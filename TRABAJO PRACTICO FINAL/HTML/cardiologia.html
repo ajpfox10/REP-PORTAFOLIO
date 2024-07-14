@@ -1,0 +1,116 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servicio de Cardiología</title>
+    <link rel="stylesheet" href="../css/csscardiologia.css"> <!-- ruta al css -->
+</head>
+<body>
+    <header>
+        <img src="../img/logo.png" alt="Logo del Hospital" class="logo"> <!-- ruta al logo-->
+        <h1 class="nombre-hospital">Nombre del Hospital</h1>
+        <button onclick="window.location.href='contacto.html'" class="contacto-btn">CONTACTO</button> <!-- ruta a la pagina -->
+    </header>
+
+    <main class="main-content">
+        <div class="service-photo">
+            <img src="../img/cardiologia.jpg" alt="Servicio de Cardiología">
+        </div>
+        <div class="content">
+            <div class="photo">
+                <img id="doctor-photo" src="../img/default-doctor.jpg" alt="Foto del médico">
+            </div>
+            <div class="staff">
+                <h2>Equipo del Servicio de Cardiología</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Matrícula</th>
+                            <th>Rol</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr onclick="mostrarFoto('doctor1')">
+                            <td>Dr. Juan Pérez</td>
+                            <td>123456</td>
+                            <td>Jefe de Servicio</td>
+                        </tr>
+                        <tr onclick="mostrarFoto('doctor2')">
+                            <td>Dr. Ana Martínez</td>
+                            <td>234567</td>
+                            <td>Jefa de Sala</td>
+                        </tr>
+                        <tr onclick="mostrarFoto('doctor3')">
+                            <td>Dr. Carlos López</td>
+                            <td>345678</td>
+                            <td>Médico de Guardia (Lunes)</td>
+                        </tr>
+                        <tr onclick="mostrarFoto('doctor4')">
+                            <td>Dr. María González</td>
+                            <td>456789</td>
+                            <td>Médico de Guardia (Martes)</td>
+                        </tr>
+                        <tr onclick="mostrarFoto('doctor5')">
+                            <td>Dr. Luis Rodríguez</td>
+                            <td>567890</td>
+                            <td>Médico de Guardia (Miércoles)</td>
+                        </tr>
+                        <!-- Agregar más médicos de guardia para los otros días de la semana -->
+                        <tr onclick="mostrarFoto('doctor6')">
+                            <td>Dr. Pablo Díaz</td>
+                            <td>678901</td>
+                            <td>Médico de Planta</td>
+                        </tr>
+                        <!-- Agregar más médicos de planta -->
+                        <tr onclick="mostrarFoto('resident1')">
+                            <td>Residente 1</td>
+                            <td>789012</td>
+                            <td>Residente de 1° Año</td>
+                        </tr>
+                        <!-- Agregar más residentes de diferentes años -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <div class="social-icons">
+                <a href="https://wa.me/1234567890" target="_blank">
+                    <img src="../img/whatsapp.png" alt="WhatsApp" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+                <a href="https://www.facebook.com" target="_blank">
+                    <img src="../img/facebook.png" alt="Facebook" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+                <a href="https://www.instagram.com" target="_blank">
+                    <img src="../img/instagram.png" alt="Instagram" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+                <a href="https://www.twitter.com" target="_blank">
+                    <img src="../img/twitter.png" alt="Twitter" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+            </div>
+            <button class="volver-btn" onclick="window.location.href='../index.html'">Volver a la página principal</button>
+        </div>
+    </footer>
+
+    <script>
+        function mostrarFoto(id) {
+            const fotos = {
+                doctor1: '../img/doctor1.jpg',
+                doctor2: '../img/doctor2.jpg',
+                doctor3: '../img/doctor3.jpg',
+                doctor4: '../img/doctor4.jpg',
+                doctor5: '../img/doctor5.jpg',
+                doctor6: '../img/doctor6.jpg',
+                resident1: '../img/resident1.jpg',
+                // Agregar más fotos de médicos y residentes
+            };
+
+            document.getElementById('doctor-photo').src = fotos[id];
+        }
+    </script>
+</body>
+</html>
