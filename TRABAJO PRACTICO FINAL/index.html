@@ -1,0 +1,68 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital La Matanza</title>
+    <link rel="stylesheet" href="../css/styles.css"> <!-- ruta a css -->
+</head>
+<body>
+    <header>
+        <img src="../img/logo.png" alt="Logo del Hospital" class="logo"> <!-- ruta al logo -->
+        <h1 class="nombre-hospital">Nombre del Hospital</h1>
+        <button onclick="window.location.href='html/contacto.html'" class="contacto-btn">CONTACTO</button> <!-- ruta a la pagina -->
+    </header>
+    <div class="main-content">
+        <nav class="sidebar">
+            <ul class="nav-list">
+                <li><a href="html/comollegar.html">Cómo Llegar</a></li>
+                <li><a href="html/noticias.html">Noticias</a></li>
+                <li class="dropdown">
+                    <a href="#servicios" class="dropbtn">Servicios</a>
+                    <ul class="dropdown-content">
+                        <li><a href="html/cardiologia.html">Cardiología</a></li>
+                        <li><a href="html/neurologia.html">Neurología</a></li>
+                        <li><a href="html/pediatria.html">Pediatría</a></li>
+                    </ul>
+                </li>
+                <li><a href="html/mision.html">Misión, Visión y Valores</a></li>
+                <li class="dropdown">
+                    <a href="#docenciainvestigacion" class="dropbtn">Docencia e Investigación</a>
+                    <ul class="dropdown-content">
+                        <li><a href="html/docencia.html">Docencia</a></li>
+                        <li><a href="html/investigacion.html">Investigación</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+        <section class="main">
+            <div class="loop-noticias">
+                <h2>Fotos en Loop de Noticias del Hospital</h2>
+                <p>Aquí irán las fotos en loop</p>
+            </div>
+            <div class="estadisticas">
+                <h2>Estadísticas</h2>
+                <p>Presentación de atendidos y otros datos relevantes</p>
+            </div>
+        </section>
+    </div>
+    <footer>
+        <div class="footer-content">
+            <div class="social-icons">
+                <a href="https://wa.me/1234567890" target="_blank">
+                    <img src="../img/whatsapp.png" alt="WhatsApp" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+                <a href="https://www.facebook.com" target="_blank">
+                    <img src="../img/facebook.png" alt="Facebook" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+                <a href="https://www.instagram.com" target="_blank">
+                    <img src="../img/instagram.png" alt="Instagram" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+                <a href="https://www.twitter.com" target="_blank">
+                    <img src="../img/twitter.png" alt="Twitter" class="footer-icon"> <!-- ruta al icono -->
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

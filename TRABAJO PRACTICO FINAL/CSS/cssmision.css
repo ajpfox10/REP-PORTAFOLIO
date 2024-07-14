@@ -1,0 +1,112 @@
+﻿/* Estilos globales */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Estilos del encabezado */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f1f1f1;
+    padding: 20px;
+    text-align: center;
+}
+
+    header .logo {
+        width: 100px; /* Ajusta el tamaño del logo según sea necesario */
+        text-align: left;
+    }
+
+    header .contacto-btn {
+        background-color: #4CAF50;
+        border: none;
+        color: white;
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 12px;
+    }
+
+    header .nombre-hospital {
+        flex: 1;
+        text-align: center;
+    }
+
+/* Estilos específicos para la página de misión y visión */
+.main-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.image-container {
+    width: 100%;
+    text-align: center; /* Centra la imagen horizontalmente */
+}
+
+.main-image {
+    width: 100%;
+    height: auto; /* Mantiene la proporción de la imagen */
+}
+
+.text-content {
+    padding: 20px;
+    text-align: center; /* Centra el texto horizontalmente */
+}
+
+    .text-content h2 {
+        margin-top: 20px;
+    }
+
+    .text-content p {
+        line-height: 1.6;
+        margin-top: 10px;
+    }
+
+/* Estilos del pie de página */
+footer {
+    background-color: #f1f1f1;
+    padding: 40px 20px; /* Aumenta el padding superior e inferior */
+    text-align: center;
+}
+
+.footer-content {
+    display: flex;
+    flex-direction: column; /* Para alinear el contenido en columna */
+    justify-content: center;
+    align-items: center;
+    max-width: 1200px; /* Limita el ancho máximo del pie de página */
+    margin: 0 auto; /* Centramos el contenido */
+}
+
+.social-icons {
+    display: flex;
+    justify-content: center; /* Centra los iconos */
+    align-items: center;
+    margin-bottom: 20px; /* Espacio entre iconos y botón */
+}
+
+.footer-icon {
+    width: 40px;
+    margin: 0 10px;
+}
+
+.volver-btn {
+    background-color: #4CAF50;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 12px;
+}
