@@ -1,0 +1,153 @@
+﻿/* Global Styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Header Styles */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f1f1f1;
+    padding: 20px;
+    text-align: center;
+}
+
+    header .research-logo {
+        width: 100px; /* Adjust the logo size as needed */
+        text-align: left;
+    }
+
+    header .research-contact-btn {
+        background-color: #4CAF50;
+        border: none;
+        color: white;
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 12px;
+    }
+
+    header .research-hospital-name {
+        flex: 1;
+        text-align: center;
+    }
+
+/* Research Page Specific Styles */
+.research-main-content {
+    display: flex;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.research-summary {
+    flex: 1;
+    padding-right: 20px;
+}
+
+    .research-summary h2 {
+        margin-top: 0;
+    }
+
+.research-research {
+    flex: 2;
+}
+
+    .research-research table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .research-research th, .research-research td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+
+    .research-research th {
+        background-color: #4CAF50;
+        color: white;
+    }
+
+    .research-research a {
+        text-decoration: none;
+        color: #4CAF50;
+    }
+
+        .research-research a:hover {
+            text-decoration: underline;
+        }
+
+/* Footer Styles */
+footer {
+    background-color: #f1f1f1;
+    padding: 40px 20px; /* Increase top and bottom padding */
+    text-align: center;
+}
+
+.research-footer-content {
+    display: flex;
+    flex-direction: column; /* Align content in column */
+    justify-content: center;
+    align-items: center;
+    max-width: 1200px; /* Limit footer max width */
+    margin: 0 auto; /* Center content */
+}
+
+.research-social-icons {
+    display: flex;
+    justify-content: center; /* Center icons */
+    align-items: center;
+    margin-bottom: 20px; /* Space between icons and button */
+}
+
+.research-footer-icon {
+    font-size: 30px; /* Set the icon size */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none; /* Remove underline */
+    margin: 0 10px; /* Add some margin between icons */
+}
+
+.research-social-icons a {
+    text-decoration: none; /* Ensure no underline on links */
+}
+
+.whatsapp {
+    color: #25D366; /* WhatsApp original color */
+}
+
+.facebook {
+    color: #3b5998; /* Facebook original color */
+}
+
+.instagram {
+    color: #E4405F; /* Instagram original color */
+}
+
+.twitter {
+    color: #1DA1F2; /* Twitter original color */
+}
+
+.research-back-btn {
+    background-color: #4CAF50;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 12px;
+    margin-top: 20px;
+}

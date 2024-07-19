@@ -1,0 +1,229 @@
+﻿/* Specific styles for the contact page */
+body.contact-page {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    overflow-x: hidden; /* Prevent horizontal overflow */
+}
+
+.contact-page header {
+    display: flex;
+    align-items: center;
+    background-color: #f1f1f1;
+    padding: 20px;
+    text-align: center;
+}
+
+    .contact-page header .logo {
+        width: 100px; /* Adjust logo size */
+        text-align: left;
+    }
+
+.contact-page .page-title {
+    flex: 1;
+    font-size: 2em;
+    margin: 0;
+    color: #333;
+    text-align: center; /* Center-aligns the text */
+}
+
+/* Main content styles */
+.contact-page .main-content {
+    margin: 0 auto;
+    padding: 20px;
+    max-width: 1200px; /* Limit the maximum width of the content */
+}
+
+.contact-page .contact-info {
+    display: flex;
+    flex-wrap: wrap; /* Allow items to adjust on smaller screens */
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.contact-page .contact-details {
+    flex: 1;
+    min-width: 300px;
+    box-sizing: border-box;
+    padding-right: 20px;
+}
+
+.contact-page .map-container {
+    flex: 1;
+    min-width: 300px;
+    box-sizing: border-box;
+    padding-left: 20px;
+}
+
+    .contact-page .map-container iframe {
+        width: 100%;
+        height: 568px; /* Adjust map height */
+        max-width: 100%;
+        border: none;
+    }
+
+/* Form styles */
+#contact-form {
+    display: flex;
+    flex-direction: column;
+}
+
+    #contact-form label {
+        margin-top: 10px;
+    }
+
+    #contact-form input,
+    #contact-form textarea {
+        margin-top: 5px;
+        padding: 10px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+
+    #contact-form textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    #contact-form button {
+        background-color: #4CAF50;
+        color: white;
+        padding: 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        margin-top: 20px;
+    }
+
+        #contact-form button:hover {
+            background-color: #45a049;
+        }
+
+/* Footer styles */
+.contact-page footer {
+    background-color: #f1f1f1;
+    padding: 40px 20px; /* Increase top and bottom padding */
+    text-align: center;
+}
+
+.contact-page .footer-content {
+    display: flex;
+    flex-direction: column; /* Align content in a column */
+    justify-content: center;
+    align-items: center;
+    max-width: 1200px; /* Limit the maximum width of the footer */
+    margin: 0 auto; /* Center the content */
+}
+
+.contact-page .social-icons {
+    display: flex;
+    justify-content: center; /* Center the icons */
+    align-items: center;
+    margin-bottom: 20px; /* Space between icons and button */
+}
+
+.contact-page .footer-icon {
+    font-size: 30px; /* Reduce icon size */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none; /* Remove underline */
+    margin: 0 10px; /* Add some margin between icons */
+}
+
+.contact-page .social-icons a {
+    text-decoration: none; /* Ensure no underline on links */
+}
+
+.whatsapp {
+    color: #25D366; /* WhatsApp original color */
+}
+
+.facebook {
+    color: #3b5998; /* Facebook original color */
+}
+
+.instagram {
+    color: #E4405F; /* Instagram original color */
+}
+
+.twitter {
+    color: #1DA1F2; /* Twitter original color */
+}
+
+.contact-page .volver-btn {
+    background-color: #4CAF50;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 12px;
+    margin-top: 20px;
+}
+
+/* Contact button and dropdown styles */
+.contact-page .contact-dropbtn {
+    background-color: #4CAF50; /* Background color */
+    color: white; /* Text color */
+    padding: 10px 20px; /* Padding alignment */
+    text-align: center;
+    text-decoration: none;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 12px; /* Rounded border */
+    border: none; /* No border */
+}
+
+    .contact-page .contact-dropbtn:hover {
+        background-color: #45a049; /* Background color on hover */
+    }
+
+.contact-page .contact-dropdown {
+    position: relative;
+    display: inline-block; /* Ensure button and dropdown are aligned correctly */
+}
+
+.contact-page .contact-dropdown-content {
+    display: none;
+    position: absolute;
+    left: 100%; /* Position dropdown to the right of the button */
+    top: 0;
+    background-color: #f9f9f9;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    white-space: nowrap; /* Prevent items from wrapping to the next line */
+}
+
+/* Show menu on hover over container */
+.contact-page .contact-dropdown:hover .contact-dropdown-content {
+    display: block;
+}
+
+.contact-page .contact-dropdown-content ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.contact-page .contact-dropdown-content li {
+    padding: 8px 16px;
+    margin: 0; /* No additional margin */
+}
+
+.contact-page .contact-dropdown-content a {
+    color: black;
+    text-decoration: none;
+    display: block;
+    margin: 0; /* No additional margin */
+}
+
+    .contact-page .contact-dropdown-content a:hover {
+        background-color: #ddd;
+    }
