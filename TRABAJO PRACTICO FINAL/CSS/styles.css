@@ -1,0 +1,242 @@
+﻿/* Global styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow-x: hidden; /* Evita el desbordamiento horizontal */
+}
+
+/* Header styles */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f1f1f1;
+    padding: 20px;
+    text-align: center;
+}
+
+    header .logo {
+        width: 100px; /* Ajusta el tamaño del logo */
+        text-align: left;
+    }
+
+    header .contact-btn {
+        background-color: #4CAF50;
+        border: none;
+        color: white;
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 12px;
+    }
+
+    header .hospital-name {
+        flex: 1;
+        text-align: center;
+    }
+
+/* Main container */
+.main-content {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+}
+
+/* Sidebar styles */
+.sidebar {
+    width: 20%;
+    background-color: #333;
+    padding: 10px;
+    box-sizing: border-box; /* Asegura que el padding se incluya en el ancho */
+}
+
+.nav-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+    .nav-list li {
+        margin: 0;
+        position: relative;
+    }
+
+    .nav-list a {
+        color: white;
+        text-decoration: none;
+        display: block;
+        padding: 10px;
+    }
+
+        .nav-list a:hover {
+            background-color: #575757;
+        }
+
+/* Dropdown styles */
+.dropdown .dropbtn {
+    cursor: pointer;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    left: 100%; /* Posición del dropdown a la derecha del menú */
+    top: 0;
+    background-color: #f9f9f9;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+
+    .dropdown-content a {
+        color: black;
+        padding: 12px 16px;
+        text-decoration: none;
+        display: block;
+        text-align: left;
+    }
+
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+/* Main content styles */
+.main {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    overflow-y: auto; /* Permite el desplazamiento vertical si el contenido es demasiado grande */
+}
+
+.loop-news, .statistics {
+    flex: 1 1 calc(50% - 20px); /* Ocupa la mitad del ancho disponible */
+    margin-bottom: 20px;
+    background-color: #eaeaea;
+    padding: 20px;
+    box-sizing: border-box; /* Asegura que el padding se incluya en el ancho */
+}
+
+    /* Loop news styles */
+    .loop-news img {
+        width: 100%; /* Asegúrate de que las imágenes ocupen todo el ancho del contenedor */
+        height: auto;
+        max-height: 300px; /* Establece una mayor altura máxima para las imágenes */
+        display: block;
+        margin: 0 auto; /* Centra las imágenes */
+    }
+
+    /* Table styles */
+    .statistics table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    .statistics th, .statistics td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
+
+    .statistics th {
+        background-color: #4CAF50;
+        color: white;
+    }
+
+    .statistics tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+
+    .statistics tr:hover {
+        background-color: #ddd;
+    }
+
+/* Footer styles */
+footer {
+    background-color: #f1f1f1;
+    padding: 40px 20px; /* Aumenta el padding superior e inferior */
+    text-align: center;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 1200px; /* Limita el ancho máximo del footer */
+    margin: 0 auto; /* Centra el contenido */
+}
+
+.social-icons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px; /* Agrega espacio entre los iconos */
+}
+
+    .social-icons a {
+        font-size: 40px; /* Reduce el tamaño del icono */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none; /* Quita el subrayado */
+    }
+
+.whatsapp {
+    color: #25D366; /* Color original de WhatsApp */
+}
+
+.facebook {
+    color: #3b5998; /* Color original de Facebook */
+}
+
+.instagram {
+    color: #E4405F; /* Color original de Instagram */
+}
+
+.twitter {
+    color: #1DA1F2; /* Color original de Twitter */
+}
+
+/* Media queries para dispositivos móviles */
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column; /* Cambia la dirección a columna para móviles */
+    }
+
+    .sidebar {
+        width: 100%; /* Ajusta el ancho al 100% para dispositivos móviles */
+    }
+
+    .nav-list li {
+        text-align: center; /* Centra el texto en los enlaces del menú */
+    }
+
+    .dropdown-content {
+        position: relative; /* Cambia la posición del dropdown para móviles */
+        left: 0;
+        width: 100%;
+    }
+
+    .main {
+        flex-direction: column; /* Asegura que el contenido principal también se adapte en columna */
+    }
+
+    .loop-news, .statistics {
+        flex: 1 1 100%; /* Asegura que ocupen todo el ancho disponible en móviles */
+    }
+}

@@ -1,0 +1,99 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servicio de Cardiología</title>
+    <link rel="stylesheet" href="../css/csscardiologia.css"> <!-- Path to the CSS file -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/line-awesome/1.3.0/line-awesome/css/line-awesome.min.css"> <!-- Line Awesome CSS -->
+</head>
+<body>
+    <header>
+        <img src="../img/logo.png" alt="Logo del Hospital" class="logo"> <!-- Path to the logo -->
+        <h1 class="hospital-name">Servicio de Cardiologia Clinica Salud</h1>
+        <button onclick="window.location.href='contacto.html'" class="cardiology-contact-btn">CONTACTO</button> <!-- Path to the contact page -->
+    </header>
+
+    <main class="cardiology-main-content">
+        <div class="cardiology-service-photo">
+            <img src="../img/Serviciosimg/cardiologia.jpeg" alt="Servicio de Cardiología"> <!-- Path to the cardiology service photo -->
+        </div>
+        <div class="cardiology-content">
+            <div class="cardiology-photo">
+                <img id="doctor-photo" src="../img/Medicoscardio/default-doctor.jpeg" alt="Foto del médico"> <!-- Path to the default doctor photo -->
+            </div>
+            <div class="cardiology-staff">
+                <h2>Equipo del Servicio de Cardiología</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Matrícula</th>
+                            <th>Rol</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr onclick="showPhoto('doctor1')">
+                            <td>Dr. Juan Pérez</td>
+                            <td>123456</td>
+                            <td>Jefe de Servicio</td>
+                        </tr>
+                        <tr onclick="showPhoto('doctor2')">
+                            <td>Dr. Ana Martínez</td>
+                            <td>234567</td>
+                            <td>Jefa de Sala</td>
+                        </tr>
+                        <tr onclick="showPhoto('doctor3')">
+                            <td>Dr. Carlos López</td>
+                            <td>345678</td>
+                            <td>Médico de Guardia (Lunes)</td>
+                        </tr>
+                        <tr onclick="showPhoto('doctor4')">
+                            <td>Dr. María González</td>
+                            <td>456789</td>
+                            <td>Médico de Guardia (Martes)</td>
+                        </tr>
+                        <tr onclick="showPhoto('doctor5')">
+                            <td>Dr. Luis Rodríguez</td>
+                            <td>567890</td>
+                            <td>Médico de Guardia (Miércoles)</td>
+                        </tr>
+                        <!-- Add more on-call doctors for other days of the week -->
+                        <tr onclick="showPhoto('doctor6')">
+                            <td>Dr. Pablo Díaz</td>
+                            <td>678901</td>
+                            <td>Médico de Planta</td>
+                        </tr>
+                        <!-- Add more attending physicians -->
+                        <tr onclick="showPhoto('resident1')">
+                            <td>Residente 1</td>
+                            <td>789012</td>
+                            <td>Residente de 1° Año</td>
+                        </tr>
+                        <!-- Add more residents of different years -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="../js/footer3.js"></script> <!-- Path to the footer3.js -->
+    <script>
+        function showPhoto(id) {
+            const photos = {
+                doctor1: '../img/Medicoscardio/doctor1.jpeg',
+                doctor2: '../img/Medicoscardio/doctor2.jpeg',
+                doctor3: '../img/Medicoscardio/doctor3.jpeg',
+                doctor4: '../img/Medicoscardio/doctor4.jpeg',
+                doctor5: '../img/Medicoscardio/doctor5.jpeg',
+                doctor6: '../img/Medicoscardio/doctor6.jpeg',
+                resident1: '../img/Medicoscardio/resident1.jpeg',
+                // Add more doctor and resident photos
+            };
+
+            document.getElementById('doctor-photo').src = photos[id]; // Change the photo source based on the clicked doctor
+        }
+    </script>
+</body>
+</html>
+

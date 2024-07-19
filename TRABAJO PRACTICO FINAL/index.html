@@ -1,0 +1,113 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital La Matanza</title>
+    <link rel="stylesheet" href="css/styles.css"> <!-- Path to CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/line-awesome/1.3.0/line-awesome/css/line-awesome.min.css"> <!-- Line Awesome CSS -->
+</head>
+<body>
+    <header>
+        <img src="img/logo.png" alt="Logo del Hospital" class="logo"> <!-- Path to logo -->
+        <h1 class="hospital-name">Clinica Salud</h1>
+        <button onclick="window.location.href='html/contacto.html'" class="contact-btn">CONTACTO</button> <!-- Path to contact page -->
+    </header>
+    <div class="main-content">
+        <nav class="sidebar">
+            <ul class="nav-list">
+                <li><a href="html/comollegar.html">Cómo Llegar</a></li>
+                <li><a href="html/noticias.html">Noticias</a></li>
+                <li class="dropdown">
+                    <a href="#servicios" class="dropbtn">Servicios</a>
+                    <ul class="dropdown-content">
+                        <li><a href="html/cardiologia.html">Cardiología</a></li>
+                        <li><a href="html/neurologia.html">Neurología</a></li>
+                        <li><a href="html/pediatria.html">Pediatría</a></li>
+                    </ul>
+                </li>
+                <li><a href="html/mision.html">Misión, Visión y Valores</a></li>
+                <li class="dropdown">
+                    <a href="#docenciainvestigacion" class="dropbtn">Docencia e Investigación</a>
+                    <ul class="dropdown-content">
+                        <li><a href="html/docencia.html">Docencia</a></li>
+                        <li><a href="html/investigacion.html">Investigación</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+        <section class="main">
+            <div class="loop-news">
+                <h2>Fotos en Loop de Noticias del Hospital</h2>
+                <div class="photo-container">
+                    <!-- This will hold the photos -->
+                </div>
+            </div>
+            <div class="statistics">
+                <h2>Estadísticas</h2>
+                <p>Presentación de atendidos y otros datos relevantes</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Servicio</th>
+                            <th>Atendidos</th>
+                            <th>Altas</th>
+                            <th>Reingresos</th>
+                            <th>Porcentaje de Satisfacción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Cardiología</td>
+                            <td>200</td>
+                            <td>180</td>
+                            <td>5</td>
+                            <td>95%</td>
+                        </tr>
+                        <tr>
+                            <td>Neurología</td>
+                            <td>150</td>
+                            <td>140</td>
+                            <td>10</td>
+                            <td>90%</td>
+                        </tr>
+                        <tr>
+                            <td>Pediatría</td>
+                            <td>300</td>
+                            <td>290</td>
+                            <td>8</td>
+                            <td>97%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <script src="js/footer.js"></script> <!-- Path to the footer.js -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const photoContainer = document.querySelector('.photo-container');
+            const photoDir = 'img/presentacion/'; // Path to the presentation folder
+
+            // List of photo filenames
+            const photos = [
+                'cardiologia.jpeg',
+                'neurologia.jpeg',
+                'pediatria.jpeg'
+            ];
+
+            let currentIndex = 0;
+
+            function showNextPhoto() {
+                photoContainer.innerHTML = `<img src="${photoDir + photos[currentIndex]}" alt="Foto de presentación" class="loop-photo">`;
+                currentIndex = (currentIndex + 1) % photos.length;
+            }
+
+            setInterval(showNextPhoto, 3000); // Change photo every 3 seconds
+
+            // Initially show the first photo
+            showNextPhoto();
+        });
+    </script>
+</body>
+</html>

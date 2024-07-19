@@ -1,0 +1,90 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docencia</title>
+    <link rel="stylesheet" href="../css/cssdocencia.css"> <!-- Path to CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/line-awesome/1.3.0/line-awesome/css/line-awesome.min.css"> <!-- Line Awesome CSS -->
+</head>
+<body>
+    <header>
+        <img src="../img/logo.png" alt="Logo del Hospital" class="docencia-logo"> <!-- Path to logo -->
+        <h1 class="docencia-hospital-name">Departamento de Docencia de Clinica Salud</h1>
+        <button onclick="window.location.href='contacto.html'" class="docencia-contact-btn">CONTACTO</button> <!-- Path to contact page -->
+    </header>
+
+    <main class="docencia-main-content">
+        <div class="docencia-services">
+            <h2>Áreas Docentes y Servicios</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Servicio</th>
+                        <th>Área Docente</th>
+                        <th>Especialidades</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="cardiologia.html">Cardiología</a></td>
+                        <td>Cardiología Clínica</td>
+                        <td>4</td>
+                    </tr>
+                    <tr>
+                        <td><a href="neurologia.html">Neurología</a></td>
+                        <td>Neurociencias</td>
+                        <td>3</td>
+                    </tr>
+                    <tr>
+                        <td><a href="pediatria.html">Pediatría</a></td>
+                        <td>Pediatría General</td>
+                        <td>5</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="docencia-photos">
+            <img src="../img/docencia/photo1.jpg" alt="Photo 1" class="photo">
+            <img src="../img/docencia/photo2.jpg" alt="Photo 2" class="photo">
+            <img src="../img/docencia/photo3.jpg" alt="Photo 3" class="photo">
+        </div>
+    </main>
+
+    <footer>
+        <div class="docencia-footer-content">
+            <div class="docencia-social-icons">
+                <a href="https://wa.me/1234567890" target="_blank" class="whatsapp">
+                    <i class="lab la-whatsapp docencia-footer-icon"></i>
+                </a>
+                <a href="https://www.facebook.com" target="_blank" class="facebook">
+                    <i class="lab la-facebook docencia-footer-icon"></i>
+                </a>
+                <a href="https://www.instagram.com" target="_blank" class="instagram">
+                    <i class="lab la-instagram docencia-footer-icon"></i>
+                </a>
+                <a href="https://www.twitter.com" target="_blank" class="twitter">
+                    <i class="lab la-twitter docencia-footer-icon"></i>
+                </a>
+            </div>
+            <button class="docencia-back-btn" onclick="window.location.href='../index.html'">Volver a la página principal</button>
+        </div>
+    </footer>
+
+    <script>
+        let currentIndex = 0;
+        const photos = document.querySelectorAll('.docencia-photos .photo');
+        function showNextPhoto() {
+            photos[currentIndex].style.display = 'none';
+            currentIndex = (currentIndex + 1) % photos.length;
+            photos[currentIndex].style.display = 'block';
+        }
+        setInterval(showNextPhoto, 3000);
+        document.addEventListener('DOMContentLoaded', () => {
+            photos.forEach((photo, index) => {
+                photo.style.display = index === 0 ? 'block' : 'none';
+            });
+        });
+    </script>
+</body>
+</html>
