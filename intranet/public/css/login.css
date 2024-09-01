@@ -1,0 +1,97 @@
+/* login.css */
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.main-header {
+    background: linear-gradient(to right, #8e44ad, #2980b9); /* Gradiente de morado a azul en el fondo */
+    color: #fff; /* Texto en blanco */
+    text-align: center;
+    padding: 20px;
+    font-size: 24px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.login-container {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 20px;
+    color: #333;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    text-align: left;
+    color: #333;
+}
+
+input[type="text"],
+input[type="password"] {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(to right, #8e44ad, #2980b9); /* De morado a azul */
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: linear-gradient(to right, #732d91, #1f6699); /* Colores un poco más oscuros al hacer hover */
+}
+
+a {
+    display: block;
+    margin-top: 15px;
+    color: #5bc0de;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    .login-container {
+        padding: 15px;
+        width: 90%;
+    }
+
+    .main-header {
+        font-size: 20px;
+        padding: 15px;
+    }
+}
+
+
+
