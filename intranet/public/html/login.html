@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SISTEMAS DE NOVEDADES DEL HIGA SIMPLEMENTE EVITA</title>
+    <link rel="stylesheet"  href="/css/login.css">
+</head>
+<body>
+    <header class="main-header">
+        SISTEMAS DE NOVEDADES DEL HIGA SIMPLEMENTE EVITA
+    </header>
+    <div class="login-container">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <label for="username">Usuario:</label>
+            <input type="text" id="username" name="username" required>
+            <br>
+            <label for="password">Contraseña:</label>
+            <input type="password" id="password" name="password" required>
+            <br>
+            <button type="submit">Ingresar</button>
+            <br>
+            <a href="/forgot-password">Recuperar contraseña</a>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                // Redirige a la página correspondiente según el rol
+                window.location.href = result.redirectTo;
+            } else {
+                alert(result.message);
+            }
+        });
+    </script>
+</body>
+</html>

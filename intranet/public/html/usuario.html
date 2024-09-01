@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página de Usuario</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.13/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="/css/usuario.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <h1>SISTEMA DE CARGA DE NOVEDADES</h1>
+
+    <div class="container">
+        <!-- Menú lateral a la izquierda -->
+        <div class="menu">
+            <h2>Menú</h2>
+            <a href="#" id="cargaNovedadesBtn">Carga de Novedades</a>
+            <a href="#" id="cargaNovedadesRangoBtn">Carga de Novedades por Rango de Fechas</a>
+            <a href="#" id="cargaDestinoBtn">Cargar Destino</a>
+        </div>
+
+        <!-- Contenido principal -->
+        <div class="content">
+            <div class="form-container">
+                <div id="novedadesForm" style="display: none;">
+                    <form id="formNovedades">
+                        <input type="text" id="search-apellido" class="agente-select" placeholder="Buscar apellido">
+                        <label for="agente">Agente:</label>
+                        <select id="agente" name="agente"></select>
+
+                        <label for="tipoNovedad">Tipo de Novedad:</label>
+                        <select id="tipoNovedad" name="tipoNovedad"></select>
+
+                        <label for="fecha">Fecha:</label>
+                        <input type="date" id="fecha" name="fecha">
+
+                        <label for="observaciones">Observaciones:</label>
+                        <textarea id="observaciones" name="observaciones"></textarea>
+
+                        <button class="btn btn-warning" type="submit">Cargar</button>
+                    </form>
+                </div>
+
+                <div id="novedadesRangoForm" style="display: none;">
+                    <form id="formNovedadesRango">
+                        <label for="fechaDesde">Fecha Desde:</label>
+                        <input type="date" id="fechaDesde" name="fechaDesde">
+
+                        <label for="fechaHasta">Fecha Hasta:</label>
+                        <input type="date" id="fechaHasta" name="fechaHasta">
+                        <input type="text" id="search-apellido-rango" class="agente-select" placeholder="Buscar por rango">
+                        <label for="agenteRango">Agente:</label>
+                        <select id="agenteRango" name="agenteRango"></select>
+
+                        <label for="tipoNovedadRango">Tipo de Novedad:</label>
+                        <select id="tipoNovedadRango" name="tipoNovedadRango"></select>
+
+                        <label for="observacionesRango">Observaciones:</label>
+                        <textarea id="observacionesRango" name="observacionesRango"></textarea>
+
+                        <button class="btn btn-warning" type="submit">Cargar Novedades por Rango</button>
+                    </form>
+                </div>
+
+                <!-- Formulario de destino añadido -->
+                <div id="formDestino" style="display: none;">
+                    <form id="formDestinoForm">
+                        <input type="text" id="search-agente-destino" class="agente-select" placeholder="Buscar agente">
+                        <label for="agenteAsignable">Agente:</label>
+                        <select id="agenteAsignable" name="agenteAsignable"></select>
+
+                        <label for="servicioDestino">Servicio:</label>
+                        <select id="servicioDestino" name="servicioDestino"></select>
+
+                        <label for="tipoCuidado">Tipo de Cuidado:</label>
+                        <select id="tipoCuidado" name="tipoCuidado"></select>
+
+                        <label for="fechaDestino">Fecha:</label>
+                        <input type="date" id="fechaDestino" name="fechaDestino">
+
+                        <button class="btn btn-warning" type="submit">Cargar Destino</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Contenedor de título y tabla de datos de agentes y servicios, oculto inicialmente -->
+            <div id="contenedorAgentesServicios" style="display: none;">
+                <h2 id="tituloAgentesServicios">Datos de Agentes y Servicios</h2>
+		<h2>Datos Cargados</h2>
+		<select id="filterFieldServicios">
+    			<option value="0">ID</option> <!-- Añadido para incluir la columna ID -->
+   			<option value="1">Agente ID</option>
+   		        <option value="2">Nombre del Agente</option>
+                        <option value="3" style="display:none;">ID</option> <!-- Opción oculta -->
+                        <option value="4">Tipo de Cuidado</option>
+                        <option value="5">Fecha Desde</option>
+		</select>
+                <input type="text" id="filterInputServicios" placeholder="Filtrar...">
+                <table id="tablaAgentesServicios">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Agente ID</th>
+                            <th>Nombre del Agente</th>
+                            <th>Servicio ID</th>
+			    <!-- <th>SERVICIO</th> <!-- Ocultar esta columna en el encabezado -->
+                            <th>Tipo de Cuidado</th>
+                            <th>Fecha Desde</th>
+                            <th>Acciones</th> <!-- Nueva columna para botones de acciones -->                            
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Datos se cargarán dinámicamente aquí -->
+                    </tbody>
+                </table>
+         	<button id="generarPDF">Generar Reporte PDF</button>
+            </div>
+
+            <div id="tablaContainer" style="display: none;">
+                <h2>Datos Cargados</h2>
+                <select id="filterField">
+                    <option value="0">Agente</option>
+                    <option value="1">Apellido</option>
+                    <option value="2">Tipo de Novedad</option>
+                    <option value="3">Fecha</option>
+		    <option value="4">Observaciones</option>
+                </select>
+                <input type="text" id="filterInputNovedades" placeholder="Filtrar...">
+                <table id="tablaNovedades">
+                    <thead>
+                        <tr>
+                            <th>Agente</th>
+                            <th>Apellido</th> <!-- Nueva columna -->
+                            <th>Tipo de Novedad</th>
+                            <th>Fecha</th>
+                            <th>Observaciones</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Los datos se cargarán aquí dinámicamente -->
+                    </tbody>
+                </table>
+                <button id="exportPdf">Exportar a PDF</button>
+            </div>
+        </div> <!-- Fin del contenedor de contenido -->
+    </div> <!-- Fin del contenedor principal -->
+    <button id="logoutButton">Logout</button>
+    <script src="/js/usuario.js"></script>
+    <script src="/js/destino.js"></script>
+</body>
+</html>
+
+
+
+
+

@@ -1,0 +1,262 @@
+/* Estilo general */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+/* Título principal */
+h1 {
+    text-align: center;
+    background: linear-gradient(to right, #8e44ad, #2980b9); /* Gradiente morado a azul */
+    color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 1200px;
+    box-sizing: border-box;
+    margin-bottom: 20px;
+}
+
+/* Contenedor principal */
+.container {
+    display: flex;
+    width: 100%;
+    max-width: 1200px;
+    box-sizing: border-box;
+}
+
+/* Menú lateral a la izquierda */
+.menu {
+    background: linear-gradient(to right, #8e44ad, #2980b9); /* Gradiente morado a azul */
+    padding: 20px;
+    border-radius: 8px;
+    color: white;
+    width: 200px;
+    margin-right: 20px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.menu h2 {
+    margin-bottom: 20px;
+    font-size: 20px;
+}
+
+.menu a {
+    color: white;
+    text-decoration: none;
+    margin-bottom: 15px;
+    width: 100%;
+    text-align: center;
+    padding: 15px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.menu a:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Contenido principal */
+.content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-left: 20px;
+}
+
+/* Contenedor de formularios */
+.form-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 20px; /* Espacio entre formularios */
+    margin-bottom: 20px;
+}
+
+/* Formularios */
+form {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    flex-grow: 1;
+}
+
+form label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+form select,
+form input[type="date"],
+form textarea {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+/* Botones dentro de los formularios */
+form button,
+button {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(to right, #8e44ad, #2980b9); /* Gradiente morado a azul */
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: background 0.3s;
+}
+
+form button:hover,
+button:hover {
+    background: linear-gradient(to right, #732d91, #1f6699); /* Gradiente más oscuro al pasar el mouse */
+}
+
+/* Tabla de novedades */
+#tablaNovedades {
+    margin-top: 20px;
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+#tablaNovedades h2 {
+    margin-bottom: 20px;
+}
+
+#tablaNovedades table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#tablaNovedades th,
+#tablaNovedades td {
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+#tablaNovedades th {
+    background-color: #2980b9;
+    color: white;
+    text-transform: uppercase;
+}
+
+#tablaNovedades td {
+    background-color: #f9f9f9;
+}
+
+/* Estilos responsive */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+
+    .form-container {
+        flex-direction: column;
+    }
+
+    .menu {
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    .content {
+        padding-left: 0;
+    }
+}
+
+/* Estilos de carga */
+.loading {
+    text-align: center;
+    font-style: italic;
+    color: #555;
+}
+
+/* Mensajes y notificaciones */
+.message-box {
+    color: #fff; /* Color del texto en blanco */
+    background: linear-gradient(to right, #8e44ad, #2980b9); /* Gradiente morado a azul */
+    text-align: center; /* Centra el texto dentro del contenedor */
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Centra el contenedor en la página */
+    padding: 15px;
+    border-radius: 5px;
+    font-size: 16px;
+    z-index: 1000;
+    width: 100%; /* Ajusta según sea necesario */
+    max-width: 600px; /* Ajusta según el diseño */
+}
+
+#tablaAgentesServicios {
+    margin-top: 20px;
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+#tablaAgentesServicios h2 {
+    margin-bottom: 20px;
+}
+
+#tablaAgentesServicios {
+    /* Elimina la línea de display: none; */
+    margin-top: 20px;
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+#tablaAgentesServicios th,
+#tablaAgentesServicios td {
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+#tablaAgentesServicios th {
+    background-color: #2980b9;
+    color: white;
+    text-transform: uppercase;
+}
+
+#tablaAgentesServicios td {
+    background-color: #f9f9f9;
+}
+
+.form-container, .table-container {
+    width: 100%;
+    clear: both;
+    margin-bottom: 20px;
+}
+
+.content {
+    display: flex;
+    flex-direction: column; /* Esto asegurará que se apilen verticalmente */
+}

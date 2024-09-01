@@ -1,0 +1,143 @@
+/* admin.css */
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    height: 100vh;
+}
+
+.container {
+    display: flex;
+    width: 100%;
+}
+
+.sidebar {
+    width: 200px;
+    background-color: #333;
+    color: white;
+    padding: 20px;
+}
+
+.sidebar h2 {
+    margin-bottom: 20px;
+}
+
+.sidebar button {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    background-color: #444;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.sidebar button:hover {
+    background-color: #555;
+}
+
+.content {
+    flex-grow: 1;
+    padding: 20px;
+}
+
+#user-form.hidden,
+#user-table.hidden {
+    display: none;
+}
+
+#user-form label {
+    display: block;
+    margin: 10px 0 5px;
+}
+
+#user-form input,
+#user-form select {
+    width: calc(100% - 20px);
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+#user-form button {
+    padding: 10px 15px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+#user-form button:hover {
+    background-color: #218838;
+}
+
+#user-table {
+    width: 75%; /* Ajusta la tabla para que ocupe 3/4 de la pantalla */
+}
+
+#user-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#user-table th, #user-table td {
+    padding: 10px;
+    border: 1px solid #ccc;
+    text-align: left;
+}
+
+#user-table th {
+    background-color: #f8f9fa;
+}
+
+#user-table td button {
+    padding: 5px 10px;
+    border: none;
+    cursor: pointer;
+}
+
+#user-table td button.deactivate {
+    background-color: #dc3545;
+    color: white;
+    border-radius: 4px;
+}
+
+#user-table td button.change-role {
+    background-color: #007bff;
+    color: white;
+    border-radius: 4px;
+}
+
+#user-table td button:hover {
+    opacity: 0.8;
+}
+
+.loading {
+    text-align: center;
+    font-style: italic;
+    color: #555;
+}
+
+.message-box {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px;
+    border-radius: 5px;
+    font-size: 16px;
+    z-index: 1000;
+    color: #fff;
+}
+
+.message-box.success {
+    background-color: #28a745;
+}
+
+.message-box.error {
+    background-color: #dc3545;
+}
