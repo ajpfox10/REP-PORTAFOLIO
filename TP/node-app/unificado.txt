@@ -1,0 +1,1698 @@
+
+===== Archivo: ./config/config.js =====
+Carpeta: ./config
+Contenido:
+// config/config.js
+require('dotenv').config();
+
+module.exports = {
+    sessionSecret: process.env.SESSION_SECRET,
+    jwtSecret: process.env.JWT_SECRET
+};
+
+
+
+===== Archivo: ./config/db.js =====
+Carpeta: ./config
+Contenido:
+// config/db.js
+const mysql = require('mysql2/promise');
+require('dotenv').config();
+
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+module.exports = pool;
+
+
+
+===== Archivo: ./controllers/adminController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/adminController.js
+
+exports.getAdminDashboard = async (req, res) => {
+    try {
+        // Obtener datos del admin desde req.user o desde la base de datos si es necesario
+        const adminData = {
+            id: req.user.id,
+            email: req.user.email,
+            role: req.user.TIPOUSUARIO
+            // Agrega más datos si es necesario
+        };
+
+        res.render('adminDashboard', { admin: adminData }); // Renderiza la vista adminDashboard.ejs
+    } catch (error) {
+        console.error('Error al cargar el dashboard de admin:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+
+
+===== Archivo: ./controllers/authController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/authController.js
+
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+const { findUserByEmail, verifyPassword } = require('../models/userModel');
+const sessionModel = require('../models/sessionModel');
+
+exports.login = async (req, res) => {
+    const { email, password } = req.body;
+
+    // Validación básica
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Por favor, ingresa tu correo y contraseña' });
+    }
+
+    try {
+        const user = await findUserByEmail(email);
+        if (!user) {
+            return res.status(400).json({ message: 'Correo o contraseña incorrectos' });
+        }
+
+        const isPasswordValid = await verifyPassword(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({ message: 'Correo o contraseña incorrectos' });
+        }
+
+        // Generar JWT
+        const token = jwt.sign(
+            { id: user.id, email: user.email, TIPOUSUARIO: user.TIPOUSUARIO },
+            jwtSecret,
+            { expiresIn: '1h' }
+        );
+
+        // Crear una sesión activa
+        await sessionModel.createSession(user.id, token);
+
+        // Establecer la cookie HTTP-only
+        res.cookie('token', token, {
+            httpOnly: true, // No accesible desde JavaScript
+            secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
+            maxAge: 3600000, // 1 hora
+            sameSite: 'strict', // Protege contra ataques CSRF
+        });
+
+        // Responder con éxito
+        res.status(200).json({ message: 'Inicio de sesión exitoso' });
+    } catch (err) {
+        console.error('Error en login:', err);
+        res.status(500).json({ message: 'Error interno del servidor' });
+    }
+};
+
+exports.logout = async (req, res) => {
+    try {
+        const token = req.cookies.token;
+        if (token) {
+            await sessionModel.deleteSession(token);
+            res.clearCookie('token');
+        }
+        res.status(200).json({ message: 'Cierre de sesión exitoso' });
+    } catch (err) {
+        console.error('Error en logout:', err);
+        res.status(500).json({ message: 'Error interno del servidor' });
+    }
+};
+
+
+
+===== Archivo: ./controllers/userController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/userController.js
+
+const Joi = require('joi');
+
+// Función para renderizar el dashboard del usuario
+exports.getUserDashboard = (req, res) => {
+    res.render('dashboard', { user: req.user, csrfToken: req.csrfToken() });
+};
+
+// Funciones para servir los formularios
+exports.getForm1 = (req, res) => {
+    res.render('forms/form1', { csrfToken: req.csrfToken() });
+};
+
+exports.getForm2 = (req, res) => {
+    res.render('forms/form2', { csrfToken: req.csrfToken() });
+};
+
+exports.getForm3 = (req, res) => {
+    res.render('forms/form3', { csrfToken: req.csrfToken() });
+};
+
+// Validación de los formularios con Joi
+const form1Schema = Joi.object({
+    field1: Joi.string().min(1).max(100).required()
+});
+
+const form2Schema = Joi.object({
+    field2: Joi.string().min(1).max(100).required()
+});
+
+const form3Schema = Joi.object({
+    field3: Joi.string().min(1).max(100).required()
+});
+
+// Funciones para manejar las sumisiones de los formularios
+exports.handleForm1 = (req, res) => {
+    const { error, value } = form1Schema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Formulario 1:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Formulario 1');
+    }
+
+    const { field1 } = value;
+    // Procesa los datos del formulario 1 de manera segura
+    console.log('Formulario 1 recibido y validado:', field1);
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
+    res.redirect('/auth/user/dashboard');
+};
+
+exports.handleForm2 = (req, res) => {
+    const { error, value } = form2Schema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Formulario 2:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Formulario 2');
+    }
+
+    const { field2 } = value;
+    // Procesa los datos del formulario 2 de manera segura
+    console.log('Formulario 2 recibido y validado:', field2);
+    // Realiza operaciones necesarias
+    res.redirect('/auth/user/dashboard');
+};
+
+exports.handleForm3 = (req, res) => {
+    const { error, value } = form3Schema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Formulario 3:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Formulario 3');
+    }
+
+    const { field3 } = value;
+    // Procesa los datos del formulario 3 de manera segura
+    console.log('Formulario 3 recibido y validado:', field3);
+    // Realiza operaciones necesarias
+    res.redirect('/auth/user/dashboard');
+};
+
+
+
+===== Archivo: ./generateFileList.js =====
+Carpeta: .
+Contenido:
+const fs = require('fs');
+const path = require('path');
+
+// Ruta del directorio principal del proyecto
+const projectDir = path.join(__dirname);
+
+// Función para recorrer todos los archivos del proyecto
+function getFiles(dir, ext, filelist = []) {
+    const files = fs.readdirSync(dir);
+    files.forEach(file => {
+        const filepath = path.join(dir, file);
+        const stat = fs.statSync(filepath);
+        if (stat.isDirectory()) {
+            filelist = getFiles(filepath, ext, filelist);
+        } else if (path.extname(file) === ext) {
+            filelist.push(filepath);
+        }
+    });
+    return filelist;
+}
+
+// Obtener todos los archivos .js del proyecto
+const jsFiles = getFiles(projectDir, '.js');
+
+// Crear archivo de salida
+const outputFilePath = path.join(__dirname, 'lista_archivos_con_texto.txt');
+const outputStream = fs.createWriteStream(outputFilePath, { flags: 'w' });
+
+// Escribir el nombre del archivo y su contenido
+jsFiles.forEach(file => {
+    outputStream.write(`Archivo: ${file}\n`);
+    outputStream.write('------------------------------------------\n');
+    const content = fs.readFileSync(file, 'utf8');
+    outputStream.write(content);
+    outputStream.write('\n\n');
+});
+
+// Cerrar el archivo de salida
+outputStream.end(() => {
+    console.log(`Archivo generado: ${outputFilePath}`);
+});
+
+
+
+===== Archivo: ./middleware/auth.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/auth.js
+
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+const sessionModel = require('../models/sessionModel');
+
+module.exports = async (req, res, next) => {
+    const token = req.cookies.token;
+    if (!token) {
+        console.log('No se encontró el token en las cookies.');
+        return res.status(401).json({ message: 'Acceso denegado, inicia sesión' });
+    }
+    try {
+        const verified = jwt.verify(token, jwtSecret);
+        console.log(`Token verificado para user_id: ${verified.id}`);
+
+        // Verificar si la sesión está activa
+        const session = await sessionModel.findActiveSession(verified.id);
+        if (!session) {
+            console.log('No se encontró ninguna sesión activa para el usuario.');
+            return res.status(401).json({ message: 'Sesión inválida o expirada' });
+        }
+
+        if (session.token !== token) {
+            console.log('El token en la sesión no coincide con el token proporcionado.');
+            return res.status(401).json({ message: 'Sesión inválida o expirada' });
+        }
+
+        console.log('Sesión verificada exitosamente.');
+        req.user = verified;
+        next();
+    } catch (err) {
+        console.error('Error en middleware de autenticación:', err);
+        res.status(400).json({ message: 'Token no válido' });
+    }
+};
+
+
+
+===== Archivo: ./middleware/rateLimiter.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/rateLimiter.js
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100, // limitar cada IP a 100 solicitudes por ventana
+    message: 'Demasiadas solicitudes desde esta IP, por favor intenta más tarde.'
+});
+
+module.exports = limiter;
+
+
+
+===== Archivo: ./middleware/role.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/role.js
+
+module.exports = (requiredRole) => {
+    return (req, res, next) => {
+        const userRole = req.user.role;
+        if (userRole !== requiredRole) {
+            return res.status(403).json({ message: 'Acceso denegado: No tienes los permisos necesarios' });
+        }
+        next();
+    };
+};
+
+
+
+===== Archivo: ./middleware/xssProtection.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/xssProtection.js
+const xss = require('xss-clean');
+
+module.exports = xss();
+
+
+
+===== Archivo: ./models/sessionModel.js =====
+Carpeta: ./models
+Contenido:
+// models/sessionModel.js
+
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Busca una sesión activa por el ID del usuario.
+     * @param {number} userId - El ID del usuario.
+     * @returns {Object|null} - Retorna la sesión si se encuentra, de lo contrario null.
+     */
+    findActiveSession: async (userId) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM sessions WHERE user_id = ? AND active = ?', [userId, true]);
+            return rows[0] || null;
+        } catch (error) {
+            console.error('Error al buscar sesión activa:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Crea una nueva sesión en la base de datos.
+     * @param {number} userId - El ID del usuario.
+     * @param {string} token - El token de la sesión.
+     */
+    createSession: async (userId, token) => {
+        try {
+            await db.query('INSERT INTO sessions (user_id, token, active) VALUES (?, ?, ?)', [userId, token, true]);
+        } catch (error) {
+            console.error('Error al crear sesión:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Elimina una sesión activa por el token.
+     * @param {string} token - El token de la sesión.
+     */
+    deleteSession: async (token) => {
+        try {
+            await db.query('DELETE FROM sessions WHERE token = ?', [token]);
+        } catch (error) {
+            console.error('Error al eliminar sesión:', error);
+            throw error;
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/userModel.js =====
+Carpeta: ./models
+Contenido:
+// models/userModel.js
+
+const db = require('../config/db');
+const bcrypt = require('bcrypt');
+
+module.exports = {
+    /**
+     * Busca un usuario por su correo electrónico.
+     * @param {string} email - El correo electrónico del usuario.
+     * @returns {Object|null} - Retorna el usuario si se encuentra, de lo contrario null.
+     */
+    findUserByEmail: async (email) => {
+        try {
+            const [rows] = await db.query(`
+                SELECT 
+                    iduser AS iduser,
+                    email, 
+                    pass AS password, 
+                    TIPOUSUARIO AS TIPOUSUARIO,
+                    nameuser,
+                    lvl,
+                    fondo_imagen,
+                    user_fondo,
+                    color_preferido,
+                    ACTIVO
+                FROM users 
+                WHERE email = ?
+            `, [email]);
+
+            if (rows.length === 0) {
+                console.log('No se encontró ningún usuario con el email:', email);
+                return null;
+            }
+
+            console.log('Usuario encontrado:', rows[0]);
+            return rows[0];
+        } catch (error) {
+            console.error('Error al buscar usuario por email:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Crea un nuevo usuario en la base de datos.
+     * @param {string} email - El correo electrónico del usuario.
+     * @param {string} password - La contraseña del usuario.
+     * @param {string} [role='USER'] - El rol del usuario.
+     * @returns {Object} - Resultado de la inserción.
+     */
+    createUser: async (email, password, role = 'USER') => {
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const [result] = await db.query(`
+                INSERT INTO users (email, pass, TIPOUSUARIO, nameuser, lvl, ACTIVO) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            `, [email, hashedPassword, role, 'NombreUsuario', 1, 1]); // Ajusta otros campos según tu esquema
+            return result;
+        } catch (error) {
+            console.error('Error al crear usuario:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Verifica si la contraseña ingresada coincide con la almacenada.
+     * @param {string} inputPassword - La contraseña ingresada por el usuario.
+     * @param {string} storedPassword - La contraseña hasheada almacenada en la base de datos.
+     * @returns {boolean} - Retorna true si las contraseñas coinciden, de lo contrario false.
+     */
+    verifyPassword: async (inputPassword, storedPassword) => {
+        try {
+            console.log('Verificando contraseña: inputPassword:', inputPassword, 'storedPassword:', storedPassword);
+            if (!inputPassword || !storedPassword) {
+                throw new Error('Se requieren ambos argumentos: data y hash.');
+            }
+            return await bcrypt.compare(inputPassword, storedPassword);
+        } catch (error) {
+            console.error('Error en verifyPassword:', error);
+            throw error;
+        }
+    }
+};
+
+
+
+===== Archivo: ./public/js/dashboard.js =====
+Carpeta: ./public/js
+Contenido:
+// public/js/dashboard.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnForm1 = document.getElementById('btnForm1');
+    const btnForm2 = document.getElementById('btnForm2');
+    const btnForm3 = document.getElementById('btnForm3');
+    const formContainer = document.getElementById('formContainer');
+
+    btnForm1.addEventListener('click', () => {
+        loadForm('/auth/user/form1');
+    });
+
+    btnForm2.addEventListener('click', () => {
+        loadForm('/auth/user/form2');
+    });
+
+    btnForm3.addEventListener('click', () => {
+        loadForm('/auth/user/form3');
+    });
+
+    function loadForm(url) {
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'text/html'
+            },
+            credentials: 'include' // Asegura que las cookies se envían con la solicitud
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar el formulario');
+            }
+            return response.text();
+        })
+        .then(html => {
+            formContainer.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ocurrió un error al cargar el formulario.');
+        });
+    }
+});
+
+
+
+===== Archivo: ./public/js/login.js =====
+Carpeta: ./public/js
+Contenido:
+// public/js/login.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('loginForm');
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault(); // Prevenir el envío tradicional del formulario
+
+        const formData = new FormData(loginForm);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'CSRF-Token': data._csrf // Incluir el token CSRF en las cabeceras
+                },
+                body: JSON.stringify({
+                    email: data.email,
+                    password: data.password
+                }),
+                credentials: 'include' // Asegurar que las cookies se envían con la solicitud
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Error al iniciar sesión');
+            }
+
+            console.log('Inicio de sesión exitoso:', result.message);
+            // Redirigir al dashboard o manejar el éxito según tus necesidades
+            window.location.href = '/auth/user/dashboard';
+        } catch (error) {
+            console.error('Error al iniciar sesión:', error.message);
+            alert(`Error al iniciar sesión: ${error.message}`);
+        }
+    });
+});
+
+
+
+===== Archivo: ./routes/authRoutes.js =====
+Carpeta: ./routes
+Contenido:
+// routes/authRoutes.js
+
+const express = require('express');
+const authController = require('../controllers/authController');
+const userController = require('../controllers/userController');
+const adminController = require('../controllers/adminController');
+const authMiddleware = require('../middleware/auth');
+const roleMiddleware = require('../middleware/role');
+
+const router = express.Router();
+
+// Rutas de autenticación
+router.get('/login', (req, res) => {
+    res.render('login', { csrfToken: req.csrfToken() });
+});
+
+router.post('/login', authController.login);
+router.post('/logout', authController.logout);
+
+// Rutas del dashboard de usuario
+router.get('/user/dashboard', authMiddleware, roleMiddleware('USER'), userController.getUserDashboard);
+
+// Rutas para servir los formularios de usuario
+router.get('/user/form1', authMiddleware, roleMiddleware('USER'), userController.getForm1);
+router.get('/user/form2', authMiddleware, roleMiddleware('USER'), userController.getForm2);
+router.get('/user/form3', authMiddleware, roleMiddleware('USER'), userController.getForm3);
+
+// Rutas para manejar las sumisiones de los formularios
+router.post('/user/form1', authMiddleware, roleMiddleware('USER'), userController.handleForm1);
+router.post('/user/form2', authMiddleware, roleMiddleware('USER'), userController.handleForm2);
+router.post('/user/form3', authMiddleware, roleMiddleware('USER'), userController.handleForm3);
+
+// Rutas del dashboard de admin
+router.get('/admin/dashboard', authMiddleware, roleMiddleware('admin'), adminController.getAdminDashboard);
+// routes/authRoutes.js
+
+console.log('authController.login:', authController.login);
+console.log('authController.logout:', authController.logout);
+console.log('userController.getUserDashboard:', userController.getUserDashboard);
+console.log('userController.getForm1:', userController.getForm1);
+console.log('userController.getForm2:', userController.getForm2);
+console.log('userController.getForm3:', userController.getForm3);
+console.log('userController.handleForm1:', userController.handleForm1);
+console.log('userController.handleForm2:', userController.handleForm2);
+console.log('userController.handleForm3:', userController.handleForm3);
+console.log('adminController.getAdminDashboard:', adminController.getAdminDashboard);
+
+module.exports = router;
+
+
+
+===== Archivo: ./scripts/createTestuser.js =====
+Carpeta: ./scripts
+Contenido:
+// scripts/createTestUser.js
+
+const { createUser } = require('../models/userModel');
+
+const crearUsuarioPrueba = async () => {
+    const email = 'testuser@example.com';
+    const password = 'password123'; // Contraseña en texto plano
+    const role = 'USER'; // o 'admin'
+
+    try {
+        await createUser(email, password, role);
+        console.log('Usuario de prueba creado exitosamente.');
+    } catch (error) {
+        console.error('Error al crear usuario de prueba:', error);
+    }
+};
+
+crearUsuarioPrueba();
+
+
+
+===== Archivo: ./server.js =====
+Carpeta: .
+Contenido:
+// server.js
+
+const express = require('express');
+const helmet = require('helmet');
+const path = require('path');
+const session = require('express-session');
+const rateLimiter = require('./middleware/rateLimiter');
+const xssProtection = require('./middleware/xssProtection');
+const authRoutes = require('./routes/authRoutes');
+const { sessionSecret } = require('./config/config');
+const morgan = require('morgan');
+const fs = require('fs');
+const { createStream } = require('rotating-file-stream'); // Para rotación de logs
+const cookieParser = require('cookie-parser');
+const csrf = require('csurf'); // Importar csurf
+require('dotenv').config();
+
+const app = express();
+
+// Middlewares de seguridad con Helmet
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'", 'https:'],
+                imgSrc: ["'self'", 'data:'],
+                connectSrc: ["'self'"],
+                fontSrc: ["'self'", 'https:', 'data:'],
+                objectSrc: ["'none'"],
+                upgradeInsecureRequests: [],
+            },
+        },
+    })
+);
+
+// Middleware para parsear cuerpos de solicitudes
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// Middleware para parsear cookies
+app.use(cookieParser());
+
+// Limitar solicitudes
+app.use(rateLimiter);
+
+// Protección contra ataques XSS
+app.use(xssProtection);
+
+// Logger para registrar solicitudes en logs
+const logDirectory = path.join(__dirname, 'logs');
+
+// Asegurarse de que el directorio de logs existe
+fs.existsSync(logDirectory) || fs.mkdirSync(logDirectory);
+
+const accessLogStream = createStream('access.log', {
+    interval: '1d', // Rotar diariamente
+    path: logDirectory
+});
+
+app.use(morgan('combined', { stream: accessLogStream }));
+
+// Gestión de sesión
+app.use(session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+    }
+}));
+
+// Configurar csurf middleware después de cookieParser y session
+app.use(csrf());
+
+// Middleware para pasar el token CSRF a todas las vistas
+app.use((req, res, next) => {
+    res.locals.csrfToken = req.csrfToken();
+    next();
+});
+
+// Motor de plantillas EJS
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Middleware para servir archivos estáticos - DEBE ESTAR ANTES DE LAS RUTas
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Rutas
+app.use('/auth', authRoutes);
+
+// Ruta raíz redirige a login
+app.get('/', (req, res) => {
+    res.redirect('/auth/login');
+});
+
+// Manejo de errores global
+app.use((err, req, res, next) => {
+    if (err.code === 'EBADCSRFTOKEN') {
+        // Manejar el error de CSRF
+        res.status(403).json({ message: 'Formulario inválido' });
+    } else {
+        console.error(err.stack);
+        res.status(500).json({ message: 'Ocurrió un error en el servidor' });
+    }
+});
+
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
+});
+
+
+
+===== Archivo: ./unificado.txt =====
+Carpeta: .
+Contenido:
+
+===== Archivo: ./config/config.js =====
+Carpeta: ./config
+Contenido:
+// config/config.js
+require('dotenv').config();
+
+module.exports = {
+    sessionSecret: process.env.SESSION_SECRET,
+    jwtSecret: process.env.JWT_SECRET
+};
+
+
+
+===== Archivo: ./config/db.js =====
+Carpeta: ./config
+Contenido:
+// config/db.js
+const mysql = require('mysql2/promise');
+require('dotenv').config();
+
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+module.exports = pool;
+
+
+
+===== Archivo: ./controllers/adminController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/adminController.js
+
+exports.getAdminDashboard = async (req, res) => {
+    try {
+        // Obtener datos del admin desde req.user o desde la base de datos si es necesario
+        const adminData = {
+            id: req.user.id,
+            email: req.user.email,
+            role: req.user.TIPOUSUARIO
+            // Agrega más datos si es necesario
+        };
+
+        res.render('adminDashboard', { admin: adminData }); // Renderiza la vista adminDashboard.ejs
+    } catch (error) {
+        console.error('Error al cargar el dashboard de admin:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+
+
+===== Archivo: ./controllers/authController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/authController.js
+
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+const { findUserByEmail, verifyPassword } = require('../models/userModel');
+const sessionModel = require('../models/sessionModel');
+
+exports.login = async (req, res) => {
+    const { email, password } = req.body;
+
+    // Validación básica
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Por favor, ingresa tu correo y contraseña' });
+    }
+
+    try {
+        const user = await findUserByEmail(email);
+        if (!user) {
+            return res.status(400).json({ message: 'Correo o contraseña incorrectos' });
+        }
+
+        const isPasswordValid = await verifyPassword(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({ message: 'Correo o contraseña incorrectos' });
+        }
+
+        // Generar JWT
+        const token = jwt.sign(
+            { id: user.id, email: user.email, TIPOUSUARIO: user.TIPOUSUARIO },
+            jwtSecret,
+            { expiresIn: '1h' }
+        );
+
+        // Crear una sesión activa
+        await sessionModel.createSession(user.id, token);
+
+        // Establecer la cookie HTTP-only
+        res.cookie('token', token, {
+            httpOnly: true, // No accesible desde JavaScript
+            secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
+            maxAge: 3600000, // 1 hora
+            sameSite: 'strict', // Protege contra ataques CSRF
+        });
+
+        // Responder con éxito
+        res.status(200).json({ message: 'Inicio de sesión exitoso' });
+    } catch (err) {
+        console.error('Error en login:', err);
+        res.status(500).json({ message: 'Error interno del servidor' });
+    }
+};
+
+exports.logout = async (req, res) => {
+    try {
+        const token = req.cookies.token;
+        if (token) {
+            await sessionModel.deleteSession(token);
+            res.clearCookie('token');
+        }
+        res.status(200).json({ message: 'Cierre de sesión exitoso' });
+    } catch (err) {
+        console.error('Error en logout:', err);
+        res.status(500).json({ message: 'Error interno del servidor' });
+    }
+};
+
+
+
+===== Archivo: ./controllers/userController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/userController.js
+
+const Joi = require('joi');
+
+// Función para renderizar el dashboard del usuario
+exports.getUserDashboard = (req, res) => {
+    res.render('dashboard', { user: req.user, csrfToken: req.csrfToken() });
+};
+
+// Funciones para servir los formularios
+exports.getForm1 = (req, res) => {
+    res.render('forms/form1', { csrfToken: req.csrfToken() });
+};
+
+exports.getForm2 = (req, res) => {
+    res.render('forms/form2', { csrfToken: req.csrfToken() });
+};
+
+exports.getForm3 = (req, res) => {
+    res.render('forms/form3', { csrfToken: req.csrfToken() });
+};
+
+// Validación de los formularios con Joi
+const form1Schema = Joi.object({
+    field1: Joi.string().min(1).max(100).required()
+});
+
+const form2Schema = Joi.object({
+    field2: Joi.string().min(1).max(100).required()
+});
+
+const form3Schema = Joi.object({
+    field3: Joi.string().min(1).max(100).required()
+});
+
+// Funciones para manejar las sumisiones de los formularios
+exports.handleForm1 = (req, res) => {
+    const { error, value } = form1Schema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Formulario 1:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Formulario 1');
+    }
+
+    const { field1 } = value;
+    // Procesa los datos del formulario 1 de manera segura
+    console.log('Formulario 1 recibido y validado:', field1);
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
+    res.redirect('/auth/user/dashboard');
+};
+
+exports.handleForm2 = (req, res) => {
+    const { error, value } = form2Schema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Formulario 2:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Formulario 2');
+    }
+
+    const { field2 } = value;
+    // Procesa los datos del formulario 2 de manera segura
+    console.log('Formulario 2 recibido y validado:', field2);
+    // Realiza operaciones necesarias
+    res.redirect('/auth/user/dashboard');
+};
+
+exports.handleForm3 = (req, res) => {
+    const { error, value } = form3Schema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Formulario 3:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Formulario 3');
+    }
+
+    const { field3 } = value;
+    // Procesa los datos del formulario 3 de manera segura
+    console.log('Formulario 3 recibido y validado:', field3);
+    // Realiza operaciones necesarias
+    res.redirect('/auth/user/dashboard');
+};
+
+
+
+===== Archivo: ./generateFileList.js =====
+Carpeta: .
+Contenido:
+const fs = require('fs');
+const path = require('path');
+
+// Ruta del directorio principal del proyecto
+const projectDir = path.join(__dirname);
+
+// Función para recorrer todos los archivos del proyecto
+function getFiles(dir, ext, filelist = []) {
+    const files = fs.readdirSync(dir);
+    files.forEach(file => {
+        const filepath = path.join(dir, file);
+        const stat = fs.statSync(filepath);
+        if (stat.isDirectory()) {
+            filelist = getFiles(filepath, ext, filelist);
+        } else if (path.extname(file) === ext) {
+            filelist.push(filepath);
+        }
+    });
+    return filelist;
+}
+
+// Obtener todos los archivos .js del proyecto
+const jsFiles = getFiles(projectDir, '.js');
+
+// Crear archivo de salida
+const outputFilePath = path.join(__dirname, 'lista_archivos_con_texto.txt');
+const outputStream = fs.createWriteStream(outputFilePath, { flags: 'w' });
+
+// Escribir el nombre del archivo y su contenido
+jsFiles.forEach(file => {
+    outputStream.write(`Archivo: ${file}\n`);
+    outputStream.write('------------------------------------------\n');
+    const content = fs.readFileSync(file, 'utf8');
+    outputStream.write(content);
+    outputStream.write('\n\n');
+});
+
+// Cerrar el archivo de salida
+outputStream.end(() => {
+    console.log(`Archivo generado: ${outputFilePath}`);
+});
+
+
+
+===== Archivo: ./middleware/auth.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/auth.js
+
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+const sessionModel = require('../models/sessionModel');
+
+module.exports = async (req, res, next) => {
+    const token = req.cookies.token;
+    if (!token) {
+        console.log('No se encontró el token en las cookies.');
+        return res.status(401).json({ message: 'Acceso denegado, inicia sesión' });
+    }
+    try {
+        const verified = jwt.verify(token, jwtSecret);
+        console.log(`Token verificado para user_id: ${verified.id}`);
+
+        // Verificar si la sesión está activa
+        const session = await sessionModel.findActiveSession(verified.id);
+        if (!session) {
+            console.log('No se encontró ninguna sesión activa para el usuario.');
+            return res.status(401).json({ message: 'Sesión inválida o expirada' });
+        }
+
+        if (session.token !== token) {
+            console.log('El token en la sesión no coincide con el token proporcionado.');
+            return res.status(401).json({ message: 'Sesión inválida o expirada' });
+        }
+
+        console.log('Sesión verificada exitosamente.');
+        req.user = verified;
+        next();
+    } catch (err) {
+        console.error('Error en middleware de autenticación:', err);
+        res.status(400).json({ message: 'Token no válido' });
+    }
+};
+
+
+
+===== Archivo: ./middleware/rateLimiter.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/rateLimiter.js
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100, // limitar cada IP a 100 solicitudes por ventana
+    message: 'Demasiadas solicitudes desde esta IP, por favor intenta más tarde.'
+});
+
+module.exports = limiter;
+
+
+
+===== Archivo: ./middleware/role.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/role.js
+
+module.exports = (requiredRole) => {
+    return (req, res, next) => {
+        const userRole = req.user.role;
+        if (userRole !== requiredRole) {
+            return res.status(403).json({ message: 'Acceso denegado: No tienes los permisos necesarios' });
+        }
+        next();
+    };
+};
+
+
+
+===== Archivo: ./middleware/xssProtection.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/xssProtection.js
+const xss = require('xss-clean');
+
+module.exports = xss();
+
+
+
+===== Archivo: ./models/sessionModel.js =====
+Carpeta: ./models
+Contenido:
+// models/sessionModel.js
+
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Busca una sesión activa por el ID del usuario.
+     * @param {number} userId - El ID del usuario.
+     * @returns {Object|null} - Retorna la sesión si se encuentra, de lo contrario null.
+     */
+    findActiveSession: async (userId) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM sessions WHERE user_id = ? AND active = ?', [userId, true]);
+            return rows[0] || null;
+        } catch (error) {
+            console.error('Error al buscar sesión activa:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Crea una nueva sesión en la base de datos.
+     * @param {number} userId - El ID del usuario.
+     * @param {string} token - El token de la sesión.
+     */
+    createSession: async (userId, token) => {
+        try {
+            await db.query('INSERT INTO sessions (user_id, token, active) VALUES (?, ?, ?)', [userId, token, true]);
+        } catch (error) {
+            console.error('Error al crear sesión:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Elimina una sesión activa por el token.
+     * @param {string} token - El token de la sesión.
+     */
+    deleteSession: async (token) => {
+        try {
+            await db.query('DELETE FROM sessions WHERE token = ?', [token]);
+        } catch (error) {
+            console.error('Error al eliminar sesión:', error);
+            throw error;
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/userModel.js =====
+Carpeta: ./models
+Contenido:
+// models/userModel.js
+
+const db = require('../config/db');
+const bcrypt = require('bcrypt');
+
+module.exports = {
+    /**
+     * Busca un usuario por su correo electrónico.
+     * @param {string} email - El correo electrónico del usuario.
+     * @returns {Object|null} - Retorna el usuario si se encuentra, de lo contrario null.
+     */
+    findUserByEmail: async (email) => {
+        try {
+            const [rows] = await db.query(`
+                SELECT 
+                    iduser AS iduser,
+                    email, 
+                    pass AS password, 
+                    TIPOUSUARIO AS TIPOUSUARIO,
+                    nameuser,
+                    lvl,
+                    fondo_imagen,
+                    user_fondo,
+                    color_preferido,
+                    ACTIVO
+                FROM users 
+                WHERE email = ?
+            `, [email]);
+
+            if (rows.length === 0) {
+                console.log('No se encontró ningún usuario con el email:', email);
+                return null;
+            }
+
+            console.log('Usuario encontrado:', rows[0]);
+            return rows[0];
+        } catch (error) {
+            console.error('Error al buscar usuario por email:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Crea un nuevo usuario en la base de datos.
+     * @param {string} email - El correo electrónico del usuario.
+     * @param {string} password - La contraseña del usuario.
+     * @param {string} [role='USER'] - El rol del usuario.
+     * @returns {Object} - Resultado de la inserción.
+     */
+    createUser: async (email, password, role = 'USER') => {
+        try {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const [result] = await db.query(`
+                INSERT INTO users (email, pass, TIPOUSUARIO, nameuser, lvl, ACTIVO) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            `, [email, hashedPassword, role, 'NombreUsuario', 1, 1]); // Ajusta otros campos según tu esquema
+            return result;
+        } catch (error) {
+            console.error('Error al crear usuario:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Verifica si la contraseña ingresada coincide con la almacenada.
+     * @param {string} inputPassword - La contraseña ingresada por el usuario.
+     * @param {string} storedPassword - La contraseña hasheada almacenada en la base de datos.
+     * @returns {boolean} - Retorna true si las contraseñas coinciden, de lo contrario false.
+     */
+    verifyPassword: async (inputPassword, storedPassword) => {
+        try {
+            console.log('Verificando contraseña: inputPassword:', inputPassword, 'storedPassword:', storedPassword);
+            if (!inputPassword || !storedPassword) {
+                throw new Error('Se requieren ambos argumentos: data y hash.');
+            }
+            return await bcrypt.compare(inputPassword, storedPassword);
+        } catch (error) {
+            console.error('Error en verifyPassword:', error);
+            throw error;
+        }
+    }
+};
+
+
+
+===== Archivo: ./public/js/dashboard.js =====
+Carpeta: ./public/js
+Contenido:
+// public/js/dashboard.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnForm1 = document.getElementById('btnForm1');
+    const btnForm2 = document.getElementById('btnForm2');
+    const btnForm3 = document.getElementById('btnForm3');
+    const formContainer = document.getElementById('formContainer');
+
+    btnForm1.addEventListener('click', () => {
+        loadForm('/auth/user/form1');
+    });
+
+    btnForm2.addEventListener('click', () => {
+        loadForm('/auth/user/form2');
+    });
+
+    btnForm3.addEventListener('click', () => {
+        loadForm('/auth/user/form3');
+    });
+
+    function loadForm(url) {
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'text/html'
+            },
+            credentials: 'include' // Asegura que las cookies se envían con la solicitud
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar el formulario');
+            }
+            return response.text();
+        })
+        .then(html => {
+            formContainer.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ocurrió un error al cargar el formulario.');
+        });
+    }
+});
+
+
+
+===== Archivo: ./public/js/login.js =====
+Carpeta: ./public/js
+Contenido:
+// public/js/login.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('loginForm');
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault(); // Prevenir el envío tradicional del formulario
+
+        const formData = new FormData(loginForm);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'CSRF-Token': data._csrf // Incluir el token CSRF en las cabeceras
+                },
+                body: JSON.stringify({
+                    email: data.email,
+                    password: data.password
+                }),
+                credentials: 'include' // Asegurar que las cookies se envían con la solicitud
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Error al iniciar sesión');
+            }
+
+            console.log('Inicio de sesión exitoso:', result.message);
+            // Redirigir al dashboard o manejar el éxito según tus necesidades
+            window.location.href = '/auth/user/dashboard';
+        } catch (error) {
+            console.error('Error al iniciar sesión:', error.message);
+            alert(`Error al iniciar sesión: ${error.message}`);
+        }
+    });
+});
+
+
+
+===== Archivo: ./routes/authRoutes.js =====
+Carpeta: ./routes
+Contenido:
+// routes/authRoutes.js
+
+const express = require('express');
+const authController = require('../controllers/authController');
+const userController = require('../controllers/userController');
+const adminController = require('../controllers/adminController');
+const authMiddleware = require('../middleware/auth');
+const roleMiddleware = require('../middleware/role');
+
+const router = express.Router();
+
+// Rutas de autenticación
+router.get('/login', (req, res) => {
+    res.render('login', { csrfToken: req.csrfToken() });
+});
+
+router.post('/login', authController.login);
+router.post('/logout', authController.logout);
+
+// Rutas del dashboard de usuario
+router.get('/user/dashboard', authMiddleware, roleMiddleware('USER'), userController.getUserDashboard);
+
+// Rutas para servir los formularios de usuario
+router.get('/user/form1', authMiddleware, roleMiddleware('USER'), userController.getForm1);
+router.get('/user/form2', authMiddleware, roleMiddleware('USER'), userController.getForm2);
+router.get('/user/form3', authMiddleware, roleMiddleware('USER'), userController.getForm3);
+
+// Rutas para manejar las sumisiones de los formularios
+router.post('/user/form1', authMiddleware, roleMiddleware('USER'), userController.handleForm1);
+router.post('/user/form2', authMiddleware, roleMiddleware('USER'), userController.handleForm2);
+router.post('/user/form3', authMiddleware, roleMiddleware('USER'), userController.handleForm3);
+
+// Rutas del dashboard de admin
+router.get('/admin/dashboard', authMiddleware, roleMiddleware('admin'), adminController.getAdminDashboard);
+// routes/authRoutes.js
+
+console.log('authController.login:', authController.login);
+console.log('authController.logout:', authController.logout);
+console.log('userController.getUserDashboard:', userController.getUserDashboard);
+console.log('userController.getForm1:', userController.getForm1);
+console.log('userController.getForm2:', userController.getForm2);
+console.log('userController.getForm3:', userController.getForm3);
+console.log('userController.handleForm1:', userController.handleForm1);
+console.log('userController.handleForm2:', userController.handleForm2);
+console.log('userController.handleForm3:', userController.handleForm3);
+console.log('adminController.getAdminDashboard:', adminController.getAdminDashboard);
+
+module.exports = router;
+
+
+
+===== Archivo: ./scripts/createTestuser.js =====
+Carpeta: ./scripts
+Contenido:
+// scripts/createTestUser.js
+
+const { createUser } = require('../models/userModel');
+
+const crearUsuarioPrueba = async () => {
+    const email = 'testuser@example.com';
+    const password = 'password123'; // Contraseña en texto plano
+    const role = 'USER'; // o 'admin'
+
+    try {
+        await createUser(email, password, role);
+        console.log('Usuario de prueba creado exitosamente.');
+    } catch (error) {
+        console.error('Error al crear usuario de prueba:', error);
+    }
+};
+
+crearUsuarioPrueba();
+
+
+
+===== Archivo: ./server.js =====
+Carpeta: .
+Contenido:
+// server.js
+
+const express = require('express');
+const helmet = require('helmet');
+const path = require('path');
+const session = require('express-session');
+const rateLimiter = require('./middleware/rateLimiter');
+const xssProtection = require('./middleware/xssProtection');
+const authRoutes = require('./routes/authRoutes');
+const { sessionSecret } = require('./config/config');
+const morgan = require('morgan');
+const fs = require('fs');
+const { createStream } = require('rotating-file-stream'); // Para rotación de logs
+const cookieParser = require('cookie-parser');
+const csrf = require('csurf'); // Importar csurf
+require('dotenv').config();
+
+const app = express();
+
+// Middlewares de seguridad con Helmet
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'", 'https:'],
+                imgSrc: ["'self'", 'data:'],
+                connectSrc: ["'self'"],
+                fontSrc: ["'self'", 'https:', 'data:'],
+                objectSrc: ["'none'"],
+                upgradeInsecureRequests: [],
+            },
+        },
+    })
+);
+
+// Middleware para parsear cuerpos de solicitudes
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// Middleware para parsear cookies
+app.use(cookieParser());
+
+// Limitar solicitudes
+app.use(rateLimiter);
+
+// Protección contra ataques XSS
+app.use(xssProtection);
+
+// Logger para registrar solicitudes en logs
+const logDirectory = path.join(__dirname, 'logs');
+
+// Asegurarse de que el directorio de logs existe
+fs.existsSync(logDirectory) || fs.mkdirSync(logDirectory);
+
+const accessLogStream = createStream('access.log', {
+    interval: '1d', // Rotar diariamente
+    path: logDirectory
+});
+
+app.use(morgan('combined', { stream: accessLogStream }));
+
+// Gestión de sesión
+app.use(session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+    }
+}));
+
+// Configurar csurf middleware después de cookieParser y session
+app.use(csrf());
+
+// Middleware para pasar el token CSRF a todas las vistas
+app.use((req, res, next) => {
+    res.locals.csrfToken = req.csrfToken();
+    next();
+});
+
+// Motor de plantillas EJS
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Middleware para servir archivos estáticos - DEBE ESTAR ANTES DE LAS RUTas
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Rutas
+app.use('/auth', authRoutes);
+
+// Ruta raíz redirige a login
+app.get('/', (req, res) => {
+    res.redirect('/auth/login');
+});
+
+// Manejo de errores global
+app.use((err, req, res, next) => {
+    if (err.code === 'EBADCSRFTOKEN') {
+        // Manejar el error de CSRF
+        res.status(403).json({ message: 'Formulario inválido' });
+    } else {
+        console.error(err.stack);
+        res.status(500).json({ message: 'Ocurrió un error en el servidor' });
+    }
+});
+
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
+});
+
+
+
+===== Archivo: ./validations/loginValidation.js =====
+Carpeta: ./validations
+Contenido:
+// validations/loginValidation.js
+
+const Joi = require('joi');
+
+const loginSchema = Joi.object({
+    email: Joi.string().required().messages({
+        'string.email': 'El correo debe ser válido.',
+        'any.required': 'El correo es obligatorio.'
+    }),
+    password: Joi.string().min(1).required().messages({
+        'string.min': 'La contraseña debe tener al menos 6 caracteres.',
+        'any.required': 'La contraseña es obligatoria.'
+    })
+});
+
+module.exports = loginSchema;
+
+
+
+===== Archivo: ./views/dashboard.ejs =====
+Carpeta: ./views
+Contenido:
+<!-- views/dashboard.ejs -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script defer src="/js/dashboard.js"></script>
+</head>
+<body>
+    <h1>Bienvenido, <%= user.email %></h1>
+    <p>Tu rol es: <%= user.TIPOUSUARIO %></p>
+
+    <!-- Botones para cargar formularios -->
+    <button id="btnForm1">Mostrar Formulario 1</button>
+    <button id="btnForm2">Mostrar Formulario 2</button>
+    <button id="btnForm3">Mostrar Formulario 3</button>
+
+    <!-- Contenedor donde se cargarán los formularios -->
+    <div id="formContainer">
+        <!-- Los formularios se cargarán aquí -->
+    </div>
+
+    <!-- Formulario para cerrar sesión -->
+    <form action="/auth/logout" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit">Cerrar Sesión</button>
+    </form>
+</body>
+</html>
+
+
+
+===== Archivo: ./views/forms/form1.ejs =====
+Carpeta: ./views/forms
+Contenido:
+<!-- views/forms/form1.ejs -->
+<form id="form1" action="/auth/user/form1" method="POST">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div>
+        <label for="field1">Campo 1:</label>
+        <input type="text" id="field1" name="field1" required>
+    </div>
+    <button type="submit">Enviar Formulario 1</button>
+</form>
+
+
+
+===== Archivo: ./views/forms/form2.ejs =====
+Carpeta: ./views/forms
+Contenido:
+<!-- views/forms/form1.ejs -->
+<form id="form1" action="/auth/user/form1" method="POST">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div>
+        <label for="field1">Campo 1:</label>
+        <input type="text" id="field1" name="field1" required>
+    </div>
+    <button type="submit">Enviar Formulario 1</button>
+</form>
+
+
+
+===== Archivo: ./views/forms/form3.ejs =====
+Carpeta: ./views/forms
+Contenido:
+<!-- views/forms/form1.ejs -->
+<form id="form1" action="/auth/user/form1" method="POST">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div>
+        <label for="field1">Campo 1:</label>
+        <input type="text" id="field1" name="field1" required>
+    </div>
+    <button type="submit">Enviar Formulario 1</button>
+</form>
+
+
+
+===== Archivo: ./views/login.ejs =====
+Carpeta: ./views
+Contenido:
+<!-- views/login.ejs -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <h1>Iniciar Sesión</h1>
+    <form id="loginForm" action="/auth/login" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div>
+            <label for="email">Correo Electrónico:</label>
+            <input type="text" id="email" name="email" required>
+        </div>
+        <div>
+            <label for="password">Contraseña:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <button type="submit">Ingresar</button>
+    </form>
+
+    <script src="/js/login.js"></script>
+</body>
+</html>
+
+
+

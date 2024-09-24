@@ -1,0 +1,30 @@
+<!-- views/dashboard.ejs -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script defer src="/js/dashboard.js"></script>
+</head>
+<body>
+    <h1>Bienvenido, <%= user.email %></h1>
+    <p>Tu rol es: <%= user.TIPOUSUARIO %></p>
+
+    <!-- Botones para cargar formularios -->
+    <button id="btnForm1">Mostrar Formulario 1</button>
+    <button id="btnForm2">Mostrar Formulario 2</button>
+    <button id="btnForm3">Mostrar Formulario 3</button>
+
+    <!-- Contenedor donde se cargarán los formularios -->
+    <div id="formContainer">
+        <!-- Los formularios se cargarán aquí -->
+    </div>
+
+    <!-- Formulario para cerrar sesión -->
+    <form action="/auth/logout" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit">Cerrar Sesión</button>
+    </form>
+</body>
+</html>
