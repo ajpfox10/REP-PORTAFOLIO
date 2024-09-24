@@ -1,0 +1,9 @@
+<!-- views/forms/form1.ejs -->
+<form id="form1" action="/auth/user/form1" method="POST">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div>
+        <label for="field1">Campo 1:</label>
+        <input type="text" id="field1" name="field1" required>
+    </div>
+    <button type="submit">Enviar Formulario 1</button>
+</form>

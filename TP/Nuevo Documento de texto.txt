@@ -1,0 +1,344 @@
+#!/bin/bash
+
+# Crear directorios
+mkdir -p node-app/{config,controllers,middleware,models,public/{css,js},routes,views}
+
+cd node-app
+
+# Inicializar npm
+npm init -y
+
+# Instalar dependencias
+npm install express bcrypt jsonwebtoken dotenv mysql2 helmet joi express-rate-limit xss-clean nodemon ejs
+
+# Crear archivos necesarios
+touch .env server.js nodemon.json config/config.js config/db.js controllers/authController.js controllers/userController.js middleware/auth.js middleware/rateLimiter.js middleware/xssProtection.js models/userModel.js models/sessionModel.js routes/authRoutes.js routes/userRoutes.js public/css/style.css public/js/script.js views/login.ejs views/register.ejs views/user.ejs views/admin.ejs
+
+# Configurar nodemon.json
+cat <<EOL > nodemon.json
+{
+  "watch": ["server.js", "config/", "controllers/", "middleware/", "models/", "routes/"],
+  "ext": "js,json,ejs",
+  "ignore": ["public/"],
+  "exec": "node server.js"
+}
+EOL
+
+# Variables de entorno en .env
+cat <<EOL > .env
+JWT_SECRET=your_jwt_secret
+SESSION_SECRET=your_session_secret
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=personal
+PORT=3000
+EOL
+
+# Configuración de la base de datos en config.js
+cat <<EOL > config/config.js
+require('dotenv').config();
+
+module.exports = {
+    jwtSecret: process.env.JWT_SECRET,
+    sessionSecret: process.env.SESSION_SECRET,
+    dbConfig: {
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+    },
+    port: process.env.PORT || 3000,
+};
+EOL
+
+# Configuración de la conexión a la base de datos en db.js
+cat <<EOL > config/db.js
+const mysql = require('mysql2/promise');
+const { dbConfig } = require('./config');
+
+const pool = mysql.createPool({
+    host: dbConfig.host,
+    user: dbConfig.user,
+    password: dbConfig.password,
+    database: dbConfig.database,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+module.exports = pool;
+EOL
+
+# Crear server.js
+cat <<EOL > server.js
+const express = require('express');
+const helmet = require('helmet');
+const path = require('path');
+const session = require('express-session');
+const rateLimiter = require('./middleware/rateLimiter');
+const xssProtection = require('./middleware/xssProtection');
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const { sessionSecret } = require('./config/config');
+
+const app = express();
+
+// Middlewares de seguridad
+app.use(helmet());
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// Aplicar limitador de solicitudes y protección contra XSS
+app.use(rateLimiter);
+app.use(xssProtection);
+
+// Archivos estáticos
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Gestión de sesión
+app.use(session({ secret: sessionSecret, resave: false, saveUninitialized: true }));
+
+// Motor de plantillas EJS
+app.set('view engine', 'ejs');
+
+// Rutas
+app.use('/auth', authRoutes);
+app.use('/user', userRoutes);
+
+// Iniciar servidor
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(\`Servidor corriendo en el puerto \${port}\`);
+});
+EOL
+
+# Crear authController.js
+cat <<EOL > controllers/authController.js
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const { findUserByEmail, createUser } = require("../models/userModel");
+const { createSession, findActiveSession, updateSessionEnd } = require("../models/sessionModel");
+const { jwtSecret } = require("../config/config");
+
+exports.login = async (req, res) => {
+    const { email, password } = req.body;
+    const user = await findUserByEmail(email);
+    if (!user || !bcrypt.compareSync(password, user.pass)) {
+        return res.status(401).json({ message: "Credenciales inválidas" });
+    }
+    const activeSession = await findActiveSession(user.iduser);
+    if (activeSession) {
+        return res.status(403).json({ message: "Ya tienes una sesión activa" });
+    }
+    const token = jwt.sign({ id: user.iduser, role: user.TIPOUSUARIO }, jwtSecret, { expiresIn: "1h" });
+    await createSession(user.iduser, token);
+    req.session.token = token;
+    return res.json({ message: "Inicio de sesión exitoso" });
+};
+
+exports.register = async (req, res) => {
+    const { email, password } = req.body;
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    await createUser(email, hashedPassword);
+    res.json({ message: "Usuario registrado exitosamente" });
+};
+
+exports.logout = async (req, res) => {
+    const token = req.session.token;
+    await updateSessionEnd(token);
+    req.session.destroy();
+    res.json({ message: "Sesión cerrada exitosamente" });
+};
+EOL
+
+# Crear userController.js
+cat <<EOL > controllers/userController.js
+exports.getUser = (req, res) => {
+    res.render('user');
+};
+
+exports.getAdmin = (req, res) => {
+    res.render('admin');
+};
+EOL
+
+# Crear auth.js
+cat <<EOL > middleware/auth.js
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+
+module.exports = (req, res, next) => {
+    const token = req.session.token;
+    if (!token) {
+        return res.status(401).json({ message: 'Acceso denegado, inicia sesión' });
+    }
+    try {
+        const verified = jwt.verify(token, jwtSecret);
+        req.user = verified;
+        next();
+    } catch (err) {
+        res.status(400).json({ message: 'Token no válido' });
+    }
+};
+EOL
+
+# Crear rateLimiter.js
+cat <<EOL > middleware/rateLimiter.js
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Demasiadas solicitudes, intenta de nuevo más tarde.'
+});
+
+module.exports = limiter;
+EOL
+
+# Crear xssProtection.js
+cat <<EOL > middleware/xssProtection.js
+const xss = require('xss-clean');
+module.exports = xss();
+EOL
+
+# Crear userModel.js
+cat <<EOL > models/userModel.js
+const db = require('../config/db');
+
+module.exports = {
+    findUserByEmail: async (email) => {
+        const [rows] = await db.query('SELECT * FROM users WHERE nameuser = ?', [email]);
+        return rows[0];
+    },
+    createUser: async (email, password) => {
+        const [result] = await db.query('INSERT INTO users (nameuser, pass) VALUES (?, ?)', [email, password]);
+        return result;
+    }
+};
+EOL
+
+# Crear sessionModel.js
+cat <<EOL > models/sessionModel.js
+const db = require('../config/db');
+
+module.exports = {
+    findActiveSession: async (userId) => {
+        const [rows] = await db.query('SELECT * FROM sessions WHERE iduser = ? AND active = "yes"', [userId]);
+        return rows[0];
+    },
+    createSession: async (userId, token) => {
+        await db.query('INSERT INTO sessions (iduser, token, active) VALUES (?, ?, "yes")', [userId, token]);
+    },
+    updateSessionEnd: async (token) => {
+        await db.query('UPDATE sessions SET active = "no", fecha_fin = NOW() WHERE token = ?', [token]);
+    }
+};
+EOL
+
+# Crear authRoutes.js
+cat <<EOL > routes/authRoutes.js
+const express = require('express');
+const authController = require('../controllers/authController');
+const router = express.Router();
+
+// Rutas de autenticación
+router.post('/login', authController.login);
+router.post('/register', authController.register);
+router.post('/logout', authController.logout);
+
+module.exports = router;
+EOL
+
+# Crear userRoutes.js
+cat <<EOL > routes/userRoutes.js
+const express = require('express');
+const userController = require('../controllers/userController');
+const auth = require('../middleware/auth');
+const router = express.Router();
+
+// Rutas protegidas para usuarios y administradores
+router.get('/user', auth, userController.getUser);
+router.get('/admin', auth, userController.getAdmin);
+
+module.exports = router;
+EOL
+
+# Crear vistas EJS
+cat <<EOL > views/login.ejs
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+</head>
+<body>
+        <form action="/auth/login" method="POST">
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">Login</button>
+    </form>
+</body>
+</html>
+EOL
+
+cat <<EOL > views/register.ejs
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+</head>
+<body>
+    <form action="/auth/register" method="POST">
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">Register</button>
+    </form>
+</body>
+</html>
+EOL
+
+cat <<EOL > views/user.ejs
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User</title>
+</head>
+<body>
+    <h1>Bienvenido, Usuario</h1>
+</body>
+</html>
+EOL
+
+cat <<EOL > views/admin.ejs
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin</title>
+</head>
+<body>
+    <h1>Bienvenido, Administrador</h1>
+</body>
+</html>
+EOL
+
+# Crear script.js vacío
+cat <<EOL > public/js/script.js
+// Archivo vacío
+EOL
+
+# Crear style.css vacío
+cat <<EOL > public/css/style.css
+/* Estilos personalizados para la aplicación */
+EOL
+
+# Mensaje de finalización
+echo "¡El proyecto ha sido configurado exitosamente! Ejecuta 'npm run dev' para iniciar el servidor."
+
