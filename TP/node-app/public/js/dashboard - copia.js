@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     const openSidebarButton = document.getElementById('openSidebarButton');
 
-    // Crear el loader
+    // Opcional: Loader
     const formLoader = document.createElement('div');
     formLoader.className = 'form-loader';
     formLoader.innerHTML = '<div class="spinner"></div>';
@@ -33,8 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(html => {
             formContainer.innerHTML = html;
-            // Reagregar el loader después de reemplazar el contenido
-            formContainer.appendChild(formLoader);
             hideSidebar(); // Ocultar el sidebar al cargar un formulario
         })
         .catch(error => {
@@ -107,9 +105,10 @@ document.addEventListener('DOMContentLoaded', () => {
             showSidebar();
         });
     }
+});
 
-    // **Elimina o comenta cualquier carga inicial de formularios para evitar mostrar el loader al cargar la página**
-    // Por ejemplo, si tienes líneas como estas, asegúrate de que estén comentadas:
+    // Opcional: Cargar un formulario predeterminado al iniciar
+    // Por ejemplo, cargar "Mesa de Entradas" por defecto
     // loadForm('/auth/user/mesaDeEntradas');
     // setActiveButton(btnMesaDeEntradas);
-});
+

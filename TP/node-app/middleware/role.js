@@ -1,9 +1,8 @@
 // middleware/role.js
 
-module.exports = (requiredRole) => {
+module.exports = (requiredRoles) => {
     return (req, res, next) => {
-        const userRole = req.user.role;
-        if (userRole !== requiredRole) {
+        if (!req.user || !requiredRoles.includes(req.user.role)) {
             return res.status(403).json({ message: 'Acceso denegado: No tienes los permisos necesarios' });
         }
         next();
