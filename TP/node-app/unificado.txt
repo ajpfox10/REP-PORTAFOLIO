@@ -88,7 +88,7 @@ exports.login = async (req, res) => {
 
         // Generar JWT
         const token = jwt.sign(
-            { id: user.id, email: user.email, TIPOUSUARIO: user.TIPOUSUARIO },
+            { id: user.id, email: user.email, role: user.TIPOUSUARIO },
             jwtSecret,
             { expiresIn: '1h' }
         );
@@ -128,11 +128,263 @@ exports.logout = async (req, res) => {
 
 
 
+===== Archivo: ./controllers/mesaDeEntradasController - copia.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/mesaDeEntradasController.js
+
+const Joi = require('joi');
+const consultasEchasModel = require('../models/consultasEchasModel');
+const expedientesModel = require('../models/expedientesModel');
+const citacionesModel = require('../models/citacionesModel');
+const pedidosModel = require('../models/pedidosModel');
+const resolucionesModel = require('../models/resolucionesModel');
+
+// Definir el esquema de validación con Joi
+const mesaDeEntradasSchema = Joi.object({
+    motivoConsulta: Joi.string().min(1).max(500).required(),
+    explicacionDada: Joi.string().min(1).max(1000).required(),
+    // Añade más campos según tus necesidades
+});
+
+// Función para renderizar el formulario de Mesa de Entradas
+exports.getMesaDeEntradas = async (req, res) => {
+    try {
+        const [
+            consultasEchas,
+            expedientes,
+            citaciones,
+            pedidos,
+            resoluciones
+        ] = await Promise.all([
+            consultasEchasModel.getAllConsultasEchas(),
+            expedientesModel.getAllExpedientes(),
+            citacionesModel.getAllCitaciones(),
+            pedidosModel.getAllPedidos(),
+            resolucionesModel.getAllResoluciones()
+        ]);
+
+        console.log('consultasEchas:', consultasEchas); // Verificar datos
+
+        res.render('forms/mesaDeEntradas', { 
+            csrfToken: req.csrfToken(),
+            consultasEchas,
+            expedientes,
+            citaciones,
+            pedidos,
+            resoluciones
+        });
+    } catch (error) {
+        console.error('Error al cargar el formulario de Mesa de Entradas:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+// Función para manejar la sumisión del formulario de Mesa de Entradas
+exports.handleMesaDeEntradas = async (req, res) => {
+    const { error, value } = mesaDeEntradasSchema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Mesa de Entradas:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Mesa de Entradas');
+    }
+
+    const { motivoConsulta, explicacionDada } = value;
+    // Procesa los datos de Mesa de Entradas de manera segura
+    console.log('Mesa de Entradas recibida y validada:', { motivoConsulta, explicacionDada });
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
+    res.redirect('/auth/user/dashboard');
+};
+
+// Rutas API para obtener detalles de registros
+exports.getConsultaEchasById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const consulta = await consultasEchasModel.getConsultaEchaById(id);
+        if (!consulta) {
+            return res.status(404).json({ message: 'Consulta Echa no encontrada' });
+        }
+        res.json(consulta);
+    } catch (error) {
+        console.error('Error en API /api/consultasEchas/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getExpedienteById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const expediente = await expedientesModel.getExpedienteById(id);
+        if (!expediente) {
+            return res.status(404).json({ message: 'Expediente no encontrado' });
+        }
+        res.json(expediente);
+    } catch (error) {
+        console.error('Error en API /api/expedientes/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getCitacionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const citacion = await citacionesModel.getCitacionById(id);
+        if (!citacion) {
+            return res.status(404).json({ message: 'Citación no encontrada' });
+        }
+        res.json(citacion);
+    } catch (error) {
+        console.error('Error en API /api/citaciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getPedidoById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const pedido = await pedidosModel.getPedidoById(id);
+        if (!pedido) {
+            return res.status(404).json({ message: 'Pedido no encontrado' });
+        }
+        res.json(pedido);
+    } catch (error) {
+        console.error('Error en API /api/pedidos/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getResolucionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const resolucion = await resolucionesModel.getResolucionById(id);
+        if (!resolucion) {
+            return res.status(404).json({ message: 'Resolución no encontrada' });
+        }
+        res.json(resolucion);
+    } catch (error) {
+        console.error('Error en API /api/resoluciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+
+
+===== Archivo: ./controllers/mesaDeEntradasController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/mesaDeEntradasController.js
+
+const Joi = require('joi');
+const consultasEchasModel = require('../models/consultasEchasModel');
+const expedientesModel = require('../models/expedientesModel');
+const citacionesModel = require('../models/citacionesModel');
+const pedidosModel = require('../models/pedidosModel');
+const resolucionesModel = require('../models/resolucionesModel');
+
+// Definir el esquema de validación con Joi
+const mesaDeEntradasSchema = Joi.object({
+    motivoConsulta: Joi.string().min(1).max(500).required(),
+    explicacionDada: Joi.string().min(1).max(1000).required(),
+    // Añade más campos según tus necesidades
+});
+
+// Función para renderizar el formulario de Mesa de Entradas
+// Función para manejar la sumisión del formulario de Mesa de Entradas
+exports.handleMesaDeEntradas = async (req, res) => {
+    const { error, value } = mesaDeEntradasSchema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Mesa de Entradas:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Mesa de Entradas');
+    }
+
+    const { motivoConsulta, explicacionDada } = value;
+    // Procesa los datos de Mesa de Entradas de manera segura
+    console.log('Mesa de Entradas recibida y validada:', { motivoConsulta, explicacionDada });
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
+    res.redirect('/auth/user/dashboard');
+};
+
+// Rutas API para obtener detalles de registros
+exports.getConsultaEchasById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const consulta = await consultasEchasModel.getConsultaEchaById(id);
+        if (!consulta) {
+            return res.status(404).json({ message: 'Consulta Echa no encontrada' });
+        }
+        res.json(consulta);
+    } catch (error) {
+        console.error('Error en API /api/consultasEchas/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getExpedienteById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const expediente = await expedientesModel.getExpedienteById(id);
+        if (!expediente) {
+            return res.status(404).json({ message: 'Expediente no encontrado' });
+        }
+        res.json(expediente);
+    } catch (error) {
+        console.error('Error en API /api/expedientes/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getCitacionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const citacion = await citacionesModel.getCitacionById(id);
+        if (!citacion) {
+            return res.status(404).json({ message: 'Citación no encontrada' });
+        }
+        res.json(citacion);
+    } catch (error) {
+        console.error('Error en API /api/citaciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getPedidoById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const pedido = await pedidosModel.getPedidoById(id);
+        if (!pedido) {
+            return res.status(404).json({ message: 'Pedido no encontrado' });
+        }
+        res.json(pedido);
+    } catch (error) {
+        console.error('Error en API /api/pedidos/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getResolucionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const resolucion = await resolucionesModel.getResolucionById(id);
+        if (!resolucion) {
+            return res.status(404).json({ message: 'Resolución no encontrada' });
+        }
+        res.json(resolucion);
+    } catch (error) {
+        console.error('Error en API /api/resoluciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+
+
 ===== Archivo: ./controllers/userController.js =====
 Carpeta: ./controllers
 Contenido:
 // controllers/userController.js
-
+const consultasEchasModel = require('../models/consultasEchasModel');
+const expedientesModel = require('../models/expedientesModel');
+const citacionesModel = require('../models/citacionesModel');
+const pedidosModel = require('../models/pedidosModel');
+const resolucionesModel = require('../models/resolucionesModel');
 const Joi = require('joi');
 
 // Función para renderizar el dashboard del usuario
@@ -141,71 +393,90 @@ exports.getUserDashboard = (req, res) => {
 };
 
 // Funciones para servir los formularios
-exports.getForm1 = (req, res) => {
-    res.render('forms/form1', { csrfToken: req.csrfToken() });
+exports.getMesaDeEntradas = async (req, res) => {
+    try {
+        const [consultasEchas, expedientes, citaciones, pedidos, resoluciones] = await Promise.all([
+            consultasEchasModel.getAllConsultasEchas(),
+            expedientesModel.getAllExpedientes(),
+            citacionesModel.getAllCitaciones(),
+            pedidosModel.getAllPedidos(),
+            resolucionesModel.getAllResoluciones()
+        ]);
+        res.render('forms/mesaDeEntradas', { 
+            csrfToken: req.csrfToken(),
+            consultasEchas,
+            expedientes,
+            citaciones,
+            pedidos,
+            resoluciones
+        });
+    } catch (error) {
+        console.error('Error al cargar el formulario de Mesa de Entradas:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
 };
 
-exports.getForm2 = (req, res) => {
-    res.render('forms/form2', { csrfToken: req.csrfToken() });
+exports.getGestion = (req, res) => {
+    res.render('forms/gestion', { csrfToken: req.csrfToken() });
 };
 
-exports.getForm3 = (req, res) => {
-    res.render('forms/form3', { csrfToken: req.csrfToken() });
+exports.getDireccion = (req, res) => {
+    res.render('forms/direccion', { csrfToken: req.csrfToken() });
 };
 
 // Validación de los formularios con Joi
-const form1Schema = Joi.object({
+const mesaDeEntradasSchema = Joi.object({
     field1: Joi.string().min(1).max(100).required()
 });
 
-const form2Schema = Joi.object({
+const gestionSchema = Joi.object({
     field2: Joi.string().min(1).max(100).required()
 });
 
-const form3Schema = Joi.object({
+const direccionSchema = Joi.object({
     field3: Joi.string().min(1).max(100).required()
 });
 
 // Funciones para manejar las sumisiones de los formularios
-exports.handleForm1 = (req, res) => {
-    const { error, value } = form1Schema.validate(req.body);
+exports.handleMesaDeEntradas = (req, res) => {
+    const { error, value } = mesaDeEntradasSchema.validate(req.body);
     if (error) {
-        console.log('Validación fallida en Formulario 1:', error.details[0].message);
-        return res.status(400).send('Datos inválidos en Formulario 1');
+        console.log('Validación fallida en Mesa de Entradas:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Mesa de Entradas');
     }
 
     const { field1 } = value;
-    // Procesa los datos del formulario 1 de manera segura
-    console.log('Formulario 1 recibido y validado:', field1);
+    // Procesa los datos de Mesa de Entradas de manera segura
+    console.log('Mesa de Entradas recibida y validada:', field1);
     // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
     res.redirect('/auth/user/dashboard');
 };
 
-exports.handleForm2 = (req, res) => {
-    const { error, value } = form2Schema.validate(req.body);
+exports.handleGestion = (req, res) => {
+    const { error, value } = gestionSchema.validate(req.body);
     if (error) {
-        console.log('Validación fallida en Formulario 2:', error.details[0].message);
-        return res.status(400).send('Datos inválidos en Formulario 2');
+        console.log('Validación fallida en Gestión:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Gestión');
     }
 
     const { field2 } = value;
-    // Procesa los datos del formulario 2 de manera segura
-    console.log('Formulario 2 recibido y validado:', field2);
-    // Realiza operaciones necesarias
+    // Procesa los datos de Gestión de manera segura
+    console.log('Gestión recibida y validada:', field2);
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
     res.redirect('/auth/user/dashboard');
 };
 
-exports.handleForm3 = (req, res) => {
-    const { error, value } = form3Schema.validate(req.body);
+exports.handleDireccion = (req, res) => {
+    const { error, value } = direccionSchema.validate(req.body);
     if (error) {
-        console.log('Validación fallida en Formulario 3:', error.details[0].message);
-        return res.status(400).send('Datos inválidos en Formulario 3');
+        console.log('Validación fallida en Dirección:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Dirección');
     }
 
     const { field3 } = value;
-    // Procesa los datos del formulario 3 de manera segura
-    console.log('Formulario 3 recibido y validado:', field3);
-    // Realiza operaciones necesarias
+    // Procesa los datos de Dirección de manera segura
+    console.log('Dirección recibida y validada:', field3);
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
     res.redirect('/auth/user/dashboard');
 };
 
@@ -255,6 +526,23 @@ jsFiles.forEach(file => {
 outputStream.end(() => {
     console.log(`Archivo generado: ${outputFilePath}`);
 });
+
+
+
+===== Archivo: ./middleware/adminLevel.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/adminLevel.js
+
+module.exports = (requiredRole, requiredLvl) => {
+    return (req, res, next) => {
+        if (req.user && req.user.role === requiredRole && req.user.lvl === requiredLvl) {
+            next();
+        } else {
+            return res.status(403).json({ message: 'Acceso denegado: No tienes los permisos necesarios' });
+        }
+    };
+};
 
 
 
@@ -321,10 +609,9 @@ Carpeta: ./middleware
 Contenido:
 // middleware/role.js
 
-module.exports = (requiredRole) => {
+module.exports = (requiredRoles) => {
     return (req, res, next) => {
-        const userRole = req.user.role;
-        if (userRole !== requiredRole) {
+        if (!req.user || !requiredRoles.includes(req.user.role)) {
             return res.status(403).json({ message: 'Acceso denegado: No tienes los permisos necesarios' });
         }
         next();
@@ -340,6 +627,201 @@ Contenido:
 const xss = require('xss-clean');
 
 module.exports = xss();
+
+
+
+===== Archivo: ./models/citacionesModel.js =====
+Carpeta: ./models
+Contenido:
+// models/citacionesModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todas las citaciones.
+     * @returns {Array} - Lista de citaciones.
+     */
+    getAllCitaciones: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM citaciones');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener citaciones:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene una citación por su ID.
+     * @param {number} id - ID de la citación.
+     * @returns {Object|null} - Citación o null si no se encuentra.
+     */
+    getCitacionById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM citaciones WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve la citación o null
+        } catch (error) {
+            console.error('Error al obtener citación por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/consultasEchasModel.js =====
+Carpeta: ./models
+Contenido:
+// models/consultasEchasModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todas las consultas echas.
+     * @returns {Array} - Lista de consultas echas.
+     */
+    getAllConsultasEchas: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM consultas_echas');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener consultas echas:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene una consulta echa por su ID.
+     * @param {number} id - ID de la consulta.
+     * @returns {Object|null} - Consulta echa o null si no se encuentra.
+     */
+    getConsultaEchaById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM consultas_echas WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve la consulta o null
+        } catch (error) {
+            console.error('Error al obtener consulta echa por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/expedientesModel.js =====
+Carpeta: ./models
+Contenido:
+// models/expedientesModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todos los expedientes.
+     * @returns {Array} - Lista de expedientes.
+     */
+    getAllExpedientes: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM expedientes');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener expedientes:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene un expediente por su ID.
+     * @param {number} id - ID del expediente.
+     * @returns {Object|null} - Expediente o null si no se encuentra.
+     */
+    getExpedienteById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM expedientes WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve el expediente o null
+        } catch (error) {
+            console.error('Error al obtener expediente por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/pedidosModel.js =====
+Carpeta: ./models
+Contenido:
+// models/pedidosModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todos los pedidos.
+     * @returns {Array} - Lista de pedidos.
+     */
+    getAllPedidos: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM pedidos');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener pedidos:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene un pedido por su ID.
+     * @param {number} id - ID del pedido.
+     * @returns {Object|null} - Pedido o null si no se encuentra.
+     */
+    getPedidoById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM pedidos WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve el pedido o null
+        } catch (error) {
+            console.error('Error al obtener pedido por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/resolucionesModel.js =====
+Carpeta: ./models
+Contenido:
+// models/resolucionesModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todas las resoluciones.
+     * @returns {Array} - Lista de resoluciones.
+     */
+    getAllResoluciones: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM resoluciones');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener resoluciones:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene una resolución por su ID.
+     * @param {number} id - ID de la resolución.
+     * @returns {Object|null} - Resolución o null si no se encuentra.
+     */
+    getResolucionById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM resoluciones WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve la resolución o null
+        } catch (error) {
+            console.error('Error al obtener resolución por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
 
 
 
@@ -414,7 +896,7 @@ module.exports = {
         try {
             const [rows] = await db.query(`
                 SELECT 
-                    iduser AS iduser,
+                    iduser AS id,
                     email, 
                     pass AS password, 
                     TIPOUSUARIO AS TIPOUSUARIO,
@@ -484,30 +966,29 @@ module.exports = {
 
 
 
-===== Archivo: ./public/js/dashboard.js =====
+===== Archivo: ./public/js/dashboard - copia.js =====
 Carpeta: ./public/js
 Contenido:
 // public/js/dashboard.js
 
 document.addEventListener('DOMContentLoaded', () => {
-    const btnForm1 = document.getElementById('btnForm1');
-    const btnForm2 = document.getElementById('btnForm2');
-    const btnForm3 = document.getElementById('btnForm3');
+    const btnMesaDeEntradas = document.getElementById('btnMesaDeEntradas');
+    const btnGestion = document.getElementById('btnGestion');
+    const btnDireccion = document.getElementById('btnDireccion');
     const formContainer = document.getElementById('formContainer');
+    const dashboardSidebar = document.getElementById('dashboardSidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const openSidebarButton = document.getElementById('openSidebarButton');
 
-    btnForm1.addEventListener('click', () => {
-        loadForm('/auth/user/form1');
-    });
+    // Opcional: Loader
+    const formLoader = document.createElement('div');
+    formLoader.className = 'form-loader';
+    formLoader.innerHTML = '<div class="spinner"></div>';
+    formContainer.appendChild(formLoader);
 
-    btnForm2.addEventListener('click', () => {
-        loadForm('/auth/user/form2');
-    });
-
-    btnForm3.addEventListener('click', () => {
-        loadForm('/auth/user/form3');
-    });
-
+    // Función para cargar formularios
     function loadForm(url) {
+        formLoader.style.display = 'block'; // Mostrar el loader
         fetch(url, {
             method: 'GET',
             headers: {
@@ -523,12 +1004,204 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(html => {
             formContainer.innerHTML = html;
+            hideSidebar(); // Ocultar el sidebar al cargar un formulario
         })
         .catch(error => {
             console.error('Error:', error);
             alert('Ocurrió un error al cargar el formulario.');
+        })
+        .finally(() => {
+            formLoader.style.display = 'none'; // Ocultar el loader
         });
     }
+
+    // Event listeners para los botones
+    if (btnMesaDeEntradas) {
+        btnMesaDeEntradas.addEventListener('click', () => {
+            loadForm('/auth/user/mesaDeEntradas');
+            setActiveButton(btnMesaDeEntradas);
+        });
+    }
+
+    if (btnGestion) {
+        btnGestion.addEventListener('click', () => {
+            loadForm('/auth/user/gestion');
+            setActiveButton(btnGestion);
+        });
+    }
+
+    if (btnDireccion) {
+        btnDireccion.addEventListener('click', () => {
+            loadForm('/auth/user/direccion');
+            setActiveButton(btnDireccion);
+        });
+    }
+
+    // Función para resaltar el botón activo
+    function setActiveButton(activeBtn) {
+        const buttons = document.querySelectorAll('.sidebar-button');
+        buttons.forEach(btn => {
+            btn.classList.remove('active-button');
+        });
+        activeBtn.classList.add('active-button');
+    }
+
+    // Función para ocultar el sidebar
+    function hideSidebar() {
+        dashboardSidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+    }
+
+    // Función para mostrar el sidebar
+    function showSidebar() {
+        dashboardSidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+    }
+
+    // Manejar la aparición del sidebar al acercar el mouse al borde izquierdo
+    document.addEventListener('mousemove', (e) => {
+        if (e.clientX <= 50 && !dashboardSidebar.classList.contains('active')) {
+            showSidebar();
+        }
+    });
+
+    // Manejar el clic en el overlay para ocultar el sidebar
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', hideSidebar);
+    }
+
+    // Manejar el clic en el botón para abrir el sidebar (en dispositivos móviles)
+    if (openSidebarButton) {
+        openSidebarButton.addEventListener('click', () => {
+            showSidebar();
+        });
+    }
+});
+
+    // Opcional: Cargar un formulario predeterminado al iniciar
+    // Por ejemplo, cargar "Mesa de Entradas" por defecto
+    // loadForm('/auth/user/mesaDeEntradas');
+    // setActiveButton(btnMesaDeEntradas);
+
+
+
+===== Archivo: ./public/js/dashboard.js =====
+Carpeta: ./public/js
+Contenido:
+// public/js/dashboard.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnMesaDeEntradas = document.getElementById('btnMesaDeEntradas');
+    const btnGestion = document.getElementById('btnGestion');
+    const btnDireccion = document.getElementById('btnDireccion');
+    const formContainer = document.getElementById('formContainer');
+    const dashboardSidebar = document.getElementById('dashboardSidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const openSidebarButton = document.getElementById('openSidebarButton');
+
+    // Crear el loader
+    const formLoader = document.createElement('div');
+    formLoader.className = 'form-loader';
+    formLoader.innerHTML = '<div class="spinner"></div>';
+    formContainer.appendChild(formLoader);
+
+    // Función para cargar formularios
+    function loadForm(url) {
+        formLoader.style.display = 'block'; // Mostrar el loader
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'text/html'
+            },
+            credentials: 'include' // Asegura que las cookies se envían con la solicitud
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar el formulario');
+            }
+            return response.text();
+        })
+        .then(html => {
+            formContainer.innerHTML = html;
+            // Reagregar el loader después de reemplazar el contenido
+            formContainer.appendChild(formLoader);
+            hideSidebar(); // Ocultar el sidebar al cargar un formulario
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ocurrió un error al cargar el formulario.');
+        })
+        .finally(() => {
+            formLoader.style.display = 'none'; // Ocultar el loader
+        });
+    }
+
+    // Event listeners para los botones
+    if (btnMesaDeEntradas) {
+        btnMesaDeEntradas.addEventListener('click', () => {
+            loadForm('/auth/user/mesaDeEntradas');
+            setActiveButton(btnMesaDeEntradas);
+        });
+    }
+
+    if (btnGestion) {
+        btnGestion.addEventListener('click', () => {
+            loadForm('/auth/user/gestion');
+            setActiveButton(btnGestion);
+        });
+    }
+
+    if (btnDireccion) {
+        btnDireccion.addEventListener('click', () => {
+            loadForm('/auth/user/direccion');
+            setActiveButton(btnDireccion);
+        });
+    }
+
+    // Función para resaltar el botón activo
+    function setActiveButton(activeBtn) {
+        const buttons = document.querySelectorAll('.sidebar-button');
+        buttons.forEach(btn => {
+            btn.classList.remove('active-button');
+        });
+        activeBtn.classList.add('active-button');
+    }
+
+    // Función para ocultar el sidebar
+    function hideSidebar() {
+        dashboardSidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+    }
+
+    // Función para mostrar el sidebar
+    function showSidebar() {
+        dashboardSidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+    }
+
+    // Manejar la aparición del sidebar al acercar el mouse al borde izquierdo
+    document.addEventListener('mousemove', (e) => {
+        if (e.clientX <= 50 && !dashboardSidebar.classList.contains('active')) {
+            showSidebar();
+        }
+    });
+
+    // Manejar el clic en el overlay para ocultar el sidebar
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', hideSidebar);
+    }
+
+    // Manejar el clic en el botón para abrir el sidebar (en dispositivos móviles)
+    if (openSidebarButton) {
+        openSidebarButton.addEventListener('click', () => {
+            showSidebar();
+        });
+    }
+
+    // **Elimina o comenta cualquier carga inicial de formularios para evitar mostrar el loader al cargar la página**
+    // Por ejemplo, si tienes líneas como estas, asegúrate de que estén comentadas:
+    // loadForm('/auth/user/mesaDeEntradas');
+    // setActiveButton(btnMesaDeEntradas);
 });
 
 
@@ -590,6 +1263,7 @@ const userController = require('../controllers/userController');
 const adminController = require('../controllers/adminController');
 const authMiddleware = require('../middleware/auth');
 const roleMiddleware = require('../middleware/role');
+const adminLevelMiddleware = require('../middleware/adminLevel'); // Importa el nuevo middleware
 
 const router = express.Router();
 
@@ -602,32 +1276,73 @@ router.post('/login', authController.login);
 router.post('/logout', authController.logout);
 
 // Rutas del dashboard de usuario
-router.get('/user/dashboard', authMiddleware, roleMiddleware('USER'), userController.getUserDashboard);
+router.get('/user/dashboard', authMiddleware, roleMiddleware(['USER', 'admin']), userController.getUserDashboard);
 
 // Rutas para servir los formularios de usuario
-router.get('/user/form1', authMiddleware, roleMiddleware('USER'), userController.getForm1);
-router.get('/user/form2', authMiddleware, roleMiddleware('USER'), userController.getForm2);
-router.get('/user/form3', authMiddleware, roleMiddleware('USER'), userController.getForm3);
+router.get('/user/mesaDeEntradas', authMiddleware, roleMiddleware(['USER', 'admin']), userController.getMesaDeEntradas);
+router.get('/user/gestion', authMiddleware, roleMiddleware(['USER', 'admin']), userController.getGestion);
+
+// Ruta para servir el formulario de Dirección solo para admin lvl 9
+router.get('/user/direccion', authMiddleware, adminLevelMiddleware('admin', 9), userController.getDireccion);
 
 // Rutas para manejar las sumisiones de los formularios
-router.post('/user/form1', authMiddleware, roleMiddleware('USER'), userController.handleForm1);
-router.post('/user/form2', authMiddleware, roleMiddleware('USER'), userController.handleForm2);
-router.post('/user/form3', authMiddleware, roleMiddleware('USER'), userController.handleForm3);
+router.post('/user/mesaDeEntradas', authMiddleware, roleMiddleware(['USER', 'admin']), userController.handleMesaDeEntradas);
+router.post('/user/gestion', authMiddleware, roleMiddleware(['USER', 'admin']), userController.handleGestion);
+router.post('/user/direccion', authMiddleware, adminLevelMiddleware('admin', 9), userController.handleDireccion);
 
 // Rutas del dashboard de admin
-router.get('/admin/dashboard', authMiddleware, roleMiddleware('admin'), adminController.getAdminDashboard);
-// routes/authRoutes.js
+router.get('/admin/dashboard', authMiddleware, roleMiddleware(['admin']), adminController.getAdminDashboard);
 
+// Log de las funciones de controlador (opcional)
 console.log('authController.login:', authController.login);
 console.log('authController.logout:', authController.logout);
 console.log('userController.getUserDashboard:', userController.getUserDashboard);
-console.log('userController.getForm1:', userController.getForm1);
-console.log('userController.getForm2:', userController.getForm2);
-console.log('userController.getForm3:', userController.getForm3);
-console.log('userController.handleForm1:', userController.handleForm1);
-console.log('userController.handleForm2:', userController.handleForm2);
-console.log('userController.handleForm3:', userController.handleForm3);
+console.log('userController.getMesaDeEntradas:', userController.getMesaDeEntradas);
+console.log('userController.getGestion:', userController.getGestion);
+console.log('userController.getDireccion:', userController.getDireccion);
+console.log('userController.handleMesaDeEntradas:', userController.handleMesaDeEntradas);
+console.log('userController.handleGestion:', userController.handleGestion);
+console.log('userController.handleDireccion:', userController.handleDireccion);
 console.log('adminController.getAdminDashboard:', adminController.getAdminDashboard);
+
+module.exports = router;
+
+
+
+===== Archivo: ./routes/mesaDeEntradasRoutes.js =====
+Carpeta: ./routes
+Contenido:
+// routes/mesaDeEntradasRoutes.js
+
+const express = require('express');
+const mesaDeEntradasController = require('../controllers/mesaDeEntradasController');
+const authMiddleware = require('../middleware/auth');
+const roleMiddleware = require('../middleware/role');
+const userController = require('../controllers/userController');
+const router = express.Router();
+
+// Ruta para renderizar el formulario de Mesa de Entradas
+router.get(
+    '/mesaDeEntradas',
+    authMiddleware,
+    roleMiddleware(['USER', 'admin']),
+    mesaDeEntradasController.getMesaDeEntradas
+);
+
+// Ruta para manejar la sumisión del formulario de Mesa de Entradas
+router.get(
+    '/mesaDeEntradas',
+    authMiddleware,
+    roleMiddleware(['USER', 'admin']),
+    userController.getMesaDeEntradas
+);
+
+// Rutas API para obtener detalles de registros
+router.get('/api/consultasEchas/:id', authMiddleware, mesaDeEntradasController.getConsultaEchasById);
+router.get('/api/expedientes/:id', authMiddleware, mesaDeEntradasController.getExpedienteById);
+router.get('/api/citaciones/:id', authMiddleware, mesaDeEntradasController.getCitacionById);
+router.get('/api/pedidos/:id', authMiddleware, mesaDeEntradasController.getPedidoById);
+router.get('/api/resoluciones/:id', authMiddleware, mesaDeEntradasController.getResolucionById);
 
 module.exports = router;
 
@@ -669,6 +1384,7 @@ const session = require('express-session');
 const rateLimiter = require('./middleware/rateLimiter');
 const xssProtection = require('./middleware/xssProtection');
 const authRoutes = require('./routes/authRoutes');
+const mesaDeEntradasRoutes = require('./routes/mesaDeEntradasRoutes'); // Importar el nuevo archivo de rutas
 const { sessionSecret } = require('./config/config');
 const morgan = require('morgan');
 const fs = require('fs');
@@ -753,7 +1469,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas
 app.use('/auth', authRoutes);
-
+app.use('/auth/user', mesaDeEntradasRoutes); // Montar las rutas de Mesa de Entradas bajo /auth/user
 // Ruta raíz redirige a login
 app.get('/', (req, res) => {
     res.redirect('/auth/login');
@@ -871,7 +1587,7 @@ exports.login = async (req, res) => {
 
         // Generar JWT
         const token = jwt.sign(
-            { id: user.id, email: user.email, TIPOUSUARIO: user.TIPOUSUARIO },
+            { id: user.id, email: user.email, role: user.TIPOUSUARIO },
             jwtSecret,
             { expiresIn: '1h' }
         );
@@ -911,11 +1627,263 @@ exports.logout = async (req, res) => {
 
 
 
+===== Archivo: ./controllers/mesaDeEntradasController - copia.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/mesaDeEntradasController.js
+
+const Joi = require('joi');
+const consultasEchasModel = require('../models/consultasEchasModel');
+const expedientesModel = require('../models/expedientesModel');
+const citacionesModel = require('../models/citacionesModel');
+const pedidosModel = require('../models/pedidosModel');
+const resolucionesModel = require('../models/resolucionesModel');
+
+// Definir el esquema de validación con Joi
+const mesaDeEntradasSchema = Joi.object({
+    motivoConsulta: Joi.string().min(1).max(500).required(),
+    explicacionDada: Joi.string().min(1).max(1000).required(),
+    // Añade más campos según tus necesidades
+});
+
+// Función para renderizar el formulario de Mesa de Entradas
+exports.getMesaDeEntradas = async (req, res) => {
+    try {
+        const [
+            consultasEchas,
+            expedientes,
+            citaciones,
+            pedidos,
+            resoluciones
+        ] = await Promise.all([
+            consultasEchasModel.getAllConsultasEchas(),
+            expedientesModel.getAllExpedientes(),
+            citacionesModel.getAllCitaciones(),
+            pedidosModel.getAllPedidos(),
+            resolucionesModel.getAllResoluciones()
+        ]);
+
+        console.log('consultasEchas:', consultasEchas); // Verificar datos
+
+        res.render('forms/mesaDeEntradas', { 
+            csrfToken: req.csrfToken(),
+            consultasEchas,
+            expedientes,
+            citaciones,
+            pedidos,
+            resoluciones
+        });
+    } catch (error) {
+        console.error('Error al cargar el formulario de Mesa de Entradas:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+// Función para manejar la sumisión del formulario de Mesa de Entradas
+exports.handleMesaDeEntradas = async (req, res) => {
+    const { error, value } = mesaDeEntradasSchema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Mesa de Entradas:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Mesa de Entradas');
+    }
+
+    const { motivoConsulta, explicacionDada } = value;
+    // Procesa los datos de Mesa de Entradas de manera segura
+    console.log('Mesa de Entradas recibida y validada:', { motivoConsulta, explicacionDada });
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
+    res.redirect('/auth/user/dashboard');
+};
+
+// Rutas API para obtener detalles de registros
+exports.getConsultaEchasById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const consulta = await consultasEchasModel.getConsultaEchaById(id);
+        if (!consulta) {
+            return res.status(404).json({ message: 'Consulta Echa no encontrada' });
+        }
+        res.json(consulta);
+    } catch (error) {
+        console.error('Error en API /api/consultasEchas/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getExpedienteById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const expediente = await expedientesModel.getExpedienteById(id);
+        if (!expediente) {
+            return res.status(404).json({ message: 'Expediente no encontrado' });
+        }
+        res.json(expediente);
+    } catch (error) {
+        console.error('Error en API /api/expedientes/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getCitacionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const citacion = await citacionesModel.getCitacionById(id);
+        if (!citacion) {
+            return res.status(404).json({ message: 'Citación no encontrada' });
+        }
+        res.json(citacion);
+    } catch (error) {
+        console.error('Error en API /api/citaciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getPedidoById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const pedido = await pedidosModel.getPedidoById(id);
+        if (!pedido) {
+            return res.status(404).json({ message: 'Pedido no encontrado' });
+        }
+        res.json(pedido);
+    } catch (error) {
+        console.error('Error en API /api/pedidos/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getResolucionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const resolucion = await resolucionesModel.getResolucionById(id);
+        if (!resolucion) {
+            return res.status(404).json({ message: 'Resolución no encontrada' });
+        }
+        res.json(resolucion);
+    } catch (error) {
+        console.error('Error en API /api/resoluciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+
+
+===== Archivo: ./controllers/mesaDeEntradasController.js =====
+Carpeta: ./controllers
+Contenido:
+// controllers/mesaDeEntradasController.js
+
+const Joi = require('joi');
+const consultasEchasModel = require('../models/consultasEchasModel');
+const expedientesModel = require('../models/expedientesModel');
+const citacionesModel = require('../models/citacionesModel');
+const pedidosModel = require('../models/pedidosModel');
+const resolucionesModel = require('../models/resolucionesModel');
+
+// Definir el esquema de validación con Joi
+const mesaDeEntradasSchema = Joi.object({
+    motivoConsulta: Joi.string().min(1).max(500).required(),
+    explicacionDada: Joi.string().min(1).max(1000).required(),
+    // Añade más campos según tus necesidades
+});
+
+// Función para renderizar el formulario de Mesa de Entradas
+// Función para manejar la sumisión del formulario de Mesa de Entradas
+exports.handleMesaDeEntradas = async (req, res) => {
+    const { error, value } = mesaDeEntradasSchema.validate(req.body);
+    if (error) {
+        console.log('Validación fallida en Mesa de Entradas:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Mesa de Entradas');
+    }
+
+    const { motivoConsulta, explicacionDada } = value;
+    // Procesa los datos de Mesa de Entradas de manera segura
+    console.log('Mesa de Entradas recibida y validada:', { motivoConsulta, explicacionDada });
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
+    res.redirect('/auth/user/dashboard');
+};
+
+// Rutas API para obtener detalles de registros
+exports.getConsultaEchasById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const consulta = await consultasEchasModel.getConsultaEchaById(id);
+        if (!consulta) {
+            return res.status(404).json({ message: 'Consulta Echa no encontrada' });
+        }
+        res.json(consulta);
+    } catch (error) {
+        console.error('Error en API /api/consultasEchas/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getExpedienteById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const expediente = await expedientesModel.getExpedienteById(id);
+        if (!expediente) {
+            return res.status(404).json({ message: 'Expediente no encontrado' });
+        }
+        res.json(expediente);
+    } catch (error) {
+        console.error('Error en API /api/expedientes/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getCitacionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const citacion = await citacionesModel.getCitacionById(id);
+        if (!citacion) {
+            return res.status(404).json({ message: 'Citación no encontrada' });
+        }
+        res.json(citacion);
+    } catch (error) {
+        console.error('Error en API /api/citaciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getPedidoById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const pedido = await pedidosModel.getPedidoById(id);
+        if (!pedido) {
+            return res.status(404).json({ message: 'Pedido no encontrado' });
+        }
+        res.json(pedido);
+    } catch (error) {
+        console.error('Error en API /api/pedidos/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+exports.getResolucionById = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const resolucion = await resolucionesModel.getResolucionById(id);
+        if (!resolucion) {
+            return res.status(404).json({ message: 'Resolución no encontrada' });
+        }
+        res.json(resolucion);
+    } catch (error) {
+        console.error('Error en API /api/resoluciones/:id:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
+};
+
+
+
 ===== Archivo: ./controllers/userController.js =====
 Carpeta: ./controllers
 Contenido:
 // controllers/userController.js
-
+const consultasEchasModel = require('../models/consultasEchasModel');
+const expedientesModel = require('../models/expedientesModel');
+const citacionesModel = require('../models/citacionesModel');
+const pedidosModel = require('../models/pedidosModel');
+const resolucionesModel = require('../models/resolucionesModel');
 const Joi = require('joi');
 
 // Función para renderizar el dashboard del usuario
@@ -924,71 +1892,90 @@ exports.getUserDashboard = (req, res) => {
 };
 
 // Funciones para servir los formularios
-exports.getForm1 = (req, res) => {
-    res.render('forms/form1', { csrfToken: req.csrfToken() });
+exports.getMesaDeEntradas = async (req, res) => {
+    try {
+        const [consultasEchas, expedientes, citaciones, pedidos, resoluciones] = await Promise.all([
+            consultasEchasModel.getAllConsultasEchas(),
+            expedientesModel.getAllExpedientes(),
+            citacionesModel.getAllCitaciones(),
+            pedidosModel.getAllPedidos(),
+            resolucionesModel.getAllResoluciones()
+        ]);
+        res.render('forms/mesaDeEntradas', { 
+            csrfToken: req.csrfToken(),
+            consultasEchas,
+            expedientes,
+            citaciones,
+            pedidos,
+            resoluciones
+        });
+    } catch (error) {
+        console.error('Error al cargar el formulario de Mesa de Entradas:', error);
+        res.status(500).json({ message: 'Error en el servidor' });
+    }
 };
 
-exports.getForm2 = (req, res) => {
-    res.render('forms/form2', { csrfToken: req.csrfToken() });
+exports.getGestion = (req, res) => {
+    res.render('forms/gestion', { csrfToken: req.csrfToken() });
 };
 
-exports.getForm3 = (req, res) => {
-    res.render('forms/form3', { csrfToken: req.csrfToken() });
+exports.getDireccion = (req, res) => {
+    res.render('forms/direccion', { csrfToken: req.csrfToken() });
 };
 
 // Validación de los formularios con Joi
-const form1Schema = Joi.object({
+const mesaDeEntradasSchema = Joi.object({
     field1: Joi.string().min(1).max(100).required()
 });
 
-const form2Schema = Joi.object({
+const gestionSchema = Joi.object({
     field2: Joi.string().min(1).max(100).required()
 });
 
-const form3Schema = Joi.object({
+const direccionSchema = Joi.object({
     field3: Joi.string().min(1).max(100).required()
 });
 
 // Funciones para manejar las sumisiones de los formularios
-exports.handleForm1 = (req, res) => {
-    const { error, value } = form1Schema.validate(req.body);
+exports.handleMesaDeEntradas = (req, res) => {
+    const { error, value } = mesaDeEntradasSchema.validate(req.body);
     if (error) {
-        console.log('Validación fallida en Formulario 1:', error.details[0].message);
-        return res.status(400).send('Datos inválidos en Formulario 1');
+        console.log('Validación fallida en Mesa de Entradas:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Mesa de Entradas');
     }
 
     const { field1 } = value;
-    // Procesa los datos del formulario 1 de manera segura
-    console.log('Formulario 1 recibido y validado:', field1);
+    // Procesa los datos de Mesa de Entradas de manera segura
+    console.log('Mesa de Entradas recibida y validada:', field1);
     // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
     res.redirect('/auth/user/dashboard');
 };
 
-exports.handleForm2 = (req, res) => {
-    const { error, value } = form2Schema.validate(req.body);
+exports.handleGestion = (req, res) => {
+    const { error, value } = gestionSchema.validate(req.body);
     if (error) {
-        console.log('Validación fallida en Formulario 2:', error.details[0].message);
-        return res.status(400).send('Datos inválidos en Formulario 2');
+        console.log('Validación fallida en Gestión:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Gestión');
     }
 
     const { field2 } = value;
-    // Procesa los datos del formulario 2 de manera segura
-    console.log('Formulario 2 recibido y validado:', field2);
-    // Realiza operaciones necesarias
+    // Procesa los datos de Gestión de manera segura
+    console.log('Gestión recibida y validada:', field2);
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
     res.redirect('/auth/user/dashboard');
 };
 
-exports.handleForm3 = (req, res) => {
-    const { error, value } = form3Schema.validate(req.body);
+exports.handleDireccion = (req, res) => {
+    const { error, value } = direccionSchema.validate(req.body);
     if (error) {
-        console.log('Validación fallida en Formulario 3:', error.details[0].message);
-        return res.status(400).send('Datos inválidos en Formulario 3');
+        console.log('Validación fallida en Dirección:', error.details[0].message);
+        return res.status(400).send('Datos inválidos en Dirección');
     }
 
     const { field3 } = value;
-    // Procesa los datos del formulario 3 de manera segura
-    console.log('Formulario 3 recibido y validado:', field3);
-    // Realiza operaciones necesarias
+    // Procesa los datos de Dirección de manera segura
+    console.log('Dirección recibida y validada:', field3);
+    // Realiza operaciones necesarias (base de datos, lógica de negocio, etc.)
     res.redirect('/auth/user/dashboard');
 };
 
@@ -1038,6 +2025,23 @@ jsFiles.forEach(file => {
 outputStream.end(() => {
     console.log(`Archivo generado: ${outputFilePath}`);
 });
+
+
+
+===== Archivo: ./middleware/adminLevel.js =====
+Carpeta: ./middleware
+Contenido:
+// middleware/adminLevel.js
+
+module.exports = (requiredRole, requiredLvl) => {
+    return (req, res, next) => {
+        if (req.user && req.user.role === requiredRole && req.user.lvl === requiredLvl) {
+            next();
+        } else {
+            return res.status(403).json({ message: 'Acceso denegado: No tienes los permisos necesarios' });
+        }
+    };
+};
 
 
 
@@ -1104,10 +2108,9 @@ Carpeta: ./middleware
 Contenido:
 // middleware/role.js
 
-module.exports = (requiredRole) => {
+module.exports = (requiredRoles) => {
     return (req, res, next) => {
-        const userRole = req.user.role;
-        if (userRole !== requiredRole) {
+        if (!req.user || !requiredRoles.includes(req.user.role)) {
             return res.status(403).json({ message: 'Acceso denegado: No tienes los permisos necesarios' });
         }
         next();
@@ -1123,6 +2126,201 @@ Contenido:
 const xss = require('xss-clean');
 
 module.exports = xss();
+
+
+
+===== Archivo: ./models/citacionesModel.js =====
+Carpeta: ./models
+Contenido:
+// models/citacionesModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todas las citaciones.
+     * @returns {Array} - Lista de citaciones.
+     */
+    getAllCitaciones: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM citaciones');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener citaciones:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene una citación por su ID.
+     * @param {number} id - ID de la citación.
+     * @returns {Object|null} - Citación o null si no se encuentra.
+     */
+    getCitacionById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM citaciones WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve la citación o null
+        } catch (error) {
+            console.error('Error al obtener citación por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/consultasEchasModel.js =====
+Carpeta: ./models
+Contenido:
+// models/consultasEchasModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todas las consultas echas.
+     * @returns {Array} - Lista de consultas echas.
+     */
+    getAllConsultasEchas: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM consultas_echas');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener consultas echas:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene una consulta echa por su ID.
+     * @param {number} id - ID de la consulta.
+     * @returns {Object|null} - Consulta echa o null si no se encuentra.
+     */
+    getConsultaEchaById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM consultas_echas WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve la consulta o null
+        } catch (error) {
+            console.error('Error al obtener consulta echa por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/expedientesModel.js =====
+Carpeta: ./models
+Contenido:
+// models/expedientesModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todos los expedientes.
+     * @returns {Array} - Lista de expedientes.
+     */
+    getAllExpedientes: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM expedientes');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener expedientes:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene un expediente por su ID.
+     * @param {number} id - ID del expediente.
+     * @returns {Object|null} - Expediente o null si no se encuentra.
+     */
+    getExpedienteById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM expedientes WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve el expediente o null
+        } catch (error) {
+            console.error('Error al obtener expediente por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/pedidosModel.js =====
+Carpeta: ./models
+Contenido:
+// models/pedidosModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todos los pedidos.
+     * @returns {Array} - Lista de pedidos.
+     */
+    getAllPedidos: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM pedidos');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener pedidos:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene un pedido por su ID.
+     * @param {number} id - ID del pedido.
+     * @returns {Object|null} - Pedido o null si no se encuentra.
+     */
+    getPedidoById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM pedidos WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve el pedido o null
+        } catch (error) {
+            console.error('Error al obtener pedido por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
+
+
+
+===== Archivo: ./models/resolucionesModel.js =====
+Carpeta: ./models
+Contenido:
+// models/resolucionesModel.js
+const db = require('../config/db');
+
+module.exports = {
+    /**
+     * Obtiene todas las resoluciones.
+     * @returns {Array} - Lista de resoluciones.
+     */
+    getAllResoluciones: async () => {
+        try {
+            const [rows] = await db.query('SELECT * FROM resoluciones');
+            return rows; // Devuelve todas las filas
+        } catch (error) {
+            console.error('Error al obtener resoluciones:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    },
+
+    /**
+     * Obtiene una resolución por su ID.
+     * @param {number} id - ID de la resolución.
+     * @returns {Object|null} - Resolución o null si no se encuentra.
+     */
+    getResolucionById: async (id) => {
+        try {
+            const [rows] = await db.query('SELECT * FROM resoluciones WHERE id = ?', [id]); // Consulta segura
+            return rows[0] || null; // Devuelve la resolución o null
+        } catch (error) {
+            console.error('Error al obtener resolución por ID:', error);
+            throw error; // Lanza el error para manejo posterior
+        }
+    }
+};
 
 
 
@@ -1197,7 +2395,7 @@ module.exports = {
         try {
             const [rows] = await db.query(`
                 SELECT 
-                    iduser AS iduser,
+                    iduser AS id,
                     email, 
                     pass AS password, 
                     TIPOUSUARIO AS TIPOUSUARIO,
@@ -1267,30 +2465,29 @@ module.exports = {
 
 
 
-===== Archivo: ./public/js/dashboard.js =====
+===== Archivo: ./public/js/dashboard - copia.js =====
 Carpeta: ./public/js
 Contenido:
 // public/js/dashboard.js
 
 document.addEventListener('DOMContentLoaded', () => {
-    const btnForm1 = document.getElementById('btnForm1');
-    const btnForm2 = document.getElementById('btnForm2');
-    const btnForm3 = document.getElementById('btnForm3');
+    const btnMesaDeEntradas = document.getElementById('btnMesaDeEntradas');
+    const btnGestion = document.getElementById('btnGestion');
+    const btnDireccion = document.getElementById('btnDireccion');
     const formContainer = document.getElementById('formContainer');
+    const dashboardSidebar = document.getElementById('dashboardSidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const openSidebarButton = document.getElementById('openSidebarButton');
 
-    btnForm1.addEventListener('click', () => {
-        loadForm('/auth/user/form1');
-    });
+    // Opcional: Loader
+    const formLoader = document.createElement('div');
+    formLoader.className = 'form-loader';
+    formLoader.innerHTML = '<div class="spinner"></div>';
+    formContainer.appendChild(formLoader);
 
-    btnForm2.addEventListener('click', () => {
-        loadForm('/auth/user/form2');
-    });
-
-    btnForm3.addEventListener('click', () => {
-        loadForm('/auth/user/form3');
-    });
-
+    // Función para cargar formularios
     function loadForm(url) {
+        formLoader.style.display = 'block'; // Mostrar el loader
         fetch(url, {
             method: 'GET',
             headers: {
@@ -1306,12 +2503,204 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(html => {
             formContainer.innerHTML = html;
+            hideSidebar(); // Ocultar el sidebar al cargar un formulario
         })
         .catch(error => {
             console.error('Error:', error);
             alert('Ocurrió un error al cargar el formulario.');
+        })
+        .finally(() => {
+            formLoader.style.display = 'none'; // Ocultar el loader
         });
     }
+
+    // Event listeners para los botones
+    if (btnMesaDeEntradas) {
+        btnMesaDeEntradas.addEventListener('click', () => {
+            loadForm('/auth/user/mesaDeEntradas');
+            setActiveButton(btnMesaDeEntradas);
+        });
+    }
+
+    if (btnGestion) {
+        btnGestion.addEventListener('click', () => {
+            loadForm('/auth/user/gestion');
+            setActiveButton(btnGestion);
+        });
+    }
+
+    if (btnDireccion) {
+        btnDireccion.addEventListener('click', () => {
+            loadForm('/auth/user/direccion');
+            setActiveButton(btnDireccion);
+        });
+    }
+
+    // Función para resaltar el botón activo
+    function setActiveButton(activeBtn) {
+        const buttons = document.querySelectorAll('.sidebar-button');
+        buttons.forEach(btn => {
+            btn.classList.remove('active-button');
+        });
+        activeBtn.classList.add('active-button');
+    }
+
+    // Función para ocultar el sidebar
+    function hideSidebar() {
+        dashboardSidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+    }
+
+    // Función para mostrar el sidebar
+    function showSidebar() {
+        dashboardSidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+    }
+
+    // Manejar la aparición del sidebar al acercar el mouse al borde izquierdo
+    document.addEventListener('mousemove', (e) => {
+        if (e.clientX <= 50 && !dashboardSidebar.classList.contains('active')) {
+            showSidebar();
+        }
+    });
+
+    // Manejar el clic en el overlay para ocultar el sidebar
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', hideSidebar);
+    }
+
+    // Manejar el clic en el botón para abrir el sidebar (en dispositivos móviles)
+    if (openSidebarButton) {
+        openSidebarButton.addEventListener('click', () => {
+            showSidebar();
+        });
+    }
+});
+
+    // Opcional: Cargar un formulario predeterminado al iniciar
+    // Por ejemplo, cargar "Mesa de Entradas" por defecto
+    // loadForm('/auth/user/mesaDeEntradas');
+    // setActiveButton(btnMesaDeEntradas);
+
+
+
+===== Archivo: ./public/js/dashboard.js =====
+Carpeta: ./public/js
+Contenido:
+// public/js/dashboard.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnMesaDeEntradas = document.getElementById('btnMesaDeEntradas');
+    const btnGestion = document.getElementById('btnGestion');
+    const btnDireccion = document.getElementById('btnDireccion');
+    const formContainer = document.getElementById('formContainer');
+    const dashboardSidebar = document.getElementById('dashboardSidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const openSidebarButton = document.getElementById('openSidebarButton');
+
+    // Crear el loader
+    const formLoader = document.createElement('div');
+    formLoader.className = 'form-loader';
+    formLoader.innerHTML = '<div class="spinner"></div>';
+    formContainer.appendChild(formLoader);
+
+    // Función para cargar formularios
+    function loadForm(url) {
+        formLoader.style.display = 'block'; // Mostrar el loader
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'text/html'
+            },
+            credentials: 'include' // Asegura que las cookies se envían con la solicitud
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar el formulario');
+            }
+            return response.text();
+        })
+        .then(html => {
+            formContainer.innerHTML = html;
+            // Reagregar el loader después de reemplazar el contenido
+            formContainer.appendChild(formLoader);
+            hideSidebar(); // Ocultar el sidebar al cargar un formulario
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ocurrió un error al cargar el formulario.');
+        })
+        .finally(() => {
+            formLoader.style.display = 'none'; // Ocultar el loader
+        });
+    }
+
+    // Event listeners para los botones
+    if (btnMesaDeEntradas) {
+        btnMesaDeEntradas.addEventListener('click', () => {
+            loadForm('/auth/user/mesaDeEntradas');
+            setActiveButton(btnMesaDeEntradas);
+        });
+    }
+
+    if (btnGestion) {
+        btnGestion.addEventListener('click', () => {
+            loadForm('/auth/user/gestion');
+            setActiveButton(btnGestion);
+        });
+    }
+
+    if (btnDireccion) {
+        btnDireccion.addEventListener('click', () => {
+            loadForm('/auth/user/direccion');
+            setActiveButton(btnDireccion);
+        });
+    }
+
+    // Función para resaltar el botón activo
+    function setActiveButton(activeBtn) {
+        const buttons = document.querySelectorAll('.sidebar-button');
+        buttons.forEach(btn => {
+            btn.classList.remove('active-button');
+        });
+        activeBtn.classList.add('active-button');
+    }
+
+    // Función para ocultar el sidebar
+    function hideSidebar() {
+        dashboardSidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+    }
+
+    // Función para mostrar el sidebar
+    function showSidebar() {
+        dashboardSidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+    }
+
+    // Manejar la aparición del sidebar al acercar el mouse al borde izquierdo
+    document.addEventListener('mousemove', (e) => {
+        if (e.clientX <= 50 && !dashboardSidebar.classList.contains('active')) {
+            showSidebar();
+        }
+    });
+
+    // Manejar el clic en el overlay para ocultar el sidebar
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', hideSidebar);
+    }
+
+    // Manejar el clic en el botón para abrir el sidebar (en dispositivos móviles)
+    if (openSidebarButton) {
+        openSidebarButton.addEventListener('click', () => {
+            showSidebar();
+        });
+    }
+
+    // **Elimina o comenta cualquier carga inicial de formularios para evitar mostrar el loader al cargar la página**
+    // Por ejemplo, si tienes líneas como estas, asegúrate de que estén comentadas:
+    // loadForm('/auth/user/mesaDeEntradas');
+    // setActiveButton(btnMesaDeEntradas);
 });
 
 
@@ -1373,6 +2762,7 @@ const userController = require('../controllers/userController');
 const adminController = require('../controllers/adminController');
 const authMiddleware = require('../middleware/auth');
 const roleMiddleware = require('../middleware/role');
+const adminLevelMiddleware = require('../middleware/adminLevel'); // Importa el nuevo middleware
 
 const router = express.Router();
 
@@ -1385,32 +2775,73 @@ router.post('/login', authController.login);
 router.post('/logout', authController.logout);
 
 // Rutas del dashboard de usuario
-router.get('/user/dashboard', authMiddleware, roleMiddleware('USER'), userController.getUserDashboard);
+router.get('/user/dashboard', authMiddleware, roleMiddleware(['USER', 'admin']), userController.getUserDashboard);
 
 // Rutas para servir los formularios de usuario
-router.get('/user/form1', authMiddleware, roleMiddleware('USER'), userController.getForm1);
-router.get('/user/form2', authMiddleware, roleMiddleware('USER'), userController.getForm2);
-router.get('/user/form3', authMiddleware, roleMiddleware('USER'), userController.getForm3);
+router.get('/user/mesaDeEntradas', authMiddleware, roleMiddleware(['USER', 'admin']), userController.getMesaDeEntradas);
+router.get('/user/gestion', authMiddleware, roleMiddleware(['USER', 'admin']), userController.getGestion);
+
+// Ruta para servir el formulario de Dirección solo para admin lvl 9
+router.get('/user/direccion', authMiddleware, adminLevelMiddleware('admin', 9), userController.getDireccion);
 
 // Rutas para manejar las sumisiones de los formularios
-router.post('/user/form1', authMiddleware, roleMiddleware('USER'), userController.handleForm1);
-router.post('/user/form2', authMiddleware, roleMiddleware('USER'), userController.handleForm2);
-router.post('/user/form3', authMiddleware, roleMiddleware('USER'), userController.handleForm3);
+router.post('/user/mesaDeEntradas', authMiddleware, roleMiddleware(['USER', 'admin']), userController.handleMesaDeEntradas);
+router.post('/user/gestion', authMiddleware, roleMiddleware(['USER', 'admin']), userController.handleGestion);
+router.post('/user/direccion', authMiddleware, adminLevelMiddleware('admin', 9), userController.handleDireccion);
 
 // Rutas del dashboard de admin
-router.get('/admin/dashboard', authMiddleware, roleMiddleware('admin'), adminController.getAdminDashboard);
-// routes/authRoutes.js
+router.get('/admin/dashboard', authMiddleware, roleMiddleware(['admin']), adminController.getAdminDashboard);
 
+// Log de las funciones de controlador (opcional)
 console.log('authController.login:', authController.login);
 console.log('authController.logout:', authController.logout);
 console.log('userController.getUserDashboard:', userController.getUserDashboard);
-console.log('userController.getForm1:', userController.getForm1);
-console.log('userController.getForm2:', userController.getForm2);
-console.log('userController.getForm3:', userController.getForm3);
-console.log('userController.handleForm1:', userController.handleForm1);
-console.log('userController.handleForm2:', userController.handleForm2);
-console.log('userController.handleForm3:', userController.handleForm3);
+console.log('userController.getMesaDeEntradas:', userController.getMesaDeEntradas);
+console.log('userController.getGestion:', userController.getGestion);
+console.log('userController.getDireccion:', userController.getDireccion);
+console.log('userController.handleMesaDeEntradas:', userController.handleMesaDeEntradas);
+console.log('userController.handleGestion:', userController.handleGestion);
+console.log('userController.handleDireccion:', userController.handleDireccion);
 console.log('adminController.getAdminDashboard:', adminController.getAdminDashboard);
+
+module.exports = router;
+
+
+
+===== Archivo: ./routes/mesaDeEntradasRoutes.js =====
+Carpeta: ./routes
+Contenido:
+// routes/mesaDeEntradasRoutes.js
+
+const express = require('express');
+const mesaDeEntradasController = require('../controllers/mesaDeEntradasController');
+const authMiddleware = require('../middleware/auth');
+const roleMiddleware = require('../middleware/role');
+const userController = require('../controllers/userController');
+const router = express.Router();
+
+// Ruta para renderizar el formulario de Mesa de Entradas
+router.get(
+    '/mesaDeEntradas',
+    authMiddleware,
+    roleMiddleware(['USER', 'admin']),
+    mesaDeEntradasController.getMesaDeEntradas
+);
+
+// Ruta para manejar la sumisión del formulario de Mesa de Entradas
+router.get(
+    '/mesaDeEntradas',
+    authMiddleware,
+    roleMiddleware(['USER', 'admin']),
+    userController.getMesaDeEntradas
+);
+
+// Rutas API para obtener detalles de registros
+router.get('/api/consultasEchas/:id', authMiddleware, mesaDeEntradasController.getConsultaEchasById);
+router.get('/api/expedientes/:id', authMiddleware, mesaDeEntradasController.getExpedienteById);
+router.get('/api/citaciones/:id', authMiddleware, mesaDeEntradasController.getCitacionById);
+router.get('/api/pedidos/:id', authMiddleware, mesaDeEntradasController.getPedidoById);
+router.get('/api/resoluciones/:id', authMiddleware, mesaDeEntradasController.getResolucionById);
 
 module.exports = router;
 
@@ -1452,6 +2883,7 @@ const session = require('express-session');
 const rateLimiter = require('./middleware/rateLimiter');
 const xssProtection = require('./middleware/xssProtection');
 const authRoutes = require('./routes/authRoutes');
+const mesaDeEntradasRoutes = require('./routes/mesaDeEntradasRoutes'); // Importar el nuevo archivo de rutas
 const { sessionSecret } = require('./config/config');
 const morgan = require('morgan');
 const fs = require('fs');
@@ -1536,7 +2968,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas
 app.use('/auth', authRoutes);
-
+app.use('/auth/user', mesaDeEntradasRoutes); // Montar las rutas de Mesa de Entradas bajo /auth/user
 // Ruta raíz redirige a login
 app.get('/', (req, res) => {
     res.redirect('/auth/login');
@@ -1583,6 +3015,59 @@ module.exports = loginSchema;
 
 
 
+===== Archivo: ./views/adminDashboard.ejs =====
+Carpeta: ./views
+Contenido:
+<!-- views/adminDashboard.ejs -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard de Administrador</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside id="dashboardSidebar" class="dashboard-sidebar">
+            <h2 class="sidebar-title">Menú de Admin</h2>
+            <button id="btnUsuarios" class="sidebar-button">Gestión de Usuarios</button>
+            <button id="btnConfiguracion" class="sidebar-button">Configuración</button>
+            <!-- Agrega más botones según tus necesidades -->
+        </aside>
+
+        <!-- Overlay para dispositivos móviles -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <header class="dashboard-header">
+                <h1 class="dashboard-title">Bienvenido, <%= admin.email %></h1>
+                <p class="dashboard-role">Rol: <%= admin.role %></p>
+                <!-- Botón para abrir el sidebar en dispositivos móviles -->
+                <button id="openSidebarButton" class="open-sidebar-button">&#9776;</button>
+            </header>
+
+            <!-- Contenedor para los contenidos del dashboard -->
+            <div id="adminContent" class="admin-content">
+                <!-- Aquí puedes cargar diferentes secciones mediante JavaScript o enlaces -->
+                <p>Contenido del Dashboard de Administrador.</p>
+            </div>
+
+            <!-- Botón para cerrar sesión -->
+            <form action="/auth/logout" method="POST" class="logout-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="logout-button">Cerrar Sesión</button>
+            </form>
+        </main>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
+
+
+
 ===== Archivo: ./views/dashboard.ejs =====
 Carpeta: ./views
 Contenido:
@@ -1592,75 +3077,130 @@ Contenido:
 <head>
     <meta charset="UTF-8">
     <title>Dashboard</title>
-    <link rel="stylesheet" href="/css/styles.css">
-    <script defer src="/js/dashboard.js"></script>
+    <link rel="stylesheet" href="/css/dashboard.css">
 </head>
 <body>
-    <h1>Bienvenido, <%= user.email %></h1>
-    <p>Tu rol es: <%= user.TIPOUSUARIO %></p>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside id="dashboardSidebar" class="dashboard-sidebar">
+            <h2 class="sidebar-title">Menú</h2>
+            <button id="btnMesaDeEntradas" class="sidebar-button">Mesa de Entradas</button>
+            <button id="btnGestion" class="sidebar-button">Gestión</button>
+            <% if (user.role === 'admin' && user.lvl === 9) { %>
+                <button id="btnDireccion" class="sidebar-button">Dirección</button>
+            <% } %>
+        </aside>
 
-    <!-- Botones para cargar formularios -->
-    <button id="btnForm1">Mostrar Formulario 1</button>
-    <button id="btnForm2">Mostrar Formulario 2</button>
-    <button id="btnForm3">Mostrar Formulario 3</button>
+        <!-- Overlay para dispositivos móviles -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
-    <!-- Contenedor donde se cargarán los formularios -->
-    <div id="formContainer">
-        <!-- Los formularios se cargarán aquí -->
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <header class="dashboard-header">
+                <h1 class="dashboard-title">Bienvenido, <%= user.email %></h1>
+                <p class="dashboard-role">Tu rol es: <%= user.role %></p>
+                <!-- Botón para abrir el sidebar en dispositivos móviles -->
+                <button id="openSidebarButton" class="open-sidebar-button">&#9776;</button>
+            </header>
+
+            <!-- Contenedor para los formularios -->
+            <div id="formContainer" class="form-container">
+                <!-- Los formularios se cargarán aquí -->
+            </div>
+
+            <!-- Botón para cerrar sesión -->
+            <form action="/auth/logout" method="POST" class="logout-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="logout-button">Cerrar Sesión</button>
+            </form>
+        </main>
     </div>
 
-    <!-- Formulario para cerrar sesión -->
-    <form action="/auth/logout" method="POST">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button type="submit">Cerrar Sesión</button>
-    </form>
+    <script src="/js/dashboard.js"></script>
 </body>
 </html>
 
 
 
-===== Archivo: ./views/forms/form1.ejs =====
+===== Archivo: ./views/forms/direccion.ejs =====
 Carpeta: ./views/forms
 Contenido:
-<!-- views/forms/form1.ejs -->
-<form id="form1" action="/auth/user/form1" method="POST">
+<!-- views/forms/direccion.ejs -->
+<form id="direccionForm" class="direccion-form" action="/auth/user/direccion" method="POST">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <div>
-        <label for="field1">Campo 1:</label>
-        <input type="text" id="field1" name="field1" required>
+    <div class="form-group">
+        <label for="direccionField" class="form-label">Campo de Dirección:</label>
+        <input type="text" id="direccionField" name="field3" class="form-input" required>
     </div>
-    <button type="submit">Enviar Formulario 1</button>
+    <button type="submit" class="form-submit-button">Enviar Dirección</button>
 </form>
 
 
 
-===== Archivo: ./views/forms/form2.ejs =====
+===== Archivo: ./views/forms/gestion.ejs =====
 Carpeta: ./views/forms
 Contenido:
-<!-- views/forms/form1.ejs -->
-<form id="form1" action="/auth/user/form1" method="POST">
+<!-- views/forms/gestion.ejs -->
+<form id="gestionForm" class="gestion-form" action="/auth/user/gestion" method="POST">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <div>
-        <label for="field1">Campo 1:</label>
-        <input type="text" id="field1" name="field1" required>
+    <div class="form-group">
+        <label for="gestionField" class="form-label">Campo de Gestión:</label>
+        <input type="text" id="gestionField" name="field2" class="form-input" required>
     </div>
-    <button type="submit">Enviar Formulario 1</button>
+    <button type="submit" class="form-submit-button">Enviar Gestión</button>
 </form>
 
 
 
-===== Archivo: ./views/forms/form3.ejs =====
+===== Archivo: ./views/forms/mesaDeEntradas.ejs =====
 Carpeta: ./views/forms
 Contenido:
-<!-- views/forms/form1.ejs -->
-<form id="form1" action="/auth/user/form1" method="POST">
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <div>
-        <label for="field1">Campo 1:</label>
-        <input type="text" id="field1" name="field1" required>
+<div>
+    <!-- Tabla de Consultas Echas -->
+    <h2>Consultas Echas</h2>
+    <table id="consultasEchasTable" class="display">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre del Usuario</th>
+                <th>Motivo de la Consulta</th>
+                <th>Explicación Dada</th>
+                <th>DNI</th>
+                <th>Fecha y Hora de Alta</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% if (consultasEchas && consultasEchas.length > 0) { %>
+                <% consultasEchas.forEach(consulta => { %>
+                    <tr>
+                        <td><%= consulta.id %></td>
+                        <td><%= consulta.nameuser %></td>
+                        <td><%= consulta.motivodelacon %></td>
+                        <td><%= consulta.explicaciondada %></td>
+                        <td><%= consulta.dni %></td>
+                        <td><%= consulta.fechayhoradealta %></td>
+                        <td><button class="view-details" data-id="<%= consulta.id %>">Ver Detalles</button></td>
+                    </tr>
+                <% }) %>
+            <% } else { %>
+                <tr>
+                    <td colspan="7">No hay consultas registradas en este momento.</td>
+                </tr>
+            <% } %>
+        </tbody>
+    </table>
+
+    <!-- Modal para Mostrar Detalles -->
+    <div id="detailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <div id="modalBody">
+                <!-- Los detalles se cargarán aquí -->
+            </div>
+        </div>
     </div>
-    <button type="submit">Enviar Formulario 1</button>
-</form>
+</div>
 
 
 
@@ -1672,23 +3212,25 @@ Contenido:
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Login</title>
-    <link rel="stylesheet" href="/css/styles.css">
+    <title>Iniciar Sesión</title>
+    <link rel="stylesheet" href="/css/login.css">
 </head>
 <body>
-    <h1>Iniciar Sesión</h1>
-    <form id="loginForm" action="/auth/login" method="POST">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <div>
-            <label for="email">Correo Electrónico:</label>
-            <input type="text" id="email" name="email" required>
-        </div>
-        <div>
-            <label for="password">Contraseña:</label>
-            <input type="password" id="password" name="password" required>
-        </div>
-        <button type="submit">Ingresar</button>
-    </form>
+    <div class="login-container">
+        <form id="loginForm" class="login-form" action="/auth/login" method="POST">
+            <h2 class="login-title">Iniciar Sesión</h2>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="login-field">
+                <label for="email" class="login-label">Correo Electrónico:</label>
+                <input type="text" id="email" name="email" class="login-input" required>
+            </div>
+            <div class="login-field">
+                <label for="password" class="login-label">Contraseña:</label>
+                <input type="password" id="password" name="password" class="login-input" required>
+            </div>
+            <button type="submit" class="login-button">Ingresar</button>
+        </form>
+    </div>
 
     <script src="/js/login.js"></script>
 </body>

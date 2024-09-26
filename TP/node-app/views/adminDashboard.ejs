@@ -1,21 +1,19 @@
-<!-- views/dashboard.ejs -->
+<!-- views/adminDashboard.ejs -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <title>Dashboard de Administrador</title>
     <link rel="stylesheet" href="/css/dashboard.css">
 </head>
 <body>
     <div class="dashboard-container">
         <!-- Sidebar -->
         <aside id="dashboardSidebar" class="dashboard-sidebar">
-            <h2 class="sidebar-title">Menú</h2>
-            <button id="btnMesaDeEntradas" class="sidebar-button">Mesa de Entradas</button>
-            <button id="btnGestion" class="sidebar-button">Gestión</button>
-            <% if (user.role === 'admin' && user.lvl === 9) { %>
-                <button id="btnDireccion" class="sidebar-button">Dirección</button>
-            <% } %>
+            <h2 class="sidebar-title">Menú de Admin</h2>
+            <button id="btnUsuarios" class="sidebar-button">Gestión de Usuarios</button>
+            <button id="btnConfiguracion" class="sidebar-button">Configuración</button>
+            <!-- Agrega más botones según tus necesidades -->
         </aside>
 
         <!-- Overlay para dispositivos móviles -->
@@ -24,15 +22,16 @@
         <!-- Main Content -->
         <main class="dashboard-main">
             <header class="dashboard-header">
-                <h1 class="dashboard-title">Bienvenido, <%= user.email %></h1>
-                <p class="dashboard-role">Tu rol es: <%= user.role %></p>
+                <h1 class="dashboard-title">Bienvenido, <%= admin.email %></h1>
+                <p class="dashboard-role">Rol: <%= admin.role %></p>
                 <!-- Botón para abrir el sidebar en dispositivos móviles -->
                 <button id="openSidebarButton" class="open-sidebar-button">&#9776;</button>
             </header>
 
-            <!-- Contenedor para los formularios -->
-            <div id="formContainer" class="form-container">
-                <!-- Los formularios se cargarán aquí -->
+            <!-- Contenedor para los contenidos del dashboard -->
+            <div id="adminContent" class="admin-content">
+                <!-- Aquí puedes cargar diferentes secciones mediante JavaScript o enlaces -->
+                <p>Contenido del Dashboard de Administrador.</p>
             </div>
 
             <!-- Botón para cerrar sesión -->

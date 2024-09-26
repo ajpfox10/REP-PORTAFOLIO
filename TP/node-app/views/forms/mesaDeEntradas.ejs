@@ -1,0 +1,46 @@
+<div>
+    <!-- Tabla de Consultas Echas -->
+    <h2>Consultas Echas</h2>
+    <table id="consultasEchasTable" class="display">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre del Usuario</th>
+                <th>Motivo de la Consulta</th>
+                <th>Explicación Dada</th>
+                <th>DNI</th>
+                <th>Fecha y Hora de Alta</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% if (consultasEchas && consultasEchas.length > 0) { %>
+                <% consultasEchas.forEach(consulta => { %>
+                    <tr>
+                        <td><%= consulta.id %></td>
+                        <td><%= consulta.nameuser %></td>
+                        <td><%= consulta.motivodelacon %></td>
+                        <td><%= consulta.explicaciondada %></td>
+                        <td><%= consulta.dni %></td>
+                        <td><%= consulta.fechayhoradealta %></td>
+                        <td><button class="view-details" data-id="<%= consulta.id %>">Ver Detalles</button></td>
+                    </tr>
+                <% }) %>
+            <% } else { %>
+                <tr>
+                    <td colspan="7">No hay consultas registradas en este momento.</td>
+                </tr>
+            <% } %>
+        </tbody>
+    </table>
+
+    <!-- Modal para Mostrar Detalles -->
+    <div id="detailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <div id="modalBody">
+                <!-- Los detalles se cargarán aquí -->
+            </div>
+        </div>
+    </div>
+</div>

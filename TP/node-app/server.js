@@ -7,6 +7,7 @@ const session = require('express-session');
 const rateLimiter = require('./middleware/rateLimiter');
 const xssProtection = require('./middleware/xssProtection');
 const authRoutes = require('./routes/authRoutes');
+const mesaDeEntradasRoutes = require('./routes/mesaDeEntradasRoutes'); // Importar el nuevo archivo de rutas
 const { sessionSecret } = require('./config/config');
 const morgan = require('morgan');
 const fs = require('fs');
@@ -91,7 +92,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas
 app.use('/auth', authRoutes);
-
+app.use('/auth/user', mesaDeEntradasRoutes); // Montar las rutas de Mesa de Entradas bajo /auth/user
 // Ruta raíz redirige a login
 app.get('/', (req, res) => {
     res.redirect('/auth/login');
