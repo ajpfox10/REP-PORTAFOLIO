@@ -1,46 +1,243 @@
-<div>
-    <!-- Tabla de Consultas Echas -->
-    <h2>Consultas Echas</h2>
-    <table id="consultasEchasTable" class="display">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nombre del Usuario</th>
-                <th>Motivo de la Consulta</th>
-                <th>Explicación Dada</th>
-                <th>DNI</th>
-                <th>Fecha y Hora de Alta</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            <% if (consultasEchas && consultasEchas.length > 0) { %>
-                <% consultasEchas.forEach(consulta => { %>
-                    <tr>
-                        <td><%= consulta.id %></td>
-                        <td><%= consulta.nameuser %></td>
-                        <td><%= consulta.motivodelacon %></td>
-                        <td><%= consulta.explicaciondada %></td>
-                        <td><%= consulta.dni %></td>
-                        <td><%= consulta.fechayhoradealta %></td>
-                        <td><button class="view-details" data-id="<%= consulta.id %>">Ver Detalles</button></td>
-                    </tr>
-                <% }) %>
-            <% } else { %>
-                <tr>
-                    <td colspan="7">No hay consultas registradas en este momento.</td>
-                </tr>
-            <% } %>
-        </tbody>
-    </table>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesa de Entradas</title>
+    <link rel="stylesheet" href="/css/mesaDeEntradas.css">
 
-    <!-- Modal para Mostrar Detalles -->
-    <div id="detailsModal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <div id="modalBody">
-                <!-- Los detalles se cargarán aquí -->
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside id="dashboardSidebar" class="dashboard-sidebar">
+            <h2 class="sidebar-title">Menú</h2>
+            <button id="btnMesaDeEntradas" class="sidebar-button active-button">Mesa de Entradas</button>
+            <button id="btnGestion" class="sidebar-button">Gestión</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="dashboard-main no-sidebar">
+            <header class="dashboard-header">
+                <h1 class="dashboard-title">Mesa de Entradas</h1>
+            </header>
+
+            <!-- Contenedor de las tablas -->
+            <div class="form-container">
+                 <form id="busquedaForm" class="busqueda-form">
+                  <label for="tipoBusqueda">Buscar por:</label>
+                  <select id="tipoBusqueda" name="tipoBusqueda">
+                   <option value="dni">DNI</option>
+                   <option value="apellido">Apellido</option>
+                  </select>
+                  <div class="busqueda-input">
+                    <input type="text" id="valorBusqueda" name="valorBusqueda" placeholder="Ingrese DNI o Apellido">
+                  </div>
+                     <button type="button" id="buscarAgente" class="buscar-button">Buscar</button>
+                 </form>
+
+                  <!-- Campos que se completarán automáticamente -->
+                  <div class="autocomplete-fields">
+                      <div>
+                          <label for="dniAgente">DNI del Agente:</label>
+                          <input type="text" id="dniAgente" name="dni" readonly>
+                     </div>
+                     <div>
+ 		          <label for="apellidoAgente">Apellido del Agente:</label>
+ 	                  <input type="text" id="apellidoAgente" name="apellido" readonly>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <div class="table-group">
+               
+                    <!-- Tabla de Consultas -->
+                    <div class="table-responsive">
+                        <h2>Consultas Echas</h2>
+                        <table id="consultasEchasTable" class="display">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre del Usuario</th>
+                                    <th>Motivo de la Consulta</th>
+                                    <th>Explicación Dada</th>
+                                    <th>DNI</th>
+                                    <th>Fecha y Hora de Alta</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (consultasEchas.length > 0) { %>
+                                    <% consultasEchas.forEach(consulta => { %>
+                                        <tr>
+                                            <td><%= consulta.id %></td>
+                                            <td><%= consulta.nombreUsuario %></td>
+                                            <td><%= consulta.motivoConsulta %></td>
+                                            <td><%= consulta.explicacion %></td>
+                                            <td><%= consulta.dni %></td>
+                                            <td><%= consulta.fechaHora %></td>
+                                            <td>Acciones</td>
+                                        </tr>
+                                    <% }); %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="7">No hay consultas registradas en este momento.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tabla de Expedientes -->
+                    <div class="table-responsive">
+                        <h2>Expedientes</h2>
+                        <table id="expedientesTable" class="display">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre del Usuario</th>
+                                    <th>Expediente</th>
+                                    <th>Fecha y Hora</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (expedientes.length > 0) { %>
+                                    <% expedientes.forEach(expediente => { %>
+                                        <tr>
+                                            <td><%= expediente.id %></td>
+                                            <td><%= expediente.nombreUsuario %></td>
+                                            <td><%= expediente.descripcion %></td>
+                                            <td><%= expediente.fechaHora %></td>
+                                            <td>Acciones</td>
+                                        </tr>
+                                    <% }); %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="5">No hay expedientes registrados en este momento.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tabla de Citaciones -->
+                    <div class="table-responsive">
+                        <h2>Citaciones</h2>
+                        <table id="citacionesTable" class="display">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre del Usuario</th>
+                                    <th>Motivo de la Citación</th>
+                                    <th>Fecha y Hora</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (citaciones.length > 0) { %>
+                                    <% citaciones.forEach(citacion => { %>
+                                        <tr>
+                                            <td><%= citacion.id %></td>
+                                            <td><%= citacion.nombreUsuario %></td>
+                                            <td><%= citacion.motivo %></td>
+                                            <td><%= citacion.fechaHora %></td>
+                                            <td>Acciones</td>
+                                        </tr>
+                                    <% }); %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="5">No hay citaciones registradas en este momento.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tabla de Pedidos -->
+                    <div class="table-responsive">
+                        <h2>Pedidos</h2>
+                        <table id="pedidosTable" class="display">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Descripción</th>
+                                    <th>Fecha y Hora</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (pedidos.length > 0) { %>
+                                    <% pedidos.forEach(pedido => { %>
+                                        <tr>
+                                            <td><%= pedido.id %></td>
+                                            <td><%= pedido.descripcion %></td>
+                                            <td><%= pedido.fechaHora %></td>
+                                            <td>Acciones</td>
+                                        </tr>
+                                    <% }); %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="4">No hay pedidos registrados en este momento.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tabla de Resoluciones -->
+                    <div class="table-responsive">
+                        <h2>Resoluciones</h2>
+                        <table id="resolucionesTable" class="display">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Descripción</th>
+                                    <th>Fecha y Hora</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (resoluciones.length > 0) { %>
+                                    <% resoluciones.forEach(resolucion => { %>
+                                        <tr>
+                                            <td><%= resolucion.id %></td>
+                                            <td><%= resolucion.descripcion %></td>
+                                            <td><%= resolucion.fechaHora %></td>
+                                            <td>Acciones</td>
+                                        </tr>
+                                    <% }); %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="4">No hay resoluciones registradas en este momento.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
-</div>
+
+    <!-- DataTables JS y jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+
+    <!-- Inicializar DataTables -->
+    <script>
+        $(document).ready(function() {
+            $('#consultasEchasTable').DataTable();   // DataTables para Consultas
+            $('#expedientesTable').DataTable();      // DataTables para Expedientes
+            $('#citacionesTable').DataTable();       // DataTables para Citaciones
+            $('#pedidosTable').DataTable();          // DataTables para Pedidos
+            $('#resolucionesTable').DataTable();     // DataTables para Resoluciones
+        });
+    </script>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
+

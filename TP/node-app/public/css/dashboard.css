@@ -1,22 +1,68 @@
-/* public/css/dashboard.css */
-
-/* Estilos Generales */
-body {
+/* ============================
+   Ajustes generales del body
+   ============================ */
+html, body {
     margin: 0;
     padding: 0;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f4f4f4;
-    height: 100vh;
-    display: flex;
+    height: 100%;
+    overflow-x: hidden; /* Elimina scroll horizontal innecesario */
 }
 
+/* ============================
+   Contenedor principal del dashboard
+   ============================ */
 .dashboard-container {
     display: flex;
     width: 100%;
-    height: 100%;
+    min-height: 100vh; /* Cambiado de height: 100vh para evitar doble scroll */
+    overflow: hidden; /* Asegura que no haya scroll innecesario */
 }
 
-/* Sidebar */
+/* ============================
+   Dashboard Header
+   ============================ */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #fff;
+    margin-bottom: 0; /* Elimina espacio innecesario */
+}
+
+.header-left,
+.header-right {
+    display: flex;
+    align-items: center;
+}
+
+.header-right {
+    gap: 10px;
+}
+
+.dashboard-title {
+    margin: 0;
+    font-size: 24px; 
+    margin-bottom: 5px; /* Reducido el espacio */
+}
+
+.dashboard-role {
+    margin: 0;
+    font-size: 14px;
+}
+
+.open-sidebar-button {
+    font-size: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+/* ============================
+   Sidebar (menú lateral)
+   ============================ */
 .dashboard-sidebar {
     background-color: #2c3e50;
     color: #ecf0f1;
@@ -24,239 +70,110 @@ body {
     min-width: 200px;
     padding: 20px;
     box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    transition: transform 0.3s ease;
-}
-
-.sidebar-title {
-    text-align: center;
-    margin-bottom: 30px;
-    font-size: 24px;
-    border-bottom: 1px solid #34495e;
-    padding-bottom: 10px;
-}
-
-.sidebar-button {
-    background-color: #34495e;
-    color: #ecf0f1;
-    border: none;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    text-align: left;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
-}
-
-.sidebar-button:hover {
-    background-color: #3d566e;
-}
-
-/* Botón Activo */
-.active-button {
-    background-color: #1abc9c !important;
-}
-
-/* Overlay para Sidebar en Dispositivos Móviles */
-.sidebar-overlay {
     position: fixed;
     top: 0;
+    left: -250px; /* Sidebar oculto por defecto */
+    height: 90vh;
+    transition: left 0.3s ease;
+    z-index: 1001;
+}
+
+.dashboard-sidebar.visible {
     left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: none;
+}
+
+.dashboard-sidebar.visible + .dashboard-main {
+    margin-left: 250px;
+}
+
+/* ============================
+   Hover para mostrar el sidebar
+   ============================ */
+#hoverZone {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 50px;
     z-index: 999;
 }
 
-/* Botón para Abrir Sidebar en Dispositivos Móviles */
-.open-sidebar-button {
-    background: none;
-    border: none;
-    color: #2c3e50;
-    font-size: 24px;
-    cursor: pointer;
-    display: none; /* Ocultar en pantallas grandes */
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 1100; /* Por encima del sidebar */
+#hoverZone:hover + .dashboard-sidebar {
+    left: 0;
 }
 
-/* Main Content */
+#hoverZone:hover ~ .dashboard-main {
+    margin-left: 250px;
+}
+
+/* ============================
+   Contenido principal
+   ============================ */
 .dashboard-main {
     flex: 1;
-    display: flex;
-    flex-direction: column;
     padding: 20px;
-    box-sizing: border-box;
+    margin-left: 0;
+    width: 100%;
+    transition: margin-left 0.3s ease;
+    background-color: #fff;
+    border-radius: 8px;
+    overflow-y: auto;
 }
 
-.dashboard-header {
-    margin-bottom: 20px;
-}
-
-.dashboard-title {
-    margin: 0;
-    font-size: 28px;
-    color: #2c3e50;
-}
-
-.dashboard-role {
-    margin: 5px 0 0 0;
-    color: #7f8c8d;
-    font-size: 18px;
-}
-
-/* Contenedor de Formularios */
+/* ============================
+   Contenedor del formulario
+   ============================ 
 .form-container {
     flex: 1;
+    padding: 20px;
     background-color: #fff;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    overflow-y: auto;
-    position: relative; /* Para posicionar el loader correctamente */
-}
-
-/* Formularios */
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-label {
-    display: block;
-    margin-bottom: 5px;
-    color: #34495e;
-    font-weight: bold;
-}
-
-.form-input {
+    border-radius: 8px;
     width: 100%;
-    padding: 10px;
-    border: 1px solid #bdc3c7;
-    border-radius: 5px;
-    font-size: 16px;
+    box-sizing: border-box;
+    margin-top: 0;
+    overflow-y: auto;
 }
-
-.form-submit-button {
-    padding: 10px 20px;
-    background-color: #27ae60;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
-}
-
-.form-submit-button:hover {
-    background-color: #219150;
-}
-
-/* Estilos Específicos para Formularios */
-.mesa-de-entradas-form,
-.gestion-form,
-.direccion-form {
-    /* Puedes agregar estilos específicos si es necesario */
-}
-
-/* Logout */
-.logout-form {
-    margin-top: 20px;
-    text-align: right;
-}
-
-.logout-button {
-    background-color: #c0392b;
-    color: #fff;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
-}
-
-.logout-button:hover {
-    background-color: #e74c3c;
-}
-
-/* Loader */
-.form-loader {
+*/
+/* ============================
+   Botón de Cerrar Sesión
+   ============================ */
+button#logout {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    display: none; /* Ocultar el spinner por defecto */
-    z-index: 1000; /* Asegurar que esté por encima de otros elementos */
-    background: rgba(255, 255, 255, 0.8); /* Fondo semi-transparente */
-    padding: 20px;
-    border-radius: 10px;
+    bottom: 20px;
+    left: 20px;
+    padding: 10px;
+    background-color: #f4f4f4;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
 }
 
-.spinner {
-    border: 8px solid #f3f3f3;
-    border-top: 8px solid #3498db;
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Responsividad */
-@media (max-width: 768px) {
-    .dashboard-container {
-        flex-direction: column;
-    }
-
+/* ============================
+   Ajustes para dispositivos móviles
+   ============================ */
+@media screen and (max-width: 768px) {
     .dashboard-sidebar {
-        width: 100%;
-        flex-direction: row;
-        overflow-x: auto;
-        transform: translateX(-100%); /* Inicialmente oculto */
-    }
-
-    .dashboard-sidebar.active {
-        transform: translateX(0);
-    }
-
-    .sidebar-button {
-        flex: 1;
-        text-align: center;
-        margin-bottom: 0;
-        margin-right: 10px;
-    }
-
-    .sidebar-button:last-child {
-        margin-right: 0;
+        left: -250px;
     }
 
     .dashboard-main {
-        padding: 10px;
+        margin-left: 0;
+        width: 100%;
     }
 
-    .sidebar-overlay.active {
-        display: block;
+    .table-container {
+        width: 100%;
     }
 
-    .open-sidebar-button {
-        display: block;
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px 15px;
     }
-}
 
-/* Alternativa sin Iframe (Usando AJAX para Insertar HTML Directamente) */
-.form-container form {
-    width: 100%;
-}
-
-.form-container .form-submit-button {
-    width: 100%;
+    .header-right {
+        margin-top: 5px;
+        gap: 5px;
+    }
 }

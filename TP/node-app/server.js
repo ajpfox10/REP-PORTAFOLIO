@@ -24,8 +24,17 @@ app.use(
         contentSecurityPolicy: {
             directives: {
                 defaultSrc: ["'self'"],
-                scriptSrc: ["'self'"],
-                styleSrc: ["'self'", 'https:'],
+                scriptSrc: [
+                    "'self'",
+                    "https://cdn.datatables.net", // Permitir DataTables JS
+                    "https://code.jquery.com"     // Permitir jQuery
+                ],
+                styleSrc: [
+                    "'self'",
+                    "'unsafe-inline'",            // Permitir estilos inline (opcional, si lo necesitas)
+                    "https://cdn.datatables.net", // Permitir DataTables CSS
+                ],
+                //styleSrc: ["'self'", 'https:'],
                 imgSrc: ["'self'", 'data:'],
                 connectSrc: ["'self'"],
                 fontSrc: ["'self'", 'https:', 'data:'],
