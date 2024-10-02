@@ -22,21 +22,4 @@ router.get('/api/citaciones/:id', authMiddleware, mesaDeEntradasController.getCi
 router.get('/api/pedidos/:id', authMiddleware, mesaDeEntradasController.getPedidoById);
 router.get('/api/resoluciones/:id', authMiddleware, mesaDeEntradasController.getResolucionById);
 
-router.get('/mesaDeEntradas', authMiddleware, roleMiddleware(['USER', 'admin']), userController.getMesaDeEntradas);
-
-router.post('/buscarAgente', authMiddleware, async (req, res) => {
-    const { tipoBusqueda, valorBusqueda } = req.body;
-    try {
-        const agente = await personalModel.buscarAgente(tipoBusqueda, valorBusqueda);
-        if (!agente) {
-            return res.json({ success: false, message: 'Agente no encontrado' });
-        }
-        res.json({ success: true, agente });
-    } catch (error) {
-        console.error('Error al buscar agente:', error);
-        res.status(500).json({ success: false, message: 'Error interno del servidor' });
-    }
-});
-
-
 module.exports = router;
