@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- Metadatos y enlaces a estilos -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesa de Entradas</title>
+    <link rel="stylesheet" href="/css/mesaDeEntradas.css">
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside id="dashboardSidebar" class="dashboard-sidebar">
+            <h2 class="sidebar-title">Menú</h2>
+            <button id="btnMesaDeEntradas" class="sidebar-button active-button">Mesa de Entradas</button>
+            <button id="btnGestion" class="sidebar-button">Gestión</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="dashboard-main no-sidebar">
+            <header class="dashboard-header">
+                <h1 class="dashboard-title">Mesa de Entradas</h1>
+            </header>
+
+            <!-- Contenedor de Búsqueda, Casillas de Verificación y Vista Previa de la Foto -->
+            <div class="form-container">
+                <!-- Casillas de Verificación a la Izquierda -->
+                <div class="left-section checkbox-group">
+                    <label><input type="checkbox" name="salarioFamiliar"> Salario Familiar</label>
+                    <label><input type="checkbox" name="foto"> Foto</label>
+                    <label><input type="checkbox" name="declaracionDomicilio"> Declaración de Domicilio</label>
+                    <label><input type="checkbox" name="renovacionSalario"> Renovación de Salario</label>
+                    <label><input type="checkbox" name="scaneoDocumentacion"> Escaneo de Documentación</label>
+                </div>
+
+                <!-- Vista Previa de la Foto -->
+                <div class="photo-upload">
+                    <p>Vista previa de la foto</p>
+                    <img id="fotoPreview" src="#" alt="Vista previa de la foto" style="max-width: 100px;">
+                </div>
+
+                <!-- Formulario de Búsqueda a la Derecha -->
+                <form id="busquedaForm" class="busqueda-form">
+                    <label for="tipoBusqueda">Buscar por:</label>
+                    <select id="tipoBusqueda" name="tipoBusqueda">
+                        <option value="dni">DNI</option>
+                        <option value="apellido">Apellido</option>
+                    </select>
+                    <div class="busqueda-input">
+                        <input type="text" id="valorBusqueda" name="valorBusqueda" placeholder="Ingrese DNI o Apellido">
+                    </div>
+                    <button type="button" id="buscarAgente" class="buscar-button">Buscar</button>
+                </form>
+            </div>
+
+            <!-- Campos Automáticos debajo del Formulario de Búsqueda -->
+            <div class="autocomplete-fields">
+                <div>
+                    <label for="dniAgente">DNI del Agente:</label>
+                    <input type="text" id="dniAgente" name="dni" readonly>
+                </div>
+                <div>
+                    <label for="apellidoAgente">Apellido del Agente:</label>
+                    <input type="text" id="apellidoAgente" name="apellido" readonly>
+                </div>
+            </div>
+
+            <!-- Contenedor de las Tablas y los Campos de Texto -->
+            <div class="content-row">
+                <!-- Contenedor de las Tablas -->
+                <div class="table-group">
+                    <!-- Tablas existentes -->
+                    <!-- Tabla de Consultas -->
+                    <div class="table-responsive">
+                        <h2>Consultas Hechas</h2>
+                        <table id="consultasEchasTable" class="display">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre del Usuario</th>
+                                    <th>Motivo de la Consulta</th>
+                                    <th>Explicación Dada</th>
+                                    <th>DNI</th>
+                                    <th>Fecha y Hora de Alta</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (consultasEchas.length > 0) { %>
+                                    <% consultasEchas.forEach(consulta => { %>
+                                        <tr>
+                                            <td><%= consulta.id %></td>
+                                            <td><%= consulta.nombreUsuario %></td>
+                                            <td><%= consulta.motivoConsulta %></td>
+                                            <td><%= consulta.explicacion %></td>
+                                            <td><%= consulta.dni %></td>
+                                            <td><%= consulta.fechaHora %></td>
+                                            <td>Acciones</td>
+                                        </tr>
+                                    <% }); %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="7">No hay consultas registradas en este momento.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Otras tablas (Expedientes, Citaciones, Pedidos, Resoluciones) -->
+                    <!-- ... (código existente de las otras tablas) ... -->
+                </div>
+
+                <!-- Contenedor de los Campos de Texto -->
+                <div class="textarea-group">
+                    <label for="motivoConsulta">Motivo de Consulta:</label>
+                    <textarea id="motivoConsulta" name="motivoConsulta" rows="4"></textarea>
+
+                    <label for="explicacionDada">Explicación Dada:</label>
+                    <textarea id="explicacionDada" name="explicacionDada" rows="4"></textarea>
+
+                    <!-- Sección del PDF dentro de textarea-group -->
+                    <div class="pdf-section">
+                        <h2>Documentación a cargar</h2>
+                        <!-- Mostrar el PDF escaneado -->
+                        <iframe id="pdfViewer" src="/ruta/al/documento-de-prueba.pdf"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scripts -->
+            <!-- DataTables JS y jQuery -->
+            <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+            <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+
+            <!-- Inicializar DataTables -->
+            <script>
+                $(document).ready(function() {
+                    $('#consultasEchasTable').DataTable();
+                    $('#expedientesTable').DataTable();
+                    $('#citacionesTable').DataTable();
+                    $('#pedidosTable').DataTable();
+                    $('#resolucionesTable').DataTable();
+                });
+            </script>
+
+            <!-- Scripts adicionales -->
+            <script src="/js/dashboard.js"></script>
+        </main>
+    </div>
+</body>
+</html>
