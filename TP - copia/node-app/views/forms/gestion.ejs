@@ -1,0 +1,9 @@
+<!-- views/forms/gestion.ejs -->
+<form id="gestionForm" class="gestion-form" action="/auth/user/gestion" method="POST">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="form-group">
+        <label for="gestionField" class="form-label">Campo de Gestión:</label>
+        <input type="text" id="gestionField" name="field2" class="form-input" required>
+    </div>
+    <button type="submit" class="form-submit-button">Enviar Gestión</button>
+</form>

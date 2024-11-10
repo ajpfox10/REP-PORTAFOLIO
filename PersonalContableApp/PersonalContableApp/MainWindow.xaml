@@ -1,0 +1,223 @@
+﻿<!-- Archivo: MainWindow.xaml -->
+<Window x:Class="PersonalContableApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:PersonalContableApp"
+        Title="Gestión de Personal Contable" Height="700" Width="900">
+    <!-- Contenedor principal con margen -->
+    <Grid Margin="10">
+        <!-- ScrollViewer para permitir el desplazamiento si el contenido excede la ventana -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <!-- StackPanel para organizar los elementos verticalmente -->
+            <StackPanel>
+                <!-- Título de la sección de agregar personal -->
+                <TextBlock Text="Agregar Nuevo Personal" 
+                           FontSize="24" 
+                           FontWeight="Bold" 
+                           Margin="0,0,0,20" />
+
+                <!-- Formulario para ingresar datos del personal -->
+                <Grid>
+                    <!-- Definición de filas y columnas -->
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Fila 0: Apellido y Nombre -->
+                    <Label Content="Apellido y Nombre:" 
+                           Grid.Row="0" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtApellidoNombre" 
+                             Grid.Row="0" 
+                             Grid.Column="1" 
+                             Margin="5" 
+                             MaxLength="50"/>
+
+                    <!-- Fila 1: Domicilio -->
+                    <Label Content="Domicilio:" 
+                           Grid.Row="1" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtDomicilio" 
+                             Grid.Row="1" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+
+                    <!-- Fila 2: Localidad -->
+                    <Label Content="Localidad:" 
+                           Grid.Row="2" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtLocalidad" 
+                             Grid.Row="2" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+
+                    <!-- Fila 3: Provincia -->
+                    <Label Content="Provincia:" 
+                           Grid.Row="3" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtProvincia" 
+                             Grid.Row="3" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+
+                    <!-- Fila 4: Código Postal -->
+                    <Label Content="Código Postal:" 
+                           Grid.Row="4" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtCodigoPostal" 
+                             Grid.Row="4" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+
+                    <!-- Fila 5: Puesto -->
+                    <Label Content="Puesto:" 
+                           Grid.Row="5" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <ComboBox x:Name="cmbPuesto" 
+                              Grid.Row="5" 
+                              Grid.Column="1" 
+                              Margin="5">
+                        <ComboBoxItem Content="1 - Contable" Tag="1"/>
+                        <ComboBoxItem Content="2 - Taller" Tag="2"/>
+                        <ComboBoxItem Content="3 - Recursos Humanos" Tag="3"/>
+                        <ComboBoxItem Content="4 - IT" Tag="4"/>
+                        <ComboBoxItem Content="5 - Marketing" Tag="5"/>
+                        <!-- Agregar más puestos según necesidad -->
+                    </ComboBox>
+
+                    <!-- Fila 6: Categoría -->
+                    <Label Content="Categoría:" 
+                           Grid.Row="6" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <ComboBox x:Name="cmbCategoria" 
+                              Grid.Row="6" 
+                              Grid.Column="1" 
+                              Margin="5">
+                        <ComboBoxItem Content="1 - Dirección" Tag="1"/>
+                        <ComboBoxItem Content="2 - Jefe" Tag="2"/>
+                        <ComboBoxItem Content="3 - Contable" Tag="3"/>
+                        <ComboBoxItem Content="4 - Administrativo" Tag="4"/>
+                        <ComboBoxItem Content="5 - Operativo" Tag="5"/>
+                        <!-- Agregar más categorías según necesidad -->
+                    </ComboBox>
+
+                    <!-- Fila 7: Año de Ingreso -->
+                    <Label Content="Año de Ingreso:" 
+                           Grid.Row="7" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtAñoIngreso" 
+                             Grid.Row="7" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+
+                    <!-- Fila 8: Sector Asignado -->
+                    <Label Content="Sector Asignado:" 
+                           Grid.Row="8" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtSectorAsignado" 
+                             Grid.Row="8" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+
+                    <!-- Fila 9: Actividad -->
+                    <Label Content="Actividad:" 
+                           Grid.Row="9" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtActividad" 
+                             Grid.Row="9" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+
+                    <!-- Fila 10: Sueldo Nominal -->
+                    <Label Content="Sueldo Nominal:" 
+                           Grid.Row="10" 
+                           Grid.Column="0" 
+                           VerticalAlignment="Center" 
+                           Margin="5"/>
+                    <TextBox x:Name="txtSueldoNominal" 
+                             Grid.Row="10" 
+                             Grid.Column="1" 
+                             Margin="5"/>
+                </Grid>
+                <!-- Fin del Grid del formulario -->
+
+                <!-- Botones de acción -->
+                <StackPanel Orientation="Horizontal" 
+                            HorizontalAlignment="Left" 
+                            Margin="0,20,0,0">
+                    <Button Content="Agregar" 
+                            Width="100" 
+                            Click="Agregar_Click" 
+                            Margin="5"/>
+                    <Button Content="Eliminar Seleccionado" 
+                            Width="150" 
+                            Click="Eliminar_Click" 
+                            Margin="5"/>
+                </StackPanel>
+
+                <!-- Separador visual -->
+                <Separator Margin="0,20,0,20"/>
+
+                <!-- Título de la lista de personal -->
+                <TextBlock Text="Lista de Personal" 
+                           FontSize="24" 
+                           FontWeight="Bold" 
+                           Margin="0,0,0,10"/>
+
+                <!-- DataGrid para mostrar la lista de personal -->
+                <DataGrid x:Name="dataGridPersonal" 
+                          AutoGenerateColumns="False" 
+                          Height="300" 
+                          Margin="0,0,0,20">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Nombre" Binding="{Binding ApellidoNombre}" Width="*"/>
+                        <DataGridTextColumn Header="Domicilio" Binding="{Binding Domicilio}" Width="*"/>
+                        <DataGridTextColumn Header="Localidad" Binding="{Binding Localidad}" Width="*"/>
+                        <DataGridTextColumn Header="Provincia" Binding="{Binding Provincia}" Width="*"/>
+                        <DataGridTextColumn Header="Código Postal" Binding="{Binding CodigoPostal}" Width="*"/>
+                        <DataGridTextColumn Header="Puesto" Binding="{Binding Puesto}" Width="*"/>
+                        <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria}" Width="*"/>
+                        <DataGridTextColumn Header="Año Ingreso" Binding="{Binding AñoIngreso}" Width="*"/>
+                        <DataGridTextColumn Header="Sector Asignado" Binding="{Binding SectorAsignado}" Width="*"/>
+                        <DataGridTextColumn Header="Actividad" Binding="{Binding Actividad}" Width="*"/>
+                        <DataGridTextColumn Header="Sueldo Nominal" Binding="{Binding SueldoNominal}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
