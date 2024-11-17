@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ScanX Demo</title>
+    <script src="/path/to/jquery.js"></script>
+    <script src="/path/to/signalr.min.js"></script>
+    <script src="/path/to/scanx.js"></script>
+</head>
+<body>
+    <h1>Escanear Documento</h1>
+    <button onclick="startScan()">Escanear</button>
+    <img id="scannedImage" alt="Escaneo" />
+    <script>
+        // Inicializar ScanX
+        var scan = new ScanX();
+
+        // Conectar al protocolo ScanX
+        scan.connect();
+
+        // Evento cuando la imagen ha sido escaneada
+        scan.connection.on("OnImageScanned", (data) => {
+            var image = document.getElementById('scannedImage');
+            image.src = "data:image/jpeg;base64," + data.imageBytes;
+        });
+
+        // Obtener los escáneres disponibles
+        scan.getScanners().then((scanners) => {
+            if (scanners.length > 0) {
+                var firstScannerId = scanners[0].deviceId;
+
+                // Configuración de escaneo
+                var settings = {
+                    color: 1, // Color
+                    dpi: 200 // Resolución
+                };
+
+                // Función para iniciar el escaneo
+                window.startScan = function () {
+                    scan.scanSingle(firstScannerId, settings);
+                };
+            } else {
+                console.error("No se encontraron escáneres disponibles");
+            }
+        }).catch((error) => {
+            console.error("Error al obtener escáneres: ", error);
+        });
+    </script>
+</body>
+</html>
