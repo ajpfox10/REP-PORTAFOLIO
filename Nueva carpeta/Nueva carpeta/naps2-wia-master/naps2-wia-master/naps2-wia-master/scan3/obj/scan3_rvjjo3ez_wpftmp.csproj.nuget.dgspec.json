@@ -1,0 +1,152 @@
+{
+  "format": 1,
+  "restore": {
+    "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\scan3\\scan3.csproj": {}
+  },
+  "projects": {
+    "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\NAPS2.Wia.csproj": {
+      "version": "2.0.3",
+      "restore": {
+        "projectUniqueName": "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\NAPS2.Wia.csproj",
+        "projectName": "NAPS2.Wia",
+        "projectPath": "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\NAPS2.Wia.csproj",
+        "packagesPath": "C:\\Users\\fox12\\.nuget\\packages\\",
+        "outputPath": "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\obj\\",
+        "projectStyle": "PackageReference",
+        "crossTargeting": true,
+        "fallbackFolders": [
+          "d:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\fox12\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.404/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\scan3\\scan3.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\scan3\\scan3.csproj",
+        "projectName": "scan3",
+        "projectPath": "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\scan3\\scan3.csproj",
+        "packagesPath": "C:\\Users\\fox12\\.nuget\\packages\\",
+        "outputPath": "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\scan3\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "d:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\fox12\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0-windows"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0-windows7.0": {
+            "targetAlias": "net8.0-windows",
+            "projectReferences": {
+              "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\NAPS2.Wia.csproj": {
+                "projectPath": "D:\\Users\\fox12\\Desktop\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\NAPS2.Wia.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0-windows7.0": {
+          "targetAlias": "net8.0-windows",
+          "dependencies": {
+            "Microsoft.Extensions.Logging": {
+              "target": "Package",
+              "version": "[9.0.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            },
+            "Microsoft.WindowsDesktop.App.WPF": {
+              "privateAssets": "none"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.404/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

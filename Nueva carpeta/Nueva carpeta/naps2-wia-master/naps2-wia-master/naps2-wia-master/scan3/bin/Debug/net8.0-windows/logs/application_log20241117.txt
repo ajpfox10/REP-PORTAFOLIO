@@ -1,0 +1,20 @@
+
+2024-11-17 16:55:40.113 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 16:55:41.302 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 16:55:41.737 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 16:55:46.528 -03:00 [INF] Escáneres cargados correctamente: 13
+2024-11-17 16:55:48.844 -03:00 [INF] Estado del ADF: Estado desconocido del ADF (Valor: 3).
+2024-11-17 17:35:43.182 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 17:35:43.326 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 17:35:44.020 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 17:35:47.603 -03:00 [INF] Escáneres cargados correctamente: 13
+2024-11-17 17:35:50.022 -03:00 [INF] Estado del ADF: El ADF está listo con múltiples hojas.
+2024-11-17 17:35:50.023 -03:00 [INF] Estado del ADF: 7
+2024-11-17 17:35:56.154 -03:00 [INF] Escaneo completado exitosamente con el dispositivo: Brother DCP-L5650DN LAN #2
+2024-11-17 17:46:11.529 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 17:46:11.656 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 17:46:12.124 -03:00 [INF] MainViewModel inicializado correctamente
+2024-11-17 17:46:15.320 -03:00 [INF] Escáneres cargados correctamente: 13
+2024-11-17 17:46:18.120 -03:00 [INF] Estado del ADF interpretado: El ADF está listo con múltiples hojas. (Valor recibido: 7)
+2024-11-17 17:46:18.120 -03:00 [INF] Estado del ADF: 7
+2024-11-17 17:46:24.279 -03:00 [INF] Escaneo completado exitosamente con el dispositivo: Brother DCP-L5650DN LAN #2

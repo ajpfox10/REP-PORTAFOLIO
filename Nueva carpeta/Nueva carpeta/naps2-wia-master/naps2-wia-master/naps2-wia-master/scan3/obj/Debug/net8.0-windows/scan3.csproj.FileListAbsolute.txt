@@ -1,0 +1,83 @@
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.AssemblyReference.cache
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\Views\MainWindow.g.cs
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\App.g.cs
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3_MarkupCompile.cache
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3_MarkupCompile.lref
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.exe
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.dll.config
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.deps.json
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.runtimeconfig.json
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.pdb
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Abstractions.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Options.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Primitives.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Win32.SystemEvents.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\System.Diagnostics.DiagnosticSource.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\System.Drawing.Common.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\System.Private.Windows.Core.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\runtimes\win\lib\net8.0\Microsoft.Win32.SystemEvents.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\NAPS2.Wia.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\NAPS2.Wia.pdb
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\Views\MainWindow.baml
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.g.resources
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.Properties.Resources.resources
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.GenerateResource.cache
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.GeneratedMSBuildEditorConfig.editorconfig
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.AssemblyInfoInputs.cache
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.AssemblyInfo.cs
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.CoreCompileInputs.cache
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.Up2Date
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\refint\scan3.dll
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.pdb
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.genruntimeconfig.cache
+D:\Users\fox12\Desktop\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\ref\scan3.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.exe
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.dll.config
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.deps.json
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.runtimeconfig.json
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\scan3.pdb
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Options.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Extensions.Primitives.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Microsoft.Win32.SystemEvents.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\System.Diagnostics.DiagnosticSource.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\System.Drawing.Common.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\System.Private.Windows.Core.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\runtimes\win\lib\net8.0\Microsoft.Win32.SystemEvents.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\NAPS2.Wia.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\NAPS2.Wia.pdb
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.AssemblyReference.cache
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\Views\MainWindow.g.cs
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\App.g.cs
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3_MarkupCompile.cache
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3_MarkupCompile.lref
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\Views\MainWindow.baml
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.g.resources
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.Properties.Resources.resources
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.GenerateResource.cache
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.AssemblyInfoInputs.cache
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.AssemblyInfo.cs
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.CoreCompileInputs.cache
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.csproj.Up2Date
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\refint\scan3.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.pdb
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\scan3.genruntimeconfig.cache
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\obj\Debug\net8.0-windows\ref\scan3.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Infrastructure\Logging\GlobalLogger.cs
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Serilog.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Serilog.Extensions.Logging.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Serilog.Sinks.Console.dll
+C:\Users\foxtrot\Desktop\Nueva carpeta\naps2-wia-master\naps2-wia-master\naps2-wia-master\scan3\bin\Debug\net8.0-windows\Serilog.Sinks.File.dll

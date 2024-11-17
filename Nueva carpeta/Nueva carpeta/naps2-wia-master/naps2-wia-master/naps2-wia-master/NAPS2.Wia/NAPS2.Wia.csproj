@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>true</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>NAPS2.Wia</RootNamespace>
+    <Title>NAPS2.Wia</Title>
+    <Product>NAPS2.Wia</Product>
+    <Version>2.0.3</Version>
+    <PackageVersion>2.0.3</PackageVersion>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <Copyright>Copyright 2018-2023 Ben Olden-Cooligan</Copyright>
+    <LangVersion>10</LangVersion>
+    <Authors>Ben Olden-Cooligan</Authors>
+    <Description>Low-level WIA 2.0/1.0 application library for .NET</Description>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Title>NAPS2.Wia</Title>
+    <RepositoryUrl>https://github.com/cyanfish/naps2-wia</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/cyanfish/naps2-wia</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>naps2 wia wiaaut scan scanning scanner</PackageTags>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>public_signing_key.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="NAPS2.Wia.Native" />
+    <Using Remove="System.Net.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
