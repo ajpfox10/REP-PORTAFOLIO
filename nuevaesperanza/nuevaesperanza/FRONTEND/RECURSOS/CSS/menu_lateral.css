@@ -1,0 +1,80 @@
+/* CSS/menu_lateral.css */
+
+/* Estilo para la pestaña que siempre está visible */
+#menu-tab-menu-lateral {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #f90; /* Color llamativo para que sea visible */
+    padding: 10px;
+    cursor: pointer;
+    z-index: 1000; /* Asegúrate de que esté por encima de otros elementos */
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+    transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+    color: #fff; /* Texto blanco para mejor contraste */
+    font-size: 16px;
+    text-align: center;
+    width: 100px; /* Ajusta según tus necesidades */
+    font-family: 'Poppins', sans-serif;
+}
+
+/* Reducir visibilidad de la pestaña */
+#menu-tab-menu-lateral.reducido-menu-lateral {
+    transform: translateY(-50%) translateX(85%); /* Mueve la pestaña parcialmente fuera de la pantalla */
+    opacity: 0.6; /* Hacerla un poco transparente */
+}
+
+/* Menú lateral */
+#menu-lateral-menu-lateral {
+    position: fixed;
+    right: 0;
+    top: 80px; /* Ajusta según la altura del encabezado */
+    width: 250px;
+    padding: 20px;
+    background-color: #f1f1f1;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out; /* Se añadió opacidad a la transición */
+    z-index: 999; /* Asegúrate de que esté debajo de la pestaña */
+}
+
+/* Ocultar el menú lateral */
+#menu-lateral-menu-lateral.oculto-menu-lateral {
+    transform: translateX(100%); /* Ocultar el menú moviéndolo fuera de la pantalla */
+    opacity: 0; /* Cambiar la opacidad a 0 para ocultarlo completamente */
+}
+
+/* Mostrar el menú lateral */
+#menu-lateral-menu-lateral:not(.oculto-menu-lateral) {
+    transform: translateX(0);
+    opacity: 1; /* Asegurarse de que la opacidad esté en 1 cuando esté visible */
+}
+
+/* Estilos adicionales para el menú */
+#menu-lateral-menu-lateral ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#menu-lateral-menu-lateral ul li {
+    margin: 15px 0;
+}
+
+#menu-lateral-menu-lateral ul li a {
+    text-decoration: none;
+    color: #333;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+}
+
+#menu-lateral-menu-lateral ul li a i {
+    margin-right: 10px;
+}
+
+/* Opcional: estilos para hover */
+#menu-lateral-menu-lateral ul li a:hover {
+    color: #f90;
+}
