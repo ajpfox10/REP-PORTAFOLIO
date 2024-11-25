@@ -1,0 +1,54 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\foxtrot\\Desktop\\Nueva carpeta\\naps2-wia-master\\naps2-wia-master\\naps2-wia-master\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{B94FCB96-EE87-449E-BC45-B0AC9D2CA92F}|scan3\\scan3.csproj|c:\\users\\foxtrot\\desktop\\nueva carpeta\\naps2-wia-master\\naps2-wia-master\\naps2-wia-master\\scan3\\viewmodels\\mainviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B94FCB96-EE87-449E-BC45-B0AC9D2CA92F}|scan3\\scan3.csproj|solutionrelative:scan3\\viewmodels\\mainviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{34600630-C4E7-4BBA-B658-C5CDAADE1EBA}|NAPS2.Wia\\NAPS2.Wia.csproj|c:\\users\\foxtrot\\desktop\\nueva carpeta\\naps2-wia-master\\naps2-wia-master\\naps2-wia-master\\naps2.wia\\wiapropertyvalue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{34600630-C4E7-4BBA-B658-C5CDAADE1EBA}|NAPS2.Wia\\NAPS2.Wia.csproj|solutionrelative:naps2.wia\\wiapropertyvalue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "WiaPropertyValue.cs",
+              "DocumentMoniker": "C:\\Users\\foxtrot\\Desktop\\Nueva carpeta\\naps2-wia-master\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\WiaPropertyValue.cs",
+              "RelativeDocumentMoniker": "NAPS2.Wia\\WiaPropertyValue.cs",
+              "ToolTip": "C:\\Users\\foxtrot\\Desktop\\Nueva carpeta\\naps2-wia-master\\naps2-wia-master\\naps2-wia-master\\NAPS2.Wia\\WiaPropertyValue.cs",
+              "RelativeToolTip": "NAPS2.Wia\\WiaPropertyValue.cs",
+              "ViewState": "AgIAAB8AAAAAAAAAAAAQwC4AAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-11-17T20:17:21.997Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "MainViewModel.cs",
+              "DocumentMoniker": "C:\\Users\\foxtrot\\Desktop\\Nueva carpeta\\naps2-wia-master\\naps2-wia-master\\naps2-wia-master\\scan3\\ViewModels\\MainViewModel.cs",
+              "RelativeDocumentMoniker": "scan3\\ViewModels\\MainViewModel.cs",
+              "ToolTip": "C:\\Users\\foxtrot\\Desktop\\Nueva carpeta\\naps2-wia-master\\naps2-wia-master\\naps2-wia-master\\scan3\\ViewModels\\MainViewModel.cs*",
+              "RelativeToolTip": "scan3\\ViewModels\\MainViewModel.cs*",
+              "ViewState": "AgIAAF0BAAAAAAAAAAAowHgBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2024-11-17T18:59:27.504Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
