@@ -1,0 +1,48 @@
+/* Encabezado CSS */
+
+header#encabezado-encabezado {
+    background-color: #2ecc71;
+    color: #fff;
+    padding: 20px;
+}
+
+    header#encabezado-encabezado nav.nav-encabezado {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    header#encabezado-encabezado .logo-encabezado {
+        display: flex;
+        align-items: center;
+    }
+
+        header#encabezado-encabezado .logo-encabezado img {
+            height: 50px;
+            margin-right: 10px;
+        }
+
+    header#encabezado-encabezado .titulo-encabezado {
+        font-size: 24px;
+        font-weight: 700;
+    }
+
+    header#encabezado-encabezado .menu-encabezado {
+        list-style: none;
+        display: flex;
+        gap: 20px;
+    }
+
+        header#encabezado-encabezado .menu-encabezado li {
+            display: inline;
+        }
+
+    header#encabezado-encabezado .enlace-encabezado {
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+    }
+
+        header#encabezado-encabezado .enlace-encabezado:hover {
+            text-decoration: underline;
+        }

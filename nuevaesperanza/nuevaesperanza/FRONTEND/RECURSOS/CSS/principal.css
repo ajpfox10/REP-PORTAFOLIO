@@ -1,0 +1,172 @@
+body.body-index {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f9f9f9;
+    color: #333;
+    margin: 0;
+    padding: 0;
+}
+
+header.header-index {
+    background-color: #2ecc71;
+    color: #fff;
+    padding: 20px;
+}
+
+    header.header-index nav.nav-index {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    header.header-index .logo-index {
+        display: flex;
+        align-items: center;
+    }
+
+        header.header-index .logo-index img {
+            height: 50px;
+            margin-right: 10px;
+        }
+
+    header.header-index .menu-index {
+        list-style: none;
+        display: flex;
+        gap: 20px;
+    }
+
+        header.header-index .menu-index li {
+            display: inline;
+        }
+
+        header.header-index .menu-index a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+.hero-index {
+    background-image: url('../imagenes/banner-supermercado.jpg');
+    background-size: cover;
+    background-position: center;
+    color: white;
+    padding: 100px 20px;
+    text-align: center;
+}
+
+#verOfertas-index {
+    background-color: #ff9800;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+}
+
+    #verOfertas-index:hover {
+        background-color: #e68900;
+    }
+
+#menu-lateral-index {
+    position: fixed;
+    right: 0;
+    top: 80px;
+    width: 200px;
+    padding: 20px;
+    background-color: #f1f1f1;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+}
+
+    #menu-lateral-index h3 {
+        margin-top: 0;
+    }
+
+    #menu-lateral-index button {
+        display: block;
+        width: 100%;
+        margin: 10px 0;
+        padding: 10px;
+        background-color: #2ecc71;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+        #menu-lateral-index button:hover {
+            background-color: #27ae60;
+        }
+
+.contenedor-promociones-index, .contenedor-categorias-index {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+
+.promocion-index, .categoria-index {
+    background: #fff;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    text-align: center;
+}
+
+#login-registro-index {
+    text-align: center;
+    padding: 40px;
+    background: #f1f1f1;
+    margin-top: 20px;
+}
+
+    #login-registro-index .boton-index {
+        text-decoration: none;
+        padding: 10px 20px;
+        background-color: #2ecc71;
+        color: white;
+        font-weight: bold;
+        margin: 10px;
+    }
+
+        #login-registro-index .boton-index:hover {
+            background-color: #27ae60;
+        }
+
+footer#footer-index {
+    background-color: #333;
+    color: #fff;
+    padding: 20px;
+    text-align: center;
+}
+
+.footer-content-index {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.footer-links-index {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    gap: 15px;
+}
+
+    .footer-links-index a {
+        color: #fff;
+        text-decoration: none;
+    }
+
+        .footer-links-index a:hover {
+            text-decoration: underline;
+        }
+
+.social-media-icons-index a {
+    margin: 0 10px;
+    color: #fff;
+    font-size: 1.5em;
+}
+
+    .social-media-icons-index a:hover {
+        color: #ff9800;
+    }
