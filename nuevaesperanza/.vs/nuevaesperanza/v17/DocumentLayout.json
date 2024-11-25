@@ -1,0 +1,70 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{D168D229-DDD3-48B3-856E-EB5801FE5BC9}|nuevaesperanza\\nuevaesperanza.njsproj|C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\PLANTILLAS\\menu_lateral.html||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{D168D229-DDD3-48B3-856E-EB5801FE5BC9}|nuevaesperanza\\nuevaesperanza.njsproj|solutionrelative:nuevaesperanza\\FRONTEND\\RECURSOS\\PLANTILLAS\\menu_lateral.html||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D168D229-DDD3-48B3-856E-EB5801FE5BC9}|nuevaesperanza\\nuevaesperanza.njsproj|C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\CSS\\menu_lateral.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{D168D229-DDD3-48B3-856E-EB5801FE5BC9}|nuevaesperanza\\nuevaesperanza.njsproj|solutionrelative:nuevaesperanza\\FRONTEND\\RECURSOS\\CSS\\menu_lateral.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D168D229-DDD3-48B3-856E-EB5801FE5BC9}|nuevaesperanza\\nuevaesperanza.njsproj|C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\JS\\menu_lateral.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{D168D229-DDD3-48B3-856E-EB5801FE5BC9}|nuevaesperanza\\nuevaesperanza.njsproj|solutionrelative:nuevaesperanza\\FRONTEND\\RECURSOS\\JS\\menu_lateral.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "menu_lateral.css",
+              "DocumentMoniker": "C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\CSS\\menu_lateral.css",
+              "RelativeDocumentMoniker": "nuevaesperanza\\FRONTEND\\RECURSOS\\CSS\\menu_lateral.css",
+              "ToolTip": "C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\CSS\\menu_lateral.css",
+              "RelativeToolTip": "nuevaesperanza\\FRONTEND\\RECURSOS\\CSS\\menu_lateral.css",
+              "ViewState": "AQIAABgAAAAAAAAAAAAAAEcAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2024-11-25T00:26:56.574Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "menu_lateral.html",
+              "DocumentMoniker": "C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\PLANTILLAS\\menu_lateral.html",
+              "RelativeDocumentMoniker": "nuevaesperanza\\FRONTEND\\RECURSOS\\PLANTILLAS\\menu_lateral.html",
+              "ToolTip": "C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\PLANTILLAS\\menu_lateral.html",
+              "RelativeToolTip": "nuevaesperanza\\FRONTEND\\RECURSOS\\PLANTILLAS\\menu_lateral.html",
+              "ViewState": "AQIAAAcAAAAAAAAAAAAgwAwAAAAoAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001512|",
+              "WhenOpened": "2024-11-24T23:00:47.063Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "menu_lateral.js",
+              "DocumentMoniker": "C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\JS\\menu_lateral.js",
+              "RelativeDocumentMoniker": "nuevaesperanza\\FRONTEND\\RECURSOS\\JS\\menu_lateral.js",
+              "ToolTip": "C:\\Users\\fox12\\source\\repos\\nuevaesperanza\\nuevaesperanza\\FRONTEND\\RECURSOS\\JS\\menu_lateral.js",
+              "RelativeToolTip": "nuevaesperanza\\FRONTEND\\RECURSOS\\JS\\menu_lateral.js",
+              "ViewState": "AQIAAEUAAAAAAAAAAAAqwGMAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2024-11-24T22:50:22.933Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

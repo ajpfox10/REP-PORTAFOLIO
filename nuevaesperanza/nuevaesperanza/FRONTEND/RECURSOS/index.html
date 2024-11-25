@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="CSS/principal.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Incluir Font Awesome para los iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>Supermercado Nueva Esperanza</title>
+</head>
+<body class="body-index">
+    <!-- Encabezado -->
+    <div id="encabezado-container"></div>
+
+    <!-- Contenedor del menú lateral -->
+    <div id="menu-lateral-container-menu-lateral"></div>
+    <div id="menu-tab-menu-lateral" class="menu-tab-menu-lateral">Opciones</div>
+
+    <!-- Contenido Principal -->
+    <main class="main-index">
+        <!-- Sección de bienvenida -->
+        <section id="bienvenida-index" class="hero-index">
+            <div class="contenido-bienvenida-index">
+                <h1>Bienvenidos a Nueva Esperanza</h1>
+                <p>Todo lo que necesitas en un solo lugar, con las mejores ofertas para vos y tu familia.</p>
+                <button id="verOfertas-index">Descubrí Nuestras Ofertas</button>
+            </div>
+        </section>
+
+        <!-- Sección de Promociones -->
+        <section id="promociones-index">
+            <h2>Promociones Destacadas</h2>
+            <div class="contenedor-promociones-index">
+                <!-- Productos en promoción cargados dinámicamente -->
+                <div class="promocion-index">
+                    <img src="recursos/imagenes/promocion1.jpg" alt="Promoción 1">
+                    <h3>Producto en Promoción 1</h3>
+                    <p>Precio especial: $100</p>
+                </div>
+                <div class="promocion-index">
+                    <img src="recursos/imagenes/promocion2.jpg" alt="Promoción 2">
+                    <h3>Producto en Promoción 2</h3>
+                    <p>Precio especial: $150</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sección de Categorías -->
+        <section id="categorias-index">
+            <h2>Categorías de Productos</h2>
+            <div class="contenedor-categorias-index">
+                <div class="categoria-index">
+                    <img src="recursos/imagenes/frutas.jpg" alt="Frutas">
+                    <h3>Frutas y Verduras</h3>
+                </div>
+                <div class="categoria-index">
+                    <img src="recursos/imagenes/lacteos.jpg" alt="Lácteos">
+                    <h3>Lácteos</h3>
+                </div>
+                <div class="categoria-index">
+                    <img src="recursos/imagenes/bebidas.jpg" alt="Bebidas">
+                    <h3>Bebidas</h3>
+                </div>
+                <div class="categoria-index">
+                    <img src="recursos/imagenes/panaderia.jpg" alt="Panadería">
+                    <h3>Panadería</h3>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sección de Login / Registro -->
+        <section id="login-registro-index">
+            <h2>Iniciar Sesión o Registrarse</h2>
+            <p>Para poder acceder a las ofertas personalizadas y gestionar tu carrito de compras, por favor inicia sesión o regístrate.</p>
+            <div class="acciones-usuario-index">
+                <a href="login.html" class="boton-index">Iniciar Sesión</a>
+                <a href="registro.html" class="boton-index">Registrarse</a>
+            </div>
+        </section>
+    </main>
+
+    <!-- Div donde se cargará el footer -->
+    <div id="footer-container"></div>
+
+    <!-- JavaScript para cargar el encabezado, el menú lateral, el footer y otros scripts -->
+    <script src="JS/encabezado.js"></script>
+    <script src="JS/menu_lateral.js"></script>
+    <script src="JS/footer.js"></script>
+</body>
+</html>
