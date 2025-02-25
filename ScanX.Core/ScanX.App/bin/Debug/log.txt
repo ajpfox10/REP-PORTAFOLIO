@@ -1,4 +1,0 @@
-[9/11/2024 15:43:04] ERROR: Scan failed with code NoDevice: No scanner device selected
-Exception: ScanX.Exceptions.ScanXException - No scanner device selected
-Stack Trace:    en ScanX.App.ViewModels.MainViewModel.<Scan>d__69.MoveNext() en D:\Users\fox12\Desktop\ScanX.Core\ScanX.App\ViewModels\MainViewModel.cs:línea 163
-----------------------------------------------------

@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
-    var headerPath = "PLANTILLAS/encabezado.html";
+    var headerPath = "./PLANTILLAS/encabezado.html";
     var headerContainer = document.getElementById("encabezado-container");
 
     fetch(headerPath)
