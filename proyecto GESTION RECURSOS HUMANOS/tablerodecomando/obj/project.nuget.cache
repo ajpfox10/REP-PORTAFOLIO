@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "DDvP2xlRjkXTkWUyzpa0ZcICTgGXXXV2V9nd/+FKODk58g2QXmVB6vzFhPqZ3AnUrCTk+OM9uCvTMUwqvVdJuA==",
+  "success": true,
+  "projectFilePath": "C:\\Users\\famil\\Desktop\\mesadeentradafinal1\\tablerodecomando\\tablerodecomando\\tablerodecomando.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\famil\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\7.0.1\\microsoft.extensions.logging.abstractions.7.0.1.nupkg.sha512",
+    "C:\\Users\\famil\\.nuget\\packages\\mysqlconnector\\2.3.1\\mysqlconnector.2.3.1.nupkg.sha512",
+    "C:\\Users\\famil\\.nuget\\packages\\system.diagnostics.diagnosticsource\\7.0.2\\system.diagnostics.diagnosticsource.7.0.2.nupkg.sha512",
+    "C:\\Users\\famil\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}
