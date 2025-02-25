@@ -9,9 +9,8 @@ footer#footer-footer {
 
 .footer-content-footer {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
-    flex-wrap: wrap;
     gap: 20px;
 }
 
@@ -20,6 +19,7 @@ footer#footer-footer {
     padding: 0;
     display: flex;
     gap: 15px;
+    justify-content: center;
 }
 
     .footer-links-footer .enlace-footer {
@@ -34,6 +34,7 @@ footer#footer-footer {
 .social-media-icons-footer {
     display: flex;
     gap: 15px;
+    justify-content: center;
 }
 
     .social-media-icons-footer .icono-footer {
@@ -44,3 +45,8 @@ footer#footer-footer {
         .social-media-icons-footer .icono-footer:hover {
             color: #ff9800;
         }
+
+.copyright-footer {
+    margin: 10px 0;
+    font-size: 0.9em;
+}

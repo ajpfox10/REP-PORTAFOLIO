@@ -4,6 +4,8 @@
     <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
     <Name>nuevaesperanza</Name>
     <RootNamespace>nuevaesperanza</RootNamespace>
+    <LaunchUrl>http://localhost:8080</LaunchUrl>
+    <SaveNodeJsSettingsInProjectFile>True</SaveNodeJsSettingsInProjectFile>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -19,7 +21,7 @@
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <ProjectTypeGuids>{3AF33F2E-1136-4D97-BBB7-1795711AC8B8};{349c5851-65df-11da-9384-00065b846f21};{9092AA53-FB77-4645-B42D-1CCCA6BD08BD}</ProjectTypeGuids>
     <NodejsPort>1337</NodejsPort>
-    <StartWebBrowser>true</StartWebBrowser>
+    <StartWebBrowser>True</StartWebBrowser>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -28,18 +30,26 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="BACKEND\API\registro.php" />
+    <Content Include="BACKEND\CONFIG\conexion.php" />
+    <Content Include="BACKEND\CONTROLLERS\userController.js" />
+    <Content Include="BACKEND\middleware\validateRegistro.js" />
+    <Content Include="BACKEND\SERVICES\phpExecutor.js" />
     <Content Include="bin\Microsoft.NodejsTools.WebRole.dll" />
     <Content Include="FRONTEND\RECURSOS\CSS\encabezado.css" />
     <Content Include="FRONTEND\RECURSOS\CSS\footer.css" />
     <Content Include="FRONTEND\RECURSOS\CSS\menu_lateral.css" />
+    <Content Include="FRONTEND\RECURSOS\CSS\registro.css" />
     <Content Include="FRONTEND\RECURSOS\index.html" />
     <Content Include="FRONTEND\RECURSOS\CSS\principal.css" />
     <Content Include="FRONTEND\RECURSOS\JS\encabezado.js" />
     <Content Include="FRONTEND\RECURSOS\JS\footer.js" />
     <Content Include="FRONTEND\RECURSOS\JS\menu_lateral.js" />
+    <Content Include="FRONTEND\RECURSOS\JS\registro.js" />
     <Content Include="FRONTEND\RECURSOS\PLANTILLAS\encabezado.html" />
     <Content Include="FRONTEND\RECURSOS\PLANTILLAS\footer.html" />
     <Content Include="FRONTEND\RECURSOS\PLANTILLAS\menu_lateral.html" />
+    <Content Include="FRONTEND\RECURSOS\PLANTILLAS\registro_usuario.html" />
     <Content Include="obj\Debug\nuevaesperanza.njsproj.AssemblyReference.cache" />
     <Content Include="obj\Debug\nuevaesperanza.njsproj.CoreCompileInputs.cache" />
     <Content Include="obj\Debug\nuevaesperanza.njsproj.FileListAbsolute.txt" />
@@ -50,7 +60,11 @@
   <ItemGroup>
     <Folder Include="BACKEND\" />
     <Folder Include="BACKEND\API\" />
+    <Folder Include="BACKEND\CONFIG\" />
+    <Folder Include="BACKEND\CONTROLLERS\" />
     <Folder Include="BACKEND\INCLUDES\" />
+    <Folder Include="BACKEND\middleware\" />
+    <Folder Include="BACKEND\SERVICES\" />
     <Folder Include="bin\" />
     <Folder Include="FRONTEND\" />
     <Folder Include="FRONTEND\PLANTILLAS\" />

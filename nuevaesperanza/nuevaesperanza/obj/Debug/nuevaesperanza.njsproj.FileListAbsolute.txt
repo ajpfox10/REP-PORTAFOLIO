@@ -1,3 +1,6 @@
 C:\Users\fox12\source\repos\nuevaesperanza\nuevaesperanza\obj\Debug\nuevaesperanza.njsproj.AssemblyReference.cache
 C:\Users\fox12\source\repos\nuevaesperanza\nuevaesperanza\obj\Debug\nuevaesperanza.njsproj.CoreCompileInputs.cache
 C:\Users\fox12\source\repos\nuevaesperanza\nuevaesperanza\bin\Microsoft.NodejsTools.WebRole.dll
+C:\Users\fox12\source\repos\REP-PORTAFOLIO\nuevaesperanza\nuevaesperanza\obj\Debug\nuevaesperanza.njsproj.AssemblyReference.cache
+C:\Users\fox12\source\repos\REP-PORTAFOLIO\nuevaesperanza\nuevaesperanza\obj\Debug\nuevaesperanza.njsproj.CoreCompileInputs.cache
+C:\Users\fox12\source\repos\REP-PORTAFOLIO\nuevaesperanza\nuevaesperanza\bin\Microsoft.NodejsTools.WebRole.dll

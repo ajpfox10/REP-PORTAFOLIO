@@ -1,69 +1,36 @@
-'use strict';
-var http = require('http');
-var fs = require('fs');
-var path = require('path');
-var port = process.env.PORT || 1337;
+const express = require('express');
+const path = require('path');
+const { registerUser } = require('./BACKEND/CONTROLLERS/userController');
+const validateRegistro = require('./BACKEND/middleware/validateRegistro');
+const app = express();
+const port = process.env.PORT || 1337;
 
-http.createServer(function (req, res) {
-    console.log('Solicitud para:', req.url);
+// Middleware para procesar datos del formulario
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-    // Define la ruta base de los recursos del frontend
-    let baseDir = path.join(__dirname, 'FRONTEND', 'RECURSOS');
-    let filePath;
+// Log de todas las solicitudes
+app.use((req, res, next) => {
+    console.log(`[LOG] Solicitud recibida: ${req.method} ${req.url}`);
+    next();
+});
 
-    // Para cualquier ruta, construir la ruta a partir de la base y la solicitud
-    if (req.url === '/') {
-        filePath = path.join(baseDir, 'index.html');
-    } else {
-        filePath = path.join(baseDir, req.url);
-    }
+// Ruta principal
+app.get('/', (req, res) => {
+    console.log('[LOG] Serviendo archivo index.html');
+    app.use(express.static(path.join(__dirname, 'FRONTEND', 'RECURSOS')));
+});
 
-    // Normaliza la ruta del archivo
-    filePath = path.normalize(filePath);
+// Ruta temporal para probar GET
+app.get('/api/register-user', (req, res) => {
+    console.log('[LOG] GET /api/register-user ejecutado');
+    res.send('Ruta GET /api/register-user activa');
+});
 
-    console.log('Ruta resuelta del archivo:', filePath);
+// Ruta POST para registro de usuario
+app.post('/api/register-user', validateRegistro, registerUser);
 
-    // Determina la extensión y el tipo de contenido del archivo
-    const extname = String(path.extname(filePath)).toLowerCase();
-    const mimeTypes = {
-        '.html': 'text/html',
-        '.js': 'application/javascript',
-        '.css': 'text/css',
-        '.json': 'application/json',
-        '.png': 'image/png',
-        '.jpg': 'image/jpg',
-        '.gif': 'image/gif',
-        '.svg': 'image/svg+xml',
-        '.wav': 'audio/wav',
-        '.mp4': 'video/mp4',
-        '.woff': 'application/font-woff',
-        '.ttf': 'application/font-ttf',
-        '.eot': 'application/vnd.ms-fontobject',
-        '.otf': 'application/font-otf',
-        '.wasm': 'application/wasm'
-    };
-    const contentType = mimeTypes[extname] || 'application/octet-stream';
-
-    // Lee el archivo solicitado y envíalo como respuesta
-    fs.readFile(filePath, function (err, content) {
-        if (err) {
-            if (err.code == 'ENOENT') {
-                // Archivo no encontrado, responder con un error 404
-                res.writeHead(404, { 'Content-Type': 'text/plain' });
-                res.end('404: File Not Found\n');
-                console.error('Archivo no encontrado:', filePath);
-            } else {
-                // Error diferente, responder con un error 500
-                res.writeHead(500, { 'Content-Type': 'text/plain' });
-                res.end('500: Internal Server Error\n');
-                console.error('Error interno del servidor:', err);
-            }
-        } else {
-            // Si el archivo se encuentra, responder con el contenido y el tipo adecuado
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(content, 'utf-8');
-        }
-    });
-}).listen(port);
-
-console.log(`Server running at http://localhost:${port}/`);
+// Inicia el servidor
+app.listen(port, () => {
+    console.log(`[LOG] Servidor ejecutándose en http://localhost:${port}`);
+});

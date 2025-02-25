@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
-    const menuPath = "./PLANTILLAS/menu_lateral.html";
+    const menuPath = "./RECURSOS/PLANTILLAS/menu_lateral.html";
     const menuContainer = document.getElementById("menu-lateral-container-menu-lateral");
     const tab = document.getElementById("menu-tab-menu-lateral");
     let hideMenuTimeout;
