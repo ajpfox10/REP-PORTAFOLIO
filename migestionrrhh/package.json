@@ -1,0 +1,60 @@
+{
+  "name": "migestionrrhh",
+  "version": "1.0.0",
+  "description": "API de gestión de RRHH con NestJS",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "routes": "ts-node test/routes.ts",
+    "clean": "rimraf dist node_modules package-lock.json",
+    "reinstall": "npm run clean && npm install"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.12",
+    "@nestjs/core": "^11.0.12",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.12",
+    "@nestjs/sequelize": "^11.0.0",
+    "@nestjs/swagger": "^11.1.0",
+    "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.14.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "sequelize": "^6.37.7",
+    "sequelize-typescript": "^2.1.5",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.5",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/testing": "^11.0.12",
+    "@types/bcrypt": "^5.0.2",
+    "@types/express": "^5.0.1",
+    "@types/jest": "^29.5.14",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.13.14",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/sequelize": "^4.28.20",
+    "@types/supertest": "^6.0.3",
+    "jest": "^29.7.0",
+    "supertest": "^7.1.0",
+    "ts-jest": "^29.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.2.2"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
