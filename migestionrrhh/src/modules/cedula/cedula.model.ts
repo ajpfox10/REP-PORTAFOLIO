@@ -25,7 +25,8 @@ export class Cedula extends Model<
 
     @Column({ type: DataType.STRING, allowNull: false })
     numero!: string;
-
+    @Column({ type: DataType.STRING, allowNull: false })
+    usuarioCarga!: string;
     @Column({ type: DataType.DATE, allowNull: true })
     fechaEmision?: Date;
 }

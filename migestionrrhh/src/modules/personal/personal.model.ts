@@ -5,5 +5,27 @@ export class Personal extends Model {
     @Column({ primaryKey: true, autoIncrement: true })
     CODIGOCLI!: number;
 
-    // Agregar nuevos campos aquí (preferentemente al final para evitar problemas de migración)
+    @Column
+    nombre!: string;
+
+    @Column
+    apellido!: string;
+
+    @Column
+    dni!: string;
+
+    @Column
+    sexo!: string;
+
+    @Column
+    cargo!: string;
+
+    @Column
+    usuarioCarga!: string;
+
+    @Column
+    fechaNacimiento?: Date;
+
+    @Column
+    fechaDeAlta?: Date;
 }

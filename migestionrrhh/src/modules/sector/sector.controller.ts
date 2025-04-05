@@ -1,28 +1,45 @@
-import { Controller, Post, Get, Param, Body, Delete } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Delete, Patch } from '@nestjs/common';
 import { SectorService } from './sector.service';
 import { CrearSectorDto } from './dto/crear-sector.dto';
+import { ActualizarSectorDto } from './dto/actualizar-sector.dto';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
+
+@ApiTags('sector')
+@UseGuards(JwtAuthGuard)
 
 @Controller('sector')
 export class SectorController {
-  constructor(private readonly service: SectorService) {}
+    constructor(private readonly sectorService: SectorService) { }
 
-  @Post()
-  crear(@Body() dto: CrearSectorDto) {
-    return this.service.crear(dto);
-  }
+    @Post()
+    @ApiOperation({ summary: 'Crear un sector' })
+    crear(@Body() dto: CrearSectorDto) {
+        return this.sectorService.crear(dto);
+    }
 
-  @Get()
-  obtenerTodos() {
-    return this.service.obtenerTodos();
-  }
+    @Get()
+    @ApiOperation({ summary: 'Obtener todos los sectores' })
+    obtenerTodos() {
+        return this.sectorService.obtenerTodos();
+    }
 
-  @Get(':id')
-  obtenerPorId(@Param('id') id: number) {
-    return this.service.obtenerPorId(id);
-  }
+    @Get(':id')
+    @ApiOperation({ summary: 'Obtener un sector por ID' })
+    obtenerPorId(@Param('id') id: number) {
+        return this.sectorService.obtenerPorId(id);
+    }
 
-  @Delete(':id')
-  eliminar(@Param('id') id: number) {
-    return this.service.eliminar(id);
-  }
+    @Patch(':id')
+    @ApiOperation({ summary: 'Actualizar un sector' })
+    actualizar(@Param('id') id: number, @Body() dto: ActualizarSectorDto) {
+        return this.sectorService.actualizar(id, dto);
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Eliminar un sector' })
+    eliminar(@Param('id') id: number) {
+        return this.sectorService.eliminar(id);
+    }
 }

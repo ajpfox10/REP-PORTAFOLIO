@@ -1,28 +1,17 @@
-// Modelo Sequelize para el módulo cc
-import {
-    Table,
-    Column,
-    Model,
-    DataType,
-    PrimaryKey,
-    AutoIncrement,
-} from 'sequelize-typescript';
-import {
-    CreationOptional,
-    InferAttributes,
-    InferCreationAttributes,
-} from 'sequelize';
+// cc.model.ts
+import { Table, Column, Model, DataType } from 'sequelize-typescript';
 
-@Table({ tableName: 'ccmodel', timestamps: false })
-export class CCModel extends Model<
-    InferAttributes<CCModel>,
-    InferCreationAttributes<CCModel>
-> {
-    @PrimaryKey
-    @AutoIncrement
-    @Column({ type: DataType.INTEGER })
-    id!: CreationOptional<number>;
+@Table({ tableName: 'cc' })
+export class Cc extends Model<Cc> {
+    @Column({ primaryKey: true, autoIncrement: true, type: DataType.INTEGER })
+    id!: number;
 
-    @Column({ type: DataType.STRING, allowNull: false })
+    @Column({ type: DataType.STRING })
     nombre!: string;
+
+    @Column({ type: DataType.DATE })
+    fechaDeAlta!: Date;
+
+    @Column({ type: DataType.STRING })
+    usuarioCarga!: string;
 }

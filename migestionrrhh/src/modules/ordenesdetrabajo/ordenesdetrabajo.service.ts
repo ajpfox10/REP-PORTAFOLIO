@@ -11,11 +11,8 @@ export class OrdenesdetrabajoService {
         private readonly model: typeof Ordenesdetrabajo,
     ) { }
 
-    async crear(data: CrearOrdenesdetrabajoDto): Promise<Ordenesdetrabajo> {
-        return this.model.create({
-            ...data,
-            fechaDeAlta: new Date(),
-        });
+    async crear(dto: CrearOrdenesdetrabajoDto): Promise<Ordenesdetrabajo> {
+        return this.model.create({ ...dto, fechaDeAlta: dto.fechaDeAlta || new Date() } as any);
     }
 
     async obtenerTodos(): Promise<Ordenesdetrabajo[]> {
@@ -24,25 +21,18 @@ export class OrdenesdetrabajoService {
 
     async obtenerPorId(id: number): Promise<Ordenesdetrabajo> {
         const orden = await this.model.findByPk(id);
-        if (!orden) {
-            throw new NotFoundException(`Orden de trabajo con ID ${id} no encontrada`);
-        }
+        if (!orden) throw new NotFoundException(`Orden con ID ${id} no encontrada`);
         return orden;
     }
 
-    async actualizar(
-        id: number,
-        data: ActualizarOrdenesdetrabajoDto,
-    ): Promise<[number, Ordenesdetrabajo[]]> {
-        return this.model.update(data, {
-            where: { id },
-            returning: true,
-        });
+    async actualizar(id: number, dto: ActualizarOrdenesdetrabajoDto): Promise<Ordenesdetrabajo> {
+        const orden = await this.obtenerPorId(id);
+        await orden.update(dto);
+        return orden;
     }
 
-    async eliminar(id: number): Promise<number> {
-        return this.model.destroy({
-            where: { id },
-        });
+    async eliminar(id: number): Promise<void> {
+        const orden = await this.obtenerPorId(id);
+        await orden.destroy();
     }
 }

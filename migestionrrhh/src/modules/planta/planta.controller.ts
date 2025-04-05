@@ -1,28 +1,53 @@
 import {
     Controller,
+    Post,
     Get,
     Param,
-    NotFoundException,
-    UseGuards,
+    Body,
+    Delete,
+    Patch,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PlantaService } from './planta.service';
+import { CrearPlantaDto } from './dto/crear-planta.dto';
+import { ActualizarPlantaDto } from './dto/actualizar-planta.dto';
+import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@auth/guards/roles.guard';
-import { Roles } from '@auth/decoradores/roles.decorator';
-import { Rol } from '@auth/interfaces/rol.enum';
+
+@ApiTags('planta')
+@UseGuards(JwtAuthGuard)
 
 @Controller('planta')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class PlantaController {
-    constructor(private readonly plantaService: PlantaService) { }
+    constructor(private readonly service: PlantaService) { }
+
+    @Post()
+    @ApiOperation({ summary: 'Crear una nueva planta' })
+    crear(@Body() dto: CrearPlantaDto) {
+        return this.service.crear(dto);
+    }
+
+    @Get()
+    @ApiOperation({ summary: 'Obtener todas las plantas' })
+    obtenerTodos() {
+        return this.service.obtenerTodos();
+    }
 
     @Get(':id')
-    @Roles(Rol.ADMIN, Rol.USER)
-    async buscarPorId(@Param('id') id: number) {
-        const planta = await this.plantaService.obtenerPorId(id);
-        if (!planta) {
-            throw new NotFoundException('Planta no encontrada');
-        }
-        return planta;
+    @ApiOperation({ summary: 'Obtener una planta por ID' })
+    obtenerPorId(@Param('id') id: number) {
+        return this.service.obtenerPorId(id);
+    }
+
+    @Patch(':id')
+    @ApiOperation({ summary: 'Actualizar una planta por ID' })
+    actualizar(@Param('id') id: number, @Body() dto: ActualizarPlantaDto) {
+        return this.service.actualizar(id, dto);
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Eliminar una planta por ID' })
+    eliminar(@Param('id') id: number) {
+        return this.service.eliminar(id);
     }
 }

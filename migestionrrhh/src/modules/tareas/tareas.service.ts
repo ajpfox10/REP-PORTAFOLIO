@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Tareas } from './tareas.model';
 import { CrearTareasDto } from './dto/crear-tareas.dto';
+import { ActualizarTareasDto } from './dto/actualizar-tareas.dto';
 
 @Injectable()
 export class TareasService {
@@ -30,7 +31,21 @@ export class TareasService {
         return tarea;
     }
 
-    async eliminar(id: number): Promise<void> {
-        await this.tareasModel.destroy({ where: { ID: id } });
+    async actualizar(id: number, dto: ActualizarTareasDto): Promise<Tareas> {
+        const tarea = await this.obtenerPorId(id);
+        if (!tarea) {
+            throw new NotFoundException(`Tarea con ID ${id} no encontrada`);
+        }
+        await tarea.update(dto);
+        return tarea;
     }
+
+    async eliminar(id: number): Promise<void> {
+        const tarea = await this.obtenerPorId(id);
+        if (!tarea) {
+            throw new NotFoundException(`Tarea con ID ${id} no encontrada`);
+        }
+        await tarea.destroy();
+    }
+
 }
