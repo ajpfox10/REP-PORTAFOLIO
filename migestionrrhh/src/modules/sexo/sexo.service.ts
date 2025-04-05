@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Sexo } from './sexo.model';
+import { ActualizarSexoDto } from './dto/actualizar-sexo.dto';
 
 @Injectable()
 export class SexoService {
@@ -19,13 +20,23 @@ export class SexoService {
             throw new NotFoundException(`Sexo con ID ${id} no encontrado`);
         }
         return sexo;
+    }  
+
+    async actualizar(id: number, dto: ActualizarSexoDto): Promise<Sexo> {
+        const sexo = await this.obtenerPorId(id);
+        if (!sexo) {
+            throw new NotFoundException(`Sexo con ID ${id} no encontrado`);
+        }
+        await sexo.update(dto);
+        return sexo;
     }
 
     async eliminar(id: number): Promise<void> {
-        const eliminado = await this.sexoModel.destroy({ where: { id } });
-        if (!eliminado) {
-            throw new NotFoundException(`Sexo con ID ${id} no encontrado para eliminar`);
+        const sexo = await this.obtenerPorId(id);
+        if (!sexo) {
+            throw new NotFoundException(`Sexo con ID ${id} no encontrado`);
         }
+        await sexo.destroy();
     }
 }
 

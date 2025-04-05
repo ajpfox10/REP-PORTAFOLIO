@@ -1,25 +1,45 @@
-// DTO para el módulo categoria
-import { IsString, IsNotEmpty, IsOptional, IsDateString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+    IsString,
+    IsNotEmpty,
+    IsOptional,
+    IsDateString,
+    MaxLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CrearCategoriaDto {
-    @ApiProperty({ example: 'Electrónica' })
-    @IsString()
-    @IsNotEmpty()
+    @ApiProperty({
+        example: 'Electrónica',
+        description: 'Nombre de la categoría',
+    })
+    @IsString({ message: 'El nombre debe ser una cadena de texto' })
+    @IsNotEmpty({ message: 'El nombre de la categoría es obligatorio' })
+    @MaxLength(100, { message: 'El nombre no puede exceder 100 caracteres' })
     nombre!: string;
 
-    @ApiProperty({ example: 'Categoría de productos electrónicos', required: false })
-    @IsString()
+    @ApiPropertyOptional({
+        example: 'Categoría de productos electrónicos',
+        description: 'Descripción breve (opcional)',
+    })
+    @IsString({ message: 'La descripción debe ser una cadena de texto' })
     @IsOptional()
+    @MaxLength(255, { message: 'La descripción no puede exceder 255 caracteres' })
     descripcion?: string;
 
-    @ApiProperty({ example: '2024-04-01', required: false, description: 'Fecha de alta en formato ISO' })
-    @IsDateString()
+    @ApiPropertyOptional({
+        example: '2024-04-01',
+        description: 'Fecha de alta en formato ISO 8601',
+    })
+    @IsDateString({}, { message: 'La fecha debe estar en formato ISO' })
     @IsOptional()
     fechaDeAlta?: Date;
 
-    @ApiProperty({ example: 'admin@example.com', required: false })
-    @IsString()
+    @ApiPropertyOptional({
+        example: 'admin@example.com',
+        description: 'Usuario que realiza la carga',
+    })
+    @IsString({ message: 'El usuario debe ser una cadena de texto' })
     @IsOptional()
+    @MaxLength(50, { message: 'El usuario no puede exceder 50 caracteres' })
     usuarioCarga?: string;
 }

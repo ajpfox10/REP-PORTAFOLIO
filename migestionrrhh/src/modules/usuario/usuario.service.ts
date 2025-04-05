@@ -1,9 +1,10 @@
 ﻿import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Usuario } from '../../database/models/usuario.model';
+import { Usuario } from '../../modules/usuario/usuario.model';
 import { CreateUsuarioDto } from './dto/usuario.dto';
 import * as bcrypt from 'bcrypt';
 import { CreationAttributes } from 'sequelize';
+import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto';
 @Injectable()
 export class UsuarioService {
     constructor(
@@ -40,4 +41,23 @@ export class UsuarioService {
         }
         return usuario;
     }
+    async actualizar(id: number, dto: ActualizarUsuarioDto): Promise<Usuario> {
+        const usuario = await this.obtenerPorId(id);
+        await usuario.update(dto);
+        return usuario;
+    }
+
+    async eliminar(id: number): Promise<void> {
+        const usuario = await this.obtenerPorId(id);
+        await usuario.destroy();
+    }
+    async guardarRefreshToken(userId: number, refreshToken: string): Promise<void> {
+        const usuario = await this.usuarioModel.findByPk(userId);
+        if (!usuario) {
+            throw new NotFoundException(`Usuario con id ${userId} no encontrado.`);
+        }
+        usuario.refreshToken = refreshToken;
+        await usuario.save();
+    }
+
 }

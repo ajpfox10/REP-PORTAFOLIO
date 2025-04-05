@@ -4,7 +4,7 @@ import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { Usuario } from '../database/models/usuario.model';
+import { Usuario } from '../modules/usuario/usuario.model';
 import { JwtStrategy } from './jwt.strategy';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsuarioModule } from '../modules/usuario/usuario.module'; // 👈 Importar módulo

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Nomendador } from './nomendador.model';
 import { CrearNomendadorDto } from './dto/crear-nomendador.dto';
+import { ActualizarNomendadorDto } from './dto/actualizar-nomendador.dto';
 
 @Injectable()
 export class NomendadorService {
@@ -10,29 +11,33 @@ export class NomendadorService {
         private readonly model: typeof Nomendador,
     ) { }
 
-    async crear(data: CrearNomendadorDto): Promise<Nomendador> {
-        return this.model.create({ ...(data as any), fechaDeAlta: new Date() });
+    async crear(dto: CrearNomendadorDto): Promise<Nomendador> {
+        return this.model.create({
+            ...dto,
+            fechaDeAlta: dto.fechaDeAlta ?? new Date(),
+        } as any);
     }
 
     async obtenerTodos(): Promise<Nomendador[]> {
         return this.model.findAll();
     }
 
-    async obtenerPorId(id: number): Promise<Nomendador | null> {
-        return this.model.findByPk(id);
-    }
-
-    async actualizar(id: number, data: Partial<CrearNomendadorDto>): Promise<Nomendador | null> {
-        const instancia = await this.model.findByPk(id);
-        if (!instancia) {
-            return null;
+    async obtenerPorId(id: number): Promise<Nomendador> {
+        const item = await this.model.findByPk(id);
+        if (!item) {
+            throw new NotFoundException(`Nomendador con ID ${id} no encontrado`);
         }
-        await instancia.update(data);
-        return instancia;
+        return item;
     }
 
-    async eliminar(id: number): Promise<boolean> {
-        const eliminado = await this.model.destroy({ where: { id } });
-        return eliminado > 0;
+    async actualizar(id: number, dto: ActualizarNomendadorDto): Promise<Nomendador> {
+        const item = await this.obtenerPorId(id);
+        await item.update(dto);
+        return item;
+    }
+
+    async eliminar(id: number): Promise<void> {
+        const item = await this.obtenerPorId(id);
+        await item.destroy();
     }
 }

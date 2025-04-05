@@ -1,34 +1,62 @@
-import { Controller, Post, Body, Get, Param, Put, Delete } from '@nestjs/common';
-import { TblArchivosService } from './tblarchivos.service';
-import { TblArchivos } from './tblarchivos.model';
-import { CreationAttributes } from 'sequelize';
+import {
+    Controller,
+    Post,
+    Get,
+    Param,
+    Body,
+    Delete,
+    Patch,
+    UseGuards,
+    ParseIntPipe,
+} from '@nestjs/common';
+import { TblarchivosService } from './tblarchivos.service';
+import { CrearArchivoDto } from './dto/crear-archivo.dto';
+import { ActualizarArchivoDto } from './dto/actualizar-archivo.dto';
+import { EliminarArchivosDto } from './dto/eliminar-archivos.dto';
+import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
+import { RolesGuard } from '@auth/guards/roles.guard';
+import { Roles } from '@auth/decoradores/roles.decorator';
+import { Rol } from '@auth/interfaces/rol.enum';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Tblarchivos } from './tblarchivos.model';
 
-@Controller('archivos')
-export class TblArchivosController {
-    constructor(private readonly service: TblArchivosService) { }
+@ApiTags('tblarchivos')
+@Controller('tblarchivos')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class TblarchivosController {
+    constructor(private readonly service: TblarchivosService) { }
 
     @Post()
-    async create(@Body() data: CreationAttributes<TblArchivos>): Promise<TblArchivos> {
-        return this.service.create(data);
+    @Roles(Rol.ADMIN)
+    @ApiOperation({ summary: 'Crear archivo' })
+    crear(@Body() dto: CrearArchivoDto) {
+        return this.service.crear(dto);
     }
 
     @Get()
-    findAll(): Promise<TblArchivos[]> {
-        return this.service.findAll();
+    @ApiOperation({ summary: 'Listar todos los archivos' })
+    obtenerTodos() {
+        return this.service.obtenerTodos();
     }
 
     @Get(':id')
-    findOne(@Param('id') id: number): Promise<TblArchivos> {
-        return this.service.findOne(id);
+    @ApiOperation({ summary: 'Obtener archivo por ID' })
+    obtenerPorId(@Param('id', ParseIntPipe) id: number) {
+        return this.service.obtenerPorId(id);
     }
 
-    @Put(':id')
-    update(@Param('id') id: number, @Body() data: Partial<TblArchivos>): Promise<void> {
-        return this.service.update(id, data);
+    @Patch(':id')
+    @Roles(Rol.ADMIN)
+    @ApiOperation({ summary: 'Actualizar archivo por ID' })
+    actualizar(@Param('id', ParseIntPipe) id: number, @Body() dto: ActualizarArchivoDto) {
+        return this.service.actualizar(id, dto);
     }
 
     @Delete(':id')
-    delete(@Param('id') id: number): Promise<void> {
-        return this.service.delete(id);
+    @Roles(Rol.ADMIN)
+    @ApiOperation({ summary: 'Eliminar archivo por ID' })
+    eliminar(@Param('id', ParseIntPipe) id: number, @Body() dto: EliminarArchivosDto) {
+        return this.service.eliminar(id, dto);
     }
 }
+

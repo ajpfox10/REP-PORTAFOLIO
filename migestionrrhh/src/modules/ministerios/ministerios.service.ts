@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Ministerios } from './ministerios.model';
 import { CrearMinisteriosDto } from './dto/crear-ministerios.dto';
+import { ActualizarMinisteriosDto } from './dto/actualizar-ministerios.dto';
 
 @Injectable()
 export class MinisteriosService {
@@ -10,29 +11,33 @@ export class MinisteriosService {
         private readonly model: typeof Ministerios,
     ) { }
 
-    async crear(data: CrearMinisteriosDto): Promise<Ministerios> {
+    async crear(dto: CrearMinisteriosDto): Promise<Ministerios> {
         return this.model.create({
-            ...(data as any),
-            fechaDeAlta: new Date(),
-        });
+            ...dto,
+            fechaDeAlta: dto.fechaDeAlta ?? new Date(),
+        } as any);
     }
 
-    async eliminar(id: number): Promise<void> {
-        const ministerio = await this.model.findByPk(id);
-        if (!ministerio) {
-            throw new NotFoundException(`Ministerio con ID ${id} no encontrado`);
-        }
-        await ministerio.destroy();
-    }
     async obtenerTodos(): Promise<Ministerios[]> {
         return this.model.findAll();
     }
 
     async obtenerPorId(id: number): Promise<Ministerios> {
-        const ministerio = await this.model.findByPk(id);
-        if (!ministerio) {
+        const item = await this.model.findByPk(id);
+        if (!item) {
             throw new NotFoundException(`Ministerio con ID ${id} no encontrado`);
         }
-        return ministerio;
+        return item;
+    }
+
+    async actualizar(id: number, dto: ActualizarMinisteriosDto): Promise<Ministerios> {
+        const item = await this.obtenerPorId(id);
+        await item.update(dto);
+        return item;
+    }
+
+    async eliminar(id: number): Promise<void> {
+        const item = await this.obtenerPorId(id);
+        await item.destroy();
     }
 }

@@ -2,7 +2,7 @@
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsuarioService } from '../modules/usuario/usuario.service'; // 📌 RUTA CORRECTA
-import { Usuario } from '../database/models/usuario.model'; // 📌 RUTA CORRECTA
+import { Usuario } from '../modules/usuario/usuario.model'; // 📌 RUTA CORRECTA
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {

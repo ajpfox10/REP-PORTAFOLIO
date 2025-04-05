@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Localidades1 } from './localidades1.model';
 import { CrearLocalidades1Dto } from './dto/crear-localidades1.dto';
+import { ActualizarLocalidades1Dto } from './dto/actualizar_localidades1.dto';
 
 @Injectable()
 export class Localidades1Service {
@@ -10,30 +11,33 @@ export class Localidades1Service {
         private readonly model: typeof Localidades1,
     ) { }
 
-    async crear(data: CrearLocalidades1Dto): Promise<Localidades1> {
+    async crear(dto: CrearLocalidades1Dto): Promise<Localidades1> {
         return this.model.create({
-            ...data,
+            ...(dto as any),
             fechaDeAlta: new Date(),
         });
-    }
-
-    async obtenerPorId(id: number): Promise<Localidades1> {
-        const entidad = await this.model.findByPk(id);
-        if (!entidad) {
-            throw new NotFoundException(`Localidad con ID ${id} no encontrada`);
-        }
-        return entidad;
     }
 
     async obtenerTodos(): Promise<Localidades1[]> {
         return this.model.findAll();
     }
 
-    async eliminar(id: number): Promise<void> {
-        const entidad = await this.model.findByPk(id);
-        if (!entidad) {
+    async obtenerPorId(id: number): Promise<Localidades1> {
+        const localidad = await this.model.findByPk(id);
+        if (!localidad) {
             throw new NotFoundException(`Localidad con ID ${id} no encontrada`);
         }
-        await entidad.destroy();
+        return localidad;
+    }
+
+    async actualizar(id: number, dto: ActualizarLocalidades1Dto): Promise<Localidades1> {
+        const localidad = await this.obtenerPorId(id);
+        await localidad.update(dto);
+        return localidad;
+    }
+
+    async eliminar(id: number): Promise<void> {
+        const localidad = await this.obtenerPorId(id);
+        await localidad.destroy();
     }
 }

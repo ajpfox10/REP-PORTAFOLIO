@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Regimenhorarios } from './regimenhorarios.model';
 import { CrearRegimenhorariosDto } from './dto/crear-regimenhorarios.dto';
-
+import { ActualizarRegimenhorariosDto } from './dto/actualizar-regimenhorarios.dto';
 
 @Injectable()
 export class RegimenhorariosService {
@@ -12,24 +12,28 @@ export class RegimenhorariosService {
     ) { }
 
     async crear(data: CrearRegimenhorariosDto): Promise<Regimenhorarios> {
-        return this.model.create({
-            ...data,
-            fechaDeAlta: new Date(),
-        } as any);
-    }
-
-    async obtenerPorId(id: number): Promise<Regimenhorarios | null> {
-        return this.model.findByPk(id);
+        return this.model.create({ ...(data as any), fechaDeAlta: new Date() });
     }
 
     async obtenerTodos(): Promise<Regimenhorarios[]> {
         return this.model.findAll();
     }
 
-    async eliminar(id: number): Promise<void> {
-        const registro = await this.model.findByPk(id);
-        if (registro) {
-            await registro.destroy();
+    async obtenerPorId(id: number): Promise<Regimenhorarios> {
+        const item = await this.model.findByPk(id);
+        if (!item) {
+            throw new NotFoundException(`Régimen horario con ID ${id} no encontrado`);
         }
+        return item;
+    }
+
+    async eliminar(id: number): Promise<void> {
+        const item = await this.obtenerPorId(id);
+        await item.destroy();
+    }
+    async actualizar(id: number, dto: ActualizarRegimenhorariosDto): Promise<Regimenhorarios> {
+        const item = await this.obtenerPorId(id);
+        await item.update(dto);
+        return item;
     }
 }
