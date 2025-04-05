@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Ocupacion1 } from './ocupacion1.model';
 import { CrearOcupacion1Dto } from './dto/crear-ocupacion1.dto';
+import { ActualizarOcupacion1Dto } from './dto/actualizar-ocupacion1.dto';
 
 @Injectable()
 export class Ocupacion1Service {
@@ -12,34 +13,31 @@ export class Ocupacion1Service {
 
     async crear(dto: CrearOcupacion1Dto): Promise<Ocupacion1> {
         return this.ocupacion1Model.create({
-            ...(dto as any),
+            ...dto,
             fechaDeAlta: new Date(),
-        });
+        } as any);
     }
 
-    async buscarTodos(): Promise<Ocupacion1[]> {
-        return this.ocupacion1Model.findAll();
-    }
-
-    async buscarPorId(id: number): Promise<Ocupacion1 | null> {
-        return this.ocupacion1Model.findByPk(id);
-    }
-
-    async actualizar(id: number, dto: Partial<CrearOcupacion1Dto>): Promise<[number, Ocupacion1[]]> {
-        return this.ocupacion1Model.update(dto, {
-            where: { id },
-            returning: true,
-        });
-    }
-
-    async eliminar(id: number): Promise<number> {
-        return this.ocupacion1Model.destroy({ where: { id } });
-    }
     async obtenerTodos(): Promise<Ocupacion1[]> {
         return this.ocupacion1Model.findAll();
     }
 
-    async obtenerPorId(id: number): Promise<Ocupacion1 | null> {
-        return this.ocupacion1Model.findByPk(id);
+    async obtenerPorId(id: number): Promise<Ocupacion1> {
+        const ocupacion = await this.ocupacion1Model.findByPk(id);
+        if (!ocupacion) {
+            throw new NotFoundException(`Ocupación con ID ${id} no encontrada`);
+        }
+        return ocupacion;
+    }
+
+    async actualizar(id: number, dto: ActualizarOcupacion1Dto): Promise<Ocupacion1> {
+        const ocupacion = await this.obtenerPorId(id);
+        await ocupacion.update(dto);
+        return ocupacion;
+    }
+
+    async eliminar(id: number): Promise<void> {
+        const ocupacion = await this.obtenerPorId(id);
+        await ocupacion.destroy();
     }
 }

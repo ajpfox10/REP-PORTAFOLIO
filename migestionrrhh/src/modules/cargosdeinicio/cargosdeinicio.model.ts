@@ -1,28 +1,19 @@
-// Modelo Sequelize para el módulo cargosdeinicio
-import {
-    Table,
-    Column,
-    Model,
-    DataType,
-    PrimaryKey,
-    AutoIncrement,
-} from 'sequelize-typescript';
-import {
-    CreationOptional,
-    InferAttributes,
-    InferCreationAttributes,
-} from 'sequelize';
+import { Column, Model, Table, DataType } from 'sequelize-typescript';
 
-@Table({ tableName: 'cargosdeinicio', timestamps: false })
-export class CargosDeInicio extends Model<
-    InferAttributes<CargosDeInicio>,
-    InferCreationAttributes<CargosDeInicio>
-> {
-    @PrimaryKey
-    @AutoIncrement
-    @Column({ type: DataType.INTEGER })
-    id!: CreationOptional<number>;
+@Table({ tableName: 'cargosdeinicio' })
+export class Cargosdeinicio extends Model<Cargosdeinicio> {
+    @Column({ primaryKey: true, autoIncrement: true })
+    id!: number;
 
-    @Column({ type: DataType.STRING, allowNull: false })
+    @Column({ type: DataType.STRING })
     cargo!: string;
+
+    @Column({ type: DataType.STRING })
+    descripcion!: string;
+
+    @Column({ type: DataType.DATE, defaultValue: DataType.NOW })
+    fechaDeAlta!: Date;
+
+    @Column({ type: DataType.STRING })
+    usuarioCarga!: string;
 }

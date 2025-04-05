@@ -1,31 +1,52 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/sequelize';
-import { Ordenesdetrabajo } from './ordenesdetrabajo.model';
+import {
+    Controller,
+    Post,
+    Body,
+    Get,
+    Param,
+    Patch,
+    Delete,
+} from '@nestjs/common';
+import { OrdenesdetrabajoService } from './ordenesdetrabajo.service';
 import { CrearOrdenesdetrabajoDto } from './dto/crear-ordenesdetrabajo.dto';
+import { ActualizarOrdenesdetrabajoDto } from './dto/actualizar-ordenesdetrabajo.dto';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '@auth/guards/jwt-auth.guard';
 
-@Injectable()
-export class OrdenesdetrabajoService {
-    constructor(
-        @InjectModel(Ordenesdetrabajo)
-        private readonly model: typeof Ordenesdetrabajo,
-    ) { }
+@ApiTags('ordenesdetrabajo')
+@UseGuards(JwtAuthGuard)
+@Controller('ordenesdetrabajo')
+export class OrdenesdetrabajoController {
+    constructor(private readonly service: OrdenesdetrabajoService) { }
 
-    async crear(data: CrearOrdenesdetrabajoDto): Promise<Ordenesdetrabajo> {
-        return this.model.create({ ...data, fechaDeAlta: new Date() } as any);
+    @Post()
+    @ApiOperation({ summary: 'Crear una orden de trabajo' })
+    crear(@Body() dto: CrearOrdenesdetrabajoDto) {
+        return this.service.crear(dto);
     }
 
-    async obtenerTodos(): Promise<Ordenesdetrabajo[]> {
-        return this.model.findAll();
+    @Get()
+    @ApiOperation({ summary: 'Obtener todas las órdenes de trabajo' })
+    obtenerTodos() {
+        return this.service.obtenerTodos();
     }
 
-    async obtenerPorId(id: number): Promise<Ordenesdetrabajo> {
-        const item = await this.model.findByPk(id);
-        if (!item) throw new NotFoundException('No encontrado');
-        return item;
+    @Get(':id')
+    @ApiOperation({ summary: 'Obtener una orden de trabajo por ID' })
+    obtenerPorId(@Param('id') id: number) {
+        return this.service.obtenerPorId(id);
     }
 
-    async eliminar(id: number): Promise<void> {
-        const item = await this.obtenerPorId(id);
-        await item.destroy();
+    @Patch(':id')
+    @ApiOperation({ summary: 'Actualizar una orden de trabajo por ID' })
+    actualizar(@Param('id') id: number, @Body() dto: ActualizarOrdenesdetrabajoDto) {
+        return this.service.actualizar(id, dto);
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Eliminar una orden de trabajo por ID' })
+    eliminar(@Param('id') id: number) {
+        return this.service.eliminar(id);
     }
 }

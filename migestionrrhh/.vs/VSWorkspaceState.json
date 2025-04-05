@@ -2,10 +2,12 @@
   "ExpandedNodes": [
     "",
     "\\src",
+    "\\src\\auth",
+    "\\src\\auth\\decoradores",
     "\\src\\modules",
-    "\\src\\modules\\ministerios",
-    "\\src\\modules\\tareasadquiridas"
+    "\\src\\modules\\certificados",
+    "\\src\\modules\\certificados\\dto"
   ],
-  "SelectedNode": "\\src\\modules\\tareasadquiridas\\tareasadquiridias.service.ts",
+  "SelectedNode": "\\src\\modules\\certificados\\certificados.controller.ts",
   "PreviewInSolutionExplorer": false
 }

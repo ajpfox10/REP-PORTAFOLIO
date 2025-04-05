@@ -1,34 +1,36 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { TblArchivos } from './tblarchivos.model';
-import { CreationAttributes } from 'sequelize';
+import { Tblarchivos } from './tblarchivos.model';
+import { CrearArchivoDto } from './dto/crear-archivo.dto';
+import { ActualizarArchivoDto } from './dto/actualizar-archivo.dto';
+import { EliminarArchivosDto } from './dto/eliminar-archivos.dto';
 
 @Injectable()
-export class TblArchivosService {
+export class TblarchivosService {
     constructor(
-        @InjectModel(TblArchivos)
-        private readonly tblArchivosModel: typeof TblArchivos,
+        @InjectModel(Tblarchivos)
+        private readonly model: typeof Tblarchivos,
     ) { }
 
-    async create(data: CreationAttributes<TblArchivos>): Promise<TblArchivos> {
-        return this.tblArchivosModel.create(data);
+    async crear(dto: CrearArchivoDto): Promise<Tblarchivos> {
+        return this.model.create({ ...dto, fechaDeAlta: new Date() } as any);
     }
-
-    async findAll(): Promise<TblArchivos[]> {
-        return this.tblArchivosModel.findAll();
+    async obtenerTodos(): Promise<Tblarchivos[]> {
+        return this.model.findAll();
     }
-
-    async findOne(id: number): Promise<TblArchivos> {
-        const archivo = await this.tblArchivosModel.findByPk(id);
-        if (!archivo) throw new Error(`Archivo con id ${id} no encontrado`);
+    async obtenerPorId(id: number): Promise<Tblarchivos> {
+        const archivo = await this.model.findByPk(id);
+        if (!archivo) throw new NotFoundException(`Archivo con ID ${id} no encontrado`);
         return archivo;
     }
-
-    async update(id: number, data: Partial<TblArchivos>): Promise<void> {
-        await this.tblArchivosModel.update(data, { where: { id } });
+    async actualizar(id: number, dto: Partial<Tblarchivos>): Promise<[number, Tblarchivos[]]> {
+        return this.model.update(dto, {
+            where: { id },
+            returning: true,
+        });
     }
-
-    async delete(id: number): Promise<void> {
-        await this.tblArchivosModel.destroy({ where: { id } });
+    async eliminar(id: number, _dto: EliminarArchivosDto): Promise<void> {
+        const archivo = await this.obtenerPorId(id);
+        await archivo.destroy();
     }
 }

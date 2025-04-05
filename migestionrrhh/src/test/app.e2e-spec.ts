@@ -1,37 +1,44 @@
+// Test end-to-end base
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { Sequelize } from 'sequelize-typescript';
 import request from 'supertest';
-import { AppModule } from './../src/app.module';
+import { AppModule } from '../app.module';
 
 describe('AppController (e2e)', () => {
-  let app: INestApplication;
-  let sequelize: Sequelize;
+    let app: INestApplication;
+    let sequelize: Sequelize;
 
-  beforeAll(async () => {
-    jest.setTimeout(30000);
-    jest.clearAllMocks();
+    beforeAll(async () => {
+        // Aumentamos el tiempo máximo de ejecución, por si la base de datos tarda
+        jest.setTimeout(30000);
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+        // Limpiamos cualquier mock antes de iniciar
+        jest.clearAllMocks();
 
-    app = moduleFixture.createNestApplication();
-    await app.init();
+        // Creación y compilación del módulo de prueba con el AppModule
+        const moduleFixture: TestingModule = await Test.createTestingModule({
+            imports: [AppModule],
+        }).compile();
 
-    sequelize = moduleFixture.get(Sequelize);
-    await sequelize.sync();
-  });
+        // Inicializamos la aplicación
+        app = moduleFixture.createNestApplication();
+        await app.init();
 
-  it('/ (GET)', async () => {
-    await request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
-  });
+        // Obtenemos la instancia de Sequelize para sincronizar la base de datos
+        sequelize = moduleFixture.get(Sequelize);
+        await sequelize.sync();
+    });
 
-  afterAll(async () => {
-    await sequelize.close(); // Cierra Sequelize
-    await app.close();
-  });
+    it('/ (GET)', async () => {
+        // Verificamos que la ruta raíz devuelva un 200 con "Hello World!"
+        const response = await request(app.getHttpServer()).get('/').expect(200);
+        expect(response.text).toBe('Hello World!');
+    });
+
+    afterAll(async () => {
+        // Cerramos la conexión y la app al finalizar las pruebas
+        await sequelize.close();
+        await app.close();
+    });
 });

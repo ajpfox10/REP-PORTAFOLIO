@@ -1,12 +1,13 @@
+import { Tblarchivos } from './tblarchivos.model';
+import { TblarchivosService } from './tblarchivos.service';
+import { TblarchivosController } from './tblarchivos.controller';
+
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { TblArchivos } from './tblarchivos.model';
-import { TblArchivosService } from './tblarchivos.service';
-import { TblArchivosController } from './tblarchivos.controller';
 
 @Module({
-    imports: [SequelizeModule.forFeature([TblArchivos])],
-    providers: [TblArchivosService],
-    controllers: [TblArchivosController],
+    imports: [SequelizeModule.forFeature([Tblarchivos])],
+    providers: [TblarchivosService],
+    controllers: [TblarchivosController],
 })
-export class TblArchivosModule {}
+export class TblarchivosModule { }

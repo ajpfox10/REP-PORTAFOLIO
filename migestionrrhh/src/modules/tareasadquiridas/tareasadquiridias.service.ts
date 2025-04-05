@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Tareasadquiridias } from './tareasadquiridias.model';
 import { CrearTareasadquiridiasDto } from './dto/crear-tareasadquiridias.dto';
+import { ActualizarTareasadquiridiasDto } from './dto/actualizar-tareasadquiridias.dto';
 
 @Injectable()
 export class TareasadquiridiasService {
@@ -35,5 +36,10 @@ export class TareasadquiridiasService {
         if (tarea) {
             await tarea.destroy();
         }
+    }
+    async actualizar(id: number, dto: ActualizarTareasadquiridiasDto): Promise<Tareasadquiridias> {
+        const tarea = await this.obtenerPorId(id);
+        await tarea.update(dto);
+        return tarea;
     }
 }

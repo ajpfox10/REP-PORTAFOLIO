@@ -1,48 +1,19 @@
-// Modelo Sequelize para el módulo certificados
-import {
-    Table,
-    Column,
-    Model,
-    DataType,
-    PrimaryKey,
-    AutoIncrement,
-    CreatedAt,
-    UpdatedAt,
-} from 'sequelize-typescript';
-import {
-    CreationOptional,
-    InferAttributes,
-    InferCreationAttributes,
-} from 'sequelize';
+import { Table, Column, Model, DataType } from 'sequelize-typescript';
 
-@Table({
-    tableName: 'certificados',
-    timestamps: true, // Si usás createdAt y updatedAt
-    // freezeTableName: true, // Opcional, si no querés que se pluralice
-})
-export class Certificados extends Model<
-    InferAttributes<Certificados>,
-    InferCreationAttributes<Certificados>
-> {
-    @PrimaryKey
-    @AutoIncrement
-    @Column({ type: DataType.INTEGER })
-    id!: CreationOptional<number>;
+@Table({ tableName: 'certificados', timestamps: true })
+export class Certificados extends Model {
+    @Column({ primaryKey: true, autoIncrement: true })
+    id!: number;
 
-    @Column({ type: DataType.STRING, allowNull: false })
+    @Column(DataType.STRING)
     nombre!: string;
 
-    @Column({ type: DataType.STRING, allowNull: false })
+    @Column(DataType.STRING)
     descripcion!: string;
 
-    @CreatedAt
-    @Column({ type: DataType.DATE })
-    fechaCreacion!: CreationOptional<Date>;
-
-    @UpdatedAt
-    @Column({ type: DataType.DATE })
-    fechaActualizacion!: CreationOptional<Date>;
-
-    @Column({ type: DataType.STRING, allowNull: false })
+    @Column(DataType.STRING)
     usuarioCarga!: string;
+
+    @Column({ type: DataType.DATE })
+    fechaDeAlta!: Date;
 }

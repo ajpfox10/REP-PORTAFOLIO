@@ -5,10 +5,31 @@ import { UsuarioModule } from './modules/usuario/usuario.module';
 import { AuthModule } from './auth/auth.module';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { ConfigModule } from '@nestjs/config';
-import { Usuario } from './database/models/usuario.model';
+import { Usuario } from './modules/usuario/usuario.model';
+import { LoggerModule } from 'nestjs-pino';
+import { SentryModule } from '@ntegral/nestjs-sentry';
 
 @Module({
     imports: [
+
+        SentryModule.forRoot({
+            dsn: process.env.SENTRY_DSN, // Poné tu DSN real de Sentry aquí
+            environment: process.env.NODE_ENV || 'development',
+            debug: false,
+            tracesSampleRate: 1.0, // Para seguimiento de performance (opcional)
+            logLevels: ['error', 'warn'], // logs automáticos de errores y advertencias
+        }),
+
+        LoggerModule.forRoot({
+            pinoHttp: {
+                transport: process.env.NODE_ENV !== 'production'
+                    ? { target: 'pino-pretty' } // Para logs bonitos en desarrollo
+                    : undefined,
+                level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+                autoLogging: true,
+            },
+        }),
+
         ConfigModule.forRoot({ isGlobal: true }),
         SequelizeModule.forRoot({
             dialect: 'mysql',
