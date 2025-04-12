@@ -1,0 +1,14 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\src",
+    "\\src\\auth",
+    "\\src\\auth\\decoradores",
+    "\\src\\auth\\guards",
+    "\\src\\modules",
+    "\\src\\modules\\reparticiones",
+    "\\src\\modules\\reparticiones\\dto"
+  ],
+  "SelectedNode": "\\src\\modules\\reparticiones\\reparticiones.controller.spec.ts",
+  "PreviewInSolutionExplorer": false
+}

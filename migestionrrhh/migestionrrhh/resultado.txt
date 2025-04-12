@@ -1,0 +1,77 @@
+
+> migestionrrhh@1.0.0 test
+> jest --coverage
+
+------------------------------|---------|----------|---------|---------|-------------------------------------------
+File                          | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                         
+------------------------------|---------|----------|---------|---------|-------------------------------------------
+All files                     |   66.47 |    13.63 |   87.21 |   63.81 |                                           
+ src                          |     100 |      100 |     100 |     100 |                                           
+  app.controller.ts           |     100 |      100 |     100 |     100 |                                           
+  app.service.ts              |     100 |      100 |     100 |     100 |                                           
+ src/auth                     |   23.68 |        0 |       0 |      20 |                                           
+  auth.service.ts             |   23.68 |        0 |       0 |      20 | 12-71                                     
+ src/modules/cargosdeinicio   |   29.62 |        0 |       0 |      24 |                                           
+  cargosdeinicio.model.ts     |     100 |      100 |     100 |     100 |                                           
+  cargosdeinicio.service.ts   |   15.55 |        0 |       0 |   11.62 | 10-78                                     
+ src/modules/cccoodegdeba     |   78.43 |        0 |     100 |   76.59 |                                           
+  cccoodegdeba.model.ts       |     100 |      100 |     100 |     100 |                                           
+  cccoodegdeba.service.ts     |   75.55 |        0 |     100 |   74.41 | 25-27,36-38,47-48,52-54                   
+ src/modules/certificados     |   79.62 |    33.33 |     100 |      78 |                                           
+  certificados.model.ts       |     100 |      100 |     100 |     100 |                                           
+  certificados.service.ts     |   75.55 |    33.33 |     100 |   74.41 | 25-27,36-38,47-48,52-54                   
+ src/modules/leyes            |      80 |        0 |     100 |   78.43 |                                           
+  leyes.model.ts              |     100 |      100 |     100 |     100 |                                           
+  leyes.service.ts            |   75.55 |        0 |     100 |   74.41 | 22-24,33-35,44-45,49-51                   
+ src/modules/localidades1     |   79.62 |        0 |     100 |      78 |                                           
+  localidades1.model.ts       |     100 |      100 |     100 |     100 |                                           
+  localidades1.service.ts     |   75.55 |        0 |     100 |   74.41 | 25-27,36-38,47-48,52-54                   
+ src/modules/ministerios      |   79.62 |    33.33 |     100 |      78 |                                           
+  ministerios.model.ts        |     100 |      100 |     100 |     100 |                                           
+  ministerios.service.ts      |   75.55 |    33.33 |     100 |   74.41 | 25-27,36-38,47-48,52-54                   
+ src/modules/nomendador       |   79.62 |    33.33 |     100 |      78 |                                           
+  nomendador.model.ts         |     100 |      100 |     100 |     100 |                                           
+  nomendador.service.ts       |   75.55 |    33.33 |     100 |   74.41 | 25-27,36-38,47-48,52-54                   
+ src/modules/ocupacion1       |   67.92 |        0 |     100 |    65.3 |                                           
+  ocupacion1.model.ts         |     100 |      100 |     100 |     100 |                                           
+  ocupacion1.service.ts       |   62.22 |        0 |     100 |   60.46 | 25-27,36-38,47-48,52-54,64-66,76-78       
+ src/modules/ordenesdetrabajo |   67.92 |    33.33 |     100 |    65.3 |                                           
+  ordenesdetrabajo.model.ts   |     100 |      100 |     100 |     100 |                                           
+  ordenesdetrabajo.service.ts |   62.22 |    33.33 |     100 |   60.46 | 25-27,36-38,47-48,52-54,64-66,76-78       
+ src/modules/pedidos          |   67.92 |    33.33 |     100 |    65.3 |                                           
+  pedidos.model.ts            |     100 |      100 |     100 |     100 |                                           
+  pedidos.service.ts          |   62.22 |    33.33 |     100 |   60.46 | 25-27,36-38,47-48,52-54,64-66,76-78       
+ src/modules/personal         |   70.68 |        0 |     100 |   68.51 |                                           
+  personal.model.ts           |     100 |      100 |     100 |     100 |                                           
+  personal.service.ts         |   62.22 |        0 |     100 |   60.46 | 25-27,36-38,47-48,52-54,64-66,76-78       
+ src/modules/planta           |   68.51 |        0 |     100 |      66 |                                           
+  planta.model.ts             |     100 |      100 |     100 |     100 |                                           
+  planta.service.ts           |   62.22 |        0 |     100 |   60.46 | 25-27,36-38,47-48,52-54,64-66,76-78       
+ src/modules/rangoshorarios   |   67.92 |    33.33 |     100 |    65.3 |                                           
+  rangoshorarios.model.ts     |     100 |      100 |     100 |     100 |                                           
+  rangoshorarios.service.ts   |   62.22 |    33.33 |     100 |   60.46 | 25-27,36-38,47-48,52-54,64-66,76-78       
+ src/modules/regimenhorarios  |   68.51 |        0 |     100 |      66 |                                           
+  regimenhorarios.model.ts    |     100 |      100 |     100 |     100 |                                           
+  regimenhorarios.service.ts  |   62.22 |        0 |     100 |   60.46 | 22-24,33-35,44-45,49-51,61-63,73-75       
+ src/modules/reparticiones    |   69.09 |        0 |     100 |   66.66 |                                           
+  reparticiones.model.ts      |     100 |      100 |     100 |     100 |                                           
+  reparticiones.service.ts    |   62.22 |        0 |     100 |   60.46 | 25-27,36-38,47-48,52-54,64-66,76-78       
+ src/modules/resoluciones     |   67.92 |        0 |     100 |    65.3 |                                           
+  resoluciones.model.ts       |     100 |      100 |     100 |     100 |                                           
+  resoluciones.service.ts     |   62.22 |        0 |     100 |   60.46 | 26-28,37-39,48-49,53-55,65-67,77-79       
+ src/modules/sector           |   66.66 |        0 |     100 |   64.15 |                                           
+  sector.model.ts             |     100 |      100 |     100 |     100 |                                           
+  sector.service.ts           |   60.41 |        0 |     100 |   58.69 | 22-24,33-34,38-40,49-51,60-62,71-72,77-79 
+ src/modules/sexo             |   70.83 |        0 |     100 |   68.18 |                                           
+  sexo.model.ts               |     100 |      100 |     100 |     100 |                                           
+  sexo.service.ts             |      65 |        0 |     100 |   63.15 | 21-23,32-33,37-39,50-52,62-64             
+ src/modules/tareas           |      75 |        0 |     100 |   73.07 |                                           
+  tareas.model.ts             |     100 |      100 |     100 |     100 |                                           
+  tareas.service.ts           |   68.18 |        0 |     100 |   66.66 | 26-28,37-39,48-50,59-60,65-67             
+ src/modules/tipotramite      |   66.07 |        0 |     100 |   63.46 |                                           
+  tipotramite.model.ts        |     100 |      100 |     100 |     100 |                                           
+  tipotramite.service.ts      |   60.41 |        0 |     100 |   58.69 | 22-24,33-35,44-46,55-56,60-62,71-72,77-79 
+ src/modules/usuario          |   29.16 |        0 |       0 |      25 |                                           
+  usuario.model.ts            |     100 |      100 |     100 |     100 |                                           
+  usuario.service.ts          |   13.55 |        0 |       0 |   10.52 | 12-107                                    
+------------------------------|---------|----------|---------|---------|-------------------------------------------
