@@ -1,1 +1,0 @@
-// Módulo principal para categoria
