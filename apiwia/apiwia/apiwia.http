@@ -1,0 +1,6 @@
+@apiwia_HostAddress = http://localhost:5200
+
+GET {{apiwia_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
