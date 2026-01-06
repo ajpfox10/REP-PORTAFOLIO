@@ -1,0 +1,21 @@
+# Node
+api personal/node_modules/
+api personal/dist/
+api personal/build/
+api personal/coverage/
+
+# Env (NO subir secretos)
+api personal/.env
+api personal/.env.* 
+!api personal/.env.example
+
+# Cache / artifacts
+api personal/.cache/
+api personal/logs/
+api personal/*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
