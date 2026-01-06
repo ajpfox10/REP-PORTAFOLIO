@@ -1,0 +1,15 @@
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\tests\\fixtures\\openapi.test.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T18:15:43.121Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\tests\\fixtures\\openapi.test.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T21:14:58.038Z"}
+{"level":"info","message":{"db":"personalv5","msg":"Introspecting schema from DB..."},"timestamp":"2025-12-30T23:33:35.375Z"}
+{"level":"info","message":{"cachePath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\.cache\\schema.integration.test.json","hash":"83d95c8016ec3a60a7521fa36290121bae4a1a6043645a828163015dfd76175f","msg":"Schema cached"},"timestamp":"2025-12-30T23:33:35.438Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:36.423Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:36.784Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:37.288Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\tests\\fixtures\\openapi.test.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:38.018Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:38.606Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:38.863Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:39.509Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:39.951Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:40.368Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:40.507Z"}
+{"level":"info","message":{"apiSpecPath":"C:\\Users\\Administrator\\Desktop\\personalv5-enterprise-api-fixed\\docs\\openapi.yaml","msg":"OpenAPI validation enabled"},"timestamp":"2025-12-30T23:33:40.860Z"}
