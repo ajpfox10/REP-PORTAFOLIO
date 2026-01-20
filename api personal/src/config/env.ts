@@ -1,91 +1,135 @@
+// src/config/env.ts
+import path from "path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
-dotenv.config();
+// carga robusta .env (en root y en src/config)
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-const boolFromString = (v: string | undefined, def: boolean) => {
-  if (v === undefined) return def;
-  return ["1", "true", "yes", "on"].includes(v.toLowerCase());
-};
+const boolish = z.preprocess((v) => {
+  if (v === undefined || v === null || v === "") return undefined;
+  const s = String(v).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "si", "sí", "on"].includes(s)) return true;
+  if (["0", "false", "no", "n", "off"].includes(s)) return false;
+  return v;
+}, z.boolean());
 
+const intish = (def: number) =>
+  z.preprocess((v) => {
+    if (v === undefined || v === null || v === "") return def;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : def;
+  }, z.number().int());
 
-const parseTrustProxy = (v: string | undefined): boolean | number | string => {
-  if (v === undefined) return false;
-  const s = String(v).trim();
-  if (!s) return false;
-  const lower = s.toLowerCase();
-  if (["0", "false", "off", "no"].includes(lower)) return false;
-  // treat "true" as "1" to avoid permissive trust proxy mode
-  if (["true", "1", "on", "yes"].includes(lower)) return 1;
-  if (/^\d+$/.test(lower)) return Number(lower);
-  return s; // e.g. "loopback"
-};
+const strish = (def = "") =>
+  z.preprocess((v) => (v === undefined || v === null ? def : String(v)), z.string());
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-  PORT: z.coerce.number().int().positive().default(3000),
-  TRUST_PROXY: z.string().optional().default("0"),
+const schema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  PORT: intish(3000),
 
+  TRUST_PROXY: boolish.default(false),
+
+  // DB
   DB_HOST: z.string().min(1),
-  DB_PORT: z.coerce.number().int().positive().default(3306),
+  DB_PORT: intish(3306),
   DB_NAME: z.string().min(1),
   DB_USER: z.string().min(1),
-  DB_PASSWORD: z.string().optional().default(""),
+  DB_PASSWORD: strish(""),
 
-  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
-  DB_POOL_MIN: z.coerce.number().int().nonnegative().default(0),
-  DB_POOL_ACQUIRE_MS: z.coerce.number().int().positive().default(30000),
-  DB_POOL_IDLE_MS: z.coerce.number().int().positive().default(10000),
-  DB_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  // Pool/timeout
+  DB_POOL_MAX: intish(10),
+  DB_POOL_MIN: intish(0),
+  DB_POOL_ACQUIRE_MS: intish(30000),
+  DB_POOL_IDLE_MS: intish(10000),
+  DB_QUERY_TIMEOUT_MS: intish(30000),
 
-  SCHEMA_CACHE_PATH: z.string().default("./.cache/schema.json"),
+  // Migrations / schema cache
+  MIGRATIONS_ENABLE: boolish.default(false),
+  MIGRATIONS_DIR: strish("scripts/migrations"),
+  SCHEMA_CACHE_PATH: strish("./.cache/schema.json"),
 
-  IP_ALLOWLIST: z.string().optional().default(""),
-  IP_BLACKLIST: z.string().optional().default(""),
+  // Logs
+  LOG_DIR: strish("./logs"),
+  LOG_LEVEL: strish("info"),
+  LOG_RETENTION_DAYS: intish(30),
 
-  CORS_ALLOW_ALL: z.string().optional(),
-  CORS_DENYLIST: z.string().optional().default(""),
+  // OpenAPI
+  ENABLE_OPENAPI_VALIDATION: boolish.default(false),
+  OPENAPI_PATH: strish("docs/openapi.yaml"),
 
-  RATE_LIMIT_ENABLE: z.string().optional(),
-  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  // Middlewares
+  ENABLE_HARDENING: boolish.default(false),
+  ENABLE_COMPRESSION: boolish.default(false),
+  ENABLE_REQUEST_BODY_LIMITS: boolish.default(false),
 
-  METRICS_ENABLE: z.string().optional(),
-  METRICS_PATH: z.string().default("/metrics"),
-  METRICS_PROTECT: z.string().optional(),
+  // CORS
+  // Default seguro: en LAN/produccion pon tu origin del front y deja esto en false.
+  CORS_ALLOW_ALL: boolish.default(false),
+  CORS_ALLOWLIST: strish(""),
+  CORS_DENYLIST: strish(""),
 
-  LOG_DIR: z.string().default("./logs"),
-  LOG_LEVEL: z.string().default("info"),
-  LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 
-  ENABLE_COMPRESSION: z.string().optional(),
-  ENABLE_REQUEST_BODY_LIMITS: z.string().optional(),
-  ENABLE_HARDENING: z.string().optional(),
+  // IP allow/black
+  IP_GUARD_ENABLE: boolish.default(false),
+  IP_ALLOWLIST: strish(""),
+  IP_BLACKLIST: strish(""),
 
-  ENABLE_OPENAPI_VALIDATION: z.string().optional(),
-  OPENAPI_PATH: z.string().optional().default("docs/openapi.yaml")
+  // Docs (OpenAPI file)
+  DOCS_ENABLE: boolish.default(true),
+  DOCS_PATH: strish("/docs"),
+  DOCS_PROTECT: boolish.default(true),
+
+  // Rate limit
+  RATE_LIMIT_WINDOW_MS: intish(900000),
+  RATE_LIMIT_MAX: intish(300),
+
+  // Metrics
+  METRICS_ENABLE: boolish.default(false),
+  METRICS_PATH: strish("/metrics"),
+  METRICS_PROTECT: boolish.default(false),
+  METRICS_TOKEN: strish(""),
+
+  // CRUD
+  CRUD_STRICT_ALLOWLIST: boolish.default(false),
+  CRUD_TABLE_ALLOWLIST: strish(""),
+  CRUD_TABLE_DENYLIST: strish(""),
+  CRUD_READONLY: boolish.default(false),
+
+  // Auth / RBAC
+  AUTH_ENABLE: boolish.default(true),
+  RBAC_ENABLE: boolish.default(true),
+  AUTH_ALLOW_DEV_USER_ID_HEADER: boolish.default(true),
+  AUTH_BEARER_MODE: z.enum(["auto", "jwt", "api_key"]).default("auto"),
+
+  // Auth cookies (CIA mode)
+  AUTH_REFRESH_COOKIE: boolish.default(true),
+  COOKIE_SECURE: boolish.default(false),
+  COOKIE_DOMAIN: strish(""),
+
+  // JWT
+  JWT_ACCESS_SECRET: strish(""),
+  JWT_REFRESH_SECRET: strish(""),
+  JWT_ACCESS_TTL_SECONDS: intish(3600),
+  JWT_REFRESH_TTL_DAYS: intish(14),
+
+
+
+  // Server timeout
+  REQUEST_TIMEOUT_MS: intish(60000),
+  
+  // foto agente, documentos
+  DOCUMENTS_BASE_DIR: z.string().min(3).default("D:/G/DOCU"),
+
 });
 
-const parsed = envSchema.safeParse(process.env);
-if (!parsed.success) {
-  // eslint-disable-next-line no-console
-  console.error("❌ .env inválido:", parsed.error.flatten().fieldErrors);
-  process.exit(1);
-}
-
-const raw = parsed.data;
+const raw = schema.parse(process.env);
 
 export const env = {
   ...raw,
-  TRUST_PROXY: parseTrustProxy(raw.TRUST_PROXY),
-  CORS_ALLOW_ALL: boolFromString(raw.CORS_ALLOW_ALL, true),
-  RATE_LIMIT_ENABLE: boolFromString(raw.RATE_LIMIT_ENABLE, true),
-  METRICS_ENABLE: boolFromString(raw.METRICS_ENABLE, true),
-  METRICS_PROTECT: boolFromString(raw.METRICS_PROTECT, false),
+  CORS_ALLOWLIST: raw.CORS_ALLOWLIST.split(",").map((x: string) => x.trim()).filter(Boolean),
+  CORS_DENYLIST: raw.CORS_DENYLIST.split(",").map((x: string) => x.trim()).filter(Boolean),
+} as const;
 
-  ENABLE_COMPRESSION: boolFromString(raw.ENABLE_COMPRESSION, true),
-  ENABLE_REQUEST_BODY_LIMITS: boolFromString(raw.ENABLE_REQUEST_BODY_LIMITS, true),
-  ENABLE_HARDENING: boolFromString(raw.ENABLE_HARDENING, true),
-
-  ENABLE_OPENAPI_VALIDATION: boolFromString(raw.ENABLE_OPENAPI_VALIDATION, true)
-};
+export type Env = typeof env;

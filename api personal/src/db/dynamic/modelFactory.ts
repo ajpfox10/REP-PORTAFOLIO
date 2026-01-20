@@ -4,10 +4,11 @@ import { SchemaSnapshot, TableInfo } from "../schema/types";
 const mapType = (t: string, maxLength: number | null) => {
   const dt = (t || "").toLowerCase();
 
-  if (dt.includes("int")) return DataTypes.INTEGER;
   if (dt === "bigint") return DataTypes.BIGINT;
   if (dt === "tinyint") return DataTypes.TINYINT;
   if (dt === "smallint") return DataTypes.SMALLINT;
+  if (dt.includes("int")) return DataTypes.INTEGER;
+
   if (dt === "decimal" || dt === "numeric") return DataTypes.DECIMAL;
   if (dt === "float") return DataTypes.FLOAT;
   if (dt === "double") return DataTypes.DOUBLE;
@@ -30,13 +31,34 @@ export const buildModels = (sequelize: Sequelize, schema: SchemaSnapshot) => {
   const defineTable = (table: TableInfo) => {
     const attrs: any = {};
 
+    // Detectar auto_inc (solo 1)
+    const autoIncCols = table.columns.filter((c) => c.isAutoIncrement).map((c) => c.name);
+    let chosenAutoInc: string | null = null;
+
+    if (autoIncCols.length > 0) {
+      const pk0 = table.primaryKey?.[0];
+      chosenAutoInc = pk0 && autoIncCols.includes(pk0) ? pk0 : autoIncCols[0];
+
+      if (autoIncCols.length > 1) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[modelFactory] '${table.name}' tiene múltiples AUTO_INCREMENT: ${autoIncCols.join(
+            ", "
+          )}. Se usará solo '${chosenAutoInc}'.`
+        );
+      }
+    }
+
+    const pkSet = new Set<string>(table.primaryKey || []);
+
     for (const c of table.columns) {
       attrs[c.name] = {
         type: mapType(c.dataType, c.maxLength),
         allowNull: c.isNullable,
-        primaryKey: table.primaryKey.includes(c.name),
-        autoIncrement: c.isAutoIncrement
+        primaryKey: pkSet.has(c.name),
+        autoIncrement: chosenAutoInc === c.name
       };
+
       if (c.columnDefault !== null) attrs[c.name].defaultValue = c.columnDefault;
     }
 
