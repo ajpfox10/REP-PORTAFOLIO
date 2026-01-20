@@ -1,135 +1,124 @@
-import express from "express";
+// src/app.ts
+import express, { type Express } from "express";
 import helmet from "helmet";
-import hpp from "hpp";
 import cors from "cors";
 import compression from "compression";
-import fs from "fs";
-import path from "path";
+import hpp from "hpp";
+import morgan from "morgan";
+
 import { env } from "./config/env";
-import { requestId } from "./middlewares/requestId";
-import { ipGuard } from "./middlewares/ipGuard";
-import { sanitize } from "./middlewares/sanitize";
-import { globalLimiter } from "./middlewares/rateLimiters";
-import { metricsMiddleware } from "./metrics/metrics";
 import { logger } from "./logging/logger";
-import * as OpenApiValidator from "express-openapi-validator";
+import { requestId } from "./middlewares/requestId";
+import { sanitize } from "./middlewares/sanitize";
+import { ipGuard } from "./middlewares/ipGuard";
+import { rateLimiter } from "./middlewares/rateLimiters";
+import { openapiValidator } from "./middlewares/openapiValidator";
+import { systemRouter } from "./routes/system.routes";
+import { errorHandler } from "./middlewares/errorHandler";
 
-// --- Test-only SuperTest JSON parsing patch ---
-// SuperTest usa SuperAgent y parsea JSON con JSON.parse => objetos con Object.prototype.
-// Algunos tests de seguridad esperan que `__proto__` y `constructor` sean realmente undefined.
-// Eso solo pasa si lo parseado queda con null-prototype.
-//
-// Este patch SOLO corre en NODE_ENV=test y solo afecta el parseo de responses en tests.
-function toNullProto(value: any): any {
-  if (Array.isArray(value)) return value.map(toNullProto);
-  if (value && typeof value === "object") {
-    const out = Object.create(null) as any;
-    for (const [k, v] of Object.entries(value)) out[k] = toNullProto(v);
-    return out;
-  }
-  return value;
-}
+type MountFn = (app: Express) => void;
 
-function patchSuperAgentJsonParserForTests() {
-  if (process.env.NODE_ENV !== "test") return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const superagent = require("superagent");
-    if (!superagent?.parse) return;
-
-    const key = "application/json";
-    const original = superagent.parse[key];
-    if ((original as any)?.__nullProtoPatched) return;
-
-    superagent.parse[key] = function patchedJsonParser(res: any, cb: any) {
-      let data = "";
-      res.on("data", (chunk: any) => {
-        data += chunk;
-      });
-      res.on("end", () => {
-        try {
-          const parsed = JSON.parse(data);
-          cb(null, toNullProto(parsed));
-        } catch (err) {
-          cb(err);
-        }
-      });
-    };
-
-    (superagent.parse[key] as any).__nullProtoPatched = true;
-  } catch {
-    // si no está superagent (prod), ignorar
-  }
-}
-
-export const createApp = (openapiPathArg?: string) => {
-  patchSuperAgentJsonParserForTests();
-
+export function createApp(openapiPathOverride?: string, mount?: MountFn) {
   const app = express();
 
-  app.disable("x-powered-by");
-  app.set("trust proxy", env.TRUST_PROXY as any);
+  // trust proxy
+  if (env.TRUST_PROXY) {
+    app.set("trust proxy", 1);
+  }
 
+  // request id
   app.use(requestId);
-  app.use(ipGuard);
 
+  // logging http -> va a tu logger
+  app.use(
+    morgan("combined", {
+      stream: {
+        write: (msg: string) => logger.info({ msg: msg.trim() })
+      }
+    })
+  );
+
+  // hardening
   if (env.ENABLE_HARDENING) {
-    app.use(helmet({ contentSecurityPolicy: false }));
+    app.disable("x-powered-by");
+    app.use(helmet());
     app.use(hpp());
   }
 
-  if (env.ENABLE_COMPRESSION) app.use(compression());
+  // compression
+  if (env.ENABLE_COMPRESSION) {
+    app.use(compression());
+  }
 
+  // body limits
   if (env.ENABLE_REQUEST_BODY_LIMITS) {
-    app.use(express.json({ limit: "1mb" }));
-    app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+    app.use(express.json({ limit: "200kb" }));
+    app.use(express.urlencoded({ extended: true, limit: "200kb" }));
   } else {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
   }
 
+  // sanitize
   app.use(sanitize);
 
-  const deny = env.CORS_DENYLIST.split(",").map((s) => s.trim()).filter(Boolean);
-  app.use(
-    cors({
-      origin: (origin, cb) => {
-        if (!origin) return cb(null, true);
-        if (deny.includes(origin)) return cb(new Error("CORS bloqueado"));
-        return cb(null, env.CORS_ALLOW_ALL);
-      },
-      credentials: false
-    })
-  );
+ // CORS (CIA: allowlist primero, denylist opcional)
+ if (env.CORS_ALLOW_ALL) {
+   // OJO: si usas cookies/credentials no puede ser "*", esto refleja origin
+   app.use(cors({ origin: true, credentials: true }));
+ } else {
+   const allow = (env.CORS_ALLOWLIST || []).map((x: string) => x.toLowerCase());
+   const deny = (env.CORS_DENYLIST || []).map((x: string) => x.toLowerCase());
 
-  if (env.RATE_LIMIT_ENABLE) app.use(globalLimiter);
-  if (env.METRICS_ENABLE) app.use(metricsMiddleware);
+   app.use(
+     cors({
+       origin: (origin, cb) => {
+         if (!origin) return cb(null, true); // postman/curl/healthchecks
+         const o = origin.toLowerCase();
 
+         if (deny.includes(o)) return cb(new Error("CORS blocked (denylist)"));
+         if (allow.length === 0) return cb(new Error("CORS blocked (allowlist vacía)"));
+         if (!allow.includes(o)) return cb(new Error("CORS blocked (not allowed)"));
+
+         return cb(null, true);
+       },
+       credentials: true,
+     })
+   );
+ }
+
+
+
+  // IP guard
+  app.use(ipGuard);
+
+  // ✅ SYSTEM ROUTES SIEMPRE DISPONIBLES (antes de OpenAPI y también antes del rate limiter)
+  app.use(systemRouter);
+
+  // rate limit (para el resto, no para /health)
+  app.use(rateLimiter);
+
+  // ✅ OpenAPI validation (optional)
   if (env.ENABLE_OPENAPI_VALIDATION) {
-    const apiSpecPath = path.resolve(process.cwd(), openapiPathArg || env.OPENAPI_PATH);
-    if (fs.existsSync(apiSpecPath)) {
-      app.use(
-        OpenApiValidator.middleware({
-          apiSpec: apiSpecPath,
-          validateRequests: true,
-          validateResponses: false
-        })
-      );
-      logger.info({ msg: "OpenAPI validation enabled", apiSpecPath });
-    } else {
-      logger.warn({ msg: "OpenAPI spec not found (validation skipped)", apiSpecPath });
-    }
+    const specPath = openapiPathOverride || env.OPENAPI_PATH;
+    logger.info({ msg: "OpenAPI validation enabled", apiSpecPath: specPath });
+    app.use(openapiValidator(specPath));
   }
 
-  // error handler final
-  app.use((err: any, _req: any, res: any, _next: any) => {
-    const status = err.status || 500;
-    res.status(status).json({
+  // ✅ Montaje de rutas reales del sistema (API /api/v1 etc)
+  if (mount) mount(app);
+
+  // 404 default (al final)
+  app.use((req, res) => {
+    res.status(404).json({
       ok: false,
-      error: err.message || "Internal error",
-      details: err.errors || undefined
+      error: "Not found",
+      details: [{ path: req.path, message: "not found" }]
     });
   });
 
+  // error handler final (al final de TODO)
+  app.use(errorHandler);
+
   return app;
-};
+}

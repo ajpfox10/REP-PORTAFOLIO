@@ -1,21 +1,35 @@
-# Node
-api personal/node_modules/
-api personal/dist/
-api personal/build/
-api personal/coverage/
+# dependencies
+node_modules/
 
-# Env (NO subir secretos)
-api personal/.env
-api personal/.env.* 
-!api personal/.env.example
+# build output
+dist/
 
-# Cache / artifacts
-api personal/.cache/
-api personal/logs/
-api personal/*.log
+# runtime artifacts
+logs/
+.cache/
+coverage/
 
-# OS / IDE
+# dotenv (keep example)
+.env
+.env.*
+!.env.example
+
+# accidental files
+200
+400
+{
+
+# OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# misc
+*.log

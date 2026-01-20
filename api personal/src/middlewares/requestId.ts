@@ -1,23 +1,19 @@
-import { Request, Response, NextFunction } from "express";
-import { v4 as uuid } from "uuid";
+import type { Request, Response, NextFunction } from "express";
+import { randomUUID, randomBytes } from "crypto";
 
-export const requestId = (req: Request, res: Response, next: NextFunction) => {
-  const incoming = req.header("x-request-id") || req.header("X-Request-Id");
-  const id = incoming && incoming.trim().length > 0 ? incoming.trim() : uuid();
+function genId() {
+  return typeof randomUUID === "function"
+    ? randomUUID()
+    : randomBytes(16).toString("hex");
+}
 
-  // disponible para tu código
+// ✅ Middleware directo (NO factory)
+export function requestId(req: Request, res: Response, next: NextFunction) {
+  const incoming = req.header("x-request-id");
+  const id = incoming && incoming.trim() ? incoming.trim() : genId();
+
   (req as any).requestId = id;
-
-  // IMPORTANTe para OpenAPI validator (valida headers de REQUEST)
-  try {
-    (req as any).headers = (req as any).headers || {};
-    (req as any).headers["x-request-id"] = id;
-  } catch {
-    // noop
-  }
-
-  // visible para el cliente
   res.setHeader("x-request-id", id);
 
   next();
-};
+}

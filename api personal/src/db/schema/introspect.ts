@@ -16,6 +16,7 @@ type RawColumn = {
 type RawKey = {
   TABLE_NAME: string;
   CONSTRAINT_NAME: string;
+  CONSTRAINT_TYPE: string | null;
   COLUMN_NAME: string;
   REFERENCED_TABLE_NAME: string | null;
   REFERENCED_COLUMN_NAME: string | null;
@@ -65,12 +66,17 @@ export const introspectSchema = async (sequelize: Sequelize): Promise<SchemaSnap
     SELECT
       k.TABLE_NAME,
       k.CONSTRAINT_NAME,
+      c.CONSTRAINT_TYPE,
       k.COLUMN_NAME,
       k.REFERENCED_TABLE_NAME,
       k.REFERENCED_COLUMN_NAME,
       rc.UPDATE_RULE,
       rc.DELETE_RULE
     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE k
+    LEFT JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS c
+      ON c.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+     AND c.TABLE_SCHEMA = k.TABLE_SCHEMA
+     AND c.TABLE_NAME = k.TABLE_NAME
     LEFT JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
       ON rc.CONSTRAINT_NAME = k.CONSTRAINT_NAME
      AND rc.CONSTRAINT_SCHEMA = k.TABLE_SCHEMA
@@ -97,7 +103,8 @@ export const introspectSchema = async (sequelize: Sequelize): Promise<SchemaSnap
       name: c.COLUMN_NAME,
       dataType: String(c.DATA_TYPE || "varchar"),
       isNullable: c.IS_NULLABLE === "YES",
-      columnDefault: c.COLUMN_DEFAULT === undefined ? null : (c.COLUMN_DEFAULT === null ? null : String(c.COLUMN_DEFAULT)),
+      columnDefault:
+        c.COLUMN_DEFAULT === undefined ? null : c.COLUMN_DEFAULT === null ? null : String(c.COLUMN_DEFAULT),
       isAutoIncrement: (c.EXTRA || "").toLowerCase().includes("auto_increment"),
       maxLength: c.CHARACTER_MAXIMUM_LENGTH ?? null
     };
@@ -110,12 +117,28 @@ export const introspectSchema = async (sequelize: Sequelize): Promise<SchemaSnap
     tableMap[pk.TABLE_NAME].primaryKey.push(pk.COLUMN_NAME);
   }
 
+  // Si PK incluye 'id', colapsamos a ['id'] (alineado al estándar)
+  for (const t of Object.values(tableMap)) {
+    const hasId = t.columns.some((c) => c.name === "id");
+    if (!hasId) continue;
+
+    if (t.primaryKey.includes("id") && (t.primaryKey.length !== 1 || t.primaryKey[0] !== "id")) {
+      t.primaryKey = ["id"];
+    } else if (!t.primaryKey.includes("id") && t.primaryKey.length) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[introspect] Warning: table '${t.name}' has column 'id' but PK is [${t.primaryKey.join(", ")}].`
+      );
+    }
+  }
+
   const uniqByTable: Record<string, Record<string, string[]>> = {};
   const fkByTable: Record<string, Record<string, ForeignKeyInfo>> = {};
 
   for (const k of keys) {
     if (!tableMap[k.TABLE_NAME]) continue;
 
+    // FK
     if (k.REFERENCED_TABLE_NAME && k.REFERENCED_COLUMN_NAME) {
       fkByTable[k.TABLE_NAME] = fkByTable[k.TABLE_NAME] || {};
       fkByTable[k.TABLE_NAME][k.CONSTRAINT_NAME] = fkByTable[k.TABLE_NAME][k.CONSTRAINT_NAME] || {
@@ -131,10 +154,31 @@ export const introspectSchema = async (sequelize: Sequelize): Promise<SchemaSnap
       continue;
     }
 
-    if (k.CONSTRAINT_NAME && k.CONSTRAINT_NAME !== "PRIMARY") {
+    // UNIQUE
+    if (k.CONSTRAINT_TYPE === "UNIQUE" && k.CONSTRAINT_NAME && k.CONSTRAINT_NAME !== "PRIMARY") {
       uniqByTable[k.TABLE_NAME] = uniqByTable[k.TABLE_NAME] || {};
       uniqByTable[k.TABLE_NAME][k.CONSTRAINT_NAME] = uniqByTable[k.TABLE_NAME][k.CONSTRAINT_NAME] || [];
       uniqByTable[k.TABLE_NAME][k.CONSTRAINT_NAME].push(k.COLUMN_NAME);
+    }
+  }
+
+  // 1 AUTO_INCREMENT por tabla
+  for (const t of Object.values(tableMap)) {
+    const autoCols = t.columns.filter((c) => c.isAutoIncrement).map((c) => c.name);
+    if (autoCols.length <= 1) continue;
+
+    const pk0 = t.primaryKey?.[0] || null;
+    const chosen = autoCols.includes("id") ? "id" : pk0 && autoCols.includes(pk0) ? pk0 : autoCols[0];
+
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[introspect] Warning: table '${t.name}' has multiple AUTO_INCREMENT columns (${autoCols.join(
+        ", "
+      )}). Using '${chosen}'.`
+    );
+
+    for (const c of t.columns) {
+      c.isAutoIncrement = c.name === chosen;
     }
   }
 
@@ -148,10 +192,7 @@ export const introspectSchema = async (sequelize: Sequelize): Promise<SchemaSnap
     tableMap[t].foreignKeys = Object.values(m);
   }
 
-  const hash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(tableMap))
-    .digest("hex");
+  const hash = crypto.createHash("sha256").update(JSON.stringify(tableMap)).digest("hex");
 
   return {
     database: db,

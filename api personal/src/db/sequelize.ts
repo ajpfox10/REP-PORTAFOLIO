@@ -1,8 +1,16 @@
+// src/db/sequelize.ts
 import { Sequelize } from "sequelize";
 import { env } from "../config/env";
 
-export const createSequelize = () => {
-  const sequelize = new Sequelize(env.DB_NAME, env.DB_USER, env.DB_PASSWORD, {
+let _sequelize: Sequelize | null = null;
+
+/**
+ * Singleton: crea o devuelve la instancia única de Sequelize.
+ */
+export function createSequelize(): Sequelize {
+  if (_sequelize) return _sequelize;
+
+  _sequelize = new Sequelize(env.DB_NAME, env.DB_USER, env.DB_PASSWORD, {
     host: env.DB_HOST,
     port: env.DB_PORT,
     dialect: "mysql",
@@ -18,5 +26,17 @@ export const createSequelize = () => {
     }
   });
 
-  return sequelize;
-};
+  return _sequelize;
+}
+
+/**
+ * Export “directo” para imports existentes: `import { sequelize } from "../db/sequelize"`
+ * OJO: se inicializa lazy (cuando alguien lo usa por primera vez).
+ */
+export const sequelize: Sequelize = (null as any) as Sequelize;
+
+// Proxy simple: cuando alguien use `sequelize`, lo resolvemos al singleton real.
+Object.defineProperty(exports, "sequelize", {
+  enumerable: true,
+  get: () => createSequelize()
+});
