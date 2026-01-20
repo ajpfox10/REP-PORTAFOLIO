@@ -7,3 +7,4 @@ export const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+export const rateLimiter = globalLimiter;

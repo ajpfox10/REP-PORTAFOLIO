@@ -1,25 +1,29 @@
-# personalv5-enterprise-api (fixed)
+name: ci
 
-## Run (dev)
-```bash
-npm i
-copy .env.example .env
-npm run dev
-```
+on:
+  push:
+  pull_request:
 
-## Build + Run (prod)
-```bash
-npm run build
-npm start
-```
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-## OpenAPI
-- Default: `docs/openapi.yaml`
-- Override:
-  - CLI: `npm run dev -- --openapi=docs/openapi.yaml`
-  - ENV: `OPENAPI_PATH=docs/openapi.yaml`
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-Generate a fresh spec from DB schema snapshot:
-```bash
-npm run openapi:export
-```
+      - name: Install
+        run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Typecheck (all)
+        run: npm run lint:types
+
+      - name: Build
+        run: npm run build
