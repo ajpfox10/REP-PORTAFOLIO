@@ -62,32 +62,35 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
   // sanitize
   app.use(sanitize);
 
- // CORS (CIA: allowlist primero, denylist opcional)
- if (env.CORS_ALLOW_ALL) {
-   // OJO: si usas cookies/credentials no puede ser "*", esto refleja origin
-   app.use(cors({ origin: true, credentials: true }));
- } else {
-   const allow = (env.CORS_ALLOWLIST || []).map((x: string) => x.toLowerCase());
-   const deny = (env.CORS_DENYLIST || []).map((x: string) => x.toLowerCase());
+  // CORS
+  // ⚠️ Importante: si el front usa `credentials: "include"` (cookies/refresh),
+  // el navegador PROHÍBE `Access-Control-Allow-Origin: *`.
+  // Por eso, incluso en modo "allow all", reflejamos el origin real.
+  app.use(
+    cors({
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true); // curl/postman/server-to-server
 
-   app.use(
-     cors({
-       origin: (origin, cb) => {
-         if (!origin) return cb(null, true); // postman/curl/healthchecks
-         const o = origin.toLowerCase();
+        const o = origin.toLowerCase();
+        const deny = env.CORS_DENYLIST.map((x: string) => x.toLowerCase());
+        if (deny.includes(o)) return cb(new Error("CORS blocked"));
 
-         if (deny.includes(o)) return cb(new Error("CORS blocked (denylist)"));
-         if (allow.length === 0) return cb(new Error("CORS blocked (allowlist vacía)"));
-         if (!allow.includes(o)) return cb(new Error("CORS blocked (not allowed)"));
+        // Si hay allowlist explícita, solo permitimos esos origins.
+        if (env.CORS_ALLOWLIST.length > 0) {
+          const allow = env.CORS_ALLOWLIST.map((x: string) => x.toLowerCase());
+          if (!allow.includes(o)) return cb(new Error("CORS not allowed"));
+          return cb(null, true);
+        }
 
-         return cb(null, true);
-       },
-       credentials: true,
-     })
-   );
- }
-
-
+        // Si no hay allowlist:
+        // - Si CORS_ALLOW_ALL=true -> permitimos cualquier origin (reflejado)
+        // - Si CORS_ALLOW_ALL=false -> permitimos cualquier origin salvo denylist (reflejado)
+        // (ambos casos sirven para cookies porque NO devolvemos '*')
+        return cb(null, true);
+      },
+      credentials: true
+    })
+  );
 
   // IP guard
   app.use(ipGuard);

@@ -58,6 +58,9 @@ const schema = z.object({
   // OpenAPI
   ENABLE_OPENAPI_VALIDATION: boolish.default(false),
   OPENAPI_PATH: strish("docs/openapi.yaml"),
+  // OpenAPI auto (generado desde DB al boot)
+  OPENAPI_AUTO_GENERATE: boolish.default(true),
+  OPENAPI_AUTO_OUTPUT: strish("docs/openapi.generated.yaml"),
 
   // Middlewares
   ENABLE_HARDENING: boolish.default(false),
@@ -65,11 +68,12 @@ const schema = z.object({
   ENABLE_REQUEST_BODY_LIMITS: boolish.default(false),
 
   // CORS
-  // Default seguro: en LAN/produccion pon tu origin del front y deja esto en false.
-  CORS_ALLOW_ALL: boolish.default(false),
+  CORS_ALLOW_ALL: boolish.default(true),
+  // Lista explícita de origins permitidos (separados por coma).
+  // Ej: http://localhost:5173,https://app.tudominio.com
+  // Si está vacía y CORS_ALLOW_ALL=true -> se permite cualquier origin (reflejado, apto para credentials).
   CORS_ALLOWLIST: strish(""),
   CORS_DENYLIST: strish(""),
-
 
   // IP allow/black
   IP_GUARD_ENABLE: boolish.default(false),
@@ -80,7 +84,6 @@ const schema = z.object({
   DOCS_ENABLE: boolish.default(true),
   DOCS_PATH: strish("/docs"),
   DOCS_PROTECT: boolish.default(true),
-
   // Rate limit
   RATE_LIMIT_WINDOW_MS: intish(900000),
   RATE_LIMIT_MAX: intish(300),
@@ -103,33 +106,35 @@ const schema = z.object({
   AUTH_ALLOW_DEV_USER_ID_HEADER: boolish.default(true),
   AUTH_BEARER_MODE: z.enum(["auto", "jwt", "api_key"]).default("auto"),
 
-  // Auth cookies (CIA mode)
-  AUTH_REFRESH_COOKIE: boolish.default(true),
-  COOKIE_SECURE: boolish.default(false),
-  COOKIE_DOMAIN: strish(""),
-
-  // JWT
+  // JWT (y compat con tu jwt.ts)
   JWT_ACCESS_SECRET: strish(""),
   JWT_REFRESH_SECRET: strish(""),
   JWT_ACCESS_TTL_SECONDS: intish(3600),
   JWT_REFRESH_TTL_DAYS: intish(14),
+  // Documents (base dir en disco o red UNC)
+  DOCUMENTS_BASE_DIR: z.string().min(3),
 
-
-
+  // Fotos credencial (filesystem). Si no se setea, usa DOCUMENTS_BASE_DIR.
+  PHOTOS_BASE_DIR: strish(""),
   // Server timeout
   REQUEST_TIMEOUT_MS: intish(60000),
-  
-  // foto agente, documentos
-  DOCUMENTS_BASE_DIR: z.string().min(3).default("D:/G/DOCU"),
-
 });
 
 const raw = schema.parse(process.env);
 
 export const env = {
   ...raw,
-  CORS_ALLOWLIST: raw.CORS_ALLOWLIST.split(",").map((x: string) => x.trim()).filter(Boolean),
-  CORS_DENYLIST: raw.CORS_DENYLIST.split(",").map((x: string) => x.trim()).filter(Boolean),
+  // default: si no seteaste PHOTOS_BASE_DIR, usa DOCUMENTS_BASE_DIR
+  PHOTOS_BASE_DIR: raw.PHOTOS_BASE_DIR?.trim() ? raw.PHOTOS_BASE_DIR : raw.DOCUMENTS_BASE_DIR,
+  // normalizamos a array para que no tire any en map()
+  CORS_ALLOWLIST: raw.CORS_ALLOWLIST
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean),
+  CORS_DENYLIST: raw.CORS_DENYLIST
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean),
 } as const;
 
 export type Env = typeof env;

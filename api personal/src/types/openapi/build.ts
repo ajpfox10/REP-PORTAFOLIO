@@ -6,11 +6,21 @@ import { SchemaSnapshot, TableInfo, ColumnInfo } from "../../db/schema/types";
  * Esto es “build-only”: no toca runtime.
  */
 
+export type BuildOpenApiOptions = {
+  allowedTables?: Set<string>;
+  views?: Set<string>;
+  readonly?: boolean;
+};
+
 type OpenApiDoc = {
   openapi: string;
   info: { title: string; version: string };
+  tags?: Array<{ name: string; description?: string }>;
   paths: Record<string, any>;
-  components: { schemas: Record<string, any> };
+  components: {
+    schemas: Record<string, any>;
+    securitySchemes?: Record<string, any>;
+  };
 };
 
 function mapColumnToSchema(col: ColumnInfo) {
@@ -71,82 +81,274 @@ function normalizeTables(snapshot: SchemaSnapshot): TableInfo[] {
   return [];
 }
 
-export function buildOpenApiFromSchema(snapshot: SchemaSnapshot): OpenApiDoc {
+export function buildOpenApiFromSchema(snapshot: SchemaSnapshot, opts: BuildOpenApiOptions = {}): OpenApiDoc {
   const doc: OpenApiDoc = {
     openapi: "3.0.3",
     info: { title: "personalv5-enterprise-api", version: "1.0.0" },
+    tags: [
+      { name: "system", description: "Health/ready/endpoints base" },
+      { name: "meta", description: "Endpoints auxiliares del CRUD" },
+      { name: "auth", description: "Autenticación (login/refresh/logout)" },
+      { name: "personal", description: "Búsqueda de personal (dni / apellido / nombre)" },
+      { name: "crud", description: "CRUD genérico por tabla/vista" },
+      { name: "docs", description: "OpenAPI spec" },
+    ],
     paths: {},
-    components: { schemas: {} },
+    components: {
+      schemas: {},
+      securitySchemes: {
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      },
+    },
   };
 
   const tables = normalizeTables(snapshot);
 
+  // =========================
+  // Rutas fijas (no dependen del schema)
+  // =========================
+  doc.paths["/health"] = {
+    get: {
+      tags: ["system"],
+      summary: "Health check",
+      responses: { 200: { description: "OK" } },
+    },
+  };
+
+  doc.paths["/ready"] = {
+    get: {
+      tags: ["system"],
+      summary: "Readiness check (DB ping)",
+      "x-internal": true,
+      responses: {
+        200: { description: "Ready" },
+        503: { description: "DB not ready" },
+      },
+    },
+  };
+
+  doc.paths["/api/v1/tables"] = {
+    get: {
+      tags: ["meta"],
+      summary: "List tables/views available for CRUD",
+      security: [{ bearerAuth: [] }],
+      responses: { 200: { description: "OK" } },
+    },
+  };
+
+  // ======================
+  // Personal search
+  // ======================
+  doc.paths["/api/v1/personal/search"] = {
+    get: {
+      tags: ["personal"],
+      security: [{ bearerAuth: [] }],
+      summary: "Buscar personal por dni / apellido / nombre",
+      parameters: [
+        { name: "dni", in: "query", schema: { type: "string" } },
+        { name: "apellido", in: "query", schema: { type: "string" } },
+        { name: "nombre", in: "query", schema: { type: "string" } },
+        { name: "q", in: "query", schema: { type: "string" } },
+        { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+        { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+      ],
+      responses: {
+        200: { description: "OK" },
+        400: { description: "Parámetros inválidos" },
+        401: { description: "No autenticado" },
+        403: { description: "No autorizado" },
+      },
+    },
+  };
+
+  // ======================
+  // Agentes: Foto credencial (filesystem)
+  // ======================
+  doc.paths["/api/v1/agentes/{dni}/foto"] = {
+    get: {
+      tags: ["agentes"],
+      security: [{ bearerAuth: [] }],
+      summary: "Obtener foto credencial por DNI",
+      parameters: [
+        {
+          name: "dni",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Imagen",
+          content: {
+            "image/jpeg": { schema: { type: "string", format: "binary" } },
+            "image/png": { schema: { type: "string", format: "binary" } },
+            "image/webp": { schema: { type: "string", format: "binary" } },
+          },
+        },
+        400: { description: "DNI inválido" },
+        401: { description: "No autenticado" },
+        403: { description: "No autorizado" },
+        404: { description: "Not found" },
+      },
+    },
+  };
+
+  doc.paths["/docs/openapi.yaml"] = {
+    get: {
+      tags: ["docs"],
+      summary: "Get OpenAPI spec (yaml)",
+      responses: { 200: { description: "OK" } },
+    },
+  };
+
+  doc.paths["/docs/openapi.json"] = {
+    get: {
+      tags: ["docs"],
+      summary: "Get OpenAPI spec (json)",
+      responses: { 200: { description: "OK" } },
+    },
+  };
+
+  // ======================
+  // Auth endpoints
+  // ======================
+  doc.paths["/api/v1/auth/login"] = {
+    post: {
+      tags: ["auth"],
+      summary: "Login de usuario",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["email", "password"],
+              properties: {
+                email: { type: "string", format: "email" },
+                password: { type: "string", minLength: 1 },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Login OK" },
+        401: { description: "Credenciales inválidas" },
+      },
+    },
+  };
+
+  doc.paths["/api/v1/auth/refresh"] = {
+    post: {
+      tags: ["auth"],
+      summary: "Refresh token",
+      responses: {
+        200: { description: "Token renovado" },
+        401: { description: "No autorizado" },
+      },
+    },
+  };
+
+  doc.paths["/api/v1/auth/logout"] = {
+    post: {
+      tags: ["auth"],
+      summary: "Logout",
+      responses: { 200: { description: "Logout OK" } },
+    },
+  };
+
+
   for (const table of tables) {
+    // allow/deny/strict (ya aplicado por opts.allowedTables)
+    if (opts.allowedTables && !opts.allowedTables.has(table.name)) continue;
+
+    const isView = Boolean(opts.views && opts.views.has(table.name));
+    const allowWrites = !Boolean(opts.readonly) && !isView;
     const name = tableSchemaName(table);
     doc.components.schemas[name] = tableToComponentSchema(table);
 
     const base = `/api/v1/${table.name}`;
 
     doc.paths[base] = {
-      get: {
-        summary: `List ${table.name}`,
-        parameters: [
-          { name: "page", in: "query", schema: { type: "integer", default: 1 } },
-          { name: "limit", in: "query", schema: { type: "integer", default: 50 } },
-          { name: "q", in: "query", schema: { type: "string" } },
-        ],
-        responses: {
-          200: {
-            description: "OK",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    ok: { type: "boolean" },
-                    data: { type: "array", items: { $ref: `#/components/schemas/${name}` } },
-                  },
-                },
+  get: {
+    tags: ["crud"],
+    security: [{ bearerAuth: [] }],
+    summary: `List ${table.name}`,
+    parameters: [
+      { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+      { name: "limit", in: "query", schema: { type: "integer", default: 50 } },
+      { name: "q", in: "query", schema: { type: "string" } },
+    ],
+    responses: {
+      200: {
+        description: "OK",
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                ok: { type: "boolean" },
+                data: { type: "array", items: { $ref: `#/components/schemas/${name}` } },
               },
             },
           },
         },
       },
-      post: {
-        summary: `Create ${table.name}`,
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": { schema: { $ref: `#/components/schemas/${name}` } },
-          },
-        },
-        responses: { 201: { description: "Created" } },
+    },
+  },
+};
+
+if (allowWrites) {
+  (doc.paths[base] as any).post = {
+    tags: ["crud"],
+    security: [{ bearerAuth: [] }],
+    summary: `Create ${table.name}`,
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": { schema: { $ref: `#/components/schemas/${name}` } },
       },
-    };
+    },
+    responses: { 201: { description: "Created" } },
+  };
+}
+
 
     doc.paths[`${base}/{id}`] = {
-      get: {
-        summary: `Get ${table.name} by id`,
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-        responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
+  get: {
+    tags: ["crud"],
+    security: [{ bearerAuth: [] }],
+    summary: `Get ${table.name} by id`,
+    parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+    responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
+  },
+};
+
+if (allowWrites) {
+  (doc.paths[`${base}/{id}`] as any).put = {
+    tags: ["crud"],
+    security: [{ bearerAuth: [] }],
+    summary: `Update ${table.name} by id`,
+    parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": { schema: { $ref: `#/components/schemas/${name}` } },
       },
-      put: {
-        summary: `Update ${table.name} by id`,
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": { schema: { $ref: `#/components/schemas/${name}` } },
-          },
-        },
-        responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
-      },
-      delete: {
-        summary: `Delete ${table.name} by id`,
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-        responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
-      },
-    };
+    },
+    responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
+  };
+
+  (doc.paths[`${base}/{id}`] as any).delete = {
+    tags: ["crud"],
+    security: [{ bearerAuth: [] }],
+    summary: `Delete ${table.name} by id`,
+    parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+    responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
+  };
+}
+
   }
 
   return doc;
