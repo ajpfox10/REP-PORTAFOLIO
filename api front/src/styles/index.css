@@ -1,3 +1,10 @@
 @import './base.css';
 @import './components.css';
-@import './pages.css';
+
+/*
+  ⚠️ IMPORTANTE
+  ---------------------------------------------------------------------------
+  Este proyecto dejó de usar un "pages.css" global.
+  Cada página importa SU PROPIO CSS (co-locado en /src/pages/styles).
+  Motivo: evitar colisiones y mantener estilos acotados por ruta.
+*/

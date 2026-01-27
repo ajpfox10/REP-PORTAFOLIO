@@ -4,6 +4,9 @@ import { Layout } from '../components/Layout';
 import { apiFetch } from '../api/http';
 import { useToast } from '../ui/toast';
 
+// 🎨 CSS de esta ruta (NO global): /src/pages/styles/TablesPage.css
+import './styles/TablesPage.css';
+
 export function TablesPage() {
   const toast = useToast();
   const [tables, setTables] = useState<string[]>([]);
@@ -28,7 +31,7 @@ export function TablesPage() {
 
   return (
     <Layout title="Tablas" showBack>
-      <div className="card" style={{ padding: 14 }}>
+      <div className="card tables-card">
         {loading ? (
           <div className="muted">Cargando…</div>
         ) : (

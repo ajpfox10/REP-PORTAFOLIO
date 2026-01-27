@@ -1,0 +1,254 @@
+/*
+  ==============================
+  GestiónPage ( /app/gestion )
+  ==============================
+  Objetivo:
+  - Estilos SOLO para la pantalla de Gestión.
+  - Mantener el layout en 2 columnas en desktop y apilado en mobile.
+  - Evitar que las cards se "estiren" fuera del contenedor.
+  - Todo responsive sin tocar nombres de clase existentes.
+*/
+
+/*
+  Contenedor principal de la página.
+  - max-width centra el contenido y evita "pantallas eternas".
+  - minmax(0, ...) permite que el grid encoja sin overflow horizontal.
+*/
+.gestion-layout {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
+  gap: 16px;
+  padding: 0 12px;
+  align-items: start;
+}
+
+/*
+  IMPORTANTÍSIMO en grid/flex:
+  min-width: 0 permite que el contenido interno (tablas, imágenes grandes)
+  no "empuje" la columna y termine pintando por arriba de la otra.
+*/
+.gestion-layout > * {
+  min-width: 0;
+}
+
+/*
+  En pantallas medianas/chicas apilamos columnas.
+  Importante: así evitamos que el panel derecho "pise" la tabla.
+*/
+@media (max-width: 980px) {
+  .gestion-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/*
+  Fila de buscadores (DNI + Apellido/Nombre)
+  - 2 columnas por defecto.
+  - En mobile se apila.
+*/
+.search-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .search-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/*
+  Label + input alineados, con espacio.
+  - La columna de label es fija.
+  - La de input es flexible.
+*/
+.search-field {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+/*
+  Inputs:
+  - En desktop limitamos ancho para prolijidad.
+  - En mobile dejamos que ocupen todo el ancho disponible.
+*/
+.search-field input {
+  width: 100%;
+  max-width: 320px;
+}
+
+@media (max-width: 700px) {
+  .search-field input {
+    max-width: none;
+  }
+}
+
+/*
+  Módulos (Consultas / Pedidos):
+  Dentro de Gestión se renderiza un .grid forzado a 2 columnas por inline-style.
+  En mobile lo sobreescribimos para que no se rompa el layout.
+*/
+@media (max-width: 700px) {
+  .gestion-layout .grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/*
+  Tabla: si algo trae textos largos, que el scroll sea horizontal dentro del contenedor,
+  no en toda la página.
+*/
+.gestion-layout .table {
+  min-width: 720px;
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Reemplazo de estilos inline (JSX) por clases locales
+  ---------------------------------------------------------------------------
+  Regla de oro:
+  - NO se renombra ninguna clase existente.
+  - Estas clases nuevas se agregan además del className original.
+  - Todo queda encapsulado en esta ruta.
+*/
+
+/* Columna (izq/der) con separación entre cards */
+.gp-col {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/*
+  Sección full-width (abajo de las 2 columnas)
+  - En desktop: ocupa las 2 columnas del grid principal.
+  - En mobile: naturalmente queda en 1 columna (porque el grid ya se apila).
+*/
+.gp-full {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Wrapping de botones de exportación */
+.gp-export-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Padding local (no toca .card global) */
+.gp-card-14 { padding: 14px; }
+.gp-card-12 { padding: 12px; }
+
+/* Márgenes utilitarios */
+.gp-mt-10 { margin-top: 10px; }
+.gp-mt-6 { margin-top: 6px; }
+
+/* Títulos sin márgenes inline */
+.gp-h3-top0 { margin-top: 0; }
+.gp-h3-top0-bot6 { margin-top: 0; margin-bottom: 6px; }
+.gp-h3-0 { margin: 0; }
+
+/* Filas con alineaciones típicas */
+.gp-row-between-baseline {
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gp-row-between-center {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gp-row-between-wrap {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gp-row-wrap {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gp-row-between-gap10 {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gp-row-baseline-gap10 {
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* Módulos (Consultas / Pedidos) */
+.gp-mod-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .gp-mod-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tabla embebida: scroll interno */
+.gp-tablewrap {
+  overflow: auto;
+  max-height: 55vh;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Card de exportación debajo de la tabla, full width dentro de .gp-full */
+.gp-full-export {
+  width: 100%;
+}
+
+/* Lista de coincidencias */
+.gp-match-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.gp-match-item { margin: 8px 0; }
+
+/* Foto credencial */
+.gp-photo {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  display: block;
+}
+
+/*
+  Contención de la card que contiene la imagen de credencial.
+  Si el servidor devuelve una imagen muy grande, evitamos que se vea por fuera.
+*/
+.gp-photo-card {
+  overflow: hidden;
+}
+
+/* Modal */
+.gp-modal-head {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gp-muted-xs { font-size: 12px; }
+
+.gp-modal-actions {
+  justify-content: flex-end;
+}
