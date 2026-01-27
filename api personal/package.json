@@ -15,7 +15,7 @@
     "arranque": "node scripts/arranque.mjs",
     "db:migrate": "ts-node src/scripts/migrate.ts",
     "db:migrate:test": "cross-env NODE_ENV=test ts-node src/scripts/migrate.ts",
-    "openapi:export": "ts-node src/openapi/export.ts",
+    "openapi:export": "ts-node src/types/openapi/export.ts",
     "seed:admin": "node scripts/seedAdmin.mjs"
   },
   "keywords": [],

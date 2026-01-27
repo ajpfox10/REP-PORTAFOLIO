@@ -13,14 +13,34 @@ export function errorHandler(err: any, req: Request, res: Response, _next: NextF
 
   const requestId = (req as any)?.requestId;
 
-  logger.error({
-    msg: "Unhandled error",
+  const auth = (req as any)?.auth;
+  const actor = auth
+    ? {
+        principalType: auth?.principalType,
+        principalId: auth?.principalId,
+      }
+    : null;
+
+  const logPayload = {
+    msg: status >= 500 ? "Unhandled error" : "Request rejected",
     status,
     requestId,
+    actor,
     method: req.method,
     path: req.originalUrl,
+    query: req.query,
     err: err?.message ? `${err.message}\n${err.stack || ""}` : err
-  });
+  };
+
+  // ✅ 401/403: esperado (auth/permiso). No ensuciar ERROR
+  if (status === 401 || status === 403) {
+    logger.warn(logPayload);
+  } else if (status >= 400 && status < 500) {
+    // 4xx: normalmente es input inválido / ruta no permitida / validator
+    logger.info(logPayload);
+  } else {
+    logger.error(logPayload);
+  }
 
   if (res.headersSent) return;
 

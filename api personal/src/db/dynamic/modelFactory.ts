@@ -50,12 +50,15 @@ export const buildModels = (sequelize: Sequelize, schema: SchemaSnapshot) => {
     }
 
     const pkSet = new Set<string>(table.primaryKey || []);
+    const hasExplicitPk = pkSet.size > 0; // ✅ si el introspector detectó PK real
+    // ✅ Para VIEWS: si NO hay PK explícita, tratamos "id" como PK si existe
+    const hasIdColumn = table.columns.some((c) => c.name === "id");
 
     for (const c of table.columns) {
       attrs[c.name] = {
         type: mapType(c.dataType, c.maxLength),
         allowNull: c.isNullable,
-        primaryKey: pkSet.has(c.name),
+        primaryKey: pkSet.has(c.name) || (!hasExplicitPk && hasIdColumn && c.name === "id"),
         autoIncrement: chosenAutoInc === c.name
       };
 

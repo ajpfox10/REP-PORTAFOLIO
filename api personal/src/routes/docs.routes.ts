@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
+import YAML from "yaml";
 import { env } from "../config/env";
 
 /**
@@ -15,7 +16,10 @@ export const buildDocsRouter = () => {
 
   // helper simple para servir el YAML
   const serveYaml = (_req: Request, res: Response) => {
-    const abs = path.resolve(process.cwd(), env.OPENAPI_PATH);
+    const specPath = (env.ENABLE_OPENAPI_VALIDATION && env.OPENAPI_AUTO_GENERATE)
+      ? env.OPENAPI_AUTO_OUTPUT
+      : env.OPENAPI_PATH;
+    const abs = path.resolve(process.cwd(), specPath);
     if (!fs.existsSync(abs)) {
       return res.status(404).json({ ok: false, error: "No existe el archivo OpenAPI" });
     }
@@ -23,9 +27,36 @@ export const buildDocsRouter = () => {
     return res.status(200).send(fs.readFileSync(abs, "utf8"));
   };
 
+
+
+// helper para servir JSON (Swagger UI suele preferir JSON)
+  const serveJson = (_req: Request, res: Response) => {
+    const specPath = (env.ENABLE_OPENAPI_VALIDATION && env.OPENAPI_AUTO_GENERATE)
+      ? env.OPENAPI_AUTO_OUTPUT
+      : env.OPENAPI_PATH;
+  
+    const abs = path.resolve(process.cwd(), specPath);
+    if (!fs.existsSync(abs)) {
+      return res.status(404).json({ ok: false, error: "No existe el archivo OpenAPI" });
+    }
+  
+    const raw = fs.readFileSync(abs, "utf8");
+    let obj: any;
+  
+    // si el archivo es yaml/yml lo parseamos, si no intentamos JSON
+    if (abs.endsWith(".yaml") || abs.endsWith(".yml")) {
+      obj = YAML.parse(raw);
+    } else {
+      obj = JSON.parse(raw);
+    }
+  
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    return res.status(200).send(JSON.stringify(obj, null, 2));
+  };
   // /docs -> redirect a /docs/openapi.yaml
   r.get("/", (_req, res) => res.redirect(302, `${env.DOCS_PATH.replace(/\/$/, "")}/openapi.yaml`));
   r.get("/openapi.yaml", serveYaml);
+  r.get("/openapi.json", serveJson);
 
   return r;
 };

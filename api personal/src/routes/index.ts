@@ -10,7 +10,8 @@ import { buildAuthRouter } from "./auth.routes";
 import { authContext } from "../middlewares/authContext";
 import { buildDocsRouter, docsProtect } from "./docs.routes";
 import { buildDocumentsRouter } from "./documents.routes"; // ✅ agregado
-import { buildAgentesRouter } from "./agentes.routes";
+import { buildPersonalRouter } from "./personal.routes";
+import { buildAgentesFotoRouter } from "./agentesFoto.routes";
 
 function metricsAuth(req: Request, res: Response, next: NextFunction) {
   if (!env.METRICS_PROTECT) return next();
@@ -47,12 +48,16 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
 
   // ✅ Documents (tblarchivos -> stream desde DOCUMENTS_BASE_DIR)
   app.use("/api/v1/documents", authContext(sequelize), buildDocumentsRouter(sequelize));
-  // ✅ Rutas 
-  app.use("/api/v1/agentes", authContext(sequelize), buildAgentesRouter(sequelize));
+
+  // ✅ Foto credencial por DNI (filesystem) - NO toca el CRUD genérico
+  app.use("/api/v1/agentes", authContext(sequelize), buildAgentesFotoRouter());
+
+  // ✅ Personal search (dni / apellido / nombre) - protegido con authContext + RBAC(read)
+  app.use("/api/v1/personal", authContext(sequelize), buildPersonalRouter(sequelize));
+
+  // ✅ Personal search (para búsqueda por DNI / Apellido+Nombre sin tocar el CRUD genérico)
+  app.use("/api/v1/personal", authContext(sequelize), buildPersonalRouter(sequelize));
 
   // ✅ CRUD protegido: authContext antes del router
   app.use("/api/v1", authContext(sequelize), buildCrudRouter(sequelize, schema));
-
-
-
 };
