@@ -8,6 +8,29 @@ import http from "node:http";
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise((resolve) => rl.question(q, (ans) => resolve(ans.trim())));
 
+function loadDotEnvFallback() {
+  const envPath = path.resolve(process.cwd(), ".env");
+  if (!exists(envPath)) return;
+
+  const txt = fs.readFileSync(envPath, "utf8");
+  for (const line of txt.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+
+    const m = t.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (!m) continue;
+
+    const key = m[1];
+    let val = m[2];
+
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+
+    if (process.env[key] == null) process.env[key] = val;
+  }
+}
+
 function exists(p) {
   try {
     fs.accessSync(p, fs.constants.F_OK);
@@ -98,9 +121,65 @@ function findEntry() {
   return null;
 }
 
-function httpGet(url, timeoutMs = 2200) {
+function httpRequest(method, url, { headers = {}, body = null, timeoutMs = 2200 } = {}) {
   return new Promise((resolve) => {
-    const req = http.get(url, (res) => {
+    const u = new URL(url);
+    const req = http.request(
+      { method, hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => resolve({ code: res.statusCode || 0, body: data }));
+      }
+    );
+    req.on("error", () => resolve({ code: 0, body: "" }));
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      resolve({ code: 0, body: "" });
+    });
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function probeLoginToken(baseUrl) {
+  if (process.env.PROBE_TOKEN) return process.env.PROBE_TOKEN;
+
+  const email = process.env.PROBE_EMAIL;
+  const password = process.env.PROBE_PASSWORD;
+  if (!email || !password) return null;
+
+  const payload = JSON.stringify({ email, password });
+  const r = await httpRequest("POST", baseUrl + "/api/v1/auth/login", {
+    headers: {
+      "content-type": "application/json",
+      "content-length": Buffer.byteLength(payload)
+    },
+    body: payload,
+    timeoutMs: 3500
+  });
+
+  if (r.code < 200 || r.code >= 300) return null;
+
+  try {
+    const j = JSON.parse(r.body || "{}");
+    return (
+      j?.accessToken ||
+      j?.token ||
+      j?.access_token ||
+      j?.data?.accessToken ||
+      j?.data?.token ||
+      j?.data?.access_token ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+function httpGet(url, timeoutMs = 2200, headers = {}) {
+  return new Promise((resolve) => {
+    const req = http.get(url, { headers }, (res) => {
       res.on("data", () => {});
       res.on("end", () => {
         const code = res.statusCode || 0;
@@ -116,16 +195,23 @@ function httpGet(url, timeoutMs = 2200) {
 }
 
 async function probe(baseUrl, paths, retries = 12, sleepMs = 900) {
+  const token = await probeLoginToken(baseUrl);
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
   let last = {};
   for (let i = 0; i < retries; i++) {
     last = {};
     let all = true;
+
     for (const p of paths) {
-      const r = await httpGet(baseUrl + p);
+      const headers = p === "/api/v1/tables" ? authHeaders : {};
+      const r = await httpGet(baseUrl + p, 2200, headers);
       last[p] = r;
-      // En un deploy real, /api/v1/tables suele estar protegido -> 401 es señal de vida.
-      if (!(p === "/api/v1/tables" && r.code === 401) && !r.ok) all = false;
+
+      // En un deploy real, /api/v1/tables suele estar protegido -> 401 es señal de vida si NO hay token.
+      if (!(p === "/api/v1/tables" && r.code === 401 && !token) && !r.ok) all = false;
     }
+
     if (all) return { ok: true, last };
     await new Promise((r) => setTimeout(r, sleepMs));
   }
@@ -247,6 +333,7 @@ async function doExportOpenApi() {
 
 async function main() {
   assertRepoRoot();
+  loadDotEnvFallback();
 
   console.log("\n🧭 Wizard personalv5-enterprise-api\n");
   console.log("¿Qué querés hacer ahora?");

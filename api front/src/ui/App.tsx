@@ -66,7 +66,14 @@ export function App() {
           <Route path="/app/info" element={<Private><InfoPage /></Private>} />
           <Route path="/" element={<Navigate to="/gate" replace />} />
           <Route path="*" element={<Navigate to="/gate" replace />} />
-          <Route path="/app/gestion" element={<GestionPage />} />
+          <Route
+            path="/app/gestion"
+            element={
+              <Private>
+                <GestionPage />
+              </Private>
+            }
+          />
 
         </Routes>
       </AuthProvider>
