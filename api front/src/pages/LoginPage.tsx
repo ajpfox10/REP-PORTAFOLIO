@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { useToast } from '../ui/toast';
 
+// 🎨 CSS de esta ruta (NO global): /src/pages/styles/LoginPage.css
+import './styles/LoginPage.css';
+
 function normalizeErrMessage(err: any): string {
   if (!err) return 'Error';
   if (typeof err === 'string') return err;
@@ -40,9 +43,9 @@ export function LoginPage() {
 
   return (
     <div className="container">
-      <div className="card" style={{ padding: 20, maxWidth: 520, margin: '0 auto' }}>
+      <div className="card login-card">
         <div className="h1">Iniciar sesión</div>
-        <div className="muted" style={{ marginTop: 4, marginBottom: 16 }}>
+        <div className="muted login-subtitle">
           Use credenciales de un usuario activo.
         </div>
 
@@ -68,7 +71,7 @@ export function LoginPage() {
             />
           </div>
 
-          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <div className="row login-actions">
             <button className="btn primary" type="submit" disabled={loading}>
               {loading ? 'Ingresando…' : 'Ingresar'}
             </button>

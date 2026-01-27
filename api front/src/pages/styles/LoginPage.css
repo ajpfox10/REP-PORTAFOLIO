@@ -1,0 +1,25 @@
+/*
+  LoginPage (ruta propia)
+  ---------------------------------------------------------------------------
+  Este archivo contiene estilos SOLO para esta página.
+  Mantener acá cualquier ajuste visual/responsive para evitar choques globales.
+*/
+
+.login-card {
+  padding: 20px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* Subtítulo de la página */
+.login-subtitle {
+  margin-top: 4px;
+  margin-bottom: 16px;
+}
+
+/* Botones con wrap en mobile */
+.login-actions {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}

@@ -3,6 +3,9 @@ import { Layout } from '../components/Layout';
 import { apiFetch, apiFetchBlob } from '../api/http';
 import { useToast } from '../ui/toast';
 
+// 🎨 CSS de esta ruta (NO global): /src/pages/styles/DocumentsPage.css
+import './styles/DocumentsPage.css';
+
 type DocRow = {
   id: number;
   nombre: string | null;
@@ -74,14 +77,15 @@ export function DocumentsPage() {
 
   return (
     <Layout title="Documentos" showBack>
-      <div className="card" style={{ padding: 14 }}>
-        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
-          <div className="row" style={{ flexWrap: 'wrap' }}>
+      {/* Card de búsqueda (sin estilos inline) */}
+      <div className="card docs-card-14">
+        <div className="row docs-search-row">
+          <div className="row docs-search-controls">
             <input
+              className="input docs-search-input"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar por nombre, número, tipo, descripción"
-              style={{ minWidth: 280 }}
             />
             <button className="btn" type="button" onClick={load} disabled={loading}>
               {loading ? 'Buscando…' : 'Buscar'}
@@ -91,16 +95,16 @@ export function DocumentsPage() {
         </div>
       </div>
 
-      <div style={{ marginTop: 16 }} className="split">
-        <div className="card" style={{ padding: 12, overflow: 'auto', maxHeight: '72vh' }}>
+      {/* Split responsive (lista a la izquierda, visor a la derecha) */}
+      <div className="split docs-split-top">
+        <div className="card docs-card-12 docs-list">
           {items.map((d) => (
             <div
               key={d.id}
-              className="tile"
-              style={{ marginBottom: 10, cursor: 'pointer', borderColor: selected?.id === d.id ? 'rgba(34,211,238,0.55)' : undefined }}
+              className={`tile docs-doc-tile ${selected?.id === d.id ? 'is-selected' : ''}`}
               onClick={() => setSelected(d)}
             >
-              <h3 style={{ wordBreak: 'break-word' }}>{d.nombre ?? `Documento ${d.id}`}</h3>
+              <h3 className="docs-doc-title">{d.nombre ?? `Documento ${d.id}`}</h3>
               <p>
                 {d.numero ? `N° ${d.numero} · ` : ''}
                 {d.tipo ?? 'sin tipo'}
@@ -111,11 +115,11 @@ export function DocumentsPage() {
           {!items.length && <div className="muted">Sin resultados.</div>}
         </div>
 
-        <div className="card" style={{ padding: 12, minHeight: '72vh' }}>
-          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap' }}>
+        <div className="card docs-card-12 docs-viewer">
+          <div className="row docs-viewer-head">
             <div>
-              <div className="h1" style={{ fontSize: 16 }}>{meta || 'Visor'}</div>
-              {selected?.descripcion ? <div className="muted" style={{ marginTop: 2 }}>{selected.descripcion}</div> : null}
+              <div className="h1 docs-viewer-meta">{meta || 'Visor'}</div>
+              {selected?.descripcion ? <div className="muted docs-viewer-desc">{selected.descripcion}</div> : null}
             </div>
             {pdfUrl ? (
               <div className="row">
@@ -126,7 +130,7 @@ export function DocumentsPage() {
           </div>
 
           {pdfUrl ? (
-            <iframe title="pdf" src={pdfUrl} style={{ width: '100%', height: '62vh', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12 }} />
+            <iframe title="pdf" src={pdfUrl} className="docs-iframe" />
           ) : (
             <div className="muted">Seleccione un documento para ver el archivo.</div>
           )}

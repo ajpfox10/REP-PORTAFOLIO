@@ -4,6 +4,9 @@ import { useToast } from "../ui/toast";
 import { apiFetch, apiFetchBlob } from "../api/http";
 import { exportToExcel, exportToPdf, exportToWord, printTable } from "../utils/export";
 
+// 🎨 CSS de esta ruta (NO global): /src/pages/styles/GestionPage.css
+import "./styles/GestionPage.css";
+
 export function GestionPage() {
   const toast = useToast();
 
@@ -260,7 +263,7 @@ export function GestionPage() {
     const title = `${moduleTitle} (DNI ${cleanDni})`;
     const file = `${activeModule}_dni_${cleanDni}`;
     return (
-      <div className="row" style={{ flexWrap: "wrap" }}>
+      <div className="row gp-export-actions">
         <button className="btn" type="button" onClick={() => printTable(title, moduleRows)} disabled={!moduleRows.length}>
           Imprimir
         </button>
@@ -281,8 +284,8 @@ export function GestionPage() {
     <Layout title="Gestión" showBack>
       <div className="gestion-layout">
         {/* IZQUIERDA */}
-        <div style={{ display: "grid", gap: 12 }}>
-          <div className="card" style={{ padding: 14 }}>
+        <div className="gp-col">
+          <div className="card gp-card-14">
             <div className="search-row">
               <div className="search-field">
                 <label className="label">DNI</label>
@@ -307,20 +310,20 @@ export function GestionPage() {
               </div>
             </div>
 
-            <div style={{ marginTop: 10 }} className="muted">
+            <div className="muted gp-mt-10">
               Buscá por DNI o por Apellido/Nombre. Enter y a otra cosa 😎
             </div>
           </div>
 
           {loading && (
-            <div className="card" style={{ padding: 14 }}>
+            <div className="card gp-card-14">
               Cargando…
             </div>
           )}
 
           {row && (
-            <div className="card" style={{ padding: 14 }}>
-              <h3 style={{ marginTop: 0 }}>
+            <div className="card gp-card-14">
+              <h3 className="gp-h3-top0">
                 {row.apellido}, {row.nombre}
               </h3>
 
@@ -336,10 +339,10 @@ export function GestionPage() {
 
           {/* ✅ MÓDULOS: solo aparecen cuando YA se buscó por DNI (Enter) */}
           {row?.dni ? (
-            <div className="card" style={{ padding: 14 }}>
-              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10 }}>
+            <div className="card gp-card-14">
+              <div className="row gp-row-between-baseline">
                 <div>
-                  <h3 style={{ marginTop: 0, marginBottom: 6 }}>Gestión por DNI</h3>
+                  <h3 className="gp-h3-top0-bot6">Gestión por DNI</h3>
                   <div className="muted">Enter primero. Después habilitamos los módulos, sin humo ni duplicados.</div>
                 </div>
                 <div className="badge">DNI {cleanDni}</div>
@@ -347,14 +350,14 @@ export function GestionPage() {
 
               <div className="sep" />
 
-              <div className="grid" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                <div className="card" style={{ padding: 12 }}>
-                  <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+              <div className="grid gp-mod-grid">
+                <div className="card gp-card-12">
+                  <div className="row gp-row-between-center">
                     <b>Consultas</b>
                     <span className="badge">/consultas</span>
                   </div>
-                  <p className="muted" style={{ marginTop: 6 }}>Atenciones, motivo y explicación.</p>
-                  <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <p className="muted gp-mt-6">Atenciones, motivo y explicación.</p>
+                  <div className="row gp-row-between-center">
                     <button className="btn" type="button" onClick={() => loadModule("consultas")} disabled={moduleLoading && activeModule === "consultas"}>
                       {moduleLoading && activeModule === "consultas" ? "Cargando…" : "Ver"}
                     </button>
@@ -362,13 +365,13 @@ export function GestionPage() {
                   </div>
                 </div>
 
-                <div className="card" style={{ padding: 12 }}>
-                  <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                <div className="card gp-card-12">
+                  <div className="row gp-row-between-center">
                     <b>Pedidos</b>
                     <span className="badge">/pedidos</span>
                   </div>
-                  <p className="muted" style={{ marginTop: 6 }}>Pedidos, estado, lugar y fecha.</p>
-                  <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <p className="muted gp-mt-6">Pedidos, estado, lugar y fecha.</p>
+                  <div className="row gp-row-between-center">
                     <button className="btn" type="button" onClick={() => loadModule("pedidos")} disabled={moduleLoading && activeModule === "pedidos"}>
                       {moduleLoading && activeModule === "pedidos" ? "Cargando…" : "Ver"}
                     </button>
@@ -376,81 +379,15 @@ export function GestionPage() {
                   </div>
                 </div>
               </div>
-
-              {/* ✅ Tabla embebida del módulo (dentro de Gestión) */}
-              {activeModule ? (
-                <>
-                  <div className="sep" />
-
-                  <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                    {exportActions}
-                    <div className="row" style={{ flexWrap: "wrap" }}>
-                      <div className="badge">{moduleLoading ? "Cargando…" : `Filas: ${moduleRows.length}`}</div>
-                      {moduleScanned ? (
-                        <div className="badge">
-                          Scan: {moduleScanned.pages}/{moduleScanned.totalPages} pág (total API {moduleScanned.total})
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="sep" />
-
-                  <div style={{ overflow: "auto", maxHeight: "55vh", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)" }}>
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          {moduleCols.map((c) => (
-                            <th key={c}>{c}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {moduleRows.map((r, idx) => (
-                          <tr key={idx}>
-                            {moduleCols.map((c) => (
-                              <td
-                                key={c}
-                                className="cell"
-                                title="Click para ampliar"
-                                onClick={() => setCellModal({ col: c, value: String(r?.[c] ?? ""), rowIndex: idx })}
-                              >
-                                {String(r?.[c] ?? "")}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* ✅ Card de exportación debajo de los datos */}
-                  <div className="sep" />
-                  <div className="card" style={{ padding: 12 }}>
-                    <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                      <div>
-                        <div className="row" style={{ alignItems: "baseline", gap: 10 }}>
-                          <h3 style={{ margin: 0 }}>{moduleTitle}</h3>
-                          <span className="badge">Exportación</span>
-                        </div>
-                        <p className="muted" style={{ marginTop: 6 }}>
-                          Tip: si un campo viene largo, click en la celda y se abre el formulario emergente para leerlo completo.
-                        </p>
-                      </div>
-                      {exportActions}
-                    </div>
-                  </div>
-                </>
-              ) : null}
             </div>
           ) : null}
 
           {!!matches.length && (
-            <div className="card" style={{ padding: 14 }}>
-              <h3 style={{ marginTop: 0 }}>Coincidencias</h3>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
+            <div className="card gp-card-14">
+              <h3 className="gp-h3-top0">Coincidencias</h3>
+              <ul className="gp-match-list">
                 {matches.map((m: any) => (
-                  <li key={m.dni} style={{ margin: "8px 0" }}>
+                  <li key={m.dni} className="gp-match-item">
                     <button className="btn" onClick={() => loadByDni(m.dni)}>
                       {m.apellido}, {m.nombre} (DNI {m.dni})
                     </button>
@@ -462,37 +399,109 @@ export function GestionPage() {
         </div>
 
         {/* DERECHA */}
-        <div style={{ display: "grid", gap: 12 }}>
-          <div className="card" style={{ padding: 14 }}>
-            <h3 style={{ marginTop: 0 }}>Foto credencial</h3>
+        <div className="gp-col">
+          {/*
+            NOTA UI:
+            La foto credencial suele venir como una imagen tipo "tarjeta" (fondo blanco) y puede ser grande.
+            Esta clase extra fuerza contención (overflow) para que NO se superponga a otras secciones.
+          */}
+          <div className="card gp-card-14 gp-photo-card">
+            <h3 className="gp-h3-top0">Foto credencial</h3>
 
             {!row?.dni ? (
               <p className="muted">Buscá un agente.</p>
             ) : fotoUrl ? (
-              <img
-                src={fotoUrl}
-                alt="Foto credencial"
-                style={{ width: "100%", borderRadius: 12, display: "block" }}
-              />
+              <img src={fotoUrl} alt="Foto credencial" className="gp-photo" />
             ) : (
               <p className="muted">Sin foto (o no autorizado).</p>
             )}
           </div>
 
-          <div className="card" style={{ padding: 14 }}>
-            <h3 style={{ marginTop: 0 }}>Panel derecho</h3>
+          <div className="card gp-card-14">
+            <h3 className="gp-h3-top0">Panel derecho</h3>
             <p className="muted">Acá va historial, documentos, acciones, etc.</p>
           </div>
         </div>
+
+        {/*
+          =========================
+          ZONA INFERIOR (full width)
+          Motivo:
+          - Cuando se activa un módulo (Consultas/Pedidos) la tabla debe ocupar TODO el ancho.
+          - Así evitamos el efecto visual de "tabla a la izquierda" mientras el panel derecho
+            queda flotando al lado.
+        */}
+        {activeModule ? (
+          <div className="gp-full">
+            <div className="card gp-card-14">
+              <div className="row gp-row-between-wrap">
+                {exportActions}
+                <div className="row gp-row-wrap">
+                  <div className="badge">{moduleLoading ? "Cargando…" : `Filas: ${moduleRows.length}`}</div>
+                  {moduleScanned ? (
+                    <div className="badge">
+                      Scan: {moduleScanned.pages}/{moduleScanned.totalPages} pág (total API {moduleScanned.total})
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="sep" />
+
+              <div className="gp-tablewrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      {moduleCols.map((c) => (
+                        <th key={c}>{c}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {moduleRows.map((r, idx) => (
+                      <tr key={idx}>
+                        {moduleCols.map((c) => (
+                          <td
+                            key={c}
+                            className="cell"
+                            title="Click para ampliar"
+                            onClick={() => setCellModal({ col: c, value: String(r?.[c] ?? ""), rowIndex: idx })}
+                          >
+                            {String(r?.[c] ?? "")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="card gp-card-14 gp-full-export">
+              <div className="row gp-row-between-gap10">
+                <div>
+                  <div className="row gp-row-baseline-gap10">
+                    <h3 className="gp-h3-0">{moduleTitle}</h3>
+                    <span className="badge">Exportación</span>
+                  </div>
+                  <p className="muted gp-mt-6">
+                    Tip: si un campo viene largo, click en la celda y se abre el formulario emergente para leerlo completo.
+                  </p>
+                </div>
+                {exportActions}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {cellModal ? (
         <div className="modalOverlay" role="dialog" aria-modal="true" onMouseDown={() => setCellModal(null)}>
           <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <div className="row gp-modal-head">
               <div>
-                <div className="muted" style={{ fontSize: 12 }}>Fila {cellModal.rowIndex + 1}</div>
-                <h3 style={{ margin: 0 }}>{cellModal.col}</h3>
+                <div className="muted gp-muted-xs">Fila {cellModal.rowIndex + 1}</div>
+                <h3 className="gp-h3-0">{cellModal.col}</h3>
               </div>
               <button className="btn" type="button" onClick={() => setCellModal(null)}>
                 Cerrar
@@ -503,7 +512,7 @@ export function GestionPage() {
 
             <textarea className="textarea" readOnly value={cellModal.value} />
 
-            <div className="row" style={{ justifyContent: "flex-end" }}>
+            <div className="row gp-modal-actions">
               <button
                 className="btn"
                 type="button"

@@ -5,6 +5,9 @@ import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../api/http';
 import { useToast } from '../ui/toast';
 
+// 🎨 CSS de esta ruta (NO global): /src/pages/styles/DashboardPage.css
+import './styles/DashboardPage.css';
+
 function Tile({ to, title, desc, disabled }: { to: string; title: string; desc: string; disabled?: boolean }) {
   const cls = `tile ${disabled ? 'disabled' : ''}`;
   if (disabled) {
@@ -27,8 +30,9 @@ function StatTile({ to, title, desc, stat, disabled }: { to: string; title: stri
   const cls = `tile ${disabled ? 'disabled' : ''}`;
   const content = (
     <>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h3 style={{ margin: 0 }}>{title}</h3>
+      {/* Header del tile con badge a la derecha, sin estilos inline */}
+      <div className="row dash-stat-head">
+        <h3 className="dash-stat-title">{title}</h3>
         {stat ? <span className="badge">{stat}</span> : null}
       </div>
       <p>{desc}</p>

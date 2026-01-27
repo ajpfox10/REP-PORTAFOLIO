@@ -1,0 +1,61 @@
+/*
+  ================================
+  Página: Documentos (DocumentsPage)
+  ================================
+
+  Problemas que resolvemos:
+  - "split" no tenía estilos y terminaba quedando todo apilado/estirado.
+  - El visor PDF debe ser usable en desktop y mobile.
+  - La lista no debe desbordar toda la pantalla.
+*/
+
+/* Layout: lista (izq) + visor (der) */
+.documents-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* En pantallas chicas: apilar */
+@media (max-width: 980px) {
+  .documents-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Buscador: en mobile que no se vaya de ancho */
+.documents-searchInput {
+  max-width: 100%;
+}
+
+/* Lista: scroll propio (no estira todo) */
+.documents-list {
+  overflow: auto;
+  max-height: 72vh;
+}
+
+@media (max-height: 780px) {
+  .documents-list { max-height: 62vh; }
+}
+
+/* Visor: que ocupe espacio disponible sin deformarse */
+.documents-viewer {
+  min-height: 72vh;
+}
+
+@media (max-width: 980px) {
+  .documents-viewer { min-height: 60vh; }
+}
+
+/* Iframe PDF: borde consistente con el resto del UI */
+.documents-iframe {
+  width: 100%;
+  height: 62vh;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+}
+
+@media (max-width: 980px) {
+  .documents-iframe { height: 55vh; }
+}
