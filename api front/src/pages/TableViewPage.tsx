@@ -5,6 +5,9 @@ import { apiFetch } from '../api/http';
 import { useToast } from '../ui/toast';
 import { exportToExcel, exportToPdf, exportToWord, printTable } from '../utils/export';
 
+// 🎨 CSS de esta ruta (NO global): /src/pages/styles/TableViewPage.css
+import './styles/TableViewPage.css';
+
 type Meta = { page: number; limit: number; total: number };
 
 export function TableViewPage() {
@@ -43,7 +46,7 @@ export function TableViewPage() {
   const cols = rows.length ? Object.keys(rows[0]) : [];
 
   const exportActions = (
-    <div className="row" style={{ flexWrap: 'wrap' }}>
+    <div className="row tv-export-actions">
       <button className="btn" type="button" onClick={() => printTable(title, rows)} disabled={!rows.length}>
         Imprimir
       </button>
@@ -61,11 +64,11 @@ export function TableViewPage() {
 
   return (
     <Layout title={title} showBack>
-      <div className="card" style={{ padding: 16 }}>
-        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <div className="card tv-card-main">
+        <div className="row tv-top-row">
           {exportActions}
 
-          <div className="row" style={{ flexWrap: 'wrap' }}>
+          <div className="row tv-top-stats">
             <div className="badge">{loading ? 'Cargando…' : `Filas: ${rows.length}`}</div>
             <div className="badge">Página {page} / {totalPages}</div>
           </div>
@@ -73,7 +76,7 @@ export function TableViewPage() {
 
         <div className="sep" />
 
-        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div className="row tv-controls-row">
           <div className="row">
             <button className="btn" type="button" onClick={() => setPage(1)} disabled={page <= 1}>⏮</button>
             <button className="btn" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>◀</button>
@@ -92,7 +95,7 @@ export function TableViewPage() {
 
         <div className="sep" />
 
-        <div style={{ overflow: 'auto', maxHeight: '65vh', borderRadius: 12, border: '1px solid rgba(255,255,255,0.12)' }}>
+        <div className="tv-tablewrap">
           <table className="table">
             <thead>
               <tr>
@@ -122,14 +125,14 @@ export function TableViewPage() {
 
         {/* Card de acciones debajo de los datos (pedido del usuario) */}
         <div className="sep" />
-        <div className="card" style={{ padding: 14 }}>
-          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div className="card tv-actions-card">
+          <div className="row tv-actions-row">
             <div>
-              <div className="row" style={{ alignItems: 'baseline', gap: 10 }}>
-                <h3 style={{ margin: 0 }}>{table === 'pedidos' ? 'Pedidos' : 'Consultas'}</h3>
+              <div className="row tv-actions-head">
+                <h3 className="tv-actions-title">{table === 'pedidos' ? 'Pedidos' : 'Consultas'}</h3>
                 <span className="badge">Exportación</span>
               </div>
-              <p className="muted" style={{ marginTop: 6 }}>
+              <p className="muted tv-actions-tip">
                 Tip: si un campo viene largo, hacé click en la celda y se abre un formulario emergente para leerlo completo.
               </p>
             </div>
@@ -141,10 +144,10 @@ export function TableViewPage() {
       {cellModal ? (
         <div className="modalOverlay" role="dialog" aria-modal="true" onMouseDown={() => setCellModal(null)}>
           <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="row tv-modal-head">
               <div>
-                <div className="muted" style={{ fontSize: 12 }}>Fila {cellModal.rowIndex + 1}</div>
-                <h3 style={{ margin: 0 }}>{cellModal.col}</h3>
+                <div className="muted tv-muted-xs">Fila {cellModal.rowIndex + 1}</div>
+                <h3 className="tv-modal-title">{cellModal.col}</h3>
               </div>
               <button className="btn" type="button" onClick={() => setCellModal(null)}>
                 Cerrar
@@ -155,7 +158,7 @@ export function TableViewPage() {
 
             <textarea className="textarea" readOnly value={cellModal.value} />
 
-            <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <div className="row tv-modal-actions">
               <button
                 className="btn"
                 type="button"

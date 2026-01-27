@@ -1,0 +1,21 @@
+/*
+  ==========================
+  Página: Login (LoginPage)
+  ==========================
+
+  - Define espaciado del formulario (.field) sin tocar clases globales.
+  - Mantiene inputs y labels consistentes con el sistema (input/label).
+*/
+
+/* Cada campo: label arriba, input abajo, con aire */
+.field {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+/* En pantallas angostas, el contenedor ya centra con maxWidth inline.
+   Esto evita que la card quede pegada a los bordes si el padding del container cambia. */
+@media (max-width: 420px) {
+  .field { margin: 10px 0; }
+}
