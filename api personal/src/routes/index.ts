@@ -54,9 +54,11 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
 
   // ✅ Personal search (dni / apellido / nombre) - protegido con authContext + RBAC(read)
   app.use("/api/v1/personal", authContext(sequelize), buildPersonalRouter(sequelize));
+  
+  // ✅  Health endpoints (legacy + api/v1 aliases)
+  app.get("/api/v1/health", (_req, res) => res.redirect(307, "/health"));
+  app.get("/api/v1/ready", (_req, res) => res.redirect(307, "/ready"));
 
-  // ✅ Personal search (para búsqueda por DNI / Apellido+Nombre sin tocar el CRUD genérico)
-  app.use("/api/v1/personal", authContext(sequelize), buildPersonalRouter(sequelize));
 
   // ✅ CRUD protegido: authContext antes del router
   app.use("/api/v1", authContext(sequelize), buildCrudRouter(sequelize, schema));

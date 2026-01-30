@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./ui/App";
 import "./styles/index.css";
+import { logEvent } from "./logging/clientLogger";
 declare global {
   interface Window {
     __RUNTIME_CONFIG__?: any;
@@ -34,3 +35,40 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+// Captura global: errores de runtime y promesas sin catch.
+// Objetivo: saber QUÉ pasó, CUÁNDO y en QUÉ pantalla.
+window.addEventListener('error', (ev) => {
+  try {
+    logEvent({
+      level: 'error',
+      what: 'window_error',
+      where: window.location?.pathname,
+      details: {
+        message: (ev as any)?.message,
+        filename: (ev as any)?.filename,
+        lineno: (ev as any)?.lineno,
+        colno: (ev as any)?.colno,
+      },
+    });
+  } catch {
+    /* noop */
+  }
+});
+
+window.addEventListener('unhandledrejection', (ev) => {
+  try {
+    const reason: any = (ev as any)?.reason;
+    logEvent({
+      level: 'error',
+      what: 'unhandledrejection',
+      where: window.location?.pathname,
+      details: {
+        message: reason?.message || String(reason),
+        reason,
+      },
+    });
+  } catch {
+    /* noop */
+  }
+});

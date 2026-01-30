@@ -62,7 +62,26 @@ export const buildModels = (sequelize: Sequelize, schema: SchemaSnapshot) => {
         autoIncrement: chosenAutoInc === c.name
       };
 
-      if (c.columnDefault !== null) attrs[c.name].defaultValue = c.columnDefault;
+      if (c.columnDefault !== null) {
+      const defRaw = String(c.columnDefault).trim();
+      const typeRaw = String(c.dataType || "").toLowerCase();
+
+      const isDateType =
+  	  typeRaw === "datetime" ||
+  	  typeRaw === "timestamp" ||
+  	  typeRaw === "date";
+
+      const isCurrentTs = defRaw.toUpperCase().includes("CURRENT_TIMESTAMP");
+
+      // ✅ MySQL CURRENT_TIMESTAMP no es una fecha literal: es una expresión SQL.
+      // Si lo dejamos como string, Sequelize lo parsea y termina en "Invalid date".
+      if (isDateType && isCurrentTs) {
+      attrs[c.name].defaultValue = Sequelize.literal("CURRENT_TIMESTAMP");
+      } else {
+     attrs[c.name].defaultValue = c.columnDefault;
+       }
+     }
+
     }
 
     const m = sequelize.define(table.name, attrs, {
