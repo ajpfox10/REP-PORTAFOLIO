@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
 import { ToastProvider } from './toast';
+import { ErrorBoundary } from './ErrorBoundary';
 import { GatePage } from '../pages/GatePage';
 import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
@@ -9,7 +10,7 @@ import { DocumentsPage } from '../pages/DocumentsPage';
 import { TablesPage } from '../pages/TablesPage';
 import { TableViewPage } from '../pages/TableViewPage';
 import { InfoPage } from '../pages/InfoPage';
-import {GestionPage}  from "../pages/GestionPage";
+import { GestionPage } from '../pages/GestionPage'; 
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -23,7 +24,8 @@ export function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <Routes>
+        <ErrorBoundary>
+          <Routes>
           <Route path="/gate" element={<GatePage />} />
           <Route path="/login" element={<LoginPage />} />
 
@@ -75,7 +77,8 @@ export function App() {
             }
           />
 
-        </Routes>
+          </Routes>
+        </ErrorBoundary>
       </AuthProvider>
     </ToastProvider>
   );

@@ -13,6 +13,23 @@
 
 * { box-sizing: border-box; }
 
+/*
+  Anti scroll horizontal (global)
+  ---------------------------------------------------------------------------
+  Queremos que:
+  - La página NO cree scroll horizontal.
+  - Si algo necesita scroll (ej: tablas grandes), que sea dentro de su wrapper.
+*/
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Root de React también sin overflow horizontal */
+#root {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background:

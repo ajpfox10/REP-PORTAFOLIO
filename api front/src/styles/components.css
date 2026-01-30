@@ -9,6 +9,11 @@
   display: flex;
   gap: 16px;
   align-items: center;
+  /*
+    Responsive: por defecto permitimos wrap.
+    Evita que topbar/botones/textos largos generen scroll horizontal.
+  */
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -208,3 +213,21 @@
 
 .toast.ok { border-color: rgba(16, 185, 129, 0.4); }
 .toast.err { border-color: rgba(239, 68, 68, 0.4); }
+
+/* ErrorBoundary (fallback de pantalla) */
+.p5-eb {
+  padding: 14px;
+}
+
+.p5-eb-title {
+  margin-top: 0;
+}
+
+.p5-eb-actions {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.p5-eb-tip {
+  margin-top: 10px;
+}

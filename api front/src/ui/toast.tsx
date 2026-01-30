@@ -1,4 +1,15 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+
+// Permite mostrar toasts desde capas no-React (ej: api/http) sin acoplar rutas.
+// Se usa de forma defensiva: si no existe, no rompe nada.
+declare global {
+  interface Window {
+    __P5_TOAST__?: {
+      ok: (title: string, message?: string) => void;
+      error: (title: string, message?: string) => void;
+    };
+  }
+}
 
 type ToastKind = 'ok' | 'err';
 
@@ -35,6 +46,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }),
     [push]
   );
+
+  // Exponemos API global para errores fuera del árbol React.
+  useEffect(() => {
+    window.__P5_TOAST__ = api;
+    return () => {
+      // limpiamos al desmontar
+      if (window.__P5_TOAST__ === api) delete window.__P5_TOAST__;
+    };
+  }, [api]);
 
   return (
     <ToastCtx.Provider value={api}>

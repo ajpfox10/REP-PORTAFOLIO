@@ -24,6 +24,17 @@ function isAuthEndpoint(path: string) {
   return path.startsWith('/auth/login') || path.startsWith('/auth/refresh') || path.startsWith('/auth/logout');
 }
 
+function notifyAuthExpired(msg: string) {
+  try {
+    // Toast opcional (si el provider está montado)
+    window.__P5_TOAST__?.error('Sesión expirada', msg);
+    // Evento global para que el AuthProvider u otros listeners puedan reaccionar.
+    window.dispatchEvent(new CustomEvent('p5:auth_expired', { detail: { message: msg } }));
+  } catch {
+    /* noop */
+  }
+}
+
 function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
   const m = document.cookie.match(
@@ -193,6 +204,7 @@ export async function apiFetch<T = any>(path: string, init: RequestInit = {}): P
       const body = await parseJsonSafe(res);
       const raw = body?.error?.message ?? body?.error ?? body?.message ?? 'Sesión expirada';
       logEvent({ level: 'warn', what: 'auth_401', where: `apiFetch:${path}`, status: 401, details: body });
+      notifyAuthExpired(errorToString(raw));
       throw { message: errorToString(raw), status: 401, details: body } as ApiError;
     }
 
@@ -274,6 +286,7 @@ export async function apiFetchBlob(path: string, init: RequestInit = {}): Promis
     if (res.status === 401) {
       clearSession();
       logEvent({ level: 'warn', what: 'auth_401', where: `apiFetchBlob:${path}`, status: 401 });
+      notifyAuthExpired('Sesión expirada');
       throw { message: "Sesión expirada", status: 401 } as ApiError;
     }
 
@@ -294,4 +307,48 @@ export async function apiFetchBlob(path: string, init: RequestInit = {}): Promis
     }
     throw err;
   }
+}
+
+// Blob + metadata: útil para visor de documentos (PDF/IMG/TXT) sin tocar endpoints.
+export async function apiFetchBlobWithMeta(path: string, init: RequestInit = {}): Promise<{ blob: Blob; contentType: string; filename: string | null }> {
+  await loadRuntimeConfig();
+
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('Accept')) headers.set('Accept', '*/*');
+
+  const s = loadSession();
+  if (s?.accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${s.accessToken}`);
+  }
+
+  let res = await fetch(joinUrl(path), { ...init, headers, credentials: 'include', signal: init.signal });
+  if (res.status === 401 && !isAuthEndpoint(path)) {
+    try {
+      await refreshTokensIfPossible();
+      const s2 = loadSession();
+      if (s2?.accessToken) headers.set('Authorization', `Bearer ${s2.accessToken}`);
+      res = await fetch(joinUrl(path), { ...init, headers, credentials: 'include', signal: init.signal });
+    } catch {
+      clearSession();
+    }
+  }
+
+  if (res.status === 401) {
+    clearSession();
+    notifyAuthExpired('Sesión expirada');
+    throw { message: 'Sesión expirada', status: 401 } as ApiError;
+  }
+
+  if (!res.ok) {
+    const body = await parseJsonSafe(res);
+    const raw = body?.error?.message ?? body?.error ?? body?.message ?? `Error ${res.status}`;
+    throw { message: errorToString(raw), status: res.status, details: body } as ApiError;
+  }
+
+  const contentType = res.headers.get('content-type') || 'application/octet-stream';
+  const cd = res.headers.get('content-disposition') || '';
+  const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+  const filename = m ? decodeURIComponent(m[1] || m[2] || '') : null;
+  const blob = await res.blob();
+  return { blob, contentType, filename };
 }

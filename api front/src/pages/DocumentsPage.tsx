@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from '../components/Layout';
-import { apiFetch, apiFetchBlob } from '../api/http';
+import { apiFetch, apiFetchBlobWithMeta } from '../api/http';
 import { useToast } from '../ui/toast';
 
 // 🎨 CSS de esta ruta (NO global): /src/pages/styles/DocumentsPage.css
@@ -23,7 +23,8 @@ export function DocumentsPage() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<DocRow[]>([]);
   const [selected, setSelected] = useState<DocRow | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileMeta, setFileMeta] = useState<{ contentType: string; filename: string | null } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -46,25 +47,28 @@ export function DocumentsPage() {
 
   useEffect(() => {
     let alive = true;
-    async function loadPdf() {
+    async function loadFile() {
       if (!selected) {
-        setPdfUrl(null);
+        setFileUrl(null);
+        setFileMeta(null);
         return;
       }
       try {
-        const blob = await apiFetchBlob(selected.fileUrl);
+        const { blob, contentType, filename } = await apiFetchBlobWithMeta(selected.fileUrl);
         const url = URL.createObjectURL(blob);
         if (!alive) return;
-        setPdfUrl((prev) => {
+        setFileMeta({ contentType, filename });
+        setFileUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return url;
         });
       } catch (e: any) {
         toast.error('No se pudo abrir el archivo', e?.message || 'Error');
-        setPdfUrl(null);
+        setFileUrl(null);
+        setFileMeta(null);
       }
     }
-    loadPdf();
+    loadFile();
     return () => {
       alive = false;
     };
@@ -121,21 +125,60 @@ export function DocumentsPage() {
               <div className="h1 docs-viewer-meta">{meta || 'Visor'}</div>
               {selected?.descripcion ? <div className="muted docs-viewer-desc">{selected.descripcion}</div> : null}
             </div>
-            {pdfUrl ? (
+            {fileUrl ? (
               <div className="row">
-                <a className="btn" href={pdfUrl} download>Descargar</a>
-                <button className="btn" type="button" onClick={() => window.open(pdfUrl, '_blank')}>Abrir</button>
+                <a className="btn" href={fileUrl} download={fileMeta?.filename || undefined}>Descargar</a>
+                <button className="btn" type="button" onClick={() => window.open(fileUrl, '_blank')}>Abrir</button>
               </div>
             ) : null}
           </div>
 
-          {pdfUrl ? (
-            <iframe title="pdf" src={pdfUrl} className="docs-iframe" />
+          {fileUrl ? (
+            <DocumentPreview url={fileUrl} meta={fileMeta} />
           ) : (
             <div className="muted">Seleccione un documento para ver el archivo.</div>
           )}
         </div>
       </div>
     </Layout>
+  );
+}
+
+function DocumentPreview({ url, meta }: { url: string; meta: { contentType: string; filename: string | null } | null }) {
+  const ct = (meta?.contentType || '').toLowerCase();
+  const name = (meta?.filename || '').toLowerCase();
+
+  // PDF
+  if (ct.includes('pdf') || name.endsWith('.pdf')) {
+    return <iframe title="pdf" src={url} className="docs-iframe" />;
+  }
+
+  // Imágenes
+  if (ct.startsWith('image/') || name.match(/\.(png|jpe?g|webp|gif)$/)) {
+    return (
+      <div className="docs-imgwrap">
+        <img className="docs-img" src={url} alt={meta?.filename || 'archivo'} />
+      </div>
+    );
+  }
+
+  // Texto
+  if (ct.startsWith('text/') || name.match(/\.(txt|csv|log)$/)) {
+    return (
+      <div className="docs-generic">
+        <div className="badge">Vista previa limitada</div>
+        <iframe title="text" src={url} className="docs-iframe" />
+      </div>
+    );
+  }
+
+  // Word/Excel/otros: mostramos aviso y dejamos descarga
+  return (
+    <div className="docs-generic">
+      <div className="badge">Sin visor embebido</div>
+      <p className="muted docs-generic-text">
+        Este tipo de archivo (por ejemplo Word/Excel) se descarga y se abre con tu aplicación.
+      </p>
+    </div>
   );
 }
