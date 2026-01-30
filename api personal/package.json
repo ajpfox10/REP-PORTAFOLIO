@@ -22,12 +22,10 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "-": "^0.0.1",
     "@types/compression": "^1.8.1",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
-    "D": "^1.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-openapi-validator": "^5.6.0",

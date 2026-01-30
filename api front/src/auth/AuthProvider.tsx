@@ -44,6 +44,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let alive = true;
 
+    // Listener global: cuando api/http detecta 401 final, avisa y acá bajamos sesión.
+    const onExpired = (ev: any) => {
+      const msg = ev?.detail?.message || 'Sesión expirada';
+      logEvent({ level: 'warn', what: 'auth_expired_event', where: 'AuthProvider.listener', details: { msg } });
+      clearSession();
+      if (alive) setSession(null);
+    };
+    window.addEventListener('p5:auth_expired', onExpired as any);
+
     (async () => {
       try {
         const s = loadSession();
@@ -98,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       alive = false;
+      window.removeEventListener('p5:auth_expired', onExpired as any);
     };
   }, []);
 

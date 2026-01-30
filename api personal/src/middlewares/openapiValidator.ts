@@ -27,16 +27,19 @@ function resolveOavMiddleware(): (opts: any) => RequestHandler[] {
 export function openapiValidator(apiSpecPath: string): RequestHandler {
   const middlewareFactory = resolveOavMiddleware();
 
-  // Ignoramos system routes para que JAMÁS se rompan por OpenAPI
+    // Ignoramos system routes para que JAMÁS se rompan por OpenAPI
   const ignore = (path: string) => {
     return (
       path === "/health" ||
       path === "/ready" ||
+      path === "/api/v1/health" ||
+      path === "/api/v1/ready" ||
       path === "/version" ||
       path === "/diag" ||
       path.startsWith("/metrics")
     );
   };
+
 
   const stack = middlewareFactory({
     apiSpec: apiSpecPath,

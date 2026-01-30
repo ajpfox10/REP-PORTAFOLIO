@@ -286,7 +286,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_agentes"
+              $ref: "#/components/schemas/Table_agentes_Create"
       responses:
         "201":
           description: Created
@@ -395,7 +395,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_agentes_servicios"
+              $ref: "#/components/schemas/Table_agentes_servicios_Create"
       responses:
         "201":
           description: Created
@@ -558,7 +558,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_api_keys"
+              $ref: "#/components/schemas/Table_api_keys_Create"
       responses:
         "201":
           description: Created
@@ -667,7 +667,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_audit_log"
+              $ref: "#/components/schemas/Table_audit_log_Create"
       responses:
         "201":
           description: Created
@@ -776,7 +776,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_auth_login_guard"
+              $ref: "#/components/schemas/Table_auth_login_guard_Create"
       responses:
         "201":
           description: Created
@@ -885,7 +885,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_bonificaciones"
+              $ref: "#/components/schemas/Table_bonificaciones_Create"
       responses:
         "201":
           description: Created
@@ -994,7 +994,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_categoria"
+              $ref: "#/components/schemas/Table_categoria_Create"
       responses:
         "201":
           description: Created
@@ -1103,7 +1103,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_cc"
+              $ref: "#/components/schemas/Table_cc_Create"
       responses:
         "201":
           description: Created
@@ -1212,7 +1212,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ccoodegdeba"
+              $ref: "#/components/schemas/Table_ccoodegdeba_Create"
       responses:
         "201":
           description: Created
@@ -1321,7 +1321,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_citaciones"
+              $ref: "#/components/schemas/Table_citaciones_Create"
       responses:
         "201":
           description: Created
@@ -1430,7 +1430,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_codigoa"
+              $ref: "#/components/schemas/Table_codigoa_Create"
       responses:
         "201":
           description: Created
@@ -1539,7 +1539,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_consultas"
+              $ref: "#/components/schemas/Table_consultas_Create"
       responses:
         "201":
           description: Created
@@ -1702,7 +1702,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_disiplina"
+              $ref: "#/components/schemas/Table_disiplina_Create"
       responses:
         "201":
           description: Created
@@ -1811,7 +1811,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_dominios"
+              $ref: "#/components/schemas/Table_dominios_Create"
       responses:
         "201":
           description: Created
@@ -1920,7 +1920,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_especialidaddesmedicas"
+              $ref: "#/components/schemas/Table_especialidaddesmedicas_Create"
       responses:
         "201":
           description: Created
@@ -2029,7 +2029,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_eventos"
+              $ref: "#/components/schemas/Table_eventos_Create"
       responses:
         "201":
           description: Created
@@ -2138,7 +2138,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_expedientes"
+              $ref: "#/components/schemas/Table_expedientes_Create"
       responses:
         "201":
           description: Created
@@ -2247,7 +2247,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_funciones"
+              $ref: "#/components/schemas/Table_funciones_Create"
       responses:
         "201":
           description: Created
@@ -2356,7 +2356,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_idempotency_keys"
+              $ref: "#/components/schemas/Table_idempotency_keys_Create"
       responses:
         "201":
           description: Created
@@ -2465,7 +2465,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_inconvenientesagentes"
+              $ref: "#/components/schemas/Table_inconvenientesagentes_Create"
       responses:
         "201":
           description: Created
@@ -2574,7 +2574,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_jefaturas"
+              $ref: "#/components/schemas/Table_jefaturas_Create"
       responses:
         "201":
           description: Created
@@ -2683,7 +2683,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_jefedeptos"
+              $ref: "#/components/schemas/Table_jefedeptos_Create"
       responses:
         "201":
           description: Created
@@ -2792,7 +2792,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ley"
+              $ref: "#/components/schemas/Table_ley_Create"
       responses:
         "201":
           description: Created
@@ -2901,7 +2901,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_localidades"
+              $ref: "#/components/schemas/Table_localidades_Create"
       responses:
         "201":
           description: Created
@@ -3010,7 +3010,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ministerios"
+              $ref: "#/components/schemas/Table_ministerios_Create"
       responses:
         "201":
           description: Created
@@ -3119,7 +3119,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_nomenclador"
+              $ref: "#/components/schemas/Table_nomenclador_Create"
       responses:
         "201":
           description: Created
@@ -3228,7 +3228,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ocupacion"
+              $ref: "#/components/schemas/Table_ocupacion_Create"
       responses:
         "201":
           description: Created
@@ -3337,7 +3337,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ordenesdetrabajo"
+              $ref: "#/components/schemas/Table_ordenesdetrabajo_Create"
       responses:
         "201":
           description: Created
@@ -3446,7 +3446,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_pedidos"
+              $ref: "#/components/schemas/Table_pedidos_Create"
       responses:
         "201":
           description: Created
@@ -3609,7 +3609,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_permisos"
+              $ref: "#/components/schemas/Table_permisos_Create"
       responses:
         "201":
           description: Created
@@ -3718,7 +3718,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_personal"
+              $ref: "#/components/schemas/Table_personal_Create"
       responses:
         "201":
           description: Created
@@ -3827,7 +3827,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_planta"
+              $ref: "#/components/schemas/Table_planta_Create"
       responses:
         "201":
           description: Created
@@ -3936,7 +3936,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_refresh_tokens"
+              $ref: "#/components/schemas/Table_refresh_tokens_Create"
       responses:
         "201":
           description: Created
@@ -4045,7 +4045,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_regimenhorario"
+              $ref: "#/components/schemas/Table_regimenhorario_Create"
       responses:
         "201":
           description: Created
@@ -4154,7 +4154,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_reparticiones"
+              $ref: "#/components/schemas/Table_reparticiones_Create"
       responses:
         "201":
           description: Created
@@ -4263,7 +4263,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_resoluciones"
+              $ref: "#/components/schemas/Table_resoluciones_Create"
       responses:
         "201":
           description: Created
@@ -4372,7 +4372,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_roles"
+              $ref: "#/components/schemas/Table_roles_Create"
       responses:
         "201":
           description: Created
@@ -4481,7 +4481,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_roles_permisos"
+              $ref: "#/components/schemas/Table_roles_permisos_Create"
       responses:
         "201":
           description: Created
@@ -4590,7 +4590,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_schema_migrations"
+              $ref: "#/components/schemas/Table_schema_migrations_Create"
       responses:
         "201":
           description: Created
@@ -4699,7 +4699,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_security_bans"
+              $ref: "#/components/schemas/Table_security_bans_Create"
       responses:
         "201":
           description: Created
@@ -4808,7 +4808,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_sequelizemeta"
+              $ref: "#/components/schemas/Table_sequelizemeta_Create"
       responses:
         "201":
           description: Created
@@ -4917,7 +4917,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_sexo"
+              $ref: "#/components/schemas/Table_sexo_Create"
       responses:
         "201":
           description: Created
@@ -5026,7 +5026,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_tareas"
+              $ref: "#/components/schemas/Table_tareas_Create"
       responses:
         "201":
           description: Created
@@ -5135,7 +5135,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_tareasadquiridias"
+              $ref: "#/components/schemas/Table_tareasadquiridias_Create"
       responses:
         "201":
           description: Created
@@ -5244,7 +5244,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_tblarchivos"
+              $ref: "#/components/schemas/Table_tblarchivos_Create"
       responses:
         "201":
           description: Created
@@ -5353,7 +5353,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_tipodecuidado"
+              $ref: "#/components/schemas/Table_tipodecuidado_Create"
       responses:
         "201":
           description: Created
@@ -5462,7 +5462,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_tipoderesolucion"
+              $ref: "#/components/schemas/Table_tipoderesolucion_Create"
       responses:
         "201":
           description: Created
@@ -5571,7 +5571,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_usuarios"
+              $ref: "#/components/schemas/Table_usuarios_Create"
       responses:
         "201":
           description: Created
@@ -5680,7 +5680,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_usuarios_dominios"
+              $ref: "#/components/schemas/Table_usuarios_dominios_Create"
       responses:
         "201":
           description: Created
@@ -5789,7 +5789,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_usuarios_roles"
+              $ref: "#/components/schemas/Table_usuarios_roles_Create"
       responses:
         "201":
           description: Created
@@ -5868,54 +5868,115 @@ components:
         fecha_ingreso:
           type: string
           format: date-time
+          nullable: true
         fecha_baja:
           type: string
           format: date-time
+          nullable: true
         estado_empleo:
           type: string
+          nullable: true
         ley_id:
           type: number
+          nullable: true
         ley_nombre:
           type: string
+          nullable: true
         servicio_id:
           type: number
+          nullable: true
         dependencia_id:
           type: number
+          nullable: true
         dependencia_nombre:
           type: string
+          nullable: true
         servicio_nombre:
           type: string
+          nullable: true
         jefe_nombre:
           type: string
+          nullable: true
         fecha_desde:
           type: string
           format: date-time
+          nullable: true
         fecha_hasta:
           type: string
           format: date-time
+          nullable: true
         motivo:
           type: string
+          nullable: true
         servicio_observaciones:
           type: string
+          nullable: true
       required:
         - dni
         - apellido
         - nombre
-        - agente_id
-        - fecha_ingreso
-        - fecha_baja
-        - estado_empleo
-        - ley_id
-        - ley_nombre
-        - servicio_id
-        - dependencia_id
-        - dependencia_nombre
-        - servicio_nombre
-        - jefe_nombre
-        - fecha_desde
-        - fecha_hasta
-        - motivo
-        - servicio_observaciones
+    Table_agentehistorial_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        dependencia_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        servicio_observaciones:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
     Table_agentes:
       type: object
       additionalProperties: false
@@ -5926,60 +5987,121 @@ components:
           type: number
         planta_id:
           type: number
+          nullable: true
         categoria_id:
           type: number
+          nullable: true
         ocupacion_id:
           type: number
+          nullable: true
         regimen_horario_id:
           type: number
+          nullable: true
         ley_id:
           type: number
+          nullable: true
         sector_id:
           type: number
+          nullable: true
         jefatura_id:
           type: number
+          nullable: true
         fecha_ingreso:
           type: string
           format: date-time
+          nullable: true
         fecha_baja:
           type: string
           format: date-time
+          nullable: true
         estado_empleo:
           type: string
+          nullable: true
         salario_mensual:
           type: number
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - planta_id
-        - categoria_id
-        - ocupacion_id
-        - regimen_horario_id
-        - ley_id
-        - sector_id
-        - jefatura_id
-        - fecha_ingreso
-        - fecha_baja
-        - estado_empleo
-        - salario_mensual
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_agentes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        planta_id:
+          type: number
+          nullable: true
+        categoria_id:
+          type: number
+          nullable: true
+        ocupacion_id:
+          type: number
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        jefatura_id:
+          type: number
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        salario_mensual:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_agentes_servicios:
       type: object
       additionalProperties: false
@@ -5990,48 +6112,97 @@ components:
           type: number
         dependencia_id:
           type: number
+          nullable: true
         servicio_nombre:
           type: string
+          nullable: true
         jefe_nombre:
           type: string
+          nullable: true
         fecha_desde:
           type: string
           format: date-time
+          nullable: true
         fecha_hasta:
           type: string
           format: date-time
+          nullable: true
         motivo:
           type: string
+          nullable: true
         observaciones:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - dependencia_id
-        - servicio_nombre
-        - jefe_nombre
-        - fecha_desde
-        - fecha_hasta
-        - motivo
-        - observaciones
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_agentes_servicios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        dependencia_id:
+          type: number
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_agentexdni1:
       type: object
       additionalProperties: false
@@ -6047,74 +6218,153 @@ components:
         fecha_nacimiento:
           type: string
           format: date-time
+          nullable: true
         cuil:
           type: string
+          nullable: true
         nacionalidad:
           type: string
+          nullable: true
         telefono:
           type: string
+          nullable: true
         email:
           type: string
+          nullable: true
         domicilio:
           type: string
+          nullable: true
         personal_observaciones:
           type: string
+          nullable: true
         sexo_id:
           type: number
+          nullable: true
         sexo_nombre:
           type: string
+          nullable: true
         localidad_id:
           type: number
+          nullable: true
         localidad_nombre:
           type: string
+          nullable: true
         agente_id:
           type: number
         ley_id:
           type: number
+          nullable: true
         ley_nombre:
           type: string
+          nullable: true
         servicio_id:
           type: number
+          nullable: true
         dependencia_id:
           type: number
+          nullable: true
         reparticion_nombre:
           type: string
+          nullable: true
         servicio_nombre:
           type: string
+          nullable: true
         jefe_nombre:
           type: string
+          nullable: true
         fecha_desde:
           type: string
           format: date-time
+          nullable: true
         fecha_hasta:
           type: string
           format: date-time
+          nullable: true
       required:
-        - id
         - dni
         - apellido
         - nombre
-        - fecha_nacimiento
-        - cuil
-        - nacionalidad
-        - telefono
-        - email
-        - domicilio
-        - personal_observaciones
-        - sexo_id
-        - sexo_nombre
-        - localidad_id
-        - localidad_nombre
-        - agente_id
-        - ley_id
-        - ley_nombre
-        - servicio_id
-        - dependencia_id
-        - reparticion_nombre
-        - servicio_nombre
-        - jefe_nombre
-        - fecha_desde
-        - fecha_hasta
+    Table_agentexdni1_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        personal_observaciones:
+          type: string
+          nullable: true
+        sexo_id:
+          type: number
+          nullable: true
+        sexo_nombre:
+          type: string
+          nullable: true
+        localidad_id:
+          type: number
+          nullable: true
+        localidad_nombre:
+          type: string
+          nullable: true
+        agente_id:
+          type: number
+        ley_id:
+          type: number
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        reparticion_nombre:
+          type: string
+          nullable: true
+        servicio_nombre:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
     Table_api_keys:
       type: object
       additionalProperties: false
@@ -6127,19 +6377,41 @@ components:
           type: string
         role_id:
           type: number
+          nullable: true
         revoked_at:
           type: string
           format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
       required:
         - id
         - name
         - key_hash
-        - role_id
-        - revoked_at
-        - created_at
+    Table_api_keys_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        key_hash:
+          type: string
+        role_id:
+          type: number
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - name
+        - key_hash
     Table_audit_log:
       type: object
       additionalProperties: false
@@ -6148,67 +6420,133 @@ components:
           type: number
         usuario_id:
           type: number
+          nullable: true
         action:
           type: string
         table_name:
           type: string
+          nullable: true
         record_pk:
           type: string
+          nullable: true
         route:
           type: string
+          nullable: true
         ip:
           type: string
+          nullable: true
         user_agent:
           type: string
+          nullable: true
         before_json:
           type: string
+          nullable: true
         after_json:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         request_id:
           type: string
+          nullable: true
         actor_type:
           type: string
+          nullable: true
         actor_id:
           type: number
+          nullable: true
         method:
           type: string
+          nullable: true
         status_code:
           type: number
+          nullable: true
         duration_ms:
           type: number
+          nullable: true
         entity_table:
           type: string
+          nullable: true
         entity_pk:
           type: string
+          nullable: true
         request_json:
           type: string
+          nullable: true
         response_json:
           type: string
+          nullable: true
       required:
         - id
-        - usuario_id
         - action
-        - table_name
-        - record_pk
-        - route
-        - ip
-        - user_agent
-        - before_json
-        - after_json
-        - created_at
-        - request_id
-        - actor_type
-        - actor_id
-        - method
-        - status_code
-        - duration_ms
-        - entity_table
-        - entity_pk
-        - request_json
-        - response_json
+    Table_audit_log_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        usuario_id:
+          type: number
+          nullable: true
+        action:
+          type: string
+        table_name:
+          type: string
+          nullable: true
+        record_pk:
+          type: string
+          nullable: true
+        route:
+          type: string
+          nullable: true
+        ip:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        before_json:
+          type: string
+          nullable: true
+        after_json:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        actor_type:
+          type: string
+          nullable: true
+        actor_id:
+          type: number
+          nullable: true
+        method:
+          type: string
+          nullable: true
+        status_code:
+          type: number
+          nullable: true
+        duration_ms:
+          type: number
+          nullable: true
+        entity_table:
+          type: string
+          nullable: true
+        entity_pk:
+          type: string
+          nullable: true
+        request_json:
+          type: string
+          nullable: true
+        response_json:
+          type: string
+          nullable: true
+      required:
+        - action
     Table_auth_login_guard:
       type: object
       additionalProperties: false
@@ -6224,16 +6562,36 @@ components:
         locked_until:
           type: string
           format: date-time
+          nullable: true
         last_attempt_at:
           type: string
           format: date-time
+          nullable: true
       required:
         - id
         - ip
         - identifier
-        - attempts
-        - locked_until
-        - last_attempt_at
+    Table_auth_login_guard_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        ip:
+          type: string
+        identifier:
+          type: string
+        attempts:
+          type: number
+        locked_until:
+          type: string
+          format: date-time
+          nullable: true
+        last_attempt_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - ip
+        - identifier
     Table_bonificaciones:
       type: object
       additionalProperties: false
@@ -6244,33 +6602,67 @@ components:
           type: number
         decreto_numero:
           type: string
+          nullable: true
         motivo:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         anio:
           type: number
+          nullable: true
         observaciones:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - decreto_numero
-        - motivo
-        - fecha
-        - anio
-        - observaciones
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_bonificaciones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        decreto_numero:
+          type: string
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        anio:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_categoria:
       type: object
       additionalProperties: false
@@ -6279,19 +6671,36 @@ components:
           type: number
         CATEGORIA:
           type: number
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - ID
-        - CATEGORIA
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_categoria_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        CATEGORIA:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_cc:
       type: object
       additionalProperties: false
@@ -6302,32 +6711,65 @@ components:
           type: number
         observaciones:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - observaciones
-        - fecha
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_cc_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_ccoodegdeba:
       type: object
       additionalProperties: false
@@ -6336,34 +6778,66 @@ components:
           type: number
         nro_expediente:
           type: string
+          nullable: true
         caratula:
           type: string
+          nullable: true
         fecha_y_zura:
           type: string
           format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - nro_expediente
-        - caratula
-        - fecha_y_zura
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_ccoodegdeba_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        nro_expediente:
+          type: string
+          nullable: true
+        caratula:
+          type: string
+          nullable: true
+        fecha_y_zura:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_citaciones:
       type: object
       additionalProperties: false
@@ -6374,42 +6848,85 @@ components:
           type: number
         citado_por:
           type: string
+          nullable: true
         motivo:
           type: string
+          nullable: true
         citacion_activa:
           type: number
+          nullable: true
         fecha_citacion:
           type: string
           format: date-time
+          nullable: true
         cierre_citacion:
           type: string
           format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - citado_por
-        - motivo
-        - citacion_activa
-        - fecha_citacion
-        - cierre_citacion
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_citaciones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        citado_por:
+          type: string
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        citacion_activa:
+          type: number
+          nullable: true
+        fecha_citacion:
+          type: string
+          format: date-time
+          nullable: true
+        cierre_citacion:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_codigoa:
       type: object
       additionalProperties: false
@@ -6420,20 +6937,41 @@ components:
           type: string
         observacion:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - nu
         - codigo
-        - observacion
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_codigoa_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        observacion:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - codigo
     Table_consultas:
       type: object
       additionalProperties: false
@@ -6444,41 +6982,83 @@ components:
           type: number
         motivo_consulta:
           type: string
+          nullable: true
         explicacion:
           type: string
+          nullable: true
         atendido_por:
           type: string
+          nullable: true
         hora_atencion:
           type: string
           format: date-time
+          nullable: true
         impreso:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - motivo_consulta
-        - explicacion
-        - atendido_por
-        - hora_atencion
-        - impreso
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_consultas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        motivo_consulta:
+          type: string
+          nullable: true
+        explicacion:
+          type: string
+          nullable: true
+        atendido_por:
+          type: string
+          nullable: true
+        hora_atencion:
+          type: string
+          format: date-time
+          nullable: true
+        impreso:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_consultaspordni:
       type: object
       additionalProperties: false
@@ -6493,42 +7073,88 @@ components:
           type: string
         agente_id:
           type: number
+          nullable: true
         estado_empleo:
           type: string
+          nullable: true
         fecha_ingreso:
           type: string
           format: date-time
+          nullable: true
         fecha_baja:
           type: string
           format: date-time
+          nullable: true
         consulta_id:
           type: number
         hora_atencion:
           type: string
           format: date-time
+          nullable: true
         atendido_por:
           type: string
+          nullable: true
         motivo_consulta:
           type: string
+          nullable: true
         explicacion:
           type: string
+          nullable: true
         impreso:
           type: string
+          nullable: true
       required:
-        - id
         - dni
         - apellido
         - nombre
-        - agente_id
-        - estado_empleo
-        - fecha_ingreso
-        - fecha_baja
-        - consulta_id
-        - hora_atencion
-        - atendido_por
-        - motivo_consulta
-        - explicacion
-        - impreso
+    Table_consultaspordni_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        agente_id:
+          type: number
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        consulta_id:
+          type: number
+        hora_atencion:
+          type: string
+          format: date-time
+          nullable: true
+        atendido_por:
+          type: string
+          nullable: true
+        motivo_consulta:
+          type: string
+          nullable: true
+        explicacion:
+          type: string
+          nullable: true
+        impreso:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
     Table_disiplina:
       type: object
       additionalProperties: false
@@ -6540,16 +7166,34 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - disciplina
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_disiplina_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        disciplina:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - disciplina
     Table_dominios:
       type: object
       additionalProperties: false
@@ -6560,20 +7204,41 @@ components:
           type: string
         descripcion:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - nombre
-        - descripcion
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_dominios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - nombre
     Table_especialidaddesmedicas:
       type: object
       additionalProperties: false
@@ -6582,22 +7247,42 @@ components:
           type: number
         especialidad:
           type: string
+          nullable: true
         profesion_referencia:
           type: number
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - especialidad
-        - profesion_referencia
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_especialidaddesmedicas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        especialidad:
+          type: string
+          nullable: true
+        profesion_referencia:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_eventos:
       type: object
       additionalProperties: false
@@ -6613,32 +7298,68 @@ components:
         fecha_inicio:
           type: string
           format: date-time
+          nullable: true
         fecha_fin:
           type: string
           format: date-time
+          nullable: true
         titulo:
           type: string
+          nullable: true
         descripcion:
           type: string
+          nullable: true
         metadata:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
         created_by_api_key_id:
           type: number
+          nullable: true
       required:
         - id
         - dni
         - tipo
         - estado
-        - fecha_inicio
-        - fecha_fin
-        - titulo
-        - descripcion
-        - metadata
-        - created_at
-        - created_by_api_key_id
+    Table_eventos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        tipo:
+          type: string
+        estado:
+          type: string
+        fecha_inicio:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date-time
+          nullable: true
+        titulo:
+          type: string
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        metadata:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by_api_key_id:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - tipo
+        - estado
     Table_expedientes:
       type: object
       additionalProperties: false
@@ -6649,38 +7370,77 @@ components:
           type: number
         numero:
           type: string
+          nullable: true
         caratula:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         estado:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - numero
-        - caratula
-        - fecha
-        - estado
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_expedientes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        numero:
+          type: string
+          nullable: true
+        caratula:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_funciones:
       type: object
       additionalProperties: false
@@ -6689,30 +7449,58 @@ components:
           type: number
         funcion:
           type: string
+          nullable: true
         descripcion:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - funcion
-        - descripcion
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_funciones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        funcion:
+          type: string
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_idempotency_keys:
       type: object
       additionalProperties: false
@@ -6721,6 +7509,7 @@ components:
           type: number
         usuario_id:
           type: number
+          nullable: true
         route:
           type: string
         idem_key:
@@ -6735,15 +7524,42 @@ components:
         created_at:
           type: string
           format: date-time
+          nullable: true
       required:
         - id
-        - usuario_id
         - route
         - idem_key
         - request_hash
         - response_json
         - expires_at
-        - created_at
+    Table_idempotency_keys_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        usuario_id:
+          type: number
+          nullable: true
+        route:
+          type: string
+        idem_key:
+          type: string
+        request_hash:
+          type: string
+        response_json:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - route
+        - idem_key
+        - request_hash
+        - response_json
+        - expires_at
     Table_inconvenientesagentes:
       type: object
       additionalProperties: false
@@ -6754,43 +7570,87 @@ components:
           type: number
         motivo:
           type: string
+          nullable: true
         observaciones:
           type: string
+          nullable: true
         fecha_incidente:
           type: string
           format: date-time
+          nullable: true
         fecha_desde:
           type: string
           format: date-time
+          nullable: true
         fecha_hasta:
           type: string
           format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - motivo
-        - observaciones
-        - fecha_incidente
-        - fecha_desde
-        - fecha_hasta
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_inconvenientesagentes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_incidente:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_jefaturas:
       type: object
       additionalProperties: false
@@ -6799,22 +7659,42 @@ components:
           type: number
         sector:
           type: string
+          nullable: true
         jefe:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - sector
-        - jefe
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_jefaturas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        sector:
+          type: string
+          nullable: true
+        jefe:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_jefedeptos:
       type: object
       additionalProperties: false
@@ -6823,25 +7703,48 @@ components:
           type: number
         jefedepto:
           type: string
+          nullable: true
         depto:
           type: string
+          nullable: true
         oficinacentral:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - jefedepto
-        - depto
-        - oficinacentral
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_jefedeptos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        jefedepto:
+          type: string
+          nullable: true
+        depto:
+          type: string
+          nullable: true
+        oficinacentral:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_ley:
       type: object
       additionalProperties: false
@@ -6850,25 +7753,48 @@ components:
           type: number
         ley_nombre:
           type: string
+          nullable: true
         codigoexp:
           type: number
+          nullable: true
         leyactiva:
           type: number
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - ley_nombre
-        - codigoexp
-        - leyactiva
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_ley_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        ley_nombre:
+          type: string
+          nullable: true
+        codigoexp:
+          type: number
+          nullable: true
+        leyactiva:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_localidades:
       type: object
       additionalProperties: false
@@ -6877,34 +7803,66 @@ components:
           type: number
         provincia_nombre:
           type: string
+          nullable: true
         municipio_nombre:
           type: string
+          nullable: true
         localidad_nombre:
           type: string
+          nullable: true
         municipio_id:
           type: string
+          nullable: true
         provincia_id:
           type: string
+          nullable: true
         localidad_codigo:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - provincia_nombre
-        - municipio_nombre
-        - localidad_nombre
-        - municipio_id
-        - provincia_id
-        - localidad_codigo
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_localidades_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        provincia_nombre:
+          type: string
+          nullable: true
+        municipio_nombre:
+          type: string
+          nullable: true
+        localidad_nombre:
+          type: string
+          nullable: true
+        municipio_id:
+          type: string
+          nullable: true
+        provincia_id:
+          type: string
+          nullable: true
+        localidad_codigo:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_ministerios:
       type: object
       additionalProperties: false
@@ -6913,19 +7871,36 @@ components:
           type: number
         ministerio:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - ministerio
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_ministerios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        ministerio:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_nomenclador:
       type: object
       additionalProperties: false
@@ -6934,22 +7909,42 @@ components:
           type: number
         cargo:
           type: string
+          nullable: true
         tareas:
           type: number
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - cargo
-        - tareas
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_nomenclador_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        cargo:
+          type: string
+          nullable: true
+        tareas:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_ocupacion:
       type: object
       additionalProperties: false
@@ -6960,44 +7955,89 @@ components:
           type: string
         codigo:
           type: number
+          nullable: true
         regimen_horario_id:
           type: number
+          nullable: true
         es_insalubre:
           type: number
+          nullable: true
         especialidad_id:
           type: number
+          nullable: true
         ley_id:
           type: number
+          nullable: true
         agrupamiento:
           type: string
+          nullable: true
         grado:
           type: string
+          nullable: true
         asignacion:
           type: string
+          nullable: true
         activo:
           type: number
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - nombre_ocupacion
-        - codigo
-        - regimen_horario_id
-        - es_insalubre
-        - especialidad_id
-        - ley_id
-        - agrupamiento
-        - grado
-        - asignacion
-        - activo
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_ocupacion_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre_ocupacion:
+          type: string
+        codigo:
+          type: number
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        es_insalubre:
+          type: number
+          nullable: true
+        especialidad_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        grado:
+          type: string
+          nullable: true
+        asignacion:
+          type: string
+          nullable: true
+        activo:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - nombre_ocupacion
     Table_ordenesdetrabajo:
       type: object
       additionalProperties: false
@@ -7009,37 +8049,76 @@ components:
         fecha:
           type: string
           format: date-time
+          nullable: true
         requiere:
           type: string
+          nullable: true
         descripcion_tarea:
           type: string
+          nullable: true
         estado:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - fecha
-        - requiere
-        - descripcion_tarea
-        - estado
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_ordenesdetrabajo_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        requiere:
+          type: string
+          nullable: true
+        descripcion_tarea:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_pedidos:
       type: object
       additionalProperties: false
@@ -7050,38 +8129,77 @@ components:
           type: number
         pedido:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         lugar:
           type: string
+          nullable: true
         estado:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
-          type: number
+          type: string
+          nullable: true
         updated_by:
-          type: number
+          type: string
+          nullable: true
       required:
         - id
         - dni
-        - pedido
-        - fecha
-        - lugar
-        - estado
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_pedidos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        pedido:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+          nullable: true
+      required:
+        - dni
     Table_pedidospordni:
       type: object
       additionalProperties: false
@@ -7092,20 +8210,42 @@ components:
           type: number
         que_pidio:
           type: string
+          nullable: true
         cuando:
           type: string
           format: date-time
+          nullable: true
         donde:
           type: string
+          nullable: true
         estado:
           type: string
+          nullable: true
       required:
-        - id
         - dni
-        - que_pidio
-        - cuando
-        - donde
-        - estado
+    Table_pedidospordni_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        que_pidio:
+          type: string
+          nullable: true
+        cuando:
+          type: string
+          format: date-time
+          nullable: true
+        donde:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+      required:
+        - dni
     Table_permisos:
       type: object
       additionalProperties: false
@@ -7116,23 +8256,47 @@ components:
           type: string
         descripcion:
           type: string
+          nullable: true
         dominio_id:
           type: number
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - clave
-        - descripcion
-        - dominio_id
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_permisos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        clave:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        dominio_id:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - clave
     Table_personal:
       type: object
       additionalProperties: false
@@ -7146,53 +8310,113 @@ components:
         fecha_nacimiento:
           type: string
           format: date-time
+          nullable: true
         sexo_id:
           type: number
+          nullable: true
         telefono:
           type: string
+          nullable: true
         email:
           type: string
+          nullable: true
         domicilio:
           type: string
+          nullable: true
         localidad_id:
           type: number
+          nullable: true
         cuil:
           type: string
+          nullable: true
         nacionalidad:
           type: string
+          nullable: true
         observaciones:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - dni
         - apellido
         - nombre
-        - fecha_nacimiento
-        - sexo_id
-        - telefono
-        - email
-        - domicilio
-        - localidad_id
-        - cuil
-        - nacionalidad
-        - observaciones
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_personal_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        sexo_id:
+          type: number
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        localidad_id:
+          type: number
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
     Table_planta:
       type: object
       additionalProperties: false
@@ -7201,19 +8425,36 @@ components:
           type: number
         planta_nombre:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - planta_nombre
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_planta_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        planta_nombre:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_refresh_tokens:
       type: object
       additionalProperties: false
@@ -7230,25 +8471,57 @@ components:
         revoked_at:
           type: string
           format: date-time
+          nullable: true
         replaced_by:
           type: number
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         ip:
           type: string
+          nullable: true
         user_agent:
           type: string
+          nullable: true
       required:
         - id
         - usuario_id
         - token_hash
         - expires_at
-        - revoked_at
-        - replaced_by
-        - created_at
-        - ip
-        - user_agent
+    Table_refresh_tokens_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        usuario_id:
+          type: number
+        token_hash:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        replaced_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        ip:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+      required:
+        - usuario_id
+        - token_hash
+        - expires_at
     Table_regimenhorario:
       type: object
       additionalProperties: false
@@ -7257,19 +8530,36 @@ components:
           type: number
         regimen_horario:
           type: number
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - regimen_horario
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_regimenhorario_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        regimen_horario:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_reparticiones:
       type: object
       additionalProperties: false
@@ -7281,16 +8571,34 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - reparticion_nombre
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_reparticiones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        reparticion_nombre:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - reparticion_nombre
     Table_resoluciones:
       type: object
       additionalProperties: false
@@ -7301,38 +8609,77 @@ components:
           type: number
         motivo:
           type: string
+          nullable: true
         observaciones:
           type: string
+          nullable: true
         numero:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - motivo
-        - observaciones
-        - numero
-        - fecha
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_resoluciones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        numero:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_roles:
       type: object
       additionalProperties: false
@@ -7343,20 +8690,41 @@ components:
           type: string
         descripcion:
           type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - nombre
-        - descripcion
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_roles_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre:
+          type: string
+        descripcion:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - nombre
     Table_roles_permisos:
       type: object
       additionalProperties: false
@@ -7370,17 +8738,38 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - rol_id
         - permiso_id
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_roles_permisos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        rol_id:
+          type: number
+        permiso_id:
+          type: number
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - rol_id
+        - permiso_id
     Table_schema_migrations:
       type: object
       additionalProperties: false
@@ -7398,7 +8787,20 @@ components:
         - id
         - filename
         - checksum
-        - applied_at
+    Table_schema_migrations_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        filename:
+          type: string
+        checksum:
+          type: string
+        applied_at:
+          type: string
+          format: date-time
+      required:
+        - filename
+        - checksum
     Table_security_bans:
       type: object
       additionalProperties: false
@@ -7407,23 +8809,45 @@ components:
           type: number
         ip:
           type: string
+          nullable: true
         usuario_email:
           type: string
+          nullable: true
         reason:
           type: string
+          nullable: true
         banned_until:
           type: string
           format: date-time
         created_at:
           type: string
           format: date-time
+          nullable: true
       required:
         - id
-        - ip
-        - usuario_email
-        - reason
         - banned_until
-        - created_at
+    Table_security_bans_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        ip:
+          type: string
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        banned_until:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - banned_until
     Table_sequelizemeta:
       type: object
       additionalProperties: false
@@ -7433,15 +8857,33 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - name
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_sequelizemeta_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - name
     Table_sexo:
       type: object
       additionalProperties: false
@@ -7453,16 +8895,34 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - sexo_nombre
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_sexo_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        sexo_nombre:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - sexo_nombre
     Table_tareas:
       type: object
       additionalProperties: false
@@ -7471,40 +8931,78 @@ components:
           type: number
         nombre_tarea:
           type: string
+          nullable: true
         descripcion_tarea:
           type: string
+          nullable: true
         estado:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         asignado_a:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - nombre_tarea
-        - descripcion_tarea
-        - estado
-        - fecha
-        - asignado_a
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_tareas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre_tarea:
+          type: string
+          nullable: true
+        descripcion_tarea:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        asignado_a:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_tareasadquiridias:
       type: object
       additionalProperties: false
@@ -7513,37 +9011,72 @@ components:
           type: number
         tarea:
           type: string
+          nullable: true
         descripcion_tarea:
           type: string
+          nullable: true
         estado:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
-        - tarea
-        - descripcion_tarea
-        - estado
-        - fecha
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_tareasadquiridias_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tarea:
+          type: string
+          nullable: true
+        descripcion_tarea:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_tblarchivos:
       type: object
       additionalProperties: false
@@ -7554,50 +9087,101 @@ components:
           type: number
         ruta:
           type: string
+          nullable: true
         nombre:
           type: string
+          nullable: true
         numero:
           type: string
+          nullable: true
         tipo:
           type: string
+          nullable: true
         tamanio:
           type: string
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
         descripcion_archivo:
           type: string
+          nullable: true
         nombre_archivo_original:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - dni
-        - ruta
-        - nombre
-        - numero
-        - tipo
-        - tamanio
-        - fecha
-        - descripcion_archivo
-        - nombre_archivo_original
-        - created_at
-        - updated_at
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_tblarchivos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ruta:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        numero:
+          type: string
+          nullable: true
+        tipo:
+          type: string
+          nullable: true
+        tamanio:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        descripcion_archivo:
+          type: string
+          nullable: true
+        nombre_archivo_original:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
     Table_tipodecuidado:
       type: object
       additionalProperties: false
@@ -7609,16 +9193,34 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - cuidado_nombre
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_tipodecuidado_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        cuidado_nombre:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - cuidado_nombre
     Table_tipoderesolucion:
       type: object
       additionalProperties: false
@@ -7630,16 +9232,34 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - resolucion_nombre
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_tipoderesolucion_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        resolucion_nombre:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - resolucion_nombre
     Table_usuarios:
       type: object
       additionalProperties: false
@@ -7652,32 +9272,67 @@ components:
           type: string
         nombre:
           type: string
+          nullable: true
         estado:
           type: string
+          nullable: true
         creado_en:
           type: string
           format: date-time
+          nullable: true
         actualizado_en:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - email
         - password
-        - nombre
-        - estado
-        - creado_en
-        - actualizado_en
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_usuarios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        nombre:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+          nullable: true
+        actualizado_en:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - email
+        - password
     Table_usuarios_dominios:
       type: object
       additionalProperties: false
@@ -7691,17 +9346,38 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
         created_by:
           type: number
+          nullable: true
         updated_by:
           type: number
+          nullable: true
       required:
         - id
         - usuario_id
         - dominio_id
-        - deleted_at
-        - created_by
-        - updated_by
+    Table_usuarios_dominios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        usuario_id:
+          type: number
+        dominio_id:
+          type: number
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - usuario_id
+        - dominio_id
     Table_usuarios_roles:
       type: object
       additionalProperties: false
@@ -7715,15 +9391,34 @@ components:
         created_at:
           type: string
           format: date-time
+          nullable: true
         deleted_at:
           type: string
           format: date-time
+          nullable: true
       required:
         - id
         - usuario_id
         - rol_id
-        - created_at
-        - deleted_at
+    Table_usuarios_roles_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        usuario_id:
+          type: number
+        rol_id:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - usuario_id
+        - rol_id
   securitySchemes:
     bearerAuth:
       type: http

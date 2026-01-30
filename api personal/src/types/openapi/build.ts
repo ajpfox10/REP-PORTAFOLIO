@@ -25,7 +25,8 @@ type OpenApiDoc = {
 
 function mapColumnToSchema(col: ColumnInfo) {
   const t = (col as any).dataType || (col as any).type || "string";
-  const nullable = Boolean((col as any).allowNull);
+  const nullable = Boolean((col as any).isNullable);
+
 
   let schema: any = { type: "string" };
 
@@ -48,15 +49,24 @@ function tableSchemaName(table: TableInfo) {
   return `Table_${table.name}`;
 }
 
-function tableToComponentSchema(table: TableInfo) {
+function tableCreateSchemaName(table: TableInfo) {
+  return `Table_${table.name}_Create`;
+}
+
+function tableToComponentSchema(table: TableInfo, mode: "full" | "create" = "full") {
   const props: Record<string, any> = {};
   const required: string[] = [];
 
   for (const col of table.columns || []) {
+    const isAutoIncrement = Boolean((col as any).isAutoIncrement);
+
+    // Para CREATE: si es autoincrement (ej: id), NO lo incluimos ni como required ni como property
+    if (mode === "create" && isAutoIncrement) continue;
+
     props[col.name] = mapColumnToSchema(col);
 
-    const allowNull = Boolean((col as any).allowNull);
-    const hasDefault = (col as any).defaultValue !== undefined && (col as any).defaultValue !== null;
+    const allowNull = Boolean((col as any).isNullable);
+    const hasDefault = (col as any).columnDefault !== null && (col as any).columnDefault !== undefined;
 
     if (!allowNull && !hasDefault) required.push(col.name);
   }
@@ -70,6 +80,7 @@ function tableToComponentSchema(table: TableInfo) {
   if (required.length) out.required = required;
   return out;
 }
+
 
 function normalizeTables(snapshot: SchemaSnapshot): TableInfo[] {
   const tablesAny: any = (snapshot as any)?.tables ?? [];
@@ -266,7 +277,10 @@ export function buildOpenApiFromSchema(snapshot: SchemaSnapshot, opts: BuildOpen
     const isView = Boolean(opts.views && opts.views.has(table.name));
     const allowWrites = !Boolean(opts.readonly) && !isView;
     const name = tableSchemaName(table);
-    doc.components.schemas[name] = tableToComponentSchema(table);
+    const createName = tableCreateSchemaName(table);
+
+    doc.components.schemas[name] = tableToComponentSchema(table, "full");
+    doc.components.schemas[createName] = tableToComponentSchema(table, "create");
 
     const base = `/api/v1/${table.name}`;
 
@@ -307,7 +321,7 @@ if (allowWrites) {
     requestBody: {
       required: true,
       content: {
-        "application/json": { schema: { $ref: `#/components/schemas/${name}` } },
+        "application/json": { schema: { $ref: `#/components/schemas/${createName}` } },
       },
     },
     responses: { 201: { description: "Created" } },

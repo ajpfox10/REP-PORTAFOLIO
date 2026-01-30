@@ -92,7 +92,7 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
     })
   );
 
-  // IP guard
+  // ✅ IP guard
   app.use(ipGuard);
 
   // ✅ SYSTEM ROUTES SIEMPRE DISPONIBLES (antes de OpenAPI y también antes del rate limiter)

@@ -10,6 +10,15 @@ systemRouter.get("/health", (_req, res) => {
 // Si tu ready real vive en otro router, acá dejamos pasar
 systemRouter.get("/ready", (_req, _res, next) => next());
 
+// Aliases API v1 para system routes (compatibilidad con clientes/monitores)
+// No cambian el contrato: solo ofrecen el mismo endpoint bajo /api/v1/*
+systemRouter.get("/api/v1/health", (_req, res) => {
+  return res.status(200).json({ ok: true, status: "up" });
+});
+
+// Ready "real" puede vivir en otro router; este alias apunta al mismo flujo
+systemRouter.get("/api/v1/ready", (_req, _res, next) => next());
+
 systemRouter.get("/version", (req, res) => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkg = require("../../package.json");
