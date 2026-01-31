@@ -10,7 +10,8 @@ import { DocumentsPage } from '../pages/DocumentsPage';
 import { TablesPage } from '../pages/TablesPage';
 import { TableViewPage } from '../pages/TableViewPage';
 import { InfoPage } from '../pages/InfoPage';
-import { GestionPage } from '../pages/GestionPage'; 
+// Usamos la versión nueva (carpeta feature): /src/pages/Gesytiopage
+import { GestionPage } from '../pages/Gesytionpage'; 
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
