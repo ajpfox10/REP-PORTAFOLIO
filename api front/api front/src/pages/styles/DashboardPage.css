@@ -1,0 +1,20 @@
+/*
+  DashboardPage (ruta propia)
+  ---------------------------------------------------------------------------
+  Este archivo contiene estilos SOLO para esta página.
+  Mantener acá cualquier ajuste visual/responsive para evitar choques globales.
+*/
+
+/*
+  Encabezado del tile con estadística
+  - Mantiene el título y el badge alineados
+  - Evita márgenes inline en el <h3>
+*/
+.dash-stat-head {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.dash-stat-title {
+  margin: 0;
+}
