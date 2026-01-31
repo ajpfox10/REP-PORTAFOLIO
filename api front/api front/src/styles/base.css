@@ -1,0 +1,59 @@
+:root {
+  --bg: #0b1020;
+  --card: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: rgba(255, 255, 255, 0.9);
+  --muted: rgba(255, 255, 255, 0.65);
+  --accent: #7c3aed;
+  --accent2: #22d3ee;
+  --danger: #ef4444;
+  --ok: #10b981;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+/*
+  Anti scroll horizontal (global)
+  ---------------------------------------------------------------------------
+  Queremos que:
+  - La página NO cree scroll horizontal.
+  - Si algo necesita scroll (ej: tablas grandes), que sea dentro de su wrapper.
+*/
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Root de React también sin overflow horizontal */
+#root {
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 20% 10%, rgba(124, 58, 237, 0.25), transparent 60%),
+    radial-gradient(900px 500px at 80% 20%, rgba(34, 211, 238, 0.20), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.h1 { font-size: 22px; margin: 0; }
+.h2 { font-size: 16px; font-weight: 600; }
+.muted { color: var(--muted); }
+
+.sep {
+  height: 1px;
+  background: rgba(255,255,255,0.10);
+  margin: 14px 0;
+}
