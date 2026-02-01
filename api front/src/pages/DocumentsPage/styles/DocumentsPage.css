@@ -1,0 +1,128 @@
+/*
+  DocumentsPage (ruta propia)
+  ---------------------------------------------------------------------------
+  Este archivo contiene estilos SOLO para esta página.
+  Mantener acá cualquier ajuste visual/responsive para evitar choques globales.
+*/
+
+/*
+  Utilidades locales de padding
+  - No tocamos la clase .card global
+  - Aplicamos padding solo donde agregamos estas clases
+*/
+.docs-card-14 { padding: 14px; }
+.docs-card-12 { padding: 12px; }
+
+/*
+  Encabezado de búsqueda
+  - Alinea contador a la derecha
+  - Permite wrap en pantallas chicas
+*/
+.docs-search-row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.docs-search-controls {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.docs-search-input {
+  min-width: 280px;
+}
+
+/*
+  Separación vertical del bloque split
+*/
+.docs-split-top {
+  margin-top: 16px;
+}
+
+/*
+  Lista de documentos
+  - Scroll interno y altura estable para no romper layout
+*/
+.docs-list {
+  overflow: auto;
+  max-height: 72vh;
+}
+
+.docs-doc-tile {
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+/* Estado seleccionado sin estilos inline */
+.docs-doc-tile.is-selected {
+  border-color: rgba(34, 211, 238, 0.55);
+}
+
+.docs-doc-title {
+  word-break: break-word;
+}
+
+/*
+  Visor
+  - Mantiene alto mínimo para que el iframe no "salte"
+*/
+.docs-viewer {
+  min-height: 72vh;
+}
+
+.docs-viewer-head {
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.docs-viewer-meta {
+  font-size: 16px;
+}
+
+.docs-viewer-desc {
+  margin-top: 2px;
+}
+
+.docs-iframe {
+  width: 100%;
+  height: 62vh;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+
+/* Imagen embebida (foto, escaneo, etc.) */
+.docs-imgwrap {
+  width: 100%;
+  max-height: 62vh;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+
+.docs-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Fallback para tipos sin visor */
+.docs-generic {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.docs-generic-text {
+  margin-top: 10px;
+}
+
+/*
+  Responsive fino
+  - Evita que el input empuje el layout si el viewport es angosto
+*/
+@media (max-width: 420px) {
+  .docs-search-input { min-width: 0; width: 100%; }
+}
