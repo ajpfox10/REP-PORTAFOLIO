@@ -13,8 +13,13 @@ import path from "node:path";
 import YAML from "yaml";
 import { buildOpenApiFromSchema } from "./types/openapi/build";
 
-process.on("unhandledRejection", (e) => console.error("UNHANDLED_REJECTION:", e));
-process.on("uncaughtException", (e) => console.error("UNCAUGHT_EXCEPTION:", e));
+// ✅ Hard-fail logging: no usamos console.* para que quede en el logger central
+process.on("unhandledRejection", (e) => {
+  logger.error({ msg: "UNHANDLED_REJECTION", err: e instanceof Error ? e.stack : String(e) });
+});
+process.on("uncaughtException", (e) => {
+  logger.error({ msg: "UNCAUGHT_EXCEPTION", err: e instanceof Error ? e.stack : String(e) });
+});
 
 async function main() {
   const openapiPathArg = process.argv.find((a) => a.startsWith("--openapi="))?.split("=")[1];
@@ -38,38 +43,38 @@ async function main() {
   let openapiPathForValidator = openapiPathArg || env.OPENAPI_PATH;
 
   if (env.ENABLE_OPENAPI_VALIDATION && env.OPENAPI_AUTO_GENERATE) {
-// allow/deny/strict igual que en crud.routes.ts
-const allow = new Set(parseList(env.CRUD_TABLE_ALLOWLIST));
-const deny = new Set(parseList(env.CRUD_TABLE_DENYLIST));
-const strict = env.CRUD_STRICT_ALLOWLIST;
+    // allow/deny/strict igual que en crud.routes.ts
+    const allow = new Set(parseList(env.CRUD_TABLE_ALLOWLIST));
+    const deny = new Set(parseList(env.CRUD_TABLE_DENYLIST));
+    const strict = env.CRUD_STRICT_ALLOWLIST;
 
-const isAllowed = (table: string) => {
-  if (deny.has(table)) return false;
-  if (allow.size) return allow.has(table);
-  if (strict) return false;
-  return true;
-};
+    const isAllowed = (table: string) => {
+      if (deny.has(table)) return false;
+      if (allow.size) return allow.has(table);
+      if (strict) return false;
+      return true;
+    };
 
-const allowedTables = new Set(Object.keys((schema as any).tables || {}).filter(isAllowed));
+    const allowedTables = new Set(Object.keys((schema as any).tables || {}).filter(isAllowed));
 
-// detectar vistas desde INFORMATION_SCHEMA.TABLES
-const viewRows = await sequelize.query<{ TABLE_NAME: string }>(
-  `
-  SELECT TABLE_NAME
-  FROM INFORMATION_SCHEMA.TABLES
-  WHERE TABLE_SCHEMA = :db
-    AND TABLE_TYPE = 'VIEW'
-  `,
-  { type: QueryTypes.SELECT, replacements: { db: env.DB_NAME } }
-);
+    // detectar vistas desde INFORMATION_SCHEMA.TABLES
+    const viewRows = await sequelize.query<{ TABLE_NAME: string }>(
+      `
+      SELECT TABLE_NAME
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = :db
+        AND TABLE_TYPE = 'VIEW'
+      `,
+      { type: QueryTypes.SELECT, replacements: { db: env.DB_NAME } }
+    );
 
-const views = new Set((viewRows || []).map((r: any) => String(r.TABLE_NAME)));
+    const views = new Set((viewRows || []).map((r: any) => String(r.TABLE_NAME)));
 
-const doc = buildOpenApiFromSchema(schema as any, {
-  allowedTables,
-  views,
-  readonly: env.CRUD_READONLY,
-});
+    const doc = buildOpenApiFromSchema(schema as any, {
+      allowedTables,
+      views,
+      readonly: env.CRUD_READONLY,
+    });
 
     const outAbs = path.resolve(process.cwd(), env.OPENAPI_AUTO_OUTPUT);
     fs.mkdirSync(path.dirname(outAbs), { recursive: true });
@@ -103,6 +108,32 @@ const doc = buildOpenApiFromSchema(schema as any, {
     });
   });
 
+  // ✅ Graceful shutdown (no cambia endpoints, solo operación)
+  const shutdown = async (signal: string) => {
+    try {
+      logger.warn({ msg: "Shutdown signal received", signal });
+
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+
+      try {
+        await sequelize.close();
+      } catch (e) {
+        logger.warn({ msg: "Sequelize close failed", err: e instanceof Error ? e.stack : String(e) });
+      }
+
+      logger.info({ msg: "Shutdown complete", signal });
+      process.exit(0);
+    } catch (e) {
+      logger.error({ msg: "Shutdown failed", signal, err: e instanceof Error ? e.stack : String(e) });
+      process.exit(1);
+    }
+  };
+
+  process.once("SIGTERM", () => void shutdown("SIGTERM"));
+  process.once("SIGINT", () => void shutdown("SIGINT"));
+
   // Timeouts de server (protege de requests colgadas)
   try {
     server.setTimeout(env.REQUEST_TIMEOUT_MS);
@@ -116,7 +147,6 @@ const doc = buildOpenApiFromSchema(schema as any, {
 }
 
 main().catch((err) => {
-  console.error(err);
   logger.error({
     msg: "❌ Fatal bootstrap error",
     err: err instanceof Error ? err.stack : String(err),

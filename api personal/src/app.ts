@@ -1,11 +1,9 @@
 // src/app.ts
 import express, { type Express } from "express";
-import helmet from "helmet";
 import cors from "cors";
 import compression from "compression";
-import hpp from "hpp";
 import morgan from "morgan";
-
+import { metricsHttp } from "./middlewares/metricsHttp";
 import { env } from "./config/env";
 import { logger } from "./logging/logger";
 import { requestId } from "./middlewares/requestId";
@@ -15,6 +13,7 @@ import { rateLimiter } from "./middlewares/rateLimiters";
 import { openapiValidator } from "./middlewares/openapiValidator";
 import { systemRouter } from "./routes/system.routes";
 import { errorHandler } from "./middlewares/errorHandler";
+import { hardening } from "./middlewares/hardening";
 
 type MountFn = (app: Express) => void;
 
@@ -29,20 +28,51 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
   // request id
   app.use(requestId);
 
-  // logging http -> va a tu logger
+  // Middleware de métricas HTTP (Prometheus):
+  // registra requests en vuelo, conteo por método/ruta/status
+  // y tiempos de respuesta sin afectar endpoints ni contratos.
+  if (env.METRICS_ENABLE) {
+  app.use(metricsHttp);
+  }
+
+  // logging HTTP -> estructurado, con requestId
+  morgan.token("requestId", (req: any) => String(req?.requestId || ""));
   app.use(
-    morgan("combined", {
-      stream: {
-        write: (msg: string) => logger.info({ msg: msg.trim() })
+    morgan(
+      (tokens, req: any, res) => {
+        const payload = {
+          msg: "http",
+          requestId: tokens.requestId(req, res) || undefined,
+          method: tokens.method(req, res),
+          path: tokens.url(req, res),
+          status: Number(tokens.status(req, res) || 0) || undefined,
+          length: Number(tokens.res(req, res, "content-length") || 0) || undefined,
+          durationMs: Number(tokens["response-time"](req, res) || 0) || undefined,
+          remoteAddr: tokens["remote-addr"](req, res),
+          userAgent: tokens["user-agent"](req, res),
+        };
+        return JSON.stringify(payload);
+      },
+      {
+        stream: {
+          write: (line: string) => {
+            const raw = String(line || "").trim();
+            if (!raw) return;
+            try {
+              logger.info(JSON.parse(raw));
+            } catch {
+              logger.info({ msg: "http", line: raw });
+            }
+          },
+        },
       }
-    })
+    )
   );
 
   // hardening
   if (env.ENABLE_HARDENING) {
     app.disable("x-powered-by");
-    app.use(helmet());
-    app.use(hpp());
+    app.use(...hardening());
   }
 
   // compression
@@ -63,42 +93,34 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
   app.use(sanitize);
 
   // CORS
-  // ⚠️ Importante: si el front usa `credentials: "include"` (cookies/refresh),
-  // el navegador PROHÍBE `Access-Control-Allow-Origin: *`.
-  // Por eso, incluso en modo "allow all", reflejamos el origin real.
   app.use(
     cors({
       origin: (origin, cb) => {
-        if (!origin) return cb(null, true); // curl/postman/server-to-server
+        if (!origin) return cb(null, true);
 
         const o = origin.toLowerCase();
         const deny = env.CORS_DENYLIST.map((x: string) => x.toLowerCase());
         if (deny.includes(o)) return cb(new Error("CORS blocked"));
 
-        // Si hay allowlist explícita, solo permitimos esos origins.
         if (env.CORS_ALLOWLIST.length > 0) {
           const allow = env.CORS_ALLOWLIST.map((x: string) => x.toLowerCase());
           if (!allow.includes(o)) return cb(new Error("CORS not allowed"));
           return cb(null, true);
         }
 
-        // Si no hay allowlist:
-        // - Si CORS_ALLOW_ALL=true -> permitimos cualquier origin (reflejado)
-        // - Si CORS_ALLOW_ALL=false -> permitimos cualquier origin salvo denylist (reflejado)
-        // (ambos casos sirven para cookies porque NO devolvemos '*')
         return cb(null, true);
       },
       credentials: true
     })
   );
 
-  // ✅ IP guard
+  // IP guard
   app.use(ipGuard);
 
-  // ✅ SYSTEM ROUTES SIEMPRE DISPONIBLES (antes de OpenAPI y también antes del rate limiter)
+  // ✅ SYSTEM ROUTES SIEMPRE DISPONIBLES
   app.use(systemRouter);
 
-  // rate limit (para el resto, no para /health)
+  // rate limit global
   app.use(rateLimiter);
 
   // ✅ OpenAPI validation (optional)
@@ -108,10 +130,10 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
     app.use(openapiValidator(specPath));
   }
 
-  // ✅ Montaje de rutas reales del sistema (API /api/v1 etc)
+  // ✅ Montaje rutas reales
   if (mount) mount(app);
 
-  // 404 default (al final)
+  // 404 default
   app.use((req, res) => {
     res.status(404).json({
       ok: false,
@@ -120,7 +142,7 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
     });
   });
 
-  // error handler final (al final de TODO)
+  // error handler final
   app.use(errorHandler);
 
   return app;

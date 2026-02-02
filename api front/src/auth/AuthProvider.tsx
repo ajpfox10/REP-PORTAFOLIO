@@ -4,6 +4,7 @@ import { apiFetch, type ApiError } from '../api/http';
 import { clearSession, loadSession, saveSession, type Session } from './session';
 import { isJwtExpired } from './jwt';
 import { logEvent } from '../logging/clientLogger';
+import { canCrud, hasAll, hasAny, hasPermission, type CrudAction } from './permissions';
 
 type AuthCtx = {
   session: Session | null;
@@ -11,18 +12,19 @@ type AuthCtx = {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   hasPerm: (perm: string) => boolean;
+  hasAny: (perms: string[]) => boolean;
+  hasAll: (perms: string[]) => boolean;
+  canCrud: (table: string, action: CrudAction) => boolean;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
 
 function pickMessageFromApi(res: any): string {
-  // API estándar: { ok:false, error:"..." } o { ok:false, error:{...} }
   const e = res?.error;
   if (!e) return 'Error';
   if (typeof e === 'string') return e;
   if (typeof e?.message === 'string') return e.message;
 
-  // zod/validator style: { formErrors:[], fieldErrors:{...} }
   if (e?.fieldErrors && typeof e.fieldErrors === 'object') {
     const firstKey = Object.keys(e.fieldErrors)[0];
     const firstVal = e.fieldErrors?.[firstKey];
@@ -40,11 +42,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(() => loadSession());
   const [isReady, setIsReady] = useState(false);
 
-  // Harden: al boot no confiamos en localStorage. Validamos token (exp) + ping auth-protected.
   useEffect(() => {
     let alive = true;
 
-    // Listener global: cuando api/http detecta 401 final, avisa y acá bajamos sesión.
     const onExpired = (ev: any) => {
       const msg = ev?.detail?.message || 'Sesión expirada';
       logEvent({ level: 'warn', what: 'auth_expired_event', where: 'AuthProvider.listener', details: { msg } });
@@ -58,13 +58,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const s = loadSession();
         if (!s) return;
 
-        // 1) si access expiró, intentamos refresh
         if (isJwtExpired(s.accessToken)) {
           if (!s.refreshToken) {
             clearSession();
             if (alive) setSession(null);
             return;
           }
+
           const r = await apiFetch('/auth/refresh', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -87,8 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (alive) setSession(next);
         }
 
-        // 2) ping a un endpoint protegido SIN RBAC (documents) para confirmar que el token sirve.
-        // Si alguien “inyectó” una session fake en storage, acá se cae.
+        // ping a endpoint protegido (no asume RBAC fino)
         const check = await apiFetch('/documents?limit=1&page=1', { method: 'GET' });
         if (!check?.ok) {
           logEvent({ level: 'warn', what: 'boot_token_invalid', where: 'AuthProvider.boot', status: 401, details: check });
@@ -96,7 +95,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (alive) setSession(null);
         }
       } catch (e: any) {
-        // cualquier cosa rara -> sesión afuera
         logEvent({ level: 'warn', what: 'boot_auth_exception', where: 'AuthProvider.boot', details: e });
         clearSession();
         if (alive) setSession(null);
@@ -112,23 +110,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function login(email: string, password: string) {
-    // ✅ OJO: NO pongas /api/v1 acá porque el BASE_URL ya tiene /api/v1
     const res = await apiFetch('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
 
-    if (!res?.ok) {
-      throw { message: pickMessageFromApi(res) } as ApiError;
-    }
+    if (!res?.ok) throw { message: pickMessageFromApi(res) } as ApiError;
 
     const accessToken = res?.data?.accessToken;
     const refreshToken = res?.data?.refreshToken;
 
-    if (!accessToken) {
-      throw { message: 'Respuesta inválida (falta accessToken)' } as ApiError;
-    }
+    if (!accessToken) throw { message: 'Respuesta inválida (falta accessToken)' } as ApiError;
 
     const next: Session = {
       accessToken,
@@ -145,7 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const s = loadSession();
     try {
       if (s?.refreshToken) {
-        // ✅ mismo criterio: sin /api/v1
         await apiFetch('/auth/logout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -158,12 +150,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const hasPerm = (perm: string) => {
-    if (!session) return false;
-    return session.permissions.includes(perm) || session.permissions.includes('crud:*:*');
-  };
+  const perms = session?.permissions ?? [];
 
-  const value = useMemo<AuthCtx>(() => ({ session, isReady, login, logout, hasPerm }), [session, isReady]);
+  const hasPermFn = (perm: string) => !!session && hasPermission(perms, perm);
+  const hasAnyFn = (list: string[]) => !!session && hasAny(perms, list);
+  const hasAllFn = (list: string[]) => !!session && hasAll(perms, list);
+  const canCrudFn = (table: string, action: CrudAction) => !!session && canCrud(perms, table, action);
+
+  const value = useMemo<AuthCtx>(
+    () => ({
+      session,
+      isReady,
+      login,
+      logout,
+      hasPerm: hasPermFn,
+      hasAny: hasAnyFn,
+      hasAll: hasAllFn,
+      canCrud: canCrudFn,
+    }),
+    [session, isReady]
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
