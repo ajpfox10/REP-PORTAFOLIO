@@ -32,8 +32,26 @@ export const logger = winston.createLogger({
         winston.format.colorize(),
         winston.format.timestamp(),
         winston.format.printf((info) => {
-          const msg = typeof info.message === "string" ? info.message : JSON.stringify(info.message);
-          return `${info.timestamp} ${info.level}: ${msg}`;
+          // Winston pone todo en `info`, no solo `message`.
+          // Si el message es objeto (caso típico: logger.info({ msg: "...", ...meta })), lo serializamos bien.
+          const base: any = {
+            timestamp: info.timestamp,
+            level: info.level,
+          };
+
+          // `message` puede venir como string u objeto
+          const message = (info as any).message;
+          if (typeof message === "string") base.message = message;
+          else if (message !== undefined) base.message = message;
+
+          // Copiamos el resto de campos relevantes (meta) evitando keys internas
+          for (const [k, v] of Object.entries(info)) {
+            if (k === "level" || k === "timestamp" || k === "message") continue;
+            if (k.startsWith("_") || k === "[Symbol(message)]") continue;
+            (base as any)[k] = v;
+          }
+
+          return JSON.stringify(base);
         })
       )
     })

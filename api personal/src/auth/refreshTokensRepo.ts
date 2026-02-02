@@ -98,19 +98,44 @@ export async function findRefreshRow(sequelize: Sequelize, refreshToken: string)
 
 /**
  * Valida refresh JWT + valida que exista en DB y no esté revocado/expirado.
+ *
+ * IMPORTANTES:
+ * - Nunca lanzar exceptions al caller (el handler de /auth/refresh debe poder responder 401 prolijo)
+ * - Detección de reuse: si está revocado Y tiene replaced_by, es un refresh rotado que se está reusando.
  */
 export async function validateRefreshToken(sequelize: Sequelize, refreshToken: string) {
-  const claims = verifyRefreshToken(refreshToken);
-  const row = await findRefreshRow(sequelize, refreshToken);
-  if (!row) return { ok: false as const, error: "Refresh token no registrado" };
+  let claims: any;
+  try {
+    claims = verifyRefreshToken(refreshToken);
+  } catch {
+    // firma inválida / token malformado / token vencido
+    return { ok: false as const, kind: "invalid" as const, error: "Refresh token inválido o vencido" };
+  }
 
-  if (row.revokedAt) return { ok: false as const, error: "Refresh token revocado" };
-  if (row.expiresAt.getTime() < Date.now()) return { ok: false as const, error: "Refresh token expirado" };
+  const row = await findRefreshRow(sequelize, refreshToken);
+  if (!row) return { ok: false as const, kind: "not_registered" as const, error: "Refresh token no registrado" };
+
+  // 👇 Si está revocado y tenía replaced_by -> es candidato a reuse
+  if (row.revokedAt && row.replacedBy) {
+    return {
+      ok: false as const,
+      kind: "reuse" as const,
+      error: "Refresh token reutilizado",
+      usuarioId: row.usuarioId,
+      rowId: row.id,
+    };
+  }
+
+  if (row.revokedAt) return { ok: false as const, kind: "revoked" as const, error: "Refresh token revocado" };
+  if (row.expiresAt.getTime() < Date.now())
+    return { ok: false as const, kind: "expired" as const, error: "Refresh token expirado" };
 
   const usuarioId = Number(claims.sub);
-  if (!Number.isFinite(usuarioId) || usuarioId <= 0) return { ok: false as const, error: "Refresh inválido" };
+  if (!Number.isFinite(usuarioId) || usuarioId <= 0)
+    return { ok: false as const, kind: "invalid" as const, error: "Refresh inválido" };
 
-  if (usuarioId !== row.usuarioId) return { ok: false as const, error: "Refresh inconsistente" };
+  if (usuarioId !== row.usuarioId)
+    return { ok: false as const, kind: "invalid" as const, error: "Refresh inconsistente" };
 
   return { ok: true as const, usuarioId, rowId: row.id };
 }

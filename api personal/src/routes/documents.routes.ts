@@ -1,24 +1,20 @@
 import { Router, Request, Response } from "express";
-import path from "path";
 import fs from "fs";
+import path from "path";
 import { env } from "../config/env";
+import { documentsBlockedTotal } from "../metrics/domain";
+import { alertOnSpike } from "../alerts/thresholds";
+import { resolveSafeRealPath, validateDownloadFile, FileSecurityError } from "../files/fileSecurity";
+import { scanFileOrThrow, VirusFoundError } from "../files/fileScanner";
 
 /**
- * Resuelve un path de DB dentro de DOCUMENTS_BASE_DIR de forma segura.
- * Bloquea path traversal (.., etc).
+ * Sanitiza nombre para Content-Disposition (evita path o comillas raras).
  */
-function resolveSafe(baseDir: string, dbPath: string) {
-  const base = path.resolve(baseDir);
-  const full = path.resolve(base, dbPath || "");
-
-  const baseWithSep = base.endsWith(path.sep) ? base : base + path.sep;
-  if (full !== base && !full.startsWith(baseWithSep)) {
-    const err: any = new Error("Forbidden path");
-    err.status = 403;
-    throw err;
-  }
-
-  return full;
+function safeFilename(name: string) {
+  return String(name || "document")
+    .replace(/[\\/]/g, "_")
+    .replace(/[\r\n"]/g, "_")
+    .trim() || "document";
 }
 
 export function buildDocumentsRouter(sequelize: any) {
@@ -28,10 +24,7 @@ export function buildDocumentsRouter(sequelize: any) {
   router.get("/", async (req: Request, res: Response) => {
     try {
       const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
-      const limit = Math.min(
-        100,
-        Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50)
-      );
+      const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
       const q = String(req.query.q ?? "").trim();
       const offset = (page - 1) * limit;
 
@@ -63,11 +56,7 @@ export function buildDocumentsRouter(sequelize: any) {
         LIMIT :limit OFFSET :offset
         `,
         {
-          replacements: {
-            q: `%${q}%`,
-            limit,
-            offset,
-          },
+          replacements: { q: `%${q}%`, limit, offset },
           type: sequelize.QueryTypes.SELECT,
         }
       );
@@ -88,10 +77,7 @@ export function buildDocumentsRouter(sequelize: any) {
       return res.json({ ok: true, data, page, limit });
     } catch (err: any) {
       const status = err?.status || 500;
-      return res.status(status).json({
-        ok: false,
-        error: err?.message || "Error",
-      });
+      return res.status(status).json({ ok: false, error: err?.message || "Error" });
     }
   });
 
@@ -99,9 +85,7 @@ export function buildDocumentsRouter(sequelize: any) {
   router.get("/:id/file", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
-      if (!id || Number.isNaN(id)) {
-        return res.status(400).json({ ok: false, error: "Invalid id" });
-      }
+      if (!id || Number.isNaN(id)) return res.status(400).json({ ok: false, error: "Invalid id" });
 
       const rows = await sequelize.query(
         `
@@ -110,34 +94,98 @@ export function buildDocumentsRouter(sequelize: any) {
         WHERE id = :id AND deleted_at IS NULL
         LIMIT 1
         `,
-        {
-          replacements: { id },
-          type: sequelize.QueryTypes.SELECT,
-        }
+        { replacements: { id }, type: sequelize.QueryTypes.SELECT }
       );
 
       const row = (rows as any[])[0];
       if (!row) return res.status(404).json({ ok: false, error: "Not found" });
 
-      const fullPath = resolveSafe(env.DOCUMENTS_BASE_DIR, String(row.ruta || ""));
+      // ✅ path seguro + anti-symlink escape
+      const fullPath = resolveSafeRealPath(env.DOCUMENTS_BASE_DIR, String(row.ruta || ""));
 
-      if (!fs.existsSync(fullPath)) {
-        return res.status(404).json({ ok: false, error: "File not found" });
-      }
+      // ✅ validar tamaño + MIME por magic bytes
+      const { stat, sniff } = validateDownloadFile(fullPath);
+      await scanFileOrThrow(fullPath);
 
-      const safeName = String(row.nombre || `document-${id}.pdf`).replace(/[\\/]/g, "_");
-      res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+      const nameFromDb = safeFilename(String(row.nombre || `document-${id}`));
+      const filename = nameFromDb.includes(".") ? nameFromDb : `${nameFromDb}.${sniff.ext || "bin"}`;
 
-      return res.sendFile(fullPath);
+      // Headers seguros
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, max-age=0, no-store");
+      res.setHeader("Content-Type", sniff.mime);
+      res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+      res.setHeader("Content-Length", String(stat.size));
+
+      // ✅ Auditoría (para auditAllApi)
+      // No metemos el path real en auditoría (info sensible)
+      (res.locals as any).audit = {
+        action: "documents_download",
+        table_name: "tblarchivos",
+        record_pk: id,
+        entity_table: "tblarchivos",
+        entity_pk: id,
+        request_json: {
+          id,
+          mime: sniff.mime,
+          size: stat.size,
+        },
+        response_json: { status: 200 },
+      };
+
+      // Streaming seguro
+      const stream = fs.createReadStream(fullPath);
+      stream.on("error", () => {
+        if (!res.headersSent) res.status(500).json({ ok: false, error: "Stream error" });
+      });
+      return stream.pipe(res);
     } catch (err: any) {
       const status = err?.status || 500;
-      return res.status(status).json({
-        ok: false,
-        error: err?.message || "Error",
-      });
+
+      // 🚨 Virus detectado (scanner)
+      if (err instanceof VirusFoundError) {
+        try { documentsBlockedTotal.labels("virus_detected").inc(1); } catch {}
+        try { alertOnSpike("documents_blocked", 10, 60_000, "Spike documentos bloqueados", { reason: "virus_detected" }); } catch {}
+
+        (res.locals as any).audit = {
+          action: "documents_blocked",
+          table_name: "tblarchivos",
+          record_pk: parseInt(req.params.id || "0", 10) || null,
+          entity_table: "tblarchivos",
+          entity_pk: parseInt(req.params.id || "0", 10) || null,
+          request_json: {
+            reason: "virus_detected",
+            signature: (err as any).signature ?? null,
+            message: err.message,
+          },
+          response_json: { status: err.status ?? 423 },
+        };
+
+        return res.status(err.status ?? 423).json({ ok: false, error: err.message });
+      }
+
+      // Auditoría de bloqueo
+      if (err instanceof FileSecurityError) {
+        try { documentsBlockedTotal.labels(err.code || "other").inc(1); } catch {}
+        try { alertOnSpike("documents_blocked", 10, 60_000, "Spike documentos bloqueados", { reason: err.code || "other" }); } catch {}
+
+        (res.locals as any).audit = {
+          action: "documents_blocked",
+          table_name: "tblarchivos",
+          record_pk: parseInt(req.params.id || "0", 10) || null,
+          entity_table: "tblarchivos",
+          entity_pk: parseInt(req.params.id || "0", 10) || null,
+          request_json: {
+            reason: err.code,
+            message: err.message,
+          },
+          response_json: { status },
+        };
+      }
+
+      return res.status(status).json({ ok: false, error: err?.message || "Error" });
     }
   });
 
   return router;
 }
-
