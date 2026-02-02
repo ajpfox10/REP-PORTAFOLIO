@@ -146,7 +146,8 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.80);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;

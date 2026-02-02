@@ -27,7 +27,6 @@ function mapColumnToSchema(col: ColumnInfo) {
   const t = (col as any).dataType || (col as any).type || "string";
   const nullable = Boolean((col as any).isNullable);
 
-
   let schema: any = { type: "string" };
 
   const tn = String(t).toLowerCase();
@@ -51,6 +50,11 @@ function tableSchemaName(table: TableInfo) {
 
 function tableCreateSchemaName(table: TableInfo) {
   return `Table_${table.name}_Create`;
+}
+
+/** ✅ PATCH schema name (parcial, sin required) */
+function tablePatchSchemaName(table: TableInfo) {
+  return `Table_${table.name}_Patch`;
 }
 
 function tableToComponentSchema(table: TableInfo, mode: "full" | "create" = "full") {
@@ -81,6 +85,12 @@ function tableToComponentSchema(table: TableInfo, mode: "full" | "create" = "ful
   return out;
 }
 
+/** ✅ PATCH: mismo shape, pero sin required (update parcial) */
+function tableToPatchSchema(table: TableInfo) {
+  const full = tableToComponentSchema(table, "full");
+  const { required, ...rest } = full as any;
+  return rest;
+}
 
 function normalizeTables(snapshot: SchemaSnapshot): TableInfo[] {
   const tablesAny: any = (snapshot as any)?.tables ?? [];
@@ -269,7 +279,6 @@ export function buildOpenApiFromSchema(snapshot: SchemaSnapshot, opts: BuildOpen
     },
   };
 
-
   for (const table of tables) {
     // allow/deny/strict (ya aplicado por opts.allowedTables)
     if (opts.allowedTables && !opts.allowedTables.has(table.name)) continue;
@@ -278,91 +287,106 @@ export function buildOpenApiFromSchema(snapshot: SchemaSnapshot, opts: BuildOpen
     const allowWrites = !Boolean(opts.readonly) && !isView;
     const name = tableSchemaName(table);
     const createName = tableCreateSchemaName(table);
+    const patchName = tablePatchSchemaName(table);
 
     doc.components.schemas[name] = tableToComponentSchema(table, "full");
     doc.components.schemas[createName] = tableToComponentSchema(table, "create");
+    doc.components.schemas[patchName] = tableToPatchSchema(table);
 
     const base = `/api/v1/${table.name}`;
 
     doc.paths[base] = {
-  get: {
-    tags: ["crud"],
-    security: [{ bearerAuth: [] }],
-    summary: `List ${table.name}`,
-    parameters: [
-      { name: "page", in: "query", schema: { type: "integer", default: 1 } },
-      { name: "limit", in: "query", schema: { type: "integer", default: 50 } },
-      { name: "q", in: "query", schema: { type: "string" } },
-    ],
-    responses: {
-      200: {
-        description: "OK",
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              properties: {
-                ok: { type: "boolean" },
-                data: { type: "array", items: { $ref: `#/components/schemas/${name}` } },
+      get: {
+        tags: ["crud"],
+        security: [{ bearerAuth: [] }],
+        summary: `List ${table.name}`,
+        parameters: [
+          { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+          { name: "limit", in: "query", schema: { type: "integer", default: 50 } },
+          { name: "q", in: "query", schema: { type: "string" } },
+        ],
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    ok: { type: "boolean" },
+                    data: { type: "array", items: { $ref: `#/components/schemas/${name}` } },
+                  },
+                },
               },
             },
           },
         },
       },
-    },
-  },
-};
+    };
 
-if (allowWrites) {
-  (doc.paths[base] as any).post = {
-    tags: ["crud"],
-    security: [{ bearerAuth: [] }],
-    summary: `Create ${table.name}`,
-    requestBody: {
-      required: true,
-      content: {
-        "application/json": { schema: { $ref: `#/components/schemas/${createName}` } },
-      },
-    },
-    responses: { 201: { description: "Created" } },
-  };
-}
-
+    if (allowWrites) {
+      (doc.paths[base] as any).post = {
+        tags: ["crud"],
+        security: [{ bearerAuth: [] }],
+        summary: `Create ${table.name}`,
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: `#/components/schemas/${createName}` } },
+          },
+        },
+        responses: { 201: { description: "Created" } },
+      };
+    }
 
     doc.paths[`${base}/{id}`] = {
-  get: {
-    tags: ["crud"],
-    security: [{ bearerAuth: [] }],
-    summary: `Get ${table.name} by id`,
-    parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
-  },
-};
-
-if (allowWrites) {
-  (doc.paths[`${base}/{id}`] as any).put = {
-    tags: ["crud"],
-    security: [{ bearerAuth: [] }],
-    summary: `Update ${table.name} by id`,
-    parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-    requestBody: {
-      required: true,
-      content: {
-        "application/json": { schema: { $ref: `#/components/schemas/${name}` } },
+      get: {
+        tags: ["crud"],
+        security: [{ bearerAuth: [] }],
+        summary: `Get ${table.name} by id`,
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
       },
-    },
-    responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
-  };
+    };
 
-  (doc.paths[`${base}/{id}`] as any).delete = {
-    tags: ["crud"],
-    security: [{ bearerAuth: [] }],
-    summary: `Delete ${table.name} by id`,
-    parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
-  };
-}
+    if (allowWrites) {
+      (doc.paths[`${base}/{id}`] as any).put = {
+        tags: ["crud"],
+        security: [{ bearerAuth: [] }],
+        summary: `Update ${table.name} by id`,
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: `#/components/schemas/${name}` } },
+          },
+        },
+        responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
+      };
 
+      /** ✅ PATCH agregado */
+      (doc.paths[`${base}/{id}`] as any).patch = {
+        tags: ["crud"],
+        security: [{ bearerAuth: [] }],
+        summary: `Patch ${table.name} by id`,
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: `#/components/schemas/${patchName}` } },
+          },
+        },
+        responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
+      };
+
+      (doc.paths[`${base}/{id}`] as any).delete = {
+        tags: ["crud"],
+        security: [{ bearerAuth: [] }],
+        summary: `Delete ${table.name} by id`,
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
+      };
+    }
   }
 
   return doc;
