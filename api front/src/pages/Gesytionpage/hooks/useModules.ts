@@ -18,24 +18,24 @@ export type ModuleState = {
 
 export function useModules(cleanDni: string) {
   const toast = useToast();
-  
+
   const [modules, setModules] = useState<Record<ModuleKey, ModuleState>>({
-    consultas: { 
-      open: false, rows: [], selectedIndex: 0, loading: false, 
-      scanned: null, tablePage: 1, tablePageSize: 50 
+    consultas: {
+      open: false, rows: [], selectedIndex: 0, loading: false,
+      scanned: null, tablePage: 1, tablePageSize: 50
     },
-    pedidos: { 
-      open: false, rows: [], selectedIndex: 0, loading: false, 
-      scanned: null, tablePage: 1, tablePageSize: 50 
+    pedidos: {
+      open: false, rows: [], selectedIndex: 0, loading: false,
+      scanned: null, tablePage: 1, tablePageSize: 50
     },
-    documentos: { 
-      open: false, rows: [], selectedIndex: 0, loading: false, 
-      scanned: null, tablePage: 1, tablePageSize: 50 
+    documentos: {
+      open: false, rows: [], selectedIndex: 0, loading: false,
+      scanned: null, tablePage: 1, tablePageSize: 50
     },
   });
 
   const loadModule = useCallback(async (
-    table: ModuleKey, 
+    table: ModuleKey,
     opts?: { forceReload?: boolean }
   ) => {
     if (!cleanDni) {
@@ -46,19 +46,17 @@ export function useModules(cleanDni: string) {
     const current = modules[table];
     if (current.loading) return;
 
-    // 1. Abrir módulo
     setModules(prev => ({
       ...prev,
       [table]: { ...prev[table], open: true }
     }));
 
-    trackAction('gestion_module_open', { 
-      module: table, 
-      dni: Number(cleanDni), 
-      forceReload: !!opts?.forceReload 
+    trackAction('gestion_module_open', {
+      module: table,
+      dni: Number(cleanDni),
+      forceReload: !!opts?.forceReload
     });
 
-    // 2. Si ya tiene datos y no forzamos reload, salir
     if (current.rows.length && !opts?.forceReload) {
       return;
     }
@@ -66,53 +64,53 @@ export function useModules(cleanDni: string) {
     try {
       setModules(prev => ({
         ...prev,
-        [table]: { 
-          ...prev[table], 
-          loading: true, 
-          rows: [], 
-          selectedIndex: 0, 
-          scanned: null, 
-          tablePage: 1 
+        [table]: {
+          ...prev[table],
+          loading: true,
+          rows: [],
+          selectedIndex: 0,
+          scanned: null,
+          tablePage: 1
         }
       }));
 
-      // OPTIMIZACIÓN: Pedir filtrado por DNI al backend
-      const endpoint = table === 'documentos' 
-        ? '/tblarchivos' 
+      const endpoint = table === 'documentos'
+        ? '/tblarchivos'
         : `/${table}`;
-      
+
       let allRows: any[] = [];
       let page = 1;
       const limit = 100;
       let total = 0;
       let totalPages = 1;
 
-      // Intentar con filtro DNI si el backend lo soporta
+      // Intentar con q= (permitido por OpenAPI) en vez de dni=
       try {
-        const res = await apiFetch<any>(`${endpoint}?dni=${cleanDni}&limit=${limit}`);
+        const res = await apiFetch<any>(
+          `${endpoint}?q=${encodeURIComponent(cleanDni)}&limit=${limit}&page=1`
+        );
         if (res?.data) {
           allRows = res.data;
           total = res?.meta?.total || allRows.length;
           totalPages = Math.ceil(total / limit);
         }
       } catch {
-        // Fallback: paginación tradicional
+        // Fallback: paginación tradicional + filtro en frontend
         while (page <= 5 && allRows.length < 500) {
           const res = await apiFetch<any>(`${endpoint}?page=${page}&limit=${limit}`);
           const rows = res?.data || [];
           const meta = res?.meta;
-          
+
           if (meta) {
             total = Number(meta.total) || 0;
             totalPages = Math.max(1, Math.ceil(total / limit));
           }
-          
-          // Filtrar por DNI en frontend (temporal)
-          const filtered = rows.filter((r: any) => 
+
+          const filtered = rows.filter((r: any) =>
             String(r?.dni ?? "").replace(/\D/g, "") === cleanDni
           );
           allRows = [...allRows, ...filtered];
-          
+
           if (!rows.length || rows.length < limit) break;
           page++;
         }
@@ -167,10 +165,10 @@ export function useModules(cleanDni: string) {
   const setTablePageSize = useCallback((table: ModuleKey, size: number) => {
     setModules(prev => ({
       ...prev,
-      [table]: { 
-        ...prev[table], 
-        tablePageSize: size, 
-        tablePage: 1 
+      [table]: {
+        ...prev[table],
+        tablePageSize: size,
+        tablePage: 1
       }
     }));
   }, []);
@@ -182,8 +180,7 @@ export function useModules(cleanDni: string) {
     setSelectedIndex,
     setTablePage,
     setTablePageSize,
-    
-    // Helpers
+
     getModule: (key: ModuleKey) => modules[key],
     isModuleOpen: (key: ModuleKey) => modules[key].open,
     getSelectedRow: (key: ModuleKey) => {

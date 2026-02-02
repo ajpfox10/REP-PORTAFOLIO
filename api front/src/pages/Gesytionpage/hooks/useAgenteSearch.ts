@@ -14,33 +14,36 @@ export function useAgenteSearch() {
     row: null as any,
   });
 
-  // Optimizado: busca directamente con query param si el backend lo soporta
+  // Busca el agenteId a partir del DNI respetando el OpenAPI
   async function resolveAgenteIdByDni(dniValue: string): Promise<string> {
     const clean = dniValue.replace(/\D/g, "");
     if (!clean) throw new Error("DNI inválido");
 
+    // 1) Endpoint correcto según OpenAPI: /personal/search?dni=...
+    // (porque /agentes NO acepta query param dni)
     try {
-      // PRIMERO: Intentar endpoint específico si existe
-      const res = await apiFetch<any>(`/agentes?dni=${clean}`);
-      if (res?.data?.[0]?.id) {
-        return String(res.data[0].id);
-      }
-      
-      // SEGUNDO: Fallback a paginación (mismo que tenías)
-      const limit = 50;
-      for (let page = 1; page <= 5; page++) {
-        const res = await apiFetch<any>(`/agentexdni1?page=${page}&limit=${limit}`);
-        const hit = res?.data?.find((r: any) => 
-          String(r?.dni ?? "").replace(/\D/g, "") === clean
-        );
-        if (hit?.agente_id) return String(hit.agente_id);
-        if (!res?.data?.length || res.data.length < limit) break;
-      }
-      
-      throw new Error("No encontrado");
-    } catch (error) {
-      throw error;
+      const res = await apiFetch<any>(`/personal/search?dni=${clean}&limit=1&page=1`);
+      const first = res?.data?.[0];
+
+      // Preferimos agente_id (lo que después usa /agentes/{id})
+      const agenteId = first?.agente_id ?? first?.agenteId ?? first?.id;
+      if (agenteId) return String(agenteId);
+    } catch {
+      // si falla el search, seguimos al fallback para no romper el flujo
     }
+
+    // 2) Fallback: paginación sobre agentexdni1 (como ya estaba)
+    const limit = 50;
+    for (let page = 1; page <= 5; page++) {
+      const res = await apiFetch<any>(`/agentexdni1?page=${page}&limit=${limit}`);
+      const hit = res?.data?.find((r: any) =>
+        String(r?.dni ?? "").replace(/\D/g, "") === clean
+      );
+      if (hit?.agente_id) return String(hit.agente_id);
+      if (!res?.data?.length || res.data.length < limit) break;
+    }
+
+    throw new Error("No encontrado");
   }
 
   async function onSearch() {
@@ -52,10 +55,10 @@ export function useAgenteSearch() {
 
     try {
       setState(s => ({ ...s, loading: true, row: null, matches: [] }));
-      
+
       const agenteId = await resolveAgenteIdByDni(clean);
       const res = await apiFetch<any>(`/agentes/${agenteId}`);
-      
+
       setState(s => ({ ...s, loading: false, row: res.data }));
       toast.ok("Agente cargado");
       trackAction('gestion_load_agente_by_dni', { dni: clean, agenteId });
@@ -87,26 +90,21 @@ export function useAgenteSearch() {
   }
 
   return {
-    // Estado
     dni: state.dni,
     fullName: state.fullName,
     matches: state.matches,
     loading: state.loading,
     row: state.row,
     cleanDni: state.row?.dni ? String(state.row.dni).replace(/\D/g, "") : "",
-    
-    // Setters
+
     setDni: (dni: string) => setState(s => ({ ...s, dni })),
     setFullName: (fullName: string) => setState(s => ({ ...s, fullName })),
-    
-    // Acciones
+
     onSearch,
     onSearchByName,
-    
-    // Helper para cargar por DNI desde lista
+
     loadByDni: async (dniValue: string) => {
       setState(s => ({ ...s, dni: dniValue }));
-      // Pequeño delay para que se actualice el estado
       await new Promise(resolve => setTimeout(resolve, 10));
       await onSearch();
     }
