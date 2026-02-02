@@ -32,49 +32,63 @@ import './styles/GestionPage.css';
 
 export function GestionPage() {
   const toast = useToast();
-  
+
   // Hooks
   const agenteSearch = useAgenteSearch(toast);
   const debouncedDni = useDebounce(agenteSearch.dni, 500);
-  const { modules, loadModule, closeModule, setSelectedIndex, setTablePage, setTablePageSize, getSelectedRow } = 
+  const { modules, loadModule, closeModule, setSelectedIndex, setTablePage, setTablePageSize, getSelectedRow } =
     useModules(agenteSearch.cleanDni, toast);
-  const pedidos = usePedidos(agenteSearch.cleanDni, modules.pedidos, toast, () => 
+  const pedidos = usePedidos(agenteSearch.cleanDni, modules.pedidos, toast, () =>
     loadModule('pedidos', { forceReload: true }));
   const documentos = useDocumentos(agenteSearch.cleanDni, toast);
   const cellModal = useCellModal(toast);
-  
+
   // Estado para compatibilidad
   const [matches, setMatches] = useState<any[]>([]);
   const [row, setRow] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  
+
   // Sincronización
   useEffect(() => { setRow(agenteSearch.row); }, [agenteSearch.row]);
   useEffect(() => { setLoading(agenteSearch.loading); }, [agenteSearch.loading]);
-  
+
   useEffect(() => {
     if (debouncedDni && debouncedDni.replace(/\D/g, "").length >= 7) {
       agenteSearch.onSearch();
     }
   }, [debouncedDni]);
-  
+
+  // ✅ Cargar foto credencial cuando cambia el DNI limpio
+  useEffect(() => {
+    const dni = agenteSearch.cleanDni;
+
+    // si no hay dni, limpiamos la última URL para evitar leaks/preview viejo
+    if (!dni) {
+      documentos.revokeLastObjectUrl();
+      return;
+    }
+
+    // pedimos la foto (si falla, FotoCredencialCard ya muestra "Sin foto")
+    documentos.fetchFotoPrivada(dni).catch(() => {});
+  }, [agenteSearch.cleanDni]);
+
   // Funciones de compatibilidad
   const onSearch = () => agenteSearch.onSearch();
-  
+
   const onSearchByName = async () => {
     const q = agenteSearch.fullName.trim();
     if (!q) {
       toast.error("Búsqueda inválida", "Ingresá apellido y/o nombre");
       return;
     }
-  
+
     try {
       setLoading(true);
       setMatches([]);
       setRow(null);
       Object.keys(modules).forEach(key => closeModule(key as ModuleKey));
       documentos.revokeLastObjectUrl();
-      
+
       const res = await apiFetch<any>(`/personal/search?q=${encodeURIComponent(q)}&limit=20&page=1`);
       setMatches(res.data || []);
       toast.ok("Búsqueda lista");
@@ -84,25 +98,25 @@ export function GestionPage() {
       setLoading(false);
     }
   };
-  
+
   const loadByDni = (dni: string) => {
     agenteSearch.setDni(dni);
     setTimeout(() => agenteSearch.onSearch(), 10);
   };
-  
+
   const getActor = () => {
     const s = loadSession();
     const u: any = s?.user || {};
     return u?.username || u?.user || u?.name || u?.email || u?.id || 'anon';
   };
-  
+
   // Helpers
   const getModuleTitle = (key: ModuleKey) => {
     if (key === 'pedidos') return 'Pedidos';
     if (key === 'documentos') return 'Documentos';
     return 'Consultas';
   };
-  
+
   const getModuleCols = (key: ModuleKey, rows: any[]) => {
     if (!rows.length) return [];
     const cols = Object.keys(rows[0]);
@@ -117,12 +131,12 @@ export function GestionPage() {
     for (const c of cols) if (!out.includes(c)) out.push(c);
     return out;
   };
-  
+
   const renderExportActions = (key: ModuleKey) => {
     const st = modules[key];
     const title = `${getModuleTitle(key)} (DNI ${agenteSearch.cleanDni})`;
     const file = `${key}_dni_${agenteSearch.cleanDni}`;
-    
+
     return (
       <div className="row gp-export-actions">
         <button className="btn" onClick={() => printTable(title, st.rows)} disabled={!st.rows.length}>Imprimir</button>
@@ -132,7 +146,7 @@ export function GestionPage() {
       </div>
     );
   };
-  
+
   // Render
   return (
     <Layout title="Gestión" showBack>
@@ -149,11 +163,11 @@ export function GestionPage() {
               onSearch={onSearch}
               onSearchByName={onSearchByName}
             />
-            
+
             {loading && <div className="card gp-card-14">Cargando…</div>}
-            
+
             <AgenteInfoCard row={row} />
-            
+
             {row?.dni && (
               <ModuleGrid
                 modules={modules}
@@ -163,16 +177,16 @@ export function GestionPage() {
                 onCloseModule={closeModule}
               />
             )}
-            
+
             <MatchesList matches={matches} onSelect={loadByDni} />
           </div>
-          
+
           {/* Derecha */}
           <div className="gp-col gp-right-panel">
             <FotoCredencialCard hasAgente={!!row?.dni} fotoUrl={documentos.fotoUrl} />
           </div>
         </div>
-        
+
         {/* Stack de módulos */}
         <div className="gp-bottomstack">
           {(['consultas', 'pedidos', 'documentos'] as ModuleKey[])
@@ -185,7 +199,7 @@ export function GestionPage() {
               const curPage = Math.min(Math.max(st.tablePage || 1, 1), totalPages);
               const start = (curPage - 1) * pageSize;
               const pageRows = st.rows.slice(start, start + pageSize);
-              
+
               return (
                 <ModuleDetailView
                   key={k}
@@ -219,7 +233,7 @@ export function GestionPage() {
             })}
         </div>
       </div>
-      
+
       {/* Modales */}
       <PedidoModal
         open={pedidos.pedidoModal.open}
@@ -230,14 +244,14 @@ export function GestionPage() {
         onSubmit={pedidos.createPedidosFromModal}
         getActor={getActor}
       />
-      
+
       <CellModal
         open={!!cellModal.cellModal}
         data={cellModal.cellModal}
         onClose={cellModal.closeCellModal}
         onCopy={cellModal.copyToClipboard}
       />
-      
+
       <DocViewerModal
         open={documentos.docViewer.open}
         data={documentos.docViewer}

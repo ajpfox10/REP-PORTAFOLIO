@@ -22,12 +22,22 @@ function fromVite(key: string): string | undefined {
 }
 
 export function getApiBaseUrl(): string {
-  // prioridad: runtime-config.json -> .env
-  const r = runtime().VITE_API_BASE_URL;
+  // prioridad: runtime-config.json -> .env -> default
+  const cfg = runtime();
+
+  const r1 = cfg?.VITE_API_BASE_URL;
+  const r2 = cfg?.apiBaseUrl; // ✅ tu runtime-config.json actual
   const v = fromVite('VITE_API_BASE_URL');
-  const base = (typeof r === 'string' && r) || (typeof v === 'string' && v) || 'http://localhost:3000/api/v1';
+
+  const base =
+    (typeof r1 === 'string' && r1.trim()) ||
+    (typeof r2 === 'string' && r2.trim()) ||
+    (typeof v === 'string' && v.trim()) ||
+    'http://localhost:3000/api/v1';
+
   return base.replace(/\/+$/, ''); // sin trailing slash
 }
+
 
 export function getAuthStorageKind(): 'memory' | 'session' | 'local' {
   // ✅ NUEVO: una sola variable, todas las opciones
