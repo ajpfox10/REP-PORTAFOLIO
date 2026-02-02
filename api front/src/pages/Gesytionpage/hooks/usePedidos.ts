@@ -126,18 +126,10 @@ export function usePedidos(cleanDni: string, moduleState: ModuleState) {
 
   const patchPedido = useCallback(async (id: any, changes: any) => {
     const pid = String(id);
-    try {
-      return await apiFetch<any>(`/pedidos/${encodeURIComponent(pid)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(changes),
-      });
-    } catch {
-      // Fallback a PUT
-      return await apiFetch<any>(`/pedidos/${encodeURIComponent(pid)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...changes, id: pid }),
-      });
-    }
+    return await apiFetch<any>(`/pedidos/${encodeURIComponent(pid)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+    });
   }, []);
 
   const bajaPedidoSelected = useCallback(async () => {

@@ -177,5 +177,37 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     res.json({ ok: true, data: { deleted: true } });
   });
 
+  // ✅ PATCH (RBAC update) - update parcial
+router.patch("/:table/:id", requireCrud("update"), guardTable, guardWrite, async (req: Request, res: Response) => {
+  const table = req.params.table;
+  const model = getModel(table);
+  if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
+
+  const pk = getPk(table);
+  if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
+
+  const before = await model.findOne({ where: { [pk]: req.params.id } as any });
+  if (!before) return res.status(404).json({ ok: false, error: "No encontrado" });
+
+  await model.update(req.body, { where: { [pk]: req.params.id } as any });
+
+  const after = await model.findOne({ where: { [pk]: req.params.id } as any });
+
+  const beforeJson = (before as any).toJSON ? (before as any).toJSON() : before;
+  const afterJson = (after as any)?.toJSON ? (after as any).toJSON() : after;
+
+  (res.locals as any).audit = {
+    usuario_id: null,
+    action: "patch",
+    table_name: table,
+    record_pk: req.params.id,
+    before_json: safeStringify(beforeJson),
+    after_json: safeStringify(afterJson),
+  };
+
+  res.json({ ok: true, data: after });
+});
+
+
   return router;
 };
