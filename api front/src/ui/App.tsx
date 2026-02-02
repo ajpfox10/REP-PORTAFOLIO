@@ -10,8 +10,9 @@ import { DocumentsPage } from '../pages/DocumentsPage';
 import { TablesPage } from '../pages/TablesPage';
 import { TableViewPage } from '../pages/TableViewPage';
 import { InfoPage } from '../pages/InfoPage';
-// Usamos la versión nueva (carpeta feature): /src/pages/Gesytiopage
-import { GestionPage } from '../pages/Gesytionpage'; 
+import { GestionPage } from '../pages/Gesytionpage';
+import { RequirePermission } from '../auth/RequirePermission';
+import { ForbiddenPage } from '../pages/ForbiddenPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -21,63 +22,97 @@ function Private({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AppGuard({ children }: { children: React.ReactNode }) {
+  // permiso base del backend (deny-by-default global)
+  return <RequirePermission perm="api:access">{children}</RequirePermission>;
+}
+
 export function App() {
   return (
     <ToastProvider>
       <AuthProvider>
         <ErrorBoundary>
           <Routes>
-          <Route path="/gate" element={<GatePage />} />
-          <Route path="/login" element={<LoginPage />} />
+            <Route path="/gate" element={<GatePage />} />
+            <Route path="/login" element={<LoginPage />} />
 
-          <Route
-            path="/app"
-            element={
-              <Private>
-                <DashboardPage />
-              </Private>
-            }
-          />
+            <Route
+              path="/app"
+              element={
+                <Private>
+                  <AppGuard>
+                    <DashboardPage />
+                  </AppGuard>
+                </Private>
+              }
+            />
 
-          <Route
-            path="/app/documents"
-            element={
-              <Private>
-                <DocumentsPage />
-              </Private>
-            }
-          />
+            <Route
+              path="/app/documents"
+              element={
+                <Private>
+                  <AppGuard>
+                    <DocumentsPage />
+                  </AppGuard>
+                </Private>
+              }
+            />
 
-          <Route
-            path="/app/tables"
-            element={
-              <Private>
-                <TablesPage />
-              </Private>
-            }
-          />
+            <Route
+              path="/app/tables"
+              element={
+                <Private>
+                  <AppGuard>
+                    <TablesPage />
+                  </AppGuard>
+                </Private>
+              }
+            />
 
-          <Route
-            path="/app/tables/:table"
-            element={
-              <Private>
-                <TableViewPage />
-              </Private>
-            }
-          />
+            <Route
+              path="/app/tables/:table"
+              element={
+                <Private>
+                  <AppGuard>
+                    <TableViewPage />
+                  </AppGuard>
+                </Private>
+              }
+            />
 
-          <Route path="/app/info" element={<Private><InfoPage /></Private>} />
-          <Route path="/" element={<Navigate to="/gate" replace />} />
-          <Route path="*" element={<Navigate to="/gate" replace />} />
-          <Route
-            path="/app/gestion"
-            element={
-              <Private>
-                <GestionPage />
-              </Private>
-            }
-          />
+            <Route
+              path="/app/info"
+              element={
+                <Private>
+                  <AppGuard>
+                    <InfoPage />
+                  </AppGuard>
+                </Private>
+              }
+            />
 
+            <Route
+              path="/app/gestion"
+              element={
+                <Private>
+                  <AppGuard>
+                    <GestionPage />
+                  </AppGuard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/forbidden"
+              element={
+                <Private>
+                  <ForbiddenPage />
+                </Private>
+              }
+            />
+
+            <Route path="/" element={<Navigate to="/gate" replace />} />
+            <Route path="*" element={<Navigate to="/gate" replace />} />
           </Routes>
         </ErrorBoundary>
       </AuthProvider>

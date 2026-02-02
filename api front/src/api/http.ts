@@ -27,7 +27,10 @@ function isAuthEndpoint(path: string) {
 function notifyAuthExpired(msg: string) {
   try {
     // Toast opcional (si el provider está montado)
-    window.__P5_TOAST__?.error('Sesión expirada', msg);
+    const title = /seguridad|sospech|reutiliz/i.test(String(msg))
+      ? 'Sesión invalidada'
+      : 'Sesión expirada';
+    window.__P5_TOAST__?.error(title, msg);
     // Evento global para que el AuthProvider u otros listeners puedan reaccionar.
     window.dispatchEvent(new CustomEvent('p5:auth_expired', { detail: { message: msg } }));
   } catch {
