@@ -11,6 +11,8 @@ import { buildDocsRouter, docsProtect } from "./docs.routes";
 import { buildDocumentsRouter } from "./documents.routes";
 import { buildPersonalRouter } from "./personal.routes";
 import { buildAgentesFotoRouter } from "./agentesFoto.routes";
+import { buildCertificadosRouter } from "./certificados.routes";
+import { mountAutoRoutes } from "./auto";
 
 // ✅ Handler correcto: usa registry (prom.ts) y devuelve formato Prometheus
 import { metricsHandler } from "../metrics/metricsHandler";
@@ -57,6 +59,14 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
   // ✅ AUTH: login/refresh/logout públicos (NO authContext acá)
   app.use("/api/v1/auth", buildAuthRouter(sequelize));
 
+  // ✅ Exportacion de datos para certificados y demas
+  app.use(
+  "/api/v1/certificados",
+  authContext(sequelize),
+  requirePermission("api:access"),
+  buildCertificadosRouter(sequelize)
+  );
+  
   // ✅ Eventos: antes decía “se protege adentro”.
   // Para deny-by-default global, lo protegemos acá también.
   // (No cambia endpoint. Si adentro ya se protege, esto refuerza.)
@@ -102,4 +112,9 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     requirePermission("api:access"),
     buildCrudRouter(sequelize, schema)
   );
+
+  // ✅ AUTO ROUTES (DX): archivos en src/routes/auto/**/*.routes.ts
+  // No toca endpoints existentes; solo monta rutas nuevas.
+  mountAutoRoutes(app, sequelize, schema);
+
 };

@@ -71,6 +71,18 @@ function hasScript(name) {
   } catch {
     return false;
   }
+
+}
+
+async function ensureGenRoutes() {
+  if (hasScript("gen:routes")) {
+    const r = run("npm", ["run", "gen:routes"]);
+    if (!r.ok) {
+      console.log(`❌ gen:routes FAIL (code ${r.code})`);
+      return false;
+    }
+  }
+  return true;
 }
 
 // Windows: cmd /c, sin shell:true (evita warning DEP0190)
@@ -352,7 +364,9 @@ async function main() {
   const action = await ask("Elegí 1-11: ");
 
   if (action === "1") {
-    run("npm", ["run", "dev"]);
+    const ok = await ensureGenRoutes();
+    if (!ok) { rl.close(); return; }
+    if (hasScript("dev:pro")) run("npm", ["run", "dev:pro"]); else run("npm", ["run", "dev"]);
     rl.close();
     return;
   }
@@ -378,6 +392,8 @@ async function main() {
   }
 
   if (action === "4") {
+    const ok = await ensureGenRoutes();
+    if (!ok) { rl.close(); return; }
     const r = run("npm", ["run", "build"]);
     console.log(r.ok ? "✅ BUILD OK" : `❌ BUILD FAIL (code ${r.code})`);
     rl.close();
@@ -395,6 +411,8 @@ async function main() {
       }
     }
 
+    const ok2 = await ensureGenRoutes();
+    if (!ok2) { rl.close(); return; }
     const b = run("npm", ["run", "build"]);
     if (!b.ok) {
       console.log(`❌ BUILD FAIL (code ${b.code})`);
@@ -452,7 +470,9 @@ async function main() {
     // build si no existe dist
     const dist = path.resolve(process.cwd(), "dist");
     if (!exists(dist)) {
-      const b = run("npm", ["run", "build"]);
+      const ok2 = await ensureGenRoutes();
+    if (!ok2) { rl.close(); return; }
+    const b = run("npm", ["run", "build"]);
       if (!b.ok) {
         console.log(`❌ BUILD FAIL (code ${b.code})`);
         rl.close();
