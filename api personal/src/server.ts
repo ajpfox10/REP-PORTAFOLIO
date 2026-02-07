@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import { buildOpenApiFromSchema } from "./types/openapi/build";
+import { getRedisClient, closeRedisClient } from "./infra/redis";
 
 // ✅ Hard-fail logging: no usamos console.* para que quede en el logger central
 process.on("unhandledRejection", (e) => {
@@ -33,6 +34,17 @@ async function main() {
   const sequelize = createSequelize();
   await sequelize.authenticate();
   logger.info({ msg: "DB connected", db: env.DB_NAME, host: env.DB_HOST });
+
+  // ✅ Preflight Redis si se usa rate limit distribuido
+  if (env.RATE_LIMIT_USE_REDIS) {
+    try {
+      await getRedisClient();
+    } catch (e) {
+      // En prod conviene fallar... en dev/test es mejor seguir con memoria.
+      if (env.NODE_ENV === "production" && env.PROD_FAIL_FAST) throw e;
+      logger.warn({ msg: "Redis no disponible, se usará rate limit en memoria", err: e instanceof Error ? e.message : String(e) });
+    }
+  }
 
   await runMigrations(sequelize);
 
@@ -121,6 +133,12 @@ async function main() {
         await sequelize.close();
       } catch (e) {
         logger.warn({ msg: "Sequelize close failed", err: e instanceof Error ? e.stack : String(e) });
+      }
+
+      try {
+        await closeRedisClient();
+      } catch (e) {
+        logger.warn({ msg: "Redis close failed", err: e instanceof Error ? e.message : String(e) });
       }
 
       logger.info({ msg: "Shutdown complete", signal });

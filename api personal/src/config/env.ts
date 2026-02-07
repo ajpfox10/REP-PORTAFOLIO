@@ -97,8 +97,14 @@ const schema = z.object({
   DOCS_PROTECT: boolish.default(true),
 
   // Rate limit (global)
+  RATE_LIMIT_ENABLE: boolish.default(true),
   RATE_LIMIT_WINDOW_MS: intish(900000),
   RATE_LIMIT_MAX: intish(300),
+
+  // ✅ Rate limit distribuido (Redis) - recomendado en producción con múltiples instancias
+  RATE_LIMIT_USE_REDIS: boolish.default(false),
+  REDIS_URL: strish(""),
+  REDIS_CONNECT_TIMEOUT_MS: intish(5000),
 
   // ✅ Rate limit fino (auth)
   AUTH_RATE_LIMIT_WINDOW_MS: intish(10 * 60_000),
