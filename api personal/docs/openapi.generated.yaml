@@ -371,6 +371,45 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/certificados/certificado-trabajo:
+    post:
+      tags:
+        - docs
+      security:
+        - bearerAuth: []
+      summary: Generar Certificado de Trabajo (DOCX) desde plantilla
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dni
+              additionalProperties: false
+              properties:
+                dni:
+                  type: number
+                dependencia:
+                  type: string
+                legajo:
+                  type: string
+                decreto:
+                  type: string
+                lugar_y_fecha:
+                  type: string
+      responses:
+        "200":
+          description: DOCX generado
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Bad request
+        "404":
+          description: No encontrado
   /api/v1/agentes_servicios:
     get:
       tags:
@@ -1920,6 +1959,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Get consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/dependencias:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List dependencias
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_dependencias"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create dependencias
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_dependencias_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/dependencias/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get dependencias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update dependencias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_dependencias"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch dependencias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_dependencias_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete dependencias by id
       parameters:
         - name: id
           in: path
@@ -4482,6 +4653,60 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete personal by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/personaldetalle:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List personaldetalle
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_personaldetalle"
+  /api/v1/personaldetalle/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get personaldetalle by id
       parameters:
         - name: id
           in: path
@@ -8927,6 +9152,27 @@ components:
         impreso:
           type: string
           nullable: true
+    Table_dependencias:
+      type: object
+      additionalProperties: false
+      properties:
+        Columna 1:
+          type: number
+          nullable: true
+    Table_dependencias_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        Columna 1:
+          type: number
+          nullable: true
+    Table_dependencias_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        Columna 1:
+          type: number
+          nullable: true
     Table_disiplina:
       type: object
       additionalProperties: false
@@ -9822,6 +10068,9 @@ components:
         updated_by:
           type: number
           nullable: true
+        descuentosprevisionales:
+          type: number
+          nullable: true
       required:
         - id
     Table_ley_Create:
@@ -9847,6 +10096,9 @@ components:
         updated_by:
           type: number
           nullable: true
+        descuentosprevisionales:
+          type: number
+          nullable: true
     Table_ley_Patch:
       type: object
       additionalProperties: false
@@ -9870,6 +10122,9 @@ components:
           type: number
           nullable: true
         updated_by:
+          type: number
+          nullable: true
+        descuentosprevisionales:
           type: number
           nullable: true
     Table_localidades:
@@ -10792,6 +11047,188 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+    Table_personaldetalle:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        localidad:
+          type: string
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        ley:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_personaldetalle_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        localidad:
+          type: string
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        ley:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_personaldetalle_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        localidad:
+          type: string
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        ley:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
           nullable: true
     Table_planta:
       type: object

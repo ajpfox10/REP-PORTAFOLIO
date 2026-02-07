@@ -4,8 +4,8 @@
   "description": "Enterprise-grade Express + Sequelize API for personalv5 (MySQL), with OpenAPI validation, security hardening, and dynamic CRUD.",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development ts-node-dev --transpile-only --respawn src/server.ts",
-    "build": "rimraf dist && tsc -p tsconfig.build.json",
+    "dev": "npm run gen:routes && cross-env NODE_ENV=development ts-node-dev --transpile-only --respawn src/server.ts",
+    "build": "rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json",
     "start": "cross-env NODE_ENV=production node dist/server.js",
     "test": "cross-env NODE_ENV=test jest --runInBand",
     "test:integration": "npx cross-env TEST_INTEGRATION=1 NODE_ENV=test jest --runInBand",
@@ -16,7 +16,10 @@
     "db:migrate": "ts-node src/scripts/migrate.ts",
     "db:migrate:test": "cross-env NODE_ENV=test ts-node src/scripts/migrate.ts",
     "openapi:export": "ts-node src/types/openapi/export.ts",
-    "seed:admin": "node scripts/seedAdmin.mjs"
+    "seed:admin": "node scripts/seedAdmin.mjs",
+    "gen:routes": "node scripts/routes/genAutoRoutesManifest.mjs",
+    "dev:watch:routes": "chokidar \"src/routes/auto/**/*.routes.ts\" \"src/routes/auto/**/*.routes.js\" -c \"npm run gen:routes\"",
+    "dev:pro": "concurrently -k -n ROUTES,API -c auto \"npm run dev:watch:routes\" \"npm run dev\""
   },
   "keywords": [],
   "author": "",
@@ -24,6 +27,7 @@
   "dependencies": {
     "@types/compression": "^1.8.1",
     "bcryptjs": "^3.0.3",
+    "jszip": "^3.10.1",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -61,6 +65,8 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^9.0.0"
   }
 }
