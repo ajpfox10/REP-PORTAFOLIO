@@ -364,6 +364,51 @@ export function buildOpenApiFromSchema(snapshot: SchemaSnapshot, opts: BuildOpen
         responses: { 200: { description: "OK" }, 404: { description: "Not found" } },
       };
 
+        // ======================
+       // Exportacion de datos para certificados
+      // ======================
+
+      doc.paths["/api/v1/certificados/certificado-trabajo"] = {
+  post: {
+    tags: ["docs"],
+    security: [{ bearerAuth: [] }],
+    summary: "Generar Certificado de Trabajo (DOCX) desde plantilla",
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["dni"],
+            additionalProperties: false,
+            properties: {
+              dni: { type: "number" },
+              dependencia: { type: "string" },
+              legajo: { type: "string" },
+              decreto: { type: "string" },
+              lugar_y_fecha: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "DOCX generado",
+        content: {
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+            schema: { type: "string", format: "binary" },
+          },
+        },
+      },
+      400: { description: "Bad request" },
+      404: { description: "No encontrado" },
+    },
+  },
+};
+
+      
+
       /** ✅ PATCH agregado */
       (doc.paths[`${base}/{id}`] as any).patch = {
         tags: ["crud"],
