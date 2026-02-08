@@ -239,6 +239,49 @@ Nada entra si:
 - no está claro
 
 ---
+### 📱 Controles de calidad
+
+- Herramientas instaladas (lint, formateo automático y hooks de Git).
+- La ejecución estricta puede estar temporalmente deshabilitada.
+- La activación definitiva queda para la etapa de estabilización.
+
+---
+
+### 🔧 Tests
+
+- Infraestructura de testing presente.
+- Cobertura incompleta en algunos módulos.
+- Los tests no bloquean commits ni pushes.
+
+---
+
+### 📢 Documentación OpenAPI
+
+- OpenAPI funcional.
+- Sin una úníca fuente de verdad definitiva.
+- Convivencia de versión base y generada.
+
+---
+
+### 🐋 Despliegue
+
+- No incluye Docker.
+- No existe guía de despliegue final.
+
+---
+
+### 🔗 Higiene del repositorio
+
+- Pueden existir logs.
+- Pueden existir archivos generados.
+- Pueden existir restos de debugging.
+
+---
+
+### 🗠 Regla importante
+
+Nada de lo anterior rompe el proyecto ni impide avanzar.
+Lo que falta no es rehacer, es cerrar.
 
 ## 🏁 Resumen final
 
