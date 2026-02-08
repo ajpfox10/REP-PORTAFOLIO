@@ -1,4 +1,6 @@
 @echo off
+set HUSKY=0
+
 setlocal EnableExtensions
 
 cd /d "%~dp0"
