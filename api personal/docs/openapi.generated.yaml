@@ -15,6 +15,11 @@ tags:
     description: CRUD genérico por tabla/vista
   - name: docs
     description: OpenAPI spec
+  - name: documents
+    description: Listado y descarga de documentos (tblarchivos)
+  - name: agentes
+    description: Gestión de agentes y recursos asociados (datos personales, fotos,
+      documentos vinculados)
 paths:
   /health:
     get:
@@ -410,6 +415,86 @@ paths:
           description: Bad request
         "404":
           description: No encontrado
+  /api/v1/documents:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Listar documentos (tblarchivos)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Parámetros inválidos
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+  /api/v1/documents/{id}/file:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Descargar/visualizar documento por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Archivo (stream)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: ID inválido / ruta inválida
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+        "404":
+          description: No encontrado
+        "413":
+          description: Archivo demasiado grande
+        "415":
+          description: Tipo de archivo no permitido
+        "423":
+          description: Bloqueado (virus detectado)
+        "500":
+          description: Error
   /api/v1/agentes_servicios:
     get:
       tags:
@@ -7447,6 +7532,14 @@ components:
           type: string
           format: date-time
           nullable: true
+        fecha_de_nombramiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_de_tituralizacion:
+          type: string
+          format: date-time
+          nullable: true
         estado_empleo:
           type: string
           nullable: true
@@ -7506,6 +7599,14 @@ components:
           format: date-time
           nullable: true
         fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_de_nombramiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_de_tituralizacion:
           type: string
           format: date-time
           nullable: true
@@ -7569,6 +7670,14 @@ components:
           format: date-time
           nullable: true
         fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_de_nombramiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_de_tituralizacion:
           type: string
           format: date-time
           nullable: true
@@ -10928,6 +11037,21 @@ components:
         updated_by:
           type: number
           nullable: true
+        numerodomicilio:
+          type: number
+          nullable: true
+        depto:
+          type: string
+          nullable: true
+        piso:
+          type: number
+          nullable: true
+        observacionesdireccion:
+          type: string
+          nullable: true
+        cp:
+          type: string
+          nullable: true
       required:
         - dni
         - apellido
@@ -10988,6 +11112,21 @@ components:
         updated_by:
           type: number
           nullable: true
+        numerodomicilio:
+          type: number
+          nullable: true
+        depto:
+          type: string
+          nullable: true
+        piso:
+          type: number
+          nullable: true
+        observacionesdireccion:
+          type: string
+          nullable: true
+        cp:
+          type: string
+          nullable: true
       required:
         - dni
         - apellido
@@ -11047,6 +11186,21 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+        numerodomicilio:
+          type: number
+          nullable: true
+        depto:
+          type: string
+          nullable: true
+        piso:
+          type: number
+          nullable: true
+        observacionesdireccion:
+          type: string
+          nullable: true
+        cp:
+          type: string
           nullable: true
     Table_personaldetalle:
       type: object
@@ -11393,6 +11547,9 @@ components:
         regimen_horario:
           type: number
           nullable: true
+        estado_planta:
+          type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
@@ -11412,6 +11569,9 @@ components:
         regimen_horario:
           type: number
           nullable: true
+        estado_planta:
+          type: string
+          nullable: true
         deleted_at:
           type: string
           format: date-time
@@ -11430,6 +11590,9 @@ components:
           type: number
         regimen_horario:
           type: number
+          nullable: true
+        estado_planta:
+          type: string
           nullable: true
         deleted_at:
           type: string
@@ -12225,9 +12388,15 @@ components:
         tamanio:
           type: string
           nullable: true
+        anio:
+          type: number
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
+        procesada:
+          type: number
           nullable: true
         descripcion_archivo:
           type: string
@@ -12277,9 +12446,15 @@ components:
         tamanio:
           type: string
           nullable: true
+        anio:
+          type: number
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
+        procesada:
+          type: number
           nullable: true
         descripcion_archivo:
           type: string
@@ -12330,9 +12505,15 @@ components:
         tamanio:
           type: string
           nullable: true
+        anio:
+          type: number
+          nullable: true
         fecha:
           type: string
           format: date-time
+          nullable: true
+        procesada:
+          type: number
           nullable: true
         descripcion_archivo:
           type: string
