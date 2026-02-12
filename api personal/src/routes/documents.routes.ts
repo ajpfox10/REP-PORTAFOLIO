@@ -89,7 +89,8 @@ export function buildDocumentsRouter(sequelize: any) {
 
       const rows = await sequelize.query(
         `
-        SELECT id, ruta, nombre
+        SELECT id, ruta, nombre, nombre_archivo_original
+        -- ✅ CAMBIO: agregamos nombre_archivo_original porque es el filename real en disco
         FROM tblarchivos
         WHERE id = :id AND deleted_at IS NULL
         LIMIT 1
@@ -100,14 +101,27 @@ export function buildDocumentsRouter(sequelize: any) {
       const row = (rows as any[])[0];
       if (!row) return res.status(404).json({ ok: false, error: "Not found" });
 
+      // ✅ CAMBIO: el archivo físico se abre con nombre_archivo_original (no con ruta)
+      // ⛔ ANTES era:
+      // const fullPath = resolveSafeRealPath(env.DOCUMENTS_BASE_DIR, String(row.ruta || ""));
+      // Eso fallaba porque row.ruta era una carpeta/UNC (o no era el archivo).
+      const fileOnDisk = String(row.nombre_archivo_original || "").trim();
+      if (!fileOnDisk) {
+        return res.status(500).json({ ok: false, error: "Missing nombre_archivo_original" });
+      }
+
       // ✅ path seguro + anti-symlink escape
-      const fullPath = resolveSafeRealPath(env.DOCUMENTS_BASE_DIR, String(row.ruta || ""));
+      // DOCUMENTS_BASE_DIR debe ser algo como: D:\G\RESOLUCIONES Y VARIOS
+      const fullPath = resolveSafeRealPath(env.DOCUMENTS_BASE_DIR, fileOnDisk);
 
       // ✅ validar tamaño + MIME por magic bytes
       const { stat, sniff } = validateDownloadFile(fullPath);
       await scanFileOrThrow(fullPath);
 
-      const nameFromDb = safeFilename(String(row.nombre || `document-${id}`));
+      // ✅ CAMBIO (opcional pero recomendado):
+      // Para el nombre que ve el usuario, usamos el filename real (y si no, el "nombre" lógico).
+      // Evita que "nombre" (tipo "Resolución 123") genere un PDF con nombre raro.
+      const nameFromDb = safeFilename(String(row.nombre_archivo_original || row.nombre || `document-${id}`));
       const filename = nameFromDb.includes(".") ? nameFromDb : `${nameFromDb}.${sniff.ext || "bin"}`;
 
       // Headers seguros
