@@ -7,7 +7,7 @@ import { exportToExcel, exportToPdf, exportToWord, printTable } from '../../util
 import { trackAction } from '../../logging/track';
 import { loadSession } from '../../auth/session';
 
-// Hooks específicos
+// Hooks
 import { useAgenteSearch } from './hooks/useAgenteSearch';
 import { useModules, type ModuleKey } from './hooks/useModules';
 import { usePedidos } from './hooks/usePedidos';
@@ -16,18 +16,18 @@ import { useCellModal } from './hooks/useCellModal';
 import { useDebounce } from './hooks/useDebounce';
 
 // Componentes
-// Nota: en esta feature la carpeta quedó como /components/components
 import { AgenteSearchForm } from './components/components/AgenteSearchForm';
 import { AgenteInfoCard } from './components/components/AgenteInfoCard';
 import { ModuleGrid } from './components/components/ModuleGrid';
-import { ModuleDetailView } from './components/components/ModuleDetailView';
+import ModuleDetailView from './components/components/ModuleDetailView';
 import { MatchesList } from './components/components/MatchesList';
 import { FotoCredencialCard } from './components/components/FotoCredencialCard';
 import { PedidoModal } from './components/modals/PedidoModal';
 import { CellModal } from './components/modals/CellModal';
 import { DocViewerModal } from './components/modals/DocViewerModal';
-import { GestionDocumentPreview } from './components/GestionDocumentPreview';
+import { GestionDocumentPreview } from './components/components/GestionDocumentPreview';
 
+// CSS
 import './styles/GestionPage.css';
 
 export function GestionPage() {
@@ -40,7 +40,7 @@ export function GestionPage() {
     useModules(agenteSearch.cleanDni, toast);
   const pedidos = usePedidos(agenteSearch.cleanDni, modules.pedidos, toast, () =>
     loadModule('pedidos', { forceReload: true }));
-  const documentos = useDocumentos(agenteSearch.cleanDni, toast);
+  const documentos = useDocumentos(agenteSearch.cleanDni);
   const cellModal = useCellModal(toast);
 
   // Estado para compatibilidad
@@ -58,17 +58,13 @@ export function GestionPage() {
     }
   }, [debouncedDni]);
 
-  // ✅ Cargar foto credencial cuando cambia el DNI limpio
+  // Cargar foto credencial cuando cambia el DNI limpio
   useEffect(() => {
     const dni = agenteSearch.cleanDni;
-
-    // si no hay dni, limpiamos la última URL para evitar leaks/preview viejo
     if (!dni) {
       documentos.revokeLastObjectUrl();
       return;
     }
-
-    // pedimos la foto (si falla, FotoCredencialCard ya muestra "Sin foto")
     documentos.fetchFotoPrivada(dni).catch(() => {});
   }, [agenteSearch.cleanDni]);
 
@@ -121,8 +117,8 @@ export function GestionPage() {
     if (!rows.length) return [];
     const cols = Object.keys(rows[0]);
     const preferred: Record<ModuleKey, string[]> = {
-      consultas: ["id", "dni", "motivo_consulta", "explicacion"],
-      pedidos: ["id", "dni"],
+      consultas: ["id", "dni", "motivo_consulta", "explicacion", "created_at"],
+      pedidos: ["id", "dni", "pedido", "estado", "lugar", "fecha", "observacion", "created_at"],
       documentos: ["id", "dni", "ruta", "nombre", "numero", "tipo", "tamano", "fecha", "descripcion_archivo", "nombre_archivo_original"],
     };
     const pref = preferred[key] || [];
@@ -140,9 +136,16 @@ export function GestionPage() {
     return (
       <div className="row gp-export-actions">
         <button className="btn" onClick={() => printTable(title, st.rows)} disabled={!st.rows.length}>Imprimir</button>
+
+        {key === 'pedidos' && (
+        <button className="btn gp-btn-ioma" onClick={() => documentos.openCertificadoIoma()} disabled={!agenteSearch.cleanDni}>
+          Certificado IOMA (DOCX)
+        </button>
+        )}
+
         <button className="btn" onClick={() => exportToExcel(`${file}.xlsx`, st.rows)} disabled={!st.rows.length}>Excel</button>
-        <button className="btn" onClick={() => exportToPdf(title, st.rows)} disabled={!st.rows.length}>PDF</button>
-        <button className="btn" onClick={() => exportToWord(title, st.rows)} disabled={!st.rows.length}>Word</button>
+        <button className="btn" onClick={() => exportToPdf(`${file}.pdf`, st.rows)} disabled={!st.rows.length}>PDF</button>
+        <button className="btn" onClick={() => exportToWord(`${file}.docx`, st.rows)} disabled={!st.rows.length}>Word</button>
       </div>
     );
   };
@@ -208,6 +211,7 @@ export function GestionPage() {
                   moduleTitle={getModuleTitle(k)}
                   moduleCols={moduleCols}
                   selectedRow={getSelectedRow(k)}
+                  selectedRowIdx={st.selectedIndex}
                   pageRows={pageRows}
                   start={start}
                   curPage={curPage}
@@ -221,8 +225,11 @@ export function GestionPage() {
                   onCellClick={(col, value, rowIndex) => cellModal.openCellModal(k, col, value, rowIndex)}
                   onOpenDoc={(route, row) => documentos.openDocViewer(route, row)}
                   onExport={() => renderExportActions(k)}
+                  onRowSelect={(idx) => setSelectedIndex(k, idx)}
                   onPedidoAction={k === 'pedidos' ? {
                     onOpenPedidoModal: pedidos.openPedidoModal,
+                    onIoma: pedidos.generarIomaSelected,
+                    onCertificadoIoma: () => documentos.openCertificadoIoma(),
                     onMarcarPendiente: () => pedidos.marcarPedidoEstado('pendiente'),
                     onMarcarHecho: () => pedidos.marcarPedidoEstado('hecho'),
                     onBaja: pedidos.bajaPedidoSelected,

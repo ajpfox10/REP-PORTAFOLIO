@@ -1,6 +1,6 @@
-// src/pages/GestionPage/components/ModuleDetailView.tsx
+// src/pages/GestionPage/components/components/ModuleDetailView.tsx
 import React from 'react';
-import type { ModuleKey } from '../hooks/useModules';
+import type { ModuleKey } from '../../hooks/useModules';
 
 interface Props {
   moduleKey: ModuleKey;
@@ -8,6 +8,7 @@ interface Props {
   moduleTitle: string;
   moduleCols: string[];
   selectedRow: any;
+  selectedRowIdx: number;
   pageRows: any[];
   start: number;
   curPage: number;
@@ -21,21 +22,24 @@ interface Props {
   onCellClick: (col: string, value: string, rowIndex: number) => void;
   onOpenDoc: (route: string, row: any) => void;
   onExport: () => React.ReactNode;
+  onRowSelect: (idx: number) => void;
   onPedidoAction?: {
     onOpenPedidoModal: () => void;
     onMarcarPendiente: () => void;
     onMarcarHecho: () => void;
     onBaja: () => void;
+    onCertificadoIoma: () => void;
     hasRows: boolean;
   };
 }
 
-export function ModuleDetailView({
+export default function ModuleDetailView({
   moduleKey,
   moduleState,
   moduleTitle,
   moduleCols,
   selectedRow,
+  selectedRowIdx,
   pageRows,
   start,
   curPage,
@@ -49,19 +53,24 @@ export function ModuleDetailView({
   onCellClick,
   onOpenDoc,
   onExport,
+  onRowSelect,
   onPedidoAction
 }: Props) {
+  const rows = moduleState?.rows ?? moduleState?.data ?? [];
+  const loading = moduleState?.loading ?? false;
+
   return (
     <div className="card gp-card-14 gp-module-stack-card">
       <div className="sep" />
 
+      {/* Botones de exportación */}
       <div className="row gp-row-between-wrap">
         {onExport()}
         <div className="row gp-row-wrap">
-          <div className="badge">{moduleState.loading ? "Cargando…" : `Filas: ${moduleState.rows.length}`}</div>
-          {moduleState.scanned && (
+          <div className="badge">{loading ? "Cargando…" : `Filas: ${rows.length}`}</div>
+          {moduleState?.scanned && (
             <div className="badge">
-              Scan: {moduleState.scanned.pages}/{moduleState.scanned.totalPages} pág (total API {moduleState.scanned.total})
+              Scan: {moduleState.scanned.pages}/{moduleState.scanned.totalPages} pág
             </div>
           )}
           <button className="btn" type="button" onClick={onClose}>
@@ -70,50 +79,86 @@ export function ModuleDetailView({
         </div>
       </div>
 
-      <div className="gp-module-body">
-        {/* Navegación */}
-        <div className="gp-nav">
-          <div className="row gp-row-between-center">
-            <b>{moduleTitle}</b>
-            <span className="badge">Navegación</span>
-          </div>
-
-          <div className="gp-nav-list" role="list">
-            {moduleState.rows.map((r: any, idx: number) => {
-              const isActive = idx === moduleState.selectedIndex;
-              const label = moduleKey === "consultas"
-                ? `${r?.id ?? idx + 1}. ${String(r?.motivo_consulta ?? "(sin motivo)").slice(0, 48)}`
-                : moduleKey === 'documentos'
-                  ? `${r?.id ?? idx + 1}. ${String(r?.nombre ?? r?.nombre_archivo_original ?? "(sin nombre)").slice(0, 48)}`
-                  : `${r?.id ?? idx + 1}. ${String(r?.estado ?? "(sin estado)").slice(0, 48)}`;
+      {/* 🐉🐉🐉 TABLA SAGRADA - CON ID CORREGIDO 🐉🐉🐉 */}
+      <div className="gp-tablewrap">
+        <table className="table">
+          <thead>
+            <tr>
+              {moduleCols.map((col) => (
+                <th key={col}>{col}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map((row: any, idx: number) => {
+              const realIdx = start + idx;
+              const isSelected = realIdx === selectedRowIdx;
               
               return (
-                <button
-                  key={`${r?.id ?? idx}`}
-                  type="button"
-                  className={`gp-nav-item ${isActive ? "is-active" : ""}`}
-                  onClick={() => onSetSelectedIndex(idx)}
+                <tr 
+                  key={realIdx} 
+                  className={isSelected ? 'gp-row-active' : ''}
+                  onClick={() => {
+                    onSetSelectedIndex(realIdx);
+                    onRowSelect(realIdx);
+                  }}
                 >
-                  {label}
-                </button>
+                  {moduleCols.map((col) => {
+                    const value = row?.[col] ?? '';
+                    
+                    return (
+                      <td 
+                        key={col}
+                        className="cell"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          
+                          // Detectar columna de documento
+                          const isDocColumn = 
+                            col === 'ruta' || 
+                            col === 'route' || 
+                            col === 'path' || 
+                            col === 'url' ||
+                            col.toLowerCase().includes('ruta');
+                          
+                          if (isDocColumn) {
+                            // ✅ LO QUE EL BACKEND QUIERE: EL ID, NO LA RUTA
+                            const docId = row?.id ?? row?.documentoId ?? row?.document_id;
+                            
+                            if (docId) {
+                              // ✅ Mandamos el ID numérico
+                              onOpenDoc(String(docId), row);
+                            } else {
+                              // Fallback: mandamos lo que haya en la celda
+                              onOpenDoc(String(value), row);
+                            }
+                          } else {
+                            // Columna normal → modal de celda
+                            onCellClick(col, String(value), realIdx);
+                          }
+                        }}
+                      >
+                        {String(value).substring(0, 120)}
+                        {String(value).length > 120 ? '…' : ''}
+                      </td>
+                    );
+                  })}
+                </tr>
               );
             })}
-            
-            {!moduleState.rows.length && !moduleState.loading && (
-              <div className="muted gp-mt-10">Sin registros para este DNI.</div>
-            )}
-          </div>
-        </div>
+          </tbody>
+        </table>
+      </div>
 
-        {/* Detalle */}
-        <div className="gp-detail">
-          <div className="row gp-row-between-center">
-            <b>Detalle</b>
-            <span className="badge">Fila {moduleState.rows.length ? moduleState.selectedIndex + 1 : 0}</span>
-          </div>
+      <div className="sep" />
 
-          {renderDetailContent(moduleKey, selectedRow, onOpenDoc)}
+      {/* Detalle de la fila seleccionada */}
+      <div className="gp-detail">
+        <div className="row gp-row-between-center">
+          <b>Detalle</b>
+          <span className="badge">Fila {rows.length ? selectedRowIdx + 1 : 0}</span>
         </div>
+        {renderDetailContent(moduleKey, selectedRow, onOpenDoc)}
       </div>
 
       <div className="sep" />
@@ -131,6 +176,9 @@ export function ModuleDetailView({
             <button className="btn" type="button" onClick={onPedidoAction.onMarcarHecho} disabled={!onPedidoAction.hasRows}>
               Hecho
             </button>
+            <button className="btn gp-btn-ioma" type="button" onClick={onPedidoAction.onCertificadoIoma}>
+              Certificado IOMA
+            </button>
           </div>
           <div className="row gp-row-wrap">
             <button className="btn danger" type="button" onClick={onPedidoAction.onBaja} disabled={!onPedidoAction.hasRows}>
@@ -145,16 +193,17 @@ export function ModuleDetailView({
         <div className="row gp-row-wrap">
           <span className="badge">Página {curPage}/{totalPages}</span>
           <span className="badge">
-            Mostrando {moduleState.rows.length ? `${start + 1}-${Math.min(start + pageSize, moduleState.rows.length)}` : '0'} de {moduleState.rows.length}
+            Mostrando {rows.length ? `${start + 1}-${Math.min(start + pageSize, rows.length)}` : '0'} de {rows.length}
           </span>
         </div>
+
         <div className="row gp-row-wrap">
           <label className="muted gp-pager-label">
             Filas
             <select
-              className="input gp-pager-select"
               value={pageSize}
               onChange={(e) => onSetTablePageSize(Number(e.target.value))}
+              className="gp-select"
             >
               {[25, 50, 100, 200].map((n) => (
                 <option key={n} value={n}>{n}</option>
@@ -162,164 +211,91 @@ export function ModuleDetailView({
             </select>
           </label>
 
-          <button className="btn" type="button" disabled={curPage <= 1} onClick={() => onSetTablePage(curPage - 1)}>
+          <button 
+            className="btn" 
+            type="button" 
+            onClick={() => onSetTablePage(curPage - 1)} 
+            disabled={curPage <= 1}
+          >
             ◀
           </button>
-          <button className="btn" type="button" disabled={curPage >= totalPages} onClick={() => onSetTablePage(curPage + 1)}>
+          <button 
+            className="btn" 
+            type="button" 
+            onClick={() => onSetTablePage(curPage + 1)} 
+            disabled={curPage >= totalPages}
+          >
             ▶
           </button>
         </div>
-      </div>
-
-      {/* Tabla */}
-      <div className="gp-tablewrap">
-        <table className="table">
-          <thead>
-            <tr>
-              {moduleCols.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map((r, idxLocal) => {
-              const idx = start + idxLocal;
-              return (
-                <tr key={idx} className={idx === moduleState.selectedIndex ? "gp-row-active" : ""}>
-                  {moduleCols.map((c) => (
-                    <td
-                      key={c}
-                      className="cell"
-                      title="Click para ampliar"
-                      onClick={() => {
-                        onSetSelectedIndex(idx);
-                        onCellClick(c, String(r?.[c] ?? ""), idx);
-                      }}
-                      onDoubleClick={() => {
-                        if (moduleKey === 'documentos' && c === 'ruta') {
-                          onOpenDoc(String(r?.[c] ?? ''), r);
-                        }
-                      }}
-                    >
-                      {String(r?.[c] ?? "")}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="row gp-row-between-gap10 gp-accordion-foot">
-        <div>
-          <div className="row gp-row-baseline-gap10">
-            <h3 className="gp-h3-0">{moduleTitle}</h3>
-            <span className="badge">Exportación</span>
-          </div>
-          <p className="muted gp-mt-6">
-            Tip: click en una celda abre el emergente. Para navegar rápido, usá la lista de la izquierda.
-          </p>
-        </div>
-        {onExport()}
       </div>
     </div>
   );
 }
 
-// Helper para renderizar contenido del detalle
+/**
+ * 🐉 RENDERIZADO DE DETALLE - CORREGIDO CON ID
+ */
 function renderDetailContent(moduleKey: ModuleKey, selectedRow: any, onOpenDoc: (route: string, row: any) => void) {
   if (!selectedRow) {
-    return <p className="muted gp-mt-10">Seleccioná un registro a la izquierda.</p>;
+    return <div className="muted gp-mt-10">Sin fila seleccionada.</div>;
   }
 
-  switch (moduleKey) {
-    case "consultas":
-      return (
-        <div className="gp-detail-grid">
-          <div className="gp-field">
-            <div className="gp-field-label">Motivo</div>
-            <div className="gp-field-value">{String(selectedRow?.motivo_consulta ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Explicación</div>
-            <div className="gp-field-value">{String(selectedRow?.explicacion ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Atendido por</div>
-            <div className="gp-field-value">{String(selectedRow?.atendido_por ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Hora atención</div>
-            <div className="gp-field-value">{String(selectedRow?.hora_atencion ?? "-")}</div>
-          </div>
-        </div>
-      );
-
-    case "documentos":
-      return (
-        <div className="gp-detail-grid">
-          <div className="gp-field">
-            <div className="gp-field-label">Nombre</div>
-            <div className="gp-field-value">{String(selectedRow?.nombre ?? selectedRow?.nombre_archivo_original ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Tipo</div>
-            <div className="gp-field-value">{String(selectedRow?.tipo ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Número</div>
-            <div className="gp-field-value">{String(selectedRow?.numero ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Fecha</div>
-            <div className="gp-field-value">{String(selectedRow?.fecha ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Descripción</div>
-            <div className="gp-field-value">{String(selectedRow?.descripcion_archivo ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Ruta</div>
-            <div className="gp-field-value">
-              <div className="row gp-row-wrap">
-                <span className="badge" title={String(selectedRow?.ruta ?? '')}>
-                  {String(selectedRow?.ruta ?? "-")}
-                </span>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => onOpenDoc(String(selectedRow?.ruta ?? ''), selectedRow)}
-                  disabled={!selectedRow?.ruta}
+  // 🎯 VISTA ESPECIAL PARA DOCUMENTOS
+  if (moduleKey === "documentos") {
+    // ✅ LO QUE EL BACKEND QUIERE: EL ID
+    const docId = selectedRow?.id ?? selectedRow?.documentoId ?? selectedRow?.document_id;
+    
+    return (
+      <div className="gp-detail-grid">
+        {Object.entries(selectedRow).map(([k, v]) => (
+          <div key={k} className="gp-kv">
+            <div className="muted gp-k">{k}</div>
+            <div className="gp-v">
+              {k.toLowerCase().includes('ruta') || 
+               k.toLowerCase().includes('route') || 
+               k.toLowerCase().includes('path') || 
+               k.toLowerCase().includes('url') ? (
+                <button 
+                  className="btn" 
+                  type="button" 
+                  onClick={() => onOpenDoc(String(docId ?? v ?? ''), selectedRow)}
+                  disabled={!docId && !v}
                 >
-                  Abrir
+                  {docId ? `Abrir (ID ${docId})` : 'Abrir'}
                 </button>
-              </div>
+              ) : (
+                <span>{String(v ?? '')}</span>
+              )}
             </div>
           </div>
-        </div>
-      );
-
-    default: // pedidos
-      return (
-        <div className="gp-detail-grid">
-          <div className="gp-field">
-            <div className="gp-field-label">Estado</div>
-            <div className="gp-field-value">{String(selectedRow?.estado ?? "-")}</div>
+        ))}
+        
+        {/* Botón principal de abrir documento */}
+        {docId && (
+          <div className="gp-mt-10">
+            <button 
+              className="btn primary" 
+              type="button" 
+              onClick={() => onOpenDoc(String(docId), selectedRow)}
+            >
+              📄 Abrir documento (ID {docId})
+            </button>
           </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Lugar</div>
-            <div className="gp-field-value">{String(selectedRow?.lugar ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Fecha</div>
-            <div className="gp-field-value">{String(selectedRow?.fecha ?? "-")}</div>
-          </div>
-          <div className="gp-field">
-            <div className="gp-field-label">Observación</div>
-            <div className="gp-field-value">{String(selectedRow?.observacion ?? "-")}</div>
-          </div>
-        </div>
-      );
+        )}
+      </div>
+    );
   }
+
+  // 🎯 VISTA PARA CONSULTAS Y PEDIDOS
+  return (
+    <div className="gp-detail-grid">
+      {Object.entries(selectedRow).map(([k, v]) => (
+        <div key={k} className="gp-kv">
+          <div className="muted gp-k">{k}</div>
+          <div className="gp-v">{String(v ?? '')}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
