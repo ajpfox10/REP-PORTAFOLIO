@@ -16,7 +16,7 @@ export function useDocumentos(cleanDni: string) {
     loading: false,
     error: null as string | null,
   });
-  
+
   const lastObjectUrlRef = useRef<string | null>(null);
 
   const revokeLastObjectUrl = useCallback(() => {
@@ -26,10 +26,36 @@ export function useDocumentos(cleanDni: string) {
     }
   }, []);
 
+  /**
+   * 🐉 NORMALIZACIÓN DE RUTAS - VERSIÓN DEFINITIVA
+   * 
+   * ✅ SIEMPRE usar ID numérico → /documents/:id/file
+   * ✅ HTTP/HTTPS → absoluto
+   * ❌ UNC directa → ERROR (no se puede en navegador)
+   */
   const normalizeDocRoute = useCallback((route: string) => {
     const r = String(route || '').trim();
-    if (!r) return { kind: 'api', value: '/' };
-    if (/^https?:\/\//i.test(r)) return { kind: 'absolute', value: r };
+    if (!r) return { kind: 'error', value: 'Ruta vacía' };
+
+    // ✅ Si es ID numérico → endpoint correcto (EL QUE FUNCIONA)
+    if (/^\d+$/.test(r)) {
+      return { kind: 'api', value: `/documents/${r}/file` };
+    }
+
+    // ✅ URL absoluta HTTP/S
+    if (/^https?:\/\//i.test(r)) {
+      return { kind: 'absolute', value: r };
+    }
+
+    // ❌ UNC directa (\\server\share o //server/share)
+    if (/^\\\\[^\\]+\\/.test(r) || /^\/\/[^\/]+\//.test(r)) {
+      return { 
+        kind: 'error', 
+        value: 'Ruta de red no accesible directamente. Usá el ID del documento.' 
+      };
+    }
+
+    // ⚠️ Ruta de API relativa (fallback, no recomendado)
     return { kind: 'api', value: r.startsWith('/') ? r : `/${r}` };
   }, []);
 
@@ -50,12 +76,20 @@ export function useDocumentos(cleanDni: string) {
     }
   }, [revokeLastObjectUrl]);
 
-  const openDocViewer = useCallback(async (route: string, rowRef: any) => {
-    const norm = normalizeDocRoute(route);
-    trackAction('gestion_document_open', { 
-      dni: Number(cleanDni), 
-      route, 
-      kind: norm.kind 
+  /**
+   * 🐉 ABRIR VISOR DE DOCUMENTOS - VERSIÓN CORREGIDA
+   * 
+   * @param identifier - DEBE ser el ID numérico del documento
+   * @param rowRef - Fila completa (para metadata)
+   */
+  const openDocViewer = useCallback(async (identifier: string, rowRef: any) => {
+    const norm = normalizeDocRoute(identifier);
+    
+    trackAction('gestion_document_open', {
+      dni: Number(cleanDni),
+      identifier,
+      kind: norm.kind,
+      hasId: /^\d+$/.test(identifier)
     });
 
     // Limpiar URL anterior
@@ -63,92 +97,182 @@ export function useDocumentos(cleanDni: string) {
       if (prev.objectUrl && prev.objectUrl.startsWith('blob:')) {
         try { URL.revokeObjectURL(prev.objectUrl); } catch { /* noop */ }
       }
-      return { 
-        open: true, 
-        route, 
-        row: rowRef ?? null, 
-        objectUrl: null, 
-        meta: null, 
-        loading: true, 
-        error: null 
+      return {
+        open: true,
+        route: identifier,
+        row: rowRef ?? null,
+        objectUrl: null,
+        meta: null,
+        loading: true,
+        error: null
       };
     });
 
-    // URL absoluta (sin auth)
+    // ❌ Si es error (UNC directa) → mostrar mensaje claro
+    if (norm.kind === 'error') {
+      setDocViewer((prev) => ({
+        ...prev,
+        loading: false,
+        error: norm.value
+      }));
+      toast.error('No se pudo abrir el archivo', norm.value);
+      return;
+    }
+
+    // ✅ URL absoluta (sin auth)
     if (norm.kind === 'absolute') {
-      setDocViewer((prev) => ({ 
-        ...prev, 
-        objectUrl: norm.value, 
-        loading: false, 
-        meta: { contentType: '', filename: (route.split('/').pop() || null) } 
+      setDocViewer((prev) => ({
+        ...prev,
+        objectUrl: norm.value,
+        loading: false,
+        meta: { 
+          contentType: '', 
+          filename: rowRef?.nombre || identifier.split('/').pop() || null 
+        }
       }));
       return;
     }
 
-    // URL de API (con auth)
+    // ✅ URL de API con auth (EL CORRECTO: /documents/:id/file)
     try {
       const { blob, contentType, filename } = await apiFetchBlobWithMeta(norm.value);
       const url = URL.createObjectURL(blob);
-      setDocViewer((prev) => ({ 
-        ...prev, 
-        objectUrl: url, 
-        loading: false, 
-        meta: { contentType, filename: filename || (route.split('/').pop() || null) }, 
-        error: null 
+      
+      setDocViewer((prev) => ({
+        ...prev,
+        objectUrl: url,
+        loading: false,
+        meta: { 
+          contentType, 
+          filename: filename || rowRef?.nombre || `documento-${identifier}.pdf`
+        },
+        error: null
       }));
+      
+      trackAction('gestion_document_open_ok', {
+        dni: Number(cleanDni),
+        identifier,
+        bytes: blob.size,
+        contentType
+      });
+      
     } catch (e: any) {
-      setDocViewer((prev) => ({ 
-        ...prev, 
-        loading: false, 
-        error: e?.message || 'No se pudo abrir el archivo' 
+      setDocViewer((prev) => ({
+        ...prev,
+        loading: false,
+        error: e?.message || 'No se pudo abrir el archivo'
       }));
+      
       toast.error('No se pudo abrir el archivo', e?.message || 'Error');
-      trackAction('gestion_document_open_error', { 
-        dni: Number(cleanDni), 
-        route, 
-        message: e?.message 
+      
+      trackAction('gestion_document_open_error', {
+        dni: Number(cleanDni),
+        identifier,
+        message: e?.message
       });
     }
   }, [cleanDni, normalizeDocRoute, toast]);
+
+  const openCertificadoIoma = useCallback(async () => {
+    if (!cleanDni) {
+      toast.error('Primero cargá un DNI', 'Ingresá un DNI válido');
+      return;
+    }
+
+    const endpoint = `/certificados/certificado-trabajo`;
+    
+    trackAction('gestion_certificado_ioma_open', { 
+      dni: Number(cleanDni),
+      endpoint 
+    });
+
+    setDocViewer((prev) => {
+      if (prev.objectUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(prev.objectUrl);
+      }
+      return {
+        open: true,
+        route: endpoint,
+        row: null,
+        objectUrl: null,
+        meta: null,
+        loading: true,
+        error: null
+      };
+    });
+
+    try {
+      const { blob, contentType, filename } = await apiFetchBlobWithMeta(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: Number(cleanDni) }),
+      });
+
+      const url = URL.createObjectURL(blob);
+      
+      setDocViewer((prev) => ({
+        ...prev,
+        objectUrl: url,
+        loading: false,
+        meta: {
+          contentType: contentType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          filename: filename || `certificado_ioma_${cleanDni}.docx`,
+        },
+        error: null
+      }));
+
+      trackAction('gestion_certificado_ioma_open_ok', { 
+        dni: Number(cleanDni), 
+        bytes: blob.size 
+      });
+
+    } catch (e: any) {
+      setDocViewer((prev) => ({
+        ...prev,
+        loading: false,
+        error: e?.message || 'No se pudo generar el certificado'
+      }));
+      
+      toast.error('No se pudo generar el certificado', e?.message || 'Error');
+      
+      trackAction('gestion_certificado_ioma_open_error', { 
+        dni: Number(cleanDni), 
+        message: e?.message 
+      });
+    }
+  }, [cleanDni, toast]);
 
   const closeDocViewer = useCallback(() => {
     setDocViewer((prev) => {
       if (prev.objectUrl && prev.objectUrl.startsWith('blob:')) {
         try { URL.revokeObjectURL(prev.objectUrl); } catch { /* noop */ }
       }
-      return { 
-        open: false, 
-        route: '', 
-        row: null, 
-        objectUrl: null, 
-        meta: null, 
-        loading: false, 
-        error: null 
+      return {
+        open: false,
+        route: '',
+        row: null,
+        objectUrl: null,
+        meta: null,
+        loading: false,
+        error: null
       };
     });
   }, []);
-
-  // Limpiar recursos al desmontar
-  const cleanup = useCallback(() => {
-    revokeLastObjectUrl();
-    if (docViewer.objectUrl) {
-      URL.revokeObjectURL(docViewer.objectUrl);
-    }
-  }, [docViewer.objectUrl, revokeLastObjectUrl]);
 
   return {
     // Estado
     fotoUrl,
     docViewer,
-    
-    // Acciones
+
+    // Acciones principales
     fetchFotoPrivada,
     openDocViewer,
+    openCertificadoIoma,
     closeDocViewer,
     revokeLastObjectUrl,
-    
+
     // Helpers
-    cleanup,
     isDocumentOpen: docViewer.open,
+    hasFoto: !!fotoUrl,
   };
 }

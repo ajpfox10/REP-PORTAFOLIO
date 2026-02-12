@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react';
 import { useToast } from '../../../ui/toast';
 import { apiFetch } from '../../../api/http';
+import { getApiBaseUrl, loadRuntimeConfig } from '../../../api/env';
 import { trackAction } from '../../../logging/track';
 import { loadSession } from '../../../auth/session';
 import type { ModuleState } from './useModules';
@@ -126,10 +127,18 @@ export function usePedidos(cleanDni: string, moduleState: ModuleState) {
 
   const patchPedido = useCallback(async (id: any, changes: any) => {
     const pid = String(id);
-    return await apiFetch<any>(`/pedidos/${encodeURIComponent(pid)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(changes),
-    });
+    try {
+      return await apiFetch<any>(`/pedidos/${encodeURIComponent(pid)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(changes),
+      });
+    } catch {
+      // Fallback a PUT
+      return await apiFetch<any>(`/pedidos/${encodeURIComponent(pid)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...changes, id: pid }),
+      });
+    }
   }, []);
 
   const bajaPedidoSelected = useCallback(async () => {
@@ -196,21 +205,98 @@ export function usePedidos(cleanDni: string, moduleState: ModuleState) {
     }
   }, [cleanDni, moduleState, getActor, patchPedido, toast]);
 
+  // ✅ IOMA: genera DOCX desde backend y lo descarga
+  // Endpoint: POST /api/v1/certificados/certificado-trabajo { dni }
+  const generarIomaSelected = useCallback(async () => {
+    if (!cleanDni) return;
+
+    const selected = moduleState.rows[moduleState.selectedIndex];
+    if (!selected) {
+      toast.error('Seleccioná un pedido', 'Elegí una fila o un item en navegación');
+      return;
+    }
+
+    const dni = Number(selected?.dni ?? cleanDni);
+    if (!dni || Number.isNaN(dni)) {
+      toast.error('DNI inválido');
+      return;
+    }
+
+    const getCookie = (name: string): string | null => {
+      try {
+        const m = document.cookie.match(
+          new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '=([^;]*)')
+        );
+        return m ? decodeURIComponent(m[1]) : null;
+      } catch {
+        return null;
+      }
+    };
+
+    try {
+      trackAction('gestion_ioma_generate_attempt', { dni });
+
+      await loadRuntimeConfig();
+      const apiBase = String(getApiBaseUrl() || '').replace(/\/+$/, '');
+
+      const session = loadSession();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      };
+
+      if (session?.accessToken) headers['Authorization'] = `Bearer ${session.accessToken}`;
+
+      const csrf = getCookie('p5_csrf');
+      if (csrf) headers['x-csrf-token'] = csrf;
+
+      const resp = await fetch(`${apiBase}/certificados/certificado-trabajo`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ dni }),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(txt || `HTTP ${resp.status}`);
+      }
+
+      const blob = await resp.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificado_ioma_${dni}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.ok('IOMA generado', `DNI ${dni}`);
+      trackAction('gestion_ioma_generate_ok', { dni });
+      return true;
+    } catch (e: any) {
+      console.error(e);
+      toast.error('No se pudo generar IOMA', e?.message || 'Error');
+      trackAction('gestion_ioma_generate_error', { dni, message: e?.message });
+      return false;
+    }
+  }, [cleanDni, moduleState, toast]);
+
   return {
-    // Estado del modal
     pedidoModal,
-    
-    // Setters del modal
     setPedidoModal,
-    
-    // Acciones
+
     openPedidoModal,
     closePedidoModal,
     createPedidosFromModal,
     bajaPedidoSelected,
     marcarPedidoEstado,
-    
-    // Helpers
+
+    // ✅ nuevo
+    generarIomaSelected,
+
     getSelectedPedido: () => moduleState.rows[moduleState.selectedIndex],
     hasSelectedPedido: () => !!moduleState.rows[moduleState.selectedIndex],
   };
