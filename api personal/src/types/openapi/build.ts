@@ -113,6 +113,9 @@ export function buildOpenApiFromSchema(snapshot: SchemaSnapshot, opts: BuildOpen
       { name: "personal", description: "Búsqueda de personal (dni / apellido / nombre)" },
       { name: "crud", description: "CRUD genérico por tabla/vista" },
       { name: "docs", description: "OpenAPI spec" },
+      { name: "documents", description: "Listado y descarga de documentos (tblarchivos)" },
+      {name: "agentes", description: "Gestión de agentes y recursos asociados (datos personales, fotos, documentos vinculados)",}
+
     ],
     paths: {},
     components: {
@@ -407,6 +410,54 @@ export function buildOpenApiFromSchema(snapshot: SchemaSnapshot, opts: BuildOpen
   },
 };
 
+doc.paths["/api/v1/documents"] = {
+  get: {
+    tags: ["documents"],
+    security: [{ bearerAuth: [] }],
+    summary: "Listar documentos (tblarchivos)",
+    parameters: [
+      { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+      { name: "limit", in: "query", schema: { type: "integer", default: 50 } },
+      { name: "q", in: "query", schema: { type: "string" } },
+    ],
+    responses: {
+      200: { description: "OK" },
+      400: { description: "Parámetros inválidos" },
+      401: { description: "No autenticado" },
+      403: { description: "No autorizado" },
+    },
+  },
+};
+
+doc.paths["/api/v1/documents/{id}/file"] = {
+  get: {
+    tags: ["documents"],
+    security: [{ bearerAuth: [] }],
+    summary: "Descargar/visualizar documento por ID",
+    parameters: [
+      { name: "id", in: "path", required: true, schema: { type: "integer" } },
+    ],
+    responses: {
+      200: {
+        description: "Archivo (stream)",
+        content: {
+          "application/pdf": { schema: { type: "string", format: "binary" } },
+          "image/jpeg": { schema: { type: "string", format: "binary" } },
+          "image/png": { schema: { type: "string", format: "binary" } },
+          "application/octet-stream": { schema: { type: "string", format: "binary" } },
+        },
+      },
+      400: { description: "ID inválido / ruta inválida" },
+      401: { description: "No autenticado" },
+      403: { description: "No autorizado" },
+      404: { description: "No encontrado" },
+      413: { description: "Archivo demasiado grande" },
+      415: { description: "Tipo de archivo no permitido" },
+      423: { description: "Bloqueado (virus detectado)" },
+      500: { description: "Error" },
+    },
+  },
+};
       
 
       /** ✅ PATCH agregado */
