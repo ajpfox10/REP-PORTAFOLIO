@@ -1,0 +1,45 @@
+openapi: 3.0.3
+info:
+  title: personalv5-enterprise-api
+  version: 1.0.0
+  description: Run `npm run openapi:export` to regenerate this file from DB schema.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: OK
+  /ready:
+    get:
+      responses:
+        "200":
+          description: OK
+  /api/v1/tables:
+    get:
+      responses:
+        "200":
+          description: Tables
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Login OK
+        "401":
+          description: Credenciales inválidas
+
+components: {}

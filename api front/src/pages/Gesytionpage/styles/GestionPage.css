@@ -2,466 +2,161 @@
   ==============================
   GestiónPage ( /app/gestion )
   ==============================
-  Objetivo:
-  - Estilos SOLO para la pantalla de Gestión.
-  - Mantener el layout en 2 columnas en desktop y apilado en mobile.
-  - Evitar que las cards se "estiren" fuera del contenedor.
-  - Todo responsive sin tocar nombres de clase existentes.
+  DRAGÓN SAGRADO DEL RESPONSIVE:
+  - Se adapta SOLO a cualquier pantalla
+  - Sin tocar clases existentes
+  - Scrolls internos, no de página
+  - Backgrounds fantasmas EXTERMINADOS
 */
 
-/*
-  Contenedor principal de la página.
-  - max-width centra el contenido y evita "pantallas eternas".
-  - minmax(0, ...) permite que el grid encoja sin overflow horizontal.
-*/
-/* Contenedor general: apilamos secciones (top fijo + cards abajo) */
+/* ===== CONTENEDOR PRINCIPAL ===== */
 .gestion-layout {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 0 12px;
+  gap: clamp(12px, 2vw, 24px);
+  padding: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
-/* ===== Sección superior: 2 columnas (izquierda contenido, derecha foto/panel) ===== */
-.gp-topgrid{
+/* ===== TOP GRID: 2 COLUMNAS EN DESKTOP, 1 EN MOBILE ===== */
+.gp-topgrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 380px);
-  gap: 16px;
+  gap: clamp(12px, 2vw, 24px);
   align-items: start;
+  width: 100%;
 }
 
-/* IMPORTANTÍSIMO en grid/flex:
-   min-width: 0 permite que el contenido interno (tablas, imágenes grandes)
-   no "empuje" columnas ni genere overflow horizontal. */
 .gp-topgrid > * {
   min-width: 0;
+  width: 100%;
 }
 
-/* ===== Sección inferior: cards desplegables (stack) ===== */
-.gp-bottomstack{
+/* ===== STACK INFERIOR DE MÓDULOS ===== */
+.gp-bottomstack {
   display: grid;
-  gap: 12px;
+  gap: clamp(12px, 1.5vw, 20px);
   min-width: 0;
+  width: 100%;
 }
 
-/*
-  Card del módulo (Consultas/Pedidos) en el stack de abajo.
-  - max-width:100% evita que sombras/bordes o hijos anchos fuercen overflow de página.
-  - overflow:hidden recorta cualquier hijo que "se pase" (la tabla ya tiene su propio scroll).
-*/
-.gp-module-stack-card{
+.gp-module-stack-card {
   max-width: 100%;
   overflow: hidden;
+  width: 100%;
 }
 
-/*
-  En pantallas medianas/chicas apilamos columnas.
-  Importante: así evitamos que el panel derecho "pise" la tabla.
-*/
-/*
-  Breakpoint más alto:
-  En pantallas tipo notebook (1366px con sidebar, zoom, etc.) el panel derecho
-  puede “comerse” el ancho y dar la sensación de que el módulo queda "debajo" de la foto.
-  Desde ~1200px apilamos para que el flujo sea clarito y 100% usable.
-*/
-@media (max-width: 1200px) {
-  .gp-topgrid {
-    grid-template-columns: 1fr;
-  }
+/* ===== COLUMNAS LATERALES ===== */
+.gp-col {
+  display: grid;
+  gap: clamp(12px, 1.5vw, 20px);
+  min-width: 0;
+  width: 100%;
 }
 
-/*
-  Fila de buscadores (DNI + Apellido/Nombre)
-  - 2 columnas por defecto.
-  - En mobile se apila.
-*/
+/* ===== PANEL DERECHO CON STICKY CONTROLADO ===== */
+.gp-right-panel {
+  position: sticky;
+  top: clamp(8px, 2vh, 16px);
+  align-self: start;
+  width: 100%;
+}
+
+/* ===== BUSCADORES: 2 COLUMNAS EN DESKTOP, 1 EN MOBILE ===== */
 .search-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: clamp(10px, 1.5vw, 16px);
+  width: 100%;
 }
 
-@media (max-width: 700px) {
-  .search-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-/*
-  Label + input alineados, con espacio.
-  - La columna de label es fija.
-  - La de input es flexible.
-*/
 .search-field {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr);
-  gap: 10px;
+  gap: clamp(8px, 1vw, 12px);
   align-items: center;
+  width: 100%;
 }
 
-/*
-  Inputs:
-  - En desktop limitamos ancho para prolijidad.
-  - En mobile dejamos que ocupen todo el ancho disponible.
-*/
 .search-field input {
   width: 100%;
   max-width: 320px;
+  box-sizing: border-box;
 }
 
-@media (max-width: 700px) {
-  .search-field input {
-    max-width: none;
-  }
-}
-
-/*
-  Módulos (Consultas / Pedidos):
-  Dentro de Gestión se renderiza un .grid forzado a 2 columnas por inline-style.
-  En mobile lo sobreescribimos para que no se rompa el layout.
-*/
-@media (max-width: 700px) {
-  .gestion-layout .grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/*
-  Tabla: si algo trae textos largos, que el scroll sea horizontal dentro del contenedor,
-  no en toda la página.
-*/
-.gp-module-stack-card .table {
-  min-width: 720px;
-}
-
-/* En mobile, reducimos el ancho mínimo para no obligar a un scroll eterno */
-@media (max-width: 700px) {
-  .gp-module-stack-card .table {
-    min-width: 520px;
-  }
-}
-
-/*
-  ---------------------------------------------------------------------------
-  Reemplazo de estilos inline (JSX) por clases locales
-  ---------------------------------------------------------------------------
-  Regla de oro:
-  - NO se renombra ninguna clase existente.
-  - Estas clases nuevas se agregan además del className original.
-  - Todo queda encapsulado en esta ruta.
-*/
-
-/* Columna (izq/der) con separación entre cards */
-.gp-col {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
-/* Panel derecho: en desktop queda "fijo" (sticky) para que foto + datos NO bailen. */
-.gp-right-panel{
-  position: sticky;
-  top: 12px;
-  align-self: start;
-}
-
-/* En pantallas chicas no usamos sticky (para evitar saltos raros) */
-@media (max-width: 1200px){
-  .gp-right-panel{
-    position: static;
-  }
-}
-
-/*
-  Nota: ya NO usamos una sección "full width" externa para los módulos.
-  Ahora Consultas/Pedidos se despliegan dentro de la MISMA card (acordeón).
-  Dejamos esta clase por si la reusás en otra pantalla, pero en Gestión no se aplica.
-*/
-.gp-full {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
-/* Wrapping de botones de exportación */
-.gp-export-actions {
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-/* Padding local (no toca .card global) */
-.gp-card-14 { padding: 14px; }
-.gp-card-12 { padding: 12px; }
-
-/* Márgenes utilitarios */
-.gp-mt-10 { margin-top: 10px; }
-.gp-mt-6 { margin-top: 6px; }
-
-/* Títulos sin márgenes inline */
-.gp-h3-top0 { margin-top: 0; }
-.gp-h3-top0-bot6 { margin-top: 0; margin-bottom: 6px; }
-.gp-h3-0 { margin: 0; }
-
-/* Filas con alineaciones típicas */
-.gp-row-between-baseline {
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.gp-row-between-center {
-  justify-content: space-between;
-  align-items: center;
-}
-
-.gp-row-between-wrap {
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.gp-row-wrap {
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.gp-row-between-gap10 {
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.gp-row-baseline-gap10 {
-  align-items: baseline;
-  gap: 10px;
-}
-
-/*
-  Módulos (Consultas / Pedidos)
-  Pedido del boss: cards en FILAS (una debajo de otra).
-*/
+/* ===== MÓDULOS: GRID DE CARDS ===== */
 .gp-mod-grid {
-  /* Cards de módulos (Consultas/Pedidos/Documentos)
-     - Mobile: 1 columna
-     - Desktop: 3 columnas
-  */
+  display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-@media (max-width: 980px) {
-  .gp-mod-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .gp-mod-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Tabla embebida: scroll interno */
-.gp-tablewrap {
-  overflow: auto;
-  max-height: 55vh;
-  max-width: 100%;
+  gap: clamp(10px, 1.5vw, 16px);
   width: 100%;
+}
+
+/* ===== TABLA SAGRADA: SCROLL INTERNO, SIN BACKGROUNDS FANTASMA ===== */
+.gp-tablewrap {
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
+  min-height: 240px;
+  max-height: 60vh;
+  margin-top: 12px;
+  background: transparent;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
+  box-sizing: border-box;
 }
 
-/* Paginador de tabla: evita que 1000 filas rompan la UI */
-.gp-table-pager {
-  margin-top: 10px;
+.gp-tablewrap .table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
 }
 
-.gp-pager-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.gp-tablewrap th {
+  position: sticky;
+  top: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 10;
+  white-space: nowrap;
+  padding: 12px 14px;
 }
 
-.gp-pager-select {
-  width: 90px;
+.gp-tablewrap td {
+  padding: 10px 12px;
+  white-space: nowrap;
 }
 
-/* =========================
-   ACORDEÓN (dentro de "Gestión por DNI")
-   - Se abre dentro de la MISMA card.
-   - Empuja contenido hacia abajo (sin overlays).
-   ========================= */
-
-.gp-accordion {
-  margin-top: 12px;
-}
-
-/* Layout interno: navegación + detalle */
+/* ===== LAYOUT DE MÓDULO INTERNO (ACORDEÓN) ===== */
 .gp-module-body {
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-  gap: 12px;
+  gap: clamp(12px, 1.5vw, 20px);
   margin-top: 12px;
+  width: 100%;
 }
 
-@media (max-width: 1200px) {
-  .gp-module-body {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Navegación */
-.gp-nav {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
+.gp-nav, .gp-detail {
   min-width: 0;
-}
-
-.gp-nav-list {
-  margin-top: 10px;
-  display: grid;
-  gap: 8px;
-  max-height: 320px;
-  overflow: auto;
-}
-
-.gp-nav-item {
   width: 100%;
-  text-align: left;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(0, 0, 0, 0.12);
-  color: inherit;
-  cursor: pointer;
+  box-sizing: border-box;
 }
 
-.gp-nav-item:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-.gp-nav-item.is-active {
-  border-color: rgba(255, 255, 255, 0.38);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-/* Detalle */
-.gp-detail {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  min-width: 0;
-}
-
-.gp-detail-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.gp-field {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(0, 0, 0, 0.10);
-}
-
-.gp-field-label {
-  font-size: 12px;
-  opacity: 0.72;
-  margin-bottom: 6px;
-}
-
-.gp-field-value {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Resalta la fila seleccionada en la tabla */
-.gp-row-active td {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.gp-accordion-foot {
-  margin-top: 12px;
-}
-
-/* Card de exportación debajo de la tabla, full width dentro de .gp-full */
-.gp-full-export {
-  width: 100%;
-}
-
-/* Lista de coincidencias */
-.gp-match-list {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.gp-match-item { margin: 8px 0; }
-
-/* Foto credencial */
-.gp-photo {
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  border-radius: 12px;
-  display: block;
-}
-
-/*
-  Contención de la card que contiene la imagen de credencial.
-  Si el servidor devuelve una imagen muy grande, evitamos que se vea por fuera.
-*/
-.gp-photo-card {
+/* ===== MODALES RESPONSIVOS ===== */
+.gp-doc-modal,
+.gp-pedido-modal {
+  width: min(1100px, 95vw);
+  max-height: 90vh;
   overflow: hidden;
-}
-
-/* Modal */
-.gp-modal-head {
-  justify-content: space-between;
-  align-items: center;
-}
-
-.gp-muted-xs { font-size: 12px; }
-
-.gp-modal-actions {
-  justify-content: flex-end;
-}
-
-/* =========================
-   Visor de documentos (modal)
-   =========================
-   - Se abre con doble click en la columna "ruta" del módulo Documentos.
-   - Evita overflow horizontal y aprovecha altura de pantalla.
-*/
-
-.gp-doc-modal {
-  width: min(1100px, 96vw);
-  max-height: 92vh;
-  overflow: hidden; /* el scroll queda adentro del iframe/preview */
 }
 
 .gp-doc-iframe {
   width: 100%;
-  height: 72vh;
+  height: 70vh;
   border: 0;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.15);
-}
-
-.gp-doc-imgwrap {
-  width: 100%;
-  max-height: 72vh;
-  overflow: auto;
   border-radius: 12px;
 }
 
@@ -471,98 +166,182 @@
   display: block;
 }
 
-.gp-doc-generic {
-  padding: 12px;
-}
-
-/* =========================
-   PEDIDOS: acciones + modal de carga
-   ========================= */
-
-.gp-pedidos-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.gp-pedido-modal {
-  width: min(980px, 96vw);
-  max-height: 92vh;
-  overflow: auto;
-}
-
-.gp-pedido-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.gp-pedido-form-row {
-  gap: 12px;
+/* ===== FORMULARIO DE PEDIDOS ===== */
+.gp-pedido-checkgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(10px, 1.5vw, 16px);
 }
 
 .gp-pedido-field {
   display: block;
   min-width: 260px;
   flex: 1;
+  width: 100%;
 }
 
-.gp-pedido-types {
+/* ===== UTILITARIOS FLEX ===== */
+.gp-row-between-wrap,
+.gp-export-actions {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.gp-pedido-checkgrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.gp-check {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  text-align: left;
-}
-
-.gp-check input {
-  width: 18px;
-  height: 18px;
-}
-
-.gp-pedido-custom {
-  display: block;
-}
-
-.gp-pedido-actions {
-  gap: 12px;
   flex-wrap: wrap;
+  gap: clamp(8px, 1.2vw, 12px);
   align-items: center;
+  width: 100%;
 }
 
-@media (max-width: 680px) {
+/* ===== BREAKPOINTS ===== */
+
+/* 1️⃣ NOTEBOOKS CHICOS Y TABLETS HORIZONTALES (≤1200px) */
+@media (max-width: 1200px) {
+  .gp-topgrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .gp-right-panel {
+    position: static;
+  }
+  
+  .gp-module-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 2️⃣ TABLETS VERTICALES (≤980px) */
+@media (max-width: 980px) {
+  .gp-mod-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 3️⃣ MÓVILES GRANDES (≤768px) */
+@media (max-width: 768px) {
+  .gestion-layout {
+    padding: 0;
+  }
+  
+  .gp-mod-grid {
+    grid-template-columns: 1fr;
+  }
+  
   .gp-pedido-checkgrid {
     grid-template-columns: 1fr;
   }
+  
   .gp-pedido-field {
     min-width: 100%;
   }
+  
+  .search-field input {
+    max-width: none;
+  }
 }
 
-/* Mobile: el modal ocupa casi todo */
-@media (max-width: 680px) {
-  .gp-doc-modal {
-    width: 96vw;
-    max-height: 92vh;
+/* 4️⃣ MÓVILES CHICOS (≤700px) */
+@media (max-width: 700px) {
+  .search-row {
+    grid-template-columns: 1fr;
   }
-  .gp-doc-iframe {
-    height: 68vh;
+  
+  .search-field {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  
+  .search-field label {
+    margin-bottom: 4px;
+  }
+  
+  .gp-tablewrap td,
+  .gp-tablewrap th {
+    white-space: normal;
+    padding: 10px 8px;
+  }
+  
+  .gp-tablewrap .table {
+    min-width: 520px;
+  }
+  
+  .gestion-layout .grid {
+    grid-template-columns: 1fr !important;
   }
 }
+
+/* 5️⃣ MÓVILES MUY CHICOS (≤480px) */
+@media (max-width: 480px) {
+  .gp-tablewrap {
+    min-height: 200px;
+    max-height: 50vh;
+  }
+  
+  .gp-tablewrap .table {
+    min-width: 480px;
+  }
+  
+  .gp-export-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .gp-export-actions button {
+    width: 100%;
+  }
+}
+
+/* ===== FIX PARA GRIDS ANIDADOS ===== */
+.gp-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(10px, 1.2vw, 16px);
+  width: 100%;
+}
+
+/* ===== FOTO CREDENCIAL ===== */
+.gp-photo {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  display: block;
+  object-fit: contain;
+}
+
+.gp-photo-card {
+  overflow: hidden;
+  width: 100%;
+}
+
+/* ===== CLASES DE SOPORTE ===== */
+.gp-full {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.gp-card-14 { padding: 14px; }
+.gp-card-12 { padding: 12px; }
+.gp-mt-10 { margin-top: 10px; }
+.gp-mt-6 { margin-top: 6px; }
+.gp-h3-top0 { margin-top: 0; }
+.gp-h3-0 { margin: 0; }
+
+/* 🖱️ Celdas clickeables - las que abren modal */
+.cell-clickable {
+  cursor: pointer;
+  color: var(--accent2, #22d3ee);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 4px;
+}
+
+.cell-clickable:hover {
+  background: rgba(34, 211, 238, 0.1) !important;
+}
+
+/* Celdas NO clickeables */
+.cell {
+  cursor: default;
+}
+/* ===== DRAGÓN DUERME, GESTIÓN OCUPA TODO EL ANCHO ===== */
