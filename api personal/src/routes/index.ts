@@ -7,25 +7,26 @@ import { env } from "../config/env";
 import { buildEventosRouter } from "./eventos.routes";
 import { buildAuthRouter } from "./auth.routes";
 import { authContext } from "../middlewares/authContext";
-import { buildDocsRouter, docsProtect } from "./docs.routes";
+import { buildDocsRouter } from "./docs.routes";
 import { buildDocumentsRouter } from "./documents.routes";
 import { buildPersonalRouter } from "./personal.routes";
 import { buildAgentesFotoRouter } from "./agentesFoto.routes";
 import { buildCertificadosRouter } from "./certificados.routes";
 import { mountAutoRoutes } from "./auto";
-
-// ✅ Handler correcto: usa registry (prom.ts) y devuelve formato Prometheus
+import { idempotencyMiddleware } from '../middlewares/idempotency';
+import { buildDocumentsUploadRouter } from './documents.upload.routes';
+import { softDeleteMiddleware } from '../middlewares/softDelete';
+import { buildApiKeysRouter } from './apiKeys.routes';
+import { docsAuth } from '../middlewares/docsAuth';
+import { buildWebhooksRouter } from './webhooks.routes';
 import { metricsHandler } from "../metrics/metricsHandler";
-
-// ✅ NUEVO: RBAC genérico (no cambia endpoints, solo bloquea)
 import { requirePermission } from "../middlewares/rbacCrud";
+import { initWebhookEmitter } from '../webhooks/emitters'; // ✅ AGREGADO
 
 function metricsAuth(req: Request, res: Response, next: NextFunction) {
   if (!env.METRICS_PROTECT) return next();
-
   const header = req.headers["x-metrics-token"];
   const tokenFromHeader = Array.isArray(header) ? header[0] : header;
-
   const token = tokenFromHeader || "";
   if (!token || token !== env.METRICS_TOKEN) {
     return res.status(401).json({ ok: false, error: "No autorizado (metrics)" });
@@ -37,39 +38,42 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
   // system/health (público)
   app.use(buildHealthRouter(sequelize));
 
-  // ✅ DOCS (OpenAPI YAML) - protegido en production por defecto
-  // Ahora además requiere permiso base de acceso a API (si RBAC está habilitado)
+  // ✅ DOCS (OpenAPI)
   if (env.DOCS_ENABLE) {
     const docsPath = env.DOCS_PATH || "/docs";
     app.use(
       docsPath,
       authContext(sequelize),
-      requirePermission("api:access"),
-      docsProtect,
+      docsAuth,
       buildDocsRouter()
     );
   }
 
-  // ✅ Endpoint de métricas para Prometheus, protegido por token;
-  // expone métricas de la aplicación sin requerir autenticación de usuario.
+  // ✅ Métricas
   if (env.METRICS_ENABLE) {
-    app.get(env.METRICS_PATH, metricsAuth, metricsHandler);
+    app.get(
+      env.METRICS_PATH,
+      authContext(sequelize),
+      metricsAuth,
+      metricsHandler
+    );
   }
 
-  // ✅ AUTH: login/refresh/logout públicos (NO authContext acá)
+  // ✅ AUTH
   app.use("/api/v1/auth", buildAuthRouter(sequelize));
 
-  // ✅ Exportacion de datos para certificados y demas
+  // ✅ IDEMPOTENCY MIDDLEWARE
+  app.use('/api/v1', idempotencyMiddleware(sequelize));
+
+  // ✅ Certificados
   app.use(
-  "/api/v1/certificados",
-  authContext(sequelize),
-  requirePermission("api:access"),
-  buildCertificadosRouter(sequelize)
+    "/api/v1/certificados",
+    authContext(sequelize),
+    requirePermission("api:access"),
+    buildCertificadosRouter(sequelize)
   );
-  
-  // ✅ Eventos: antes decía “se protege adentro”.
-  // Para deny-by-default global, lo protegemos acá también.
-  // (No cambia endpoint. Si adentro ya se protege, esto refuerza.)
+
+  // ✅ Eventos
   app.use(
     "/api/v1/eventos",
     authContext(sequelize),
@@ -77,7 +81,7 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     buildEventosRouter(sequelize)
   );
 
-  // ✅ Documents (tblarchivos -> stream desde DOCUMENTS_BASE_DIR)
+  // ✅ Documents (GET /documents, GET /documents/:id/file)
   app.use(
     "/api/v1/documents",
     authContext(sequelize),
@@ -85,7 +89,15 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     buildDocumentsRouter(sequelize)
   );
 
-  // ✅ Foto credencial por DNI (filesystem) - NO toca el CRUD genérico
+  // ✅ Upload de documentos (mismo prefijo, router separado)
+  app.use(
+    '/api/v1/documents',
+    authContext(sequelize),
+    requirePermission('api:access'),
+    buildDocumentsUploadRouter(sequelize)
+  );
+
+  // ✅ Foto credencial
   app.use(
     "/api/v1/agentes",
     authContext(sequelize),
@@ -93,7 +105,7 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     buildAgentesFotoRouter()
   );
 
-  // ✅ Personal search (dni / apellido / nombre)
+  // ✅ Personal search
   app.use(
     "/api/v1/personal",
     authContext(sequelize),
@@ -101,11 +113,30 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     buildPersonalRouter(sequelize)
   );
 
-  // ✅ Health endpoints (legacy + api/v1 aliases)
+  // ✅ Health endpoints (legacy)
   app.get("/api/v1/health", (_req, res) => res.redirect(307, "/health"));
   app.get("/api/v1/ready", (_req, res) => res.redirect(307, "/ready"));
 
-  // ✅ CRUD protegido: authContext + permiso base antes del router
+  // ✅ SOFT DELETE MIDDLEWARE
+  app.use('/api/v1', softDeleteMiddleware(sequelize));
+
+  // ✅ API Keys Management
+  app.use(
+    '/api/v1/api-keys',
+    authContext(sequelize),
+    requirePermission('api:access'),
+    buildApiKeysRouter(sequelize)
+  );
+
+  // ✅ Webhooks Management
+  app.use(
+    '/api/v1/webhooks',
+    authContext(sequelize),
+    requirePermission('api:access'),
+    buildWebhooksRouter(sequelize)
+  );
+
+  // ✅ CRUD protegido
   app.use(
     "/api/v1",
     authContext(sequelize),
@@ -113,8 +144,9 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     buildCrudRouter(sequelize, schema)
   );
 
-  // ✅ AUTO ROUTES (DX): archivos en src/routes/auto/**/*.routes.ts
-  // No toca endpoints existentes; solo monta rutas nuevas.
-  mountAutoRoutes(app, sequelize, schema);
+  // ✅ Inicializar emisor de webhooks
+  initWebhookEmitter(sequelize);
 
+  // ✅ AUTO ROUTES
+  mountAutoRoutes(app, sequelize, schema);
 };

@@ -23,7 +23,19 @@
     "format": "biome format .",
     "lint:fix": "biome check . --write",
     "dev:pro": "concurrently -k -n ROUTES,API -c auto \"npm run dev:watch:routes\" \"npm run dev\"",
-    "prepare": "husky"
+    "prepare": "husky",
+    "postbuild": "npm run openapi:export",
+    "backup": "npm run backup:win",
+    "backup:win": "powershell -ExecutionPolicy Bypass -File scripts/backup/backup.ps1",
+    "backup:linux": "bash scripts/backup/backup.sh",
+    "backup:schedule": "npm run backup:schedule:win",
+    "backup:schedule:win": "powershell -ExecutionPolicy Bypass -File scripts/backup/schedule.ps1",
+    "backup:schedule:linux": "sudo bash scripts/backup/schedule.sh",
+    "purge:logs": "node scripts/purgeLogs.mjs",
+    "purge:logs:dry": "node scripts/purgeLogs.mjs --dry-run",
+    "user:create": "node scripts/createUser.mjs",
+    "keys:rotate": "node scripts/rotateApiKeys.mjs",
+    "keys:check": "node scripts/rotateApiKeys.mjs --check-only"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,json}": [
@@ -35,6 +47,7 @@
   "license": "MIT",
   "dependencies": {
     "@types/compression": "^1.8.1",
+    "axios": "^1.8.4",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
@@ -55,6 +68,7 @@
     "rate-limit-redis": "^4.2.0",
     "redis": "^4.7.0",
     "sequelize": "^6.37.3",
+    "socket.io": "^4.8.1",
     "uuid": "^13.0.0",
     "winston": "^3.14.2",
     "winston-daily-rotate-file": "^5.0.0",
@@ -72,6 +86,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.14.10",
+    "@types/socket.io": "^3.0.2",
     "@types/supertest": "^2.0.16",
     "chokidar-cli": "^3.0.0",
     "concurrently": "^9.0.0",

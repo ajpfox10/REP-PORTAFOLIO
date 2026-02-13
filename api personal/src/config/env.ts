@@ -2,6 +2,7 @@
 import path from "path";
 import dotenv from "dotenv";
 import { z } from "zod";
+import fs from "fs"; // ✅ IMPORT AGREGADO PARA VALIDACIÓN
 
 // carga robusta .env (en root y en src/config)
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
@@ -41,6 +42,8 @@ const listish = (def: string[] = []) =>
   }, z.array(z.string()));
 
 const schema = z.object({
+  // Core tables configuration
+  CORE_TABLES: strish(''), // CSV de tablas core, vacío = usar default
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: intish(3000),
 
@@ -94,14 +97,21 @@ const schema = z.object({
   // Docs
   DOCS_ENABLE: boolish.default(true),
   DOCS_PATH: strish("/docs"),
-  DOCS_PROTECT: boolish.default(true),
-
+  DOCS_PROTECT: z.preprocess(
+  (v) => {
+    if (v === undefined || v === null || v === "") return true;
+    if (v === "true" || v === "1" || v === "yes" || v === "y") return true;
+    if (v === "false" || v === "0" || v === "no" || v === "n") return false;
+    return Boolean(v);
+  },
+  z.boolean()
+  ).default(true),
   // Rate limit (global)
   RATE_LIMIT_ENABLE: boolish.default(true),
   RATE_LIMIT_WINDOW_MS: intish(900000),
   RATE_LIMIT_MAX: intish(300),
 
-  // ✅ Rate limit distribuido (Redis) - recomendado en producción con múltiples instancias
+  // ✅ Rate limit distribuido (Redis)
   RATE_LIMIT_USE_REDIS: boolish.default(false),
   REDIS_URL: strish(""),
   REDIS_CONNECT_TIMEOUT_MS: intish(5000),
@@ -138,7 +148,7 @@ const schema = z.object({
   // Documents
   DOCUMENTS_BASE_DIR: z.string().min(3),
 
-  // ✅ Allowlist de MIME (para fileSecurity.ts)
+  // ✅ Allowlist de MIME
   DOCUMENTS_ALLOWED_MIME: listish([
     "application/pdf",
     "image/jpeg",
@@ -148,8 +158,7 @@ const schema = z.object({
   ]),
   DOCUMENTS_MAX_BYTES: intish(25 * 1024 * 1024), // 25MB default
 
-
-    // Antivirus
+  // Antivirus
   DOCUMENTS_SCAN_ENABLE: boolish.default(false),
   DOCUMENTS_SCAN_MODE: z.enum(["clamd", "clamscan", "cli"]).default("clamscan"),
   DOCUMENTS_CLAMD_HOST: strish("127.0.0.1"),
@@ -164,7 +173,7 @@ const schema = z.object({
   // Server timeout
   REQUEST_TIMEOUT_MS: intish(60000),
 
-  // 7B: límites / prod hardening
+  // límites / prod hardening
   REQUEST_BODY_LIMIT_KB: intish(200),
   GRACEFUL_SHUTDOWN_MS: intish(15000),
   SERVER_HEADERS_TIMEOUT_MS: intish(65000),
@@ -193,39 +202,156 @@ export const env = {
 
 export type Env = typeof env;
 
+// ============================================================================
+// ✅ VALIDACIÓN MEJORADA PARA PRODUCCIÓN - VERSIÓN COMPLETA
+// ============================================================================
 export function assertProdEnvOrThrow() {
   if (env.NODE_ENV !== "production") return;
   if (!env.PROD_FAIL_FAST) return;
 
   const errors: string[] = [];
 
+  // ------------------------------------------------------------------------
+  // 1. JWT SECRETS
+  // ------------------------------------------------------------------------
   if (env.AUTH_ENABLE) {
     if (!env.JWT_ACCESS_SECRET?.trim()) errors.push("JWT_ACCESS_SECRET requerido en production");
     if (!env.JWT_REFRESH_SECRET?.trim()) errors.push("JWT_REFRESH_SECRET requerido en production");
+    if (env.JWT_ACCESS_SECRET?.length < 32) errors.push("JWT_ACCESS_SECRET debería tener al menos 32 caracteres");
+    if (env.JWT_REFRESH_SECRET?.length < 32) errors.push("JWT_REFRESH_SECRET debería tener al menos 32 caracteres");
   }
 
+  // ------------------------------------------------------------------------
+  // 2. DOCS PROTECTION
+  // ------------------------------------------------------------------------
   if (env.DOCS_ENABLE && env.PROD_REQUIRE_DOCS_PROTECT && !env.DOCS_PROTECT) {
     errors.push("DOCS_PROTECT debe ser true en production (o deshabilitar DOCS_ENABLE)");
   }
 
+  // ------------------------------------------------------------------------
+  // 3. METRICS PROTECTION
+  // ------------------------------------------------------------------------
   if (env.METRICS_ENABLE && env.PROD_REQUIRE_METRICS_PROTECT && !env.METRICS_PROTECT) {
     errors.push("METRICS_PROTECT debe ser true en production (o deshabilitar METRICS_ENABLE)");
   }
   if (env.METRICS_ENABLE && env.METRICS_PROTECT && !env.METRICS_TOKEN?.trim()) {
     errors.push("METRICS_TOKEN requerido si METRICS_PROTECT=true");
   }
+  if (env.METRICS_TOKEN && env.METRICS_TOKEN.length < 16) {
+    errors.push("METRICS_TOKEN debería tener al menos 16 caracteres");
+  }
 
+  // ------------------------------------------------------------------------
+  // 4. CORS
+  // ------------------------------------------------------------------------
   if (env.PROD_DISALLOW_CORS_ALLOW_ALL && env.CORS_ALLOW_ALL && env.CORS_ALLOWLIST.length === 0) {
     errors.push("En production: setear CORS_ALLOWLIST (y/o CORS_ALLOW_ALL=false)");
   }
 
+  // ------------------------------------------------------------------------
+  // 5. PROXY
+  // ------------------------------------------------------------------------
   if (!env.TRUST_PROXY) {
     errors.push("Recomendado en production: TRUST_PROXY=true (si hay reverse proxy)");
   }
 
+  // ------------------------------------------------------------------------
+  // 6. DOCUMENTS BASE DIR
+  // ------------------------------------------------------------------------
+  if (!env.DOCUMENTS_BASE_DIR?.trim()) {
+    errors.push("DOCUMENTS_BASE_DIR requerido en production");
+  } else {
+    try {
+      const baseDir = env.DOCUMENTS_BASE_DIR;
+      if (!fs.existsSync(baseDir)) {
+        errors.push(`DOCUMENTS_BASE_DIR no existe: ${baseDir}`);
+      } else {
+        const stats = fs.statSync(baseDir);
+        if (!stats.isDirectory()) {
+          errors.push(`DOCUMENTS_BASE_DIR no es un directorio: ${baseDir}`);
+        }
+        // Verificar permisos de lectura
+        try {
+          fs.accessSync(baseDir, fs.constants.R_OK);
+        } catch {
+          errors.push(`DOCUMENTS_BASE_DIR sin permiso de lectura: ${baseDir}`);
+        }
+      }
+    } catch (e: any) {
+      errors.push(`Error validando DOCUMENTS_BASE_DIR: ${e?.message || e}`);
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 7. PHOTOS BASE DIR
+  // ------------------------------------------------------------------------
+  if (env.PHOTOS_BASE_DIR?.trim()) {
+    try {
+      const photosDir = env.PHOTOS_BASE_DIR;
+      if (photosDir !== env.DOCUMENTS_BASE_DIR) {
+        if (!fs.existsSync(photosDir)) {
+          errors.push(`PHOTOS_BASE_DIR no existe: ${photosDir} (puede ser igual a DOCUMENTS_BASE_DIR si no hay fotos separadas)`);
+        }
+      }
+    } catch (e: any) {
+      errors.push(`Error validando PHOTOS_BASE_DIR: ${e?.message || e}`);
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 8. REDIS (si se usa)
+  // ------------------------------------------------------------------------
+  if (env.RATE_LIMIT_USE_REDIS) {
+    if (!env.REDIS_URL?.trim()) {
+      errors.push("REDIS_URL requerido cuando RATE_LIMIT_USE_REDIS=true");
+    }
+    if (!env.REDIS_CONNECT_TIMEOUT_MS || env.REDIS_CONNECT_TIMEOUT_MS < 1000) {
+      errors.push("REDIS_CONNECT_TIMEOUT_MS debe ser al menos 1000ms (1 segundo)");
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 9. RATE LIMITS
+  // ------------------------------------------------------------------------
+  if (env.RATE_LIMIT_ENABLE) {
+    if (env.RATE_LIMIT_WINDOW_MS < 1000) {
+      errors.push("RATE_LIMIT_WINDOW_MS debe ser al menos 1000ms (1 segundo)");
+    }
+    if (env.RATE_LIMIT_MAX < 1) {
+      errors.push("RATE_LIMIT_MAX debe ser al menos 1");
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 10. DB CONNECTION (básico)
+  // ------------------------------------------------------------------------
+  if (!env.DB_HOST?.trim()) errors.push("DB_HOST requerido");
+  if (!env.DB_NAME?.trim()) errors.push("DB_NAME requerido");
+  if (!env.DB_USER?.trim()) errors.push("DB_USER requerido");
+
+  // ------------------------------------------------------------------------
+  // 11. OPENAPI (si está habilitado)
+  // ------------------------------------------------------------------------
+  if (env.ENABLE_OPENAPI_VALIDATION) {
+    if (!env.OPENAPI_PATH?.trim()) {
+      errors.push("OPENAPI_PATH requerido cuando ENABLE_OPENAPI_VALIDATION=true");
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 12. CORE TABLES (warning si está vacío)
+  // ------------------------------------------------------------------------
+  if (!env.CORE_TABLES?.trim()) {
+    errors.push("CORE_TABLES vacío - se usará el default hardcodeado");
+  }
+
+  // ------------------------------------------------------------------------
+  // 13. LANZAR ERROR SI HAY PROBLEMAS
+  // ------------------------------------------------------------------------
   if (errors.length) {
     throw new Error(
-      "❌ Config inválida para production:\n" + errors.map((e) => `- ${e}`).join("\n")
+      "❌ Config inválida para production:\n" + 
+      errors.map((e) => `  - ${e}`).join("\n")
     );
   }
 }
