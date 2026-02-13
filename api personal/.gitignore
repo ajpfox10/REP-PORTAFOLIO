@@ -33,3 +33,11 @@ pnpm-debug.log*
 
 # misc
 *.log
+
+# Backups
+/backups/
+/scripts/backup/*.log
+/scripts/backup/*.sql
+/scripts/backup/*.gz
+/scripts/backup/*.7z
+/scripts/backup/*.tar.gz
