@@ -13,6 +13,8 @@ import path from "node:path";
 import YAML from "yaml";
 import { buildOpenApiFromSchema } from "./types/openapi/build";
 import { getRedisClient, closeRedisClient } from "./infra/redis";
+import { initSocketServer } from './socket';
+import { startWebhookWorker } from './webhooks/worker';
 
 // ✅ Hard-fail logging: no usamos console.* para que quede en el logger central
 process.on("unhandledRejection", (e) => {
@@ -119,6 +121,11 @@ async function main() {
       endpoints: ["/health", "/ready", "/api/v1/tables", "/api/v1/<table>?page=1&limit=50"],
     });
   });
+  // ✅ Inicializar Socket.IO
+  const io = initSocketServer(server);
+
+  // Guardar en app.locals para acceso desde controllers
+  app.locals.io = io;
 
   // ✅ Graceful shutdown (no cambia endpoints, solo operación)
   const shutdown = async (signal: string) => {
@@ -151,6 +158,15 @@ async function main() {
 
   process.once("SIGTERM", () => void shutdown("SIGTERM"));
   process.once("SIGINT", () => void shutdown("SIGINT"));
+
+
+  // ✅ Iniciar worker de webhooks
+  if (env.NODE_ENV === 'production') {
+    startWebhookWorker(sequelize, 5000); // Cada 5 segundos
+  } else {
+    // En desarrollo, cada 10 segundos para no saturar
+    startWebhookWorker(sequelize, 10000);
+  }
 
   // Timeouts de server (protege de requests colgadas)
   try {

@@ -2319,6 +2319,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/documentos_versiones:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List documentos_versiones
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_documentos_versiones"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create documentos_versiones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_documentos_versiones_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/documentos_versiones/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get documentos_versiones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update documentos_versiones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_documentos_versiones"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch documentos_versiones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_documentos_versiones_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete documentos_versiones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/dominios:
     get:
       tags:
@@ -7311,6 +7443,402 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/webhook_deliveries:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List webhook_deliveries
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_webhook_deliveries"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create webhook_deliveries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhook_deliveries_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/webhook_deliveries/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get webhook_deliveries by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update webhook_deliveries by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhook_deliveries"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch webhook_deliveries by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhook_deliveries_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete webhook_deliveries by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/webhook_queue:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List webhook_queue
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_webhook_queue"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create webhook_queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhook_queue_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/webhook_queue/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get webhook_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update webhook_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhook_queue"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch webhook_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhook_queue_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete webhook_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/webhooks:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List webhooks
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_webhooks"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhooks_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/webhooks/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get webhooks by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update webhooks by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhooks"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch webhooks by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_webhooks_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete webhooks by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
 components:
   schemas:
     Table_agentehistorial:
@@ -9339,6 +9867,110 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_documentos_versiones:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        documento_id:
+          type: number
+        version:
+          type: number
+        filename:
+          type: string
+        nombre_original:
+          type: string
+        tamanio:
+          type: number
+        mime_type:
+          type: string
+        metadata:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - documento_id
+        - filename
+        - nombre_original
+        - tamanio
+        - mime_type
+    Table_documentos_versiones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        documento_id:
+          type: number
+        version:
+          type: number
+        filename:
+          type: string
+        nombre_original:
+          type: string
+        tamanio:
+          type: number
+        mime_type:
+          type: string
+        metadata:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - documento_id
+        - filename
+        - nombre_original
+        - tamanio
+        - mime_type
+    Table_documentos_versiones_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        documento_id:
+          type: number
+        version:
+          type: number
+        filename:
+          type: string
+        nombre_original:
+          type: string
+        tamanio:
+          type: number
+        mime_type:
+          type: string
+        metadata:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_dominios:
       type: object
       additionalProperties: false
@@ -9506,6 +10138,17 @@ components:
         created_by_api_key_id:
           type: number
           nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
       required:
         - id
         - dni
@@ -9542,6 +10185,17 @@ components:
           type: string
           format: date-time
         created_by_api_key_id:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
           type: number
           nullable: true
       required:
@@ -9581,6 +10235,17 @@ components:
           type: string
           format: date-time
         created_by_api_key_id:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
           type: number
           nullable: true
     Table_expedientes:
@@ -12879,6 +13544,339 @@ components:
         created_at:
           type: string
           format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_webhook_deliveries:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        webhook_id:
+          type: number
+        evento:
+          type: string
+        payload:
+          type: string
+        request_headers:
+          type: string
+          nullable: true
+        response_status:
+          type: number
+          nullable: true
+        response_body:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        attempts:
+          type: number
+        duration_ms:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - webhook_id
+        - evento
+        - payload
+    Table_webhook_deliveries_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        webhook_id:
+          type: number
+        evento:
+          type: string
+        payload:
+          type: string
+        request_headers:
+          type: string
+          nullable: true
+        response_status:
+          type: number
+          nullable: true
+        response_body:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        attempts:
+          type: number
+        duration_ms:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - webhook_id
+        - evento
+        - payload
+    Table_webhook_deliveries_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        webhook_id:
+          type: number
+        evento:
+          type: string
+        payload:
+          type: string
+        request_headers:
+          type: string
+          nullable: true
+        response_status:
+          type: number
+          nullable: true
+        response_body:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        attempts:
+          type: number
+        duration_ms:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    Table_webhook_queue:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        webhook_id:
+          type: number
+        evento:
+          type: string
+        payload:
+          type: string
+        intento:
+          type: number
+        proximo_intento:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - webhook_id
+        - evento
+        - payload
+        - proximo_intento
+    Table_webhook_queue_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        webhook_id:
+          type: number
+        evento:
+          type: string
+        payload:
+          type: string
+        intento:
+          type: number
+        proximo_intento:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - webhook_id
+        - evento
+        - payload
+        - proximo_intento
+    Table_webhook_queue_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        webhook_id:
+          type: number
+        evento:
+          type: string
+        payload:
+          type: string
+        intento:
+          type: number
+        proximo_intento:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_webhooks:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        url:
+          type: string
+        secret:
+          type: string
+        eventos:
+          type: string
+        estado:
+          type: string
+        timeout_ms:
+          type: number
+        retry_policy:
+          type: string
+        ultima_ejecucion:
+          type: string
+          format: date-time
+          nullable: true
+        ultimo_status:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - nombre
+        - url
+        - secret
+        - eventos
+        - retry_policy
+    Table_webhooks_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre:
+          type: string
+        url:
+          type: string
+        secret:
+          type: string
+        eventos:
+          type: string
+        estado:
+          type: string
+        timeout_ms:
+          type: number
+        retry_policy:
+          type: string
+        ultima_ejecucion:
+          type: string
+          format: date-time
+          nullable: true
+        ultimo_status:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - nombre
+        - url
+        - secret
+        - eventos
+        - retry_policy
+    Table_webhooks_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        url:
+          type: string
+        secret:
+          type: string
+        eventos:
+          type: string
+        estado:
+          type: string
+        timeout_ms:
+          type: number
+        retry_policy:
+          type: string
+        ultima_ejecucion:
+          type: string
+          format: date-time
+          nullable: true
+        ultimo_status:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: number
           nullable: true
         deleted_at:
           type: string

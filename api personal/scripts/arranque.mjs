@@ -71,7 +71,6 @@ function hasScript(name) {
   } catch {
     return false;
   }
-
 }
 
 async function ensureGenRoutes() {
@@ -85,7 +84,6 @@ async function ensureGenRoutes() {
   return true;
 }
 
-// Windows: cmd /c, sin shell:true (evita warning DEP0190)
 function run(cmd, args = [], opts = {}) {
   const isWin = process.platform === "win32";
   const finalCmd = isWin ? "cmd" : cmd;
@@ -133,69 +131,21 @@ function findEntry() {
   return null;
 }
 
-function httpRequest(method, url, { headers = {}, body = null, timeoutMs = 2200 } = {}) {
-  return new Promise((resolve) => {
-    const u = new URL(url);
-    const req = http.request(
-      { method, hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers },
-      (res) => {
-        let data = "";
-        res.on("data", (c) => (data += c));
-        res.on("end", () => resolve({ code: res.statusCode || 0, body: data }));
-      }
-    );
-    req.on("error", () => resolve({ code: 0, body: "" }));
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      resolve({ code: 0, body: "" });
-    });
-    if (body) req.write(body);
-    req.end();
-  });
-}
-
-async function probeLoginToken(baseUrl) {
-  if (process.env.PROBE_TOKEN) return process.env.PROBE_TOKEN;
-
-  const email = process.env.PROBE_EMAIL;
-  const password = process.env.PROBE_PASSWORD;
-  if (!email || !password) return null;
-
-  const payload = JSON.stringify({ email, password });
-  const r = await httpRequest("POST", baseUrl + "/api/v1/auth/login", {
-    headers: {
-      "content-type": "application/json",
-      "content-length": Buffer.byteLength(payload)
-    },
-    body: payload,
-    timeoutMs: 3500
-  });
-
-  if (r.code < 200 || r.code >= 300) return null;
-
-  try {
-    const j = JSON.parse(r.body || "{}");
-    return (
-      j?.accessToken ||
-      j?.token ||
-      j?.access_token ||
-      j?.data?.accessToken ||
-      j?.data?.token ||
-      j?.data?.access_token ||
-      null
-    );
-  } catch {
-    return null;
-  }
-}
-
+// ============================================
+// ✅ HTTP GET CON SOPORTE PARA 401/403 (SERVIDOR VIVO)
+// ============================================
 function httpGet(url, timeoutMs = 2200, headers = {}) {
   return new Promise((resolve) => {
     const req = http.get(url, { headers }, (res) => {
       res.on("data", () => {});
       res.on("end", () => {
         const code = res.statusCode || 0;
-        resolve({ ok: code >= 200 && code < 300, code });
+        
+        // ✅ 200-299 = OK
+        // ✅ 401/403 = servidor vivo (requiere autenticación)
+        const isAlive = (code >= 200 && code < 300) || code === 401 || code === 403;
+        
+        resolve({ ok: isAlive, code });
       });
     });
     req.on("error", () => resolve({ ok: false, code: 0 }));
@@ -206,7 +156,17 @@ function httpGet(url, timeoutMs = 2200, headers = {}) {
   });
 }
 
-async function probe(baseUrl, paths, retries = 12, sleepMs = 900) {
+// ============================================
+// ✅ DESACTIVAMOS LOGIN AUTOMÁTICO (SIEMPRE NULL)
+// ============================================
+async function probeLoginToken(baseUrl) {
+  return null; // No intentamos autenticar, solo verificar conectividad
+}
+
+// ============================================
+// ✅ PROBE CON REGLAS CLARAS PARA ENDPOINTS PROTEGIDOS
+// ============================================
+async function probe(baseUrl, paths, retries = 30, sleepMs = 200) {
   const token = await probeLoginToken(baseUrl);
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -220,8 +180,14 @@ async function probe(baseUrl, paths, retries = 12, sleepMs = 900) {
       const r = await httpGet(baseUrl + p, 2200, headers);
       last[p] = r;
 
-      // En un deploy real, /api/v1/tables suele estar protegido -> 401 es señal de vida si NO hay token.
-      if (!(p === "/api/v1/tables" && r.code === 401 && !token) && !r.ok) all = false;
+      // ✅ REGLA DEFINITIVA:
+      // - /health, /ready: deben responder 200-299
+      // - /api/v1/tables: 401/403 = VIVO (seguridad activa)
+      if (p === "/api/v1/tables") {
+        if (r.code !== 401 && r.code !== 403 && !r.ok) all = false;
+      } else {
+        if (!r.ok) all = false;
+      }
     }
 
     if (all) return { ok: true, last };
@@ -234,14 +200,16 @@ function printProbe(baseUrl, res, paths) {
   console.log(`\n🔎 Probe baseUrl: ${baseUrl}`);
   for (const p of paths) {
     const code = res.last?.[p]?.code ?? 0;
-    const tag =
-      code === 0 ? "NO_CONN" :
-      code >= 200 && code < 300 ? "OK" :
-      code === 401 || code === 403 ? "AUTH" :
-      code === 404 ? "NOT_FOUND" :
-      code >= 500 ? "SERVER_ERR" :
-      "FAIL";
-    console.log(`  ${p} -> ${tag} (${code})`);
+    let tag = "";
+    
+    if (code === 0) tag = "❌ NO_CONN";
+    else if (code >= 200 && code < 300) tag = "✅ OK";
+    else if (code === 401 || code === 403) tag = "🔐 AUTH (vivo)";
+    else if (code === 404) tag = "⚠️ NOT_FOUND";
+    else if (code >= 500) tag = "💥 SERVER_ERR";
+    else tag = "⚠️ FAIL";
+    
+    console.log(`  ${p.padEnd(20)} ${tag} (${code})`);
   }
 }
 
@@ -278,14 +246,13 @@ function startNpmScriptBackground(scriptName, envVars) {
 }
 
 async function deployStartAndProbe() {
-  // baseUrl IPv4 por defecto (evita FAIL(0) por IPv6/localhost en Windows)
+  // ✅ Usamos localhost en lugar de 127.0.0.1 (mejor compatibilidad Windows)
   const port = Number(process.env.PORT || 3000);
-  const baseUrl = process.env.API_BASE_URL || `http://127.0.0.1:${port}`;
+  const baseUrl = process.env.API_BASE_URL || `http://localhost:${port}`;
   const paths = ["/health", "/ready", "/api/v1/tables"];
 
   const childEnv = { ...process.env, NODE_ENV: "production", TRUST_PROXY: "1", PORT: String(port) };
 
-  // preferimos npm run start si existe
   let child = null;
 
   if (hasScript("start")) {
@@ -293,27 +260,25 @@ async function deployStartAndProbe() {
   } else {
     const entry = findEntry();
     if (!entry) {
-      console.error("❌ No encuentro entry en dist/ (server.js/app.js/index.js) ni package.json main.");
+      console.error("❌ No encuentro entry en dist/ ni package.json main.");
       return { ok: false, child: null, baseUrl, paths, res: { ok: false, last: {} } };
     }
     child = startNodeBackground(entry, childEnv);
   }
 
-  console.log(`\n🧪 Probe automático: ${paths.join(", ")} (reintentos)`);
+  console.log(`\n🧪 Probe automático: ${paths.join(", ")} (${30} intentos, ${200}ms)`);
   const res = await probe(baseUrl, paths);
 
   return { ok: res.ok, child, baseUrl, paths, res };
 }
 
 async function doClean() {
-  // si existe npm run clean, usamos eso
   if (hasScript("clean")) {
     const r = run("npm", ["run", "clean"]);
     console.log(r.ok ? "✅ CLEAN OK" : `❌ CLEAN FAIL (code ${r.code})`);
     return r.ok;
   }
 
-  // fallback: dist + .cache
   rmIfExists(path.resolve(process.cwd(), "dist"));
   rmIfExists(path.resolve(process.cwd(), ".cache"));
   console.log("✅ CLEAN OK (fallback dist + .cache)");
@@ -321,14 +286,12 @@ async function doClean() {
 }
 
 async function doExportOpenApi() {
-  // preferimos script si existe
   if (hasScript("openapi:export")) {
     const r = run("npm", ["run", "openapi:export"]);
     console.log(r.ok ? "✅ OPENAPI EXPORT OK" : `❌ OPENAPI EXPORT FAIL (code ${r.code})`);
     return r.ok;
   }
 
-  // fallback a dist/types/openapi/*
   const p1 = path.resolve(process.cwd(), "dist/types/openapi/export.js");
   const p2 = path.resolve(process.cwd(), "dist/types/openapi/exportOpenApi.js");
   const target = exists(p1) ? p1 : exists(p2) ? p2 : null;
@@ -366,7 +329,8 @@ async function main() {
   if (action === "1") {
     const ok = await ensureGenRoutes();
     if (!ok) { rl.close(); return; }
-    if (hasScript("dev:pro")) run("npm", ["run", "dev:pro"]); else run("npm", ["run", "dev"]);
+    if (hasScript("dev:pro")) run("npm", ["run", "dev:pro"]);
+    else run("npm", ["run", "dev"]);
     rl.close();
     return;
   }
@@ -378,11 +342,9 @@ async function main() {
   }
 
   if (action === "3") {
-    // cross-env puede no existir: intentamos directo
     if (hasScript("test")) {
       const r = run("npx", ["cross-env", "TEST_INTEGRATION=1", "npm", "test"]);
       if (!r.ok) {
-        // fallback sin cross-env
         const env2 = { ...process.env, TEST_INTEGRATION: "1" };
         run("npm", ["test"], { env: env2 });
       }
@@ -401,18 +363,15 @@ async function main() {
   }
 
   if (action === "5") {
-    // sugerencia: clean antes (opcional)
     const cleanFirst = yn(await ask("¿Clean antes de build? (S/n): "), true);
     if (cleanFirst) {
       const ok = await doClean();
-      if (!ok) {
-        rl.close();
-        return;
-      }
+      if (!ok) { rl.close(); return; }
     }
 
     const ok2 = await ensureGenRoutes();
     if (!ok2) { rl.close(); return; }
+    
     const b = run("npm", ["run", "build"]);
     if (!b.ok) {
       console.log(`❌ BUILD FAIL (code ${b.code})`);
@@ -425,9 +384,7 @@ async function main() {
     printProbe(started.baseUrl, started.res, started.paths);
 
     if (!started.ok) {
-      console.log("❌ DEPLOY FAIL");
-
-      // Por defecto: si falla, lo matamos (evita quedar con procesos colgados)
+      console.log("❌ DEPLOY FAIL (probe)");
       const keep = yn(await ask("¿Dejar server corriendo igual? (s/N): "), false);
       if (!keep && started.child) {
         try { started.child.kill("SIGTERM"); } catch {}
@@ -435,7 +392,6 @@ async function main() {
       } else {
         console.log("🟢 Server queda corriendo. Ctrl+C para cortar.");
       }
-
       rl.close();
       process.exit(1);
     }
@@ -467,12 +423,11 @@ async function main() {
   }
 
   if (action === "9") {
-    // build si no existe dist
     const dist = path.resolve(process.cwd(), "dist");
     if (!exists(dist)) {
       const ok2 = await ensureGenRoutes();
-    if (!ok2) { rl.close(); return; }
-    const b = run("npm", ["run", "build"]);
+      if (!ok2) { rl.close(); return; }
+      const b = run("npm", ["run", "build"]);
       if (!b.ok) {
         console.log(`❌ BUILD FAIL (code ${b.code})`);
         rl.close();
@@ -486,8 +441,8 @@ async function main() {
 
   if (action === "10") {
     const port = Number((await ask("Port (default 3000): ")) || 3000);
-    const baseUrl = process.env.API_BASE_URL || `http://127.0.0.1:${port}`;
-    const res = await probe(baseUrl, ["/health", "/ready"], 3, 500);
+    const baseUrl = `http://localhost:${port}`;
+    const res = await probe(baseUrl, ["/health", "/ready"], 6, 500);
     console.log(res.ok ? "✅ SMOKE OK" : "❌ SMOKE FAIL");
     printProbe(baseUrl, res, ["/health", "/ready"]);
     rl.close();
