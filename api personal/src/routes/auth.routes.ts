@@ -15,6 +15,10 @@ import {
   storeRefreshToken,
   validateRefreshToken,
 } from "../auth/refreshTokensRepo";
+import { 
+  initiatePasswordReset, 
+  resetPasswordWithToken 
+} from "../services/passwordReset.service";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -23,6 +27,15 @@ const loginSchema = z.object({
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(1),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8),
 });
 
 export const buildAuthRouter = (sequelize: Sequelize) => {
@@ -153,6 +166,45 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
 
     await revokeAllRefreshTokensForUser(sequelize, valid.usuarioId);
     return res.json({ ok: true });
+  });
+
+  // ✅ NEW: Forgot password - initiate password reset
+  router.post("/forgot-password", async (req: Request, res: Response) => {
+    const parsed = forgotPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    }
+
+    const { email } = parsed.data;
+
+    const result = await initiatePasswordReset(sequelize, email);
+
+    if (!result.ok) {
+      return res.status(500).json({ ok: false, error: result.error });
+    }
+
+    return res.json({ 
+      ok: true,
+      message: 'Si el correo existe en nuestro sistema, recibirás instrucciones para restablecer tu contraseña.' 
+    });
+  });
+
+  // ✅ NEW: Reset password with token
+  router.post("/reset-password", async (req: Request, res: Response) => {
+    const parsed = resetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    }
+
+    const { token, newPassword } = parsed.data;
+
+    const result = await resetPasswordWithToken(sequelize, token, newPassword);
+
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, error: result.error });
+    }
+
+    return res.json({ ok: true, message: 'Contraseña restablecida exitosamente' });
   });
 
   return router;

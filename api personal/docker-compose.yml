@@ -1,23 +1,128 @@
-version: "3.9"
+version: '3.8'
 
 services:
-  redis:
-    image: redis:7-alpine
+  nginx:
+    build: ./docker/nginx
+    container_name: personalv5-nginx
     ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api1
+      - api2
+      - api3
+    networks:
+      - personalv5-network
+    restart: unless-stopped
 
-  # Opcional: si querés correr la API también desde Docker.
-  # api:
-  #   build: .
-  #   ports:
-  #     - "3000:3000"
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     - redis
+  api1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: personalv5-api1
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # ... resto de envs igual que antes
+    volumes:
+      - documents-data:/app/documents
+      - ./logs:/app/logs
+    networks:
+      - personalv5-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: personalv5-api2
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    volumes:
+      - documents-data:/app/documents
+      - ./logs:/app/logs
+    networks:
+      - personalv5-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: personalv5-api3
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    volumes:
+      - documents-data:/app/documents
+      - ./logs:/app/logs
+    networks:
+      - personalv5-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: personalv5-mysql
+    # ... igual que antes
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: personalv5-redis
+    # ... igual que antes
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: personalv5-prometheus
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - personalv5-network
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: personalv5-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    networks:
+      - personalv5-network
+    depends_on:
+      - prometheus
+
+networks:
+  personalv5-network:
+    driver: bridge
 
 volumes:
-  redis_data:
+  mysql-data:
+  redis-data:
+  documents-data:
+  grafana-data:

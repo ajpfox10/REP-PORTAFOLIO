@@ -1,3 +1,4 @@
+// src/routes/index.ts
 import { Express, Request, Response, NextFunction } from "express";
 import { Sequelize } from "sequelize";
 import { SchemaSnapshot } from "../db/schema/types";
@@ -8,6 +9,7 @@ import { buildEventosRouter } from "./eventos.routes";
 import { buildAuthRouter } from "./auth.routes";
 import { authContext } from "../middlewares/authContext";
 import { buildDocsRouter } from "./docs.routes";
+import { buildSwaggerRouter } from "./swagger.routes"; // ✅ NUEVO
 import { buildDocumentsRouter } from "./documents.routes";
 import { buildPersonalRouter } from "./personal.routes";
 import { buildAgentesFotoRouter } from "./agentesFoto.routes";
@@ -21,7 +23,8 @@ import { docsAuth } from '../middlewares/docsAuth';
 import { buildWebhooksRouter } from './webhooks.routes';
 import { metricsHandler } from "../metrics/metricsHandler";
 import { requirePermission } from "../middlewares/rbacCrud";
-import { initWebhookEmitter } from '../webhooks/emitters'; // ✅ AGREGADO
+import { initWebhookEmitter } from '../webhooks/emitters';
+import { auditReadMiddleware } from '../middlewares/auditRead';
 
 function metricsAuth(req: Request, res: Response, next: NextFunction) {
   if (!env.METRICS_PROTECT) return next();
@@ -38,9 +41,19 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
   // system/health (público)
   app.use(buildHealthRouter(sequelize));
 
-  // ✅ DOCS (OpenAPI)
+  // ✅ DOCS (OpenAPI) + Swagger UI
   if (env.DOCS_ENABLE) {
     const docsPath = env.DOCS_PATH || "/docs";
+    
+    // Swagger UI (interfaz gráfica)
+    app.use(
+      docsPath,
+      authContext(sequelize),
+      docsAuth,
+      buildSwaggerRouter()
+    );
+    
+    // Docs YAML/JSON
     app.use(
       docsPath,
       authContext(sequelize),
@@ -135,7 +148,8 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     requirePermission('api:access'),
     buildWebhooksRouter(sequelize)
   );
-
+  // ✅  DENTRO DE mountRoutes, DESPUÉS DE authContext
+  app.use('/api/v1', authContext(sequelize), auditReadMiddleware(sequelize));
   // ✅ CRUD protegido
   app.use(
     "/api/v1",
@@ -143,6 +157,27 @@ export const mountRoutes = (app: Express, sequelize: Sequelize, schema: SchemaSn
     requirePermission("api:access"),
     buildCrudRouter(sequelize, schema)
   );
+  
+  // En src/routes/index.ts, después de buildDocsRouter()
+ if (env.DOCS_ENABLE) {
+   const docsPath = env.DOCS_PATH || "/docs";
+  
+   // Swagger UI
+   app.use(
+     docsPath,
+     authContext(sequelize),
+     docsAuth,
+     buildSwaggerRouter()
+   );
+  
+   // Docs YAML/JSON
+   app.use(
+     docsPath,
+     authContext(sequelize),
+     docsAuth,
+     buildDocsRouter()
+   );
+ }  
 
   // ✅ Inicializar emisor de webhooks
   initWebhookEmitter(sequelize);

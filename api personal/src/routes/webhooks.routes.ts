@@ -8,8 +8,14 @@ import { logger } from "../logging/logger";
 import { trackAction } from "../logging/track";
 
 // ============================================
-// SCHEMAS DE VALIDACIÓN
+// SCHEMAS DE VALIDACIÓN CON FILTROS
 // ============================================
+const filterConditionSchema = z.object({
+  field: z.string(),
+  operator: z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'startsWith', 'endsWith']),
+  value: z.any()
+});
+
 const webhookSchema = z.object({
   nombre: z.string().min(3).max(100),
   url: z.string().url(),
@@ -19,6 +25,8 @@ const webhookSchema = z.object({
     'eventos.created', 'eventos.updated', 'eventos.deleted',
     'certificados.generated'
   ])).min(1),
+  // ✅ NUEVO: Filtros por campo
+  filters: z.array(filterConditionSchema).optional().default([]),
   timeout_ms: z.number().int().min(1000).max(30000).default(5000),
   retry_policy: z.object({
     max_attempts: z.number().int().min(1).max(10).default(3),
@@ -30,6 +38,40 @@ const webhookUpdateSchema = webhookSchema.partial();
 
 function generateSecret(): string {
   return crypto.randomBytes(32).toString('hex');
+}
+
+// ============================================
+// FUNCIÓN PARA EVALUAR FILTROS
+// ============================================
+function evaluateFilters(payload: any, filters: any[]): boolean {
+  if (!filters || filters.length === 0) return true;
+
+  const data = payload.data || payload;
+
+  for (const f of filters) {
+    const fieldValue = data[f.field];
+    
+    switch (f.operator) {
+      case 'eq': if (fieldValue != f.value) return false; break;
+      case 'neq': if (fieldValue == f.value) return false; break;
+      case 'gt': if (!(fieldValue > f.value)) return false; break;
+      case 'gte': if (!(fieldValue >= f.value)) return false; break;
+      case 'lt': if (!(fieldValue < f.value)) return false; break;
+      case 'lte': if (!(fieldValue <= f.value)) return false; break;
+      case 'contains': 
+        if (!String(fieldValue).includes(String(f.value))) return false; 
+        break;
+      case 'startsWith':
+        if (!String(fieldValue).startsWith(String(f.value))) return false;
+        break;
+      case 'endsWith':
+        if (!String(fieldValue).endsWith(String(f.value))) return false;
+        break;
+      default: return false;
+    }
+  }
+  
+  return true;
 }
 
 export function buildWebhooksRouter(sequelize: Sequelize) {
@@ -48,7 +90,7 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
 
         const [rows] = await sequelize.query(
           `SELECT 
-            id, nombre, url, eventos, estado, timeout_ms, retry_policy,
+            id, nombre, url, eventos, estado, timeout_ms, retry_policy, filters,
             ultima_ejecucion, ultimo_status, created_at, updated_at
            FROM webhooks
            WHERE 1=1 ${deletedFilter}
@@ -79,7 +121,7 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
 
         const [rows] = await sequelize.query(
           `SELECT 
-            id, nombre, url, eventos, estado, timeout_ms, retry_policy,
+            id, nombre, url, eventos, estado, timeout_ms, retry_policy, filters,
             ultima_ejecucion, ultimo_status, created_at, updated_at
            FROM webhooks
            WHERE id = :id AND deleted_at IS NULL
@@ -101,7 +143,7 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
   );
 
   // ------------------------------------------------------------------------
-  // POST /api/v1/webhooks - Crear webhook
+  // POST /api/v1/webhooks - Crear webhook con filtros
   // ------------------------------------------------------------------------
   router.post(
     '/',
@@ -123,9 +165,9 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
 
         const [result] = await sequelize.query(
           `INSERT INTO webhooks 
-           (nombre, url, secret, eventos, timeout_ms, retry_policy, created_by, created_at)
+           (nombre, url, secret, eventos, timeout_ms, retry_policy, filters, created_by, created_at)
            VALUES
-           (:nombre, :url, :secret, :eventos, :timeout_ms, :retry_policy, :createdBy, NOW())`,
+           (:nombre, :url, :secret, :eventos, :timeout_ms, :retry_policy, :filters, :createdBy, NOW())`,
           {
             replacements: {
               nombre: data.nombre,
@@ -134,6 +176,7 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
               eventos: JSON.stringify(data.eventos),
               timeout_ms: data.timeout_ms,
               retry_policy: JSON.stringify(data.retry_policy),
+              filters: JSON.stringify(data.filters),
               createdBy: actor
             }
           }
@@ -141,7 +184,6 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
 
         const insertId = (result as any).insertId;
 
-        // Auditoría
         (res.locals as any).audit = {
           action: 'webhook_create',
           table_name: 'webhooks',
@@ -156,7 +198,8 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
           actor,
           webhookId: insertId,
           nombre: data.nombre,
-          eventos: data.eventos.length
+          eventos: data.eventos.length,
+          filters: data.filters.length
         });
 
         return res.status(201).json({
@@ -165,8 +208,9 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
             id: insertId,
             nombre: data.nombre,
             url: data.url,
-            secret, // ⚠️ ÚNICA VEZ QUE SE MUESTRA
+            secret,
             eventos: data.eventos,
+            filters: data.filters,
             timeout_ms: data.timeout_ms,
             retry_policy: data.retry_policy,
             estado: 'activo',
@@ -206,7 +250,6 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
         const data = parseResult.data;
         const actor = (req as any).auth?.principalId ?? null;
 
-        // Verificar existencia
         const [checkRows] = await sequelize.query(
           `SELECT id FROM webhooks WHERE id = :id AND deleted_at IS NULL LIMIT 1`,
           { replacements: { id } }
@@ -239,6 +282,10 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
           sets.push('retry_policy = :retry_policy');
           repl.retry_policy = JSON.stringify(data.retry_policy);
         }
+        if (data.filters !== undefined) {
+          sets.push('filters = :filters');
+          repl.filters = JSON.stringify(data.filters);
+        }
 
         sets.push('updated_at = NOW(), updated_by = :updatedBy');
 
@@ -250,7 +297,7 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
         }
 
         const [updatedRows] = await sequelize.query(
-          `SELECT id, nombre, url, eventos, estado, timeout_ms, retry_policy,
+          `SELECT id, nombre, url, eventos, estado, timeout_ms, retry_policy, filters,
                   ultima_ejecucion, ultimo_status, created_at, updated_at
            FROM webhooks WHERE id = :id LIMIT 1`,
           { replacements: { id } }
@@ -281,7 +328,7 @@ export function buildWebhooksRouter(sequelize: Sequelize) {
   );
 
   // ------------------------------------------------------------------------
-  // DELETE /api/v1/webhooks/:id - Eliminar webhook (soft delete)
+  // DELETE /api/v1/webhooks/:id - Eliminar webhook
   // ------------------------------------------------------------------------
   router.delete(
     '/:id',

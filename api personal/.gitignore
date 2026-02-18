@@ -33,6 +33,9 @@ pnpm-debug.log*
 
 # misc
 *.log
+proyecto_completo*.txt
+runtime.log
+server.log
 
 # Backups
 /backups/

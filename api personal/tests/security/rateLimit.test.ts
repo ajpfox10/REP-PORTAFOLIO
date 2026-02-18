@@ -7,6 +7,7 @@ describe("rate limiting", () => {
       RATE_LIMIT_ENABLE: "true",
       RATE_LIMIT_WINDOW_MS: "60000",
       RATE_LIMIT_MAX: "2",
+      RATE_LIMIT_USE_REDIS: "false", // Deshabilitar Redis
       TRUST_PROXY: "false",
     });
 

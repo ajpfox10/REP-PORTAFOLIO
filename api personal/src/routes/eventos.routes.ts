@@ -6,6 +6,7 @@ import { requirePermission } from "../middlewares/rbacCrud";
 import { logger } from "../logging/logger";
 import { trackAction } from "../logging/track";
 import { emitEventoCreated, emitEventoUpdated } from '../socket/handlers/eventos';
+import { buildEventosTimelineRouter } from './eventos.timeline.routes'; // ✅ MOVED TO TOP
 
 // ============================================
 // SCHEMAS DE VALIDACIÓN
@@ -308,6 +309,9 @@ export function buildEventosRouter(sequelize: Sequelize) {
       }
     }
   );
+
+  // ✅ TIMELINE ROUTER - AGREGADO AQUÍ (DESPUÉS DE LAS RUTAS PRINCIPALES)
+  router.use('/timeline', buildEventosTimelineRouter(sequelize));
 
   return router;
 }
