@@ -7,16 +7,25 @@ import { env } from '../config/env';
 import { registerDocumentHandlers } from './handlers/documentos';
 import { registerPedidoHandlers } from './handlers/pedidos';
 import { registerEventoHandlers } from './handlers/eventos';
-import { 
-  wsConnectionsTotal, 
+import {
+  wsConnectionsTotal,
   wsConnectionsActive,
   wsMessagesReceived,
   wsMessagesSent,
   wsEventsEmitted,
-  startWebSocketMetricsCollection
+  startWebSocketMetricsCollection,
 } from './metrics';
 
 export let io: SocketServer | null = null;
+
+// Eventos internos de Socket.IO que NO deben contabilizarse en métricas de negocio
+const INTERNAL_EVENTS = new Set([
+  'connect', 'disconnect', 'disconnecting',
+  'error', 'connect_error', 'connect_timeout',
+  'ping', 'pong', 'reconnect', 'reconnect_attempt',
+  'reconnect_error', 'reconnect_failed', 'newListener',
+  'removeListener',
+]);
 
 export function initSocketServer(httpServer: HttpServer) {
   if (io) return io;
@@ -26,27 +35,28 @@ export function initSocketServer(httpServer: HttpServer) {
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);
         const o = origin.toLowerCase();
-        const deny = env.CORS_DENYLIST.map(x => x.toLowerCase());
+        const deny = env.CORS_DENYLIST.map((x) => x.toLowerCase());
         if (deny.includes(o)) return cb(new Error('CORS blocked'));
         if (env.CORS_ALLOWLIST.length > 0) {
-          const allow = env.CORS_ALLOWLIST.map(x => x.toLowerCase());
+          const allow = env.CORS_ALLOWLIST.map((x) => x.toLowerCase());
           if (!allow.includes(o)) return cb(new Error('CORS not allowed'));
         }
         return cb(null, true);
       },
-      credentials: true
-    }
+      credentials: true,
+    },
   });
 
   // Middleware de autenticación
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
+      const token =
+        socket.handshake.auth.token || socket.handshake.headers.authorization;
       if (!token) return next(new Error('Authentication required'));
 
-      const bearer = token.replace('Bearer ', '');
+      const bearer = String(token).replace(/^Bearer\s+/i, '');
       const claims = verifyAccessToken(bearer);
-      
+
       const userId = Number(claims.sub);
       if (!userId || isNaN(userId)) return next(new Error('Invalid token'));
 
@@ -54,7 +64,6 @@ export function initSocketServer(httpServer: HttpServer) {
       socket.join(`user:${userId}`);
       if (claims.roleId) socket.join(`role:${claims.roleId}`);
 
-      // ✅ Métricas
       wsConnectionsTotal.inc();
       wsConnectionsActive.inc();
 
@@ -66,38 +75,47 @@ export function initSocketServer(httpServer: HttpServer) {
     }
   });
 
-  // Registrar handlers
   io.on('connection', (socket) => {
-    logger.debug({ msg: 'Socket connected', socketId: socket.id, userId: socket.data.user?.id });
+    logger.debug({
+      msg: 'Socket connection established',
+      socketId: socket.id,
+      userId: socket.data.user?.id,
+    });
 
-    // Registrar handlers por módulo
+    // Registrar handlers de dominio
     registerDocumentHandlers(socket, io!);
     registerPedidoHandlers(socket, io!);
     registerEventoHandlers(socket, io!);
 
-    // ✅ Interceptar mensajes para métricas
-    const originalEmit = socket.emit;
-    socket.emit = function(event: string, ...args: any[]) {
-      wsMessagesSent.labels(event).inc();
-      return originalEmit.call(this, event, ...args);
-    };
+    // ── Métricas de mensajes salientes (solo eventos de negocio) ──────────────
+    // No interceptamos emit directamente para evitar interferir con eventos
+    // internos de Socket.IO. En su lugar, los handlers de dominio usan
+    // broadcastToUser/broadcastToAll que registran la métrica.
 
-    const originalOn = socket.on;
-    socket.on = function(event: string, handler: any) {
-      const wrappedHandler = (...args: any[]) => {
-        wsMessagesReceived.labels(event).inc();
-        return handler(...args);
-      };
-      return originalOn.call(this, event, wrappedHandler);
+    // ── Métricas de mensajes entrantes (solo eventos de negocio) ─────────────
+    // Wrapeamos on() para contar eventos de negocio, NO los internos
+    const originalOn = socket.on.bind(socket);
+    socket.on = function (event: string, handler: any) {
+      if (!INTERNAL_EVENTS.has(event)) {
+        const wrapped = (...args: any[]) => {
+          wsMessagesReceived.labels(event).inc();
+          return handler(...args);
+        };
+        return originalOn(event, wrapped);
+      }
+      return originalOn(event, handler);
     };
 
     socket.on('disconnect', () => {
       wsConnectionsActive.dec();
-      logger.debug({ msg: 'Socket disconnected', socketId: socket.id, userId: socket.data.user?.id });
+      logger.debug({
+        msg: 'Socket disconnected',
+        socketId: socket.id,
+        userId: socket.data.user?.id,
+      });
     });
   });
 
-  // ✅ Iniciar colección de métricas
   startWebSocketMetricsCollection();
 
   logger.info({ msg: 'Socket.IO server initialized' });
@@ -110,15 +128,18 @@ export function getSocketServer() {
 
 export function broadcastToUser(userId: number, event: string, data: any) {
   io?.to(`user:${userId}`).emit(event, data);
+  wsMessagesSent.labels(event).inc();
   wsEventsEmitted.labels(event).inc();
 }
 
 export function broadcastToRole(roleId: number, event: string, data: any) {
   io?.to(`role:${roleId}`).emit(event, data);
+  wsMessagesSent.labels(event).inc();
   wsEventsEmitted.labels(event).inc();
 }
 
 export function broadcastToAll(event: string, data: any) {
   io?.emit(event, data);
+  wsMessagesSent.labels(event).inc();
   wsEventsEmitted.labels(event).inc();
 }

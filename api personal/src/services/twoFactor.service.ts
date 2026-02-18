@@ -31,6 +31,8 @@ export async function create2FACode(
   sequelize: Sequelize,
   userId: number
 ): Promise<{ code: string; expiresAt: Date }> {
+  if (!env.ENABLE_2FA) throw new Error("2FA no está habilitado (ENABLE_2FA=false)");
+  if (!env.EMAIL_ENABLE) throw new Error("2FA requiere EMAIL_ENABLE=true para enviar el código");
   const code = generate2FACode(env.TWO_FA_CODE_LENGTH || 6);
   const codeHash = hash2FACode(code);
 

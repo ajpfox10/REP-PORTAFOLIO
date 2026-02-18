@@ -1,0 +1,23 @@
+# Normalizar line endings: LF en repo, conversión automática en checkout
+* text=auto eol=lf
+
+# Binarios — sin conversión
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.zip binary
+
+# Scripts de shell: siempre LF
+*.sh text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sql text eol=lf

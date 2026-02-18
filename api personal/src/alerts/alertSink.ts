@@ -12,8 +12,11 @@ export function emitAlert(level: AlertLevel, title: string, details?: any) {
       details: details ?? null,
     });
   } catch {
-    // fallback absoluto
-    // eslint-disable-next-line no-console
-    console.warn("ALERT", level, title, details ?? null);
+    // fallback absoluto (sin console)
+    try {
+      process.stderr.write(`ALERT ${level} ${title} ${JSON.stringify(details ?? null)}\n`);
+    } catch {
+      // no-op
+    }
   }
 }

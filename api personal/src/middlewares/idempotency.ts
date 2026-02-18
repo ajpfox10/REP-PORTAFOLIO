@@ -21,106 +21,125 @@ function hashRequest(req: Request): string {
     path: req.originalUrl || req.url,
     body: req.body,
     query: req.query,
-    // No incluimos headers porque pueden variar (auth, etc)
   };
   return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
 export function idempotencyMiddleware(sequelize: Sequelize) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    // ✅ SOLO para métodos que modifican datos
+    // Solo para métodos que modifican datos
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
       return next();
     }
 
     const key = req.headers['idempotency-key'] as string;
     if (!key) {
-      // Si no hay key, seguimos normalmente (no hay protección)
-      return next();
+      return next(); // Sin key: no hay protección, request pasa igual
     }
 
     req.idempotencyKey = key;
     const requestHash = hashRequest(req);
     const usuarioId = (req as any).auth?.principalId ?? null;
+    const route = req.originalUrl || req.url;
 
     try {
       // 1. Buscar si ya existe una respuesta para esta key
       const [rows] = await sequelize.query(
-        `SELECT response_json, expires_at 
-         FROM idempotency_keys 
+        `SELECT response_json, expires_at
+         FROM idempotency_keys
          WHERE route = :route AND idem_key = :key
          LIMIT 1`,
-        {
-          replacements: {
-            route: req.originalUrl || req.url,
-            key
-          }
-        }
+        { replacements: { route, key } }
       );
 
       const existing = (rows as any[])[0];
-      
+
       if (existing) {
-        // ✅ Key ya usada → devolvemos la respuesta cacheada
         req.idempotencyCached = true;
-        
+
         // Verificar que no haya expirado
         const expiresAt = new Date(existing.expires_at);
         if (expiresAt.getTime() < Date.now()) {
-          // Expirado: lo borramos y seguimos
+          // Expirado: lo borramos y seguimos normalmente
           await sequelize.query(
             `DELETE FROM idempotency_keys WHERE route = :route AND idem_key = :key`,
-            { replacements: { route: req.originalUrl || req.url, key } }
+            { replacements: { route, key } }
           );
           return next();
         }
 
-        // Parsear respuesta cacheada
+        // Devolver respuesta cacheada
         const cached = JSON.parse(existing.response_json);
         return res.status(cached.status).json(cached.body);
       }
 
-      // 2. No existe → interceptamos la respuesta para cachearla
-      const originalJson = res.json;
-      const originalSend = res.send;
-      const originalEnd = res.end;
-
+      // 2. No existe → capturamos la respuesta para persistirla
       let responseBody: any = null;
       let responseStatus = 200;
+      let bodyWasCaptured = false;
 
-      // Override de res.json
-      res.json = function(body) {
-        responseBody = body;
-        responseStatus = res.statusCode;
+      // Override res.json (ruta más común)
+      const originalJson = res.json;
+      res.json = function (body) {
+        if (!bodyWasCaptured) {
+          responseBody = body;
+          responseStatus = res.statusCode;
+          bodyWasCaptured = true;
+        }
         return originalJson.call(this, body);
       };
 
-      // Override de res.send
-      res.send = function(body) {
-        responseBody = body;
-        responseStatus = res.statusCode;
+      // Override res.send (ruta alternativa)
+      const originalSend = res.send;
+      res.send = function (body) {
+        if (!bodyWasCaptured && body !== undefined) {
+          // Intentar parsear si es string JSON
+          try {
+            responseBody = typeof body === 'string' ? JSON.parse(body) : body;
+          } catch {
+            responseBody = body;
+          }
+          responseStatus = res.statusCode;
+          bodyWasCaptured = true;
+        }
         return originalSend.call(this, body);
       };
 
-      // Cuando termina la request, guardamos en DB
+      // Override res.end (cubre stream/pipe y respuestas sin body explícito)
+      const originalEnd = res.end;
+      res.end = function (chunk?: any, ...args: any[]) {
+        if (!bodyWasCaptured && chunk) {
+          try {
+            const raw = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+            responseBody = JSON.parse(raw);
+            responseStatus = res.statusCode;
+            bodyWasCaptured = true;
+          } catch {
+            // Si no es JSON parseble, no cacheamos (ej: streams de archivos)
+          }
+        }
+        return (originalEnd as any).call(this, chunk, ...args);
+      };
+
+      // Cuando termina la request, persistimos si corresponde
       res.once('finish', async () => {
-        if (res.statusCode >= 200 && res.statusCode < 300 && responseBody) {
+        if (res.statusCode >= 200 && res.statusCode < 300 && bodyWasCaptured && responseBody) {
           try {
             await sequelize.query(
-              `INSERT INTO idempotency_keys 
+              `INSERT INTO idempotency_keys
                (route, idem_key, request_hash, response_json, expires_at, usuario_id, created_at)
                VALUES (:route, :key, :requestHash, :responseJson, DATE_ADD(NOW(), INTERVAL 24 HOUR), :usuarioId, NOW())`,
               {
                 replacements: {
-                  route: req.originalUrl || req.url,
+                  route,
                   key,
                   requestHash,
                   responseJson: JSON.stringify({ status: responseStatus, body: responseBody }),
-                  usuarioId
-                }
+                  usuarioId,
+                },
               }
             );
-            logger.info({ msg: 'Idempotency key stored', key, route: req.originalUrl });
+            logger.info({ msg: 'Idempotency key stored', key, route });
           } catch (err) {
             logger.error({ msg: 'Failed to store idempotency key', key, err });
           }
@@ -130,8 +149,7 @@ export function idempotencyMiddleware(sequelize: Sequelize) {
       next();
     } catch (err) {
       logger.error({ msg: 'Idempotency middleware error', err });
-      // Falla seguro: permitimos la request igual
-      next();
+      next(); // Fail open: permitimos la request igual
     }
   };
 }

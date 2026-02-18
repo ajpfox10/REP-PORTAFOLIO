@@ -2,8 +2,8 @@ import type { Express } from "express";
 import type { Sequelize } from "sequelize";
 import type { SchemaSnapshot } from "../../db/schema/types";
 import { env } from "../../config/env";
+import { logger } from "../../logging/logger";
 import { manifest as autoRoutes } from "./auto.manifest";
-
 
 /**
  * Auto-mount de rutas (DX):
@@ -20,20 +20,26 @@ export async function mountAutoRoutes(app: Express, sequelize: Sequelize, schema
     const mod: any = await entry.load();
 
     if (!mod?.basePath || typeof mod.basePath !== "string") {
-      // eslint-disable-next-line no-console
-      console.warn("[autoRoutes] módulo sin basePath, se ignora");
+      logger.warn({
+        msg: "[autoRoutes] warning",
+        detail: "[autoRoutes] módulo sin basePath, se ignora",
+      });
       continue;
     }
     if (typeof mod.buildRouter !== "function") {
-      // eslint-disable-next-line no-console
-      console.warn(`[autoRoutes] ${mod.basePath}: falta buildRouter(ctx), se ignora`);
+      logger.warn({
+        msg: "[autoRoutes] warning",
+        detail: `[autoRoutes] ${mod.basePath}: falta buildRouter(ctx), se ignora`,
+      });
       continue;
     }
 
     const router = mod.buildRouter(ctx);
     if (!router) {
-      // eslint-disable-next-line no-console
-      console.warn(`[autoRoutes] ${mod.basePath}: buildRouter devolvió vacío`);
+      logger.warn({
+        msg: "[autoRoutes] warning",
+        detail: `[autoRoutes] ${mod.basePath}: buildRouter devolvió vacío`,
+      });
       continue;
     }
     app.use(mod.basePath, router);
