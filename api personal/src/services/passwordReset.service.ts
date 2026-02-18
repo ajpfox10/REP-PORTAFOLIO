@@ -164,6 +164,13 @@ export async function initiatePasswordReset(
   sequelize: Sequelize,
   email: string
 ): Promise<{ ok: boolean; error?: string }> {
+  // Este servicio no debe llamarse cuando el email está deshabilitado.
+  // El router ya lo evita con el `if (env.EMAIL_ENABLE)` en auth.routes.ts,
+  // pero lo repetimos aquí como defensa en profundidad.
+  if (!env.EMAIL_ENABLE) {
+    logger.warn({ msg: "initiatePasswordReset llamado pero EMAIL_ENABLE=false" });
+    return { ok: false, error: "Servicio de email no disponible" };
+  }
   try {
     const userRows = await sequelize.query<any>(
       `

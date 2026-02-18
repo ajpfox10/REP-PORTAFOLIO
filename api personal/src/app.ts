@@ -96,21 +96,27 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
   app.use(
     cors({
       origin: (origin, cb) => {
+        // Sin origin = request directa (server-to-server, curl, Postman)
         if (!origin) return cb(null, true);
 
         const o = origin.toLowerCase();
         const deny = env.CORS_DENYLIST.map((x: string) => x.toLowerCase());
         if (deny.includes(o)) return cb(new Error("CORS blocked"));
 
+        // Si hay allowlist explícita, solo esos orígenes
         if (env.CORS_ALLOWLIST.length > 0) {
           const allow = env.CORS_ALLOWLIST.map((x: string) => x.toLowerCase());
           if (!allow.includes(o)) return cb(new Error("CORS not allowed"));
           return cb(null, true);
         }
 
-        return cb(null, true);
+        // CORS_ALLOW_ALL=true → aceptar cualquier origen no bloqueado
+        if (env.CORS_ALLOW_ALL) return cb(null, true);
+
+        // CORS_ALLOW_ALL=false y sin allowlist → denegar todo origen externo
+        return cb(new Error("CORS not allowed"));
       },
-      credentials: true
+      credentials: true,
     })
   );
 
@@ -138,7 +144,8 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
     res.status(404).json({
       ok: false,
       error: "Not found",
-      details: [{ path: req.path, message: "not found" }]
+      details: [{ path: req.path, message: "not found" }],
+      requestId: (req as any).requestId,
     });
   });
 

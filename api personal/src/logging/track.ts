@@ -2,6 +2,7 @@
 // Tracking de acciones para auditoría en backend
 // NO CONFUNDIR con el track.ts del frontend
 import { logger } from './logger';
+import { getRequestId } from '../middlewares/requestId';
 
 export type TrackEvent = {
   action: string;
@@ -35,7 +36,7 @@ export function trackAction(
     entity,
     details,
     timestamp: new Date(),
-    requestId: global.requestId
+    requestId: getRequestId()
   };
 
   // Log estructurado

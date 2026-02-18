@@ -57,6 +57,12 @@ export interface SendEmailOptions {
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<{ ok: boolean; error?: string; messageId?: string }> {
+  // Guard: nunca intentar enviar si el servicio está deshabilitado
+  if (!env.EMAIL_ENABLE) {
+    logger.warn({ msg: "sendEmail llamado pero EMAIL_ENABLE=false. Email no enviado.", to: options.to, subject: options.subject });
+    return { ok: false, error: "Email service disabled (EMAIL_ENABLE=false)" };
+  }
+
   const t = getEmailTransporter();
   
   if (!t) {

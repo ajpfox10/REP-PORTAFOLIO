@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Sequelize, QueryTypes } from "sequelize";
 import { ColumnInfo, ForeignKeyInfo, SchemaSnapshot, TableInfo } from "./types";
 import { env } from "../../config/env";
+import { logger } from "../../logging/logger";
 
 type RawColumn = {
   TABLE_NAME: string;
@@ -125,8 +126,7 @@ export const introspectSchema = async (sequelize: Sequelize): Promise<SchemaSnap
     if (t.primaryKey.includes("id") && (t.primaryKey.length !== 1 || t.primaryKey[0] !== "id")) {
       t.primaryKey = ["id"];
     } else if (!t.primaryKey.includes("id") && t.primaryKey.length) {
-      // eslint-disable-next-line no-console
-      console.warn(
+      logger.warn(
         `[introspect] Warning: table '${t.name}' has column 'id' but PK is [${t.primaryKey.join(", ")}].`
       );
     }
@@ -170,8 +170,7 @@ export const introspectSchema = async (sequelize: Sequelize): Promise<SchemaSnap
     const pk0 = t.primaryKey?.[0] || null;
     const chosen = autoCols.includes("id") ? "id" : pk0 && autoCols.includes(pk0) ? pk0 : autoCols[0];
 
-    // eslint-disable-next-line no-console
-    console.warn(
+    logger.warn(
       `[introspect] Warning: table '${t.name}' has multiple AUTO_INCREMENT columns (${autoCols.join(
         ", "
       )}). Using '${chosen}'.`

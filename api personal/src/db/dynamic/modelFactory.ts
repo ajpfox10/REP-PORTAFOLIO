@@ -1,5 +1,6 @@
 import { DataTypes, Model, Sequelize, Op } from "sequelize"; // ✅ AGREGADO Op
 import { SchemaSnapshot, TableInfo } from "../schema/types";
+import { logger } from "../../logging/logger";
 
 const mapType = (t: string, maxLength: number | null) => {
   const dt = (t || "").toLowerCase();
@@ -40,7 +41,7 @@ export const buildModels = (sequelize: Sequelize, schema: SchemaSnapshot) => {
       chosenAutoInc = pk0 && autoIncCols.includes(pk0) ? pk0 : autoIncCols[0];
 
       if (autoIncCols.length > 1) {
-        console.warn(
+        logger.warn(
           `[modelFactory] '${table.name}' tiene múltiples AUTO_INCREMENT: ${autoIncCols.join(", ")}. Se usará '${chosenAutoInc}'.`
         );
       }
