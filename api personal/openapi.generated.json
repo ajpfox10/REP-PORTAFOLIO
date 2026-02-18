@@ -15079,6 +15079,11 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -15107,6 +15112,11 @@
             "nullable": true
           },
           "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true
@@ -15140,6 +15150,11 @@
             "nullable": true
           },
           "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true
@@ -19068,6 +19083,11 @@
           "updated_by": {
             "type": "number",
             "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -19101,6 +19121,11 @@
           },
           "updated_by": {
             "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         },
@@ -19137,6 +19162,11 @@
           },
           "updated_by": {
             "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         }

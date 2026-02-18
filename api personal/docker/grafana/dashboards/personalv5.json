@@ -1,0 +1,54 @@
+{
+  "dashboard": {
+    "title": "PersonalV5 - API Monitor",
+    "panels": [
+      {
+        "title": "HTTP Requests Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])",
+            "legendFormat": "{{method}} {{route}}"
+          }
+        ]
+      },
+      {
+        "title": "HTTP Error Rate (4xx/5xx)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"4..|5..\"}[1m])",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      },
+      {
+        "title": "Redis Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "redis_connected_clients"
+          }
+        ]
+      },
+      {
+        "title": "WebSocket Active Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "ws_connections_active"
+          }
+        ]
+      },
+      {
+        "title": "Database Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "mysql_global_status_threads_connected"
+          }
+        ]
+      }
+    ]
+  }
+}

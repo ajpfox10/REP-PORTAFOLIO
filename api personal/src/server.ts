@@ -1,3 +1,4 @@
+// src/server.ts
 import { createApp } from "./app";
 import { QueryTypes } from "sequelize";
 import { env } from "./config/env";
@@ -42,7 +43,6 @@ async function main() {
     try {
       await getRedisClient();
     } catch (e) {
-      // En prod conviene fallar... en dev/test es mejor seguir con memoria.
       if (env.NODE_ENV === "production" && env.PROD_FAIL_FAST) throw e;
       logger.warn({ msg: "Redis no disponible, se usará rate limit en memoria", err: e instanceof Error ? e.message : String(e) });
     }
@@ -53,11 +53,9 @@ async function main() {
   const schema = await schemaBootstrap(sequelize);
   buildModels(sequelize, schema);
 
-  // ✅ OpenAPI auto generado desde DB (schema ya introspectado)
   let openapiPathForValidator = openapiPathArg || env.OPENAPI_PATH;
 
   if (env.ENABLE_OPENAPI_VALIDATION && env.OPENAPI_AUTO_GENERATE) {
-    // allow/deny/strict igual que en crud.routes.ts
     const allow = new Set(parseList(env.CRUD_TABLE_ALLOWLIST));
     const deny = new Set(parseList(env.CRUD_TABLE_DENYLIST));
     const strict = env.CRUD_STRICT_ALLOWLIST;
@@ -71,7 +69,6 @@ async function main() {
 
     const allowedTables = new Set(Object.keys((schema as any).tables || {}).filter(isAllowed));
 
-    // detectar vistas desde INFORMATION_SCHEMA.TABLES
     const viewRows = await sequelize.query<{ TABLE_NAME: string }>(
       `
       SELECT TABLE_NAME
@@ -92,7 +89,6 @@ async function main() {
 
     const outAbs = path.resolve(process.cwd(), env.OPENAPI_AUTO_OUTPUT);
     fs.mkdirSync(path.dirname(outAbs), { recursive: true });
-
     fs.writeFileSync(outAbs, YAML.stringify(doc), "utf8");
     openapiPathForValidator = outAbs;
 
@@ -100,15 +96,11 @@ async function main() {
   }
 
   const app = createApp(openapiPathForValidator, (appInstance) => {
-    // auditoría global (no rompe si falla)
     appInstance.use(auditAllApi(sequelize));
-
-    // rutas
     mountRoutes(appInstance, sequelize, schema);
   });
 
   const port = env.PORT;
-
   const server = app.listen(port, () => {
     logger.info({
       msg: "API listening",
@@ -121,13 +113,11 @@ async function main() {
       endpoints: ["/health", "/ready", "/api/v1/tables", "/api/v1/<table>?page=1&limit=50"],
     });
   });
-  // ✅ Inicializar Socket.IO
-  const io = initSocketServer(server);
 
-  // Guardar en app.locals para acceso desde controllers
+  const io = initSocketServer(server);
   app.locals.io = io;
 
-  // ✅ Graceful shutdown (no cambia endpoints, solo operación)
+  // ✅ Graceful shutdown - VERSIÓN COMPLETA CON OCR
   const shutdown = async (signal: string) => {
     try {
       logger.warn({ msg: "Shutdown signal received", signal });
@@ -148,6 +138,15 @@ async function main() {
         logger.warn({ msg: "Redis close failed", err: e instanceof Error ? e.message : String(e) });
       }
 
+      // ✅ Liberar recursos de OCR
+      try {
+        const { terminateOcrWorker } = await import('./services/ocr.service');
+        await terminateOcrWorker();
+        logger.info({ msg: "OCR worker terminated" });
+      } catch (e) {
+        logger.warn({ msg: "OCR worker termination failed", err: e instanceof Error ? e.message : String(e) });
+      }
+
       logger.info({ msg: "Shutdown complete", signal });
       process.exit(0);
     } catch (e) {
@@ -159,22 +158,17 @@ async function main() {
   process.once("SIGTERM", () => void shutdown("SIGTERM"));
   process.once("SIGINT", () => void shutdown("SIGINT"));
 
-
   // ✅ Iniciar worker de webhooks
   if (env.NODE_ENV === 'production') {
-    startWebhookWorker(sequelize, 5000); // Cada 5 segundos
+    startWebhookWorker(sequelize, 5000);
   } else {
-    // En desarrollo, cada 10 segundos para no saturar
     startWebhookWorker(sequelize, 10000);
   }
 
-  // Timeouts de server (protege de requests colgadas)
   try {
     server.setTimeout(env.REQUEST_TIMEOUT_MS);
-    // @ts-ignore - propiedades de Node http.Server
-    server.headersTimeout = Math.max(env.REQUEST_TIMEOUT_MS, 60000);
-    // @ts-ignore
-    server.requestTimeout = env.REQUEST_TIMEOUT_MS;
+    (server as any).headersTimeout = Math.max(env.REQUEST_TIMEOUT_MS, 60000);
+    (server as any).requestTimeout = env.REQUEST_TIMEOUT_MS;
   } catch {
     // no romper por compat
   }

@@ -1,9 +1,9 @@
+// src/metrics/prom.ts
 import client from "prom-client";
 import { env } from "../config/env";
 
 export const registry = new client.Registry();
 
-// Métricas default (CPU, memoria, event loop, GC, etc.)
 if (env.METRICS_ENABLE) {
   client.collectDefaultMetrics({ register: registry });
 }
@@ -28,6 +28,9 @@ export const httpRequestDuration = new client.Histogram({
   buckets: [0.01, 0.03, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
   registers: [registry],
 });
+
+// ✅ WebSocket metrics (definidas en socket/metrics.ts)
+// Se registran automáticamente al importar el archivo
 
 export function metricsText() {
   return registry.metrics();
