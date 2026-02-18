@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { Sequelize, QueryTypes } from "sequelize";
 import { can } from "../middlewares/rbacCrud";
 import { env } from "../config/env";
+import { buildPersonalHistorialRouter } from './personal.historial.routes';
 
 // ✅ RBAC sin depender de req.params.table (este endpoint no es el CRUD genérico)
 function requireCrudFor(table: string, action: "read" | "create" | "update" | "delete") {
@@ -118,6 +119,6 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       return res.json({ ok: true, data: rows, meta: { page, limit, total } });
     }
   );
-
+  router.use('/', buildPersonalHistorialRouter(sequelize));
   return router;
 }

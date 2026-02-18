@@ -8,7 +8,9 @@ import { alertOnSpike } from "../alerts/thresholds";
 import { resolveSafeRealPath, validateDownloadFile, FileSecurityError } from "../files/fileSecurity";
 import { scanFileOrThrow, VirusFoundError } from "../files/fileScanner";
 import { cacheMiddleware } from "../infra/cache";
-import { buildDocumentsVersionsRouter } from './documents.versions.routes'; // ✅ AGREGADO
+import { buildDocumentsVersionsRouter } from './documents.versions.routes';
+import { buildDocumentsPreviewRouter } from './documents.preview.routes'; // ✅ IMPORT AGREGADO
+import { buildDocumentsOcrRouter } from './documents.ocr.routes';
 
 function safeFilename(name: string) {
   return String(name || "document")
@@ -89,6 +91,12 @@ export function buildDocumentsRouter(sequelize: any) {
     }
   );
 
+  // ✅ OCR para imágenes
+   router.use('/:id/ocr', buildDocumentsOcrRouter(sequelize));
+
+  // ✅ PREVIEW EMBEBIDO (PDF, DOCX, imágenes)
+  router.use('/:id/preview', buildDocumentsPreviewRouter(sequelize));
+
   // GET /api/v1/documents/:id/file - NO CACHE
   router.get("/:id/file", async (req: Request, res: Response) => {
     try {
@@ -158,7 +166,7 @@ export function buildDocumentsRouter(sequelize: any) {
     }
   });
 
-  // ✅ SUBROUTER DE VERSIONES - AGREGADO AQUÍ
+  // ✅ SUBROUTER DE VERSIONES
   router.use('/:id/versions', buildDocumentsVersionsRouter(sequelize));
 
   return router;

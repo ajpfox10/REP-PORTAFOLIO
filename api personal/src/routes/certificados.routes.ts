@@ -1,3 +1,4 @@
+// src/routes/certificados.routes.ts
 import { Router, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
@@ -8,7 +9,7 @@ import { Sequelize, QueryTypes } from "sequelize";
  * Reemplaza placeholders simples en los XML del DOCX.
  * Nota: esto funciona bien si los placeholders no están cortados en runs.
  */
-async function fillDocxTemplate(templateBuffer: Buffer, replacements: Record<string, string>) {
+export async function fillDocxTemplate(templateBuffer: Buffer, replacements: Record<string, string>) {
   const zip = await JSZip.loadAsync(templateBuffer);
 
   const candidates = Object.keys(zip.files).filter((p) =>

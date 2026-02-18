@@ -1,6 +1,6 @@
 import rateLimit from "express-rate-limit";
 import { env } from "../config/env";
-import { getRedisClient } from "../infra/redis";
+import { getRedisClient, isRedisEnabled, redisIncrWithExpire, redisDel, redisKeys } from "../infra/redis";
 
 function pickRequestId(req: any): string | null {
   const id = req?.requestId || req?.headers?.["x-request-id"];
@@ -18,7 +18,7 @@ function rateLimitJsonHandler(message: string) {
   };
 }
 
-// ✅ FALLBACK EN MEMORIA (cuando Redis falla o no está configurado)
+// ✅ FALLBACK EN MEMORIA
 const memoryStore: Record<string, number> = {};
 
 const fallbackStore = {
@@ -37,7 +37,7 @@ const fallbackStore = {
   }
 };
 
-// ✅ STORE PERSONALIZADO QUE FUNCIONA CON CUALQUIER REDIS (SIN COMANDO SCRIPT)
+// ✅ STORE CON REDIS
 function buildStoreIfEnabled() {
   if (!env.RATE_LIMIT_USE_REDIS) return undefined;
   if (!String(env.REDIS_URL || "").trim()) return undefined;
@@ -45,30 +45,14 @@ function buildStoreIfEnabled() {
   return {
     async increment(key: string) {
       try {
-        const client = await getRedisClient();
         const now = Date.now();
         const windowMs = env.RATE_LIMIT_WINDOW_MS || 60000;
         const windowKey = `${key}:${Math.floor(now / windowMs)}`;
         
-        // Usar multi().exec() de forma segura con tipado
-        const multi = client.multi();
-        multi.incr(windowKey);
-        multi.expire(windowKey, Math.ceil(windowMs / 1000));
-        
-        const results = await multi.exec();
-        
-        // ✅ EXTRACCIÓN SEGURA DEL RESULTADO
-        let totalHits = 1;
-        if (results && results.length > 0 && results[0]) {
-          const firstResult = results[0];
-          if (Array.isArray(firstResult) && firstResult.length > 1) {
-            const value = firstResult[1];
-            if (typeof value === 'number') totalHits = value;
-          }
-        }
+        const totalHits = await redisIncrWithExpire(windowKey, Math.ceil(windowMs / 1000));
         
         return {
-          totalHits,
+          totalHits: totalHits || 1,
           resetTime: new Date(Math.floor(now / windowMs) * windowMs + windowMs)
         };
       } catch (err) {
@@ -77,23 +61,31 @@ function buildStoreIfEnabled() {
       }
     },
     
-    async decrement(key: string) {
-      // No implementado, no es necesario para rate-limit
-    },
+    async decrement(key: string) {},
     
     async resetKey(key: string) {
       try {
-        const client = await getRedisClient();
         const pattern = `${key}:*`;
-        const keys = await client.keys(pattern);
-        if (keys.length) {
-          await client.del(keys);
+        const keys = await redisKeys(pattern);
+        for (const k of keys) {
+          await redisDel(k);
         }
-      } catch {
-        // Ignorar errores en reset
-      }
+      } catch {}
     }
   };
+}
+
+// ✅ KEY GENERATOR QUE USA IP + USUARIO (SI ESTÁ AUTENTICADO)
+function keyGenerator(req: any): string {
+  const auth = req.auth;
+  const userId = auth?.principalId;
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  
+  if (userId && env.RATE_LIMIT_BY_USER) {
+    return `user:${userId}`;
+  }
+  
+  return `ip:${ip}`;
 }
 
 export const globalLimiter = rateLimit({
@@ -102,6 +94,7 @@ export const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: buildStoreIfEnabled(),
+  keyGenerator,
   handler: rateLimitJsonHandler("Demasiadas solicitudes. Intente más tarde."),
   skipSuccessfulRequests: false,
 });
@@ -114,5 +107,6 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: buildStoreIfEnabled(),
+  keyGenerator: (req) => req.ip || 'unknown',
   handler: rateLimitJsonHandler("Demasiados intentos. Espere unos minutos."),
 });

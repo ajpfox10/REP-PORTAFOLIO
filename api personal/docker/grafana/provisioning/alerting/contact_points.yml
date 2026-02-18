@@ -1,0 +1,21 @@
+apiVersion: 1
+
+contactPoints:
+  - name: 'slack-webhook'
+    receivers:
+      - name: 'default'
+        slackConfigs:
+          - url: '${SLACK_WEBHOOK_URL}'
+            title: 'PersonalV5 Alert'
+            text: '{{ .Message }}'
+            sendResolved: true
+
+  - name: 'email-admin'
+    receivers:
+      - name: 'default'
+        emailConfigs:
+          - to: '${ADMIN_EMAIL}'
+            from: 'alerts@personalv5.com'
+            smarthost: 'smtp.gmail.com:587'
+            authUsername: '${SMTP_USER}'
+            authPassword: '${SMTP_PASSWORD}'
