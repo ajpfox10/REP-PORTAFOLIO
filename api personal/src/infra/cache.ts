@@ -1,83 +1,18 @@
 // src/infra/cache.ts
-import { createClient } from 'redis';
+import { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
-
-type CacheClient = ReturnType<typeof createClient>;
-
-let client: CacheClient | null = null;
-let connecting: Promise<CacheClient> | null = null;
+import { getRedisClient } from './redis';
 
 const DEFAULT_TTL = 300; // 5 minutos
 const DEFAULT_KEY_PREFIX = 'cache:';
 
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(`${label} timeout (${ms}ms)`)), ms);
-    p.then((v) => {
-      clearTimeout(t);
-      resolve(v);
-    }).catch((e) => {
-      clearTimeout(t);
-      reject(e);
-    });
-  });
-}
-
-export async function getRedisClient(): Promise<CacheClient> {
-  if (client) return client;
-  if (connecting) return connecting;
-
-  const url = String(env.REDIS_URL || '').trim();
-  if (!url) {
-    throw new Error('REDIS_URL no configurado');
-  }
-
-  const c = createClient({ url });
-  
-  c.on('error', (err) => {
-    logger.warn(`[redis] error: ${err?.message || err}`);
-  });
-  
-  c.on('reconnecting', () => {
-    logger.warn('[redis] reconnecting...');
-  });
-  
-  c.on('connect', () => {
-    logger.info('[redis] connected');
-  });
-
-  connecting = withTimeout(
-    c.connect().then(() => c),
-    env.REDIS_CONNECT_TIMEOUT_MS || 5000,
-    'Redis connect'
-  );
-
-  try {
-    client = await connecting;
-    return client;
-  } finally {
-    connecting = null;
-  }
-}
-
-export async function closeRedisClient(): Promise<void> {
-  if (!client) return;
-  try {
-    await client.quit();
-  } catch {
-    try {
-      await client.disconnect();
-    } catch {
-      // ignore
-    }
-  } finally {
-    client = null;
-  }
-}
-
-export function isRedisEnabled(): boolean {
-  return env.RATE_LIMIT_USE_REDIS === true && !!env.REDIS_URL?.trim();
+/**
+ * Indica si el cache Redis está habilitado.
+ * Usa CACHE_USE_REDIS, independiente del rate limit (RATE_LIMIT_USE_REDIS).
+ */
+export function isCacheEnabled(): boolean {
+  return env.CACHE_USE_REDIS === true && !!env.REDIS_URL?.trim();
 }
 
 // ============== CACHE API ==============
@@ -89,15 +24,13 @@ export interface CacheOptions {
 }
 
 export async function cacheGet<T>(key: string, options?: CacheOptions): Promise<T | null> {
-  if (!isRedisEnabled()) return null;
-  
+  if (!isCacheEnabled()) return null;
+
   try {
     const redis = await getRedisClient();
     const prefixed = `${options?.keyPrefix || DEFAULT_KEY_PREFIX}${key}`;
     const data = await redis.get(prefixed);
-    
     if (!data) return null;
-    
     return JSON.parse(data) as T;
   } catch (err) {
     logger.warn({ msg: 'Cache get failed', key, err: String(err) });
@@ -106,20 +39,20 @@ export async function cacheGet<T>(key: string, options?: CacheOptions): Promise<
 }
 
 export async function cacheSet<T>(
-  key: string, 
-  value: T, 
+  key: string,
+  value: T,
   options?: CacheOptions
 ): Promise<void> {
-  if (!isRedisEnabled()) return;
-  
+  if (!isCacheEnabled()) return;
+
   try {
     const redis = await getRedisClient();
     const prefixed = `${options?.keyPrefix || DEFAULT_KEY_PREFIX}${key}`;
     const ttl = options?.ttl || DEFAULT_TTL;
-    
+
     await redis.setEx(prefixed, ttl, JSON.stringify(value));
-    
-    // Guardar tags para invalidación
+
+    // Guardar tags para invalidación por grupo
     if (options?.tags?.length) {
       for (const tag of options.tags) {
         const tagKey = `tag:${tag}`;
@@ -133,8 +66,8 @@ export async function cacheSet<T>(
 }
 
 export async function cacheDel(key: string, options?: CacheOptions): Promise<void> {
-  if (!isRedisEnabled()) return;
-  
+  if (!isCacheEnabled()) return;
+
   try {
     const redis = await getRedisClient();
     const prefixed = `${options?.keyPrefix || DEFAULT_KEY_PREFIX}${key}`;
@@ -145,15 +78,15 @@ export async function cacheDel(key: string, options?: CacheOptions): Promise<voi
 }
 
 export async function cacheInvalidateTags(tags: string[]): Promise<void> {
-  if (!isRedisEnabled() || !tags.length) return;
-  
+  if (!isCacheEnabled() || !tags.length) return;
+
   try {
     const redis = await getRedisClient();
-    
+
     for (const tag of tags) {
       const tagKey = `tag:${tag}`;
       const keys = await redis.sMembers(tagKey);
-      
+
       if (keys.length) {
         await redis.del(keys);
         await redis.del(tagKey);
@@ -167,8 +100,6 @@ export async function cacheInvalidateTags(tags: string[]): Promise<void> {
 
 // ============== CACHE MIDDLEWARE ==============
 
-import { Request, Response, NextFunction } from 'express';
-
 export interface CacheMiddlewareOptions {
   ttl?: number;
   keyPrefix?: string;
@@ -178,40 +109,29 @@ export interface CacheMiddlewareOptions {
 
 /**
  * Middleware de cache para Express.
- * 
- * @example
- * app.get('/api/v1/documents',
- *   cacheMiddleware({ ttl: 300, tags: ['documents'] }),
- *   documentsHandler
- * );
+ * Solo actúa cuando CACHE_USE_REDIS=true.
+ * La cache key NO incluye userId: los datos son los mismos para todos
+ * los usuarios que acceden a la misma URL. Si necesitás cache per-user,
+ * usá un keyPrefix personalizado que incluya el userId.
  */
 export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    // ✅ Solo cachear GET
-    if (req.method !== 'GET') {
-      return next();
-    }
+    // Solo cachear GET
+    if (req.method !== 'GET') return next();
 
-    // ✅ Condición personalizada (ej: no cachear con ?noCache=1)
-    if (options.condition && !options.condition(req)) {
-      return next();
-    }
+    // Condición personalizada (ej: no cachear con ?noCache=1)
+    if (options.condition && !options.condition(req)) return next();
 
-    // ✅ Si Redis no está habilitado, skip
-    if (!isRedisEnabled()) {
-      return next();
-    }
+    // Si cache Redis no está habilitado, skip
+    if (!isCacheEnabled()) return next();
 
-    // ✅ Generar key única basada en URL + query + auth (opcional)
-    const userId = (req as any).auth?.principalId || 'anon';
     const path = req.originalUrl || req.url;
-    const cacheKey = `${req.method}:${userId}:${path}`;
+    const cacheKey = `${req.method}:${path}`;
 
     try {
-      // Intentar obtener del cache
       const cached = await cacheGet<any>(cacheKey, {
         ttl: options.ttl,
-        keyPrefix: options.keyPrefix
+        keyPrefix: options.keyPrefix,
       });
 
       if (cached) {
@@ -223,24 +143,21 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
 
       // Interceptar res.json para guardar en cache
       const originalJson = res.json;
-      res.json = function(body) {
-        const responseBody = body;
+      res.json = function (body) {
         const statusCode = res.statusCode;
 
-        // Solo cachear respuestas exitosas
         if (statusCode >= 200 && statusCode < 300) {
           const tags = options.tags ? options.tags(req) : [];
-          
-          cacheSet(cacheKey, { status: statusCode, body: responseBody }, {
+          cacheSet(cacheKey, { status: statusCode, body }, {
             ttl: options.ttl,
             keyPrefix: options.keyPrefix,
-            tags
-          }).catch(err => {
+            tags,
+          }).catch((err) => {
             logger.warn({ msg: 'Async cache set failed', key: cacheKey, err });
           });
         }
 
-        return originalJson.call(this, responseBody);
+        return originalJson.call(this, body);
       };
 
       next();

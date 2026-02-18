@@ -5,6 +5,7 @@ import { SchemaSnapshot } from "../db/schema/types";
 import { env } from "../config/env";
 import { requireCrud, requireMetaRead } from "../middlewares/rbacCrud";
 import { cacheMiddleware, cacheInvalidateTags } from "../infra/cache";
+import { exportLimiter } from "../middlewares/rateLimiters";
 import { emitPedidoCreated, emitPedidoUpdated, emitPedidoDeleted } from '../socket/handlers/pedidos';
 import JSZip from 'jszip';
 import { Parser } from 'json2csv';
@@ -25,38 +26,29 @@ const safeStringify = (v: any) => {
   }
 };
 
-// ============================================
-// FILTROS AVANZADOS
-// ============================================
+// ─── FILTROS AVANZADOS ────────────────────────────────────────────────────────
 function buildWhereClause(query: any, schemaTable: any): any {
   const where: any = {};
-  
+
   // Filtros exactos (?nombre=Juan)
   for (const [key, value] of Object.entries(query)) {
-    if (key === 'page' || key === 'limit' || key === 'sort' || key === 'fields' || key === 'noCache') continue;
+    if (['page', 'limit', 'sort', 'fields', 'noCache', 'withDeleted'].includes(key)) continue;
     if (key.startsWith('_')) continue;
-    
     const column = schemaTable?.columns?.find((c: any) => c.name === key);
     if (!column) continue;
-    
     where[key] = value;
   }
-  
-  // Filtros con operadores
-  // ?dni_gt=30000000
-  // ?nombre_contains=Pepe
+
+  // Filtros con operadores: ?dni_gt=30000000 / ?nombre_contains=Pepe
   const operators = ['_gt', '_gte', '_lt', '_lte', '_ne', '_contains', '_startsWith', '_endsWith'];
-  
   for (const [key, value] of Object.entries(query)) {
     for (const op of operators) {
       if (key.endsWith(op)) {
         const field = key.slice(0, -op.length);
         const column = schemaTable?.columns?.find((c: any) => c.name === field);
         if (!column) continue;
-        
         if (!where[field]) where[field] = {};
-        
-        switch(op) {
+        switch (op) {
           case '_gt': where[field][Op.gt] = value; break;
           case '_gte': where[field][Op.gte] = value; break;
           case '_lt': where[field][Op.lt] = value; break;
@@ -69,38 +61,28 @@ function buildWhereClause(query: any, schemaTable: any): any {
       }
     }
   }
-  
+
   return where;
 }
 
-// ============================================
-// ORDENAMIENTO
-// ============================================
+// ─── ORDENAMIENTO ─────────────────────────────────────────────────────────────
 function buildOrderClause(query: any): any[] {
-  const order: any[] = [];
-  
-  if (query.sort) {
-    const sorts = String(query.sort).split(',');
-    for (const s of sorts) {
-      const desc = s.startsWith('-');
-      const field = desc ? s.slice(1) : s;
-      order.push([field, desc ? 'DESC' : 'ASC']);
-    }
-  }
-  
-  return order;
+  if (!query.sort) return [];
+  return String(query.sort).split(',').map((s) => {
+    const desc = s.startsWith('-');
+    return [desc ? s.slice(1) : s, desc ? 'DESC' : 'ASC'];
+  });
 }
 
-// ============================================
-// SELECCIÓN DE CAMPOS
-// ============================================
-function buildAttributesClause(query: any): any {
+// ─── SELECCIÓN DE CAMPOS ──────────────────────────────────────────────────────
+function buildAttributesClause(query: any): string[] | undefined {
   if (query.fields) {
-    return String(query.fields).split(',').map(f => f.trim());
+    return String(query.fields).split(',').map((f) => f.trim());
   }
   return undefined;
 }
 
+// ─── ROUTER ───────────────────────────────────────────────────────────────────
 export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) => {
   const router = Router();
 
@@ -135,28 +117,90 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
 
   const getPk = (table: string): string | null => {
     const t = schema.tables?.[table];
-    const pk = t?.primaryKey?.[0];
-    return pk || null;
+    return t?.primaryKey?.[0] || null;
   };
 
-  // GET /tables
+  // ── GET /tables ──────────────────────────────────────────────────────────────
   router.get("/tables", requireMetaRead, (_req, res) => {
     const all = Object.keys(schema.tables || {}).sort();
     const filtered = all.filter(isAllowedTable);
     res.json({ ok: true, data: filtered });
   });
 
-  // ------------------------------------------------------------------------
-  // GET /:table - LIST con FILTROS AVANZADOS y CACHE
-  // ------------------------------------------------------------------------
+  // ── GET /:table/export/:format  (ANTES de /:table/:id para evitar shadowing) ──
   router.get(
-    "/:table", 
-    requireCrud("read"), 
+    '/:table/export/:format',
+    requireCrud("read"),
+    guardTable,
+    exportLimiter,
+    async (req: Request, res: Response) => {
+      try {
+        const table = req.params.table;
+        const format = req.params.format;
+        const model = getModel(table);
+        if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
+
+        const limit = Math.min(pickQueryInt(req.query.limit, 10000, 1), 50000);
+        const where = buildWhereClause(req.query, schema.tables?.[table]);
+        const order = buildOrderClause(req.query);
+
+        const rows = await model.findAll({
+          where: Object.keys(where).length ? where : undefined,
+          order: order.length ? order : undefined,
+          limit,
+        });
+
+        const data = rows.map((r) => ((r as any).toJSON ? (r as any).toJSON() : r));
+
+        if (format === 'json') {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Content-Disposition', `attachment; filename="${table}_export.json"`);
+          return res.json(data);
+        }
+
+        if (format === 'csv') {
+          if (!data.length) {
+            return res.status(404).json({ ok: false, error: 'No hay datos para exportar' });
+          }
+          const fields = Object.keys(data[0]);
+          const json2csvParser = new Parser({ fields });
+          const csv = json2csvParser.parse(data);
+          res.setHeader('Content-Type', 'text/csv');
+          res.setHeader('Content-Disposition', `attachment; filename="${table}_export.csv"`);
+          return res.send(csv);
+        }
+
+        if (format === 'zip') {
+          const zip = new JSZip();
+          zip.file(`${table}_export.json`, JSON.stringify(data, null, 2));
+          if (data.length) {
+            const fields = Object.keys(data[0]);
+            const json2csvParser = new Parser({ fields });
+            const csv = json2csvParser.parse(data);
+            zip.file(`${table}_export.csv`, csv);
+          }
+          const content = await zip.generateAsync({ type: 'nodebuffer' });
+          res.setHeader('Content-Type', 'application/zip');
+          res.setHeader('Content-Disposition', `attachment; filename="${table}_export.zip"`);
+          return res.send(content);
+        }
+
+        return res.status(400).json({ ok: false, error: 'Formato no soportado. Usá json, csv o zip' });
+      } catch (err: any) {
+        return res.status(500).json({ ok: false, error: err?.message || 'Error en exportación' });
+      }
+    }
+  );
+
+  // ── GET /:table — LIST con filtros avanzados y cache ─────────────────────────
+  router.get(
+    "/:table",
+    requireCrud("read"),
     guardTable,
     cacheMiddleware({
       ttl: 300,
       tags: (req) => [`table:${req.params.table}`],
-      condition: (req) => !req.query.noCache
+      condition: (req) => !req.query.noCache,
     }),
     async (req: Request, res: Response) => {
       const table = req.params.table;
@@ -167,49 +211,49 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
       const limit = Math.min(pickQueryInt(req.query.limit, 50, 1), 200);
       const offset = (page - 1) * limit;
 
-      // ✅ FILTROS AVANZADOS
       const where = buildWhereClause(req.query, schema.tables?.[table]);
       const order = buildOrderClause(req.query);
       const attributes = buildAttributesClause(req.query);
 
-      const options: any = { 
-        limit, 
+      const options: any = {
+        limit,
         offset,
         where: Object.keys(where).length ? where : undefined,
         order: order.length ? order : undefined,
-        attributes
+        attributes,
       };
 
       const [rows, total] = await Promise.all([
         model.findAll(options),
-        model.count({ where: options.where })
+        model.count({ where: options.where }),
       ]);
-      
-      res.json({ 
-        ok: true, 
-        data: rows, 
-        meta: { 
-          page, 
-          limit, 
+
+      res.json({
+        ok: true,
+        data: rows,
+        meta: {
+          page,
+          limit,
           total,
           filtered: rows.length,
           where: options.where,
-          order: options.order
-        } 
+          order: options.order,
+        },
       });
     }
   );
 
-  // ------------------------------------------------------------------------
-  // GET /:table/:id - BY ID
-  // ------------------------------------------------------------------------
+  // ── GET /:table/:id — BY ID ───────────────────────────────────────────────────
   router.get(
-    "/:table/:id", 
-    requireCrud("read"), 
+    "/:table/:id",
+    requireCrud("read"),
     guardTable,
     cacheMiddleware({
       ttl: 300,
-      tags: (req) => [`table:${req.params.table}`, `row:${req.params.table}:${req.params.id}`]
+      tags: (req) => [
+        `table:${req.params.table}`,
+        `row:${req.params.table}:${req.params.id}`,
+      ],
     }),
     async (req: Request, res: Response) => {
       const table = req.params.table;
@@ -226,84 +270,7 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     }
   );
 
-  // ------------------------------------------------------------------------
-  // GET /:table/export/:format - EXPORTACIÓN MASIVA
-  // ------------------------------------------------------------------------
-  router.get(
-    '/:table/export/:format',
-    requireCrud("read"),
-    guardTable,
-    async (req: Request, res: Response) => {
-      try {
-        const table = req.params.table;
-        const format = req.params.format;
-        const model = getModel(table);
-        
-        if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
-        
-        // Obtener todos los registros (con límite de seguridad)
-        const limit = Math.min(pickQueryInt(req.query.limit, 10000, 1), 50000);
-        const where = buildWhereClause(req.query, schema.tables?.[table]);
-        const order = buildOrderClause(req.query);
-        
-        const rows = await model.findAll({ 
-          where: Object.keys(where).length ? where : undefined,
-          order: order.length ? order : undefined,
-          limit
-        });
-        
-        const data = rows.map(r => (r as any).toJSON ? (r as any).toJSON() : r);
-        
-        if (format === 'json') {
-          res.setHeader('Content-Type', 'application/json');
-          res.setHeader('Content-Disposition', `attachment; filename="${table}_export.json"`);
-          return res.json(data);
-        }
-        
-        if (format === 'csv') {
-          if (!data.length) {
-            return res.status(404).json({ ok: false, error: 'No hay datos para exportar' });
-          }
-          
-          const fields = Object.keys(data[0]);
-          const json2csvParser = new Parser({ fields });
-          const csv = json2csvParser.parse(data);
-          
-          res.setHeader('Content-Type', 'text/csv');
-          res.setHeader('Content-Disposition', `attachment; filename="${table}_export.csv"`);
-          return res.send(csv);
-        }
-        
-        if (format === 'zip') {
-          const zip = new JSZip();
-          
-          // Agregar JSON
-          zip.file(`${table}_export.json`, JSON.stringify(data, null, 2));
-          
-          // Agregar CSV si hay datos
-          if (data.length) {
-            const fields = Object.keys(data[0]);
-            const json2csvParser = new Parser({ fields });
-            const csv = json2csvParser.parse(data);
-            zip.file(`${table}_export.csv`, csv);
-          }
-          
-          const content = await zip.generateAsync({ type: 'nodebuffer' });
-          
-          res.setHeader('Content-Type', 'application/zip');
-          res.setHeader('Content-Disposition', `attachment; filename="${table}_export.zip"`);
-          return res.send(content);
-        }
-        
-        return res.status(400).json({ ok: false, error: 'Formato no soportado. Usá json, csv o zip' });
-        
-      } catch (err: any) {
-        return res.status(500).json({ ok: false, error: err?.message || 'Error en exportación' });
-      }
-    }
-  );
-
-  // POST /:table - CREATE
+  // ── POST /:table — CREATE ─────────────────────────────────────────────────────
   router.post("/:table", requireCrud("create"), guardTable, guardWrite, async (req: Request, res: Response) => {
     const table = req.params.table;
     const model = getModel(table);
@@ -333,7 +300,7 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     res.status(201).json({ ok: true, data: created });
   });
 
-  // PUT /:table/:id - UPDATE
+  // ── PUT /:table/:id — UPDATE COMPLETO (con transacción) ───────────────────────
   router.put("/:table/:id", requireCrud("update"), guardTable, guardWrite, async (req: Request, res: Response) => {
     const table = req.params.table;
     const model = getModel(table);
@@ -342,32 +309,90 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     const pk = getPk(table);
     if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
 
-    const before = await model.findOne({ where: { [pk]: req.params.id } as any });
-    if (!before) return res.status(404).json({ ok: false, error: "No encontrado" });
+    const t = await sequelize.transaction();
+    try {
+      const before = await model.findOne({ where: { [pk]: req.params.id } as any, transaction: t });
+      if (!before) {
+        await t.rollback();
+        return res.status(404).json({ ok: false, error: "No encontrado" });
+      }
 
-    await model.update(req.body, { where: { [pk]: req.params.id } as any });
-    const after = await model.findOne({ where: { [pk]: req.params.id } as any });
-    const afterJson = (after as any)?.toJSON ? (after as any).toJSON() : after;
+      await model.update(req.body, { where: { [pk]: req.params.id } as any, transaction: t });
+      const after = await model.findOne({ where: { [pk]: req.params.id } as any, transaction: t });
+      await t.commit();
 
-    await cacheInvalidateTags([`table:${table}`, `row:${table}:${req.params.id}`]);
+      const beforeJson = (before as any).toJSON ? (before as any).toJSON() : before;
+      const afterJson = (after as any)?.toJSON ? (after as any).toJSON() : after;
 
-    if (table === 'pedidos' && afterJson?.dni) {
-      emitPedidoUpdated(afterJson.dni, afterJson);
+      await cacheInvalidateTags([`table:${table}`, `row:${table}:${req.params.id}`]);
+
+      if (table === 'pedidos' && afterJson?.dni) {
+        emitPedidoUpdated(afterJson.dni, afterJson);
+      }
+
+      (res.locals as any).audit = {
+        usuario_id: null,
+        action: "update",
+        table_name: table,
+        record_pk: req.params.id,
+        before_json: safeStringify(beforeJson),
+        after_json: safeStringify(afterJson),
+      };
+
+      res.json({ ok: true, data: after });
+    } catch (err) {
+      await t.rollback();
+      throw err;
     }
-
-    (res.locals as any).audit = {
-      usuario_id: null,
-      action: "update",
-      table_name: table,
-      record_pk: req.params.id,
-      before_json: safeStringify((before as any).toJSON ? (before as any).toJSON() : before),
-      after_json: safeStringify(afterJson),
-    };
-
-    res.json({ ok: true, data: after });
   });
 
-  // DELETE /:table/:id - DELETE
+  // ── PATCH /:table/:id — UPDATE PARCIAL (con transacción) ─────────────────────
+  router.patch("/:table/:id", requireCrud("update"), guardTable, guardWrite, async (req: Request, res: Response) => {
+    const table = req.params.table;
+    const model = getModel(table);
+    if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
+
+    const pk = getPk(table);
+    if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
+
+    const t = await sequelize.transaction();
+    try {
+      const before = await model.findOne({ where: { [pk]: req.params.id } as any, transaction: t });
+      if (!before) {
+        await t.rollback();
+        return res.status(404).json({ ok: false, error: "No encontrado" });
+      }
+
+      await model.update(req.body, { where: { [pk]: req.params.id } as any, transaction: t });
+      const after = await model.findOne({ where: { [pk]: req.params.id } as any, transaction: t });
+      await t.commit();
+
+      const beforeJson = (before as any).toJSON ? (before as any).toJSON() : before;
+      const afterJson = (after as any)?.toJSON ? (after as any).toJSON() : after;
+
+      await cacheInvalidateTags([`table:${table}`, `row:${table}:${req.params.id}`]);
+
+      if (table === 'pedidos' && afterJson?.dni) {
+        emitPedidoUpdated(afterJson.dni, afterJson);
+      }
+
+      (res.locals as any).audit = {
+        usuario_id: null,
+        action: "patch",
+        table_name: table,
+        record_pk: req.params.id,
+        before_json: safeStringify(beforeJson),
+        after_json: safeStringify(afterJson),
+      };
+
+      res.json({ ok: true, data: after });
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  });
+
+  // ── DELETE /:table/:id ────────────────────────────────────────────────────────
   router.delete("/:table/:id", requireCrud("delete"), guardTable, guardWrite, async (req: Request, res: Response) => {
     const table = req.params.table;
     const model = getModel(table);
@@ -398,40 +423,6 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     };
 
     res.json({ ok: true, data: { deleted: true } });
-  });
-
-  // PATCH /:table/:id - PARCIAL UPDATE
-  router.patch("/:table/:id", requireCrud("update"), guardTable, guardWrite, async (req: Request, res: Response) => {
-    const table = req.params.table;
-    const model = getModel(table);
-    if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
-
-    const pk = getPk(table);
-    if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
-
-    const before = await model.findOne({ where: { [pk]: req.params.id } as any });
-    if (!before) return res.status(404).json({ ok: false, error: "No encontrado" });
-
-    await model.update(req.body, { where: { [pk]: req.params.id } as any });
-    const after = await model.findOne({ where: { [pk]: req.params.id } as any });
-    const afterJson = (after as any)?.toJSON ? (after as any).toJSON() : after;
-
-    await cacheInvalidateTags([`table:${table}`, `row:${table}:${req.params.id}`]);
-
-    if (table === 'pedidos' && afterJson?.dni) {
-      emitPedidoUpdated(afterJson.dni, afterJson);
-    }
-
-    (res.locals as any).audit = {
-      usuario_id: null,
-      action: "patch",
-      table_name: table,
-      record_pk: req.params.id,
-      before_json: safeStringify((before as any).toJSON ? (before as any).toJSON() : before),
-      after_json: safeStringify(afterJson),
-    };
-
-    res.json({ ok: true, data: after });
   });
 
   return router;
