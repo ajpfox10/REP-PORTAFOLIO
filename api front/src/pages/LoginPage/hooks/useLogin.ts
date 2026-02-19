@@ -21,8 +21,8 @@ export function useLogin() {
   const navigate = useNavigate();
   const toast = useToast();
   
-  const [email, setEmail] = useState('admin@local.com');
-  const [password, setPassword] = useState('admin1234');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleEmailChange = useCallback((value: string) => {
@@ -63,9 +63,5 @@ export function useLogin() {
     handlePasswordChange,
     handleSubmit,
     handleGoBack,
-    
-    // Valores estáticos
-    defaultEmail: 'admin@local.com',
-    defaultPassword: 'admin1234',
   };
 }
