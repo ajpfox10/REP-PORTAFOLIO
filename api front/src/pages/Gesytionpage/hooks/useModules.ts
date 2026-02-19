@@ -20,18 +20,9 @@ export function useModules(cleanDni: string) {
   const toast = useToast();
 
   const [modules, setModules] = useState<Record<ModuleKey, ModuleState>>({
-    consultas: {
-      open: false, rows: [], selectedIndex: 0, loading: false,
-      scanned: null, tablePage: 1, tablePageSize: 50
-    },
-    pedidos: {
-      open: false, rows: [], selectedIndex: 0, loading: false,
-      scanned: null, tablePage: 1, tablePageSize: 50
-    },
-    documentos: {
-      open: false, rows: [], selectedIndex: 0, loading: false,
-      scanned: null, tablePage: 1, tablePageSize: 50
-    },
+    consultas:  { open: false, rows: [], selectedIndex: 0, loading: false, scanned: null, tablePage: 1, tablePageSize: 50 },
+    pedidos:    { open: false, rows: [], selectedIndex: 0, loading: false, scanned: null, tablePage: 1, tablePageSize: 50 },
+    documentos: { open: false, rows: [], selectedIndex: 0, loading: false, scanned: null, tablePage: 1, tablePageSize: 50 },
   });
 
   const loadModule = useCallback(async (
@@ -46,74 +37,46 @@ export function useModules(cleanDni: string) {
     const current = modules[table];
     if (current.loading) return;
 
-    setModules(prev => ({
-      ...prev,
-      [table]: { ...prev[table], open: true }
-    }));
+    setModules(prev => ({ ...prev, [table]: { ...prev[table], open: true } }));
+    trackAction('gestion_module_open', { module: table, dni: Number(cleanDni), forceReload: !!opts?.forceReload });
 
-    trackAction('gestion_module_open', {
-      module: table,
-      dni: Number(cleanDni),
-      forceReload: !!opts?.forceReload
-    });
-
-    if (current.rows.length && !opts?.forceReload) {
-      return;
-    }
+    if (current.rows.length && !opts?.forceReload) return;
 
     try {
       setModules(prev => ({
         ...prev,
-        [table]: {
-          ...prev[table],
-          loading: true,
-          rows: [],
-          selectedIndex: 0,
-          scanned: null,
-          tablePage: 1
-        }
+        [table]: { ...prev[table], loading: true, rows: [], selectedIndex: 0, scanned: null, tablePage: 1 }
       }));
 
-      const endpoint = table === 'documentos'
-        ? '/tblarchivos'
-        : `/${table}`;
+      // Tabla y endpoint
+      const endpoint = table === 'documentos' ? '/tblarchivos' : `/${table}`;
+      const limit = 200;
 
+      // ANTES: usaba ?q= que el back no soporta + loop de 5 páginas en frontend
+      // AHORA: filtro exacto ?dni= directo, el back devuelve solo los del agente
       let allRows: any[] = [];
       let page = 1;
-      const limit = 100;
       let total = 0;
       let totalPages = 1;
 
-      // Intentar con q= (permitido por OpenAPI) en vez de dni=
-      try {
-        const res = await apiFetch<any>(
-          `${endpoint}?q=${encodeURIComponent(cleanDni)}&limit=${limit}&page=1`
-        );
-        if (res?.data) {
-          allRows = res.data;
-          total = res?.meta?.total || allRows.length;
-          totalPages = Math.ceil(total / limit);
+      while (true) {
+        const res = await apiFetch<any>(`${endpoint}?dni=${cleanDni}&limit=${limit}&page=${page}`);
+        const rows: any[] = res?.data || [];
+        const meta = res?.meta;
+
+        if (meta) {
+          total = Number(meta.total) || rows.length;
+          totalPages = Math.max(1, Math.ceil(total / limit));
         }
-      } catch {
-        // Fallback: paginación tradicional + filtro en frontend
-        while (page <= 5 && allRows.length < 500) {
-          const res = await apiFetch<any>(`${endpoint}?page=${page}&limit=${limit}`);
-          const rows = res?.data || [];
-          const meta = res?.meta;
 
-          if (meta) {
-            total = Number(meta.total) || 0;
-            totalPages = Math.max(1, Math.ceil(total / limit));
-          }
+        allRows = [...allRows, ...rows];
 
-          const filtered = rows.filter((r: any) =>
-            String(r?.dni ?? "").replace(/\D/g, "") === cleanDni
-          );
-          allRows = [...allRows, ...filtered];
+        // Cortar si ya trajimos todo o si la página es la última
+        if (!rows.length || rows.length < limit || page >= totalPages) break;
+        page++;
 
-          if (!rows.length || rows.length < limit) break;
-          page++;
-        }
+        // Guardia: no más de 2000 registros en UI (rendimiento)
+        if (allRows.length >= 2000) break;
       }
 
       setModules(prev => ({
@@ -131,46 +94,28 @@ export function useModules(cleanDni: string) {
       } else {
         toast.ok("Listo", `${table}: ${allRows.length} registro/s`);
       }
+
     } catch (e: any) {
-      setModules(prev => ({
-        ...prev,
-        [table]: { ...prev[table], loading: false }
-      }));
+      setModules(prev => ({ ...prev, [table]: { ...prev[table], loading: false } }));
       toast.error("No se pudo cargar módulo", e?.message || "Error");
     }
   }, [cleanDni, modules, toast]);
 
   const closeModule = useCallback((table: ModuleKey) => {
     trackAction('gestion_module_close', { module: table, dni: cleanDni });
-    setModules(prev => ({
-      ...prev,
-      [table]: { ...prev[table], open: false }
-    }));
+    setModules(prev => ({ ...prev, [table]: { ...prev[table], open: false } }));
   }, [cleanDni]);
 
   const setSelectedIndex = useCallback((table: ModuleKey, index: number) => {
-    setModules(prev => ({
-      ...prev,
-      [table]: { ...prev[table], selectedIndex: index }
-    }));
+    setModules(prev => ({ ...prev, [table]: { ...prev[table], selectedIndex: index } }));
   }, []);
 
   const setTablePage = useCallback((table: ModuleKey, page: number) => {
-    setModules(prev => ({
-      ...prev,
-      [table]: { ...prev[table], tablePage: page }
-    }));
+    setModules(prev => ({ ...prev, [table]: { ...prev[table], tablePage: page } }));
   }, []);
 
   const setTablePageSize = useCallback((table: ModuleKey, size: number) => {
-    setModules(prev => ({
-      ...prev,
-      [table]: {
-        ...prev[table],
-        tablePageSize: size,
-        tablePage: 1
-      }
-    }));
+    setModules(prev => ({ ...prev, [table]: { ...prev[table], tablePageSize: size, tablePage: 1 } }));
   }, []);
 
   return {
@@ -180,7 +125,6 @@ export function useModules(cleanDni: string) {
     setSelectedIndex,
     setTablePage,
     setTablePageSize,
-
     getModule: (key: ModuleKey) => modules[key],
     isModuleOpen: (key: ModuleKey) => modules[key].open,
     getSelectedRow: (key: ModuleKey) => {

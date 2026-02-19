@@ -14,33 +14,43 @@ export function useAgenteSearch() {
     row: null as any,
   });
 
-  // Busca el agenteId a partir del DNI respetando el OpenAPI
+  /**
+   * Resuelve el agente_id a partir de DNI usando filtro directo del CRUD.
+   * ANTES: hacía loop de hasta 5 páginas en memoria → perdía agentes si había más de 250 registros.
+   * AHORA: usa filtro exacto ?dni= que el back traduce directamente a WHERE dni = X.
+   */
   async function resolveAgenteIdByDni(dniValue: string): Promise<string> {
     const clean = dniValue.replace(/\D/g, "");
     if (!clean) throw new Error("DNI inválido");
 
-    // 1) Endpoint correcto según OpenAPI: /personal/search?dni=...
-    // (porque /agentes NO acepta query param dni)
+    // Intento 1: filtro exacto por DNI en agentexdni1 (vista que ya tiene agente_id)
     try {
-      const res = await apiFetch<any>(`/personal/search?dni=${clean}&limit=1&page=1`);
+      const res = await apiFetch<any>(`/agentexdni1?dni=${clean}&limit=1&page=1`);
       const first = res?.data?.[0];
-
-      // Preferimos agente_id (lo que después usa /agentes/{id})
       const agenteId = first?.agente_id ?? first?.agenteId ?? first?.id;
       if (agenteId) return String(agenteId);
     } catch {
-      // si falla el search, seguimos al fallback para no romper el flujo
+      // seguimos al siguiente intento
     }
 
-    // 2) Fallback: paginación sobre agentexdni1 (como ya estaba)
-    const limit = 50;
-    for (let page = 1; page <= 5; page++) {
-      const res = await apiFetch<any>(`/agentexdni1?page=${page}&limit=${limit}`);
-      const hit = res?.data?.find((r: any) =>
-        String(r?.dni ?? "").replace(/\D/g, "") === clean
-      );
-      if (hit?.agente_id) return String(hit.agente_id);
-      if (!res?.data?.length || res.data.length < limit) break;
+    // Intento 2: personal con filtro dni exacto
+    try {
+      const res = await apiFetch<any>(`/personal?dni=${clean}&limit=1&page=1`);
+      const first = res?.data?.[0];
+      const agenteId = first?.agente_id ?? first?.agenteId ?? first?.id ?? first?.dni;
+      if (agenteId) return String(agenteId);
+    } catch {
+      // seguimos
+    }
+
+    // Intento 3: /personal/search si existe
+    try {
+      const res = await apiFetch<any>(`/personal/search?dni=${clean}&limit=1&page=1`);
+      const first = res?.data?.[0];
+      const agenteId = first?.agente_id ?? first?.agenteId ?? first?.id;
+      if (agenteId) return String(agenteId);
+    } catch {
+      // endpoint personalizado puede no existir
     }
 
     throw new Error("No encontrado");
@@ -78,14 +88,24 @@ export function useAgenteSearch() {
 
     try {
       setState(s => ({ ...s, loading: true, matches: [] }));
+      // Filtro por nombre usando _contains (soportado por el CRUD del back)
       const res = await apiFetch<any>(
-        `/personal/search?q=${encodeURIComponent(q)}&limit=20&page=1`
+        `/personal?nombre_contains=${encodeURIComponent(q)}&limit=20&page=1`
       );
       setState(s => ({ ...s, loading: false, matches: res.data || [] }));
       toast.ok("Búsqueda lista");
     } catch (e: any) {
-      setState(s => ({ ...s, loading: false }));
-      toast.error("No se pudo buscar", e?.message || "Error");
+      // Fallback: endpoint search personalizado
+      try {
+        const res = await apiFetch<any>(
+          `/personal/search?q=${encodeURIComponent(q)}&limit=20&page=1`
+        );
+        setState(s => ({ ...s, loading: false, matches: res.data || [] }));
+        toast.ok("Búsqueda lista");
+      } catch {
+        setState(s => ({ ...s, loading: false }));
+        toast.error("No se pudo buscar", e?.message || "Error");
+      }
     }
   }
 

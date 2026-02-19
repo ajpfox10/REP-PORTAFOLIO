@@ -11,6 +11,7 @@ import { TablesPage } from '../pages/TablesPage';
 import { TableViewPage } from '../pages/TableViewPage';
 import { InfoPage } from '../pages/InfoPage';
 import { GestionPage } from '../pages/Gesytionpage';
+import { AdminPage } from '../pages/AdminPage';
 import { RequirePermission } from '../auth/RequirePermission';
 import { ForbiddenPage } from '../pages/ForbiddenPage';
 
@@ -107,6 +108,15 @@ export function App() {
               element={
                 <Private>
                   <ForbiddenPage />
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/admin"
+              element={
+                <Private>
+                  <AdminPage />
                 </Private>
               }
             />
