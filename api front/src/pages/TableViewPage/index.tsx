@@ -1,5 +1,5 @@
 // src/pages/TableViewPage/index.tsx
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
@@ -11,88 +11,62 @@ import { TableViewExport } from './components/TableViewExport';
 import { TableViewActionsCard } from './components/TableViewActionsCard';
 import { CellModal } from './components/CellModal';
 import { CellModalState } from './types';
-
-// CSS de esta ruta
 import './styles/TableViewPage.css';
 
 export function TableViewPage() {
   const { table } = useParams();
   const toast = useToast();
-  
-  // Hooks para datos y paginación
-  const { page, limit, setPage, setLimit, totalPages, ...paginationActions } = 
-    useTableViewPagination(null);
-  
-  const { rows, meta, loading, error } = useTableViewData(table, page, limit);
-  
+
+  // Paginación — ahora sin initial null
+  const pagination = useTableViewPagination();
+  const { page, limit, setPage, setLimit, setMeta, totalPages, ...paginationActions } = pagination;
+
+  // Datos: le pasamos page y limit del hook de paginación
+  const { rows, meta, loading, error, reload } = useTableViewData(table, page, limit);
+
+  // WIRE CRÍTICO: cada vez que llegan nuevos meta, los actualizamos en paginación
+  // Esto es lo que estaba roto: meta se calculaba sobre null fijo → totalPages = 1 siempre
+  useEffect(() => {
+    if (meta) setMeta(meta);
+  }, [meta]);
+
   const [cellModal, setCellModal] = React.useState<CellModalState>(null);
-  
   const title = useMemo(() => `Tabla: ${table || ''}`, [table]);
 
-  // Mostrar error con toast si hay
-  React.useEffect(() => {
-    if (error) {
-      toast.error('No se pudieron obtener las tablas', error);
-    }
-  }, [error, toast]);
-
-  // Actualizar paginación cuando cambian los meta datos
-  React.useEffect(() => {
-    if (meta) {
-      // Aquí podrías sincronizar si es necesario
-    }
-  }, [meta]);
+  useEffect(() => {
+    if (error) toast.error('No se pudieron obtener los datos', error);
+  }, [error]);
 
   return (
     <Layout title={title} showBack>
       <div className="card tv-card-main">
-        {/* Fila superior con exportación y estadísticas */}
         <div className="row tv-top-row">
           <TableViewExport tableName={table || ''} rows={rows} title={title} />
-          
           <div className="row tv-top-stats">
-            <div className="badge">
-              {loading ? 'Cargando…' : `Filas: ${rows.length}`}
-            </div>
-            <div className="badge">
-              Página {page} / {totalPages}
-            </div>
+            <div className="badge">{loading ? 'Cargando…' : `Filas: ${meta?.total ?? rows.length}`}</div>
+            <div className="badge">Página {page} / {totalPages}</div>
+            {meta && <div className="badge">Total DB: {meta.total}</div>}
           </div>
         </div>
 
         <div className="sep" />
 
-        {/* Controles de paginación */}
         <TableViewControls
           page={page}
           totalPages={totalPages}
           limit={limit}
           onPageChange={setPage}
-          onLimitChange={setLimit}
+          onLimitChange={(newLimit) => { setLimit(newLimit); setPage(1); }}
         />
 
         <div className="sep" />
-
-        {/* Tabla principal */}
-        <TableViewTable
-          rows={rows}
-          onCellClick={setCellModal}
-        />
-
-        {/* Card de acciones debajo de los datos */}
+        <TableViewTable rows={rows} onCellClick={setCellModal} />
         <div className="sep" />
-        <TableViewActionsCard
-          tableName={table || ''}
-          rows={rows}
-          title={title}
-        />
+
+        <TableViewActionsCard tableName={table || ''} rows={rows} title={title} />
       </div>
 
-      {/* Modal para ver celda completa */}
-      <CellModal
-        modalState={cellModal}
-        onClose={() => setCellModal(null)}
-      />
+      <CellModal modalState={cellModal} onClose={() => setCellModal(null)} />
     </Layout>
   );
 }

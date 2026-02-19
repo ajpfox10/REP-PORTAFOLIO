@@ -87,8 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (alive) setSession(next);
         }
 
-        // ping a endpoint protegido (no asume RBAC fino)
-        const check = await apiFetch('/documents?limit=1&page=1', { method: 'GET' });
+        // Ping a endpoint ligero: solo verifica que el token sea válido.
+        // /tables siempre devuelve { ok: true } si hay sesión válida,
+        // independientemente de si el usuario tiene datos.
+        // ANTES: /documents podía devolver 404/vacío y matar la sesión.
+        const check = await apiFetch('/tables', { method: 'GET' });
         if (!check?.ok) {
           logEvent({ level: 'warn', what: 'boot_token_invalid', where: 'AuthProvider.boot', status: 401, details: check });
           clearSession();
