@@ -62,7 +62,9 @@
     "security:audit": "cd security/audit && npm install && node audit.js",
     "security:audit:prod": "cd security/audit && AUDIT_URL=https://api.midominio.com node audit.js",
     "test:openapi": "jest --runInBand --coverage=false tests/openapi/openapi.contract.test.ts",
-    "security:zap": "zap-cli quick-scan --self-contained -r http://localhost:3000"
+    "security:zap": "zap-cli quick-scan --self-contained -r http://localhost:3000",
+    "scanner": "ts-node src/scanner/start-scanner.ts",
+    "scanner:dev": "ts-node-dev src/scanner/start-scanner.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,json}": [

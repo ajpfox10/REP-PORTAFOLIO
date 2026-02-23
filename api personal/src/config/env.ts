@@ -228,12 +228,15 @@ const schema = z.object({
 
   // Email
   EMAIL_ENABLE: boolish.default(false),
+  EMAIL_FROM: strish(""),
+  EMAIL_PASSWORD: strish(""),
+  ADMIN_EMAIL: strish(""),
+  SCANNER_PORT: intish(3001),
+  SCANNER_OUTPUT_DIR: strish("./scanner_output"),
   EMAIL_HOST: strish(""),
   EMAIL_PORT: intish(587),
   EMAIL_SECURE: boolish.default(false),
   EMAIL_USER: strish(""),
-  EMAIL_PASSWORD: strish(""),
-  EMAIL_FROM: strish(""),
 
   // Password reset
   PASSWORD_RESET_TOKEN_TTL_HOURS: intish(1),
@@ -294,6 +297,10 @@ const schema = z.object({
   GRACEFUL_SHUTDOWN_MS: intish(15000),
   SERVER_HEADERS_TIMEOUT_MS: intish(65000),
   SERVER_KEEPALIVE_TIMEOUT_MS: intish(61000),
+
+  // Dominio activo y version de API
+  DOMAIN: strish("personalv5"),
+  API_VERSION: strish("v1"),
 
   // Guardrails de producción (fail-fast)
   PROD_FAIL_FAST: boolish.default(true),
