@@ -71,7 +71,7 @@ export function buildDocumentsUploadRouter(sequelize: Sequelize) {
         {
           replacements: {
             dni: dniNum,
-            ruta: String(year),
+            ruta: `${year}/${fileName}`,  // path relativo completo para encontrar el archivo
             nombre: nombre || originalName,
             numero: numero || null,
             tipo: tipo || sniff.kind || 'documento',

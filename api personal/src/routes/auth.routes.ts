@@ -1,11 +1,11 @@
 // src/routes/auth.routes.ts
 import { Router, Request, Response } from "express";
-import { Sequelize } from "sequelize";
+import { Sequelize, QueryTypes } from "sequelize";
 import { z } from "zod";
 import { env } from "../config/env";
 import { authLoginTotal, authRefreshTotal } from "../metrics/domain";
 import { alertOnSpike } from "../alerts/thresholds";
-import { verifyPassword } from "../auth/password";
+import { verifyPassword, hashPassword } from "../auth/password";
 import { signAccessToken, signRefreshToken } from "../auth/jwt";
 import { loadPermissionsByRoleId } from "../auth/permissionsRepo";
 import { findUserByEmail, findUserById } from "../auth/usersRepo";
@@ -23,6 +23,7 @@ import {
   getActiveSecurityBan,
 } from "../auth/loginGuardRepo";
 import { authLimiter } from "../middlewares/rateLimiters";
+import { authContext } from "../middlewares/authContext";
 import { logger } from "../logging/logger";
 
 // ─── Schemas Zod ─────────────────────────────────────────────────────────────
@@ -385,6 +386,246 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
       return res.json({ ok: true, message: "Contraseña restablecida exitosamente." });
     });
   }
+
+
+  // ─── GET /api/v1/auth/me ─────────────────────────────────────────────────────
+  // Requiere token JWT válido. Devuelve: id, email, nombre, roleId, permissions.
+  router.get('/me', authContext(sequelize), async (req: Request, res: Response) => {
+    const auth = (req as any).auth;
+    if (!auth || !auth.principalId) {
+      return res.status(401).json({ ok: false, error: 'No autenticado' });
+    }
+
+    const user = await findUserById(sequelize, auth.principalId);
+    if (!user || !user.active) {
+      return res.status(401).json({ ok: false, error: 'Usuario no encontrado o inactivo' });
+    }
+
+    const permissions = await loadPermissionsByRoleId(sequelize, user.roleId);
+
+    return res.json({
+      ok: true,
+      data: {
+        id:          user.id,
+        email:       user.email,
+        nombre:      user.nombre,
+        roleId:      user.roleId,
+        permissions,
+      },
+    });
+  });
+
+  // ─── PATCH /api/v1/auth/me/password ──────────────────────────────────────────
+  // Cambio de contraseña autenticado (el usuario cambia la suya propia).
+  // Requiere token JWT válido + contraseña actual.
+  router.patch('/me/password', authContext(sequelize), async (req: Request, res: Response) => {
+    const auth = (req as any).auth;
+    if (!auth || !auth.principalId) {
+      return res.status(401).json({ ok: false, error: 'No autenticado' });
+    }
+
+    const schema = z.object({
+      passwordActual: z.string().min(1, 'Contraseña actual requerida'),
+      passwordNuevo:  z.string().min(8, 'Mínimo 8 caracteres'),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    }
+
+    const { passwordActual, passwordNuevo } = parsed.data;
+
+    // Obtener hash actual del usuario
+    const [rows] = await sequelize.query(
+      'SELECT id, password FROM usuarios WHERE id = :id AND deleted_at IS NULL LIMIT 1',
+      { replacements: { id: auth.principalId } }
+    );
+    const userRow = (rows as any[])[0];
+    if (!userRow) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+
+    const ok = await verifyPassword(passwordActual, userRow.password);
+    if (!ok) {
+      return res.status(401).json({ ok: false, error: 'Contraseña actual incorrecta' });
+    }
+
+    if (passwordActual === passwordNuevo) {
+      return res.status(400).json({ ok: false, error: 'La nueva contraseña debe ser distinta a la actual' });
+    }
+
+    const newHash = await hashPassword(passwordNuevo);
+    await sequelize.query(
+      'UPDATE usuarios SET password = :newHash WHERE id = :id',
+      { replacements: { newHash, id: auth.principalId } }
+    );
+
+    // Opcional: revocar todos los refresh tokens para forzar re-login en otros dispositivos
+    await revokeAllRefreshTokensForUser(sequelize, auth.principalId).catch(() => {});
+
+    logger.info({ msg: 'Contraseña cambiada', userId: auth.principalId });
+    return res.json({ ok: true, message: 'Contraseña actualizada exitosamente' });
+  });
+
+  // ─── POST /api/v1/auth/request-access ────────────────────────────────────────
+  // Endpoint PÚBLICO: solicitud de acceso.
+  // Genera un código de confirmación, lo envía al mail del solicitante Y al admin.
+  router.post('/request-access', async (req: Request, res: Response) => {
+    try {
+      const { nombre, email, motivo } = req.body || {};
+      if (!nombre?.trim() || !email?.trim()) {
+        return res.status(400).json({ ok: false, error: 'nombre y email son requeridos' });
+      }
+      const emailLower = String(email).toLowerCase().trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
+        return res.status(400).json({ ok: false, error: 'Email inválido' });
+      }
+
+      // ── Generar código de confirmación (6 dígitos) ──
+      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+      const expira = new Date(Date.now() + 24 * 3600 * 1000); // 24 hs
+
+      // ── Guardar solicitud en audit_log ──
+      await sequelize.query(
+        `INSERT INTO audit_log
+           (action, table_name, record_pk, route, ip, user_agent, request_json, created_at)
+         VALUES
+           ('request_access', 'usuarios', NULL,
+            '/api/v1/auth/request-access', :ip, :ua, :req_json, NOW())`,
+        {
+          replacements: {
+            ip:       String(req.ip || 'unknown').substring(0, 64),
+            ua:       String(req.headers['user-agent'] || '').substring(0, 255),
+            req_json: JSON.stringify({
+              nombre,
+              email: emailLower,
+              motivo: motivo?.substring(0, 500),
+              codigo,            // guardamos para que el admin pueda verificar
+              expira: expira.toISOString(),
+            }),
+          },
+        }
+      ).catch(() => {});        // no fallar si audit falla
+
+      // ── Enviar emails ──
+      try {
+        const { sendEmail } = await import('../services/email.service');
+
+        // 1️⃣  Email al SOLICITANTE con el código de confirmación
+        await sendEmail({
+          to: emailLower,
+          subject: 'Código de confirmación — Solicitud de acceso PersonalV5',
+          html: `
+            <h2>Solicitud de acceso al sistema PersonalV5</h2>
+            <p>Hola <strong>${nombre}</strong>,</p>
+            <p>Recibimos tu solicitud de acceso. Tu código de confirmación es:</p>
+            <h1 style="font-size:2.5rem;letter-spacing:0.3rem;color:#2563eb;">${codigo}</h1>
+            <p>Este código vence en <strong>24 horas</strong>.</p>
+            <p>El administrador del sistema revisará tu solicitud.
+               Una vez aprobada recibirás otro email con tus credenciales de acceso.</p>
+            <hr>
+            <p style="font-size:0.8rem;color:#94a3b8;">
+              Si no solicitaste este acceso, ignorá este mensaje.
+            </p>
+          `,
+          text: `Solicitud de acceso PersonalV5\n\nHola ${nombre},\nTu código de confirmación es: ${codigo}\nVence en 24 horas.\nEl administrador revisará tu solicitud.`,
+        });
+
+        // 2️⃣  Email al ADMINISTRADOR con los datos del solicitante
+        const adminEmail = env.ADMIN_EMAIL || env.EMAIL_FROM || '';
+        if (adminEmail && adminEmail !== emailLower) {
+          await sendEmail({
+            to: adminEmail,
+            subject: `Nueva solicitud de acceso: ${nombre} <${emailLower}>`,
+            html: `
+              <h2>Nueva solicitud de acceso — PersonalV5</h2>
+              <table>
+                <tr><td><strong>Nombre:</strong></td><td>${nombre}</td></tr>
+                <tr><td><strong>Email:</strong></td><td>${emailLower}</td></tr>
+                <tr><td><strong>Motivo:</strong></td><td>${motivo || 'No especificado'}</td></tr>
+                <tr><td><strong>Código verificación:</strong></td><td>${codigo}</td></tr>
+                <tr><td><strong>Expira:</strong></td><td>${expira.toLocaleString('es-AR')}</td></tr>
+              </table>
+              <p>Para crear el usuario, ingresá al panel de administración (Admin → Usuarios → Nuevo usuario).</p>
+            `,
+            text: `Nueva solicitud de acceso\nNombre: ${nombre}\nEmail: ${emailLower}\nMotivo: ${motivo || 'N/A'}\nCódigo: ${codigo}`,
+          });
+        }
+      } catch (emailErr: any) {
+        // Si el email falla, loguear pero no fallar la respuesta
+        // (el admin puede ver la solicitud en audit_log)
+        console.warn('[request-access] Email no enviado:', emailErr?.message);
+      }
+
+      // Responder siempre OK (no revelar si el email ya existe)
+      return res.json({
+        ok: true,
+        message: 'Solicitud recibida. Revisá tu casilla de correo para confirmar tu solicitud.',
+        emailSent: true,   // el front puede mostrar instrucciones
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
+    }
+  });
+
+  // ─── POST /api/v1/auth/confirm-access-code ───────────────────────────────────
+  // Verifica el código de 6 dígitos que el solicitante recibió por email.
+  // El código se guarda en audit_log.request_json al crear la solicitud.
+  router.post('/confirm-access-code', async (req: Request, res: Response) => {
+    try {
+      const { email, codigo } = req.body || {};
+      if (!email || !codigo) {
+        return res.status(400).json({ ok: false, error: 'email y codigo son requeridos' });
+      }
+
+      const emailLower = String(email).toLowerCase().trim();
+      const codigoStr  = String(codigo).replace(/\D/g, '').substring(0, 6);
+
+      // Buscar en audit_log la solicitud más reciente con ese email y código
+      const rows = await sequelize.query(
+        `SELECT id, request_json, created_at
+         FROM audit_log
+         WHERE action = 'request_access'
+           AND request_json LIKE :emailLike
+           AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+         ORDER BY id DESC
+         LIMIT 1`,
+        {
+          replacements: { emailLike: `%${emailLower}%` },
+          type: QueryTypes.SELECT,
+        }
+      );
+
+      const row = (rows as any[])[0];
+      if (!row) {
+        return res.status(400).json({
+          ok: false,
+          error: 'No se encontró una solicitud activa para ese email o ya venció (24 hs).',
+        });
+      }
+
+      let parsed: any = {};
+      try { parsed = JSON.parse(row.request_json); } catch {}
+
+      if (parsed.codigo !== codigoStr) {
+        return res.status(400).json({ ok: false, error: 'Código incorrecto. Verificá tu email.' });
+      }
+
+      // Marcar como confirmado en audit_log
+      await sequelize.query(
+        `UPDATE audit_log
+         SET request_json = JSON_SET(request_json, '$.confirmed', true, '$.confirmed_at', :now)
+         WHERE id = :id`,
+        { replacements: { id: row.id, now: new Date().toISOString() } }
+      ).catch(() => {});
+
+      return res.json({
+        ok: true,
+        message: 'Email confirmado. El administrador revisará tu solicitud y recibirás acceso por email.',
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
+    }
+  });
 
   return router;
 };
