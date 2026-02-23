@@ -28,14 +28,12 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
   // request id
   app.use(requestId);
 
-  // Middleware de métricas HTTP (Prometheus):
-  // registra requests en vuelo, conteo por método/ruta/status
-  // y tiempos de respuesta sin afectar endpoints ni contratos.
+  // Metricas HTTP (Prometheus)
   if (env.METRICS_ENABLE) {
-  app.use(metricsHttp);
+    app.use(metricsHttp);
   }
 
-  // logging HTTP -> estructurado, con requestId
+  // logging HTTP estructurado con requestId
   morgan.token("requestId", (req: any) => String(req?.requestId || ""));
   app.use(
     morgan(
@@ -58,99 +56,107 @@ export function createApp(openapiPathOverride?: string, mount?: MountFn) {
           write: (line: string) => {
             const raw = String(line || "").trim();
             if (!raw) return;
-            try {
-              logger.info(JSON.parse(raw));
-            } catch {
-              logger.info({ msg: "http", line: raw });
-            }
+            try { logger.info(JSON.parse(raw)); }
+            catch { logger.info({ msg: "http", line: raw }); }
           },
         },
       }
     )
   );
 
-  // hardening
+  // hardening (Helmet, HPP, etc.)
   if (env.ENABLE_HARDENING) {
     app.disable("x-powered-by");
     app.use(...hardening());
   }
 
-  // compression
+  // compression gzip/br
   if (env.ENABLE_COMPRESSION) {
     app.use(compression());
   }
 
-  // body limits
+  // body parsing con limites de tamano
   if (env.ENABLE_REQUEST_BODY_LIMITS) {
-    app.use(express.json({ limit: "200kb" }));
-    app.use(express.urlencoded({ extended: true, limit: "200kb" }));
+    app.use(express.json({ limit: `${env.REQUEST_BODY_LIMIT_KB || 200}kb` }));
+    app.use(express.urlencoded({ extended: true, limit: `${env.REQUEST_BODY_LIMIT_KB || 200}kb` }));
   } else {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
   }
 
-  // sanitize
+  // sanitizar inputs (XSS, injection basica)
   app.use(sanitize);
 
-  // CORS
+  // CORS - permite origenes configurados en .env
   app.use(
     cors({
       origin: (origin, cb) => {
         // Sin origin = request directa (server-to-server, curl, Postman)
         if (!origin) return cb(null, true);
-
         const o = origin.toLowerCase();
         const deny = env.CORS_DENYLIST.map((x: string) => x.toLowerCase());
         if (deny.includes(o)) return cb(new Error("CORS blocked"));
-
-        // Si hay allowlist explícita, solo esos orígenes
         if (env.CORS_ALLOWLIST.length > 0) {
           const allow = env.CORS_ALLOWLIST.map((x: string) => x.toLowerCase());
           if (!allow.includes(o)) return cb(new Error("CORS not allowed"));
           return cb(null, true);
         }
-
-        // CORS_ALLOW_ALL=true → aceptar cualquier origen no bloqueado
         if (env.CORS_ALLOW_ALL) return cb(null, true);
-
-        // CORS_ALLOW_ALL=false y sin allowlist → denegar todo origen externo
         return cb(new Error("CORS not allowed"));
       },
       credentials: true,
     })
   );
 
-  // IP guard
+  // IP allowlist/denylist
   app.use(ipGuard);
 
-  // ✅ SYSTEM ROUTES SIEMPRE DISPONIBLES
+  // System routes: /health, /ready, /version (siempre disponibles, sin auth)
+  // Estos van ANTES del rate limiter para que los health checks de k8s/balanceadores
+  // no consuman cuota del rate limit.
   app.use(systemRouter);
 
-  // rate limit global
+  // Rate limit global (excepto system routes que van arriba)
   app.use(rateLimiter);
 
-  // ✅ OpenAPI validation (optional)
+  // Validacion OpenAPI (opcional, solo si ENABLE_OPENAPI_VALIDATION=true)
   if (env.ENABLE_OPENAPI_VALIDATION) {
     const specPath = openapiPathOverride || env.OPENAPI_PATH;
-    logger.info({ msg: "OpenAPI validation enabled", apiSpecPath: specPath });
+    logger.info({ msg: "OpenAPI validation habilitada", apiSpecPath: specPath });
     app.use(openapiValidator(specPath));
   }
 
-  // ✅ Montaje rutas reales
+  // Hook de montaje externo: el servidor llama esto para agregar audit middleware
+  // IMPORTANTE: se ejecuta ANTES del montaje de rutas en mountApiGateway
   if (mount) mount(app);
 
-  // 404 default
-  app.use((req, res) => {
+  // ⚠️  NO agregamos 404 ni errorHandler aqui.
+  // Se agregan en server.ts DESPUES de mountApiGateway() para que no bloqueen
+  // las rutas que el gateway registra dinamicamente.
+  // Ver: addFinalHandlers() mas abajo.
+
+  return app;
+}
+
+/**
+ * Agregar los handlers finales (404 y error handler) DESPUES de que todas
+ * las rutas esten montadas. Llamar esto al final de server.ts.
+ *
+ * Razon: Express ejecuta middlewares en orden de registro.
+ * Si el 404 se registra antes que las rutas del API Gateway, esas rutas
+ * nunca se alcanzan y todo da 404.
+ */
+export function addFinalHandlers(app: Express): void {
+  // 404 catch-all: cualquier ruta que no matcheo hasta aca
+  app.use((req: any, res: any) => {
     res.status(404).json({
       ok: false,
       error: "Not found",
       details: [{ path: req.path, message: "not found" }],
-      requestId: (req as any).requestId,
+      requestId: req.requestId,
     });
   });
 
-  // error handler final
+  // Error handler global (captura errores lanzados con next(err))
   app.use(errorHandler);
-
-  return app;
 }

@@ -226,6 +226,21 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Table_agentehistorial"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentehistorial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentehistorial_Create"
+      responses:
+        "201":
+          description: Created
   /api/v1/agentehistorial/{id}:
     get:
       tags:
@@ -244,6 +259,188 @@ paths:
           description: OK
         "404":
           description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentehistorial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentehistorial"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentehistorial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentehistorial_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentehistorial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/certificados/certificado-trabajo:
+    post:
+      tags:
+        - docs
+      security:
+        - bearerAuth: []
+      summary: Generar Certificado de Trabajo (DOCX) desde plantilla
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dni
+              additionalProperties: false
+              properties:
+                dni:
+                  type: number
+                dependencia:
+                  type: string
+                legajo:
+                  type: string
+                decreto:
+                  type: string
+                lugar_y_fecha:
+                  type: string
+      responses:
+        "200":
+          description: DOCX generado
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Bad request
+        "404":
+          description: No encontrado
+  /api/v1/documents:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Listar documentos (tblarchivos)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Parámetros inválidos
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+  /api/v1/documents/{id}/file:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Descargar/visualizar documento por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Archivo (stream)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: ID inválido / ruta inválida
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+        "404":
+          description: No encontrado
+        "413":
+          description: Archivo demasiado grande
+        "415":
+          description: Tipo de archivo no permitido
+        "423":
+          description: Bloqueado (virus detectado)
+        "500":
+          description: Error
   /api/v1/agentes:
     get:
       tags:
@@ -376,125 +573,6 @@ paths:
           description: OK
         "404":
           description: Not found
-  /api/v1/certificados/certificado-trabajo:
-    post:
-      tags:
-        - docs
-      security:
-        - bearerAuth: []
-      summary: Generar Certificado de Trabajo (DOCX) desde plantilla
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - dni
-              additionalProperties: false
-              properties:
-                dni:
-                  type: number
-                dependencia:
-                  type: string
-                legajo:
-                  type: string
-                decreto:
-                  type: string
-                lugar_y_fecha:
-                  type: string
-      responses:
-        "200":
-          description: DOCX generado
-          content:
-            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: Bad request
-        "404":
-          description: No encontrado
-  /api/v1/documents:
-    get:
-      tags:
-        - documents
-      security:
-        - bearerAuth: []
-      summary: Listar documentos (tblarchivos)
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-        - name: q
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Parámetros inválidos
-        "401":
-          description: No autenticado
-        "403":
-          description: No autorizado
-  /api/v1/documents/{id}/file:
-    get:
-      tags:
-        - documents
-      security:
-        - bearerAuth: []
-      summary: Descargar/visualizar documento por ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Archivo (stream)
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-            image/png:
-              schema:
-                type: string
-                format: binary
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: ID inválido / ruta inválida
-        "401":
-          description: No autenticado
-        "403":
-          description: No autorizado
-        "404":
-          description: No encontrado
-        "413":
-          description: Archivo demasiado grande
-        "415":
-          description: Tipo de archivo no permitido
-        "423":
-          description: Bloqueado (virus detectado)
-        "500":
-          description: Error
   /api/v1/agentes_servicios:
     get:
       tags:
@@ -663,6 +741,21 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Table_agentexdni1"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentexdni1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentexdni1_Create"
+      responses:
+        "201":
+          description: Created
   /api/v1/agentexdni1/{id}:
     get:
       tags:
@@ -670,6 +763,69 @@ paths:
       security:
         - bearerAuth: []
       summary: Get agentexdni1 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentexdni1 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentexdni1"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentexdni1 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentexdni1_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentexdni1 by id
       parameters:
         - name: id
           in: path
@@ -2037,6 +2193,21 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Table_consultaspordni"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create consultaspordni
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultaspordni_Create"
+      responses:
+        "201":
+          description: Created
   /api/v1/consultaspordni/{id}:
     get:
       tags:
@@ -2044,6 +2215,69 @@ paths:
       security:
         - bearerAuth: []
       summary: Get consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultaspordni"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch consultaspordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultaspordni_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete consultaspordni by id
       parameters:
         - name: id
           in: path
@@ -4599,6 +4833,21 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Table_pedidospordni"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create pedidospordni
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_pedidospordni_Create"
+      responses:
+        "201":
+          description: Created
   /api/v1/pedidospordni/{id}:
     get:
       tags:
@@ -4606,6 +4855,69 @@ paths:
       security:
         - bearerAuth: []
       summary: Get pedidospordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update pedidospordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_pedidospordni"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch pedidospordni by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_pedidospordni_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete pedidospordni by id
       parameters:
         - name: id
           in: path
@@ -4917,6 +5229,21 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Table_personaldetalle"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create personaldetalle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personaldetalle_Create"
+      responses:
+        "201":
+          description: Created
   /api/v1/personaldetalle/{id}:
     get:
       tags:
@@ -4924,6 +5251,69 @@ paths:
       security:
         - bearerAuth: []
       summary: Get personaldetalle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update personaldetalle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personaldetalle"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch personaldetalle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personaldetalle_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete personaldetalle by id
       parameters:
         - name: id
           in: path
