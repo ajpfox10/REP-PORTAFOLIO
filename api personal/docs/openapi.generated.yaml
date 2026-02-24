@@ -190,257 +190,6 @@ paths:
       responses:
         "200":
           description: Logout OK
-  /api/v1/agentehistorial:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: List agentehistorial
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-        - name: q
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Table_agentehistorial"
-    post:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Create agentehistorial
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_agentehistorial_Create"
-      responses:
-        "201":
-          description: Created
-  /api/v1/agentehistorial/{id}:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Get agentehistorial by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    put:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Update agentehistorial by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_agentehistorial"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    patch:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Patch agentehistorial by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_agentehistorial_Patch"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    delete:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Delete agentehistorial by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-  /api/v1/certificados/certificado-trabajo:
-    post:
-      tags:
-        - docs
-      security:
-        - bearerAuth: []
-      summary: Generar Certificado de Trabajo (DOCX) desde plantilla
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - dni
-              additionalProperties: false
-              properties:
-                dni:
-                  type: number
-                dependencia:
-                  type: string
-                legajo:
-                  type: string
-                decreto:
-                  type: string
-                lugar_y_fecha:
-                  type: string
-      responses:
-        "200":
-          description: DOCX generado
-          content:
-            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: Bad request
-        "404":
-          description: No encontrado
-  /api/v1/documents:
-    get:
-      tags:
-        - documents
-      security:
-        - bearerAuth: []
-      summary: Listar documentos (tblarchivos)
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-        - name: q
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Parámetros inválidos
-        "401":
-          description: No autenticado
-        "403":
-          description: No autorizado
-  /api/v1/documents/{id}/file:
-    get:
-      tags:
-        - documents
-      security:
-        - bearerAuth: []
-      summary: Descargar/visualizar documento por ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Archivo (stream)
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-            image/png:
-              schema:
-                type: string
-                format: binary
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: ID inválido / ruta inválida
-        "401":
-          description: No autenticado
-        "403":
-          description: No autorizado
-        "404":
-          description: No encontrado
-        "413":
-          description: Archivo demasiado grande
-        "415":
-          description: Tipo de archivo no permitido
-        "423":
-          description: Bloqueado (virus detectado)
-        "500":
-          description: Error
   /api/v1/agentes:
     get:
       tags:
@@ -573,6 +322,125 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/certificados/certificado-trabajo:
+    post:
+      tags:
+        - docs
+      security:
+        - bearerAuth: []
+      summary: Generar Certificado de Trabajo (DOCX) desde plantilla
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dni
+              additionalProperties: false
+              properties:
+                dni:
+                  type: number
+                dependencia:
+                  type: string
+                legajo:
+                  type: string
+                decreto:
+                  type: string
+                lugar_y_fecha:
+                  type: string
+      responses:
+        "200":
+          description: DOCX generado
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Bad request
+        "404":
+          description: No encontrado
+  /api/v1/documents:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Listar documentos (tblarchivos)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Parámetros inválidos
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+  /api/v1/documents/{id}/file:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Descargar/visualizar documento por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Archivo (stream)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: ID inválido / ruta inválida
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+        "404":
+          description: No encontrado
+        "413":
+          description: Archivo demasiado grande
+        "415":
+          description: Tipo de archivo no permitido
+        "423":
+          description: Bloqueado (virus detectado)
+        "500":
+          description: Error
   /api/v1/agentes_servicios:
     get:
       tags:
@@ -694,138 +562,6 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete agentes_servicios by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-  /api/v1/agentexdni1:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: List agentexdni1
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-        - name: q
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Table_agentexdni1"
-    post:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Create agentexdni1
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_agentexdni1_Create"
-      responses:
-        "201":
-          description: Created
-  /api/v1/agentexdni1/{id}:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Get agentexdni1 by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    put:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Update agentexdni1 by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_agentexdni1"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    patch:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Patch agentexdni1 by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_agentexdni1_Patch"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    delete:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Delete agentexdni1 by id
       parameters:
         - name: id
           in: path
@@ -1365,13 +1101,13 @@ paths:
           description: OK
         "404":
           description: Not found
-  /api/v1/categoria:
+  /api/v1/categorias:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: List categoria
+      summary: List categorias
       parameters:
         - name: page
           in: query
@@ -1400,29 +1136,29 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Table_categoria"
+                      $ref: "#/components/schemas/Table_categorias"
     post:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Create categoria
+      summary: Create categorias
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_categoria_Create"
+              $ref: "#/components/schemas/Table_categorias_Create"
       responses:
         "201":
           description: Created
-  /api/v1/categoria/{id}:
+  /api/v1/categorias/{id}:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Get categoria by id
+      summary: Get categorias by id
       parameters:
         - name: id
           in: path
@@ -1439,7 +1175,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Update categoria by id
+      summary: Update categorias by id
       parameters:
         - name: id
           in: path
@@ -1451,7 +1187,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_categoria"
+              $ref: "#/components/schemas/Table_categorias"
       responses:
         "200":
           description: OK
@@ -1462,7 +1198,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Patch categoria by id
+      summary: Patch categorias by id
       parameters:
         - name: id
           in: path
@@ -1474,7 +1210,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_categoria_Patch"
+              $ref: "#/components/schemas/Table_categorias_Patch"
       responses:
         "200":
           description: OK
@@ -1485,7 +1221,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Delete categoria by id
+      summary: Delete categorias by id
       parameters:
         - name: id
           in: path
@@ -2146,138 +1882,6 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete consultas by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-  /api/v1/consultaspordni:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: List consultaspordni
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-        - name: q
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Table_consultaspordni"
-    post:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Create consultaspordni
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_consultaspordni_Create"
-      responses:
-        "201":
-          description: Created
-  /api/v1/consultaspordni/{id}:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Get consultaspordni by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    put:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Update consultaspordni by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_consultaspordni"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    patch:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Patch consultaspordni by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_consultaspordni_Patch"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    delete:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Delete consultaspordni by id
       parameters:
         - name: id
           in: path
@@ -4401,13 +4005,13 @@ paths:
           description: OK
         "404":
           description: Not found
-  /api/v1/ocupacion:
+  /api/v1/ocupaciones:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: List ocupacion
+      summary: List ocupaciones
       parameters:
         - name: page
           in: query
@@ -4436,29 +4040,29 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Table_ocupacion"
+                      $ref: "#/components/schemas/Table_ocupaciones"
     post:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Create ocupacion
+      summary: Create ocupaciones
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ocupacion_Create"
+              $ref: "#/components/schemas/Table_ocupaciones_Create"
       responses:
         "201":
           description: Created
-  /api/v1/ocupacion/{id}:
+  /api/v1/ocupaciones/{id}:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Get ocupacion by id
+      summary: Get ocupaciones by id
       parameters:
         - name: id
           in: path
@@ -4475,7 +4079,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Update ocupacion by id
+      summary: Update ocupaciones by id
       parameters:
         - name: id
           in: path
@@ -4487,7 +4091,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ocupacion"
+              $ref: "#/components/schemas/Table_ocupaciones"
       responses:
         "200":
           description: OK
@@ -4498,7 +4102,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Patch ocupacion by id
+      summary: Patch ocupaciones by id
       parameters:
         - name: id
           in: path
@@ -4510,7 +4114,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_ocupacion_Patch"
+              $ref: "#/components/schemas/Table_ocupaciones_Patch"
       responses:
         "200":
           description: OK
@@ -4521,7 +4125,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Delete ocupacion by id
+      summary: Delete ocupaciones by id
       parameters:
         - name: id
           in: path
@@ -5193,13 +4797,13 @@ paths:
           description: OK
         "404":
           description: Not found
-  /api/v1/personaldetalle:
+  /api/v1/plantas:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: List personaldetalle
+      summary: List plantas
       parameters:
         - name: page
           in: query
@@ -5228,29 +4832,29 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Table_personaldetalle"
+                      $ref: "#/components/schemas/Table_plantas"
     post:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Create personaldetalle
+      summary: Create plantas
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_personaldetalle_Create"
+              $ref: "#/components/schemas/Table_plantas_Create"
       responses:
         "201":
           description: Created
-  /api/v1/personaldetalle/{id}:
+  /api/v1/plantas/{id}:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Get personaldetalle by id
+      summary: Get plantas by id
       parameters:
         - name: id
           in: path
@@ -5267,7 +4871,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Update personaldetalle by id
+      summary: Update plantas by id
       parameters:
         - name: id
           in: path
@@ -5279,7 +4883,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_personaldetalle"
+              $ref: "#/components/schemas/Table_plantas"
       responses:
         "200":
           description: OK
@@ -5290,7 +4894,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Patch personaldetalle by id
+      summary: Patch plantas by id
       parameters:
         - name: id
           in: path
@@ -5302,7 +4906,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_personaldetalle_Patch"
+              $ref: "#/components/schemas/Table_plantas_Patch"
       responses:
         "200":
           description: OK
@@ -5313,139 +4917,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Delete personaldetalle by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-  /api/v1/planta:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: List planta
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-        - name: q
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Table_planta"
-    post:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Create planta
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_planta_Create"
-      responses:
-        "201":
-          description: Created
-  /api/v1/planta/{id}:
-    get:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Get planta by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    put:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Update planta by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_planta"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    patch:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Patch planta by id
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Table_planta_Patch"
-      responses:
-        "200":
-          description: OK
-        "404":
-          description: Not found
-    delete:
-      tags:
-        - crud
-      security:
-        - bearerAuth: []
-      summary: Delete planta by id
+      summary: Delete plantas by id
       parameters:
         - name: id
           in: path
@@ -5589,13 +5061,13 @@ paths:
           description: OK
         "404":
           description: Not found
-  /api/v1/regimenhorario:
+  /api/v1/regimenes_horarios:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: List regimenhorario
+      summary: List regimenes_horarios
       parameters:
         - name: page
           in: query
@@ -5624,29 +5096,29 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Table_regimenhorario"
+                      $ref: "#/components/schemas/Table_regimenes_horarios"
     post:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Create regimenhorario
+      summary: Create regimenes_horarios
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_regimenhorario_Create"
+              $ref: "#/components/schemas/Table_regimenes_horarios_Create"
       responses:
         "201":
           description: Created
-  /api/v1/regimenhorario/{id}:
+  /api/v1/regimenes_horarios/{id}:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Get regimenhorario by id
+      summary: Get regimenes_horarios by id
       parameters:
         - name: id
           in: path
@@ -5663,7 +5135,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Update regimenhorario by id
+      summary: Update regimenes_horarios by id
       parameters:
         - name: id
           in: path
@@ -5675,7 +5147,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_regimenhorario"
+              $ref: "#/components/schemas/Table_regimenes_horarios"
       responses:
         "200":
           description: OK
@@ -5686,7 +5158,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Patch regimenhorario by id
+      summary: Patch regimenes_horarios by id
       parameters:
         - name: id
           in: path
@@ -5698,7 +5170,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_regimenhorario_Patch"
+              $ref: "#/components/schemas/Table_regimenes_horarios_Patch"
       responses:
         "200":
           description: OK
@@ -5709,7 +5181,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Delete regimenhorario by id
+      summary: Delete regimenes_horarios by id
       parameters:
         - name: id
           in: path
@@ -6645,13 +6117,13 @@ paths:
           description: OK
         "404":
           description: Not found
-  /api/v1/sexo:
+  /api/v1/servicios:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: List sexo
+      summary: List servicios
       parameters:
         - name: page
           in: query
@@ -6680,29 +6152,29 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Table_sexo"
+                      $ref: "#/components/schemas/Table_servicios"
     post:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Create sexo
+      summary: Create servicios
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_sexo_Create"
+              $ref: "#/components/schemas/Table_servicios_Create"
       responses:
         "201":
           description: Created
-  /api/v1/sexo/{id}:
+  /api/v1/servicios/{id}:
     get:
       tags:
         - crud
       security:
         - bearerAuth: []
-      summary: Get sexo by id
+      summary: Get servicios by id
       parameters:
         - name: id
           in: path
@@ -6719,7 +6191,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Update sexo by id
+      summary: Update servicios by id
       parameters:
         - name: id
           in: path
@@ -6731,7 +6203,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_sexo"
+              $ref: "#/components/schemas/Table_servicios"
       responses:
         "200":
           description: OK
@@ -6742,7 +6214,7 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Patch sexo by id
+      summary: Patch servicios by id
       parameters:
         - name: id
           in: path
@@ -6754,7 +6226,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Table_sexo_Patch"
+              $ref: "#/components/schemas/Table_servicios_Patch"
       responses:
         "200":
           description: OK
@@ -6765,7 +6237,139 @@ paths:
         - crud
       security:
         - bearerAuth: []
-      summary: Delete sexo by id
+      summary: Delete servicios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/sexos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List sexos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_sexos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create sexos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_sexos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/sexos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get sexos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update sexos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_sexos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch sexos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_sexos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete sexos by id
       parameters:
         - name: id
           in: path
@@ -8231,188 +7835,6 @@ paths:
           description: Not found
 components:
   schemas:
-    Table_agentehistorial:
-      type: object
-      additionalProperties: false
-      properties:
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        agente_id:
-          type: number
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        ley_id:
-          type: number
-          nullable: true
-        ley_nombre:
-          type: string
-          nullable: true
-        servicio_id:
-          type: number
-          nullable: true
-        dependencia_id:
-          type: number
-          nullable: true
-        dependencia_nombre:
-          type: string
-          nullable: true
-        servicio_nombre:
-          type: string
-          nullable: true
-        jefe_nombre:
-          type: string
-          nullable: true
-        fecha_desde:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_hasta:
-          type: string
-          format: date-time
-          nullable: true
-        motivo:
-          type: string
-          nullable: true
-        servicio_observaciones:
-          type: string
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_agentehistorial_Create:
-      type: object
-      additionalProperties: false
-      properties:
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        agente_id:
-          type: number
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        ley_id:
-          type: number
-          nullable: true
-        ley_nombre:
-          type: string
-          nullable: true
-        servicio_id:
-          type: number
-          nullable: true
-        dependencia_id:
-          type: number
-          nullable: true
-        dependencia_nombre:
-          type: string
-          nullable: true
-        servicio_nombre:
-          type: string
-          nullable: true
-        jefe_nombre:
-          type: string
-          nullable: true
-        fecha_desde:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_hasta:
-          type: string
-          format: date-time
-          nullable: true
-        motivo:
-          type: string
-          nullable: true
-        servicio_observaciones:
-          type: string
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_agentehistorial_Patch:
-      type: object
-      additionalProperties: false
-      properties:
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        agente_id:
-          type: number
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        ley_id:
-          type: number
-          nullable: true
-        ley_nombre:
-          type: string
-          nullable: true
-        servicio_id:
-          type: number
-          nullable: true
-        dependencia_id:
-          type: number
-          nullable: true
-        dependencia_nombre:
-          type: string
-          nullable: true
-        servicio_nombre:
-          type: string
-          nullable: true
-        jefe_nombre:
-          type: string
-          nullable: true
-        fecha_desde:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_hasta:
-          type: string
-          format: date-time
-          nullable: true
-        motivo:
-          type: string
-          nullable: true
-        servicio_observaciones:
-          type: string
-          nullable: true
     Table_agentes:
       type: object
       additionalProperties: false
@@ -8446,7 +7868,7 @@ components:
           type: string
           format: date-time
           nullable: true
-        fecha_baja:
+        fecha_egreso:
           type: string
           format: date-time
           nullable: true
@@ -8480,6 +7902,21 @@ components:
           type: number
           nullable: true
         updated_by:
+          type: number
+          nullable: true
+        legajo:
+          type: number
+          nullable: true
+        estado:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        funcion_id:
+          type: number
+          nullable: true
+        servicios_id:
           type: number
           nullable: true
       required:
@@ -8516,7 +7953,7 @@ components:
           type: string
           format: date-time
           nullable: true
-        fecha_baja:
+        fecha_egreso:
           type: string
           format: date-time
           nullable: true
@@ -8550,6 +7987,21 @@ components:
           type: number
           nullable: true
         updated_by:
+          type: number
+          nullable: true
+        legajo:
+          type: number
+          nullable: true
+        estado:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        funcion_id:
+          type: number
+          nullable: true
+        servicios_id:
           type: number
           nullable: true
       required:
@@ -8587,7 +8039,7 @@ components:
           type: string
           format: date-time
           nullable: true
-        fecha_baja:
+        fecha_egreso:
           type: string
           format: date-time
           nullable: true
@@ -8623,6 +8075,21 @@ components:
         updated_by:
           type: number
           nullable: true
+        legajo:
+          type: number
+          nullable: true
+        estado:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        funcion_id:
+          type: number
+          nullable: true
+        servicios_id:
+          type: number
+          nullable: true
     Table_agentes_servicios:
       type: object
       additionalProperties: false
@@ -8634,7 +8101,7 @@ components:
         dependencia_id:
           type: number
           nullable: true
-        servicio_nombre:
+        nombre:
           type: string
           nullable: true
         jefe_nombre:
@@ -8670,6 +8137,9 @@ components:
           type: number
           nullable: true
         updated_by:
+          type: number
+          nullable: true
+        servicio_id:
           type: number
           nullable: true
       required:
@@ -8684,7 +8154,7 @@ components:
         dependencia_id:
           type: number
           nullable: true
-        servicio_nombre:
+        nombre:
           type: string
           nullable: true
         jefe_nombre:
@@ -8720,6 +8190,9 @@ components:
           type: number
           nullable: true
         updated_by:
+          type: number
+          nullable: true
+        servicio_id:
           type: number
           nullable: true
       required:
@@ -8735,7 +8208,7 @@ components:
         dependencia_id:
           type: number
           nullable: true
-        servicio_nombre:
+        nombre:
           type: string
           nullable: true
         jefe_nombre:
@@ -8773,244 +8246,8 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_agentexdni1:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: number
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        fecha_nacimiento:
-          type: string
-          format: date-time
-          nullable: true
-        cuil:
-          type: string
-          nullable: true
-        nacionalidad:
-          type: string
-          nullable: true
-        telefono:
-          type: string
-          nullable: true
-        email:
-          type: string
-          nullable: true
-        domicilio:
-          type: string
-          nullable: true
-        personal_observaciones:
-          type: string
-          nullable: true
-        sexo_id:
-          type: number
-          nullable: true
-        sexo_nombre:
-          type: string
-          nullable: true
-        localidad_id:
-          type: number
-          nullable: true
-        localidad_nombre:
-          type: string
-          nullable: true
-        agente_id:
-          type: number
-        ley_id:
-          type: number
-          nullable: true
-        ley_nombre:
-          type: string
-          nullable: true
         servicio_id:
           type: number
-          nullable: true
-        dependencia_id:
-          type: number
-          nullable: true
-        reparticion_nombre:
-          type: string
-          nullable: true
-        servicio_nombre:
-          type: string
-          nullable: true
-        jefe_nombre:
-          type: string
-          nullable: true
-        fecha_desde:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_hasta:
-          type: string
-          format: date-time
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_agentexdni1_Create:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: number
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        fecha_nacimiento:
-          type: string
-          format: date-time
-          nullable: true
-        cuil:
-          type: string
-          nullable: true
-        nacionalidad:
-          type: string
-          nullable: true
-        telefono:
-          type: string
-          nullable: true
-        email:
-          type: string
-          nullable: true
-        domicilio:
-          type: string
-          nullable: true
-        personal_observaciones:
-          type: string
-          nullable: true
-        sexo_id:
-          type: number
-          nullable: true
-        sexo_nombre:
-          type: string
-          nullable: true
-        localidad_id:
-          type: number
-          nullable: true
-        localidad_nombre:
-          type: string
-          nullable: true
-        agente_id:
-          type: number
-        ley_id:
-          type: number
-          nullable: true
-        ley_nombre:
-          type: string
-          nullable: true
-        servicio_id:
-          type: number
-          nullable: true
-        dependencia_id:
-          type: number
-          nullable: true
-        reparticion_nombre:
-          type: string
-          nullable: true
-        servicio_nombre:
-          type: string
-          nullable: true
-        jefe_nombre:
-          type: string
-          nullable: true
-        fecha_desde:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_hasta:
-          type: string
-          format: date-time
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_agentexdni1_Patch:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: number
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        fecha_nacimiento:
-          type: string
-          format: date-time
-          nullable: true
-        cuil:
-          type: string
-          nullable: true
-        nacionalidad:
-          type: string
-          nullable: true
-        telefono:
-          type: string
-          nullable: true
-        email:
-          type: string
-          nullable: true
-        domicilio:
-          type: string
-          nullable: true
-        personal_observaciones:
-          type: string
-          nullable: true
-        sexo_id:
-          type: number
-          nullable: true
-        sexo_nombre:
-          type: string
-          nullable: true
-        localidad_id:
-          type: number
-          nullable: true
-        localidad_nombre:
-          type: string
-          nullable: true
-        agente_id:
-          type: number
-        ley_id:
-          type: number
-          nullable: true
-        ley_nombre:
-          type: string
-          nullable: true
-        servicio_id:
-          type: number
-          nullable: true
-        dependencia_id:
-          type: number
-          nullable: true
-        reparticion_nombre:
-          type: string
-          nullable: true
-        servicio_nombre:
-          type: string
-          nullable: true
-        jefe_nombre:
-          type: string
-          nullable: true
-        fecha_desde:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_hasta:
-          type: string
-          format: date-time
           nullable: true
     Table_api_keys:
       type: object
@@ -9463,13 +8700,13 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_categoria:
+    Table_categorias:
       type: object
       additionalProperties: false
       properties:
         ID:
           type: number
-        CATEGORIA:
+        nombre:
           type: number
           nullable: true
         deleted_at:
@@ -9484,11 +8721,11 @@ components:
           nullable: true
       required:
         - ID
-    Table_categoria_Create:
+    Table_categorias_Create:
       type: object
       additionalProperties: false
       properties:
-        CATEGORIA:
+        nombre:
           type: number
           nullable: true
         deleted_at:
@@ -9501,13 +8738,13 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_categoria_Patch:
+    Table_categorias_Patch:
       type: object
       additionalProperties: false
       properties:
         ID:
           type: number
-        CATEGORIA:
+        nombre:
           type: number
           nullable: true
         deleted_at:
@@ -10051,165 +9288,31 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_consultaspordni:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: number
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        agente_id:
-          type: number
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        consulta_id:
-          type: number
-        hora_atencion:
-          type: string
-          format: date-time
-          nullable: true
-        atendido_por:
-          type: string
-          nullable: true
-        motivo_consulta:
-          type: string
-          nullable: true
-        explicacion:
-          type: string
-          nullable: true
-        impreso:
-          type: string
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_consultaspordni_Create:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: number
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        agente_id:
-          type: number
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        consulta_id:
-          type: number
-        hora_atencion:
-          type: string
-          format: date-time
-          nullable: true
-        atendido_por:
-          type: string
-          nullable: true
-        motivo_consulta:
-          type: string
-          nullable: true
-        explicacion:
-          type: string
-          nullable: true
-        impreso:
-          type: string
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_consultaspordni_Patch:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: number
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        agente_id:
-          type: number
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        consulta_id:
-          type: number
-        hora_atencion:
-          type: string
-          format: date-time
-          nullable: true
-        atendido_por:
-          type: string
-          nullable: true
-        motivo_consulta:
-          type: string
-          nullable: true
-        explicacion:
-          type: string
-          nullable: true
-        impreso:
-          type: string
-          nullable: true
     Table_dependencias:
       type: object
       additionalProperties: false
       properties:
-        Columna 1:
+        id:
+          type: number
+        nombre:
           type: number
           nullable: true
+      required:
+        - id
     Table_dependencias_Create:
       type: object
       additionalProperties: false
       properties:
-        Columna 1:
+        nombre:
           type: number
           nullable: true
     Table_dependencias_Patch:
       type: object
       additionalProperties: false
       properties:
-        Columna 1:
+        id:
+          type: number
+        nombre:
           type: number
           nullable: true
     Table_disiplina:
@@ -10776,7 +9879,7 @@ components:
       properties:
         id:
           type: number
-        funcion:
+        nombre:
           type: string
           nullable: true
         descripcion:
@@ -10806,7 +9909,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        funcion:
+        nombre:
           type: string
           nullable: true
         descripcion:
@@ -10836,7 +9939,7 @@ components:
       properties:
         id:
           type: number
-        funcion:
+        nombre:
           type: string
           nullable: true
         descripcion:
@@ -11225,7 +10328,7 @@ components:
       properties:
         id:
           type: number
-        ley_nombre:
+        nombre:
           type: string
           nullable: true
         codigoexp:
@@ -11253,7 +10356,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        ley_nombre:
+        nombre:
           type: string
           nullable: true
         codigoexp:
@@ -11281,7 +10384,7 @@ components:
       properties:
         id:
           type: number
-        ley_nombre:
+        nombre:
           type: string
           nullable: true
         codigoexp:
@@ -11528,13 +10631,13 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_ocupacion:
+    Table_ocupaciones:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        nombre_ocupacion:
+        nombre:
           type: string
         codigo:
           type: number
@@ -11575,12 +10678,12 @@ components:
           nullable: true
       required:
         - id
-        - nombre_ocupacion
-    Table_ocupacion_Create:
+        - nombre
+    Table_ocupaciones_Create:
       type: object
       additionalProperties: false
       properties:
-        nombre_ocupacion:
+        nombre:
           type: string
         codigo:
           type: number
@@ -11620,14 +10723,14 @@ components:
           type: number
           nullable: true
       required:
-        - nombre_ocupacion
-    Table_ocupacion_Patch:
+        - nombre
+    Table_ocupaciones_Patch:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        nombre_ocupacion:
+        nombre:
           type: string
         codigo:
           type: number
@@ -12131,6 +11234,9 @@ components:
         cp:
           type: string
           nullable: true
+        foto_path:
+          type: string
+          nullable: true
       required:
         - dni
         - apellido
@@ -12204,6 +11310,9 @@ components:
           type: string
           nullable: true
         cp:
+          type: string
+          nullable: true
+        foto_path:
           type: string
           nullable: true
       required:
@@ -12281,195 +11390,16 @@ components:
         cp:
           type: string
           nullable: true
-    Table_personaldetalle:
-      type: object
-      additionalProperties: false
-      properties:
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        fecha_nacimiento:
-          type: string
-          format: date-time
-          nullable: true
-        sexo:
+        foto_path:
           type: string
           nullable: true
-        telefono:
-          type: string
-          nullable: true
-        email:
-          type: string
-          nullable: true
-        domicilio:
-          type: string
-          nullable: true
-        localidad:
-          type: string
-          nullable: true
-        cuil:
-          type: string
-          nullable: true
-        nacionalidad:
-          type: string
-          nullable: true
-        observaciones:
-          type: string
-          nullable: true
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        ocupacion:
-          type: string
-          nullable: true
-        ley:
-          type: string
-          nullable: true
-        dependencia:
-          type: string
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_personaldetalle_Create:
-      type: object
-      additionalProperties: false
-      properties:
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        fecha_nacimiento:
-          type: string
-          format: date-time
-          nullable: true
-        sexo:
-          type: string
-          nullable: true
-        telefono:
-          type: string
-          nullable: true
-        email:
-          type: string
-          nullable: true
-        domicilio:
-          type: string
-          nullable: true
-        localidad:
-          type: string
-          nullable: true
-        cuil:
-          type: string
-          nullable: true
-        nacionalidad:
-          type: string
-          nullable: true
-        observaciones:
-          type: string
-          nullable: true
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        ocupacion:
-          type: string
-          nullable: true
-        ley:
-          type: string
-          nullable: true
-        dependencia:
-          type: string
-          nullable: true
-      required:
-        - dni
-        - apellido
-        - nombre
-    Table_personaldetalle_Patch:
-      type: object
-      additionalProperties: false
-      properties:
-        dni:
-          type: number
-        apellido:
-          type: string
-        nombre:
-          type: string
-        fecha_nacimiento:
-          type: string
-          format: date-time
-          nullable: true
-        sexo:
-          type: string
-          nullable: true
-        telefono:
-          type: string
-          nullable: true
-        email:
-          type: string
-          nullable: true
-        domicilio:
-          type: string
-          nullable: true
-        localidad:
-          type: string
-          nullable: true
-        cuil:
-          type: string
-          nullable: true
-        nacionalidad:
-          type: string
-          nullable: true
-        observaciones:
-          type: string
-          nullable: true
-        fecha_ingreso:
-          type: string
-          format: date-time
-          nullable: true
-        fecha_baja:
-          type: string
-          format: date-time
-          nullable: true
-        estado_empleo:
-          type: string
-          nullable: true
-        ocupacion:
-          type: string
-          nullable: true
-        ley:
-          type: string
-          nullable: true
-        dependencia:
-          type: string
-          nullable: true
-    Table_planta:
+    Table_plantas:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        planta_nombre:
+        nombre:
           type: string
           nullable: true
         deleted_at:
@@ -12484,11 +11414,11 @@ components:
           nullable: true
       required:
         - id
-    Table_planta_Create:
+    Table_plantas_Create:
       type: object
       additionalProperties: false
       properties:
-        planta_nombre:
+        nombre:
           type: string
           nullable: true
         deleted_at:
@@ -12501,13 +11431,13 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_planta_Patch:
+    Table_plantas_Patch:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        planta_nombre:
+        nombre:
           type: string
           nullable: true
         deleted_at:
@@ -12617,13 +11547,13 @@ components:
         user_agent:
           type: string
           nullable: true
-    Table_regimenhorario:
+    Table_regimenes_horarios:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        regimen_horario:
+        nombre:
           type: number
           nullable: true
         estado_planta:
@@ -12641,11 +11571,11 @@ components:
           nullable: true
       required:
         - id
-    Table_regimenhorario_Create:
+    Table_regimenes_horarios_Create:
       type: object
       additionalProperties: false
       properties:
-        regimen_horario:
+        nombre:
           type: number
           nullable: true
         estado_planta:
@@ -12661,13 +11591,13 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_regimenhorario_Patch:
+    Table_regimenes_horarios_Patch:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        regimen_horario:
+        nombre:
           type: number
           nullable: true
         estado_planta:
@@ -13156,13 +12086,43 @@ components:
         updated_by:
           type: number
           nullable: true
-    Table_sexo:
+    Table_servicios:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        sexo_nombre:
+        Columna 2:
+          type: number
+        nombre:
+          type: number
+      required:
+        - id
+    Table_servicios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        Columna 2:
+          type: number
+        nombre:
+          type: number
+    Table_servicios_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        Columna 2:
+          type: number
+        nombre:
+          type: number
+    Table_sexos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
           type: string
         deleted_at:
           type: string
@@ -13176,12 +12136,12 @@ components:
           nullable: true
       required:
         - id
-        - sexo_nombre
-    Table_sexo_Create:
+        - nombre
+    Table_sexos_Create:
       type: object
       additionalProperties: false
       properties:
-        sexo_nombre:
+        nombre:
           type: string
         deleted_at:
           type: string
@@ -13194,14 +12154,14 @@ components:
           type: number
           nullable: true
       required:
-        - sexo_nombre
-    Table_sexo_Patch:
+        - nombre
+    Table_sexos_Patch:
       type: object
       additionalProperties: false
       properties:
         id:
           type: number
-        sexo_nombre:
+        nombre:
           type: string
         deleted_at:
           type: string

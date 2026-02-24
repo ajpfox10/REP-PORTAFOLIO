@@ -225,7 +225,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         const profileRows = await sequelize.query(`
           SELECT
             p.dni, p.apellido, p.nombre, p.cuil,
-            p.fecha_nacimiento, p.fecha_ingreso, p.estado_empleo, p.legajo,
+            p.fecha_nacimiento, a.fecha_ingreso, a.estado_empleo, a.legajo,
             p.email, p.telefono, p.domicilio, p.foto_path, p.observaciones,
             p.created_at AS alta_sistema,
 
