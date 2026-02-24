@@ -45,10 +45,10 @@ export function useAdminUsers() {
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      // Carga usuarios + sus roles en paralelo
-      const [usersRes, rolesRes] = await Promise.all([
+      const [usersRes, rolesRes, permsRes] = await Promise.all([
         apiFetch<any>('/usuarios?limit=200&page=1'),
         apiFetch<any>('/roles?limit=100&page=1'),
+        apiFetch<any>('/permisos?limit=500&page=1'),
       ]);
 
       const userList: any[] = usersRes?.data || [];
@@ -58,7 +58,14 @@ export function useAdminUsers() {
         descripcion: r.descripcion || '',
       }));
 
-      // Cargar roles de cada usuario via usuarios_roles
+      setRoles(roleList);
+      setPermissions((permsRes?.data || []).map((p: any) => ({
+        id: Number(p.id),
+        clave: String(p.clave || ''),
+        descripcion: p.descripcion || '',
+      })));
+
+      // Cargar roles de cada usuario
       const usersWithRoles: UserRow[] = await Promise.all(
         userList.map(async (u: any) => {
           let roleId = null;
@@ -68,8 +75,7 @@ export function useAdminUsers() {
             const ur = urRes?.data?.[0];
             if (ur?.rol_id) {
               roleId = Number(ur.rol_id);
-              const found = roleList.find(r => r.id === roleId);
-              roleName = found?.nombre ?? null;
+              roleName = roleList.find(r => r.id === roleId)?.nombre ?? null;
             }
           } catch {}
           return {
@@ -85,33 +91,69 @@ export function useAdminUsers() {
       );
 
       setUsers(usersWithRoles);
-      setRoles(roleList);
     } catch (e: any) {
-      toast.error('Error cargando usuarios', e?.message || 'Error');
+      toast.error('Error cargando datos', e?.message || 'Error');
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  const loadPermissions = useCallback(async () => {
+  useEffect(() => { loadUsers(); }, []);
+
+  // ─── Permisos de un ROL ──────────────────────────────────────────────────────
+  const loadRolePerms = useCallback(async (roleId: number): Promise<number[]> => {
     try {
-      const res = await apiFetch<any>('/permisos?limit=250&page=1');
-      setPermissions(
-        (res?.data || []).map((p: any) => ({
-          id: Number(p.id),
-          clave: String(p.clave || ''),
-          descripcion: p.descripcion || '',
-        }))
-      );
-    } catch {}
+      const res = await apiFetch<any>(`/roles_permisos?rol_id=${roleId}&limit=500&page=1`);
+      return (res?.data || []).map((rp: any) => Number(rp.permiso_id));
+    } catch {
+      return [];
+    }
   }, []);
 
-  useEffect(() => {
-    loadUsers();
-    loadPermissions();
+  const saveRolePerms = useCallback(async (roleId: number, permId: number, grant: boolean) => {
+    if (grant) {
+      // Agregar permiso al rol
+      await apiFetch<any>('/roles_permisos', {
+        method: 'POST',
+        body: JSON.stringify({ rol_id: roleId, permiso_id: permId }),
+      });
+    } else {
+      // Quitar permiso del rol — buscar el registro y borrarlo
+      const res = await apiFetch<any>(`/roles_permisos?rol_id=${roleId}&permiso_id=${permId}&limit=1&page=1`);
+      const rp = res?.data?.[0];
+      if (rp?.id) {
+        await apiFetch<any>(`/roles_permisos/${rp.id}`, { method: 'DELETE' });
+      }
+    }
   }, []);
 
-  // Crear usuario
+  // ─── Permisos DIRECTOS de un USUARIO ────────────────────────────────────────
+  const loadUserPerms = useCallback(async (userId: number): Promise<number[]> => {
+    try {
+      // La tabla puede llamarse usuarios_permisos
+      const res = await apiFetch<any>(`/usuarios_permisos?usuario_id=${userId}&limit=500&page=1`);
+      return (res?.data || []).map((up: any) => Number(up.permiso_id));
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const saveUserPerm = useCallback(async (userId: number, permId: number, grant: boolean) => {
+    if (grant) {
+      await apiFetch<any>('/usuarios_permisos', {
+        method: 'POST',
+        body: JSON.stringify({ usuario_id: userId, permiso_id: permId }),
+      });
+    } else {
+      const res = await apiFetch<any>(`/usuarios_permisos?usuario_id=${userId}&permiso_id=${permId}&limit=1&page=1`);
+      const up = res?.data?.[0];
+      if (up?.id) {
+        await apiFetch<any>(`/usuarios_permisos/${up.id}`, { method: 'DELETE' });
+      }
+    }
+  }, []);
+
+  // ─── Crear usuario ───────────────────────────────────────────────────────────
   const createUser = useCallback(async () => {
     if (!form.email || !form.password || !form.nombre) {
       toast.error('Completá todos los campos requeridos');
@@ -119,21 +161,17 @@ export function useAdminUsers() {
     }
     setSaving(true);
     try {
-      // 1. Crear usuario
       const createRes = await apiFetch<any>('/usuarios', {
         method: 'POST',
         body: JSON.stringify({
-          email: form.email,
-          nombre: form.nombre,
-          password: form.password,
-          estado: form.estado,
+          email: form.email, nombre: form.nombre,
+          password: form.password, estado: form.estado,
         }),
       });
 
       const newUserId = createRes?.data?.id ?? createRes?.data?.insertId;
       if (!newUserId) throw new Error('No se recibió ID del usuario creado');
 
-      // 2. Asignar rol si se eligió uno
       if (form.roleId) {
         await apiFetch<any>('/usuarios_roles', {
           method: 'POST',
@@ -152,26 +190,21 @@ export function useAdminUsers() {
     }
   }, [form, toast, loadUsers]);
 
-  // Actualizar rol de usuario existente
-  const updateUserRole = useCallback(async (userId: number, newRoleId: number | null) => {
+  // ─── Asignar rol ─────────────────────────────────────────────────────────────
+  const assignRole = useCallback(async (userId: number, newRoleId: number | null) => {
     setSaving(true);
     try {
-      // Revocar roles anteriores (soft delete)
-      await apiFetch<any>(`/usuarios_roles?usuario_id=${userId}&limit=50&page=1`)
-        .then(async (res: any) => {
-          for (const ur of (res?.data || [])) {
-            await apiFetch<any>(`/usuarios_roles/${ur.id}`, { method: 'DELETE' }).catch(() => {});
-          }
-        }).catch(() => {});
-
-      // Asignar nuevo rol
+      // Revocar roles anteriores
+      const existing = await apiFetch<any>(`/usuarios_roles?usuario_id=${userId}&limit=50&page=1`);
+      for (const ur of (existing?.data || [])) {
+        await apiFetch<any>(`/usuarios_roles/${ur.id}`, { method: 'DELETE' }).catch(() => {});
+      }
       if (newRoleId) {
         await apiFetch<any>('/usuarios_roles', {
           method: 'POST',
           body: JSON.stringify({ usuario_id: userId, rol_id: newRoleId }),
         });
       }
-
       toast.ok('Rol actualizado');
       setRolesModal(null);
       await loadUsers();
@@ -182,8 +215,8 @@ export function useAdminUsers() {
     }
   }, [toast, loadUsers]);
 
-  // Cambiar estado del usuario (activo/inactivo)
-  const toggleUserState = useCallback(async (user: UserRow) => {
+  // ─── Toggle estado ───────────────────────────────────────────────────────────
+  const toggleEstado = useCallback(async (user: UserRow) => {
     const newEstado = user.estado === 'activo' ? 'inactivo' : 'activo';
     setSaving(true);
     try {
@@ -200,7 +233,7 @@ export function useAdminUsers() {
     }
   }, [toast, loadUsers]);
 
-  // Resetear contraseña
+  // ─── Reset password ──────────────────────────────────────────────────────────
   const resetPassword = useCallback(async (userId: number, newPassword: string) => {
     if (!newPassword || newPassword.length < 8) {
       toast.error('La contraseña debe tener al menos 8 caracteres');
@@ -222,23 +255,13 @@ export function useAdminUsers() {
   }, [toast]);
 
   return {
-    users,
-    roles,
-    permissions,
-    loading,
-    saving,
-    createModal,
-    editModal,
-    rolesModal,
-    form,
-    setForm,
-    setCreateModal,
-    setEditModal,
-    setRolesModal,
-    loadUsers,
-    createUser,
-    updateUserRole,
-    toggleUserState,
-    resetPassword,
+    users, roles, permissions,
+    loading, saving,
+    createModal, editModal, rolesModal, form,
+    setForm, setCreateModal, setEditModal, setRolesModal,
+    loadUsers, createUser, assignRole, toggleEstado, resetPassword,
+    loadRolePerms, saveRolePerms,
+    loadUserPerms, saveUserPerm,
+    toast,
   };
 }

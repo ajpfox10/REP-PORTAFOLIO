@@ -345,3 +345,51 @@
   cursor: default;
 }
 /* ===== DRAGÓN DUERME, GESTIÓN OCUPA TODO EL ANCHO ===== */
+/* ===== PANEL EDICIÓN INLINE ===== */
+.gp-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.gp-edit-full {
+  grid-column: 1 / -1;
+}
+
+.gp-edit-grid .input,
+.gp-edit-grid .textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.gp-edit-grid label.muted {
+  display: block;
+  margin-bottom: 3px;
+}
+
+/* ===== EDICIÓN INLINE ===== */
+.gp-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.gp-edit-full { grid-column: 1 / -1; }
+.gp-edit-grid .input,
+.gp-edit-grid .textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 0.84rem;
+  padding: 0.38rem 0.6rem;
+}
+
+/* ===== BTN PRIMARY en GestionPage ===== */
+.btn-primary {
+  background: #2563eb !important;
+  color: #fff !important;
+  border-color: #1d4ed8 !important;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+}

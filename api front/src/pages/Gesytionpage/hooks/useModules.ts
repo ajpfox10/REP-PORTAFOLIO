@@ -1,5 +1,5 @@
 // hooks/useModules.ts
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '../../../ui/toast';
 import { apiFetch } from '../../../api/http';
 import { trackAction } from '../../../logging/track';
@@ -18,12 +18,23 @@ export type ModuleState = {
 
 export function useModules(cleanDni: string) {
   const toast = useToast();
+  const prevDniRef = useRef('');
 
-  const [modules, setModules] = useState<Record<ModuleKey, ModuleState>>({
+  const emptyState = () => ({
     consultas:  { open: false, rows: [], selectedIndex: 0, loading: false, scanned: null, tablePage: 1, tablePageSize: 50 },
     pedidos:    { open: false, rows: [], selectedIndex: 0, loading: false, scanned: null, tablePage: 1, tablePageSize: 50 },
     documentos: { open: false, rows: [], selectedIndex: 0, loading: false, scanned: null, tablePage: 1, tablePageSize: 50 },
   });
+
+  const [modules, setModules] = useState<Record<ModuleKey, ModuleState>>(emptyState());
+
+  // FIX: al cambiar de agente resetear todos los módulos para no mostrar datos del anterior.
+  // closeModule solo ponía open:false pero rows quedaban → al reabrir no recargaba.
+  useEffect(() => {
+    if (!cleanDni || cleanDni === prevDniRef.current) return;
+    prevDniRef.current = cleanDni;
+    setModules(emptyState());
+  }, [cleanDni]);
 
   const loadModule = useCallback(async (
     table: ModuleKey,
