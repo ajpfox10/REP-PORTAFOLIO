@@ -264,6 +264,9 @@ export async function apiFetchBlob(path: string, init: RequestInit = {}): Promis
     let res = await fetch(joinUrl(path), {
       ...init,
       headers,
+      // Importante: el backend puede depender de cookies (CSRF/refresh/CIA mode).
+      // Sin esto, imágenes/archivos pueden fallar aunque el JSON funcione.
+      credentials: 'include',
       signal: init.signal,
     });
 
@@ -275,7 +278,7 @@ export async function apiFetchBlob(path: string, init: RequestInit = {}): Promis
           await refreshTokensIfPossible();
           const s2 = loadSession();
           if (s2?.accessToken) headers.set('Authorization', `Bearer ${s2.accessToken}`);
-          res = await fetch(joinUrl(path), { ...init, headers, signal: init.signal });
+          res = await fetch(joinUrl(path), { ...init, headers, credentials: 'include', signal: init.signal });
         } catch (e: any) {
           clearSession();
           logEvent({ level: 'warn', what: 'auth_401_refresh_failed', where: `apiFetchBlob:${path}`, status: 401, details: e });

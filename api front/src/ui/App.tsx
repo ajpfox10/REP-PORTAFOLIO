@@ -1,3 +1,4 @@
+// src/ui/App.tsx
 import React from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
@@ -12,6 +13,12 @@ import { TableViewPage } from '../pages/TableViewPage';
 import { InfoPage } from '../pages/InfoPage';
 import { GestionPage } from '../pages/Gesytionpage';
 import { AdminPage } from '../pages/AdminPage';
+import { CargaAgentePage } from '../pages/CargaAgentePage';
+import { ConsultasPage } from '../pages/ConsultasPage';
+import { PedidosPage } from '../pages/PedidosPage';
+import { DocumentosPage } from '../pages/DocumentosPage';
+import { ReportesPage } from '../pages/ReportesPage';
+import { SolicitarAccesoPage } from '../pages/SolicitarAccesoPage';
 import { RequirePermission } from '../auth/RequirePermission';
 import { ForbiddenPage } from '../pages/ForbiddenPage';
 
@@ -24,7 +31,6 @@ function Private({ children }: { children: React.ReactNode }) {
 }
 
 function AppGuard({ children }: { children: React.ReactNode }) {
-  // permiso base del backend (deny-by-default global)
   return <RequirePermission perm="api:access">{children}</RequirePermission>;
 }
 
@@ -36,91 +42,30 @@ export function App() {
           <Routes>
             <Route path="/gate" element={<GatePage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/solicitar-acceso" element={<SolicitarAccesoPage />} />
 
-            <Route
-              path="/app"
-              element={
-                <Private>
-                  <AppGuard>
-                    <DashboardPage />
-                  </AppGuard>
-                </Private>
-              }
-            />
+            {/* Core */}
+            <Route path="/app" element={<Private><AppGuard><DashboardPage /></AppGuard></Private>} />
+            <Route path="/app/gestion" element={<Private><AppGuard><GestionPage /></AppGuard></Private>} />
+            <Route path="/app/documents" element={<Private><AppGuard><DocumentsPage /></AppGuard></Private>} />
+            <Route path="/app/tables" element={<Private><AppGuard><TablesPage /></AppGuard></Private>} />
+            <Route path="/app/tables/:table" element={<Private><AppGuard><TableViewPage /></AppGuard></Private>} />
+            <Route path="/app/info" element={<Private><AppGuard><InfoPage /></AppGuard></Private>} />
 
-            <Route
-              path="/app/documents"
-              element={
-                <Private>
-                  <AppGuard>
-                    <DocumentsPage />
-                  </AppGuard>
-                </Private>
-              }
-            />
+            {/* Módulos standalone */}
+            <Route path="/app/consultas" element={<Private><AppGuard><ConsultasPage /></AppGuard></Private>} />
+            <Route path="/app/pedidos" element={<Private><AppGuard><PedidosPage /></AppGuard></Private>} />
+            <Route path="/app/documentos" element={<Private><AppGuard><DocumentosPage /></AppGuard></Private>} />
+            <Route path="/app/reportes" element={<Private><AppGuard><ReportesPage /></AppGuard></Private>} />
 
-            <Route
-              path="/app/tables"
-              element={
-                <Private>
-                  <AppGuard>
-                    <TablesPage />
-                  </AppGuard>
-                </Private>
-              }
-            />
+            {/* Alta de agentes */}
+            <Route path="/app/carga-agente" element={<Private><AppGuard><CargaAgentePage /></AppGuard></Private>} />
 
-            <Route
-              path="/app/tables/:table"
-              element={
-                <Private>
-                  <AppGuard>
-                    <TableViewPage />
-                  </AppGuard>
-                </Private>
-              }
-            />
+            {/* Admin */}
+            <Route path="/app/admin" element={<Private><AdminPage /></Private>} />
 
-            <Route
-              path="/app/info"
-              element={
-                <Private>
-                  <AppGuard>
-                    <InfoPage />
-                  </AppGuard>
-                </Private>
-              }
-            />
-
-            <Route
-              path="/app/gestion"
-              element={
-                <Private>
-                  <AppGuard>
-                    <GestionPage />
-                  </AppGuard>
-                </Private>
-              }
-            />
-
-            <Route
-              path="/app/forbidden"
-              element={
-                <Private>
-                  <ForbiddenPage />
-                </Private>
-              }
-            />
-
-            <Route
-              path="/app/admin"
-              element={
-                <Private>
-                  <AdminPage />
-                </Private>
-              }
-            />
-
+            {/* Misc */}
+            <Route path="/app/forbidden" element={<Private><ForbiddenPage /></Private>} />
             <Route path="/" element={<Navigate to="/gate" replace />} />
             <Route path="*" element={<Navigate to="/gate" replace />} />
           </Routes>
