@@ -1,5 +1,5 @@
 // src/components/Layout.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 
@@ -11,6 +11,7 @@ export function Layout({ title, children, showBack }: {
   const nav = useNavigate();
   const loc = useLocation();
   const { session, logout, hasPerm } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const canWrite = hasPerm('personal:write') || hasPerm('crud:*:*');
   const isAdmin  = hasPerm('usuarios:write') || hasPerm('crud:*:*');
@@ -18,16 +19,16 @@ export function Layout({ title, children, showBack }: {
   const isActive = (p: string) => loc.pathname === p || loc.pathname.startsWith(p + '/');
 
   const navLink = (to: string, label: string) => (
-    <Link className={`btn${isActive(to) ? ' active' : ''}`} to={to}>{label}</Link>
+    <Link className={`btn${isActive(to) ? ' active' : ''}`} to={to} style={{ fontSize: '0.82rem', padding: '7px 12px' }}>{label}</Link>
   );
 
   return (
     <div className={isFluid ? 'container-fluid' : 'container'}>
-      <div className="topbar card">
+      <div className="topbar card" style={{ marginBottom: 0 }}>
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem' }}>
           <div className="row" style={{ gap: '0.6rem' }}>
             {showBack
-              ? <button className="btn" onClick={() => nav(-1)} type="button">← Volver</button>
+              ? <button className="btn" onClick={() => nav(-1)} type="button" style={{ fontSize: '0.82rem' }}>← Volver</button>
               : <Link className="badge" to="/app">Inicio</Link>
             }
             <div>
@@ -36,19 +37,49 @@ export function Layout({ title, children, showBack }: {
             </div>
           </div>
 
-          <div className="row" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
+          {/* Nav principal */}
+          <div className="row" style={{ gap: '0.3rem', flexWrap: 'wrap' }}>
+            {/* Grupo principal */}
             {navLink('/app/gestion', '📋 Gestión')}
+            {navLink('/app/redaccion', '✍️ Redacción')}
             {navLink('/app/consultas', '💬 Consultas')}
             {navLink('/app/pedidos', '📨 Pedidos')}
             {navLink('/app/documentos', '📂 Docs')}
             {navLink('/app/reportes', '🎂 Reportes')}
-            {navLink('/app/tables', '⊞ Tablas')}
-            {/* Alta Agentes — solo para quienes tienen permiso de escritura */}
-            {canWrite && navLink('/app/carga-agente', '➕ Alta Agentes')}
-            {/* Admin */}
-            {isAdmin && navLink('/app/admin', '⚙ Admin')}
-            <Link className="btn" to="/app/info">ℹ Info</Link>
-            <button className="btn danger" onClick={() => logout()} type="button">Salir</button>
+
+            {/* Menú desplegable "Más" */}
+            <div style={{ position: 'relative' }}>
+              <button className="btn" onClick={() => setMenuOpen(o => !o)}
+                style={{ fontSize: '0.82rem', padding: '7px 12px', background: menuOpen ? 'rgba(255,255,255,0.12)' : undefined }}>
+                ⊞ Más {menuOpen ? '▲' : '▼'}
+              </button>
+              {menuOpen && (
+                <div onClick={() => setMenuOpen(false)} style={{
+                  position: 'absolute', top: '110%', right: 0, zIndex: 1000,
+                  background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: 12, padding: 8, minWidth: 200,
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                  display: 'flex', flexDirection: 'column', gap: 4,
+                }}>
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>Análisis</div>
+                  {navLink('/app/estadisticas', '📊 Estadísticas')}
+                  {navLink('/app/organigrama', '🏗️ Organigrama')}
+                  {navLink('/app/alertas', '🔔 Alertas')}
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>Herramientas</div>
+                  {navLink('/app/buscador', '🔍 Buscador')}
+                  {navLink('/app/comparador', '⚖️ Comparador')}
+                  {navLink('/app/legajo', '📋 Legajo')}
+                  {navLink('/app/tables', '⊞ Tablas')}
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                  {canWrite && navLink('/app/carga-agente', '➕ Alta Agentes')}
+                  {isAdmin && navLink('/app/admin', '⚙ Admin')}
+                  {navLink('/app/info', 'ℹ Info')}
+                </div>
+              )}
+            </div>
+
+            <button className="btn danger" onClick={() => logout()} type="button" style={{ fontSize: '0.82rem', padding: '7px 12px' }}>Salir</button>
           </div>
         </div>
       </div>
