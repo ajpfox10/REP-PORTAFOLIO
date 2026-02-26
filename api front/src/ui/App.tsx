@@ -18,6 +18,13 @@ import { ConsultasPage } from '../pages/ConsultasPage';
 import { PedidosPage } from '../pages/PedidosPage';
 import { DocumentosPage } from '../pages/DocumentosPage';
 import { ReportesPage } from '../pages/ReportesPage';
+import { RedaccionPage } from '../pages/RedaccionPage';
+import { EstadisticasPage } from '../pages/EstadisticasPage';
+import { OrganigramaPage } from '../pages/OrganigramaPage';
+import { ComparadorPage } from '../pages/ComparadorPage';
+import { LegajoPage } from '../pages/LegajoPage';
+import { AlertasPage } from '../pages/AlertasPage';
+import { BuscadorPage } from '../pages/BuscadorPage';
 import { SolicitarAccesoPage } from '../pages/SolicitarAccesoPage';
 import { RequirePermission } from '../auth/RequirePermission';
 import { ForbiddenPage } from '../pages/ForbiddenPage';
@@ -57,6 +64,15 @@ export function App() {
             <Route path="/app/pedidos" element={<Private><AppGuard><PedidosPage /></AppGuard></Private>} />
             <Route path="/app/documentos" element={<Private><AppGuard><DocumentosPage /></AppGuard></Private>} />
             <Route path="/app/reportes" element={<Private><AppGuard><ReportesPage /></AppGuard></Private>} />
+            <Route path="/app/redaccion" element={<Private><AppGuard><RedaccionPage /></AppGuard></Private>} />
+
+            {/* Nuevos módulos */}
+            <Route path="/app/estadisticas" element={<Private><AppGuard><EstadisticasPage /></AppGuard></Private>} />
+            <Route path="/app/organigrama" element={<Private><AppGuard><OrganigramaPage /></AppGuard></Private>} />
+            <Route path="/app/comparador" element={<Private><AppGuard><ComparadorPage /></AppGuard></Private>} />
+            <Route path="/app/legajo" element={<Private><AppGuard><LegajoPage /></AppGuard></Private>} />
+            <Route path="/app/alertas" element={<Private><AppGuard><AlertasPage /></AppGuard></Private>} />
+            <Route path="/app/buscador" element={<Private><AppGuard><BuscadorPage /></AppGuard></Private>} />
 
             {/* Alta de agentes */}
             <Route path="/app/carga-agente" element={<Private><AppGuard><CargaAgentePage /></AppGuard></Private>} />

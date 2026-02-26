@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useToast } from '../../../ui/toast';
 import { apiFetch } from '../../../api/http';
+import { searchPersonal } from '../../../api/searchPersonal';
 import { trackAction } from '../../../logging/track';
 
 export function useAgenteSearch() {
@@ -58,13 +59,12 @@ export function useAgenteSearch() {
 
     try {
       setState(s => ({ ...s, loading: true, matches: [] }));
-      // FIX: /personal/search?q= busca en apellido Y nombre. El original
-      // intentaba /personal?nombre_contains= que no existe en la API.
-      const res = await apiFetch<any>(
-        `/personal/search?q=${encodeURIComponent(q)}&limit=20&page=1`
-      );
-      setState(s => ({ ...s, loading: false, matches: res.data || [] }));
-      toast.ok("Búsqueda lista");
+      // /personal/search tiene un bug SQL en el backend.
+      // Usamos cache local con búsqueda client-side.
+      const results = await searchPersonal(q, 30);
+      setState(s => ({ ...s, loading: false, matches: results }));
+      if (!results.length) toast.error("Sin resultados", `No se encontró "${q}"`);
+      else toast.ok(`${results.length} resultado(s)`);
     } catch (e: any) {
       setState(s => ({ ...s, loading: false }));
       toast.error("No se pudo buscar", e?.message || "Error");
