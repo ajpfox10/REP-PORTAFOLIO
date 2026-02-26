@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
+import { searchPersonal } from '../../api/searchPersonal';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf, printTable } from '../../utils/export';
 
@@ -31,9 +32,9 @@ export function ConsultasPage() {
         const res = await apiFetch<any>(`/consultas?dni=${cleanDni}&limit=200&page=1`);
         data = res?.data || [];
       } else {
-        // buscar agentes por apellido, luego sus consultas
-        const persons = await apiFetch<any>(`/personal/search?apellido=${encodeURIComponent(cleanApe)}&limit=50&page=1`);
-        const dnis = (persons?.data || []).map((p: any) => p.dni);
+        // Usar cache local — /personal/search tiene bug SQL en el backend
+        const persons = await searchPersonal(cleanApe, 20);
+        const dnis = persons.map((p: any) => p.dni);
         for (const d of dnis.slice(0, 10)) {
           const res = await apiFetch<any>(`/consultas?dni=${d}&limit=100&page=1`);
           data = [...data, ...(res?.data || [])];

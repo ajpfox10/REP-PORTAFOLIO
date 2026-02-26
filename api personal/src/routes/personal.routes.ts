@@ -119,25 +119,26 @@ export function buildPersonalRouter(sequelize: Sequelize) {
 
       const where = `WHERE ${whereParts.join(' AND ')}`;
 
+      try {
       const [rows, countRows] = await Promise.all([
         sequelize.query(`
-          SELECT p.dni, p.apellido, p.nombre, p.cuil, p.email, p.telefono, p.estado_empleo,
+          SELECT p.dni, p.apellido, p.nombre, p.cuil, p.email, p.telefono, a.estado_empleo,
                  a.id         AS agente_id,
+                 a.fecha_ingreso,
                  l.nombre     AS ley_nombre,
                  pl.nombre    AS planta_nombre,
                  cat.nombre   AS categoria_nombre,
                  fn.nombre    AS funcion_nombre,
-                 -- primer servicio vigente
-                 (SELECT s.nombre FROM agentes_servicios ags
-                  JOIN servicios s ON s.id = ags.servicio_id
-                  WHERE ags.dni = p.dni AND ags.deleted_at IS NULL
-                  LIMIT 1) AS servicio_nombre
+                 -- agentes_servicios ya tiene campo 'nombre' directo, no necesita JOIN a servicios
+                 (SELECT ags_sub.nombre FROM agentes_servicios ags_sub
+                  WHERE ags_sub.dni = p.dni AND ags_sub.deleted_at IS NULL
+                  ORDER BY ags_sub.fecha_desde DESC LIMIT 1) AS servicio_nombre
           FROM personal p
-          LEFT JOIN agentes a         ON a.dni = p.dni     AND a.deleted_at IS NULL
-          LEFT JOIN ley     l         ON l.id  = a.ley_id
-          LEFT JOIN plantas pl        ON pl.id = a.planta_id
-          LEFT JOIN categorias cat    ON cat.id = a.categoria_id
-          LEFT JOIN funciones fn      ON fn.id = a.funcion_id
+          LEFT JOIN agentes a         ON a.dni = p.dni        AND a.deleted_at IS NULL
+          LEFT JOIN ley     l         ON l.id  = a.ley_id     AND l.deleted_at IS NULL
+          LEFT JOIN plantas pl        ON pl.id = a.planta_id  AND pl.deleted_at IS NULL
+          LEFT JOIN categorias cat    ON cat.ID = a.categoria_id
+          LEFT JOIN funciones fn      ON fn.id = a.funcion_id AND fn.deleted_at IS NULL
           ${where}
           ORDER BY p.apellido ASC, p.nombre ASC
           LIMIT :limit OFFSET :offset
@@ -148,6 +149,10 @@ export function buildPersonalRouter(sequelize: Sequelize) {
 
       const total = Number((countRows as any[])[0]?.total ?? 0);
       return res.json({ ok: true, data: rows, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+      } catch (err: any) {
+        logger.error({ msg: '[personal] search error', err: err?.message, sql: err?.sql });
+        return res.status(500).json({ ok: false, error: err?.message || 'Error en búsqueda' });
+      }
     }
   );
 
@@ -232,7 +237,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             s.id   AS sexo_id,    s.nombre  AS sexo_nombre,
             l.id   AS ley_id,     l.nombre  AS ley_nombre,
             pl.id  AS planta_id,  pl.nombre AS planta_nombre,
-            cat.id AS categoria_id, cat.nombre AS categoria_nombre,
+            cat.ID AS categoria_id, cat.nombre AS categoria_nombre,
             fn.id  AS funcion_id, fn.nombre AS funcion_nombre,
             oc.id  AS ocupacion_id, oc.nombre AS ocupacion_nombre,
             rh.id  AS regimen_horario_id, rh.nombre AS regimen_horario_nombre,
@@ -248,10 +253,10 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           LEFT JOIN sexos s           ON s.id  = p.sexo_id
           LEFT JOIN ley l             ON l.id  = a.ley_id
           LEFT JOIN plantas pl        ON pl.id = a.planta_id
-          LEFT JOIN categorias cat    ON cat.id = a.categoria_id
-          LEFT JOIN funciones fn      ON fn.id = a.funcion_id
-          LEFT JOIN ocupaciones oc    ON oc.id = a.ocupacion_id
-          LEFT JOIN regimenes_horarios rh ON rh.id = a.regimen_horario_id
+          LEFT JOIN categorias cat    ON cat.ID = a.categoria_id
+          LEFT JOIN funciones fn      ON fn.id = a.funcion_id AND fn.deleted_at IS NULL
+          LEFT JOIN ocupaciones oc    ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+          LEFT JOIN regimenes_horarios rh ON rh.id = a.regimen_horario_id AND rh.deleted_at IS NULL
           LEFT JOIN dependencias dep  ON dep.id = a.dependencia_id
           WHERE p.dni = :dni AND p.deleted_at IS NULL
           LIMIT 1
