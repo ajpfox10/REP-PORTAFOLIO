@@ -31,6 +31,7 @@ import { ForbiddenPage } from '../pages/ForbiddenPage';
 import { GestionUsuarioPage } from '../pages/GestionUsuarioPage';
 import { SaludLaboralPage } from '../pages/SaludLaboralPage';
 import { EmbarazadasPage } from '../pages/EmbarazadasPage';
+import { AsistenciaPage } from '../pages/AsistenciaPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -78,6 +79,7 @@ export function App() {
             <Route path="/app/buscador" element={<Private><AppGuard><BuscadorPage /></AppGuard></Private>} />            
             <Route path="/app/salud-laboral" element={<Private><AppGuard><SaludLaboralPage /></AppGuard></Private>} />
             <Route path="/app/embarazadas" element={<Private><AppGuard><EmbarazadasPage /></AppGuard></Private>} />
+            <Route path="/app/asistencia" element={<Private><AppGuard><AsistenciaPage /></AppGuard></Private>} />
 
             {/* Alta de agentes */}
             <Route path="/app/carga-agente" element={<Private><AppGuard><CargaAgentePage /></AppGuard></Private>} />
