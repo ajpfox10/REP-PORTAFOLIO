@@ -3,6 +3,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Layout } from '../../components/Layout';
 import { useAdminUsers, type UserRow, type Role, type Permission } from './hooks/useAdminUsers';
 import { apiFetch } from '../../api/http';
+import { usePendingRequests } from './hooks/usePendingRequests';
+import { SolicitudesTab } from './components/SolicitudesTab';
 import './styles/AdminPage.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -439,7 +441,8 @@ function RolesTab({ roles, permissions, onRefresh }: {
 export function AdminPage() {
   const admin = useAdminUsers();
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'users' | 'roles'>('users');
+  const [tab, setTab] = useState<'users' | 'roles' | 'solicitudes'>('users');
+  const pending = usePendingRequests(admin.roles);
   const [userPermsModal, setUserPermsModal] = useState<{ user: UserRow; perms: Set<number> } | null>(null);
   const [userPermsSaving, setUserPermsSaving] = useState(false);
 
@@ -481,11 +484,13 @@ export function AdminPage() {
     }
   }, [userPermsModal, admin]);
 
+  const pendingCount = pending.requests.filter(r => r.confirmed && !r.approved).length;
   const stats = [
     { label: 'Usuarios', val: admin.users.length, icon: '👥' },
     { label: 'Activos', val: admin.users.filter(u => u.estado === 'activo').length, icon: '✅' },
     { label: 'Sin rol', val: admin.users.filter(u => !u.roleId).length, icon: '⚠️' },
     { label: 'Roles', val: admin.roles.length, icon: '🔐' },
+    { label: 'Solicitudes', val: pendingCount, icon: '📬' },
     { label: 'Permisos', val: admin.permissions.length, icon: '🔑' },
   ];
 
@@ -511,6 +516,9 @@ export function AdminPage() {
           </button>
           <button className={`tab-btn${tab === 'roles' ? ' active' : ''}`} onClick={() => setTab('roles')}>
             🔐 Roles y permisos
+          </button>
+          <button className={`tab-btn${tab === 'solicitudes' ? ' active' : ''}`} onClick={() => setTab('solicitudes')}>
+            📬 Solicitudes{pendingCount > 0 ? ` (${pendingCount})` : ''}
           </button>
         </div>
 
@@ -579,6 +587,18 @@ export function AdminPage() {
               </table>
             </div>
           </>
+        )}
+
+        {/* ── TAB SOLICITUDES ── */}
+        {tab === 'solicitudes' && (
+          <SolicitudesTab
+            requests={pending.requests}
+            roles={admin.roles}
+            loading={pending.loading}
+            saving={pending.saving}
+            onRefresh={pending.loadRequests}
+            onApprove={pending.approveRequest}
+          />
         )}
 
         {/* ── TAB ROLES ── */}

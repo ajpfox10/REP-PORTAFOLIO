@@ -3,6 +3,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useDashboard } from './hooks/useDashboard';
+import { useAuth } from '../../auth/AuthProvider';
+import { EmbarazadasAlertaBanner } from '../EmbarazadasPage';
 import './styles/DashboardPage.css';
 
 function Tile({ to, title, desc, disabled, accent }: {
@@ -38,9 +40,13 @@ function StatTile({ to, title, desc, stat, disabled }: {
 
 export function DashboardPage() {
   const { pedidosTotal, canDocs, canTables, canGestion, canPedidos } = useDashboard();
+  const { hasPerm } = useAuth();
 
   return (
     <Layout title="Panel">
+      {/* ── Alerta embarazadas ── */}
+      <EmbarazadasAlertaBanner />
+
       {/* ── Módulos principales ── */}
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -79,8 +85,27 @@ export function DashboardPage() {
           <Tile to="/app/legajo" title="📋 Legajo Completo" desc="Vista unificada e imprimible de todos los datos de un agente: personal, laboral, servicios y documentos." accent="#a3e635" />
           <Tile to="/app/tables" title="⊞ Tablas" desc="Explorar todas las tablas del sistema." disabled={!canTables} accent="#64748b" />
           <Tile to="/app/info" title="ℹ️ Información" desc="Notas de acceso, configuración y ayuda." accent="#475569" />
+          <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos y cambio de contraseña." accent="#0ea5e9" />
         </div>
       </div>
+
+      {/* ── Salud Laboral ── */}
+      {(hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read') || hasPerm('crud:embarazadas:read')) && (
+        <div style={{ marginTop: 24, marginBottom: 6 }}>
+          <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Salud Laboral
+          </div>
+          <div className="grid">
+            {(hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read')) && (
+              <Tile to="/app/salud-laboral" title="🏥 Salud Laboral" desc="Reconocimientos médicos y exámenes anuales del personal." accent="#14b8a6" />
+            )}
+            {hasPerm('crud:embarazadas:read') && (
+              <Tile to="/app/embarazadas" title="🤰 Embarazadas" desc="Registro de agentes embarazadas, FPP y alertas de licencia." accent="#f472b6" />
+            )}
+          </div>
+        </div>
+      )}
+
     </Layout>
   );
 }

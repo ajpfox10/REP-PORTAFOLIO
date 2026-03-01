@@ -17,6 +17,7 @@ export function Layout({ title, children, showBack }: {
   const isAdmin  = hasPerm('usuarios:write') || hasPerm('crud:*:*');
   const isFluid  = title === 'Gestión';
   const isActive = (p: string) => loc.pathname === p || loc.pathname.startsWith(p + '/');
+  const isSaludLaboral = hasPerm('crud:reconocimientos_medicos:read') && !hasPerm('crud:*:*');
 
   const navLink = (to: string, label: string) => (
     <Link className={`btn${isActive(to) ? ' active' : ''}`} to={to} style={{ fontSize: '0.82rem', padding: '7px 12px' }}>{label}</Link>
