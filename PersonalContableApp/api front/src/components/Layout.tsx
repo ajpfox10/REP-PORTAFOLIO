@@ -64,6 +64,7 @@ export function Layout({ title, children, showBack }: {
                 }}>
                   <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>Análisis</div>
                   {navLink('/app/estadisticas', '📊 Estadísticas')}
+                  {navLink('/app/asistencia', '🗓️ Asistencia')}
                   {navLink('/app/organigrama', '🏗️ Organigrama')}
                   {navLink('/app/alertas', '🔔 Alertas')}
                   <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />

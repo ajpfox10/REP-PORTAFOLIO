@@ -38,6 +38,7 @@ import { buildCertificadosRouter } from '../routes/certificados.routes';
 import { buildEventosRouter } from '../routes/eventos.routes';
 import { buildApiKeysRouter } from '../routes/apiKeys.routes';
 import { buildWebhooksRouter } from '../routes/webhooks.routes';
+import { buildAsistenciaRouter } from '../routes/asistencia.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
@@ -113,6 +114,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/api-keys`,  ...protect, buildApiKeysRouter(sequelize));
   app.use(`${apiPrefix}/usuarios`,  ...protect, buildUsuariosRouter(sequelize));
   app.use(`${apiPrefix}/webhooks`,  ...protect, buildWebhooksRouter(sequelize));
+  app.use(`${apiPrefix}/asistencia`, ...protect, buildAsistenciaRouter());
 
   // ── Audit reads (registra lecturas sensibles) ─────────────────────────────
   app.use(apiPrefix, authContext(sequelize), auditReadMiddleware(sequelize));
