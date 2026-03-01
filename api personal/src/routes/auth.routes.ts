@@ -424,9 +424,16 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
       return res.status(401).json({ ok: false, error: 'No autenticado' });
     }
 
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+
     const schema = z.object({
       passwordActual: z.string().min(1, 'Contraseña actual requerida'),
-      passwordNuevo:  z.string().min(8, 'Mínimo 8 caracteres'),
+      passwordNuevo: z
+        .string()
+        .min(8, 'Mínimo 8 caracteres')
+        .refine((val) => strongPassword.test(val), {
+          message: 'Debe incluir mayúscula, minúscula, número y símbolo',
+        }),
     });
 
     const parsed = schema.safeParse(req.body);
@@ -580,33 +587,37 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
       const emailLower = String(email).toLowerCase().trim();
       const codigoStr  = String(codigo).replace(/\D/g, '').substring(0, 6);
 
-      // Buscar en audit_log la solicitud más reciente con ese email y código
+      // Buscar TODAS las solicitudes activas de ese email (puede haber varias por reenvíos)
+      // y validar contra cualquiera cuyo código coincida
       const rows = await sequelize.query(
         `SELECT id, request_json, created_at
          FROM audit_log
          WHERE action = 'request_access'
            AND request_json LIKE :emailLike
            AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-         ORDER BY id DESC
-         LIMIT 1`,
+         ORDER BY id DESC`,
         {
           replacements: { emailLike: `%${emailLower}%` },
           type: QueryTypes.SELECT,
         }
       );
 
-      const row = (rows as any[])[0];
-      if (!row) {
+      if (!(rows as any[]).length) {
         return res.status(400).json({
           ok: false,
           error: 'No se encontró una solicitud activa para ese email o ya venció (24 hs).',
         });
       }
 
-      let parsed: any = {};
-      try { parsed = JSON.parse(row.request_json); } catch {}
+      // Buscar la fila cuyo código coincide (usuario puede tener varios emails enviados)
+      let row: any = null;
+      for (const r of rows as any[]) {
+        let p: any = {};
+        try { p = typeof r.request_json === 'string' ? JSON.parse(r.request_json) : r.request_json; } catch {}
+        if (p?.codigo === codigoStr) { row = r; break; }
+      }
 
-      if (parsed.codigo !== codigoStr) {
+      if (!row) {
         return res.status(400).json({ ok: false, error: 'Código incorrecto. Verificá tu email.' });
       }
 
@@ -622,6 +633,175 @@ export const buildAuthRouter = (sequelize: Sequelize) => {
         ok: true,
         message: 'Email confirmado. El administrador revisará tu solicitud y recibirás acceso por email.',
       });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
+    }
+  });
+
+  // ─── GET /api/v1/auth/pending-requests ───────────────────────────────────────
+  // Lista solicitudes de acceso confirmadas y pendientes de aprobación (solo admin).
+  router.get('/pending-requests', authContext(sequelize), async (req: Request, res: Response) => {
+    const auth = (req as any).auth;
+    if (!auth) return res.status(401).json({ ok: false, error: 'No autenticado' });
+
+    try {
+      const rows = await sequelize.query(
+        `SELECT id, created_at, request_json
+         FROM audit_log
+         WHERE action = 'request_access'
+         ORDER BY id DESC
+         LIMIT 200`,
+        { type: QueryTypes.SELECT }
+      );
+
+      const requests = (rows as any[]).map(r => {
+        let p: any = {};
+        try { p = typeof r.request_json === 'string' ? JSON.parse(r.request_json) : r.request_json; } catch {}
+        return {
+          id:           r.id,
+          created_at:   r.created_at,
+          nombre:       p.nombre   || '',
+          email:        p.email    || '',
+          motivo:       p.motivo   || '',
+          confirmed:    p.confirmed === true,
+          confirmed_at: p.confirmed_at || null,
+          approved:     p.approved === true,
+          approved_at:  p.approved_at  || null,
+          expira:       p.expira   || null,
+        };
+      });
+
+      return res.json({ ok: true, data: requests });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
+    }
+  });
+
+  // ─── POST /api/v1/auth/approve-request ───────────────────────────────────────
+  // Aprueba una solicitud: crea el usuario, le envía email con credenciales (solo admin).
+  router.post('/approve-request', authContext(sequelize), async (req: Request, res: Response) => {
+    const auth = (req as any).auth;
+    if (!auth) return res.status(401).json({ ok: false, error: 'No autenticado' });
+
+    try {
+      const { audit_log_id, password, rol_id } = req.body || {};
+      if (!audit_log_id) {
+        return res.status(400).json({ ok: false, error: 'audit_log_id es requerido' });
+      }
+      if (!password || String(password).length < 8) {
+        return res.status(400).json({ ok: false, error: 'La contraseña debe tener al menos 8 caracteres' });
+      }
+
+      // Buscar la solicitud en audit_log
+      const rows = await sequelize.query(
+        `SELECT id, request_json FROM audit_log WHERE id = :id AND action = 'request_access' LIMIT 1`,
+        { replacements: { id: audit_log_id }, type: QueryTypes.SELECT }
+      );
+      if (!(rows as any[]).length) {
+        return res.status(404).json({ ok: false, error: 'Solicitud no encontrada' });
+      }
+
+      const logRow = (rows as any[])[0];
+      let p: any = {};
+      try { p = typeof logRow.request_json === 'string' ? JSON.parse(logRow.request_json) : logRow.request_json; } catch {}
+
+      const emailLower = String(p.email || '').toLowerCase().trim();
+      const nombre     = String(p.nombre || '').trim();
+      if (!emailLower || !nombre) {
+        return res.status(400).json({ ok: false, error: 'La solicitud no tiene email o nombre válido' });
+      }
+
+      // Verificar que el email no exista ya como usuario
+      const existing = await sequelize.query(
+        'SELECT id FROM usuarios WHERE email = :email AND deleted_at IS NULL LIMIT 1',
+        { replacements: { email: emailLower }, type: QueryTypes.SELECT }
+      );
+      if ((existing as any[]).length) {
+        return res.status(409).json({ ok: false, error: 'Ya existe un usuario con ese email' });
+      }
+
+      // Crear usuario y asignar rol en transacción
+      const { hashPassword } = await import('../auth/password');
+      const passwordHash = await hashPassword(String(password));
+
+      const t = await sequelize.transaction();
+      let userId: number;
+      try {
+        const result = await sequelize.query(
+          `INSERT INTO usuarios (email, nombre, password, estado, created_at)
+           VALUES (:email, :nombre, :passwordHash, 'activo', NOW())`,
+          {
+            replacements: { email: emailLower, nombre, passwordHash },
+            transaction: t,
+            type: QueryTypes.INSERT,
+          }
+        );
+
+        // Con QueryTypes.INSERT el insertId suele venir en el OkPacket (shape puede variar por versión)
+        const r: any = result as any;
+        // Sequelize/MySQL puede devolver OkPacket, [OkPacket, meta] o [insertId, affectedRows] según versión.
+        const okPacket: any =
+          Array.isArray(r)
+            ? (typeof r[0] === 'object' ? r[0] : { insertId: r[0] })
+            : r;
+
+        userId = Number(okPacket?.insertId ?? 0);
+        if (!userId) throw new Error('No se pudo obtener el ID del usuario creado');
+
+        if (rol_id) {
+          await sequelize.query(
+            `INSERT INTO usuarios_roles (usuario_id, rol_id, created_at)
+             VALUES (:userId, :rolId, NOW())`,
+            {
+              replacements: { userId, rolId: Number(rol_id) },
+              transaction: t,
+              type: QueryTypes.INSERT,
+            }
+          );
+        }
+
+        // Marcar solicitud como aprobada en audit_log
+        await sequelize.query(
+          `UPDATE audit_log
+           SET request_json = JSON_SET(request_json, '$.approved', true, '$.approved_at', :now)
+           WHERE id = :id`,
+          { replacements: { id: audit_log_id, now: new Date().toISOString() }, transaction: t }
+        );
+
+        await t.commit();
+      } catch (err: any) {
+        await t.rollback().catch(() => {});
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+
+      // Enviar email al usuario con sus credenciales
+      try {
+        const { sendEmail } = await import('../services/email.service');
+        await sendEmail({
+          to: emailLower,
+          subject: 'Tu acceso a PersonalV5 fue aprobado',
+          html: `
+            <h2>¡Tu solicitud fue aprobada!</h2>
+            <p>Hola <strong>${nombre}</strong>,</p>
+            <p>El administrador aprobó tu acceso al sistema <strong>PersonalV5</strong>.</p>
+            <p>Tus credenciales de acceso son:</p>
+            <ul>
+              <li><strong>Email:</strong> ${emailLower}</li>
+              <li><strong>Contraseña:</strong> ${password}</li>
+            </ul>
+            <p>Ingresá en: <a href="${env.APP_URL || 'http://localhost:5173'}">${env.APP_URL || 'http://localhost:5173'}</a></p>
+            <p>Te recomendamos cambiar tu contraseña luego del primer ingreso.</p>
+            <hr>
+            <p style="font-size:0.8rem;color:#94a3b8;">Sistema PersonalV5</p>
+          `,
+          text: `Tu solicitud fue aprobada.\nEmail: ${emailLower}\nContraseña: ${password}\nIngresá al sistema y cambiá tu contraseña.`,
+        });
+      } catch (emailErr: any) {
+        logger.warn({ msg: 'No se pudo enviar email de aprobación', email: emailLower, error: emailErr?.message });
+      }
+
+      logger.info({ msg: 'Solicitud aprobada', userId, email: emailLower, actor: auth.principalId });
+      return res.status(201).json({ ok: true, data: { userId, email: emailLower, nombre } });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
     }

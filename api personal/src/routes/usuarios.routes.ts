@@ -22,6 +22,7 @@ import { hashPassword, verifyPassword } from '../auth/password';
 import { revokeAllRefreshTokensForUser } from '../auth/refreshTokensRepo';
 import { logger } from '../logging/logger';
 import { trackAction } from '../logging/track';
+import { sendEmail } from '../services/email.service';
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const createUserSchema = z.object({
@@ -132,6 +133,32 @@ export function buildUsuariosRouter(sequelize: Sequelize) {
         }
 
         await t.commit();
+
+        // Enviar email de bienvenida al nuevo usuario
+        sendEmail({
+          to: email,
+          subject: 'Tu cuenta ha sido creada',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background-color: #2E5FA3; padding: 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0;">Cuenta Creada</h1>
+              </div>
+              <div style="padding: 30px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #333;">Hola <b>${nombre}</b>,</p>
+                <p style="font-size: 16px; color: #333;">Tu cuenta en el sistema ha sido creada exitosamente.</p>
+                <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+                  <tr><td style="padding: 8px; color: #666;">Usuario:</td><td style="padding: 8px;"><b>${email}</b></td></tr>
+                  <tr><td style="padding: 8px; color: #666;">Estado:</td><td style="padding: 8px;"><b>${estado}</b></td></tr>
+                </table>
+                <p style="font-size: 14px; color: #666;">Por seguridad, te recomendamos cambiar tu contraseña al ingresar por primera vez.</p>
+              </div>
+              <div style="padding: 15px; background-color: #f8f8f8; text-align: center; font-size: 12px; color: #999;">
+                Este es un correo automático, por favor no respondas a este mensaje.
+              </div>
+            </div>
+          `,
+          text: `Hola ${nombre},\n\nTu cuenta ha sido creada.\nUsuario: ${email}\nEstado: ${estado}\n\nTe recomendamos cambiar tu contraseña al ingresar por primera vez.`,
+        }).catch(err => logger.warn({ msg: 'No se pudo enviar email de alta', email, error: err?.message }));
 
         (res.locals as any).audit = { action: 'usuario_create', table_name: 'usuarios', record_pk: userId, request_json: { email, nombre, rol_id, estado } };
 
