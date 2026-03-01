@@ -10576,6 +10576,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        realizado:
+          type: number
+          nullable: true
       required:
         - id
         - anio
@@ -10614,6 +10617,9 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+        realizado:
+          type: number
           nullable: true
       required:
         - anio
@@ -10654,6 +10660,9 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+        realizado:
+          type: number
           nullable: true
     Table_expedientes:
       type: object
@@ -12419,6 +12428,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        realizado:
+          type: number
+          nullable: true
       required:
         - id
         - dni
@@ -12487,6 +12499,9 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+        realizado:
+          type: number
           nullable: true
       required:
         - dni
@@ -12557,6 +12572,9 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+        realizado:
+          type: number
           nullable: true
     Table_refresh_tokens:
       type: object
