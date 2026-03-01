@@ -44,37 +44,28 @@ const normalizeLike = (s: string) => String(s || '').trim();
 
 // ── Schemas Zod ───────────────────────────────────────────────────────────────
 const patchPersonalSchema = z.object({
-  // ── tabla: personal ──────────────────────────────────────────────────────
-  apellido:               z.string().min(1).max(100).trim().optional(),
-  nombre:                 z.string().min(1).max(100).trim().optional(),
-  cuil:                   z.string().max(15).optional().nullable(),
-  fecha_nacimiento:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  sexo_id:                z.number().int().positive().optional().nullable(),
-  email:                  z.string().email().optional().nullable().or(z.literal('')),
-  telefono:               z.string().max(50).optional().nullable(),
-  domicilio:              z.string().max(200).optional().nullable(),
-  numerodomicilio:        z.number().int().optional().nullable(),
-  depto:                  z.string().max(50).optional().nullable(),
-  piso:                   z.number().int().optional().nullable(),
-  observacionesdireccion: z.string().max(50).optional().nullable(),
-  cp:                     z.string().max(50).optional().nullable(),
-  localidad_id:           z.number().int().positive().optional().nullable(),
-  nacionalidad:           z.string().max(50).optional().nullable(),
-  observaciones:          z.string().optional().nullable(),
-  estado_empleo:          z.enum(['ACTIVO','INACTIVO','BAJA']).optional().nullable(),
-  // ── tabla: agentes ───────────────────────────────────────────────────────
-  ley_id:                 z.number().int().positive().optional().nullable(),
-  planta_id:              z.number().int().positive().optional().nullable(),
-  categoria_id:           z.number().int().positive().optional().nullable(),
-  funcion_id:             z.number().int().positive().optional().nullable(),
-  ocupacion_id:           z.number().int().positive().optional().nullable(),
-  regimen_horario_id:     z.number().int().positive().optional().nullable(),
-  sector_id:              z.number().int().positive().optional().nullable(),
-  dependencia_id:         z.number().int().positive().optional().nullable(),
-  fecha_ingreso:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  fecha_egreso:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  legajo:                 z.number().int().optional().nullable(),
-  salario_mensual:        z.number().optional().nullable(),
+  apellido:        z.string().min(1).max(100).trim().optional(),
+  nombre:          z.string().min(1).max(100).trim().optional(),
+  cuil:            z.string().max(15).optional(),
+  fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  sexo_id:         z.number().int().positive().optional().nullable(),
+  email:           z.string().email().optional().nullable().or(z.literal('')),
+  telefono:        z.string().max(50).optional().nullable(),
+  domicilio:       z.string().max(255).optional().nullable(),
+  localidad_id:    z.number().int().positive().optional().nullable(),
+  observaciones:   z.string().optional().nullable(),
+  estado_empleo:   z.string().max(50).optional().nullable(),
+  // Datos laborales en agentes
+  ley_id:          z.number().int().positive().optional().nullable(),
+  planta_id:       z.number().int().positive().optional().nullable(),
+  categoria_id:    z.number().int().positive().optional().nullable(),
+  funcion_id:      z.number().int().positive().optional().nullable(),
+  ocupacion_id:    z.number().int().positive().optional().nullable(),
+  regimen_horario_id: z.number().int().positive().optional().nullable(),
+  sector_id:       z.number().int().positive().optional().nullable(),
+  dependencia_id:  z.number().int().positive().optional().nullable(),
+  fecha_ingreso:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  fecha_egreso:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 }).strict();
 
 export function buildPersonalRouter(sequelize: Sequelize) {
@@ -337,18 +328,10 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       const personalFields: Record<string, any> = {};
       const agenteFields:   Record<string, any> = {};
 
-      const PERSONAL_COLS = [
-        'apellido','nombre','cuil','fecha_nacimiento','sexo_id','email',
-        'telefono','domicilio','numerodomicilio','depto','piso',
-        'observacionesdireccion','cp','localidad_id','nacionalidad',
-        'observaciones',
-      ];
-      const AGENTE_COLS = [
-        'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
-        'regimen_horario_id','sector_id','dependencia_id',
-        'fecha_ingreso','fecha_egreso','legajo','salario_mensual',
-        'estado_empleo',
-      ];
+      const PERSONAL_COLS = ['apellido','nombre','cuil','fecha_nacimiento','sexo_id','email',
+        'telefono','domicilio','localidad_id','observaciones','estado_empleo'];
+      const AGENTE_COLS = ['ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
+        'regimen_horario_id','sector_id','dependencia_id','fecha_ingreso','fecha_egreso'];
 
       for (const [k, v] of Object.entries(data)) {
         if (PERSONAL_COLS.includes(k)) personalFields[k] = v;
@@ -357,12 +340,12 @@ export function buildPersonalRouter(sequelize: Sequelize) {
 
       const t = await sequelize.transaction();
       try {
-        // Verificar que el agente existe en personal
-        const existCheck = await sequelize.query(
+        // Verificar que el agente existe
+        const [check] = await sequelize.query(
           'SELECT dni FROM personal WHERE dni = :dni AND deleted_at IS NULL LIMIT 1',
           { replacements: { dni }, type: QueryTypes.SELECT }
         );
-        if (!existCheck.length) {
+        if (!(check as any[]).length) {
           await t.rollback();
           return res.status(404).json({ ok: false, error: `Agente DNI ${dni} no encontrado` });
         }

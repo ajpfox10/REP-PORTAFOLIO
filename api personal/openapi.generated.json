@@ -17215,6 +17215,10 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "realizado": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -17266,6 +17270,10 @@
           "deleted_at": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          },
+          "realizado": {
+            "type": "number",
             "nullable": true
           }
         },
@@ -17320,6 +17328,10 @@
           "deleted_at": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          },
+          "realizado": {
+            "type": "number",
             "nullable": true
           }
         }
@@ -19697,6 +19709,10 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "realizado": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -19787,6 +19803,10 @@
           "deleted_at": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          },
+          "realizado": {
+            "type": "number",
             "nullable": true
           }
         },
@@ -19880,6 +19900,10 @@
           "deleted_at": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          },
+          "realizado": {
+            "type": "number",
             "nullable": true
           }
         }
