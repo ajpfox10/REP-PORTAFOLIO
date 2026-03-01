@@ -958,6 +958,231 @@
         }
       }
     },
+    "/api/v1/alerta_vistas": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List alerta_vistas",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_alerta_vistas"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create alerta_vistas",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_alerta_vistas_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/alerta_vistas/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get alerta_vistas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update alerta_vistas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_alerta_vistas"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch alerta_vistas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_alerta_vistas_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete alerta_vistas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/api_keys": {
       "get": {
         "tags": [
@@ -4108,6 +4333,231 @@
         }
       }
     },
+    "/api/v1/embarazadas": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List embarazadas",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_embarazadas"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create embarazadas",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_embarazadas_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/embarazadas/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get embarazadas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update embarazadas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_embarazadas"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch embarazadas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_embarazadas_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete embarazadas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/especialidaddesmedicas": {
       "get": {
         "tags": [
@@ -4538,6 +4988,231 @@
           }
         ],
         "summary": "Delete eventos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/examen_anual": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List examen_anual",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_examen_anual"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create examen_anual",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_examen_anual_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/examen_anual/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get examen_anual by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update examen_anual by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_examen_anual"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch examen_anual by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_examen_anual_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete examen_anual by id",
         "parameters": [
           {
             "name": "id",
@@ -8363,6 +9038,231 @@
           }
         ],
         "summary": "Delete plantas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/reconocimientos_medicos": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List reconocimientos_medicos",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_reconocimientos_medicos"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create reconocimientos_medicos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_reconocimientos_medicos_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/reconocimientos_medicos/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get reconocimientos_medicos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update reconocimientos_medicos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_reconocimientos_medicos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch reconocimientos_medicos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_reconocimientos_medicos_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete reconocimientos_medicos by id",
         "parameters": [
           {
             "name": "id",
@@ -13884,6 +14784,105 @@
           }
         }
       },
+      "Table_alerta_vistas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "vista_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "detalle_json": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "Table_alerta_vistas_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tipo": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "vista_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "detalle_json": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Table_alerta_vistas_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "usuario_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "vista_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "detalle_json": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "Table_api_keys": {
         "type": "object",
         "additionalProperties": false,
@@ -15635,6 +16634,256 @@
           }
         }
       },
+      "Table_embarazadas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "embarazada": {
+            "type": "number"
+          },
+          "fecha_probable_parto": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "alerta_45_avisada": {
+            "type": "number"
+          },
+          "alerta_45_fecha": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "alerta_45_usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "alerta_45_usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "alerta_45_usuario_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "fecha_probable_parto"
+        ]
+      },
+      "Table_embarazadas_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "embarazada": {
+            "type": "number"
+          },
+          "fecha_probable_parto": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "alerta_45_avisada": {
+            "type": "number"
+          },
+          "alerta_45_fecha": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "alerta_45_usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "alerta_45_usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "alerta_45_usuario_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "fecha_probable_parto"
+        ]
+      },
+      "Table_embarazadas_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "embarazada": {
+            "type": "number"
+          },
+          "fecha_probable_parto": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "alerta_45_avisada": {
+            "type": "number"
+          },
+          "alerta_45_fecha": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "alerta_45_usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "alerta_45_usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "alerta_45_usuario_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "Table_especialidaddesmedicas": {
         "type": "object",
         "additionalProperties": false,
@@ -15915,6 +17164,162 @@
           },
           "updated_by": {
             "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "Table_examen_anual": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "anio": {
+            "type": "string"
+          },
+          "fecha_examen": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "anio",
+          "fecha_examen"
+        ]
+      },
+      "Table_examen_anual_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "anio": {
+            "type": "string"
+          },
+          "fecha_examen": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "anio",
+          "fecha_examen"
+        ]
+      },
+      "Table_examen_anual_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "anio": {
+            "type": "string"
+          },
+          "fecha_examen": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         }
@@ -18206,6 +19611,279 @@
           }
         }
       },
+      "Table_reconocimientos_medicos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cantidad_dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "tipo": {
+            "type": "string",
+            "nullable": true
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_user": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_user": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "fecha"
+        ]
+      },
+      "Table_reconocimientos_medicos_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cantidad_dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "tipo": {
+            "type": "string",
+            "nullable": true
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_user": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_user": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dni",
+          "fecha"
+        ]
+      },
+      "Table_reconocimientos_medicos_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cantidad_dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "tipo": {
+            "type": "string",
+            "nullable": true
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_user": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_user": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
       "Table_refresh_tokens": {
         "type": "object",
         "additionalProperties": false,
@@ -19939,6 +21617,10 @@
           "updated_by": {
             "type": "number",
             "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -19986,6 +21668,10 @@
           },
           "updated_by": {
             "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
             "nullable": true
           }
         },
@@ -20036,6 +21722,10 @@
           },
           "updated_by": {
             "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
             "nullable": true
           }
         }

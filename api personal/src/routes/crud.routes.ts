@@ -4,6 +4,7 @@ import { Model, Sequelize, ModelStatic, Op } from "sequelize";
 import { SchemaSnapshot } from "../db/schema/types";
 import { env } from "../config/env";
 import { requireCrud, requireMetaRead } from "../middlewares/rbacCrud";
+import { saludLaboralTimeGuard } from "../middlewares/saludLaboralGuard";
 import { cacheMiddleware, cacheInvalidateTags } from "../infra/cache";
 import { exportLimiter } from "../middlewares/rateLimiters";
 import { emitPedidoCreated, emitPedidoUpdated, emitPedidoDeleted } from '../socket/handlers/pedidos';
@@ -301,7 +302,7 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
   });
 
   // ── PUT /:table/:id — UPDATE COMPLETO (con transacción) ───────────────────────
-  router.put("/:table/:id", requireCrud("update"), guardTable, guardWrite, async (req: Request, res: Response) => {
+  router.put("/:table/:id", requireCrud("update"), guardTable, guardWrite, saludLaboralTimeGuard, async (req: Request, res: Response) => {
     const table = req.params.table;
     const model = getModel(table);
     if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
@@ -347,7 +348,7 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
   });
 
   // ── PATCH /:table/:id — UPDATE PARCIAL (con transacción) ─────────────────────
-  router.patch("/:table/:id", requireCrud("update"), guardTable, guardWrite, async (req: Request, res: Response) => {
+  router.patch("/:table/:id", requireCrud("update"), guardTable, guardWrite, saludLaboralTimeGuard, async (req: Request, res: Response) => {
     const table = req.params.table;
     const model = getModel(table);
     if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });

@@ -28,6 +28,9 @@ import { BuscadorPage } from '../pages/BuscadorPage';
 import { SolicitarAccesoPage } from '../pages/SolicitarAccesoPage';
 import { RequirePermission } from '../auth/RequirePermission';
 import { ForbiddenPage } from '../pages/ForbiddenPage';
+import { GestionUsuarioPage } from '../pages/GestionUsuarioPage';
+import { SaludLaboralPage } from '../pages/SaludLaboralPage';
+import { EmbarazadasPage } from '../pages/EmbarazadasPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -65,14 +68,16 @@ export function App() {
             <Route path="/app/documentos" element={<Private><AppGuard><DocumentosPage /></AppGuard></Private>} />
             <Route path="/app/reportes" element={<Private><AppGuard><ReportesPage /></AppGuard></Private>} />
             <Route path="/app/redaccion" element={<Private><AppGuard><RedaccionPage /></AppGuard></Private>} />
-
+            <Route path="/app/mi-cuenta" element={<Private><AppGuard><GestionUsuarioPage /></AppGuard></Private>} />
             {/* Nuevos módulos */}
             <Route path="/app/estadisticas" element={<Private><AppGuard><EstadisticasPage /></AppGuard></Private>} />
             <Route path="/app/organigrama" element={<Private><AppGuard><OrganigramaPage /></AppGuard></Private>} />
             <Route path="/app/comparador" element={<Private><AppGuard><ComparadorPage /></AppGuard></Private>} />
             <Route path="/app/legajo" element={<Private><AppGuard><LegajoPage /></AppGuard></Private>} />
             <Route path="/app/alertas" element={<Private><AppGuard><AlertasPage /></AppGuard></Private>} />
-            <Route path="/app/buscador" element={<Private><AppGuard><BuscadorPage /></AppGuard></Private>} />
+            <Route path="/app/buscador" element={<Private><AppGuard><BuscadorPage /></AppGuard></Private>} />            
+            <Route path="/app/salud-laboral" element={<Private><AppGuard><SaludLaboralPage /></AppGuard></Private>} />
+            <Route path="/app/embarazadas" element={<Private><AppGuard><EmbarazadasPage /></AppGuard></Private>} />
 
             {/* Alta de agentes */}
             <Route path="/app/carga-agente" element={<Private><AppGuard><CargaAgentePage /></AppGuard></Private>} />

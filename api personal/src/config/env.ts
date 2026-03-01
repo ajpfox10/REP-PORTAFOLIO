@@ -301,6 +301,7 @@ const schema = z.object({
   // Dominio activo y version de API
   DOMAIN: strish("personalv5"),
   API_VERSION: strish("v1"),
+  APP_URL: strish("http://localhost:5173"),
 
   // Guardrails de producción (fail-fast)
   PROD_FAIL_FAST: boolish.default(true),
