@@ -96,9 +96,39 @@ function findAutoFiles(files: { name: string, fullPath: string }[]) {
 }
 
 const DEFAULT_MAPEO: Record<string, string[]> = {
-  // Ministerio -> [equivalentes SIAP]
-  '44-PERMISO CITACIONES ORG.OFICIAL': ['CITACION ORG.OFICIALES'],
-  '261-POR CAUSAS PARTICULARES': ['CAUSAS PARTICULARES'],
+  // ── Ministerio (código) ──────────────────────── SIAP equivalente(s) ─────
+  // Descanso anual
+  '08-DESCANSO ANUAL':                                      ['ANUAL'],
+  '29-COMPLEMENTARIA':                                      ['ANUAL COMPLEMENTARIA'],
+  '291-LICENCIA ANUAL COMPLEMENTARIA LEY 10430 Y MODIF.':   ['ANUAL COMPLEMENTARIA 10430'],
+  '93-LICENCIA COMPLEMENT.ANT.DENEGADA':                    ['ANUAL COMPLEMENTARIA'],  // JUSTIFICADO=NO en SIAP
+  '81-LICENCIA ANTERIOR DENEGADA':                          ['ANUAL'],                 // JUSTIFICADO=NO en SIAP
+
+  // Enfermedad
+  '01-POR RAZONES DE ENFERMEDAD':                           ['ENFERMEDAD'],
+  '1R-ENFERMEDAD DE RIESGO':                                ['ENFERMEDAD'],
+  '05-POR ATENCION DE FAMILIAR ENFERMO':                    ['ENFERMEDAD DE FAMILIAR O NIÑO/A O ADOLESCENTE', 'ATENCION FAMILIAR ENFERMO'],
+
+  // Accidente / Maternidad / Recién nacido
+  '04-POR ACCIDENTE DE TRABAJO':                            ['ACCIDENTE DE TRABAJO'],
+  '06-POR MATERNIDAD':                                      ['MATERNIDAD'],
+  'RN1-RECIEN NACIDO':                                      ['NACIMIENTO', 'CUIDADO RECIEN NACIDO/A'],
+
+  // Exámenes / Estudios / Salud preventiva
+  '18-POR EXAMEN':                                          ['EXAMEN'],
+  '17-POR PRE-EXAMEN':                                      ['PRE-EXAMEN'],
+  'DF-EXAMEN DE PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA': ['PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA'],
+  'PC-PREVENCION CANCER GENITO MAMARIO DE PROSTATO Y/O COLON':    ['EX.MED.PREV.CANCER MAMARIO/PROSTATA/COLON'],
+
+  // Duelo / Matrimonio
+  '14-DUELO FAMILIAR DIRECTO':                              ['DUELO DIRECTO'],
+  '15-DUELO FAMILIAR INDIRECTO':                            ['DUELO INDIRECTO'],
+  '16-POR MATRIMONIO':                                      ['MATRIMONIO'],
+
+  // Gremial / Citaciones / Causas particulares
+  '22-ACTIVIDAD GREMIAL':                                   ['PERMISO GREMIAL DIAS', 'COMISION'],
+  '44-PERMISO CITACIONES ORG.OFICIAL':                      ['CITACION ORG.OFICIALES'],
+  '261-POR CAUSAS PARTICULARES':                            ['CAUSAS PARTICULARES'],
 };
 
 const DEFAULT_SKIP_NOVEDADES: string[] = [
@@ -168,6 +198,42 @@ const toUTCMidnight = (d: Date) =>
 const overlap = (s1: Date, e1: Date, s2: Date, e2: Date) =>
   toUTCMidnight(s1) <= toUTCMidnight(e2) && toUTCMidnight(s2) <= toUTCMidnight(e1);
 
+
+
+// ── Periodo (mes) ────────────────────────────────────────────────────────────
+function parsePeriodoMes(val: any): { start: Date; end: Date } | null {
+  const s = String(val ?? '').trim();
+  const m = s.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 0 || mo > 11) return null;
+  const start = new Date(Date.UTC(y, mo, 1));
+  // último día del mes
+  const end = new Date(Date.UTC(y, mo + 1, 0));
+  return { start, end };
+}
+
+function clipRowToPeriod(row: any, period: { start: Date; end: Date }): any | null {
+  let desde = parseDate(row?.desde);
+  let hasta = parseDate(row?.hasta) ?? desde;
+
+  if (!desde && hasta) desde = hasta;
+  if (!desde || !hasta) return null;
+
+  const s = toUTCMidnight(desde);
+  const e = toUTCMidnight(hasta);
+  const ps = toUTCMidnight(period.start);
+  const pe = toUTCMidnight(period.end);
+
+  // si no toca el mes, se descarta
+  if (e < ps || s > pe) return null;
+
+  const clippedDesde = s < ps ? ps : s;
+  const clippedHasta = e > pe ? pe : e;
+
+  return { ...row, desde: clippedDesde, hasta: clippedHasta };
+}
 async function parseMinisterio(fp: string): Promise<any[]> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(fp);
@@ -226,34 +292,56 @@ async function parseSiap(fp: string): Promise<any[]> {
     if (v) headers[v] = col;
   });
 
-  // "NRO_DOCUMENTO" -> 'nro_documento'
-  const colDni = headers['dni'] ?? headers['nro_documento'] ?? headers['nro documento'] ?? headers['documento'] ?? 1;
-  // SIAP tiene APELLIDO y NOMBRE en columnas separadas
-  const colApellido = headers['apellido'] ?? 0;
-  const colNombreFirst = headers['nombre'] ?? 0;
-  const colNombreFull = headers['apellido y nombres'] ?? headers['apellido y nombre'] ?? headers['apellidoynombre'] ?? headers['apellido_nombre'] ?? 0;
-  const colNovedad = headers['novedad siap'] ?? headers['novedad'] ?? 3;
-  // "FECHA_DESDE" -> 'fecha_desde'
-  const colDesde = headers['desde'] ?? headers['fecha desde'] ?? headers['fecha_desde'] ?? 4;
-  const colHasta = headers['hasta'] ?? headers['fecha hasta'] ?? headers['fecha_hasta'] ?? 5;
+  // Columnas reales del SIAP según estructura del Excel
+  const colDni      = headers['nro_documento'] ?? headers['nro documento'] ?? headers['dni'] ?? headers['documento'] ?? 5;
+  const colApellido = headers['apellido'] ?? 2;
+  const colNombreFirst = headers['nombre'] ?? 3;
+  const colNombreFull  = headers['apellido y nombres'] ?? headers['apellido y nombre'] ?? 0;
+  const colNovedad  = headers['novedad'] ?? headers['novedad siap'] ?? 12;
+  const colDesde    = headers['fecha_desde'] ?? headers['fecha desde'] ?? headers['desde'] ?? 13;
+  const colHasta    = headers['fecha_hasta'] ?? headers['fecha hasta'] ?? headers['hasta'] ?? 14;
+  const colJustificado = headers['justificado'] ?? 15;
+  // E5 = col 21, E6 = col 22 — juntos determinan la dependencia
+  const colE5 = headers['e5'] ?? 21;
+  const colE6 = headers['e6'] ?? 22;
+
+  /** Resuelve la dependencia a partir de E5 y E6:
+   *  - E6 contiene "UPA 18"  → "UPA 18"
+   *  - E6 contiene "UPA 4"   → "UPA 4"
+   *  - E5 contiene "UPA 18"  → "UPA 18"  (fallback cuando E6 es "-")
+   *  - E5 contiene "UPA 4"   → "UPA 4"   (fallback cuando E6 es "-")
+   *  - todo lo demás          → "HOSPITAL"
+   */
+  function resolveDepedencia(e5raw: string, e6raw: string): string {
+    const norm = (s: string) => s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const e5 = norm(e5raw);
+    const e6 = norm(e6raw);
+    const upaInE6 = e6.match(/UPA\s*(\d+)/);
+    if (upaInE6) return `UPA ${upaInE6[1]}`;
+    const upaInE5 = e5.match(/UPA\s*(\d+)/);
+    if (upaInE5) return `UPA ${upaInE5[1]}`;
+    return 'HOSPITAL';
+  }
 
   ws.eachRow((r: any, rowNumber: number) => {
     if (rowNumber === 1) return;
     const dni = r.getCell(colDni)?.value;
-    // Construir nombre: si hay columna completa usarla, si no concatenar apellido + nombre
     let nombre: string;
     if (colNombreFull) {
       nombre = cellToText(r.getCell(colNombreFull)?.value);
-    } else if (colApellido && colNombreFirst) {
+    } else {
       const ap = cellToText(r.getCell(colApellido)?.value);
       const nm = cellToText(r.getCell(colNombreFirst)?.value);
       nombre = [ap, nm].filter(Boolean).join(', ');
-    } else {
-      nombre = cellToText(r.getCell(colNombreFirst || 2)?.value);
     }
-    const nov = r.getCell(colNovedad)?.value;
-    const desde = parseDate(r.getCell(colDesde)?.value);
-    const hasta = parseDate(r.getCell(colHasta)?.value);
+    const nov         = r.getCell(colNovedad)?.value;
+    const desde       = parseDate(r.getCell(colDesde)?.value);
+    const hasta       = parseDate(r.getCell(colHasta)?.value);
+    const justificado = cellToText(r.getCell(colJustificado)?.value); // "SI" | "NO" | ""
+    const e5raw       = cellToText(r.getCell(colE5)?.value);
+    const e6raw       = cellToText(r.getCell(colE6)?.value);
+    const dependencia = resolveDepedencia(e5raw, e6raw); // "UPA 18" | "UPA 4" | "HOSPITAL"
+
     if (!dni && !nombre && !nov) return;
     rows.push({
       dni,
@@ -261,6 +349,8 @@ async function parseSiap(fp: string): Promise<any[]> {
       novedad: cellToText(nov),
       desde,
       hasta,
+      justificado, // leído directo del SIAP, no calculado
+      upa: dependencia, // clave para elegir el archivo ministerio correcto
     });
   });
 
@@ -310,11 +400,14 @@ function compareRows(
       const sDesde = parseDate(s.desde);
       const sHasta = parseDate(s.hasta) ?? sDesde;
 
-      // Si faltan fechas, no bloqueamos el match por fecha.
-      if (!minDesde || !minHasta || !sDesde || !sHasta) return true;
+      // Si faltan fechas, NO matcheamos (evita falsos coincidentes)
+      if (!minDesde || !minHasta || !sDesde || !sHasta) return false;
 
-      // Solapamiento de rangos
-      return overlap(minDesde, minHasta, sDesde, sHasta);
+      // Igualdad exacta de rangos (desde y hasta)
+      return (
+        toUTCMidnight(minDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
+        toUTCMidnight(minHasta).getTime() === toUTCMidnight(sHasta).getTime()
+      );
     });
 
     return {
@@ -330,6 +423,96 @@ function compareRows(
   });
 }
 
+
+/**
+ * Compara SIAP vs múltiples archivos Ministerio.
+ * ministerioMap: Record<"UPA 18" | "UPA 4" | "HOSPITAL", rows[]>
+ * Cada fila SIAP tiene .upa (resuelta de E5/E6) y .justificado ("SI"|"NO").
+ *
+ * Regla especial ANUAL COMPLEMENTARIA:
+ *   SIAP ANUAL COMPLEMENTARIA + JUSTIFICADO=NO  → busca "ANUAL COMPLEMENTARIA DENEGADA" en Ministerio
+ *   SIAP ANUAL COMPLEMENTARIA + JUSTIFICADO=SI  → busca "ANUAL COMPLEMENTARIA" en Ministerio
+ */
+function compareRowsSiapVsMinisterio(
+  siap: any[],
+  ministerioMap: Record<string, any[]>,
+  mapeo: Record<string, string[]>,
+  skipNovedades: string[],
+): any[] {
+  // Pre-indexar cada ministerio por DNI
+  const minByUpaAndDni: Record<string, Record<string, any[]>> = {};
+  for (const [upa, rows] of Object.entries(ministerioMap)) {
+    minByUpaAndDni[upa] = {};
+    for (const m of rows) {
+      const dni = normDni((m as any).dni);
+      (minByUpaAndDni[upa][dni] = minByUpaAndDni[upa][dni] || []).push(m);
+    }
+  }
+
+  const mapeoN = normMapeo(mapeo);
+
+  return siap.map((s: any) => {
+    const dniS  = normDni((s as any).dni);
+    const upa   = String((s as any).upa || '').trim();
+    const novS  = String((s as any).novedad || '').trim();
+    const novSN = normNovedad(novS);
+    const justS = String((s as any).justificado || '').trim().toUpperCase(); // "SI" | "NO" | ""
+    const sDesde = parseDate((s as any).desde);
+    const sHasta = parseDate((s as any).hasta) ?? sDesde;
+
+    const baseRow = {
+      dni:              (s as any).dni,
+      nombre:           (s as any).nombre,
+      novedad_siap:     novS,
+      fecha_desde_siap: dateToStr(sDesde),
+      fecha_hasta_siap: dateToStr(sHasta),
+      upa,
+      justificado:      justS,
+    };
+
+    if (skipNovedades.some(sk => novSN.includes(normNovedad(sk)))) {
+      return { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—', estado: 'OMITIDO' };
+    }
+
+    if (!upa || !minByUpaAndDni[upa]) {
+      return { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—',
+        estado: 'NO COINCIDENTE', motivo: upa ? `Sin archivo ministerio para ${upa}` : 'Sin UPA en SIAP' };
+    }
+
+    const mins = minByUpaAndDni[upa][dniS] || [];
+
+    const match = mins.find((m: any) => {
+      const novM  = String(m.novedad || '').trim();
+      const novMN = normNovedad(novM);
+      const equivs = mapeoN[novMN] || [];
+      if (!equivs.includes(novSN)) return false;
+
+      // Regla ANUAL COMPLEMENTARIA: usar JUSTIFICADO para distinguir aprobada/denegada
+      if (novSN.includes('ANUAL COMPLEMENTARIA')) {
+        const minEsDenegada = novMN.includes('DENEGADA');
+        if (justS === 'NO' && !minEsDenegada) return false; // SIAP denegada, min aprobada → no coincide
+        if (justS === 'SI' && minEsDenegada)  return false; // SIAP aprobada, min denegada → no coincide
+      }
+
+      const mDesde = parseDate(m.desde);
+      const mHasta = parseDate(m.hasta) ?? mDesde;
+      if (!mDesde || !mHasta || !sDesde || !sHasta) return false;
+
+      return (
+        toUTCMidnight(mDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
+        toUTCMidnight(mHasta).getTime() === toUTCMidnight(sHasta).getTime()
+      );
+    });
+
+    return {
+      ...baseRow,
+      novedad_ministerio:     match ? match.novedad                                              : '—',
+      fecha_desde_ministerio: match ? dateToStr(parseDate(match.desde))                         : '—',
+      fecha_hasta_ministerio: match ? dateToStr(parseDate(match.hasta) ?? parseDate(match.desde)) : '—',
+      estado: match ? 'COINCIDENTE' : 'NO COINCIDENTE',
+    };
+  });
+}
 export function buildAsistenciaRouter() {
   const router = Router();
 
@@ -408,6 +591,7 @@ export function buildAsistenciaRouter() {
         parseSiap(siapFile),
       ]);
 
+
       const freq = (arr: any[], key: string) => {
         const m: Record<string, number> = {};
         for (const r of arr) {
@@ -437,49 +621,101 @@ export function buildAsistenciaRouter() {
       return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs en el backend (npm i exceljs)' });
     }
     try {
-      const dir = getDir();
+      const dir   = getDir();
       const files = listExcelFiles(dir);
-      const auto = findAutoFiles(files);
-
-      const ministerioFile = req.body?.ministerioFile ? path.join(dir, req.body.ministerioFile) : auto.ministerio;
-      const siapFile       = req.body?.siapFile       ? path.join(dir, req.body.siapFile)       : auto.siap;
-
-      if (!ministerioFile || !fs.existsSync(ministerioFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontró archivo MINISTERIO (auto o provisto)' });
-      }
-      if (!siapFile || !fs.existsSync(siapFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontró archivo SIAP (auto o provisto)' });
-      }
-
+      const auto  = findAutoFiles(files);
       const mapeo = loadMapeo(dir);
-      const skip = DEFAULT_SKIP_NOVEDADES;
 
-      const [ministerioRows, siapRows] = await Promise.all([
-        parseMinisterio(ministerioFile),
-        parseSiap(siapFile),
-      ]);
+      const skip: string[] = Array.isArray(req.body?.skipNovedades)
+        ? req.body.skipNovedades
+        : String(req.body?.skipNovedades || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+      const skipFinal = skip.length ? skip : DEFAULT_SKIP_NOVEDADES;
 
-      const comparado = compareRows(ministerioRows, siapRows, mapeo, skip);
+      // ── Archivo SIAP ──────────────────────────────────────────────────────
+      const siapFile = req.body?.siapFile ? path.join(dir, req.body.siapFile) : auto.siap;
+      if (!siapFile || !fs.existsSync(siapFile)) {
+        return res.status(400).json({ ok: false, error: 'No se encontró archivo SIAP' });
+      }
 
-      const ministerioF = path.parse(ministerioFile);
+      // ── Archivos Ministerio: array [{ file, upa }] ─────────────────────────
+      // ministerioFiles: [{ file: "nombre.xlsx", upa: "UPA 18" }, { file: "otro.xlsx", upa: "UPA 4" }]
+      // Si no viene ministerioFiles, retrocompatibilidad con ministerioFile único
+      type MinFile = { file: string; upa: string };
+      let ministerioFiles: MinFile[] = [];
+
+      if (Array.isArray(req.body?.ministerioFiles) && req.body.ministerioFiles.length > 0) {
+        ministerioFiles = req.body.ministerioFiles;
+      } else if (req.body?.ministerioFile) {
+        // compatibilidad: un solo archivo sin UPA asignada → se llama "GENERAL"
+        ministerioFiles = [{ file: req.body.ministerioFile, upa: 'GENERAL' }];
+      } else if (auto.ministerio) {
+        ministerioFiles = [{ file: path.basename(auto.ministerio), upa: 'GENERAL' }];
+      }
+
+      if (ministerioFiles.length === 0) {
+        return res.status(400).json({ ok: false, error: 'No se encontró ningún archivo MINISTERIO' });
+      }
+
+      // ── Parsear todos los ministerios en paralelo ─────────────────────────
+      const ministerioMap: Record<string, any[]> = {};
+      let totalMinisterioRows = 0;
+      await Promise.all(
+        ministerioFiles.map(async ({ file, upa }) => {
+          const fp = path.join(dir, file);
+          if (!fs.existsSync(fp)) return; // si no existe, esa UPA quedará sin rows
+          const rows = await parseMinisterio(fp);
+          ministerioMap[upa] = rows;
+          totalMinisterioRows += rows.length;
+        })
+      );
+
+      // ── Parsear SIAP ──────────────────────────────────────────────────────
+      let siapRows = await parseSiap(siapFile);
+
+      // ── Filtro por período (mes) ──────────────────────────────────────────
+      const period = parsePeriodoMes(req.body?.periodoMes);
+      if (period) {
+        siapRows = siapRows.map(r => clipRowToPeriod(r, period)).filter(Boolean) as any[];
+        for (const upa of Object.keys(ministerioMap)) {
+          ministerioMap[upa] = ministerioMap[upa].map(r => clipRowToPeriod(r, period)).filter(Boolean) as any[];
+        }
+        totalMinisterioRows = Object.values(ministerioMap).reduce((acc, rows) => acc + rows.length, 0);
+      }
+
+      // ── Comparar ──────────────────────────────────────────────────────────
+      const direccion = req.body?.direccion ?? 'SIAP_VS_MIN';
+      let comparado: any[];
+      if (direccion === 'MIN_VS_SIAP') {
+        // Itera el Ministerio — qué tiene el Ministerio y si coincide en SIAP
+        const allMinRows = Object.values(ministerioMap).flat();
+        // Enriquecer con UPA para que el frontend pueda filtrar por dependencia
+        const dniToUpa: Record<string, string> = {};
+        for (const [upa, rows] of Object.entries(ministerioMap)) {
+          for (const r of rows) dniToUpa[String((r as any).dni)] = upa;
+        }
+        comparado = compareRows(allMinRows, siapRows, mapeo, skipFinal)
+          .map((r: any) => ({ ...r, upa: dniToUpa[String(r.dni)] ?? '' }));
+      } else {
+        // Itera el SIAP — qué tiene el SIAP y si coincide en Ministerio
+        comparado = compareRowsSiapVsMinisterio(siapRows, ministerioMap, mapeo, skipFinal);
+      }
+
       const siapF = path.parse(siapFile);
-      const direccion = dir;
 
       return res.json({
         ok: true,
         data: {
           comparado,
           totals: {
-            ministerio: ministerioRows.length,
+            ministerio: totalMinisterioRows,
             siap: siapRows.length,
             coincidencias: comparado.filter(r => r.estado === 'COINCIDENTE').length,
-            no_coinciden: comparado.filter(r => r.estado === 'NO COINCIDENTE').length,
-            omitidos: comparado.filter(r => r.estado === 'OMITIDO').length,
+            no_coinciden:  comparado.filter(r => r.estado === 'NO COINCIDENTE').length,
+            omitidos:      comparado.filter(r => r.estado === 'OMITIDO').length,
           },
           files: {
-            ministerioFile: ministerioF.name,
+            ministerioFiles: ministerioFiles.map(m => m.file),
             siapFile: siapF.name,
-            direccion,
           },
         },
       });
