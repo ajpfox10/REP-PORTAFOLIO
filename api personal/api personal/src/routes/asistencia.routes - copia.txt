@@ -303,7 +303,7 @@ async function parseSiap(fp: string): Promise<any[]> {
   const colJustificado = headers['justificado'] ?? 15;
   // E5 = col 21, E6 = col 22 — juntos determinan la dependencia
   const colE5 = headers['e5'] ?? 21;
-  const colE6 = headers['e6'] ?? 22;
+
 
   /** Resuelve la dependencia a partir de E5 y E6:
    *  - E6 contiene "UPA 18"  → "UPA 18"
@@ -312,16 +312,20 @@ async function parseSiap(fp: string): Promise<any[]> {
    *  - E5 contiene "UPA 4"   → "UPA 4"   (fallback cuando E6 es "-")
    *  - todo lo demás          → "HOSPITAL"
    */
-  function resolveDepedencia(e5raw: string, e6raw: string): string {
-    const norm = (s: string) => s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const e5 = norm(e5raw);
-    const e6 = norm(e6raw);
-    const upaInE6 = e6.match(/UPA\s*(\d+)/);
-    if (upaInE6) return `UPA ${upaInE6[1]}`;
-    const upaInE5 = e5.match(/UPA\s*(\d+)/);
-    if (upaInE5) return `UPA ${upaInE5[1]}`;
-    return 'HOSPITAL';
-  }
+  function resolveDepedencia(e5raw: string): string {
+  const norm = (s: string) =>
+    String(s ?? '')
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const e5 = norm(e5raw);
+
+  const upaInE5 = e5.match(/UPA\s*(\d+)/);
+  if (upaInE5) return `UPA ${upaInE5[1]}`;
+
+  return 'HOSPITAL';
+}
 
   ws.eachRow((r: any, rowNumber: number) => {
     if (rowNumber === 1) return;
@@ -339,8 +343,7 @@ async function parseSiap(fp: string): Promise<any[]> {
     const hasta       = parseDate(r.getCell(colHasta)?.value);
     const justificado = cellToText(r.getCell(colJustificado)?.value); // "SI" | "NO" | ""
     const e5raw       = cellToText(r.getCell(colE5)?.value);
-    const e6raw       = cellToText(r.getCell(colE6)?.value);
-    const dependencia = resolveDepedencia(e5raw, e6raw); // "UPA 18" | "UPA 4" | "HOSPITAL"
+    const dependencia = resolveDepedencia(e5raw); // "UPA 18" | "UPA 4" | "HOSPITAL"
 
     if (!dni && !nombre && !nov) return;
     rows.push({
