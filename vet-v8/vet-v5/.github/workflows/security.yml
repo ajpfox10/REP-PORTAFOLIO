@@ -1,0 +1,31 @@
+name: security
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  sbom-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # SBOM (Syft) - placeholder
+      - name: Generate SBOM (placeholder)
+        run: echo "TODO: syft . -o cyclonedx-json=sbom.json"
+
+      # Trivy scan - placeholder
+      - name: Trivy FS scan (placeholder)
+        run: echo "TODO: trivy fs --severity HIGH,CRITICAL ."

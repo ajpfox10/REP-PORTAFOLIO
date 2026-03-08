@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+
+  api:
+    build: { context: ., target: runtime }
+    image: vetpro-api:5.0.0
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    env_file: .env
+    environment: { NODE_ENV: production, PORT: 3000 }
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [vetpro-net]
+
+  worker:
+    build: { context: ., target: worker }
+    image: vetpro-worker:5.0.0
+    restart: unless-stopped
+    env_file: .env
+    environment: { NODE_ENV: production }
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [vetpro-net]
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MASTER_DB_ROOT_PASSWORD:-CHANGE_IN_PRODUCTION}
+      MYSQL_DATABASE: ${MASTER_DB_NAME:-vetpro_master}
+      MYSQL_USER: ${MASTER_DB_USER:-vetpro_app}
+      MYSQL_PASSWORD: ${MASTER_DB_PASSWORD:-CHANGE_IN_PRODUCTION}
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./sql/master.sql:/docker-entrypoint-initdb.d/01_master.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MASTER_DB_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports: ["3306:3306"]
+    networks: [vetpro-net]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-CHANGE_IN_PRODUCTION} --appendonly yes
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-CHANGE_IN_PRODUCTION}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports: ["6379:6379"]
+    networks: [vetpro-net]
+
+  bullboard:
+    image: deadly0/bull-board:latest
+    restart: unless-stopped
+    environment: { REDIS_HOST: redis, REDIS_PORT: 6379, REDIS_PASSWORD: "${REDIS_PASSWORD:-CHANGE_IN_PRODUCTION}" }
+    ports: ["3001:3000"]
+    depends_on:
+      redis: { condition: service_healthy }
+    profiles: [dev]
+    networks: [vetpro-net]
+
+volumes:
+  db-data:
+  redis-data:
+
+networks:
+  vetpro-net:
+    driver: bridge
