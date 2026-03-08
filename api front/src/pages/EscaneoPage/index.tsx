@@ -1,5 +1,6 @@
 // src/pages/EscaneoPage/index.tsx — Scanner v3: dispositivos, bandejas, cola en tiempo real
-import React, { useState, useCallback, useRef, useEffect, useReducer } from 'react';
+// CAMBIOS: selector de tipo de documento OBLIGATORIO, agente OBLIGATORIO, guardado en G:\docu\{DNI}\
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
@@ -14,17 +15,12 @@ function getScannerBase() {
 function getScannerHeaders(): Record<string, string> {
   const cfg = (window as any).__RUNTIME_CONFIG__ || {};
   const tenant = cfg.scannerTenantId || (import.meta as any)?.env?.VITE_SCANNER_TENANT_ID || '1';
-
-  const runtimeToken =
-    cfg.scannerToken || (import.meta as any)?.env?.VITE_SCANNER_TOKEN || '';
-
+  const runtimeToken = cfg.scannerToken || (import.meta as any)?.env?.VITE_SCANNER_TOKEN || '';
   let sessionToken = '';
   try {
     sessionToken = JSON.parse(localStorage.getItem('personalv5.session') || '{}')?.accessToken || '';
   } catch {}
-
   const token = runtimeToken || sessionToken;
-
   return {
     'x-tenant': tenant,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -40,14 +36,35 @@ async function scannerFetch<T = any>(path: string, opts?: RequestInit): Promise<
       ...(opts?.headers || {}),
     },
   });
-
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     throw new Error(e?.message || e?.error || `HTTP ${res.status}`);
   }
-
   return res.json();
 }
+
+// ─── Tipos de documento disponibles ──────────────────────────────────────────
+const TIPOS_DOCUMENTO = [
+  { value: 'dni_frente',           label: 'DNI — Frente',                    icon: '🪪' },
+  { value: 'dni_dorso',            label: 'DNI — Dorso',                     icon: '🪪' },
+  { value: 'titulo_secundario',    label: 'Título Secundario',               icon: '📜' },
+  { value: 'titulo_universitario', label: 'Título Universitario / Terciario',icon: '🎓' },
+  { value: 'licencia_conducir',    label: 'Licencia de Conducir',            icon: '🚗' },
+  { value: 'acta_nacimiento',      label: 'Acta de Nacimiento',              icon: '👶' },
+  { value: 'partida_matrimonio',   label: 'Partida de Matrimonio',           icon: '💍' },
+  { value: 'contrato_trabajo',     label: 'Contrato de Trabajo',             icon: '📋' },
+  { value: 'certificado_medico',   label: 'Certificado Médico',              icon: '🏥' },
+  { value: 'certificado_estudio',  label: 'Certificado de Estudios',         icon: '📚' },
+  { value: 'recibo_sueldo',        label: 'Recibo de Sueldo',                icon: '💰' },
+  { value: 'declaracion_jurada',   label: 'Declaración Jurada',              icon: '✍️' },
+  { value: 'resolucion',           label: 'Resolución',                      icon: '📄' },
+  { value: 'nota_pedido',          label: 'Nota / Pedido',                   icon: '📝' },
+  { value: 'jubilacion',           label: 'Documentación Jubilación',        icon: '🏦' },
+  { value: 'ioma',                 label: 'Documentación IOMA',              icon: '🏥' },
+  { value: 'foto_carnet',          label: 'Foto Carnet',                     icon: '📷' },
+  { value: 'otro',                 label: 'Otro documento',                  icon: '📦' },
+];
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Device {
   id: number; name: string; driver: string; is_active: boolean;
@@ -96,14 +113,11 @@ function fmtDT(s?: string | null) {
   catch { return s; }
 }
 function deviceOnline(d: Device) {
-  // Usar el campo online que calcula la API (ping ICMP + TCP + WSD)
   if (typeof d.online === 'boolean') return d.online;
-  // Fallback: heartbeat del agente (para dispositivos locales/USB)
   if (!d.last_seen_at) return false;
   return (Date.now() - new Date(d.last_seen_at).getTime()) < 90_000;
 }
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
 type Tab = 'escanear' | 'dispositivos' | 'cola' | 'documentos';
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -111,36 +125,41 @@ export function EscaneoPage() {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('escanear');
 
-  // Agente
+  // Agente — OBLIGATORIO para escanear
   const [dni, setDni]           = useState('');
   const [fullName, setFullName] = useState('');
   const [agente, setAgente]     = useState<any>(null);
   const [matches, setMatches]   = useState<any[]>([]);
   const [loadingAgente, setLoadingAgente] = useState(false);
 
+  // Tipo de documento — OBLIGATORIO
+  const [tipoDoc, setTipoDoc] = useState<string>('');
+
+  // Descripción adicional (opcional)
+  const [descripcion, setDescripcion] = useState('');
+
   // Dispositivos y capacidades
-  const [devices, setDevices]         = useState<Device[]>([]);
+  const [devices, setDevices]               = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<number | null>(null);
   const [loadingDevices, setLoadingDevices] = useState(false);
-  const [discovering, setDiscovering] = useState(false);
+  const [discovering, setDiscovering]       = useState(false);
 
   // Perfiles
-  const [profiles, setProfiles]       = useState<ScanProfile[]>([]);
+  const [profiles, setProfiles]             = useState<ScanProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
 
   // Opciones de escaneo
-  const [source, setSource]       = useState<string>('flatbed');
-  const [dpi, setDpi]             = useState<number>(300);
-  const [color, setColor]         = useState(true);
-  const [duplex, setDuplex]       = useState(false);
-  const [docRef, setDocRef]       = useState('');
+  const [source, setSource]   = useState<string>('flatbed');
+  const [dpi, setDpi]         = useState<number>(300);
+  const [color, setColor]     = useState(true);
+  const [duplex, setDuplex]   = useState(false);
 
   // Cola de jobs
-  const [jobs, setJobs]             = useState<ScanJob[]>([]);
+  const [jobs, setJobs]               = useState<ScanJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Historial documentos del agente
+  // Historial documentos del agente (desde api_personal)
   const [docHistory, setDocHistory] = useState<any[]>([]);
 
   // Lanzar scan
@@ -152,7 +171,6 @@ export function EscaneoPage() {
     try {
       const r = await scannerFetch<{ items: Device[] }>('/v1/devices?limit=50');
       const devs = r.items || [];
-      // Cargar capacidades de cada dispositivo online
       const withCaps = await Promise.all(devs.map(async (d) => {
         if (!deviceOnline(d)) return d;
         try {
@@ -170,7 +188,6 @@ export function EscaneoPage() {
     } finally { setLoadingDevices(false); }
   }, [selectedDevice]);
 
-  // ── Cargar perfiles ───────────────────────────────────────────────────────
   const cargarProfiles = useCallback(async () => {
     try {
       const r = await scannerFetch<{ items: ScanProfile[] }>('/v1/profiles');
@@ -178,7 +195,6 @@ export function EscaneoPage() {
     } catch { /* silencioso */ }
   }, []);
 
-  // ── Descubrir dispositivos en red ─────────────────────────────────────────
   const descubrirDispositivos = useCallback(async () => {
     setDiscovering(true);
     try {
@@ -195,7 +211,6 @@ export function EscaneoPage() {
     } finally { setDiscovering(false); }
   }, [cargarDevices]);
 
-  // ── Cargar cola de jobs ───────────────────────────────────────────────────
   const cargarJobs = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoadingJobs(true);
     try {
@@ -205,7 +220,6 @@ export function EscaneoPage() {
     finally { if (!silencioso) setLoadingJobs(false); }
   }, []);
 
-  // ── Polling de cola ───────────────────────────────────────────────────────
   useEffect(() => {
     if (tab === 'cola') {
       cargarJobs();
@@ -214,13 +228,19 @@ export function EscaneoPage() {
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [tab, cargarJobs]);
 
-  // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     cargarDevices();
     cargarProfiles();
   }, []);
 
   // ── Buscar agente ─────────────────────────────────────────────────────────
+  const cargarDocHistory = useCallback(async (cleanDni: string) => {
+    try {
+      const r = await apiFetch<any>(`/scanner/documents/${cleanDni}`);
+      setDocHistory(r?.data || []);
+    } catch { setDocHistory([]); }
+  }, []);
+
   const buscarPorDni = useCallback(async (dniOverride?: string) => {
     const clean = (dniOverride ?? dni).replace(/\D/g, '');
     if (!clean) { toast.error('DNI inválido'); return; }
@@ -231,13 +251,10 @@ export function EscaneoPage() {
       const row = { ...res.data, dni: res.data.dni || Number(clean) };
       setAgente(row);
       toast.ok('Agente cargado', `${row.apellido}, ${row.nombre}`);
-      // Cargar documentos escaneados previos
-      scannerFetch<{ items: any[] }>(`/v1/documents?personal_dni=${clean}&limit=20`)
-        .then(r => setDocHistory(r.items || []))
-        .catch(() => setDocHistory([]));
+      cargarDocHistory(clean);
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setLoadingAgente(false); }
-  }, [dni]);
+  }, [dni, cargarDocHistory]);
 
   const buscarPorNombre = useCallback(async () => {
     const q = fullName.trim();
@@ -251,35 +268,71 @@ export function EscaneoPage() {
     finally { setLoadingAgente(false); }
   }, [fullName]);
 
-  // ── Lanzar escaneo ────────────────────────────────────────────────────────
-  const lanzarScan = useCallback(async () => {
-    if (!selectedDevice) { toast.error('Seleccioná un dispositivo'); return; }
+  // ── Validación antes de lanzar ────────────────────────────────────────────
+  const validarYLanzar = useCallback(async () => {
+    if (!agente) {
+      toast.error('Agente requerido', 'Buscá y seleccioná el agente antes de escanear');
+      return;
+    }
+    if (!tipoDoc) {
+      toast.error('Tipo de documento requerido', 'Seleccioná qué documento vas a escanear');
+      return;
+    }
+    if (!selectedDevice) {
+      toast.error('Seleccioná un dispositivo');
+      return;
+    }
+
+    const tipoLabel = TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label || tipoDoc;
+
     setLaunching(true);
     try {
+      // 1. Crear job en el scanner API
       const body: any = {
         device_id:    selectedDevice,
         profile_id:   selectedProfile || undefined,
         priority:     5,
-        personal_dni: agente?.dni || undefined,
-        personal_ref: docRef.trim() || undefined,
+        personal_dni: agente.dni,
+        personal_ref: tipoDoc,  // el tipo va como referencia para el scanner
+        doc_class:    tipoDoc,
       };
       const r = await scannerFetch<{ id: number; pending_tramites?: any[] }>('/v1/scan-jobs', {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      toast.ok(`✅ Job #${r.id} creado`, 'El agente tomará el trabajo en segundos');
-      if (r.pending_tramites?.length) {
-        toast.error(`⚠️ ${r.pending_tramites.length} trámite(s) pendiente(s) para este agente`, '');
+
+      // 2. Pre-registrar en api_personal (el scanner completará después vía /document-ready)
+      //    Esto permite que el job quede trazado con tipo y descripción
+      try {
+        await apiFetch('/scanner/registrar-escaneo', {
+          method: 'POST',
+          body: JSON.stringify({
+            dni:           agente.dni,
+            tipo_documento: tipoDoc,
+            descripcion:   descripcion.trim() || tipoLabel,
+            nombre_archivo: `scan-job-${r.id}.pdf`,
+          }),
+        });
+      } catch (regErr: any) {
+        // No bloquear si el registro previo falla — el scanner lo completará
+        console.warn('[scan] pre-registro falló:', regErr?.message);
       }
-      setDocRef('');
+
+      toast.ok(`✅ Job #${r.id} creado`, `${tipoLabel} para DNI ${agente.dni}`);
+      if (r.pending_tramites?.length) {
+        toast.error(`⚠️ ${r.pending_tramites.length} trámite(s) pendiente(s)`, '');
+      }
+
+      // Reset tipo y descripción, mantener agente
+      setTipoDoc('');
+      setDescripcion('');
       setTab('cola');
       setTimeout(() => cargarJobs(), 800);
     } catch (e: any) {
       toast.error('Error al lanzar scan', e?.message);
     } finally { setLaunching(false); }
-  }, [selectedDevice, selectedProfile, agente, docRef, cargarJobs]);
+  }, [agente, tipoDoc, selectedDevice, selectedProfile, descripcion, cargarJobs]);
 
-  // ── Cancelar job ──────────────────────────────────────────────────────────
   const cancelarJob = useCallback(async (jobId: number) => {
     try {
       await scannerFetch(`/v1/scan-jobs/${jobId}/cancel`, { method: 'POST' });
@@ -288,15 +341,15 @@ export function EscaneoPage() {
     } catch (e: any) { toast.error('Error al cancelar', e?.message); }
   }, [cargarJobs]);
 
-  // ── Device activo y sus capacidades ──────────────────────────────────────
-  const device     = devices.find(d => d.id === selectedDevice) || null;
-  const caps       = device?.capabilities;
-  const isOnline   = device ? deviceOnline(device) : false;
-  const cleanDni   = agente?.dni ? String(agente.dni).replace(/\D/g, '') : '';
+  const device   = devices.find(d => d.id === selectedDevice) || null;
+  const caps     = device?.capabilities;
+  const isOnline = device ? deviceOnline(device) : false;
 
-  // Cola activa: queued + in_progress
   const activeJobs = jobs.filter(j => ['queued','in_progress'].includes(j.status));
   const doneJobs   = jobs.filter(j => !['queued','in_progress'].includes(j.status));
+
+  // Validación para el botón
+  const puedeEscanear = !!agente && !!tipoDoc && !!selectedDevice;
 
   return (
     <Layout title="Escaneo" showBack>
@@ -327,7 +380,118 @@ export function EscaneoPage() {
             {/* IZQUIERDA */}
             <div className="scan-col">
 
-              {/* Dispositivo */}
+              {/* ── AGENTE — OBLIGATORIO ── */}
+              <div className={`card scan-card${!agente ? ' scan-card-required' : ' scan-card-ok'}`}>
+                <div className="scan-section-title">
+                  👤 Agente
+                  <span className="scan-required-badge">obligatorio</span>
+                </div>
+                <div className="scan-search-grid">
+                  <div>
+                    <div className="muted scan-label">DNI</div>
+                    <input className="input" value={dni} placeholder="DNI (Enter)"
+                      onChange={e => setDni(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && buscarPorDni()}
+                      disabled={loadingAgente} style={{ width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <div className="muted scan-label">Apellido</div>
+                    <input className="input" value={fullName} placeholder="Apellido (Enter)"
+                      onChange={e => setFullName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && buscarPorNombre()}
+                      disabled={loadingAgente} style={{ width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                  <button className="btn" onClick={() => buscarPorDni()} disabled={loadingAgente || !dni.trim()}>
+                    {loadingAgente ? '…' : 'Buscar'}
+                  </button>
+                  <button className="btn" onClick={buscarPorNombre} disabled={loadingAgente || !fullName.trim()}>
+                    {loadingAgente ? '…' : 'Por nombre'}
+                  </button>
+                  {agente && (
+                    <button className="btn" onClick={() => { setAgente(null); setDni(''); setDocHistory([]); }}>✕ Limpiar</button>
+                  )}
+                </div>
+
+                {matches.length > 0 && (
+                  <div className="scan-matches" style={{ marginTop: 8 }}>
+                    {matches.map((m: any) => (
+                      <button key={m.dni} className="scan-match-item"
+                        onClick={() => { setDni(String(m.dni)); setMatches([]); buscarPorDni(String(m.dni)); }}>
+                        <b>{m.apellido}, {m.nombre}</b>
+                        <span className="badge" style={{ marginLeft: 8 }}>{m.dni}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {agente ? (
+                  <div className="scan-agente-bar scan-agente-ok" style={{ marginTop: 10 }}>
+                    <span className="scan-check-icon">✅</span>
+                    <div>
+                      <div className="scan-agente-name">{agente.apellido}, {agente.nombre}</div>
+                      <div className="scan-agente-meta">
+                        <span className="badge">DNI {agente.dni}</span>
+                        {agente.dependencia_nombre && <span className="muted">{agente.dependencia_nombre}</span>}
+                      </div>
+                      <div className="scan-ruta-hint muted" style={{ fontSize: '0.7rem', marginTop: 4 }}>
+                        📁 Se guardará en: …\docu\{agente.dni}\
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="scan-required-hint">
+                    ⚠️ Buscá el agente antes de escanear
+                  </div>
+                )}
+              </div>
+
+              {/* ── TIPO DE DOCUMENTO — OBLIGATORIO ── */}
+              <div className={`card scan-card${!tipoDoc ? ' scan-card-required' : ' scan-card-ok'}`}>
+                <div className="scan-section-title">
+                  🗂️ Tipo de Documento
+                  <span className="scan-required-badge">obligatorio</span>
+                </div>
+                <div className="scan-tipos-grid">
+                  {TIPOS_DOCUMENTO.map(t => (
+                    <button
+                      key={t.value}
+                      className={`scan-tipo-btn${tipoDoc === t.value ? ' selected' : ''}`}
+                      onClick={() => setTipoDoc(t.value)}
+                      type="button"
+                    >
+                      <span className="scan-tipo-icon">{t.icon}</span>
+                      <span className="scan-tipo-label">{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {!tipoDoc && (
+                  <div className="scan-required-hint">⚠️ Seleccioná qué documento vas a escanear</div>
+                )}
+                {tipoDoc && (
+                  <div className="scan-tipo-selected">
+                    ✅ {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.icon} {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label}
+                  </div>
+                )}
+
+                {/* Descripción adicional */}
+                <div className="muted scan-label" style={{ marginTop: 12 }}>Descripción adicional (opcional)</div>
+                <input
+                  className="input"
+                  value={descripcion}
+                  onChange={e => setDescripcion(e.target.value)}
+                  placeholder="Ej: Renovación 2024, página 1 de 2…"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+            </div>
+
+            {/* DERECHA */}
+            <div className="scan-col">
+
+              {/* ── Dispositivo ── */}
               <div className="card scan-card">
                 <div className="scan-section-title">🖨️ Dispositivo</div>
                 {loadingDevices ? (
@@ -377,12 +541,11 @@ export function EscaneoPage() {
                 )}
               </div>
 
-              {/* Capacidades del dispositivo seleccionado */}
+              {/* ── Configuración del dispositivo ── */}
               {caps && (
                 <div className="card scan-card">
                   <div className="scan-section-title">⚙️ Configuración de Escaneo</div>
 
-                  {/* Fuente / Bandeja */}
                   <div className="muted scan-label">Bandeja / Fuente</div>
                   <div className="scan-caps-grid">
                     {caps.sources.map(s => (
@@ -397,7 +560,6 @@ export function EscaneoPage() {
                     ))}
                   </div>
 
-                  {/* Resolución */}
                   <div className="muted scan-label" style={{ marginTop: 12 }}>Resolución (DPI)</div>
                   <div className="scan-caps-grid">
                     {(caps.resolutions.length ? caps.resolutions : [150, 300, 600]).map(r => (
@@ -409,7 +571,6 @@ export function EscaneoPage() {
                     ))}
                   </div>
 
-                  {/* Color */}
                   <div className="muted scan-label" style={{ marginTop: 12 }}>Modo de color</div>
                   <div className="scan-caps-grid">
                     {(caps.color_modes.length ? caps.color_modes : ['color','gris']).map(m => (
@@ -421,7 +582,6 @@ export function EscaneoPage() {
                     ))}
                   </div>
 
-                  {/* Dúplex si ADF */}
                   {(source === 'adf' || source === 'adf_duplex') && caps.duplex && (
                     <label className="scan-checkbox-row" style={{ marginTop: 12 }}>
                       <input type="checkbox" checked={duplex} onChange={e => setDuplex(e.target.checked)} />
@@ -437,7 +597,7 @@ export function EscaneoPage() {
                 </div>
               )}
 
-              {/* Perfil de escaneo */}
+              {/* ── Perfiles ── */}
               {profiles.length > 0 && (
                 <div className="card scan-card">
                   <div className="scan-section-title">📋 Perfil de Escaneo</div>
@@ -464,96 +624,49 @@ export function EscaneoPage() {
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* DERECHA */}
-            <div className="scan-col">
-
-              {/* Agente */}
-              <div className="card scan-card">
-                <div className="scan-section-title">👤 Vincular a Agente (opcional)</div>
-                <div className="scan-search-grid">
-                  <div>
-                    <div className="muted scan-label">DNI</div>
-                    <input className="input" value={dni} placeholder="DNI (Enter)"
-                      onChange={e => setDni(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && buscarPorDni()}
-                      disabled={loadingAgente} style={{ width: '100%', boxSizing: 'border-box' }} />
-                  </div>
-                  <div>
-                    <div className="muted scan-label">Apellido</div>
-                    <input className="input" value={fullName} placeholder="Apellido (Enter)"
-                      onChange={e => setFullName(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && buscarPorNombre()}
-                      disabled={loadingAgente} style={{ width: '100%', boxSizing: 'border-box' }} />
-                  </div>
-                </div>
-                <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                  <button className="btn" onClick={() => buscarPorDni()} disabled={loadingAgente || !dni.trim()}>
-                    {loadingAgente ? '…' : 'Buscar'}
-                  </button>
-                  <button className="btn" onClick={buscarPorNombre} disabled={loadingAgente || !fullName.trim()}>
-                    {loadingAgente ? '…' : 'Por nombre'}
-                  </button>
-                  {agente && (
-                    <button className="btn" onClick={() => { setAgente(null); setDni(''); setDocHistory([]); }}>✕</button>
-                  )}
-                </div>
-
-                {matches.length > 0 && (
-                  <div className="scan-matches" style={{ marginTop: 8 }}>
-                    {matches.map((m: any) => (
-                      <button key={m.dni} className="scan-match-item"
-                        onClick={() => { setDni(String(m.dni)); setMatches([]); buscarPorDni(String(m.dni)); }}>
-                        <b>{m.apellido}, {m.nombre}</b>
-                        <span className="badge" style={{ marginLeft: 8 }}>{m.dni}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {agente && (
-                  <div className="scan-agente-bar" style={{ marginTop: 10 }}>
-                    <div className="scan-agente-name">✅ {agente.apellido}, {agente.nombre}</div>
-                    <div className="scan-agente-meta">
-                      <span className="badge">DNI {agente.dni}</span>
-                      {agente.dependencia_nombre && <span className="muted">{agente.dependencia_nombre}</span>}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Referencia */}
-              <div className="card scan-card">
-                <div className="scan-section-title">🏷️ Referencia (opcional)</div>
-                <input
-                  className="input"
-                  value={docRef}
-                  onChange={e => setDocRef(e.target.value)}
-                  placeholder="Ej: pedido:45, jubilacion, legajo-2024"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-                <div className="muted" style={{ fontSize: '0.72rem', marginTop: 5 }}>
-                  Aparecerá en el ticket y en el historial del agente
-                </div>
-              </div>
-
-              {/* Resumen y lanzar */}
+              {/* ── Resumen y lanzar ── */}
               <div className="card scan-card scan-launch-card">
                 <div className="scan-section-title">🚀 Lanzar Escaneo</div>
 
-                {device && (
+                {/* Checklist de requisitos */}
+                <div className="scan-checklist">
+                  <div className={`scan-check-item${agente ? ' ok' : ' pending'}`}>
+                    {agente ? '✅' : '⭕'} Agente seleccionado
+                    {agente && <span className="muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>DNI {agente.dni}</span>}
+                  </div>
+                  <div className={`scan-check-item${tipoDoc ? ' ok' : ' pending'}`}>
+                    {tipoDoc ? '✅' : '⭕'} Tipo de documento
+                    {tipoDoc && <span className="muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
+                      {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label}
+                    </span>}
+                  </div>
+                  <div className={`scan-check-item${selectedDevice ? ' ok' : ' pending'}`}>
+                    {selectedDevice ? '✅' : '⭕'} Dispositivo seleccionado
+                    {device && <span className="muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>{device.name}</span>}
+                  </div>
+                </div>
+
+                {device && agente && tipoDoc && (
                   <div className="scan-summary">
+                    <div className="scan-summary-row">
+                      <span className="muted">Agente</span>
+                      <span>{agente.apellido}, {agente.nombre} (DNI {agente.dni})</span>
+                    </div>
+                    <div className="scan-summary-row">
+                      <span className="muted">Documento</span>
+                      <span>{TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.icon} {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label}</span>
+                    </div>
+                    <div className="scan-summary-row">
+                      <span className="muted">Destino</span>
+                      <span className="scan-ruta-val">📁 …\docu\{agente.dni}\</span>
+                    </div>
                     <div className="scan-summary-row">
                       <span className="muted">Dispositivo</span>
                       <span>
                         <span className={`scan-dot${isOnline ? ' online' : ''}`} style={{ marginRight: 6 }} />
                         {device.name}
                       </span>
-                    </div>
-                    <div className="scan-summary-row">
-                      <span className="muted">Bandeja</span>
-                      <span>{SOURCE_LABEL[source] || source}</span>
                     </div>
                     <div className="scan-summary-row">
                       <span className="muted">Resolución</span>
@@ -565,23 +678,7 @@ export function EscaneoPage() {
                         <span>✓ Ambas caras</span>
                       </div>
                     )}
-                    {agente && (
-                      <div className="scan-summary-row">
-                        <span className="muted">Agente</span>
-                        <span>DNI {agente.dni}</span>
-                      </div>
-                    )}
-                    {docRef && (
-                      <div className="scan-summary-row">
-                        <span className="muted">Referencia</span>
-                        <span>{docRef}</span>
-                      </div>
-                    )}
                   </div>
-                )}
-
-                {!device && (
-                  <div className="muted" style={{ marginBottom: 12 }}>Seleccioná un dispositivo para escanear</div>
                 )}
 
                 {!isOnline && device && (
@@ -592,11 +689,12 @@ export function EscaneoPage() {
                 )}
 
                 <button
-                  className="btn scan-btn-launch"
-                  onClick={lanzarScan}
-                  disabled={launching || !selectedDevice}
+                  className={`btn scan-btn-launch${puedeEscanear ? ' ready' : ''}`}
+                  onClick={validarYLanzar}
+                  disabled={launching || !puedeEscanear}
+                  title={!agente ? 'Falta seleccionar el agente' : !tipoDoc ? 'Falta seleccionar el tipo de documento' : !selectedDevice ? 'Falta seleccionar el dispositivo' : ''}
                 >
-                  {launching ? '⏳ Enviando…' : '▶ Iniciar Escaneo'}
+                  {launching ? '⏳ Enviando…' : !agente ? '👤 Falta el agente' : !tipoDoc ? '🗂️ Falta el tipo de documento' : '▶ Iniciar Escaneo'}
                 </button>
               </div>
 
@@ -607,10 +705,14 @@ export function EscaneoPage() {
                   <div className="scan-doc-list">
                     {docHistory.slice(0, 8).map((d: any) => (
                       <div key={d.id} className="scan-doc-item">
-                        <div className="scan-doc-class">{d.doc_class || 'doc'}</div>
+                        <div className="scan-doc-class">
+                          {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.icon || '📄'}
+                        </div>
                         <div>
-                          <div style={{ fontSize: '0.83rem' }}>{d.title || `Documento #${d.id}`}</div>
-                          <div className="muted" style={{ fontSize: '0.72rem' }}>{d.page_count || '?'} pág. · {fmtDT(d.created_at)}</div>
+                          <div style={{ fontSize: '0.83rem' }}>{d.nombre || `Documento #${d.id}`}</div>
+                          <div className="muted" style={{ fontSize: '0.72rem' }}>
+                            {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.label || d.tipo} · {fmtDT(d.created_at)}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -733,7 +835,8 @@ export function EscaneoPage() {
                         <div>
                           <div style={{ fontWeight: 700 }}>Job #{j.id}</div>
                           <div className="muted" style={{ fontSize: '0.75rem' }}>
-                            {j.personal_dni ? `DNI ${j.personal_dni}` : 'Sin agente'}{j.personal_ref ? ` · ${j.personal_ref}` : ''}
+                            {j.personal_dni ? `DNI ${j.personal_dni}` : 'Sin agente'}
+                            {j.doc_class && j.doc_class !== 'unknown' ? ` · ${TIPOS_DOCUMENTO.find(t => t.value === j.doc_class)?.label || j.doc_class}` : ''}
                           </div>
                         </div>
                         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
@@ -773,7 +876,7 @@ export function EscaneoPage() {
                           <div className="muted" style={{ fontSize: '0.72rem' }}>
                             {j.personal_dni ? `DNI ${j.personal_dni}` : 'Sin agente'}
                             {j.page_count ? ` · ${j.page_count} págs.` : ''}
-                            {j.doc_class && j.doc_class !== 'unknown' ? ` · ${j.doc_class}` : ''}
+                            {j.doc_class && j.doc_class !== 'unknown' ? ` · ${TIPOS_DOCUMENTO.find(t => t.value === j.doc_class)?.label || j.doc_class}` : ''}
                           </div>
                         </div>
                         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
@@ -846,6 +949,7 @@ export function EscaneoPage() {
                 <div className="scan-agente-name">👤 {agente.apellido}, {agente.nombre}</div>
                 <div className="scan-agente-meta">
                   <span className="badge">DNI {agente.dni}</span>
+                  <span className="muted scan-ruta-hint">📁 G:\docu\{agente.dni}\</span>
                 </div>
               </div>
             )}
@@ -854,23 +958,16 @@ export function EscaneoPage() {
               <div className="scan-docs-grid">
                 {docHistory.map((d: any) => (
                   <div key={d.id} className="card scan-doc-card">
-                    <div className="scan-doc-class-badge">{d.doc_class || 'doc'}</div>
-                    <div className="scan-doc-title">{d.title || `Documento #${d.id}`}</div>
-                    <div className="scan-doc-meta">
-                      {d.page_count && <span>{d.page_count} págs.</span>}
-                      {d.personal_ref && <span>· {d.personal_ref}</span>}
+                    <div className="scan-doc-class-badge">
+                      {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.icon || '📄'} {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.label || d.tipo || 'doc'}
                     </div>
+                    <div className="scan-doc-title">{d.nombre || `Documento #${d.id}`}</div>
+                    {d.descripcion_archivo && (
+                      <div className="muted" style={{ fontSize: '0.72rem', marginTop: 2 }}>{d.descripcion_archivo}</div>
+                    )}
                     <div className="muted" style={{ fontSize: '0.72rem', marginTop: 4 }}>
                       {fmtDT(d.created_at)}
                     </div>
-                    <a
-                      href={`${getScannerBase()}/v1/documents/files/${d.storage_key}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="btn"
-                      style={{ marginTop: 8, display: 'block', textAlign: 'center', fontSize: '0.8rem' }}
-                    >
-                      📥 Descargar
-                    </a>
                   </div>
                 ))}
               </div>
