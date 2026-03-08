@@ -837,6 +837,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/api_logs:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List api_logs
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_api_logs"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create api_logs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_api_logs_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/api_logs/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get api_logs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update api_logs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_api_logs"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch api_logs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_api_logs_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete api_logs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/audit_log:
     get:
       tags:
@@ -2157,6 +2289,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/device_capabilities:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List device_capabilities
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_device_capabilities"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create device_capabilities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_device_capabilities_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/device_capabilities/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get device_capabilities by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update device_capabilities by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_device_capabilities"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch device_capabilities by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_device_capabilities_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete device_capabilities by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/devices:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List devices
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_devices"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create devices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_devices_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/devices/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get devices by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update devices by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_devices"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch devices by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_devices_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete devices by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/disiplina:
     get:
       tags:
@@ -2289,6 +2685,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/document_pages:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List document_pages
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_document_pages"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create document_pages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_document_pages_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/document_pages/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get document_pages by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update document_pages by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_document_pages"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch document_pages by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_document_pages_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete document_pages by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/documentos_versiones:
     get:
       tags:
@@ -2410,6 +2938,87 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete documentos_versiones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/documents/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get documents by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update documents by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_documents"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch documents by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_documents_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete documents by id
       parameters:
         - name: id
           in: path
@@ -4137,6 +4746,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/migrations:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List migrations
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_migrations"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create migrations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_migrations_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/migrations/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get migrations by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update migrations by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_migrations"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch migrations by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_migrations_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete migrations by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/ministerios:
     get:
       tags:
@@ -5182,6 +5923,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete personal by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/personal_integration:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List personal_integration
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_personal_integration"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create personal_integration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personal_integration_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/personal_integration/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get personal_integration by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update personal_integration by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personal_integration"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch personal_integration by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personal_integration_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete personal_integration by id
       parameters:
         - name: id
           in: path
@@ -6249,6 +7122,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/scan_jobs:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List scan_jobs
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_scan_jobs"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create scan_jobs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_scan_jobs_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/scan_jobs/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get scan_jobs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update scan_jobs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_scan_jobs"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch scan_jobs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_scan_jobs_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete scan_jobs by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/scan_profiles:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List scan_profiles
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_scan_profiles"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create scan_profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_scan_profiles_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/scan_profiles/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get scan_profiles by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update scan_profiles by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_scan_profiles"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch scan_profiles by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_scan_profiles_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete scan_profiles by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/schema_migrations:
     get:
       tags:
@@ -7305,6 +8442,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/tenants:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tenants
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tenants"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tenants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tenants_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tenants/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tenants by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tenants by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tenants"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tenants by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tenants_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tenants by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/tipodecuidado:
     get:
       tags:
@@ -7558,6 +8827,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete tipoderesolucion by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/users:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List users
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_users"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_users_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/users/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get users by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update users by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_users"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch users by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_users_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete users by id
       parameters:
         - name: id
           in: path
@@ -8929,6 +10330,77 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_api_logs:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+          nullable: true
+        level:
+          type: string
+        message:
+          type: string
+        context_json:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - level
+        - message
+    Table_api_logs_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+          nullable: true
+        level:
+          type: string
+        message:
+          type: string
+        context_json:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - level
+        - message
+    Table_api_logs_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+          nullable: true
+        level:
+          type: string
+        message:
+          type: string
+        context_json:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Table_audit_log:
       type: object
       additionalProperties: false
@@ -9915,6 +11387,151 @@ components:
         nombre:
           type: number
           nullable: true
+    Table_device_capabilities:
+      type: object
+      additionalProperties: false
+      properties:
+        device_id:
+          type: number
+        capabilities_json:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - device_id
+        - capabilities_json
+    Table_device_capabilities_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        device_id:
+          type: number
+        capabilities_json:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - device_id
+        - capabilities_json
+    Table_device_capabilities_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        device_id:
+          type: number
+        capabilities_json:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    Table_devices:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        name:
+          type: string
+        driver:
+          type: string
+        device_key:
+          type: string
+        is_active:
+          type: number
+        hostname:
+          type: string
+          nullable: true
+        agent_version:
+          type: string
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - tenant_id
+        - name
+        - device_key
+    Table_devices_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+        name:
+          type: string
+        driver:
+          type: string
+        device_key:
+          type: string
+        is_active:
+          type: number
+        hostname:
+          type: string
+          nullable: true
+        agent_version:
+          type: string
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - tenant_id
+        - name
+        - device_key
+    Table_devices_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        name:
+          type: string
+        driver:
+          type: string
+        device_key:
+          type: string
+        is_active:
+          type: number
+        hostname:
+          type: string
+          nullable: true
+        agent_version:
+          type: string
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_disiplina:
       type: object
       additionalProperties: false
@@ -9972,6 +11589,90 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_document_pages:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        document_id:
+          type: number
+        page_number:
+          type: number
+        storage_key:
+          type: string
+        ocr_text:
+          type: string
+          nullable: true
+        qr_payload:
+          type: string
+          nullable: true
+        is_blank:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenant_id
+        - document_id
+        - page_number
+        - storage_key
+    Table_document_pages_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+        document_id:
+          type: number
+        page_number:
+          type: number
+        storage_key:
+          type: string
+        ocr_text:
+          type: string
+          nullable: true
+        qr_payload:
+          type: string
+          nullable: true
+        is_blank:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - tenant_id
+        - document_id
+        - page_number
+        - storage_key
+    Table_document_pages_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        document_id:
+          type: number
+        page_number:
+          type: number
+        storage_key:
+          type: string
+        ocr_text:
+          type: string
+          nullable: true
+        qr_payload:
+          type: string
+          nullable: true
+        is_blank:
+          type: number
+        created_at:
+          type: string
+          format: date-time
     Table_documentos_versiones:
       type: object
       additionalProperties: false
@@ -10073,6 +11774,187 @@ components:
           type: number
           nullable: true
         deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_documents:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        scan_job_id:
+          type: number
+        title:
+          type: string
+          nullable: true
+        storage_key:
+          type: string
+        mime_type:
+          type: string
+        page_count:
+          type: number
+          nullable: true
+        file_size_bytes:
+          type: number
+          nullable: true
+        doc_class:
+          type: string
+        extracted_json:
+          type: string
+          nullable: true
+        ocr_text:
+          type: string
+          nullable: true
+        search_text:
+          type: string
+          nullable: true
+        av_scanned:
+          type: number
+        av_clean:
+          type: number
+        av_result:
+          type: string
+          nullable: true
+        personal_dni:
+          type: number
+          nullable: true
+        personal_ref:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - tenant_id
+        - scan_job_id
+        - storage_key
+    Table_documents_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+        scan_job_id:
+          type: number
+        title:
+          type: string
+          nullable: true
+        storage_key:
+          type: string
+        mime_type:
+          type: string
+        page_count:
+          type: number
+          nullable: true
+        file_size_bytes:
+          type: number
+          nullable: true
+        doc_class:
+          type: string
+        extracted_json:
+          type: string
+          nullable: true
+        ocr_text:
+          type: string
+          nullable: true
+        search_text:
+          type: string
+          nullable: true
+        av_scanned:
+          type: number
+        av_clean:
+          type: number
+        av_result:
+          type: string
+          nullable: true
+        personal_dni:
+          type: number
+          nullable: true
+        personal_ref:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - tenant_id
+        - scan_job_id
+        - storage_key
+    Table_documents_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        scan_job_id:
+          type: number
+        title:
+          type: string
+          nullable: true
+        storage_key:
+          type: string
+        mime_type:
+          type: string
+        page_count:
+          type: number
+          nullable: true
+        file_size_bytes:
+          type: number
+          nullable: true
+        doc_class:
+          type: string
+        extracted_json:
+          type: string
+          nullable: true
+        ocr_text:
+          type: string
+          nullable: true
+        search_text:
+          type: string
+          nullable: true
+        av_scanned:
+          type: number
+        av_clean:
+          type: number
+        av_result:
+          type: string
+          nullable: true
+        personal_dni:
+          type: number
+          nullable: true
+        personal_ref:
+          type: string
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
           nullable: true
@@ -11419,6 +13301,42 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_migrations:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        applied_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+    Table_migrations_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        applied_at:
+          type: string
+          format: date-time
+      required:
+        - name
+    Table_migrations_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        applied_at:
+          type: string
+          format: date-time
     Table_ministerios:
       type: object
       additionalProperties: false
@@ -12304,6 +14222,76 @@ components:
         foto_path:
           type: string
           nullable: true
+    Table_personal_integration:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        base_url:
+          type: string
+        api_key:
+          type: string
+        is_enabled:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - tenant_id
+        - base_url
+        - api_key
+    Table_personal_integration_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+        base_url:
+          type: string
+        api_key:
+          type: string
+        is_enabled:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - tenant_id
+        - base_url
+        - api_key
+    Table_personal_integration_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        base_url:
+          type: string
+        api_key:
+          type: string
+        is_enabled:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_plantas:
       type: object
       additionalProperties: false
@@ -13047,6 +15035,244 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_scan_jobs:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        device_id:
+          type: number
+        profile_id:
+          type: number
+          nullable: true
+        priority:
+          type: number
+        status:
+          type: string
+        page_count:
+          type: number
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        personal_dni:
+          type: number
+          nullable: true
+        personal_ref:
+          type: string
+          nullable: true
+        upload_nonce:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - tenant_id
+        - device_id
+    Table_scan_jobs_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+        device_id:
+          type: number
+        profile_id:
+          type: number
+          nullable: true
+        priority:
+          type: number
+        status:
+          type: string
+        page_count:
+          type: number
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        personal_dni:
+          type: number
+          nullable: true
+        personal_ref:
+          type: string
+          nullable: true
+        upload_nonce:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - tenant_id
+        - device_id
+    Table_scan_jobs_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        device_id:
+          type: number
+        profile_id:
+          type: number
+          nullable: true
+        priority:
+          type: number
+        status:
+          type: string
+        page_count:
+          type: number
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        personal_dni:
+          type: number
+          nullable: true
+        personal_ref:
+          type: string
+          nullable: true
+        upload_nonce:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_scan_profiles:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        name:
+          type: string
+        dpi:
+          type: number
+        color:
+          type: number
+        auto_rotate:
+          type: number
+        blank_page_detection:
+          type: number
+        compression:
+          type: string
+        output_format:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - tenant_id
+        - name
+    Table_scan_profiles_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+        name:
+          type: string
+        dpi:
+          type: number
+        color:
+          type: number
+        auto_rotate:
+          type: number
+        blank_page_detection:
+          type: number
+        compression:
+          type: string
+        output_format:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - tenant_id
+        - name
+    Table_scan_profiles_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        name:
+          type: string
+        dpi:
+          type: number
+        color:
+          type: number
+        auto_rotate:
+          type: number
+        blank_page_detection:
+          type: number
+        compression:
+          type: string
+        output_format:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_schema_migrations:
       type: object
       additionalProperties: false
@@ -13704,6 +15930,74 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_tenants:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        plan:
+          type: string
+        api_key:
+          type: string
+        is_active:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - name
+        - api_key
+    Table_tenants_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        plan:
+          type: string
+        api_key:
+          type: string
+        is_active:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - name
+        - api_key
+    Table_tenants_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        plan:
+          type: string
+        api_key:
+          type: string
+        is_active:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_tipodecuidado:
       type: object
       additionalProperties: false
@@ -13817,6 +16111,88 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+    Table_users:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        email:
+          type: string
+        password_hash:
+          type: string
+        role:
+          type: string
+        token_version:
+          type: number
+        is_active:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - tenant_id
+        - email
+        - password_hash
+    Table_users_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tenant_id:
+          type: number
+        email:
+          type: string
+        password_hash:
+          type: string
+        role:
+          type: string
+        token_version:
+          type: number
+        is_active:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - tenant_id
+        - email
+        - password_hash
+    Table_users_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tenant_id:
+          type: number
+        email:
+          type: string
+        password_hash:
+          type: string
+        role:
+          type: string
+        token_version:
+          type: number
+        is_active:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
           nullable: true
     Table_usuarios:
       type: object

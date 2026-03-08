@@ -72,6 +72,7 @@ export function DashboardPage() {
           <Tile to="/app/asistencia" title="🗓️ Asistencia" desc="Comparación de novedades entre Ministerio y SIAP. Detecta coincidencias y diferencias por DNI." accent="#6366f1" />
           <Tile to="/app/organigrama" title="🏗️ Organigrama" desc="Distribución visual del personal por jefatura, sector, servicio y dependencia." accent="#f59e0b" />
           <Tile to="/app/alertas" title="🔔 Alertas" desc="Cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos." accent="#ef4444" />
+          <Tile to="/app/atencion" title="🏛️ Atención al Público" desc="Recepción de agentes, motivo de consulta y emisión de ticket de atención." accent="#0f766e" />
         </div>
       </div>
 
@@ -87,6 +88,9 @@ export function DashboardPage() {
           <Tile to="/app/tables" title="⊞ Tablas" desc="Explorar todas las tablas del sistema." disabled={!canTables} accent="#64748b" />
           <Tile to="/app/info" title="ℹ️ Información" desc="Notas de acceso, configuración y ayuda." accent="#475569" />
           <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos y cambio de contraseña." accent="#0ea5e9" />
+          <Tile to="/app/escaneo" title="🖨️ Escaneo" desc="Escaneo de documentos, dispositivos, bandejas y cola de trabajos en tiempo real." accent="#0891b2" />
+          <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
+          <Tile to="/app/carga-agente" title="🧾 Carga de Agente" desc="Alta manual de agentes y carga inicial de datos en el sistema." accent="#84cc16" />
         </div>
       </div>
 
