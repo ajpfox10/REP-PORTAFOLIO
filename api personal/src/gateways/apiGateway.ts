@@ -39,6 +39,7 @@ import { buildEventosRouter } from '../routes/eventos.routes';
 import { buildApiKeysRouter } from '../routes/apiKeys.routes';
 import { buildWebhooksRouter } from '../routes/webhooks.routes';
 import { buildAsistenciaRouter } from '../routes/asistencia.routes';
+import { buildScannerRouter } from '../routes/scanner.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
@@ -115,6 +116,10 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/usuarios`,  ...protect, buildUsuariosRouter(sequelize));
   app.use(`${apiPrefix}/webhooks`,  ...protect, buildWebhooksRouter(sequelize));
   app.use(`${apiPrefix}/asistencia`, ...protect, buildAsistenciaRouter());
+
+  // ── Scanner API integration (recibe webhooks del scanner independiente) ───
+  // Auth: x-api-key validado por authContext (reutiliza el sistema de API keys)
+  app.use(`${apiPrefix}/scanner`, authContext(sequelize), buildScannerRouter(sequelize));
 
   // ── Audit reads (registra lecturas sensibles) ─────────────────────────────
   app.use(apiPrefix, authContext(sequelize), auditReadMiddleware(sequelize));

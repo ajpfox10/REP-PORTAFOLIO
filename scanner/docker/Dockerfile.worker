@@ -1,0 +1,12 @@
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json /app/package.json
+COPY api/package.json /app/api/package.json
+COPY worker/package.json /app/worker/package.json
+COPY agent/package.json /app/agent/package.json
+COPY shared/package.json /app/shared/package.json
+RUN npm i --workspaces --include-workspace-root
+COPY . /app
+WORKDIR /app/worker
+RUN npm run build
+CMD ["npm","run","start"]

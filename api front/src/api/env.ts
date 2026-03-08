@@ -33,7 +33,7 @@ export function getApiBaseUrl(): string {
     (typeof r1 === 'string' && r1.trim()) ||
     (typeof r2 === 'string' && r2.trim()) ||
     (typeof v === 'string' && v.trim()) ||
-    'http://localhost:3000/api/v1';
+    'http://192.168.0.21:3000/api/v1';
 
   return base.replace(/\/+$/, ''); // sin trailing slash
 }
@@ -47,15 +47,17 @@ export function getAuthStorageKind(): 'memory' | 'session' | 'local' {
 
   if (raw === 'memory' || raw === 'session' || raw === 'local') return raw;
 
-  // compat con lo viejo:
+  // compat con lo viejo — si no hay VITE_AUTH_STORAGE, usar 'local' por defecto
   const persistR = runtime().VITE_AUTH_PERSIST;
   const persistV = fromVite('VITE_AUTH_PERSIST');
-  const persist = String(persistR ?? persistV ?? 'false').toLowerCase() === 'true';
-  if (!persist) return 'memory';
+  const persistRaw = persistR ?? persistV;
+  // Solo ir a memory si está explícitamente seteado en false
+  if (persistRaw !== undefined && String(persistRaw).toLowerCase() === 'false') return 'local';
 
   const kindR = runtime().VITE_AUTH_PERSIST_KIND;
   const kindV = fromVite('VITE_AUTH_PERSIST_KIND');
-  const kind = (typeof kindR === 'string' && kindR) || (typeof kindV === 'string' && kindV) || 'session';
+  const kind = (typeof kindR === 'string' && kindR) || (typeof kindV === 'string' && kindV) || 'local';
   if (kind === 'local') return 'local';
-  return 'session';
+  if (kind === 'session') return 'session';
+  return 'local'; // default seguro
 }
