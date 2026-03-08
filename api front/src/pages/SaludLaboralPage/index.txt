@@ -309,9 +309,7 @@ export function SaludLaboralPage() {
   const handleSaveRec = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!recSearch.selected) { toast.error('Sin becado', 'Seleccioná un becado primero.'); return; }
-    // fecha_desde es opcional — solo requerida para el rol salud_laboral (no admin)
-    const isSaludLaboral = canCrud('reconocimientos_medicos', 'write') && !isAdmin;
-    if (isSaludLaboral && !formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
+    if (!formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
     setSavingRec(true);
     try {
       const dni = String(recSearch.selected.dni).replace(/\D/g, '');
@@ -543,9 +541,9 @@ export function SaludLaboralPage() {
               <form onSubmit={handleSaveRec}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                   <div style={fg}>
-                    <label style={lbl}>Fecha desde</label>
+                    <label style={lbl}>Fecha desde *</label>
                     <input className="input" type="date" value={formRec.fecha_desde}
-                      onChange={e => setFormRec(f => ({ ...f, fecha_desde: e.target.value, fecha: e.target.value }))} />
+                      onChange={e => setFormRec(f => ({ ...f, fecha_desde: e.target.value, fecha: e.target.value }))} required />
                   </div>
                   <div style={fg}>
                     <label style={lbl}>Fecha hasta</label>

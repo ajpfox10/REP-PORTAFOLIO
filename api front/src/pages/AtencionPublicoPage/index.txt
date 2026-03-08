@@ -3,7 +3,6 @@
 // NUEVO: cards resumen (consultas, pedidos, documentos, expedientes) + tabla últimas 3 por categoría
 
 import React, { useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
@@ -138,7 +137,6 @@ function TicketPrint({ ticket }: { ticket: any }) {
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function AtencionPublicoPage() {
   const toast = useToast();
-  const navigate = useNavigate();
   const [horaAtencion, setHoraAtencion] = useState('');
 
   // Búsqueda de agente
@@ -456,6 +454,165 @@ export function AtencionPublicoPage() {
             </div>
           )}
 
+          {/* ── TABLA ÚLTIMOS REGISTROS — solo cuando hay agente ── */}
+          {row && (
+            <div className="card ap-card">
+              <h3 className="ap-section-title">📊 Últimos registros</h3>
+
+              {/* Tabs de la tabla */}
+              <div className="ap-tabla-tabs">
+                {([
+                  ['consultas',   '💬 Consultas',   ultimasConsultas.length],
+                  ['pedidos',     '📋 Pedidos',      ultimosPedidos.length],
+                  ['documentos',  '📂 Documentos',  ultimosDocumentos.length],
+                  ['expedientes', '📁 Expedientes', ultimosExpedientes.length],
+                ] as [typeof tablaTab, string, number][]).map(([t, label, count]) => (
+                  <button
+                    key={t}
+                    className={`ap-tabla-tab${tablaTab === t ? ' active' : ''}`}
+                    onClick={() => setTablaTab(t)}
+                  >
+                    {label}
+                    {count > 0 && <span className="ap-tab-count">{count}</span>}
+                  </button>
+                ))}
+              </div>
+
+              {loadingDatos ? (
+                <div className="ap-tabla-loading">🔄 Cargando datos…</div>
+              ) : (
+                <div className="ap-tabla-container">
+
+                  {/* ── Tabla Consultas ── */}
+                  {tablaTab === 'consultas' && (
+                    ultimasConsultas.length > 0 ? (
+                      <table className="ap-tabla">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Motivo</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ultimasConsultas.map((c: any) => (
+                            <tr key={c.id}>
+                              <td className="ap-tabla-id">{c.id}</td>
+                              <td>{c.motivo_consulta || c.motivo || '—'}</td>
+                              <td>
+                                <span className={`ap-estado-badge ${c.estado === 'pendiente' ? 'pend' : 'ok'}`}>
+                                  {c.estado || '—'}
+                                </span>
+                              </td>
+                              <td className="muted ap-tabla-fecha">{fmtDateShort(c.created_at)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="ap-tabla-empty">Sin consultas registradas</div>
+                    )
+                  )}
+
+                  {/* ── Tabla Pedidos ── */}
+                  {tablaTab === 'pedidos' && (
+                    ultimosPedidos.length > 0 ? (
+                      <table className="ap-tabla">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Pedido</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ultimosPedidos.map((p: any) => (
+                            <tr key={p.id}>
+                              <td className="ap-tabla-id">{p.id}</td>
+                              <td>{p.pedido || p.descripcion || '—'}</td>
+                              <td>
+                                <span className={`ap-estado-badge ${p.estado === 'pendiente' ? 'pend' : 'ok'}`}>
+                                  {p.estado || '—'}
+                                </span>
+                              </td>
+                              <td className="muted ap-tabla-fecha">{fmtDateShort(p.created_at)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="ap-tabla-empty">Sin pedidos registrados</div>
+                    )
+                  )}
+
+                  {/* ── Tabla Documentos ── */}
+                  {tablaTab === 'documentos' && (
+                    ultimosDocumentos.length > 0 ? (
+                      <table className="ap-tabla">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Nombre</th>
+                            <th>Tipo</th>
+                            <th>Fecha</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ultimosDocumentos.map((d: any) => (
+                            <tr key={d.id}>
+                              <td className="ap-tabla-id">{d.id}</td>
+                              <td>{d.nombre || d.nombre_archivo_original || `Doc #${d.id}`}</td>
+                              <td>
+                                <span className="ap-tipo-badge">{d.tipo || '—'}</span>
+                              </td>
+                              <td className="muted ap-tabla-fecha">{fmtDateShort(d.created_at || d.fecha)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="ap-tabla-empty">Sin documentos cargados</div>
+                    )
+                  )}
+
+                  {/* ── Tabla Expedientes ── */}
+                  {tablaTab === 'expedientes' && (
+                    ultimosExpedientes.length > 0 ? (
+                      <table className="ap-tabla">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Tipo</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ultimosExpedientes.map((e: any) => (
+                            <tr key={e.id}>
+                              <td className="ap-tabla-id">{e.id}</td>
+                              <td>{e.tipo || e.descripcion || e.titulo || '—'}</td>
+                              <td>
+                                <span className={`ap-estado-badge ${['abierto','pendiente'].includes(e.estado) ? 'pend' : 'ok'}`}>
+                                  {e.estado || '—'}
+                                </span>
+                              </td>
+                              <td className="muted ap-tabla-fecha">{fmtDateShort(e.created_at || e.fecha)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="ap-tabla-empty">Sin expedientes registrados</div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Formulario de consulta */}
           {row && (
             <div className="card ap-card">
@@ -513,7 +670,7 @@ export function AtencionPublicoPage() {
           )}
         </div>
 
-        {/* ── COLUMNA DERECHA: Ticket + Pendientes + Tabla + Escaneo ── */}
+        {/* ── COLUMNA DERECHA: Ticket ── */}
         <div className="ap-right">
 
           {ticketEmitido ? (
@@ -552,134 +709,8 @@ export function AtencionPublicoPage() {
             </div>
           )}
 
-          {row && !loadingDatos && pendientePedidos === 0 && (
+          {row && !loadingDatos && pendientePedidos === 0 && pedidos.length >= 0 && (
             <div className="ap-tramites-ok">✅ Sin trámites pendientes</div>
-          )}
-
-          {/* ── Botón Escanear ── */}
-          {row && (
-            <div className="card ap-card ap-escaneo-card">
-              <div className="ap-escaneo-header">
-                <span className="ap-escaneo-icon">📷</span>
-                <div>
-                  <div className="ap-escaneo-title">Escanear documento</div>
-                  <div className="muted" style={{ fontSize: '0.75rem' }}>
-                    Abre el escáner con el agente ya cargado
-                  </div>
-                </div>
-              </div>
-              <button
-                className="btn ap-btn-escanear"
-                type="button"
-                onClick={() => navigate(`/app/escaneo-agente/${row.dni}`)}
-              >
-                📷 Ir a Escanear — {row.apellido}, {row.nombre}
-              </button>
-            </div>
-          )}
-
-          {/* ── Tabla últimos registros (derecha, bajo pendientes) ── */}
-          {row && (
-            <div className="card ap-card">
-              <h3 className="ap-section-title">📊 Últimos registros</h3>
-
-              <div className="ap-tabla-tabs">
-                {([
-                  ['consultas',   '💬 Consultas',   ultimasConsultas.length],
-                  ['pedidos',     '📋 Pedidos',      ultimosPedidos.length],
-                  ['documentos',  '📂 Documentos',  ultimosDocumentos.length],
-                  ['expedientes', '📁 Expedientes', ultimosExpedientes.length],
-                ] as [typeof tablaTab, string, number][]).map(([t, label, count]) => (
-                  <button
-                    key={t}
-                    className={`ap-tabla-tab${tablaTab === t ? ' active' : ''}`}
-                    onClick={() => setTablaTab(t)}
-                  >
-                    {label}
-                    {count > 0 && <span className="ap-tab-count">{count}</span>}
-                  </button>
-                ))}
-              </div>
-
-              {loadingDatos ? (
-                <div className="ap-tabla-loading">🔄 Cargando datos…</div>
-              ) : (
-                <div className="ap-tabla-container">
-
-                  {tablaTab === 'consultas' && (
-                    ultimasConsultas.length > 0 ? (
-                      <table className="ap-tabla">
-                        <thead><tr><th>#</th><th>Motivo</th><th>Estado</th><th>Fecha</th></tr></thead>
-                        <tbody>
-                          {ultimasConsultas.map((c: any) => (
-                            <tr key={c.id}>
-                              <td className="ap-tabla-id">{c.id}</td>
-                              <td>{c.motivo_consulta || c.motivo || '—'}</td>
-                              <td><span className={`ap-estado-badge ${c.estado === 'pendiente' ? 'pend' : 'ok'}`}>{c.estado || '—'}</span></td>
-                              <td className="muted ap-tabla-fecha">{fmtDateShort(c.created_at)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : <div className="ap-tabla-empty">Sin consultas registradas</div>
-                  )}
-
-                  {tablaTab === 'pedidos' && (
-                    ultimosPedidos.length > 0 ? (
-                      <table className="ap-tabla">
-                        <thead><tr><th>#</th><th>Pedido</th><th>Estado</th><th>Fecha</th></tr></thead>
-                        <tbody>
-                          {ultimosPedidos.map((p: any) => (
-                            <tr key={p.id}>
-                              <td className="ap-tabla-id">{p.id}</td>
-                              <td>{p.pedido || p.descripcion || '—'}</td>
-                              <td><span className={`ap-estado-badge ${p.estado === 'pendiente' ? 'pend' : 'ok'}`}>{p.estado || '—'}</span></td>
-                              <td className="muted ap-tabla-fecha">{fmtDateShort(p.created_at)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : <div className="ap-tabla-empty">Sin pedidos registrados</div>
-                  )}
-
-                  {tablaTab === 'documentos' && (
-                    ultimosDocumentos.length > 0 ? (
-                      <table className="ap-tabla">
-                        <thead><tr><th>#</th><th>Nombre</th><th>Tipo</th><th>Fecha</th></tr></thead>
-                        <tbody>
-                          {ultimosDocumentos.map((d: any) => (
-                            <tr key={d.id}>
-                              <td className="ap-tabla-id">{d.id}</td>
-                              <td>{d.nombre || d.nombre_archivo_original || `Doc #${d.id}`}</td>
-                              <td><span className="ap-tipo-badge">{d.tipo || '—'}</span></td>
-                              <td className="muted ap-tabla-fecha">{fmtDateShort(d.created_at || d.fecha)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : <div className="ap-tabla-empty">Sin documentos cargados</div>
-                  )}
-
-                  {tablaTab === 'expedientes' && (
-                    ultimosExpedientes.length > 0 ? (
-                      <table className="ap-tabla">
-                        <thead><tr><th>#</th><th>Tipo</th><th>Estado</th><th>Fecha</th></tr></thead>
-                        <tbody>
-                          {ultimosExpedientes.map((e: any) => (
-                            <tr key={e.id}>
-                              <td className="ap-tabla-id">{e.id}</td>
-                              <td>{e.tipo || e.descripcion || e.titulo || '—'}</td>
-                              <td><span className={`ap-estado-badge ${['abierto','pendiente'].includes(e.estado) ? 'pend' : 'ok'}`}>{e.estado || '—'}</span></td>
-                              <td className="muted ap-tabla-fecha">{fmtDateShort(e.created_at || e.fecha)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : <div className="ap-tabla-empty">Sin expedientes registrados</div>
-                  )}
-                </div>
-              )}
-            </div>
           )}
         </div>
 

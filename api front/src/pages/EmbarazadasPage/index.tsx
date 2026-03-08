@@ -305,7 +305,7 @@ export function EmbarazadasPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!search.row) { toast.error('Sin agente', 'Seleccioná un agente primero.'); return; }
-    if (!fpp) { toast.error('Requerido', 'La fecha probable de parto es obligatoria.'); return; }
+    // fpp es opcional
     setSaving(true);
     const dni = String(search.row.dni).replace(/\D/g, '');
     try {
@@ -487,9 +487,9 @@ export function EmbarazadasPage() {
           <form onSubmit={handleSave}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div style={fg}>
-                <label style={lbl}>Fecha probable de parto *</label>
+                <label style={lbl}>Fecha probable de parto</label>
                 <input className="input" type="date" value={fpp}
-                  onChange={e => setFpp(e.target.value)} required />
+                  onChange={e => setFpp(e.target.value)} />
               </div>
               <div style={fg}>
                 <label style={lbl}>Estado</label>
