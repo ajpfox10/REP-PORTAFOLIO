@@ -32,6 +32,8 @@ import { GestionUsuarioPage } from '../pages/GestionUsuarioPage';
 import { SaludLaboralPage } from '../pages/SaludLaboralPage';
 import { EmbarazadasPage } from '../pages/EmbarazadasPage';
 import { AsistenciaPage } from '../pages/AsistenciaPage';
+import { AtencionPublicoPage } from '../pages/AtencionPublicoPage';
+import { EscaneoPage } from '../pages/EscaneoPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -80,7 +82,8 @@ export function App() {
             <Route path="/app/salud-laboral" element={<Private><AppGuard><SaludLaboralPage /></AppGuard></Private>} />
             <Route path="/app/embarazadas" element={<Private><AppGuard><EmbarazadasPage /></AppGuard></Private>} />
             <Route path="/app/asistencia" element={<Private><AppGuard><AsistenciaPage /></AppGuard></Private>} />
-
+            <Route path="/app/atencion" element={<Private><AppGuard><AtencionPublicoPage /></AppGuard></Private>} />
+            <Route path="/app/escaneo" element={<Private><AppGuard><EscaneoPage /></AppGuard></Private>} />
             {/* Alta de agentes */}
             <Route path="/app/carga-agente" element={<Private><AppGuard><CargaAgentePage /></AppGuard></Private>} />
 
