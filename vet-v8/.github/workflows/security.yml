@@ -1,0 +1,67 @@
+# Security CI pipeline — v10  (S-11)
+# Runs on every push and PR. Blocks merge on HIGH/CRITICAL vulnerabilities.
+
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Weekly full audit even without code changes
+    - cron: "0 8 * * 1"
+
+jobs:
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Fail on HIGH or CRITICAL vulnerabilities
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high --omit=dev
+
+      # Report (non-blocking) on dev deps
+      - name: Audit all dependencies (report only)
+        run: npm audit --audit-level=critical || true
+        continue-on-error: true
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.json
+          retention-days: 90
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
