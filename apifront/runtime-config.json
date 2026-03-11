@@ -1,0 +1,5 @@
+{
+  "apiBaseUrl": "http://192.168.0.21:3000/api/v1",
+  "scannerApiUrl": "http://192.168.0.21:3001",
+  "scannerTenantId": "1"
+}

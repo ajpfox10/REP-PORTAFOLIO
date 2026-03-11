@@ -1,0 +1,238 @@
+/* EscaneoPage v3 — Scanner con dispositivos, bandejas, cola en tiempo real */
+
+.scan-page { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Tabs ── */
+.scan-tabs {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: 0;
+}
+.scan-tab {
+  padding: 8px 16px; border-radius: 8px 8px 0 0;
+  background: transparent; border: none; color: rgba(255,255,255,0.5);
+  font-size: 0.83rem; cursor: pointer; transition: all 0.15s;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.scan-tab:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.04); }
+.scan-tab.active { color: #a5b4fc; border-bottom-color: #6366f1; background: rgba(99,102,241,0.08); }
+
+/* ── Layout 2 cols ── */
+.scan-layout {
+  display: grid;
+  grid-template-columns: minmax(0,1.1fr) minmax(300px,1fr);
+  gap: clamp(12px,2vw,20px); align-items: start;
+}
+@media(max-width:860px){ .scan-layout{ grid-template-columns:1fr; } }
+.scan-col { display:flex; flex-direction:column; gap:14px; }
+
+/* ── Card base ── */
+.scan-card { padding: 1rem 1.1rem; }
+
+.scan-section-title {
+  font-size: 0.88rem; font-weight: 700; margin: 0 0 10px;
+  color: #e2e8f0; display:flex; align-items:center; gap:6px;
+}
+
+.scan-label {
+  font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.07em; margin-bottom: 4px;
+}
+
+/* ── Dispositivos lista ── */
+.scan-no-devices {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 20px; text-align: center; color: rgba(255,255,255,0.5);
+}
+.scan-device-list { display: flex; flex-direction: column; gap: 6px; }
+.scan-device-btn {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 12px; border-radius: 8px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer; color: inherit; text-align: left; transition: all 0.15s;
+}
+.scan-device-btn:hover { background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.3); }
+.scan-device-btn.selected { background: rgba(99,102,241,0.18); border-color: #6366f1; }
+.scan-device-btn.offline { opacity: 0.55; }
+.scan-device-row { display:flex; align-items:center; gap:8px; }
+
+/* ── Dot indicador ── */
+.scan-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #64748b; flex-shrink: 0;
+  display: inline-block;
+}
+.scan-dot.online { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.scan-dot-lg {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #64748b; flex-shrink: 0;
+}
+.scan-dot-lg.online { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.6); }
+
+/* ── Capacidades grid ── */
+.scan-caps-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.scan-cap-btn {
+  padding: 6px 12px; border-radius: 8px; font-size: 0.8rem;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer; color: rgba(255,255,255,0.7); transition: all 0.15s; text-align: left;
+}
+.scan-cap-btn:hover { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.3); }
+.scan-cap-btn.selected {
+  background: rgba(99,102,241,0.25); border-color: #6366f1;
+  color: #e0e7ff; font-weight: 600;
+}
+.scan-cap-tag {
+  font-size: 0.65rem; background: rgba(16,185,129,0.2); color: #6ee7b7;
+  padding: 1px 5px; border-radius: 4px; margin-left: 6px;
+}
+
+/* ── Checkbox ── */
+.scan-checkbox-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.83rem; cursor: pointer; color: rgba(255,255,255,0.8);
+}
+
+/* ── Búsqueda ── */
+.scan-search-grid { display:grid; grid-template-columns:1fr 1.4fr; gap:10px; }
+@media(max-width:500px){ .scan-search-grid{ grid-template-columns:1fr; } }
+
+.scan-matches { display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto; }
+.scan-match-item {
+  display:flex; align-items:center; padding:7px 10px;
+  border-radius:8px; background:rgba(255,255,255,0.04);
+  border:1px solid transparent; cursor:pointer; text-align:left; color:inherit;
+  transition:background 0.15s;
+}
+.scan-match-item:hover { background:rgba(99,102,241,0.15); border-color:rgba(99,102,241,0.3); }
+
+/* ── Agente barra ── */
+.scan-agente-bar {
+  padding: 10px 12px; border-radius: 8px;
+  background: rgba(99,102,241,0.1); border-left: 3px solid #6366f1;
+}
+.scan-agente-name { font-size: 0.95rem; font-weight: 700; }
+.scan-agente-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
+
+/* ── Resumen lanzar ── */
+.scan-launch-card { border-left: 3px solid #6366f1; }
+.scan-summary { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.scan-summary-row {
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:0.83rem; padding:4px 0;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.scan-warn {
+  padding:8px 10px; border-radius:8px; font-size:0.8rem;
+  background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3);
+  color:#fcd34d; margin-bottom:10px;
+}
+.scan-btn-launch {
+  width:100%; padding:12px !important; font-size:1rem !important; font-weight:700 !important;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6) !important;
+  color:white !important; border-radius:10px !important;
+  transition:opacity 0.15s;
+}
+.scan-btn-launch:disabled { opacity:0.5; cursor:not-allowed; }
+
+/* ── Doc list pequeña ── */
+.scan-doc-list { display:flex; flex-direction:column; gap:6px; }
+.scan-doc-item {
+  display:flex; align-items:center; gap:10px;
+  padding:6px 8px; border-radius:6px; background:rgba(255,255,255,0.03);
+}
+.scan-doc-class {
+  font-size:0.65rem; font-weight:700; text-transform:uppercase;
+  background:rgba(99,102,241,0.2); color:#a5b4fc;
+  padding:2px 6px; border-radius:4px; flex-shrink:0;
+}
+
+/* ══════════════════════════════════════
+   TAB: DISPOSITIVOS
+══════════════════════════════════════ */
+.scan-devices-page { display:flex; flex-direction:column; gap:12px; }
+.scan-devices-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.scan-discover-btn {
+  background:linear-gradient(135deg,rgba(99,102,241,0.3),rgba(139,92,246,0.3)) !important;
+  border-color:rgba(99,102,241,0.5) !important;
+}
+.scan-devices-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:14px;
+}
+.scan-device-card {
+  padding:1.1rem; border-left:3px solid rgba(255,255,255,0.1);
+  transition:border-color 0.2s;
+}
+.scan-device-card.online { border-left-color:#10b981; }
+.scan-device-header { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; }
+.scan-device-title { font-size:0.95rem; font-weight:700; }
+.scan-device-info { display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
+.scan-info-row {
+  display:flex; justify-content:space-between; font-size:0.8rem;
+  padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.scan-device-caps { margin-top:8px; }
+.scan-caps-title { font-size:0.7rem; text-transform:uppercase; color:#94a3b8; letter-spacing:0.07em; margin-bottom:6px; }
+.scan-cap-tags { display:flex; flex-wrap:wrap; gap:4px; }
+.scan-cap-tag-sm {
+  font-size:0.68rem; padding:2px 7px; border-radius:4px;
+  background:rgba(99,102,241,0.15); color:#a5b4fc; border:1px solid rgba(99,102,241,0.2);
+}
+
+/* ══════════════════════════════════════
+   TAB: COLA
+══════════════════════════════════════ */
+.scan-cola-page { display:flex; flex-direction:column; gap:12px; }
+.scan-cola-section {
+  font-size:0.72rem; text-transform:uppercase; letter-spacing:0.07em;
+  color:#64748b; margin-bottom:8px;
+}
+.scan-jobs-list { display:flex; flex-direction:column; gap:8px; }
+.scan-job-card { padding:12px 14px; }
+.scan-job-card.active { border-left:3px solid #6366f1; }
+.scan-job-card.failed { border-left:3px solid #ef4444; }
+.scan-job-header { display:flex; align-items:flex-start; gap:10px; }
+.scan-status-icon { font-size:1.2rem; flex-shrink:0; margin-top:1px; }
+.scan-job-progress {
+  margin-top:8px; height:3px; border-radius:2px;
+  background:rgba(255,255,255,0.08); overflow:hidden;
+}
+.scan-job-bar {
+  height:100%; width:60%; border-radius:2px;
+  background:linear-gradient(90deg,#6366f1,#8b5cf6);
+  animation:scan-progress 1.5s ease-in-out infinite alternate;
+}
+@keyframes scan-progress { from{width:20%} to{width:85%} }
+.scan-job-err {
+  margin-top:6px; padding:6px 8px; border-radius:6px; font-size:0.78rem;
+  background:rgba(239,68,68,0.1); color:#fca5a5;
+}
+.scan-pulse-dot {
+  display:inline-block; width:7px; height:7px; border-radius:50%;
+  background:#10b981; margin-left:8px; vertical-align:middle;
+  animation:pulse-dot 1.5s ease-in-out infinite;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+
+/* ══════════════════════════════════════
+   TAB: DOCUMENTOS
+══════════════════════════════════════ */
+.scan-docs-page { display:flex; flex-direction:column; gap:12px; }
+.scan-docs-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:12px; margin-top:4px;
+}
+.scan-doc-card { padding:1rem; }
+.scan-doc-class-badge {
+  display:inline-block; font-size:0.65rem; font-weight:700; text-transform:uppercase;
+  background:rgba(99,102,241,0.2); color:#a5b4fc;
+  padding:2px 8px; border-radius:4px; margin-bottom:8px;
+}
+.scan-doc-title { font-size:0.88rem; font-weight:600; line-height:1.3; margin-bottom:4px; }
+.scan-doc-meta { display:flex; gap:6px; font-size:0.75rem; color:#94a3b8; flex-wrap:wrap; }
+
+/* ── Empty state ── */
+.scan-empty-state {
+  display:flex; flex-direction:column; align-items:center;
+  gap:10px; padding:40px; text-align:center; color:rgba(255,255,255,0.4);
+}
