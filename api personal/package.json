@@ -7,6 +7,7 @@
     "dev": "npm run gen:routes && cross-env NODE_ENV=development ts-node-dev --transpile-only --respawn src/server.ts",
     "build": "rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json",
     "start": "cross-env NODE_ENV=production node dist/server.js",
+    "prod": "cross-env NODE_ENV=production node dist/server.js",
     "test": "cross-env NODE_ENV=test jest --runInBand",
     "test:integration": "npx cross-env TEST_INTEGRATION=1 NODE_ENV=test jest --runInBand",
     "lint:types": "tsc -p tsconfig.json --noEmit",

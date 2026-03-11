@@ -1,0 +1,10 @@
+/*
+  TablesPage (ruta propia)
+  ---------------------------------------------------------------------------
+  Este archivo contiene estilos SOLO para esta página.
+  Mantener acá cualquier ajuste visual/responsive para evitar choques globales.
+*/
+
+.tables-card {
+  padding: 14px;
+}

@@ -1,0 +1,807 @@
+// src/pages/SaludLaboralPage/index.tsx
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Layout } from '../../components/Layout';
+import { useAuth } from '../../auth/AuthProvider';
+import { useToast } from '../../ui/toast';
+import { apiFetch } from '../../api/http';
+import { searchPersonal } from '../../api/searchPersonal';
+import { exportToExcel, exportToPdf } from '../../utils/export';
+
+// ─── Leyes becados/residentes ─────────────────────────────────────────────────
+const LEYES_BECADOS = [6, 7, 8, 9, 10, 11, 12, 13];
+
+// ─── TIPOS ───────────────────────────────────────────────────────────────────
+
+interface Persona {
+  dni: number | string;
+  apellido: string;
+  nombre: string;
+  cuil?: string;
+  ley?: string;
+  dependencia_nombre?: string;
+  estado_empleo?: string;
+}
+
+interface ReconocimientoMedico {
+  id: number;
+  dni: string;
+  fecha: string;
+  fecha_desde: string | null;
+  fecha_hasta: string | null;
+  cantidad_dias: number | null;
+  tipo: string | null;
+  resultado: string | null;
+  observaciones: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by_nombre: string | null;
+  created_by_email: string | null;
+  updated_by_nombre: string | null;
+  updated_by_email: string | null;
+}
+
+interface ExamenAnual {
+  id: number;
+  dni: string;
+  anio: number;
+  fecha_examen: string;
+  resultado: string | null;
+  observaciones: string | null;
+  realizado: boolean | number | null;
+  created_at: string;
+  updated_at: string;
+  created_by_nombre: string | null;
+  created_by_email: string | null;
+  updated_by_nombre: string | null;
+  updated_by_email: string | null;
+}
+
+type Tab = 'reconocimientos' | 'examenes';
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+function isWithin24h(createdAt: string): boolean {
+  if (!createdAt) return false;
+  return Date.now() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000;
+}
+
+function fmt(d?: string | null): string {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleDateString('es-AR'); } catch { return String(d); }
+}
+
+function calcDias(desde: string, hasta: string): number | null {
+  if (!desde || !hasta) return null;
+  try {
+    const d1 = new Date(desde).getTime();
+    const d2 = new Date(hasta).getTime();
+    if (isNaN(d1) || isNaN(d2) || d2 < d1) return null;
+    return Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+  } catch { return null; }
+}
+
+function normalize(s: string) {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+// ─── HOOK: lista de becados (carga una sola vez) ──────────────────────────────
+
+function useAllBecados() {
+  const toast = useToast();
+  const [allBecados, setAllBecados] = useState<Persona[]>([]);
+  const [loading, setLoading] = useState(false);
+  const loaded = useRef(false);
+
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const agRes = await apiFetch<any>('/agentes?limit=2000');
+        const agentes: any[] = agRes?.data || [];
+        const dnisBecados = new Set(
+          agentes
+            .filter(a => LEYES_BECADOS.includes(Number(a.ley_id)) && a.estado_empleo === 'ACTIVO')
+            .map(a => String(a.dni))
+        );
+        if (!dnisBecados.size) return;
+
+        let all: any[] = [];
+        let page = 1;
+        let total = Infinity;
+        while (all.length < total) {
+          const res = await apiFetch<any>(`/personaldetalle?limit=200&page=${page}`);
+          const rows: any[] = res?.data || [];
+          if (!rows.length) break;
+          all = [...all, ...rows];
+          if (res?.meta?.total) total = Number(res.meta.total);
+          else total = all.length;
+          if (rows.length < 200) break;
+          page++;
+        }
+
+        const leyMap = new Map(agentes.map(a => [String(a.dni), a]));
+        const becados: Persona[] = all
+          .filter(p => dnisBecados.has(String(p.dni)))
+          .map(p => {
+            const ag = leyMap.get(String(p.dni));
+            return {
+              dni: p.dni,
+              apellido: p.apellido || '',
+              nombre: p.nombre || '',
+              cuil: p.cuil,
+              ley: p.ley || ag?.ley_nombre,
+              dependencia_nombre: p.dependencia,
+              estado_empleo: p.estado_empleo || ag?.estado_empleo,
+            };
+          });
+        becados.sort((a, b) => a.apellido.localeCompare(b.apellido));
+        setAllBecados(becados);
+      } catch (e: any) {
+        toast.error('Error cargando becados', e?.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  return { allBecados, loading };
+}
+
+// ─── HOOK: buscador DNI + Apellido/Nombre (igual a GestionPage) ──────────────
+// mode='becados' filtra sobre lista local; mode='todos' usa API/searchPersonal
+
+function useLiveSearch(mode: 'becados' | 'todos', allBecados: Persona[]) {
+  const toast = useToast();
+  const [dni, setDni] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [matches, setMatches] = useState<Persona[]>([]);
+  const [loadingSearch, setLoadingSearch] = useState(false);
+  const [selected, setSelected] = useState<Persona | null>(null);
+
+  // Limpiar al cambiar de tab
+  useEffect(() => {
+    setDni(''); setFullName(''); setMatches([]); setSelected(null);
+  }, [mode]);
+
+  // ── Buscar por DNI ──
+  async function onSearchDni(override?: string) {
+    const clean = (override ?? dni).replace(/\D/g, '');
+    if (!clean) { toast.error('DNI inválido', 'Ingresá un DNI válido'); return; }
+    setMatches([]); setSelected(null);
+
+    if (mode === 'becados') {
+      const found = allBecados.find(b => String(b.dni).replace(/\D/g, '') === clean);
+      if (found) { setSelected(found); }
+      else { toast.error('No encontrado', `Sin becado con DNI ${clean}`); }
+    } else {
+      setLoadingSearch(true);
+      try {
+        const res = await apiFetch<any>(`/personal/${clean}`);
+        if (res?.ok && res?.data) {
+          const r = { ...res.data }; if (!r.dni) r.dni = clean;
+          setSelected({ dni: r.dni, apellido: r.apellido || '', nombre: r.nombre || '', cuil: r.cuil, estado_empleo: r.estado_empleo, dependencia_nombre: r.dependencia });
+          toast.ok('Agente cargado', `${r.apellido ?? ''}, ${r.nombre ?? ''}`);
+        } else { toast.error('No encontrado', `Sin agente con DNI ${clean}`); }
+      } catch (e: any) { toast.error('Error', e?.message); }
+      finally { setLoadingSearch(false); }
+    }
+  }
+
+  // ── Buscar por Apellido/Nombre ──
+  async function onSearchName() {
+    const q = fullName.trim();
+    if (!q) { toast.error('Búsqueda inválida', 'Ingresá apellido y/o nombre'); return; }
+    setMatches([]); setSelected(null);
+
+    if (mode === 'becados') {
+      const nq = normalize(q);
+      const filtered = allBecados.filter(b => {
+        const ape = normalize(b.apellido);
+        const nom = normalize(b.nombre);
+        return ape.includes(nq) || nom.includes(nq) || `${ape} ${nom}`.includes(nq);
+      });
+      setMatches(filtered.slice(0, 30));
+      if (!filtered.length) toast.error('Sin resultados', `No se encontró "${q}" en becados`);
+      else toast.ok(`${filtered.length} resultado(s)`);
+    } else {
+      setLoadingSearch(true);
+      try {
+        const results = await searchPersonal(q);
+        setMatches((results as Persona[]).slice(0, 30));
+        if (!results.length) toast.error('Sin resultados', `No se encontró "${q}"`);
+        else toast.ok(`${results.length} resultado(s)`);
+      } catch (e: any) { toast.error('Error al buscar', e?.message); }
+      finally { setLoadingSearch(false); }
+    }
+  }
+
+  const select = (p: Persona) => { setSelected(p); setMatches([]); setDni(''); setFullName(''); };
+  const clear  = () => { setSelected(null); setMatches([]); setDni(''); setFullName(''); };
+
+  return { dni, setDni, fullName, setFullName, matches, loadingSearch, selected, onSearchDni, onSearchName, select, clear };
+}
+
+// ─── PÁGINA PRINCIPAL ────────────────────────────────────────────────────────
+
+export function SaludLaboralPage() {
+  const { canCrud, hasPerm, session } = useAuth();
+  const toast = useToast();
+  const isAdmin = hasPerm('crud:*:*');
+
+  const [tab, setTab] = useState<Tab>('reconocimientos');
+
+  // Lista de becados cargada una vez
+  const { allBecados, loading: loadingBecados } = useAllBecados();
+
+  // Buscador para reconocimientos (solo becados)
+  const recSearch = useLiveSearch('becados', allBecados);
+  // Buscador para examen anual (todos los agentes)
+  const examSearch = useLiveSearch('todos', allBecados);
+
+  // ── Reconocimientos ──
+  const [allRecs, setAllRecs] = useState<ReconocimientoMedico[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [editingRec, setEditingRec] = useState<ReconocimientoMedico | null>(null);
+  const [formRec, setFormRec] = useState({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '' });
+  const [savingRec, setSavingRec] = useState(false);
+
+  // ── Exámenes ──
+  const [allExams, setAllExams] = useState<ExamenAnual[]>([]);
+  const [loadingExams, setLoadingExams] = useState(false);
+  const [editingExam, setEditingExam] = useState<ExamenAnual | null>(null);
+  const [formExam, setFormExam] = useState({ anio: String(new Date().getFullYear()), fecha_examen: '', resultado: '', observaciones: '', realizado: false });
+  const [markingRealizado, setMarkingRealizado] = useState<number | null>(null);
+  const [savingExam, setSavingExam] = useState(false);
+
+  const auditInfo = {
+    id: (session?.user as any)?.id ?? null,
+    email: session?.user?.email ?? null,
+    nombre: (session?.user as any)?.nombre ?? null,
+  };
+
+  const loadAllRecs = useCallback(async () => {
+    if (!canCrud('reconocimientos_medicos', 'read')) return;
+    setLoadingRecs(true);
+    try { const r = await apiFetch<any>('/reconocimientos_medicos?limit=500&sort=-created_at'); setAllRecs(r?.data || []); }
+    catch (e: any) { toast.error('Error', e?.message); }
+    finally { setLoadingRecs(false); }
+  }, []);
+
+  const loadAllExams = useCallback(async () => {
+    if (!canCrud('examen_anual', 'read')) return;
+    setLoadingExams(true);
+    try { const r = await apiFetch<any>('/examen_anual?limit=500&sort=-created_at'); setAllExams(r?.data || []); }
+    catch (e: any) { toast.error('Error', e?.message); }
+    finally { setLoadingExams(false); }
+  }, []);
+
+  useEffect(() => { loadAllRecs(); }, [loadAllRecs]);
+  useEffect(() => { loadAllExams(); }, [loadAllExams]);
+
+  // Filtrado por persona seleccionada
+  const recDni  = recSearch.selected  ? String(recSearch.selected.dni).replace(/\D/g, '')  : '';
+  const examDni = examSearch.selected ? String(examSearch.selected.dni).replace(/\D/g, '') : '';
+  const recs  = recDni  ? allRecs.filter(r  => String(r.dni).replace(/\D/g,'')  === recDni)  : allRecs;
+  const exams = examDni ? allExams.filter(e => String(e.dni).replace(/\D/g,'') === examDni) : allExams;
+
+  // Reset forms al cambiar selección
+  useEffect(() => {
+    setEditingRec(null);
+    setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '' });
+  }, [recSearch.selected]);
+
+  useEffect(() => {
+    setEditingExam(null);
+    setFormExam({ anio: String(new Date().getFullYear()), fecha_examen: '', resultado: '', observaciones: '' });
+  }, [examSearch.selected]);
+
+  // Auto-calcular días
+  useEffect(() => {
+    if (formRec.fecha_desde && formRec.fecha_hasta) {
+      const dias = calcDias(formRec.fecha_desde, formRec.fecha_hasta);
+      if (dias !== null) setFormRec(f => ({ ...f, cantidad_dias: String(dias) }));
+    }
+  }, [formRec.fecha_desde, formRec.fecha_hasta]);
+
+  // ── Guardar reconocimiento ──
+  const handleSaveRec = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recSearch.selected) { toast.error('Sin becado', 'Seleccioná un becado primero.'); return; }
+    // fecha_desde es opcional — solo requerida para el rol salud_laboral (no admin)
+    const isSaludLaboral = canCrud('reconocimientos_medicos', 'write') && !isAdmin;
+    if (isSaludLaboral && !formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
+    setSavingRec(true);
+    try {
+      const dni = String(recSearch.selected.dni).replace(/\D/g, '');
+      const body: any = {
+        dni, fecha: formRec.fecha || formRec.fecha_desde,
+        fecha_desde: formRec.fecha_desde || null, fecha_hasta: formRec.fecha_hasta || null,
+        cantidad_dias: formRec.cantidad_dias ? Number(formRec.cantidad_dias) : null,
+        tipo: formRec.tipo || null, resultado: formRec.resultado || null, observaciones: formRec.observaciones || null,
+      };
+      if (editingRec) {
+        await apiFetch(`/reconocimientos_medicos/${editingRec.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ ...body, updated_by: auditInfo.id, updated_by_email: auditInfo.email, updated_by_nombre: auditInfo.nombre }),
+        });
+        toast.ok('Actualizado', 'Reconocimiento actualizado.');
+      } else {
+        await apiFetch('/reconocimientos_medicos', {
+          method: 'POST',
+          body: JSON.stringify({ ...body, created_by: auditInfo.id, created_by_email: auditInfo.email, created_by_nombre: auditInfo.nombre }),
+        });
+        toast.ok('Guardado', 'Reconocimiento cargado.');
+      }
+      setEditingRec(null);
+      setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '' });
+      loadAllRecs();
+    } catch (e: any) { toast.error('Error', e?.message); }
+    finally { setSavingRec(false); }
+  };
+
+  const startEditRec = (r: ReconocimientoMedico) => {
+    if (!isAdmin && !isWithin24h(r.created_at)) { toast.error('Sin permiso', 'Solo podés editar dentro de las 24hs de carga.'); return; }
+    setEditingRec(r);
+    setFormRec({ fecha: r.fecha?.slice(0,10)||'', fecha_desde: r.fecha_desde?.slice(0,10)||'', fecha_hasta: r.fecha_hasta?.slice(0,10)||'', cantidad_dias: r.cantidad_dias!=null?String(r.cantidad_dias):'', tipo: r.tipo||'', resultado: r.resultado||'', observaciones: r.observaciones||'' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // ── Guardar examen ──
+  const handleSaveExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!examSearch.selected) { toast.error('Sin agente', 'Seleccioná un agente primero.'); return; }
+    if (!formExam.fecha_examen) { toast.error('Requerido', 'La fecha del examen es obligatoria.'); return; }
+    setSavingExam(true);
+    try {
+      const dni = String(examSearch.selected.dni).replace(/\D/g, '');
+      const anioActual = new Date().getFullYear();
+      const anioForm = Number(formExam.anio);
+
+      // Bloquear nuevo registro si ya existe examen en el año en curso para ese agente
+      if (!editingExam && anioForm === anioActual) {
+        const existe = allExams.find(ex =>
+          String(ex.dni).replace(/\D/g,'') === dni && Number(ex.anio) === anioActual
+        );
+        if (existe) {
+          toast.error('Ya existe', `Este agente ya tiene un examen registrado para ${anioActual}.`);
+          setSavingExam(false);
+          return;
+        }
+      }
+
+      const body: any = {
+        dni, anio: anioForm, fecha_examen: formExam.fecha_examen,
+        resultado: formExam.resultado || null, observaciones: formExam.observaciones || null,
+        realizado: formExam.realizado ? 1 : 0,
+      };
+      if (editingExam) {
+        await apiFetch(`/examen_anual/${editingExam.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ ...body, updated_by: auditInfo.id, updated_by_email: auditInfo.email, updated_by_nombre: auditInfo.nombre }),
+        });
+        toast.ok('Actualizado', 'Examen actualizado.');
+      } else {
+        await apiFetch('/examen_anual', {
+          method: 'POST',
+          body: JSON.stringify({ ...body, created_by: auditInfo.id, created_by_email: auditInfo.email, created_by_nombre: auditInfo.nombre }),
+        });
+        toast.ok('Guardado', 'Examen cargado.');
+      }
+      setEditingExam(null);
+      setFormExam({ anio: String(new Date().getFullYear()), fecha_examen: '', resultado: '', observaciones: '', realizado: false });
+      loadAllExams();
+    } catch (e: any) { toast.error('Error', e?.message); }
+    finally { setSavingExam(false); }
+  };
+
+  // Marcar/desmarcar realizado desde la tabla (solo rol salud_laboral)
+  const handleToggleRealizado = async (ex: ExamenAnual) => {
+    setMarkingRealizado(ex.id);
+    try {
+      const nuevoValor = ex.realizado ? 0 : 1;
+      await apiFetch(`/examen_anual/${ex.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          realizado: nuevoValor,
+          updated_by: auditInfo.id,
+          updated_by_email: auditInfo.email,
+          updated_by_nombre: auditInfo.nombre,
+        }),
+      });
+      toast.ok(nuevoValor ? '✓ Marcado como realizado' : 'Desmarcado', '');
+      loadAllExams();
+    } catch (e: any) { toast.error('Error', e?.message); }
+    finally { setMarkingRealizado(null); }
+  };
+
+  const startEditExam = (ex: ExamenAnual) => {
+    if (!isAdmin && !isWithin24h(ex.created_at)) { toast.error('Sin permiso', 'Solo podés editar dentro de las 24hs de carga.'); return; }
+    setEditingExam(ex);
+    setFormExam({ anio: String(ex.anio), fecha_examen: ex.fecha_examen?.slice(0,10)||'', resultado: ex.resultado||'', observaciones: ex.observaciones||'', realizado: !!ex.realizado });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // ── Helper nombre en tabla ──
+  const getNombreRec = (dni: string) => {
+    if (recSearch.selected && String(recSearch.selected.dni).replace(/\D/g,'') === String(dni).replace(/\D/g,''))
+      return `${recSearch.selected.apellido}, ${recSearch.selected.nombre}`;
+    const b = allBecados.find(x => String(x.dni).replace(/\D/g,'') === String(dni).replace(/\D/g,''));
+    return b ? `${b.apellido}, ${b.nombre}` : dni;
+  };
+
+  // ─── RENDER ───────────────────────────────────────────────────────────────
+
+  return (
+    <Layout title="🏥 Salud Laboral" showBack>
+
+      {/* ── TABS ── */}
+      <div className="card" style={{ padding: '6px 8px', marginBottom: 16 }}>
+        <div className="row" style={{ gap: 6 }}>
+          <button className={`btn${tab === 'reconocimientos' ? ' active' : ''}`} type="button" onClick={() => setTab('reconocimientos')}>
+            🩺 Reconocimientos Médicos
+            <span className="badge" style={{ marginLeft: 6, fontSize: '0.7rem' }}>{tab === 'reconocimientos' ? recs.length : allRecs.length}</span>
+          </button>
+          <button className={`btn${tab === 'examenes' ? ' active' : ''}`} type="button" onClick={() => setTab('examenes')}>
+            📋 Examen Anual
+            <span className="badge" style={{ marginLeft: 6, fontSize: '0.7rem' }}>{tab === 'examenes' ? exams.length : allExams.length}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ══════════════ TAB RECONOCIMIENTOS ══════════════ */}
+      {tab === 'reconocimientos' && (
+        <>
+          {/* Buscador: SOLO BECADOS */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div className="h2">Buscar becado</div>
+              <span className="muted" style={{ fontSize: '0.78rem' }}>
+                {loadingBecados ? 'Cargando becados...' : `${allBecados.length} becados activos`}
+              </span>
+            </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={lbl}>DNI</label>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="input" style={{ flex: 1 }}
+                  value={recSearch.dni}
+                  onChange={e => recSearch.setDni(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && recSearch.onSearchDni()}
+                  placeholder="Enter para buscar"
+                  disabled={loadingBecados} />
+                <button className="btn" type="button" onClick={() => recSearch.onSearchDni()} disabled={loadingBecados}>
+                  {recSearch.loadingSearch ? '...' : 'Buscar'}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label style={lbl}>Apellido / Nombre</label>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="input" style={{ flex: 1 }}
+                  value={recSearch.fullName}
+                  onChange={e => recSearch.setFullName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && recSearch.onSearchName()}
+                  placeholder="Apellido Nombre (Enter)"
+                  disabled={loadingBecados} />
+                <button className="btn" type="button" onClick={recSearch.onSearchName} disabled={loadingBecados}>
+                  {recSearch.loadingSearch ? '...' : 'Buscar'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+            {/* Lista de coincidencias live */}
+            {recSearch.matches.length > 0 && (
+              <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {recSearch.matches.map(b => (
+                  <button key={b.dni} className="btn" type="button"
+                    style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                    onClick={() => recSearch.select(b)}>
+                    <strong>{b.apellido}, {b.nombre}</strong>
+                    <span className="muted" style={{ marginLeft: 8, fontSize: '0.8rem' }}>
+                      DNI {b.dni}{b.ley ? ` · ${b.ley}` : ''}{b.dependencia_nombre ? ` · ${b.dependencia_nombre}` : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Becado seleccionado */}
+            {recSearch.selected && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.3)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{recSearch.selected.apellido}, {recSearch.selected.nombre}</div>
+                  <div className="muted" style={{ fontSize: '0.82rem' }}>
+                    DNI {recSearch.selected.dni}
+                    {recSearch.selected.cuil ? ` · CUIL ${recSearch.selected.cuil}` : ''}
+                    {recSearch.selected.ley ? ` · ${recSearch.selected.ley}` : ''}
+                    {recSearch.selected.dependencia_nombre ? ` · ${recSearch.selected.dependencia_nombre}` : ''}
+                  </div>
+                </div>
+                <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={recSearch.clear}>✕ Limpiar</button>
+              </div>
+            )}
+
+            {!recSearch.selected && !recSearch.dni && !recSearch.fullName && !loadingBecados && (
+              <div className="muted" style={{ fontSize: '0.78rem', marginTop: 6 }}>
+                Sin becado seleccionado — mostrando todos los reconocimientos.
+              </div>
+            )}
+          </div>
+
+          {/* Formulario reconocimientos */}
+          {canCrud('reconocimientos_medicos', 'create') && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="h2" style={{ marginBottom: 10 }}>
+                {editingRec ? '✏️ Editar reconocimiento' : '➕ Nuevo reconocimiento médico'}
+                {recSearch.selected && <span style={{ fontWeight: 400, fontSize: '0.85rem', marginLeft: 8, color: 'rgba(255,255,255,0.5)' }}>— {recSearch.selected.apellido}, {recSearch.selected.nombre}</span>}
+              </div>
+              {!recSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un becado antes de cargar.</div>}
+              <form onSubmit={handleSaveRec}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <div style={fg}>
+                    <label style={lbl}>Fecha desde</label>
+                    <input className="input" type="date" value={formRec.fecha_desde}
+                      onChange={e => setFormRec(f => ({ ...f, fecha_desde: e.target.value, fecha: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label style={lbl}>Fecha hasta</label>
+                    <input className="input" type="date" value={formRec.fecha_hasta}
+                      min={formRec.fecha_desde || undefined}
+                      onChange={e => setFormRec(f => ({ ...f, fecha_hasta: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label style={lbl}>
+                      Cantidad de días
+                      {formRec.cantidad_dias && <span style={{ marginLeft: 6, color: '#10b981', fontWeight: 700 }}>{formRec.cantidad_dias}d</span>}
+                    </label>
+                    <input className="input" type="number" min={1} value={formRec.cantidad_dias}
+                      onChange={e => setFormRec(f => ({ ...f, cantidad_dias: e.target.value }))}
+                      placeholder="Se calcula automático" />
+                  </div>
+                  <div style={fg}>
+                    <label style={lbl}>Tipo</label>
+                    <input className="input" type="text" placeholder="Ej: Preocupacional" value={formRec.tipo}
+                      onChange={e => setFormRec(f => ({ ...f, tipo: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label style={lbl}>Resultado</label>
+                    <input className="input" type="text" placeholder="Ej: Apto" value={formRec.resultado}
+                      onChange={e => setFormRec(f => ({ ...f, resultado: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label style={lbl}>Observaciones</label>
+                    <input className="input" type="text" placeholder="Observaciones" value={formRec.observaciones}
+                      onChange={e => setFormRec(f => ({ ...f, observaciones: e.target.value }))} />
+                  </div>
+                </div>
+                {formRec.fecha_desde && formRec.fecha_hasta && (
+                  <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 6, fontSize: '0.82rem' }}>
+                    📅 Del <strong>{fmt(formRec.fecha_desde)}</strong> al <strong>{fmt(formRec.fecha_hasta)}</strong>
+                    {formRec.cantidad_dias && <> — <strong style={{ color: '#10b981' }}>{formRec.cantidad_dias} días</strong></>}
+                  </div>
+                )}
+                <div className="row" style={{ gap: 8, marginTop: 12 }}>
+                  <button className="btn ok" type="submit" disabled={savingRec || !recSearch.selected}>
+                    {savingRec ? 'Guardando...' : editingRec ? 'Actualizar' : 'Guardar'}
+                  </button>
+                  {editingRec && (
+                    <button className="btn" type="button" onClick={() => { setEditingRec(null); setFormRec({ fecha:'',fecha_desde:'',fecha_hasta:'',cantidad_dias:'',tipo:'',resultado:'',observaciones:'' }); }}>
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Tabla reconocimientos */}
+          <div className="card">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div className="h2">
+                {recSearch.selected ? `Reconocimientos de ${recSearch.selected.apellido} (${recs.length})` : `Todos los reconocimientos (${allRecs.length})`}
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <button className="btn" type="button" disabled={!recs.length} onClick={() => exportToExcel('reconocimientos_medicos', recs)}>📊 Excel</button>
+                <button className="btn" type="button" disabled={!recs.length} onClick={() => exportToPdf('reconocimientos_medicos', recs)}>📄 PDF</button>
+              </div>
+            </div>
+            {loadingRecs ? <div className="muted">Cargando...</div> : recs.length === 0 ? (
+              <div className="muted">{recSearch.selected ? 'Este becado no tiene reconocimientos.' : 'No hay reconocimientos cargados.'}</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={tbl}>
+                  <thead><tr>{['DNI','Apellido y Nombre','Desde','Hasta','Días','Tipo','Resultado','Observaciones','Cargado por','Modificado por',''].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {recs.map(r => {
+                      const editable = isAdmin || isWithin24h(r.created_at);
+                      return (
+                        <tr key={r.id}>
+                          <td style={td}><strong>{r.dni}</strong></td>
+                          <td style={td}>{getNombreRec(r.dni)}</td>
+                          <td style={td}>{fmt(r.fecha_desde)}</td>
+                          <td style={td}>{fmt(r.fecha_hasta)}</td>
+                          <td style={td}>{r.cantidad_dias != null ? <span style={{ fontWeight: 700, color: '#10b981' }}>{r.cantidad_dias}d</span> : <span className="muted">—</span>}</td>
+                          <td style={td}>{r.tipo || <span className="muted">—</span>}</td>
+                          <td style={td}>{r.resultado || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || <span className="muted">—</span>}</td>
+                          <td style={td}><div style={{ fontSize: '0.75rem' }}><div>{r.created_by_nombre || r.created_by_email || '—'}</div><div className="muted">{fmt(r.created_at)}</div></div></td>
+                          <td style={td}><div style={{ fontSize: '0.75rem' }}>{r.updated_by_nombre || r.updated_by_email ? <><div>{r.updated_by_nombre || r.updated_by_email}</div><div className="muted">{fmt(r.updated_at)}</div></> : <span className="muted">—</span>}</div></td>
+                          <td style={td}>{canCrud('reconocimientos_medicos','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditRec(r)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ══════════════ TAB EXAMEN ANUAL ══════════════ */}
+      {tab === 'examenes' && (
+        <>
+          {/* Buscador: TODOS LOS AGENTES */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="h2" style={{ marginBottom: 8 }}>Buscar agente</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={lbl}>DNI</label>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="input" style={{ flex: 1 }}
+                  value={examSearch.dni}
+                  onChange={e => examSearch.setDni(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && examSearch.onSearchDni()}
+                  placeholder="Enter para buscar" />
+                <button className="btn" type="button" onClick={() => examSearch.onSearchDni()}>
+                  {examSearch.loadingSearch ? '...' : 'Buscar'}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label style={lbl}>Apellido / Nombre</label>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="input" style={{ flex: 1 }}
+                  value={examSearch.fullName}
+                  onChange={e => examSearch.setFullName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && examSearch.onSearchName()}
+                  placeholder="Apellido Nombre (Enter)" />
+                <button className="btn" type="button" onClick={examSearch.onSearchName}>
+                  {examSearch.loadingSearch ? '...' : 'Buscar'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+            {/* Lista de coincidencias live */}
+            {examSearch.matches.length > 0 && (
+              <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {examSearch.matches.map(m => (
+                  <button key={m.dni} className="btn" type="button"
+                    style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                    onClick={() => examSearch.select(m)}>
+                    <strong>{m.apellido}, {m.nombre}</strong>
+                    <span className="muted" style={{ marginLeft: 8, fontSize: '0.8rem' }}>
+                      DNI {m.dni}{m.estado_empleo ? ` · ${m.estado_empleo}` : ''}{m.dependencia_nombre ? ` · ${m.dependencia_nombre}` : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Agente seleccionado */}
+            {examSearch.selected && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.3)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{examSearch.selected.apellido}, {examSearch.selected.nombre}</div>
+                  <div className="muted" style={{ fontSize: '0.82rem' }}>
+                    DNI {examSearch.selected.dni}
+                    {examSearch.selected.cuil ? ` · CUIL ${examSearch.selected.cuil}` : ''}
+                    {examSearch.selected.estado_empleo ? ` · ${examSearch.selected.estado_empleo}` : ''}
+                    {examSearch.selected.dependencia_nombre ? ` · ${examSearch.selected.dependencia_nombre}` : ''}
+                  </div>
+                </div>
+                <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={examSearch.clear}>✕ Limpiar</button>
+              </div>
+            )}
+
+            {!examSearch.selected && !examSearch.dni && !examSearch.fullName && (
+              <div className="muted" style={{ fontSize: '0.78rem', marginTop: 6 }}>
+                Sin agente seleccionado — mostrando todos los exámenes.
+              </div>
+            )}
+          </div>
+
+          {/* Formulario examen */}
+          {canCrud('examen_anual', 'create') && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="h2" style={{ marginBottom: 10 }}>
+                {editingExam ? '✏️ Editar examen anual' : '➕ Nuevo examen anual'}
+                {examSearch.selected && <span style={{ fontWeight: 400, fontSize: '0.85rem', marginLeft: 8, color: 'rgba(255,255,255,0.5)' }}>— {examSearch.selected.apellido}, {examSearch.selected.nombre}</span>}
+              </div>
+              {!examSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un agente antes de cargar.</div>}
+              <form onSubmit={handleSaveExam}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+                  <div style={fg}><label style={lbl}>Año *</label><input className="input" type="number" min={2000} max={2100} value={formExam.anio} onChange={e => setFormExam(f => ({ ...f, anio: e.target.value }))} required /></div>
+                  <div style={fg}><label style={lbl}>Fecha del examen *</label><input className="input" type="date" value={formExam.fecha_examen} onChange={e => setFormExam(f => ({ ...f, fecha_examen: e.target.value }))} required /></div>
+                  <div style={fg}><label style={lbl}>Resultado</label><input className="input" type="text" placeholder="Ej: Aprobado" value={formExam.resultado} onChange={e => setFormExam(f => ({ ...f, resultado: e.target.value }))} /></div>
+                  <div style={fg}><label style={lbl}>Observaciones</label><input className="input" type="text" placeholder="Observaciones" value={formExam.observaciones} onChange={e => setFormExam(f => ({ ...f, observaciones: e.target.value }))} /></div>
+                </div>
+                <div className="row" style={{ gap: 8, marginTop: 12 }}>
+                  <button className="btn ok" type="submit" disabled={savingExam || !examSearch.selected}>
+                    {savingExam ? 'Guardando...' : editingExam ? 'Actualizar' : 'Guardar'}
+                  </button>
+                  {editingExam && (
+                    <button className="btn" type="button" onClick={() => { setEditingExam(null); setFormExam({ anio: String(new Date().getFullYear()), fecha_examen:'', resultado:'', observaciones:'', realizado: false }); }}>
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Tabla exámenes */}
+          <div className="card">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div className="h2">
+                {examSearch.selected ? `Exámenes de ${examSearch.selected.apellido} (${exams.length})` : `Todos los exámenes (${allExams.length})`}
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <button className="btn" type="button" disabled={!exams.length} onClick={() => exportToExcel('examen_anual', exams)}>📊 Excel</button>
+                <button className="btn" type="button" disabled={!exams.length} onClick={() => exportToPdf('examen_anual', exams)}>📄 PDF</button>
+              </div>
+            </div>
+            {loadingExams ? <div className="muted">Cargando...</div> : exams.length === 0 ? (
+              <div className="muted">{examSearch.selected ? 'Este agente no tiene exámenes.' : 'No hay exámenes cargados.'}</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={tbl}>
+                  <thead><tr>{['DNI','Apellido y Nombre','Año','Fecha examen','Resultado','Observaciones','Cargado por','Modificado por',''].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {exams.map(ex => {
+                      const editable = isAdmin || isWithin24h(ex.created_at);
+                      const nombre = examSearch.selected && String(examSearch.selected.dni).replace(/\D/g,'') === String(ex.dni).replace(/\D/g,'')
+                        ? `${examSearch.selected.apellido}, ${examSearch.selected.nombre}` : ex.dni;
+                      return (
+                        <tr key={ex.id}>
+                          <td style={td}><strong>{ex.dni}</strong></td>
+                          <td style={td}>{nombre}</td>
+                          <td style={td}>{ex.anio}</td>
+                          <td style={td}>{fmt(ex.fecha_examen)}</td>
+                          <td style={td}>{ex.resultado || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ex.observaciones || <span className="muted">—</span>}</td>
+                          <td style={td}><div style={{ fontSize: '0.75rem' }}><div>{ex.created_by_nombre || ex.created_by_email || '—'}</div><div className="muted">{fmt(ex.created_at)}</div></div></td>
+                          <td style={td}><div style={{ fontSize: '0.75rem' }}>{ex.updated_by_nombre || ex.updated_by_email ? <><div>{ex.updated_by_nombre || ex.updated_by_email}</div><div className="muted">{fmt(ex.updated_at)}</div></> : <span className="muted">—</span>}</div></td>
+                          <td style={td}>{canCrud('examen_anual','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditExam(ex)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="muted" style={{ fontSize: '0.72rem', marginTop: 12 }}>
+        🩺 Reconocimientos: solo becados activos · 📋 Examen anual: todos los agentes ·
+        <span style={{ color: '#10b981' }}> ●</span> Editable (menos de 24hs)
+      </div>
+    </Layout>
+  );
+}
+
+// ─── ESTILOS ─────────────────────────────────────────────────────────────────
+const lbl: React.CSSProperties = { fontSize: '0.78rem', color: 'rgba(255,255,255,0.65)', fontWeight: 500, marginBottom: 4, display: 'block' };
+const fg: React.CSSProperties = { display: 'flex', flexDirection: 'column' };
+const tbl: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' };
+const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, whiteSpace: 'nowrap' };
+const td: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'middle' };
+const alertStyle: React.CSSProperties = { padding: '10px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem', color: 'rgba(245,158,11,0.9)' };
