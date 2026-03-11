@@ -86,7 +86,9 @@ const schema = z.object({
 
   // Runtime
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: intish(3000),
+  PORT: intish(0),
+  DEV_PORT: intish(3000),
+  PROD_PORT: intish(3001),
 
   // Si hay reverse proxy (Nginx, ALB, Docker), esto ayuda a que Express detecte IP real
   TRUST_PROXY: boolish.default(false),
@@ -350,6 +352,7 @@ const dbConfig =
 export const env = {
   ...raw,
   ...dbConfig, // override DB cuando NODE_ENV=test
+  PORT: raw.PORT || (raw.NODE_ENV === 'production' ? raw.PROD_PORT : raw.DEV_PORT),
 
   // si PHOTOS_BASE_DIR está vacío, reutilizamos DOCUMENTS_BASE_DIR
   PHOTOS_BASE_DIR: raw.PHOTOS_BASE_DIR?.trim() ? raw.PHOTOS_BASE_DIR : raw.DOCUMENTS_BASE_DIR,
