@@ -1,0 +1,431 @@
+[mi‚. 11/03/2026 10:45:54,82] Deploy iniciado 
+
+added 24 packages, and audited 272 packages in 4s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> @scanner/api@3.0.0 build
+> tsc
+
+
+up to date, audited 272 packages in 3s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> @scanner/agent@3.0.0 build
+> tsc
+
+src/agent.ts(70,3): error TS2322: Type 'AxiosRequestHeaders | {}' is not assignable to type 'AxiosRequestHeaders'.
+  Type '{}' is not assignable to type 'AxiosRequestHeaders'.
+    Type '{}' is missing the following properties from type 'AxiosHeaders': set, get, has, delete, and 24 more.
+src/agent.ts(81,5): error TS2322: Type 'AxiosRequestHeaders | {}' is not assignable to type 'AxiosRequestHeaders'.
+  Type '{}' is not assignable to type 'AxiosRequestHeaders'.
+    Type '{}' is missing the following properties from type 'AxiosHeaders': set, get, has, delete, and 24 more.
+npm error Lifecycle script `build` failed with error:
+npm error code 2
+npm error path C:\apps\scanner1\agent
+npm error workspace @scanner/agent@3.0.0
+npm error location C:\apps\scanner1\agent
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c tsc
+[mi‚. 11/03/2026 10:48:44,34] Deploy iniciado 
+
+up to date, audited 272 packages in 2s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> @scanner/api@3.0.0 build
+> tsc
+
+
+up to date, audited 272 packages in 1s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> @scanner/agent@3.0.0 build
+> tsc
+
+src/agent.ts(70,3): error TS2322: Type 'AxiosRequestHeaders | {}' is not assignable to type 'AxiosRequestHeaders'.
+  Type '{}' is not assignable to type 'AxiosRequestHeaders'.
+    Type '{}' is missing the following properties from type 'AxiosHeaders': set, get, has, delete, and 24 more.
+src/agent.ts(81,5): error TS2322: Type 'AxiosRequestHeaders | {}' is not assignable to type 'AxiosRequestHeaders'.
+  Type '{}' is not assignable to type 'AxiosRequestHeaders'.
+    Type '{}' is missing the following properties from type 'AxiosHeaders': set, get, has, delete, and 24 more.
+npm error Lifecycle script `build` failed with error:
+npm error code 2
+npm error path C:\apps\scanner1\agent
+npm error workspace @scanner/agent@3.0.0
+npm error location C:\apps\scanner1\agent
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c tsc
+[mi‚. 11/03/2026 10:54:35,60] Deploy iniciado 
+
+up to date, audited 272 packages in 1s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> @scanner/api@3.0.0 build
+> tsc
+
+
+up to date, audited 272 packages in 2s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> @scanner/agent@3.0.0 build
+> tsc
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : mi‚rcoles, 11 de marzo de 2026 10:54:45
+   Origen : C:\apps\scanner1\
+     Destino : C:\apps\scanner1-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    storage
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:        34        31         3         0         0         0
+ Archivos:       107       107         0         0         0         0
+    Bytes:   482.3 k   482.3 k         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           5.369.021 Bytes/s
+Velocidad:             307,218 Megabytes/min
+   Finalizado: mi‚rcoles, 11 de marzo de 2026 10:54:45
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated npmlog@5.0.1: This package is no longer supported.
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated are-we-there-yet@2.0.0: This package is no longer supported.
+npm warn deprecated multer@1.4.5-lts.2: Multer 1.x is impacted by a number of vulnerabilities, which have been patched in 2.x. You should upgrade to the latest 2.x version.
+npm warn deprecated gauge@3.0.2: This package is no longer supported.
+npm warn deprecated tar@6.2.1: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+added 352 packages, and audited 357 packages in 9m
+
+58 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[s b. 14/03/2026 12:35:20,45] Deploy iniciado 
+
+added 24 packages, and audited 272 packages in 4s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> @scanner/api@3.0.0 build
+> tsc
+
+
+up to date, audited 272 packages in 1s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> @scanner/agent@3.0.0 build
+> tsc
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 12:35:34
+   Origen : C:\apps\scanner1\
+     Destino : C:\apps\scanner1-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    storage
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:        37        34         3         0         0         0
+ Archivos:       120       120         0         0         0         0
+    Bytes:   501.4 k   501.4 k         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           5.580.967 Bytes/s
+Velocidad:             319,346 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 12:35:34
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated npmlog@5.0.1: This package is no longer supported.
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated are-we-there-yet@2.0.0: This package is no longer supported.
+npm warn deprecated multer@1.4.5-lts.2: Multer 1.x is impacted by a number of vulnerabilities, which have been patched in 2.x. You should upgrade to the latest 2.x version.
+npm warn deprecated gauge@3.0.2: This package is no longer supported.
+npm warn deprecated tar@6.2.1: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+added 352 packages, and audited 357 packages in 18s
+
+58 packages are looking for funding
+  run `npm fund` for details
+
+4 high severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[s b. 14/03/2026 14:33:21,44] Deploy iniciado 
+
+up to date, audited 272 packages in 2s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> @scanner/api@3.0.0 build
+> tsc
+
+
+up to date, audited 272 packages in 2s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> @scanner/agent@3.0.0 build
+> tsc
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 14:33:33
+   Origen : C:\apps\scanner1\
+     Destino : C:\apps\scanner1-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    storage
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:        38        35         3         0         0         0
+ Archivos:       126       126         0         0         0         0
+    Bytes:   508.8 k   508.8 k         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           5.158.594 Bytes/s
+Velocidad:             295,177 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 14:33:33
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated npmlog@5.0.1: This package is no longer supported.
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated are-we-there-yet@2.0.0: This package is no longer supported.
+npm warn deprecated multer@1.4.5-lts.2: Multer 1.x is impacted by a number of vulnerabilities, which have been patched in 2.x. You should upgrade to the latest 2.x version.
+npm warn deprecated gauge@3.0.2: This package is no longer supported.
+npm warn deprecated tar@6.2.1: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+added 352 packages, and audited 357 packages in 18s
+
+58 packages are looking for funding
+  run `npm fund` for details
+
+4 high severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[s b. 14/03/2026 14:44:41,16] Deploy iniciado 
+
+up to date, audited 272 packages in 1s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> @scanner/api@3.0.0 build
+> tsc
+
+
+up to date, audited 272 packages in 2s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> @scanner/agent@3.0.0 build
+> tsc
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 14:44:51
+   Origen : C:\apps\scanner1\
+     Destino : C:\apps\scanner1-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    storage
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:        38        35         3         0         0         0
+ Archivos:       126       126         0         0         0         0
+    Bytes:   508.8 k   508.8 k         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           5.158.594 Bytes/s
+Velocidad:             295,177 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 14:44:51
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated npmlog@5.0.1: This package is no longer supported.
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated are-we-there-yet@2.0.0: This package is no longer supported.
+npm warn deprecated multer@1.4.5-lts.2: Multer 1.x is impacted by a number of vulnerabilities, which have been patched in 2.x. You should upgrade to the latest 2.x version.
+npm warn deprecated gauge@3.0.2: This package is no longer supported.
+npm warn deprecated tar@6.2.1: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+added 352 packages, and audited 357 packages in 20s
+
+58 packages are looking for funding
+  run `npm fund` for details
+
+4 high severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.

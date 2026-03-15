@@ -38,7 +38,11 @@ app.use(cors({
     allowedHeaders: ["authorization", "content-type", "x-tenant", "x-tenant-id", "x-device-key", "x-agent-hostname", "x-agent-version", "x-request-id"],
     credentials: true,
 }));
-app.use(express.json({ limit: `${process.env.MAX_UPLOAD_MB || 150}mb` }));
+app.use((req, res, next) => {
+    if (req.path.includes('/upload'))
+        return next();
+    express.json({ limit: `${process.env.MAX_UPLOAD_MB || 150}mb` })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: `${process.env.MAX_UPLOAD_MB || 150}mb` }));
 // ── Rate limiting (global) ────────────────────────────────────────────────────
 app.use(rateLimit({

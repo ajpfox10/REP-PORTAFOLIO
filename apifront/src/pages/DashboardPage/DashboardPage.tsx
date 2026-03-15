@@ -42,12 +42,57 @@ export function DashboardPage() {
   const { pedidosTotal, canDocs, canTables, canGestion, canPedidos } = useDashboard();
   const { hasPerm } = useAuth();
 
+  const canSeeSaludLaboral =
+    hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read');
+
+  const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
+  const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
+
+  const isSaludLaboral =
+    canSeeSaludLaboral &&
+    !hasPerm('crud:*:*');
+
+  const isJefeServicio =
+    hasPerm('app:jefe_servicio:access') &&
+    !hasPerm('crud:*:*');
+
+  const shouldShowEmbarazadasBanner = !isSaludLaboral && !isJefeServicio;
+
+  if (isSaludLaboral) {
+    return (
+      <Layout title="Panel">
+        <div style={{ marginBottom: 6 }}>
+          <div
+            className="muted"
+            style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}
+          >
+            Salud Laboral
+          </div>
+          <div className="grid">
+            {canSeeSaludLaboral && (
+              <Tile
+                to="/app/salud-laboral"
+                title="🏥 Salud Laboral"
+                desc="Reconocimientos médicos y exámenes anuales del personal."
+                accent="#14b8a6"
+              />
+            )}
+            <Tile
+              to="/app/mi-cuenta"
+              title="👤 Mi cuenta"
+              desc="Perfil, permisos y cambio de contraseña."
+              accent="#0ea5e9"
+            />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout title="Panel">
-      {/* ── Alerta embarazadas ── */}
-      <EmbarazadasAlertaBanner />
+      {shouldShowEmbarazadasBanner && <EmbarazadasAlertaBanner />}
 
-      {/* ── Módulos principales ── */}
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
           Módulos principales
@@ -62,7 +107,6 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Análisis y estadísticas ── */}
       <div style={{ marginTop: 24, marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
           Análisis y estadísticas
@@ -76,7 +120,6 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Herramientas ── */}
       <div style={{ marginTop: 24, marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
           Herramientas
@@ -94,23 +137,24 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Salud Laboral ── */}
-      {(hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read') || hasPerm('crud:embarazadas:read')) && (
+      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeResidentesRotacion) && (
         <div style={{ marginTop: 24, marginBottom: 6 }}>
           <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
             Salud Laboral
           </div>
           <div className="grid">
-            {(hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read')) && (
+            {canSeeSaludLaboral && (
               <Tile to="/app/salud-laboral" title="🏥 Salud Laboral" desc="Reconocimientos médicos y exámenes anuales del personal." accent="#14b8a6" />
             )}
-            {hasPerm('crud:embarazadas:read') && (
+            {canSeeEmbarazadas && (
               <Tile to="/app/embarazadas" title="🤰 Embarazadas" desc="Registro de agentes embarazadas, FPP y alertas de licencia." accent="#f472b6" />
+            )}
+            {canSeeResidentesRotacion && (
+              <Tile to="/app/residentes-rotacion" title="🔄 Residentes Rotación" desc="Registro de rotaciones de residentes por servicio y período." accent="#a78bfa" />
             )}
           </div>
         </div>
       )}
-
     </Layout>
   );
 }

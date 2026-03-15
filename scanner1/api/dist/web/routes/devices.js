@@ -5,6 +5,8 @@ import { promisify } from "util";
 import dgram from "dgram";
 import net from "net";
 import os from "os";
+import http from "http";
+import https from "https";
 import { validate } from "../validate.js";
 import { createDeviceSchema, paginationSchema } from "../../shared/index.js";
 import { pool } from "../../db/mysql.js";
@@ -17,7 +19,6 @@ r.get("/", validate(paginationSchema, "query"), async (req, res) => {
     const { limit, cursor } = req.query;
     const [rows] = await pool.query("SELECT id,name,driver,device_key,is_active,hostname,agent_version,last_seen_at,created_at FROM devices WHERE tenant_id=? AND id>? ORDER BY id ASC LIMIT ?", [tenant_id, cursor, limit]);
     const rows_ = rows;
-    // Check online status for each device in parallel
     const items = await Promise.all(rows_.map(async (dev) => ({
         ...dev,
         online: await isOnline(dev.last_seen_at, dev.hostname),
@@ -33,7 +34,7 @@ r.get("/:id", async (req, res) => {
         throw new ApiError(404, "device_not_found");
     res.json(dev);
 });
-// ── GET /v1/devices/:id/capabilities — capacidades reportadas por el agent ────
+// ── GET /v1/devices/:id/capabilities ─────────────────────────────────────────
 r.get("/:id/capabilities", async (req, res) => {
     const tenant_id = req.tenant_id;
     const id = Number(req.params.id);
@@ -41,7 +42,6 @@ r.get("/:id/capabilities", async (req, res) => {
     const dev = rows[0];
     if (!dev)
         throw new ApiError(404, "device_not_found");
-    // Leer capacidades guardadas (el agent las reporta en heartbeat)
     const [capRows] = await pool.query("SELECT capabilities_json FROM device_capabilities WHERE device_id=?", [id]).catch(() => [[]]);
     const stored = capRows[0];
     const online = await isOnline(dev.last_seen_at, dev.hostname);
@@ -54,7 +54,6 @@ r.get("/:id/capabilities", async (req, res) => {
         }
         catch { }
     }
-    // Fallback: capacidades genéricas según driver
     res.json(defaultCapabilities(dev.driver, online));
 });
 // ── POST /v1/devices ──────────────────────────────────────────────────────────
@@ -75,7 +74,7 @@ r.patch("/:id", async (req, res) => {
     await pool.query("UPDATE devices SET name=COALESCE(?,name), is_active=COALESCE(?,is_active), updated_at=now() WHERE tenant_id=? AND id=?", [name ?? null, is_active != null ? (is_active ? 1 : 0) : null, tenant_id, id]);
     res.json({ ok: true });
 });
-// ── GET /v1/devices/:id/ping — estado en vivo (no requiere agent) ─────────────
+// ── GET /v1/devices/:id/ping ──────────────────────────────────────────────────
 r.get("/:id/ping", async (req, res) => {
     const tenant_id = req.tenant_id;
     const id = Number(req.params.id);
@@ -86,7 +85,6 @@ r.get("/:id/ping", async (req, res) => {
     const byHeartbeat = isOnlineByHeartbeat(dev.last_seen_at);
     const byNetwork = await isOnlineByNetwork(dev.hostname);
     const online = byHeartbeat || byNetwork;
-    // Update last_seen_at if responding on network but no agent
     if (byNetwork && !byHeartbeat) {
         await pool.query("UPDATE devices SET last_seen_at=now() WHERE id=?", [id]).catch(() => { });
     }
@@ -98,7 +96,7 @@ r.delete("/:id", async (req, res) => {
     await pool.query("DELETE FROM devices WHERE tenant_id=? AND id=?", [tenant_id, Number(req.params.id)]);
     res.json({ ok: true });
 });
-// ── POST /v1/devices/discover — descubrimiento híbrido ───────────────────────
+// ── POST /v1/devices/discover ─────────────────────────────────────────────────
 r.post("/discover", async (req, res) => {
     const tenant_id = req.tenant_id;
     const body = (req.body || {});
@@ -108,17 +106,24 @@ r.post("/discover", async (req, res) => {
     const { devices, diagnostics } = await discoverAll({ methods, rangeBase, ips: manualIps });
     const found = dedupeDevices(devices);
     const newDevices = [];
+    const updatedDevices = [];
     for (const dev of found) {
         const key = buildDeviceKey(dev);
-        const [existing] = await pool.query("SELECT id FROM devices WHERE tenant_id=? AND (device_key=? OR hostname=? OR (hostname IS NULL AND name=?))", [tenant_id, key, dev.hostname || null, dev.name]);
-        if (existing.length)
+        const hostname = dev.hostname || dev.ip || null;
+        const [existing] = await pool.query("SELECT id FROM devices WHERE tenant_id=? AND (device_key=? OR hostname=? OR (hostname IS NULL AND name=?))", [tenant_id, key, hostname, dev.name]);
+        const existingRows = existing;
+        if (existingRows.length) {
+            const existingId = existingRows[0].id;
+            await pool.query("UPDATE devices SET hostname=COALESCE(?,hostname), name=COALESCE(?,name), updated_at=now() WHERE id=?", [hostname, dev.name || null, existingId]).catch(() => { });
+            updatedDevices.push({ id: existingId, ...dev });
             continue;
-        const [result] = await pool.query("INSERT INTO devices (tenant_id,name,driver,device_key,is_active,hostname,created_at) VALUES (?,?,?,?,1,?,now())", [tenant_id, dev.name || dev.ip, dev.driver || "wia", key, dev.hostname || dev.ip]);
+        }
+        const [result] = await pool.query("INSERT INTO devices (tenant_id,name,driver,device_key,is_active,hostname,created_at) VALUES (?,?,?,?,1,?,now())", [tenant_id, dev.name || dev.ip || "Device", dev.driver || "wia", key, hostname]);
         newDevices.push({ id: Number(result.insertId), ...dev });
     }
-    res.json({ devices: found, registered: newDevices.length, diagnostics });
+    res.json({ devices: found, registered: newDevices.length, updated: updatedDevices.length, diagnostics });
 });
-// ── POST /v1/devices/probe-ip — prueba puntual por IP ────────────────────────
+// ── POST /v1/devices/probe-ip ─────────────────────────────────────────────────
 r.post("/probe-ip", async (req, res) => {
     const ip = String(req.body?.ip || "").trim();
     if (!ip)
@@ -126,7 +131,7 @@ r.post("/probe-ip", async (req, res) => {
     const { devices, diagnostics } = await discoverAll({ methods: ["wsd", "mdns", "snmp", "probe"], ips: [ip] });
     res.json({ ip, devices: dedupeDevices(devices), diagnostics });
 });
-// ── POST /v1/devices/discover-local — WIA/TWAIN del host Windows ─────────────
+// ── POST /v1/devices/discover-local ──────────────────────────────────────────
 r.post("/discover-local", async (_req, res) => {
     const [wia, twain] = await Promise.allSettled([discoverLocalWIA(), discoverLocalTWAIN()]);
     const devices = dedupeDevices([
@@ -142,7 +147,6 @@ r.post("/discover-local", async (_req, res) => {
     });
 });
 // ── Helpers ───────────────────────────────────────────────────────────────────
-// Agent-based check (USB/agent devices)
 function isOnlineByHeartbeat(lastSeen) {
     if (!lastSeen)
         return false;
@@ -165,57 +169,23 @@ function checkTcpPort(ip, port, timeout = 500) {
         s.on("timeout", () => finish(false));
     });
 }
-// Network-based check — uses OS ping (ICMP) as primary method, TCP as fallback
-// ICMP ping is the most reliable way to check if a device is reachable on LAN
-async function isOnlineByNetwork(hostname) {
-    if (!hostname || hostname === "127.0.0.1")
-        return false;
-    // Try ICMP ping first — works for all network devices including scanners
-    const icmpResult = pingICMP(hostname);
-    // Fallback: TCP on common scanner ports in parallel
-    const tcpPorts = [80, 443, 631, 9100, 515, 5357, 8080];
-    const tcpResult = Promise.all(tcpPorts.map((p) => checkTcpPort(hostname, p, 2000)))
-        .then((r) => r.some(Boolean));
-    // WSD UDP probe — used by most network scanners (Kyocera, HP, Canon, etc.)
-    const wsdResult = probeWsdUdp(hostname);
-    // Return as soon as any method succeeds
-    return new Promise((resolve) => {
-        let resolved = false;
-        const done = (v) => { if (!resolved && v) {
-            resolved = true;
-            resolve(true);
-        } };
-        icmpResult.then(done);
-        tcpResult.then(done);
-        wsdResult.then(done);
-        // Global timeout — if nothing responds in 3s, declare offline
-        setTimeout(() => { if (!resolved) {
-            resolved = true;
-            resolve(false);
-        } }, 3000);
-    });
-}
-// ICMP ping using OS ping command (Windows: ping -n 1 -w 1000)
-// No extra packages needed — ping.exe is always available on Windows
+// ICMP ping using OS ping.exe — no packages needed
 function pingICMP(ip) {
     return new Promise((resolve) => {
-        // Windows: ping -n 1 (1 packet) -w 1000 (1s timeout)
-        // Linux/Mac: ping -c 1 -W 1 (fallback)
         const isWin = process.platform === "win32";
-        const args = isWin ? ["-n", "1", "-w", "1000", ip] : ["-c", "1", "-W", "1", ip];
-        const proc = exec(`ping ${args.join(" ")}`, { timeout: 3000 });
+        const cmd = isWin ? `ping -n 1 -w 1000 ${ip}` : `ping -c 1 -W 1 ${ip}`;
+        const proc = exec(cmd, { timeout: 3000 });
         let out = "";
         proc.stdout?.on("data", (d) => { out += d; });
         proc.on("close", (code) => {
-            // Windows: exit 0 = alive, exit 1 = timeout/unreachable
-            // Also check stdout for TTL which confirms real response
             const alive = code === 0 && /TTL=/i.test(out);
+            console.log(`[ping] ${ip} code=${code} TTL=${/TTL=/i.test(out)} => ${alive}`);
             resolve(alive);
         });
-        proc.on("error", () => resolve(false));
+        proc.on("error", (e) => { console.log(`[ping] ${ip} error: ${e.message}`); resolve(false); });
     });
 }
-// WSD UDP probe — sends a minimal WS-Discovery Probe and waits for any response
+// WSD UDP probe to port 3702
 function probeWsdUdp(ip) {
     return new Promise((resolve) => {
         const sock = dgram.createSocket("udp4");
@@ -230,18 +200,55 @@ function probeWsdUdp(ip) {
             catch { }
             resolve(v);
         };
-        const id = `uuid:${Math.random().toString(16).slice(2)}`;
-        const xml = Buffer.from(`<?xml version="1.0"?><e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"><e:Header><w:MessageID>${id}</w:MessageID><w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To><w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action></e:Header><e:Body><d:Probe/></e:Body></e:Envelope>`);
+        const probe = buildWsDiscoveryProbe();
         sock.on("message", () => finish(true));
         sock.on("error", () => finish(false));
-        sock.bind(0, () => {
-            sock.send(xml, 3702, ip, (err) => { if (err)
-                finish(false); });
-        });
+        sock.bind(0, () => { sock.send(probe, 3702, ip, (err) => { if (err)
+            finish(false); }); });
         setTimeout(() => finish(false), 1500);
     });
 }
-// Unified: uses heartbeat if agent active, falls back to TCP probe for network devices
+// Network-based online check — ping + TCP (all manufacturer ports) + WSD UDP
+async function isOnlineByNetwork(hostname) {
+    if (!hostname || hostname === "127.0.0.1")
+        return false;
+    console.log(`[online] checking ${hostname}`);
+    const icmpResult = pingICMP(hostname);
+    // All major scanner/MFP TCP ports:
+    // 5357 = WSD-HTTP (Kyocera, Olivetti, Canon, Ricoh, Brother, Xerox, Konica Minolta)
+    // 5358 = WSD-HTTPS
+    // 80/443 = web panel (universal)
+    // 631 = IPP (HP, Brother, Epson, Canon, Ricoh, Xerox)
+    // 9100 = RAW print (HP JetDirect, Brother, Kyocera, Ricoh)
+    // 515 = LPD/LPR
+    // 8080/8443 = alt web panel (Ricoh, Konica Minolta, Sharp, Toshiba)
+    // 9090 = Kyocera status monitor
+    // 9280 = HP scan EWS
+    // 8000 = alt HTTP (Epson, Canon)
+    const tcpPorts = [5357, 80, 443, 631, 9100, 515, 5358, 8080, 8443, 9090, 9280, 8000];
+    const tcpResult = Promise.all(tcpPorts.map((p) => checkTcpPort(hostname, p, 2000)))
+        .then((r) => {
+        const open = tcpPorts.filter((_, i) => r[i]);
+        console.log(`[tcp] ${hostname} open ports: ${open.length ? open.join(",") : "none"}`);
+        return r.some(Boolean);
+    });
+    const wsdResult = probeWsdUdp(hostname).then(r => { console.log(`[wsd-udp] ${hostname} => ${r}`); return r; });
+    return new Promise((resolve) => {
+        let resolved = false;
+        const done = (v) => { if (!resolved && v) {
+            resolved = true;
+            resolve(true);
+        } };
+        icmpResult.then(done);
+        tcpResult.then(done);
+        wsdResult.then(done);
+        setTimeout(() => { if (!resolved) {
+            resolved = true;
+            console.log(`[online] ${hostname} => OFFLINE (timeout)`);
+            resolve(false);
+        } }, 4000);
+    });
+}
 async function isOnline(lastSeen, hostname) {
     if (isOnlineByHeartbeat(lastSeen))
         return true;
@@ -287,8 +294,7 @@ function dedupeDevices(items) {
 }
 function mergeDevices(a, b) {
     return {
-        ...a,
-        ...b,
+        ...a, ...b,
         name: chooseBetter(a.name, b.name),
         hostname: chooseBetter(a.hostname, b.hostname),
         manufacturer: chooseBetter(a.manufacturer || undefined, b.manufacturer || undefined) || null,
@@ -320,7 +326,6 @@ function getLocalIPv4Bases() {
     }
     return [...out];
 }
-// Returns all non-internal IPv4 addresses of the server (one per NIC)
 function getLocalIPv4Addresses() {
     const out = [];
     const ifaces = os.networkInterfaces();
@@ -343,6 +348,7 @@ async function discoverAll(opts) {
                 const list = await discoverWSD(opts.ips);
                 devices.push(...list);
                 diagnostics.wsd = { ok: true, count: list.length };
+                console.log(`[discover] WSD found ${list.length}:`, list.map(d => `${d.name}@${d.ip}`));
             }
             catch (e) {
                 diagnostics.wsd = { ok: false, error: String(e?.message || e) };
@@ -356,6 +362,7 @@ async function discoverAll(opts) {
                 const list = await discoverMDNS();
                 devices.push(...list);
                 diagnostics.mdns = { ok: true, count: list.length };
+                console.log(`[discover] mDNS found ${list.length}:`, list.map(d => `${d.name}@${d.ip}`));
             }
             catch (e) {
                 diagnostics.mdns = { ok: false, error: String(e?.message || e) };
@@ -369,6 +376,7 @@ async function discoverAll(opts) {
                 const list = await discoverSNMP(opts.rangeBase, opts.ips);
                 devices.push(...list);
                 diagnostics.snmp = { ok: true, count: list.length };
+                console.log(`[discover] SNMP found ${list.length}:`, list.map(d => `${d.name}@${d.ip}`));
             }
             catch (e) {
                 diagnostics.snmp = { ok: false, error: String(e?.message || e) };
@@ -382,6 +390,7 @@ async function discoverAll(opts) {
                 const list = await discoverLocalWIA();
                 devices.push(...list);
                 diagnostics.wia = { ok: true, count: list.length };
+                console.log(`[discover] WIA found ${list.length}:`, list.map(d => d.name));
             }
             catch (e) {
                 diagnostics.wia = { ok: false, error: String(e?.message || e) };
@@ -395,6 +404,7 @@ async function discoverAll(opts) {
                 const list = await discoverLocalTWAIN();
                 devices.push(...list);
                 diagnostics.twain = { ok: true, count: list.length };
+                console.log(`[discover] TWAIN found ${list.length}:`, list.map(d => d.name));
             }
             catch (e) {
                 diagnostics.twain = { ok: false, error: String(e?.message || e) };
@@ -408,6 +418,7 @@ async function discoverAll(opts) {
                 const list = await probeIPs(opts.ips);
                 devices.push(...list);
                 diagnostics.probe = { ok: true, count: list.length };
+                console.log(`[discover] probe found ${list.length}:`, list.map(d => `${d.name}@${d.ip}`));
             }
             catch (e) {
                 diagnostics.probe = { ok: false, error: String(e?.message || e) };
@@ -419,74 +430,170 @@ async function discoverAll(opts) {
     return { devices, diagnostics };
 }
 // ── WSD Discovery ─────────────────────────────────────────────────────────────
+// Step 1: UDP multicast probe port 3702 → get device XAddrs URL
+// Step 2: HTTP GET to XAddrs port 5357 → get real name/model/manufacturer
 async function discoverWSD(targetIps) {
     const found = [];
     const localAddrs = getLocalIPv4Addresses();
-    const targets = targetIps?.length ? targetIps : ["239.255.255.250"];
-    // When doing multicast, send from every local interface so all networks are covered
-    const sendFrom = (targetIps?.length) ? [undefined] : (localAddrs.length ? localAddrs : [undefined]);
-    await Promise.all(targets.flatMap((target) => sendFrom.map((localAddr) => new Promise((resolve) => {
-        const sock = dgram.createSocket("udp4");
-        const multicast = target === "239.255.255.250";
-        const msg = Buffer.from([
-            "M-SEARCH * HTTP/1.1",
-            `HOST: ${multicast ? "239.255.255.250:1900" : `${target}:3702`}`,
-            'MAN: "ssdp:discover"',
-            "MX: 2",
-            "ST: urn:schemas-microsoft-com:device:PrintDevice:1",
-            "",
-            "",
-        ].join("\r\n"));
-        sock.bind(0, localAddr || "0.0.0.0", () => {
-            try {
-                sock.setBroadcast(true);
-                if (multicast && localAddr) {
+    const sendFrom = localAddrs.length ? localAddrs : ["0.0.0.0"];
+    const rawResponses = [];
+    const probePromises = [];
+    console.log(`[WSD] starting discovery, local IPs: ${sendFrom.join(", ")}`);
+    if (!targetIps?.length) {
+        // WS-Discovery multicast on port 3702 (Kyocera, Olivetti, Canon, Ricoh, Brother)
+        for (const localAddr of sendFrom) {
+            probePromises.push(new Promise((resolve) => {
+                const sock = dgram.createSocket("udp4");
+                const probe = buildWsDiscoveryProbe();
+                sock.bind(0, localAddr === "0.0.0.0" ? undefined : localAddr, () => {
                     try {
-                        sock.setMulticastInterface(localAddr);
+                        if (localAddr !== "0.0.0.0") {
+                            try {
+                                sock.setMulticastTTL(4);
+                                sock.setMulticastInterface(localAddr);
+                            }
+                            catch { }
+                        }
+                        sock.send(probe, 3702, "239.255.255.250");
+                        console.log(`[WSD] sent probe from ${localAddr} to 239.255.255.250:3702`);
                     }
-                    catch { }
-                    sock.send(msg, 1900, "239.255.255.250");
-                }
-                else if (multicast) {
-                    sock.send(msg, 1900, "239.255.255.250");
-                }
-                else {
-                    const probe = buildWsDiscoveryProbe();
-                    sock.send(probe, 3702, target);
-                }
-            }
-            catch {
-                resolve();
-            }
-        });
-        sock.on("message", (buf, rinfo) => {
-            const text = buf.toString();
-            const server = (text.match(/SERVER:\s*(.+)/i) || [])[1]?.trim() || null;
-            const location = (text.match(/LOCATION:\s*(.+)/i) || [])[1]?.trim() || null;
-            const display = server || location || rinfo.address;
-            if (!found.some((f) => f.ip === rinfo.address)) {
-                found.push({
-                    ip: rinfo.address,
-                    hostname: rinfo.address,
-                    name: `WSD Scanner (${display})`,
-                    driver: "wia",
-                    protocol: "wsd",
-                    source: "network",
-                    online: true,
-                    confidence: 90,
-                    raw: { server, location, text: text.slice(0, 500) },
+                    catch (e) {
+                        console.warn(`[WSD] send error from ${localAddr}:`, e);
+                        resolve();
+                    }
                 });
+                sock.on("message", (buf, rinfo) => {
+                    const xml = buf.toString("utf8");
+                    console.log(`[WSD] response from ${rinfo.address}: ${xml.slice(0, 200)}`);
+                    const xaddrs = extractXAddrs(xml);
+                    if (!rawResponses.some(r => r.ip === rinfo.address)) {
+                        rawResponses.push({ ip: rinfo.address, xaddrs, xml });
+                    }
+                });
+                sock.on("error", (e) => { console.warn(`[WSD] socket error:`, e.message); try {
+                    sock.close();
+                }
+                catch { } ; resolve(); });
+                setTimeout(() => { try {
+                    sock.close();
+                }
+                catch { } ; resolve(); }, 4000);
+            }));
+        }
+        // SSDP M-SEARCH port 1900 fallback (some HP, Brother older models)
+        for (const localAddr of sendFrom) {
+            probePromises.push(new Promise((resolve) => {
+                const sock = dgram.createSocket("udp4");
+                const msg = Buffer.from([
+                    "M-SEARCH * HTTP/1.1",
+                    "HOST: 239.255.255.250:1900",
+                    'MAN: "ssdp:discover"',
+                    "MX: 2",
+                    "ST: urn:schemas-microsoft-com:device:PrintDevice:1",
+                    "", "",
+                ].join("\r\n"));
+                sock.bind(0, localAddr === "0.0.0.0" ? undefined : localAddr, () => {
+                    try {
+                        sock.setBroadcast(true);
+                        if (localAddr !== "0.0.0.0") {
+                            try {
+                                sock.setMulticastInterface(localAddr);
+                            }
+                            catch { }
+                        }
+                        sock.send(msg, 1900, "239.255.255.250");
+                        console.log(`[SSDP] sent M-SEARCH from ${localAddr}`);
+                    }
+                    catch (e) {
+                        console.warn(`[SSDP] send error:`, e);
+                        resolve();
+                    }
+                });
+                sock.on("message", (buf, rinfo) => {
+                    const text = buf.toString();
+                    const location = (text.match(/LOCATION:\s*(.+)/i) || [])[1]?.trim();
+                    console.log(`[SSDP] response from ${rinfo.address} location=${location}`);
+                    if (!rawResponses.some(r => r.ip === rinfo.address)) {
+                        rawResponses.push({ ip: rinfo.address, xaddrs: location ? [location] : [], xml: text });
+                    }
+                });
+                sock.on("error", () => { try {
+                    sock.close();
+                }
+                catch { } ; resolve(); });
+                setTimeout(() => { try {
+                    sock.close();
+                }
+                catch { } ; resolve(); }, 4000);
+            }));
+        }
+    }
+    else {
+        for (const ip of targetIps) {
+            probePromises.push(new Promise((resolve) => {
+                const sock = dgram.createSocket("udp4");
+                sock.bind(0, () => {
+                    sock.send(buildWsDiscoveryProbe(), 3702, ip, err => { if (err)
+                        resolve(); });
+                });
+                sock.on("message", (buf, rinfo) => {
+                    const xml = buf.toString("utf8");
+                    if (!rawResponses.some(r => r.ip === rinfo.address)) {
+                        rawResponses.push({ ip: rinfo.address, xaddrs: extractXAddrs(xml), xml });
+                    }
+                });
+                sock.on("error", () => { try {
+                    sock.close();
+                }
+                catch { } ; resolve(); });
+                setTimeout(() => { try {
+                    sock.close();
+                }
+                catch { } ; resolve(); }, 1500);
+            }));
+        }
+    }
+    await Promise.all(probePromises);
+    console.log(`[WSD] probe done — responses: ${rawResponses.length}`, rawResponses.map(r => r.ip));
+    // Step 2: fetch metadata from XAddrs HTTP (port 5357)
+    await Promise.all(rawResponses.map(async (resp) => {
+        let name = extractXmlField(resp.xml, ["FriendlyName", "d:FriendlyName"]);
+        let model = extractXmlField(resp.xml, ["Model", "d:Model"]);
+        let manufacturer = extractXmlField(resp.xml, ["Manufacturer", "d:Manufacturer"]);
+        const metaUrl = resp.xaddrs.find(u => /^https?:\/\//i.test(u))
+            || `http://${resp.ip}:5357/`;
+        if (!name || !model) {
+            console.log(`[WSD] fetching metadata from ${metaUrl}`);
+            try {
+                const meta = await fetchWsdMetadata(metaUrl);
+                if (meta.name)
+                    name = meta.name;
+                if (meta.model)
+                    model = meta.model;
+                if (meta.manufacturer)
+                    manufacturer = meta.manufacturer;
+                console.log(`[WSD] metadata for ${resp.ip}: name="${name}" model="${model}" mfr="${manufacturer}"`);
             }
+            catch (e) {
+                console.warn(`[WSD] metadata fetch failed for ${resp.ip}:`, e.message);
+            }
+        }
+        if (!name)
+            name = model || `WSD Device (${resp.ip})`;
+        found.push({
+            ip: resp.ip,
+            hostname: resp.ip,
+            name,
+            driver: "wia",
+            protocol: "wsd",
+            source: "network",
+            online: true,
+            confidence: 90,
+            manufacturer: manufacturer || guessManufacturer(name + " " + (model || "")) || null,
+            model: model || null,
+            raw: { xaddrs: resp.xaddrs, xml: resp.xml.slice(0, 500) },
         });
-        sock.on("error", () => { try {
-            sock.close();
-        }
-        catch { } ; resolve(); });
-        setTimeout(() => { try {
-            sock.close();
-        }
-        catch { } ; resolve(); }, targetIps?.length ? 1200 : 3000);
-    }))));
+    }));
     return found;
 }
 function buildWsDiscoveryProbe() {
@@ -500,26 +607,91 @@ function buildWsDiscoveryProbe() {
     <w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
     <w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>
   </e:Header>
-  <e:Body>
-    <d:Probe/>
-  </e:Body>
+  <e:Body><d:Probe/></e:Body>
 </e:Envelope>`;
     return Buffer.from(xml);
+}
+function extractXAddrs(xml) {
+    const match = xml.match(/<[^>]*:?XAddrs[^>]*>([^<]+)</);
+    if (!match)
+        return [];
+    return match[1].trim().split(/\s+/).filter(u => u.startsWith("http"));
+}
+function extractXmlField(xml, tags) {
+    for (const tag of tags) {
+        const safe = tag.replace(/:/g, "[^>]*:");
+        const m = xml.match(new RegExp(`<${safe}[^>]*>([^<]{2,200})<`));
+        if (m?.[1]?.trim())
+            return m[1].trim();
+    }
+    return "";
+}
+async function fetchWsdMetadata(url) {
+    const empty = { name: "", model: "", manufacturer: "" };
+    return new Promise((resolve) => {
+        try {
+            const body = `<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+ xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+ xmlns:w="http://schemas.xmlsoap.org/ws/2004/09/mex">
+  <s:Header>
+    <a:Action>http://schemas.xmlsoap.org/ws/2004/09/mex/GetMetadata/Request</a:Action>
+    <a:MessageID>uuid:${Math.random().toString(16).slice(2)}</a:MessageID>
+    <a:To>${url}</a:To>
+  </s:Header>
+  <s:Body><w:GetMetadata/></s:Body>
+</s:Envelope>`;
+            const parsed = new URL(url);
+            const mod = parsed.protocol === "https:" ? https : http;
+            const options = {
+                hostname: parsed.hostname,
+                port: Number(parsed.port) || (parsed.protocol === "https:" ? 5358 : 5357),
+                path: parsed.pathname || "/",
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/soap+xml; charset=utf-8",
+                    "Content-Length": Buffer.byteLength(body),
+                },
+                timeout: 2500,
+                rejectUnauthorized: false,
+            };
+            const req = mod.request(options, (res) => {
+                let data = "";
+                res.on("data", (chunk) => { data += chunk; });
+                res.on("end", () => {
+                    resolve({
+                        name: extractXmlField(data, ["FriendlyName", "wsdp:FriendlyName", "wprt:PrinterName"]),
+                        model: extractXmlField(data, ["ModelName", "wsdp:ModelName", "Model"]),
+                        manufacturer: extractXmlField(data, ["Manufacturer", "wsdp:Manufacturer"]),
+                    });
+                });
+            });
+            req.on("error", (e) => { console.warn(`[WSD] HTTP error ${url}:`, e.message); resolve(empty); });
+            req.on("timeout", () => { req.destroy(); resolve(empty); });
+            req.write(body);
+            req.end();
+        }
+        catch (e) {
+            console.warn(`[WSD] fetchWsdMetadata error:`, e.message);
+            resolve(empty);
+        }
+    });
 }
 // ── mDNS Discovery ────────────────────────────────────────────────────────────
 async function discoverMDNS() {
     const serviceNames = ["_scanner._tcp.local", "_uscan._tcp.local", "_ipp._tcp.local", "_printer._tcp.local"];
     const localAddrs = getLocalIPv4Addresses();
     const found = [];
-    // Send mDNS query from each local interface so both networks are probed
     const ifaceTargets = localAddrs.length ? localAddrs : ["0.0.0.0"];
+    console.log(`[mDNS] scanning from: ${ifaceTargets.join(", ")}`);
     await Promise.all(serviceNames.flatMap((service) => ifaceTargets.map((localAddr) => new Promise((resolve) => {
         const sock = dgram.createSocket({ type: "udp4", reuseAddr: true });
         const query = buildMdnsQuery(service);
-        sock.bind(0, localAddr, () => {
+        sock.bind(0, localAddr === "0.0.0.0" ? undefined : localAddr, () => {
             try {
                 sock.setMulticastTTL(255);
-                sock.setMulticastInterface(localAddr);
+                if (localAddr !== "0.0.0.0")
+                    sock.setMulticastInterface(localAddr);
                 sock.send(query, 5353, "224.0.0.251");
             }
             catch {
@@ -529,6 +701,7 @@ async function discoverMDNS() {
         sock.on("message", (buf, rinfo) => {
             const parsed = parseMdnsPacket(buf);
             const name = parsed.instance || parsed.target || service;
+            console.log(`[mDNS] ${rinfo.address} => ${name}`);
             if (!found.some((f) => f.ip === rinfo.address)) {
                 found.push({
                     ip: rinfo.address,
@@ -550,26 +723,22 @@ async function discoverMDNS() {
         setTimeout(() => { try {
             sock.close();
         }
-        catch { } ; resolve(); }, 1800);
+        catch { } ; resolve(); }, 2000);
     }))));
     return found;
 }
 function buildMdnsQuery(name) {
     const labels = name.split(".").filter(Boolean);
-    const parts = [
-        0x00, 0x00,
-        0x00, 0x00,
-        0x00, 0x01,
-        0x00, 0x00,
-        0x00, 0x00,
-        0x00, 0x00,
-    ];
+    const parts = [0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     for (const label of labels) {
-        parts.push(label.length, ...Buffer.from(label));
+        const encoded = Buffer.from(label, "utf8");
+        parts.push(encoded.length);
+        for (const b of encoded)
+            parts.push(b);
     }
     parts.push(0x00);
-    parts.push(0x00, 0x0c); // PTR
-    parts.push(0x00, 0x01); // IN
+    parts.push(0x00, 0x0c);
+    parts.push(0x80, 0x01);
     return Buffer.from(parts);
 }
 function parseMdnsPacket(buf) {
@@ -597,10 +766,8 @@ function parseMdnsPacket(buf) {
                 jumped = true;
                 break;
             }
-            const start = i + 1;
-            const end = start + len;
-            labels.push(buf.toString("utf8", start, end));
-            i = end;
+            labels.push(buf.toString("utf8", i + 1, i + 1 + len));
+            i += 1 + len;
             if (!jumped)
                 next = i;
         }
@@ -620,17 +787,15 @@ function parseMdnsPacket(buf) {
         off = n.next;
         const type = buf.readUInt16BE(off);
         off += 2;
-        off += 2; // class
-        off += 4; // ttl
+        off += 2;
+        off += 4;
         const rdlen = buf.readUInt16BE(off);
         off += 2;
         if (type === 12) {
-            const ptr = readName(off);
-            instance = ptr.name;
+            instance = readName(off).name;
         }
         else if (type === 33) {
-            const name = readName(off + 6);
-            target = name.name;
+            target = readName(off + 6).name;
         }
         else if (type === 1 && !target) {
             target = n.name;
@@ -641,14 +806,14 @@ function parseMdnsPacket(buf) {
 }
 // ── SNMP Discovery ────────────────────────────────────────────────────────────
 async function discoverSNMP(rangeBase, manualIps) {
-    const localBases = getLocalIPv4Bases(); // e.g. ["192.168.1", "10.0.0"]
-    const localAddrs = getLocalIPv4Addresses(); // full IPs per base
+    const localBases = getLocalIPv4Bases();
+    const localAddrs = getLocalIPv4Addresses();
     const ips = manualIps?.length
         ? manualIps
         : expandIpBases(rangeBase || process.env.NETWORK_SCAN_RANGE || "", localBases);
     const limited = ips.slice(0, Number(process.env.DISCOVERY_MAX_IPS || 254));
-    const results = await promisePool(limited, 12, async (ip) => {
-        // Find the local interface in the same /24 subnet as this target IP
+    console.log(`[SNMP] scanning ${limited.length} IPs across bases: ${localBases.join(", ")}`);
+    const results = await promisePool(limited, 16, async (ip) => {
         const targetBase = ip.split(".").slice(0, 3).join(".");
         const localAddr = localAddrs.find((a) => a.startsWith(targetBase + "."));
         return probeSNMP(ip, localAddr);
@@ -680,39 +845,32 @@ async function probeSNMP(ip, localAddress) {
         return null;
     const model = descr.length > 80 ? descr.slice(0, 80) : descr;
     return {
-        ip,
-        hostname: ip,
-        name: `SNMP Device (${ip})`,
-        driver: "wia",
-        protocol: "snmp",
-        source: "network",
-        online: true,
-        confidence: 70,
+        ip, hostname: ip,
+        name: `${guessManufacturer(descr) || "SNMP"} Device (${ip})`,
+        driver: "wia", protocol: "snmp", source: "network", online: true, confidence: 70,
         manufacturer: guessManufacturer(descr),
         model,
         raw: { sysDescr: descr },
     };
 }
 function buildSnmpGetSysDescr(community) {
-    const oid = Buffer.from([0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x01, 0x00]); // 1.3.6.1.2.1.1.1.0
+    const oid = Buffer.from([0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x01, 0x00]);
     const varBind = seq(Buffer.concat([oidTag(oid), Buffer.from([0x05, 0x00])]));
     const varBinds = seq(varBind);
-    const requestId = intTag(1);
-    const error = intTag(0);
-    const errorIndex = intTag(0);
-    const pduInner = Buffer.concat([requestId, error, errorIndex, varBinds]);
+    const pduInner = Buffer.concat([intTag(1), intTag(0), intTag(0), varBinds]);
     const pdu = tag(0xa0, pduInner);
-    const version = intTag(0);
-    const comm = octetString(Buffer.from(community, "utf8"));
-    return seq(Buffer.concat([version, comm, pdu]));
+    return seq(Buffer.concat([intTag(0), octetString(Buffer.from(community, "utf8")), pdu]));
 }
 function parseSnmpSysDescr(buf) {
     const s = buf.toString("latin1");
     const match = s.match(/[\x20-\x7e]{6,}/g);
     if (!match?.length)
         return null;
-    const candidate = match.find((x) => /kyocera|canon|hp|brother|epson|xerox|ricoh|scanner|printer/i.test(x)) || match.at(-1);
-    return candidate?.trim() || null;
+    const known = match.find((x) => /kyocera|olivetti|canon|hp|hewlett|brother|epson|xerox|ricoh|scanner|printer|mfp|imaging|konica|minolta|sharp|toshiba|lexmark|samsung/i.test(x));
+    if (known)
+        return known.trim();
+    const longest = match.reduce((a, b) => b.length > a.length ? b : a, "");
+    return longest.length >= 6 ? longest.trim() : null;
 }
 function seq(inner) { return tag(0x30, inner); }
 function intTag(n) { return tag(0x02, Buffer.from([n])); }
@@ -738,12 +896,9 @@ function udpRequest(host, port, payload, timeoutMs, localAddress) {
         };
         sock.on("message", (msg) => finish(msg));
         sock.on("error", () => finish(null));
-        // Bind to the specific local interface so packets go out the right NIC
         sock.bind(0, localAddress || "0.0.0.0", () => {
-            sock.send(payload, port, host, (err) => {
-                if (err)
-                    finish(null);
-            });
+            sock.send(payload, port, host, (err) => { if (err)
+                finish(null); });
         });
         setTimeout(() => finish(null), timeoutMs);
     });
@@ -816,26 +971,21 @@ function parseJsonArray(text) {
         return [];
     }
 }
-// ── IP probing / fallback ─────────────────────────────────────────────────────
+// ── IP probing fallback ────────────────────────────────────────────────────────
 async function probeIPs(ips) {
     const results = await promisePool(ips, 12, async (ip) => probeSingleIp(ip));
     return results.filter(Boolean);
 }
 async function probeSingleIp(ip) {
-    const ports = [80, 443, 515, 631, 9100];
-    const open = await Promise.all(ports.map((port) => checkTcpPort(ip, port, 350).then((ok) => ok ? port : null)));
+    const ports = [5357, 80, 443, 631, 9100, 515, 5358, 8080, 8443, 9090, 9280, 8000];
+    const open = await Promise.all(ports.map((port) => checkTcpPort(ip, port, 600).then((ok) => ok ? port : null)));
     const openPorts = open.filter(Boolean);
     if (!openPorts.length)
         return null;
     return {
-        ip,
-        hostname: ip,
+        ip, hostname: ip,
         name: `Network MFP (${ip})`,
-        driver: "wia",
-        protocol: "tcp",
-        source: "manual",
-        online: true,
-        confidence: 60,
+        driver: "wia", protocol: "tcp", source: "manual", online: true, confidence: 60,
         raw: { openPorts },
     };
 }
@@ -843,6 +993,8 @@ function guessManufacturer(text) {
     const lower = text.toLowerCase();
     if (lower.includes("kyocera"))
         return "Kyocera";
+    if (lower.includes("olivetti"))
+        return "Olivetti";
     if (lower.includes("hewlett") || lower.includes(" hp ") || lower.startsWith("hp"))
         return "HP";
     if (lower.includes("canon"))
@@ -855,6 +1007,16 @@ function guessManufacturer(text) {
         return "Xerox";
     if (lower.includes("ricoh"))
         return "Ricoh";
+    if (lower.includes("samsung"))
+        return "Samsung";
+    if (lower.includes("lexmark"))
+        return "Lexmark";
+    if (lower.includes("konica") || lower.includes("minolta"))
+        return "Konica Minolta";
+    if (lower.includes("sharp"))
+        return "Sharp";
+    if (lower.includes("toshiba"))
+        return "Toshiba";
     return null;
 }
 async function promisePool(items, concurrency, worker) {

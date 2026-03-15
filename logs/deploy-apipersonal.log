@@ -1,0 +1,1187 @@
+[mi‚. 11/03/2026 10:28:07,19] Deploy iniciado 
+npm warn deprecated @types/socket.io@3.0.2: This is a stub types definition. socket.io provides its own type definitions, so you do not need this installed.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated supertest@6.3.4: Please upgrade to supertest v7.1.3+, see release notes at https://github.com/forwardemail/supertest/releases/tag/v7.1.3 - maintenance is supported by Forward Email @ https://forwardemail.net
+npm warn deprecated superagent@8.1.2: Please upgrade to superagent v10.2.2+, see release notes at https://github.com/forwardemail/superagent/releases/tag/v10.2.2 - maintenance is supported by Forward Email @ https://forwardemail.net
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 465 packages, and audited 818 packages in 20s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-11T13:28:45.256Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-11T13:28:45.499Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-11T13:28:45.517Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : mi‚rcoles, 11 de marzo de 2026 10:28:45
+   Origen : C:\apps\apipersonal-prod\
+     Destino : C:\apps\apipersonal-backup\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       116         1         0         0         0
+ Archivos:       394       394         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           13.248.144 Bytes/s
+Velocidad:              758,065 Megabytes/min
+   Finalizado: mi‚rcoles, 11 de marzo de 2026 10:28:46
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : mi‚rcoles, 11 de marzo de 2026 10:28:46
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+	  *Archivo EXTRA		     657	C:\apps\apipersonal-prod\logs\.95e72fb7b00f16bb24601dee7ac3d6d573e5eb93-audit.json
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117         0       117         0         0         0
+ Archivos:       393       134       259         0         0         1
+    Bytes:    5.49 m    2.06 m    3.43 m         0         0       657
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           15.657.036 Bytes/s
+Velocidad:              895,903 Megabytes/min
+   Finalizado: mi‚rcoles, 11 de marzo de 2026 10:28:46
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 13s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[mi‚. 11/03/2026 10:34:24,21] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 5s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-11T13:34:44.380Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-11T13:34:44.539Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-11T13:34:44.554Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : mi‚rcoles, 11 de marzo de 2026 10:34:44
+   Origen : C:\apps\apipersonal-prod\
+     Destino : C:\apps\apipersonal-backup\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       116         1         0         0         0
+ Archivos:       393       393         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           13.678.396 Bytes/s
+Velocidad:              782,684 Megabytes/min
+   Finalizado: mi‚rcoles, 11 de marzo de 2026 10:34:45
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : mi‚rcoles, 11 de marzo de 2026 10:34:45
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117         0       117         0         0         0
+ Archivos:       393       129       264         0         0         0
+    Bytes:    5.49 m    1.69 m    3.79 m         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           28.641.145 Bytes/s
+Velocidad:             1638,859 Megabytes/min
+   Finalizado: mi‚rcoles, 11 de marzo de 2026 10:34:45
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 11s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 12:09:09,57] Deploy iniciado 
+npm warn deprecated @types/socket.io@3.0.2: This is a stub types definition. socket.io provides its own type definitions, so you do not need this installed.
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated supertest@6.3.4: Please upgrade to supertest v7.1.3+, see release notes at https://github.com/forwardemail/supertest/releases/tag/v7.1.3 - maintenance is supported by Forward Email @ https://forwardemail.net
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated superagent@8.1.2: Please upgrade to superagent v10.2.2+, see release notes at https://github.com/forwardemail/superagent/releases/tag/v10.2.2 - maintenance is supported by Forward Email @ https://forwardemail.net
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 817 packages, and audited 818 packages in 17s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T15:09:42.957Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T15:09:43.124Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-14T15:09:43.140Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 12:09:43
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       115         2         0         0         0
+ Archivos:       394       394         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           13.746.818 Bytes/s
+Velocidad:              786,599 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 12:09:43
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 9s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 12:33:39,68] Deploy iniciado 
+npm warn deprecated @types/socket.io@3.0.2: This is a stub types definition. socket.io provides its own type definitions, so you do not need this installed.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated supertest@6.3.4: Please upgrade to supertest v7.1.3+, see release notes at https://github.com/forwardemail/supertest/releases/tag/v7.1.3 - maintenance is supported by Forward Email @ https://forwardemail.net
+npm warn deprecated superagent@8.1.2: Please upgrade to superagent v10.2.2+, see release notes at https://github.com/forwardemail/superagent/releases/tag/v10.2.2 - maintenance is supported by Forward Email @ https://forwardemail.net
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 465 packages, and audited 818 packages in 10s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\apps\apipersonal\scripts\routes\genAutoRoutesManifest.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:174:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.18.0
+[s b. 14/03/2026 12:34:56,13] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 3s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T15:35:14.633Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T15:35:14.897Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-14T15:35:14.912Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 12:35:15
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       115         2         0         0         0
+ Archivos:       394       394         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           16.090.544 Bytes/s
+Velocidad:              920,708 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 12:35:15
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 11s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 12:57:00,63] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 3s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T15:57:18.685Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T15:57:18.841Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-14T15:57:18.852Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 12:57:18
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       115         2         0         0         0
+ Archivos:       394       394         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           19.797.982 Bytes/s
+Velocidad:             1132,850 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 12:57:19
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 8s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 13:02:12,64] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 4s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T16:02:32.256Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T16:02:32.468Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-14T16:02:32.488Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 13:02:32
+   Origen : C:\apps\apipersonal-prod\
+     Destino : C:\apps\apipersonal-backup\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       116         1         0         0         0
+ Archivos:       395       395         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           12.889.371 Bytes/s
+Velocidad:              737,536 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 13:02:33
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 13:02:33
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+	  *Archivo EXTRA		     438	C:\apps\apipersonal-prod\logs\.95e72fb7b00f16bb24601dee7ac3d6d573e5eb93-audit.json
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117         0       117         0         0         0
+ Archivos:       394       130       264         0         0         1
+    Bytes:    5.49 m    2.05 m    3.44 m         0         0       438
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           25.642.702 Bytes/s
+Velocidad:             1467,287 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 13:02:33
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 9s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 13:07:26,49] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 4s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T16:07:45.217Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T16:07:45.380Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-14T16:07:45.392Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 13:07:45
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       115         2         0         0         0
+ Archivos:       394       394         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           16.750.607 Bytes/s
+Velocidad:              958,477 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 13:07:45
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 12s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 13:18:42,67] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 3s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T16:19:01.798Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T16:19:01.954Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"55d3c07bcc4f5382c75369d616c2472408b5ff5cf8e3f4ab44f342d95531b0ab"}}
+{"timestamp":"2026-03-14T16:19:01.969Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 13:19:02
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       115         2         0         0         0
+ Archivos:       394       394         0         0         0         0
+    Bytes:    5.50 m    5.50 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           20.922.884 Bytes/s
+Velocidad:             1197,217 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 13:19:02
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 10s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 17:09:37,06] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 4s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T20:09:57.124Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T20:09:57.289Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"81fffd401f714c3ba0e856abf0a35f4b3856de0695b4306c5ab6979b1ce5d9b8"}}
+{"timestamp":"2026-03-14T20:09:57.304Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 17:09:57
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       117       115         2         0         0         0
+ Archivos:       395       395         0         0         0         0
+    Bytes:    5.52 m    5.52 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           10.608.728 Bytes/s
+Velocidad:              607,036 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 17:09:58
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 12s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 18:07:45,60] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 3s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T21:08:10.701Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T21:08:10.933Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"81fffd401f714c3ba0e856abf0a35f4b3856de0695b4306c5ab6979b1ce5d9b8"}}
+{"timestamp":"2026-03-14T21:08:10.946Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 18:08:11
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       115       113         2         0         0         0
+ Archivos:       391       391         0         0         0         0
+    Bytes:    5.52 m    5.52 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           12.583.106 Bytes/s
+Velocidad:              720,011 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 18:08:11
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 13s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+[s b. 14/03/2026 18:39:27,00] Deploy iniciado 
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+up to date, audited 818 packages in 6s
+
+107 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> personalv5-enterprise-api@1.0.0 build
+> rimraf dist && npm run gen:routes && tsc -p tsconfig.build.json
+
+
+> personalv5-enterprise-api@1.0.0 gen:routes
+> node scripts/routes/genAutoRoutesManifest.mjs
+
+[gen:routes] wrote src/routes/auto/auto.manifest.ts (0 auto routes)
+
+> personalv5-enterprise-api@1.0.0 postbuild
+> npm run openapi:export
+
+
+> personalv5-enterprise-api@1.0.0 openapi:export
+> ts-node src/types/openapi/export.ts
+
+{"timestamp":"2026-03-14T21:40:05.900Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Introspecting schema from DB...","db":"personalv5"}}
+{"timestamp":"2026-03-14T21:40:06.209Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"Schema cached","cachePath":"C:\\apps\\apipersonal\\.cache\\schema.json","hash":"81fffd401f714c3ba0e856abf0a35f4b3856de0695b4306c5ab6979b1ce5d9b8"}}
+{"timestamp":"2026-03-14T21:40:06.230Z","level":"\u001b[32minfo\u001b[39m","message":{"msg":"OpenAPI exported","dest":"C:\\apps\\apipersonal\\openapi.generated.json"}}
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Herramienta para copia eficaz de archivos         
+-------------------------------------------------------------------------------
+
+  Iniciado : s bado, 14 de marzo de 2026 18:40:06
+   Origen : C:\apps\apipersonal\
+     Destino : C:\apps\apipersonal-prod\
+
+    Archivos: *.*
+	    
+ Dirs. de ejecutables: node_modules
+	    .git
+	    
+  Opciones: *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /PURGE /MIR /R:1000000 /W:30 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total   Copiado   OmitidoNo coincidencia     ERROR    Extras
+Director.:       115       113         2         0         0         0
+ Archivos:       389       389         0         0         0         0
+    Bytes:    5.49 m    5.49 m         0         0         0         0
+   Tiempo:   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+Velocidad:           7.727.246 Bytes/s
+Velocidad:             442,157 Megabytes/min
+   Finalizado: s bado, 14 de marzo de 2026 18:40:07
+
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated json2csv@5.0.7: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+> personalv5-enterprise-api@1.0.0 prepare
+> husky
+
+.git can't be found
+added 352 packages, and audited 353 packages in 20s
+
+35 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.

@@ -1,0 +1,84 @@
+2026-03-14 15:32:00: Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\apps\scanner1-prod\api\dist\services\personalIntegration.js' imported from C:\apps\scanner1-prod\api\dist\web\routes\scanJobs.js
+2026-03-14 15:32:00:     at finalizeResolution (node:internal/modules/esm/resolve:265:11)
+2026-03-14 15:32:00:     at moduleResolve (node:internal/modules/esm/resolve:933:10)
+2026-03-14 15:32:00:     at defaultResolve (node:internal/modules/esm/resolve:1169:11)
+2026-03-14 15:32:00:     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:542:12)
+2026-03-14 15:32:00:     at ModuleLoader.resolve (node:internal/modules/esm/loader:510:25)
+2026-03-14 15:32:00:     at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:239:38)
+2026-03-14 15:32:00:     at ModuleWrap.<anonymous> (node:internal/modules/esm/module_job:96:40)
+2026-03-14 15:32:00:     at link (node:internal/modules/esm/module_job:95:36) {
+2026-03-14 15:32:00:   code: 'ERR_MODULE_NOT_FOUND',
+2026-03-14 15:32:00:   url: 'file:///C:/apps/scanner1-prod/api/dist/services/personalIntegration.js'
+2026-03-14 15:32:00: }
+2026-03-14 15:35:33: [personal-integration] notify http error {
+2026-03-14 15:35:33:   tenant_id: 1,
+2026-03-14 15:35:33:   url: 'http://localhost:3001/api/v1/scanner/document-ready',
+2026-03-14 15:35:33:   status: 400,
+2026-03-14 15:35:33:   document_id: 25,
+2026-03-14 15:35:33:   scan_job_id: 35,
+2026-03-14 15:35:33:   personal_dni: 1,
+2026-03-14 15:35:33:   storage_key: 't1/j35/27afb5bb-4c22-4228-ab0e-5f07f1ebd319.jpg',
+2026-03-14 15:35:33:   response: {
+2026-03-14 15:35:33:     ok: false,
+2026-03-14 15:35:33:     error: 'missing_fields: personal_dni y scanner_document_id son requeridos'
+2026-03-14 15:35:33:   }
+2026-03-14 15:35:33: }
+2026-03-14 17:11:13: [personal-integration] notify http error {
+2026-03-14 17:11:13:   tenant_id: 1,
+2026-03-14 17:11:13:   url: 'http://localhost:3001/api/v1/scanner/document-ready',
+2026-03-14 17:11:13:   status: 500,
+2026-03-14 17:11:13:   document_id: 27,
+2026-03-14 17:11:13:   scan_job_id: 37,
+2026-03-14 17:11:13:   personal_dni: 1,
+2026-03-14 17:11:13:   storage_key: 't1/j37/8c69e365-3386-4217-a190-3e73aca3878d.jpg',
+2026-03-14 17:11:13:   response: {
+2026-03-14 17:11:13:     ok: false,
+2026-03-14 17:11:13:     error: 'scanner_file_download_failed: scanner_download_failed status=401 url=http://localhost:3002/v1/documents/files/t1/j37/8c69e365-3386-4217-a190-3e73aca3878d.jpg'
+2026-03-14 17:11:13:   }
+2026-03-14 17:11:13: }
+2026-03-14 18:23:20: [personal-integration] notify http error {
+2026-03-14 18:23:20:   tenant_id: 1,
+2026-03-14 18:23:20:   url: 'http://localhost:3001/api/v1/scanner/document-ready',
+2026-03-14 18:23:20:   status: 500,
+2026-03-14 18:23:20:   document_id: 28,
+2026-03-14 18:23:20:   scan_job_id: 38,
+2026-03-14 18:23:20:   personal_dni: 1,
+2026-03-14 18:23:20:   storage_key: 't1/j38/6bf94f7e-cf91-4b9d-bc6d-86749d2bd858.jpg',
+2026-03-14 18:23:20:   response: {
+2026-03-14 18:23:20:     ok: false,
+2026-03-14 18:23:20:     error: 'scanner_file_download_failed: scanner_download_failed status=401 url=http://localhost:3002/v1/documents/files/t1/j38/6bf94f7e-cf91-4b9d-bc6d-86749d2bd858.jpg'
+2026-03-14 18:23:20:   }
+2026-03-14 18:23:20: }
+2026-03-14 18:35:36: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from C:\apps\scanner1-prod\api\dist\server.js
+2026-03-14 18:35:36:     at packageResolve (node:internal/modules/esm/resolve:854:9)
+2026-03-14 18:35:36:     at moduleResolve (node:internal/modules/esm/resolve:927:18)
+2026-03-14 18:35:36:     at defaultResolve (node:internal/modules/esm/resolve:1169:11)
+2026-03-14 18:35:36:     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:542:12)
+2026-03-14 18:35:36:     at ModuleLoader.resolve (node:internal/modules/esm/loader:510:25)
+2026-03-14 18:35:36:     at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:239:38)
+2026-03-14 18:35:36:     at ModuleWrap.<anonymous> (node:internal/modules/esm/module_job:96:40)
+2026-03-14 18:35:36:     at link (node:internal/modules/esm/module_job:95:36) {
+2026-03-14 18:35:36:   code: 'ERR_MODULE_NOT_FOUND'
+2026-03-14 18:35:36: }
+2026-03-14 18:38:45: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from C:\apps\scanner1-prod\api\dist\server.js
+2026-03-14 18:38:45:     at packageResolve (node:internal/modules/esm/resolve:854:9)
+2026-03-14 18:38:45:     at moduleResolve (node:internal/modules/esm/resolve:927:18)
+2026-03-14 18:38:45:     at defaultResolve (node:internal/modules/esm/resolve:1169:11)
+2026-03-14 18:38:45:     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:542:12)
+2026-03-14 18:38:45:     at ModuleLoader.resolve (node:internal/modules/esm/loader:510:25)
+2026-03-14 18:38:45:     at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:239:38)
+2026-03-14 18:38:45:     at ModuleWrap.<anonymous> (node:internal/modules/esm/module_job:96:40)
+2026-03-14 18:38:45:     at link (node:internal/modules/esm/module_job:95:36) {
+2026-03-14 18:38:45:   code: 'ERR_MODULE_NOT_FOUND'
+2026-03-14 18:38:45: }
+2026-03-14 18:42:42: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from C:\apps\scanner1-prod\api\dist\server.js
+2026-03-14 18:42:42:     at packageResolve (node:internal/modules/esm/resolve:854:9)
+2026-03-14 18:42:42:     at moduleResolve (node:internal/modules/esm/resolve:927:18)
+2026-03-14 18:42:42:     at defaultResolve (node:internal/modules/esm/resolve:1169:11)
+2026-03-14 18:42:42:     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:542:12)
+2026-03-14 18:42:42:     at ModuleLoader.resolve (node:internal/modules/esm/loader:510:25)
+2026-03-14 18:42:42:     at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:239:38)
+2026-03-14 18:42:42:     at ModuleWrap.<anonymous> (node:internal/modules/esm/module_job:96:40)
+2026-03-14 18:42:42:     at link (node:internal/modules/esm/module_job:95:36) {
+2026-03-14 18:42:42:   code: 'ERR_MODULE_NOT_FOUND'
+2026-03-14 18:42:42: }

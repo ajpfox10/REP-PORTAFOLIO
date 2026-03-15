@@ -26,7 +26,6 @@ import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
 import { SolicitarAccesoPage } from '../pages/SolicitarAccesoPage';
-import { RequirePermission } from '../auth/RequirePermission';
 import { ForbiddenPage } from '../pages/ForbiddenPage';
 import { GestionUsuarioPage } from '../pages/GestionUsuarioPage';
 import { SaludLaboralPage } from '../pages/SaludLaboralPage';
@@ -34,17 +33,34 @@ import { EmbarazadasPage } from '../pages/EmbarazadasPage';
 import { AsistenciaPage } from '../pages/AsistenciaPage';
 import { AtencionPublicoPage } from '../pages/AtencionPublicoPage';
 import { EscaneoPage } from '../pages/EscaneoPage';
+import { EscaneoAgentePage } from '../pages/EscaneoAgentePage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
   const loc = useLocation();
+
   if (!isReady) return null;
   if (!session) return <Navigate to="/gate" state={{ from: loc.pathname }} replace />;
   return <>{children}</>;
 }
 
-function AppGuard({ children }: { children: React.ReactNode }) {
-  return <RequirePermission perm="api:access">{children}</RequirePermission>;
+function Guard({
+  perm,
+  anyOf,
+  children,
+}: {
+  perm?: string;
+  anyOf?: string[];
+  children: React.ReactNode;
+}) {
+  const { hasPerm } = useAuth();
+
+  const ok =
+    (perm ? hasPerm(perm) : false) ||
+    (Array.isArray(anyOf) ? anyOf.some(p => hasPerm(p)) : false);
+
+  if (!ok) return <Navigate to="/app/forbidden" replace />;
+  return <>{children}</>;
 }
 
 export function App() {
@@ -57,38 +73,275 @@ export function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/solicitar-acceso" element={<SolicitarAccesoPage />} />
 
-            {/* Core */}
-            <Route path="/app" element={<Private><AppGuard><DashboardPage /></AppGuard></Private>} />
-            <Route path="/app/gestion" element={<Private><AppGuard><GestionPage /></AppGuard></Private>} />
-            <Route path="/app/documents" element={<Private><AppGuard><DocumentsPage /></AppGuard></Private>} />
-            <Route path="/app/tables" element={<Private><AppGuard><TablesPage /></AppGuard></Private>} />
-            <Route path="/app/tables/:table" element={<Private><AppGuard><TableViewPage /></AppGuard></Private>} />
-            <Route path="/app/info" element={<Private><AppGuard><InfoPage /></AppGuard></Private>} />
+            {/* Base mínima */}
+            <Route
+              path="/app"
+              element={
+                <Private>
+                  <Guard perm="api:access">
+                    <DashboardPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/info"
+              element={
+                <Private>
+                  <Guard perm="api:access">
+                    <InfoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/mi-cuenta"
+              element={
+                <Private>
+                  <Guard perm="api:access">
+                    <GestionUsuarioPage />
+                  </Guard>
+                </Private>
+              }
+            />
 
-            {/* Módulos standalone */}
-            <Route path="/app/consultas" element={<Private><AppGuard><ConsultasPage /></AppGuard></Private>} />
-            <Route path="/app/pedidos" element={<Private><AppGuard><PedidosPage /></AppGuard></Private>} />
-            <Route path="/app/documentos" element={<Private><AppGuard><DocumentosPage /></AppGuard></Private>} />
-            <Route path="/app/reportes" element={<Private><AppGuard><ReportesPage /></AppGuard></Private>} />
-            <Route path="/app/redaccion" element={<Private><AppGuard><RedaccionPage /></AppGuard></Private>} />
-            <Route path="/app/mi-cuenta" element={<Private><AppGuard><GestionUsuarioPage /></AppGuard></Private>} />
-            {/* Nuevos módulos */}
-            <Route path="/app/estadisticas" element={<Private><AppGuard><EstadisticasPage /></AppGuard></Private>} />
-            <Route path="/app/organigrama" element={<Private><AppGuard><OrganigramaPage /></AppGuard></Private>} />
-            <Route path="/app/comparador" element={<Private><AppGuard><ComparadorPage /></AppGuard></Private>} />
-            <Route path="/app/legajo" element={<Private><AppGuard><LegajoPage /></AppGuard></Private>} />
-            <Route path="/app/alertas" element={<Private><AppGuard><AlertasPage /></AppGuard></Private>} />
-            <Route path="/app/buscador" element={<Private><AppGuard><BuscadorPage /></AppGuard></Private>} />            
-            <Route path="/app/salud-laboral" element={<Private><AppGuard><SaludLaboralPage /></AppGuard></Private>} />
-            <Route path="/app/embarazadas" element={<Private><AppGuard><EmbarazadasPage /></AppGuard></Private>} />
-            <Route path="/app/asistencia" element={<Private><AppGuard><AsistenciaPage /></AppGuard></Private>} />
-            <Route path="/app/atencion" element={<Private><AppGuard><AtencionPublicoPage /></AppGuard></Private>} />
-            <Route path="/app/escaneo" element={<Private><AppGuard><EscaneoPage /></AppGuard></Private>} />
-            {/* Alta de agentes */}
-            <Route path="/app/carga-agente" element={<Private><AppGuard><CargaAgentePage /></AppGuard></Private>} />
+            {/* Gestión / documentos / tablas */}
+            <Route
+              path="/app/gestion"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
+                    <GestionPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/documents"
+              element={
+                <Private>
+                  <Guard anyOf={['documents:read', 'crud:*:*']}>
+                    <DocumentsPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/documentos"
+              element={
+                <Private>
+                  <Guard anyOf={['documents:read', 'crud:*:*']}>
+                    <DocumentosPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/tables"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:*:read', 'crud:*:*']}>
+                    <TablesPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/tables/:table"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:*:read', 'crud:*:*']}>
+                    <TableViewPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/pedidos"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:pedidos:read', 'crud:*:read', 'crud:*:*']}>
+                    <PedidosPage />
+                  </Guard>
+                </Private>
+              }
+            />
 
-            {/* Admin */}
-            <Route path="/app/admin" element={<Private><AdminPage /></Private>} />
+            {/* Salud laboral separado de embarazadas */}
+            <Route
+              path="/app/salud-laboral"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:reconocimientos_medicos:read', 'crud:examen_anual:read', 'crud:*:*']}>
+                    <SaludLaboralPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/embarazadas"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:embarazadas:read', 'crud:*:*']}>
+                    <EmbarazadasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            {/* Alta / admin */}
+            <Route
+              path="/app/carga-agente"
+              element={
+                <Private>
+                  <Guard anyOf={['personal:write', 'crud:*:*']}>
+                    <CargaAgentePage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/admin"
+              element={
+                <Private>
+                  <Guard anyOf={['usuarios:write', 'crud:*:*']}>
+                    <AdminPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            {/* Módulos todavía sin permiso fino claro: por seguridad, solo admin */}
+            <Route
+              path="/app/consultas"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <ConsultasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/reportes"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <ReportesPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/redaccion"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <RedaccionPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/estadisticas"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <EstadisticasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/organigrama"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <OrganigramaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/comparador"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <ComparadorPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/legajo"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <LegajoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/alertas"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <AlertasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/buscador"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <BuscadorPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/asistencia"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <AsistenciaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/atencion"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <AtencionPublicoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/escaneo"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <EscaneoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/escaneo-agente/:dni"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <EscaneoAgentePage />
+                  </Guard>
+                </Private>
+              }
+            />
 
             {/* Misc */}
             <Route path="/app/forbidden" element={<Private><ForbiddenPage /></Private>} />

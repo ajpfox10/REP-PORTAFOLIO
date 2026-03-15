@@ -1,0 +1,12 @@
+2026-03-11 17:09:53: [mysql env] {
+  MYSQL_HOST: '127.0.0.1',
+  MYSQL_PORT: '3306',
+  MYSQL_DB: 'scanner_saas',
+  MYSQL_USER: 'root',
+  MYSQL_PASSWORD_SET: true
+}
+2026-03-11 17:09:53: [api] running migrations...
+2026-03-11 17:09:53: [api] migrations done
+2026-03-11 17:09:53: [api] scanner-api v3 listening on :3002
+2026-03-11 17:09:53: [api] health: http://localhost:3002/health
+2026-03-11 17:10:01: [online] checking 192.168.0.41

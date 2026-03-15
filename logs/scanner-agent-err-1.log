@@ -1,0 +1,226 @@
+2026-03-14 15:34:44: [agent] ❌ login failed: 
+2026-03-14 15:34:44: [agent] ❌ Could not login, retrying in 10s...
+2026-03-14 17:10:31: [agent] ❌ login failed: 
+2026-03-14 17:10:31: [agent] ❌ Could not login, retrying in 10s...
+2026-03-14 17:53:55: [poll] device 67: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 66: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 65: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 64: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 63: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 62: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 61: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 60: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 59: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 58: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 57: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 56: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 55: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 54: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 53: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 52: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 51: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 50: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 49: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 48: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 47: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 46: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 45: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 44: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 43: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 42: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 41: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 40: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 39: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 38: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 37: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 36: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 35: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 34: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 33: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 32: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 31: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 30: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 29: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 28: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 27: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 26: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 25: ECONNRESET  
+2026-03-14 17:53:55: [poll] device 24: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 67: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 66: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 65: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 64: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 63: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 62: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 61: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 60: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 59: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 58: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 57: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 56: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 55: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 54: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 53: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 52: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 51: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 50: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 49: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 48: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 47: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 46: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 45: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 44: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 43: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 42: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 41: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 40: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 39: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 38: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 37: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 36: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 35: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 34: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 33: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 32: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 31: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 30: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 29: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 28: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 27: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 26: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 25: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 24: ECONNRESET  
+2026-03-14 17:54:28: [poll] device 23: ECONNRESET  
+2026-03-14 18:22:09: [agent] ❌ login failed: 
+2026-03-14 18:22:09: [agent] ❌ Could not login, retrying in 10s...
+2026-03-14 18:35:36: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from C:\apps\scanner1-prod\agent\dist\agent.js
+2026-03-14 18:35:36:     at packageResolve (node:internal/modules/esm/resolve:854:9)
+2026-03-14 18:35:36:     at moduleResolve (node:internal/modules/esm/resolve:927:18)
+2026-03-14 18:35:36:     at defaultResolve (node:internal/modules/esm/resolve:1169:11)
+2026-03-14 18:35:36:     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:542:12)
+2026-03-14 18:35:36:     at ModuleLoader.resolve (node:internal/modules/esm/loader:510:25)
+2026-03-14 18:35:36:     at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:239:38)
+2026-03-14 18:35:36:     at ModuleWrap.<anonymous> (node:internal/modules/esm/module_job:96:40)
+2026-03-14 18:35:36:     at link (node:internal/modules/esm/module_job:95:36) {
+2026-03-14 18:35:36:   code: 'ERR_MODULE_NOT_FOUND'
+2026-03-14 18:35:36: }
+2026-03-14 18:38:45: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from C:\apps\scanner1-prod\agent\dist\agent.js
+2026-03-14 18:38:45:     at packageResolve (node:internal/modules/esm/resolve:854:9)
+2026-03-14 18:38:45:     at moduleResolve (node:internal/modules/esm/resolve:927:18)
+2026-03-14 18:38:45:     at defaultResolve (node:internal/modules/esm/resolve:1169:11)
+2026-03-14 18:38:45:     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:542:12)
+2026-03-14 18:38:45:     at ModuleLoader.resolve (node:internal/modules/esm/loader:510:25)
+2026-03-14 18:38:45:     at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:239:38)
+2026-03-14 18:38:45:     at ModuleWrap.<anonymous> (node:internal/modules/esm/module_job:96:40)
+2026-03-14 18:38:45:     at link (node:internal/modules/esm/module_job:95:36) {
+2026-03-14 18:38:45:   code: 'ERR_MODULE_NOT_FOUND'
+2026-03-14 18:38:45: }
+2026-03-14 18:42:42: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from C:\apps\scanner1-prod\agent\dist\agent.js
+2026-03-14 18:42:42:     at packageResolve (node:internal/modules/esm/resolve:854:9)
+2026-03-14 18:42:42:     at moduleResolve (node:internal/modules/esm/resolve:927:18)
+2026-03-14 18:42:42:     at defaultResolve (node:internal/modules/esm/resolve:1169:11)
+2026-03-14 18:42:42:     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:542:12)
+2026-03-14 18:42:42:     at ModuleLoader.resolve (node:internal/modules/esm/loader:510:25)
+2026-03-14 18:42:42:     at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:239:38)
+2026-03-14 18:42:42:     at ModuleWrap.<anonymous> (node:internal/modules/esm/module_job:96:40)
+2026-03-14 18:42:42:     at link (node:internal/modules/esm/module_job:95:36) {
+2026-03-14 18:42:42:   code: 'ERR_MODULE_NOT_FOUND'
+2026-03-14 18:42:42: }
+2026-03-14 18:47:16: [agent] ❌ login failed: 
+2026-03-14 18:47:16: [agent] ❌ Could not login, retrying in 10s...
+2026-03-14 18:55:32: [agent] ❌ login failed: 
+2026-03-14 18:55:32: [agent] ❌ Could not login, retrying in 10s...
+2026-03-14 20:09:48: [poll] device 67: ECONNRESET  
+2026-03-14 20:09:48: [poll] device 66: ECONNRESET  
+2026-03-14 20:09:48: [poll] device 65: ECONNRESET  
+2026-03-14 20:09:48: [poll] device 64: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 67: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 66: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 65: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 64: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 63: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 62: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 61: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 60: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 59: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 58: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 57: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 56: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 55: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 54: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 53: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 52: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 51: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 50: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 49: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 48: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 47: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 46: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 45: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 44: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 43: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 42: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 41: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 40: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 39: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 38: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 37: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 36: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 35: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 34: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 33: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 32: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 31: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 30: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 29: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 28: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 27: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 26: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 25: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 24: ECONNRESET  
+2026-03-14 20:43:56: [poll] device 23: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 67: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 66: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 65: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 64: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 63: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 62: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 61: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 60: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 59: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 58: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 57: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 56: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 55: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 54: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 53: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 52: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 51: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 50: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 49: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 48: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 47: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 46: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 45: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 44: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 43: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 42: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 41: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 40: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 39: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 38: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 37: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 36: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 35: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 34: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 33: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 32: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 31: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 30: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 29: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 28: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 27: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 26: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 25: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 24: ECONNRESET  
+2026-03-14 20:45:03: [poll] device 23: ECONNRESET  

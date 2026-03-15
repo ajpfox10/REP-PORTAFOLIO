@@ -17,10 +17,25 @@ export function Layout({ title, children, showBack }: {
   const isAdmin  = hasPerm('usuarios:write') || hasPerm('crud:*:*');
   const isFluid  = title === 'Gestión';
   const isActive = (p: string) => loc.pathname === p || loc.pathname.startsWith(p + '/');
-  const isSaludLaboral = hasPerm('crud:reconocimientos_medicos:read') && !hasPerm('crud:*:*');
+
+  const isSaludLaboral =
+    (hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read')) &&
+    !hasPerm('crud:*:*');
+
+  const canSeeSaludLaboral =
+    hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read');
+
+  const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
+  const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
 
   const navLink = (to: string, label: string) => (
-    <Link className={`btn${isActive(to) ? ' active' : ''}`} to={to} style={{ fontSize: '0.82rem', padding: '7px 12px' }}>{label}</Link>
+    <Link
+      className={`btn${isActive(to) ? ' active' : ''}`}
+      to={to}
+      style={{ fontSize: '0.82rem', padding: '7px 12px' }}
+    >
+      {label}
+    </Link>
   );
 
   return (
@@ -34,54 +49,113 @@ export function Layout({ title, children, showBack }: {
             }
             <div>
               <div className="h1">{title}</div>
-              {session && <div className="muted" style={{ marginTop: 2, fontSize: '0.75rem' }}>{session.user?.email ?? ''}</div>}
-            </div>
-          </div>
-
-          {/* Nav principal */}
-          <div className="row" style={{ gap: '0.3rem', flexWrap: 'wrap' }}>
-            {/* Grupo principal */}
-            {navLink('/app/gestion', '📋 Gestión')}
-            {navLink('/app/redaccion', '✍️ Redacción')}
-            {navLink('/app/consultas', '💬 Consultas')}
-            {navLink('/app/pedidos', '📨 Pedidos')}
-            {navLink('/app/documentos', '📂 Docs')}
-            {navLink('/app/reportes', '🎂 Reportes')}
-
-            {/* Menú desplegable "Más" */}
-            <div style={{ position: 'relative' }}>
-              <button className="btn" onClick={() => setMenuOpen(o => !o)}
-                style={{ fontSize: '0.82rem', padding: '7px 12px', background: menuOpen ? 'rgba(255,255,255,0.12)' : undefined }}>
-                ⊞ Más {menuOpen ? '▲' : '▼'}
-              </button>
-              {menuOpen && (
-                <div onClick={() => setMenuOpen(false)} style={{
-                  position: 'absolute', top: '110%', right: 0, zIndex: 1000,
-                  background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: 12, padding: 8, minWidth: 200,
-                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-                  display: 'flex', flexDirection: 'column', gap: 4,
-                }}>
-                  <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>Análisis</div>
-                  {navLink('/app/estadisticas', '📊 Estadísticas')}
-                  {navLink('/app/asistencia', '🗓️ Asistencia')}
-                  {navLink('/app/organigrama', '🏗️ Organigrama')}
-                  {navLink('/app/alertas', '🔔 Alertas')}
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
-                  <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>Herramientas</div>
-                  {navLink('/app/buscador', '🔍 Buscador')}
-                  {navLink('/app/comparador', '⚖️ Comparador')}
-                  {navLink('/app/legajo', '📋 Legajo')}
-                  {navLink('/app/tables', '⊞ Tablas')}
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
-                  {canWrite && navLink('/app/carga-agente', '➕ Alta Agentes')}
-                  {isAdmin && navLink('/app/admin', '⚙ Admin')}
-                  {navLink('/app/info', 'ℹ Info')}
+              {session && (
+                <div className="muted" style={{ marginTop: 2, fontSize: '0.75rem' }}>
+                  {session.user?.email ?? ''}
                 </div>
               )}
             </div>
+          </div>
 
-            <button className="btn danger" onClick={() => logout()} type="button" style={{ fontSize: '0.82rem', padding: '7px 12px' }}>Salir</button>
+          <div className="row" style={{ gap: '0.3rem', flexWrap: 'wrap' }}>
+            {isSaludLaboral ? (
+              <>
+                {canSeeSaludLaboral && navLink('/app/salud-laboral', '🏥 Salud Laboral')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
+            ) : (
+              <>
+                {navLink('/app/gestion', '📋 Gestión')}
+                {navLink('/app/redaccion', '✍️ Redacción')}
+                {navLink('/app/consultas', '💬 Consultas')}
+                {navLink('/app/pedidos', '📨 Pedidos')}
+                {navLink('/app/documentos', '📂 Docs')}
+                {navLink('/app/reportes', '🎂 Reportes')}
+
+                <div style={{ position: 'relative' }}>
+                  <button
+                    className="btn"
+                    onClick={() => setMenuOpen(o => !o)}
+                    style={{
+                      fontSize: '0.82rem',
+                      padding: '7px 12px',
+                      background: menuOpen ? 'rgba(255,255,255,0.12)' : undefined
+                    }}
+                    type="button"
+                  >
+                    ⊞ Más {menuOpen ? '▲' : '▼'}
+                  </button>
+
+                  {menuOpen && (
+                    <div
+                      onClick={() => setMenuOpen(false)}
+                      style={{
+                        position: 'absolute',
+                        top: '110%',
+                        right: 0,
+                        zIndex: 1000,
+                        background: '#1e293b',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: 12,
+                        padding: 8,
+                        minWidth: 220,
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                      }}
+                    >
+                      <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
+                        Análisis
+                      </div>
+                      {navLink('/app/estadisticas', '📊 Estadísticas')}
+                      {navLink('/app/asistencia', '🗓️ Asistencia')}
+                      {navLink('/app/organigrama', '🏗️ Organigrama')}
+                      {navLink('/app/alertas', '🔔 Alertas')}
+                      {navLink('/app/atencion', '🏛️ Atención al Público')}
+
+                      <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+
+                      <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
+                        Herramientas
+                      </div>
+                      {navLink('/app/buscador', '🔍 Buscador')}
+                      {navLink('/app/comparador', '⚖️ Comparador')}
+                      {navLink('/app/legajo', '📋 Legajo')}
+                      {navLink('/app/tables', '⊞ Tablas')}
+                      {navLink('/app/info', 'ℹ Info')}
+                      {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+                      {navLink('/app/escaneo', '🖨 Escaneo')}
+                      {canSeeResidentesRotacion && navLink('/app/residentes-rotacion', '🔄 Residentes Rotación')}
+
+                      <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+
+                      {(canSeeSaludLaboral || canSeeEmbarazadas) && (
+                        <>
+                          <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
+                            Salud laboral
+                          </div>
+                          {canSeeSaludLaboral && navLink('/app/salud-laboral', '🏥 Salud Laboral')}
+                          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                        </>
+                      )}
+
+                      {canWrite && navLink('/app/carga-agente', '➕ Alta Agentes')}
+                      {isAdmin && navLink('/app/admin', '⚙ Admin')}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            <button
+              className="btn danger"
+              onClick={() => logout()}
+              type="button"
+              style={{ fontSize: '0.82rem', padding: '7px 12px' }}
+            >
+              Salir
+            </button>
           </div>
         </div>
       </div>

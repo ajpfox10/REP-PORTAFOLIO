@@ -132,7 +132,7 @@ r.post(
     if (job.upload_nonce !== nonce) throw new ApiError(401, "invalid_nonce")
     if (job.status !== "queued" && job.status !== "in_progress") throw new ApiError(409, "job_not_uploadable")
 
-    const files = (req.files as Express.Multer.File[]) || []
+    const files = (req.files as any[]) || []
     if (!files.length) throw new ApiError(400, "no_pages_uploaded")
 
     const timer = scanDurationSeconds.startTimer({ tenant_id: String(tenant_id) })
