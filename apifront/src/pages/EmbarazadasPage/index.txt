@@ -124,33 +124,34 @@ export function EmbarazadasAlertaBanner() {
         });
         if (enAlerta.length) {
           // 1️⃣ juntar DNIs únicos
-const dnis = [...new Set(enAlerta.map(a => String(a.dni)))];
+          const dnis = [...new Set(enAlerta.map(a => String(a.dni)))];
 
-// 2️⃣ traer datos de personal
-const personalResponses = await Promise.all(
-  dnis.map(d => apiFetch(`/personal/${d}`).catch(() => null))
-);
+          // 2️⃣ traer datos de personal
+          const personalResponses = await Promise.all(
+            dnis.map(d => apiFetch(`/personal/${d}`).catch(() => null))
+          );
 
-// 3️⃣ armar mapa dni -> { apellido, nombre }
-const nameMap = new Map();
+          // 3️⃣ armar mapa dni -> { apellido, nombre }
+          const nameMap = new Map();
 
-personalResponses.forEach((p, i) => {
-  if (p) {
-    nameMap.set(dnis[i], {
-      apellido: p.apellido,
-      nombre: p.nombre
-    });
-  }
-});
+          // ✅ CAMBIO: leer r.ok y r.data (igual que loadRows)
+          personalResponses.forEach((r, i) => {
+            if (r?.ok && r?.data) {
+              nameMap.set(dnis[i], {
+                apellido: r.data.apellido || '',
+                nombre: r.data.nombre || ''
+              });
+            }
+          });
 
-// 4️⃣ mezclar datos
-const alertasEnriquecidas = enAlerta.map(a => ({
-  ...a,
-  ...nameMap.get(String(a.dni))
-}));
+          // 4️⃣ mezclar datos
+          const alertasEnriquecidas = enAlerta.map(a => ({
+            ...a,
+            ...nameMap.get(String(a.dni))
+          }));
 
-// 5️⃣ guardar
-setAlertas(alertasEnriquecidas);
+          // 5️⃣ guardar
+          setAlertas(alertasEnriquecidas);
           setVisible(true);
 
           // registrar quién vio la alerta (solo una vez por sesión)
@@ -197,7 +198,7 @@ setAlertas(alertasEnriquecidas);
             return (
               <div key={a.id} style={{ fontSize: '0.85rem', display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ fontWeight: 600 }}>
-                {a.apellido ? `${a.apellido}, ${a.nombre}` : `DNI ${a.dni}`}
+                  {a.apellido ? `${a.apellido}, ${a.nombre}` : `DNI ${a.dni}`}
                 </span>
                 <span className="muted">·</span>
                 <span>FPP: {fmt(a.fecha_probable_parto)}</span>
@@ -304,7 +305,7 @@ export function EmbarazadasPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!search.row) { toast.error('Sin agente', 'Seleccioná un agente primero.'); return; }
-    if (!fpp) { toast.error('Requerido', 'La fecha probable de parto es obligatoria.'); return; }
+    // fpp es opcional
     setSaving(true);
     const dni = String(search.row.dni).replace(/\D/g, '');
     try {
@@ -486,9 +487,9 @@ export function EmbarazadasPage() {
           <form onSubmit={handleSave}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div style={fg}>
-                <label style={lbl}>Fecha probable de parto *</label>
+                <label style={lbl}>Fecha probable de parto</label>
                 <input className="input" type="date" value={fpp}
-                  onChange={e => setFpp(e.target.value)} required />
+                  onChange={e => setFpp(e.target.value)} />
               </div>
               <div style={fg}>
                 <label style={lbl}>Estado</label>
@@ -518,21 +519,21 @@ export function EmbarazadasPage() {
                   const d = diasHastaFPP(fpp);
                   const color = d <= 50 ? '#eab308' : '#10b981';
                   return <span style={{ marginLeft: 8, color, fontWeight: 700 }}>
-                    {d <= 0 ? `hace ${Math.abs(d)} días` : `faltan ${d} días`}
-                    {d <= 50 && d > -60 && ' ⚠️ Alerta activa'}
+                    {d <= 0 ? `hace ${Math.abs(d)} días` : `en ${d} días`}
                   </span>;
                 })()}
               </div>
             )}
 
-            <div className="row" style={{ gap: 8, marginTop: 12 }}>
-              <button className="btn ok" type="submit" disabled={saving || !search.row}>
-                {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Guardar'}
+            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+              <button className="btn" type="submit" disabled={saving || !search.row}>
+                {saving ? 'Guardando...' : (editingId ? 'Guardar cambios' : 'Guardar')}
               </button>
               {editingId && (
-                <button className="btn" type="button" onClick={() => {
-                  setEditingId(null); setFpp(''); setEsEmbarazada(true); setObservaciones(''); search.clear();
-                }}>Cancelar</button>
+                <button className="btn" type="button" onClick={() => { search.clear(); setEditingId(null); }}
+                  style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  Cancelar edición
+                </button>
               )}
             </div>
           </form>
@@ -541,135 +542,72 @@ export function EmbarazadasPage() {
 
       {/* ── TABLA ── */}
       <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-          <div className="h2">Registro de embarazadas ({rows.length})</div>
-          <div className="row" style={{ gap: 6 }}>
-            <button className="btn" type="button" disabled={!rows.length}
-              onClick={() => exportToExcel('embarazadas', rows)}>📊 Excel</button>
-            <button className="btn" type="button" disabled={!rows.length}
-              onClick={() => exportToPdf('embarazadas', rows)}>📄 PDF</button>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div className="h2" style={{ marginBottom: 8 }}>Listado</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" type="button" onClick={() => exportToExcel(rows, 'embarazadas.xlsx')} disabled={!rows.length}>⬇️ Excel</button>
+            <button className="btn" type="button" onClick={() => exportToPdf(rows, 'embarazadas.pdf')} disabled={!rows.length}>⬇️ PDF</button>
           </div>
         </div>
 
-        {loading ? (
-          <div className="muted">Cargando...</div>
-        ) : rows.length === 0 ? (
-          <div className="muted">No hay registros cargados.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={tbl}>
-              <thead>
-                <tr>
-                  {['DNI','Apellido y Nombre','Estado','FPP','Días','Alerta','Avisada por','Cargado por','Modificado por',''].map(h => (
-                    <th key={h} style={th}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => {
-                  const dias = diasHastaFPP(r.fecha_probable_parto);
-                  const enAlerta45 = r.embarazada && !r.alerta_45_avisada && dias <= 50 && dias > -60;
-                  const rowSt = getRowStyle(r);
-                  return (
-                    <tr key={r.id} style={rowSt}>
-                      <td style={td}><strong>{r.dni}</strong></td>
-                      <td style={td}>{r.apellido ? `${r.apellido}, ${r.nombre}` : <span className="muted">—</span>}</td>
-                      <td style={td}>
-                        <span style={{
-                          background: r.embarazada ? 'rgba(20,184,166,0.15)' : 'rgba(100,116,139,0.2)',
-                          color: r.embarazada ? '#14b8a6' : 'rgba(255,255,255,0.5)',
-                          borderRadius: 6, padding: '2px 8px', fontSize: '0.78rem', fontWeight: 600,
-                        }}>
-                          {r.embarazada ? '🤰 Embarazada' : 'No'}
-                        </span>
-                      </td>
-                      <td style={td}>{fmt(r.fecha_probable_parto)}</td>
-                      <td style={td}>
-                        {r.embarazada && (
-                          <span style={{
-                            fontWeight: 700,
-                            color: dias <= 0 ? '#ef4444' : dias <= 50 ? '#eab308' : '#10b981',
-                          }}>
-                            {dias <= 0 ? `hace ${Math.abs(dias)}d` : `${dias}d`}
-                          </span>
-                        )}
-                      </td>
-                      <td style={td}>
-                        {enAlerta45 ? (
-                          <span style={{ background: 'rgba(234,179,8,0.2)', color: '#eab308', borderRadius: 6, padding: '2px 8px', fontSize: '0.78rem', fontWeight: 700 }}>
-                            ⚠️ Pendiente
-                          </span>
-                        ) : r.alerta_45_avisada ? (
-                          <span style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', borderRadius: 6, padding: '2px 8px', fontSize: '0.78rem' }}>
-                            ✓ Avisada
-                          </span>
-                        ) : (
-                          <span className="muted" style={{ fontSize: '0.78rem' }}>—</span>
-                        )}
-                      </td>
-                      <td style={td}>
-                        {r.alerta_45_avisada ? (
-                          <div style={{ fontSize: '0.75rem' }}>
-                            <div>{r.alerta_45_usuario_nombre || r.alerta_45_usuario_email || '—'}</div>
-                            <div className="muted">{fmt(r.alerta_45_fecha)}</div>
-                          </div>
-                        ) : enAlerta45 ? (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table" style={{ width: '100%', marginTop: 10 }}>
+            <thead>
+              <tr>
+                <th>DNI</th>
+                <th>Apellido y Nombre</th>
+                <th>FPP</th>
+                <th>Días</th>
+                <th>Estado</th>
+                <th>Avisada</th>
+                <th>Obs.</th>
+                <th style={{ width: 220 }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const dias = diasHastaFPP(r.fecha_probable_parto);
+                return (
+                  <tr key={r.id} style={getRowStyle(r)}>
+                    <td>{r.dni}</td>
+                    <td>{r.apellido ? `${r.apellido}, ${r.nombre}` : '—'}</td>
+                    <td>{fmt(r.fecha_probable_parto)}</td>
+                    <td>{dias}</td>
+                    <td>{r.embarazada ? 'Embarazada' : 'No embarazada'}</td>
+                    <td>{r.alerta_45_avisada ? `Sí (${fmt(r.alerta_45_fecha)})` : 'No'}</td>
+                    <td>{r.observaciones || '—'}</td>
+                    <td>
+                      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                        <button className="btn" type="button" onClick={() => search.loadByDni(r.dni)} style={{ fontSize: '0.78rem' }}>
+                          Ver / Editar
+                        </button>
+                        {!r.alerta_45_avisada && r.embarazada && dias <= 50 && dias > -60 && (
                           <button className="btn" type="button"
-                            style={{ fontSize: '0.72rem', padding: '3px 10px', background: 'rgba(234,179,8,0.2)', color: '#eab308' }}
+                            style={{ fontSize: '0.78rem', background: 'rgba(234,179,8,0.18)', color: '#eab308' }}
                             onClick={() => handleMarcarAvisada(r)}
                             disabled={markingId === r.id}>
                             {markingId === r.id ? '...' : '✓ Marcar avisada'}
                           </button>
-                        ) : <span className="muted" style={{ fontSize: '0.75rem' }}>—</span>}
-                      </td>
-                      <td style={td}>
-                        <div style={{ fontSize: '0.75rem' }}>
-                          <div>{r.created_by_nombre || r.created_by_email || '—'}</div>
-                          <div className="muted">{fmt(r.created_at)}</div>
-                        </div>
-                      </td>
-                      <td style={td}>
-                        <div style={{ fontSize: '0.75rem' }}>
-                          {r.updated_by_nombre || r.updated_by_email
-                            ? <><div>{r.updated_by_nombre || r.updated_by_email}</div><div className="muted">{fmt(r.updated_at)}</div></>
-                            : <span className="muted">—</span>}
-                        </div>
-                      </td>
-                      <td style={td}>
-                        {canCrud('embarazadas', 'update') && (
-                          <button className="btn" type="button"
-                            style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                            onClick={() => {
-                              search.loadByDni(String(r.dni));
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}>
-                            ✏️
-                          </button>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Leyenda */}
-        <div className="muted" style={{ fontSize: '0.72rem', marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <span><span style={{ color: '#eab308' }}>■</span> En alerta (FPP ≤50 días, sin avisar)</span>
-          <span><span style={{ color: '#10b981' }}>✓</span> Marcada como avisada</span>
-          <span>Días = días hasta la FPP (negativo = ya pasó)</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!rows.length && (
+                <tr><td colSpan={8} className="muted" style={{ padding: 12 }}>Sin registros.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
+
     </Layout>
   );
 }
 
-// ─── ESTILOS ─────────────────────────────────────────────────────────────────
-const lbl: React.CSSProperties = { fontSize: '0.78rem', color: 'rgba(255,255,255,0.65)', fontWeight: 500, marginBottom: 4, display: 'block' };
-const fg: React.CSSProperties = { display: 'flex', flexDirection: 'column' };
-const tbl: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' };
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, whiteSpace: 'nowrap' };
-const td: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'middle' };
-const alertStyle: React.CSSProperties = { padding: '10px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem', color: 'rgba(245,158,11,0.9)' };
+// ─── estilos inline ─────────────────────────────────────────────────────────
+
+const fg: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
+const lbl: React.CSSProperties = { fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' };
+const alertStyle: React.CSSProperties = { padding: '10px 12px', borderRadius: 10, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca', marginBottom: 12, fontSize: '0.85rem' };

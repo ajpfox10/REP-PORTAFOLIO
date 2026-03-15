@@ -9,8 +9,15 @@ import './styles/SolicitarAcceso.css';
 
 type Step = 1 | 2 | 3;
 
-const API_BASE = (): string =>
-  (window as any).__API_BASE__ || 'http://localhost:3000/api/v1';
+const API_BASE = (): string => {
+  const cfg = (window as any).__RUNTIME_CONFIG__ || {};
+  return (
+    cfg.VITE_API_BASE_URL ||
+    cfg.apiBaseUrl ||
+    (import.meta as any)?.env?.VITE_API_BASE_URL ||
+    'http://localhost:3000/api/v1'
+  ).replace(/\/+$/, '');
+};
 
 // ─── Step 1: Formulario ────────────────────────────────────────────────────────
 function StepFormulario({

@@ -46,7 +46,6 @@ export function DashboardPage() {
     hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read');
 
   const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
-  const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
 
   const isSaludLaboral =
     canSeeSaludLaboral &&
@@ -137,7 +136,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeResidentesRotacion) && (
+      {(canSeeSaludLaboral || canSeeEmbarazadas) && (
         <div style={{ marginTop: 24, marginBottom: 6 }}>
           <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
             Salud Laboral
@@ -148,9 +147,6 @@ export function DashboardPage() {
             )}
             {canSeeEmbarazadas && (
               <Tile to="/app/embarazadas" title="🤰 Embarazadas" desc="Registro de agentes embarazadas, FPP y alertas de licencia." accent="#f472b6" />
-            )}
-            {canSeeResidentesRotacion && (
-              <Tile to="/app/residentes-rotacion" title="🔄 Residentes Rotación" desc="Registro de rotaciones de residentes por servicio y período." accent="#a78bfa" />
             )}
           </div>
         </div>

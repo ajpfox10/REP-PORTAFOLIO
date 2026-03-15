@@ -26,7 +26,6 @@ export function Layout({ title, children, showBack }: {
     hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read');
 
   const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
-  const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
 
   const navLink = (to: string, label: string) => (
     <Link
@@ -126,7 +125,6 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/info', 'ℹ Info')}
                       {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
                       {navLink('/app/escaneo', '🖨 Escaneo')}
-                      {canSeeResidentesRotacion && navLink('/app/residentes-rotacion', '🔄 Residentes Rotación')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 

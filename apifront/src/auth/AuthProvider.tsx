@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // /tables siempre devuelve { ok: true } si hay sesión válida,
         // independientemente de si el usuario tiene datos.
         // ANTES: /documents podía devolver 404/vacío y matar la sesión.
-        const check = await apiFetch('/tables', { method: 'GET' });
+        const check = await apiFetch('/auth/me', { method: 'GET' });
         if (!check?.ok) {
           logEvent({ level: 'warn', what: 'boot_token_invalid', where: 'AuthProvider.boot', status: 401, details: check });
           clearSession();

@@ -7,11 +7,12 @@ declare global {
     __P5_TOAST__?: {
       ok: (title: string, message?: string) => void;
       error: (title: string, message?: string) => void;
+      warning: (title: string, message?: string) => void;
     };
   }
 }
 
-type ToastKind = 'ok' | 'err';
+type ToastKind = 'ok' | 'err' | 'warn';
 
 type ToastItem = {
   id: string;
@@ -23,6 +24,7 @@ type ToastItem = {
 type ToastApi = {
   ok: (title: string, message?: string) => void;
   error: (title: string, message?: string) => void;
+  warning: (title: string, message?: string) => void;
 };
 
 const ToastCtx = createContext<ToastApi | null>(null);
@@ -43,6 +45,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ok: (t, m) => push('ok', t, m),
       error: (t, m) => push('err', t, m),
+      warning: (t, m) => push('warn', t, m),
     }),
     [push]
   );
@@ -61,7 +64,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div className="toast-wrap">
         {items.map((t) => (
-          <div key={t.id} className={`toast ${t.kind === 'ok' ? 'ok' : 'err'}`}>
+          <div key={t.id} className={`toast ${t.kind === 'ok' ? 'ok' : t.kind === 'warn' ? 'warn' : 'err'}`}>
             <div className="title">{t.title}</div>
             {t.message ? <div className="msg">{t.message}</div> : null}
           </div>

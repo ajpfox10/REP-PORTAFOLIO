@@ -18,7 +18,9 @@ function getScannerHeaders(): Record<string, string> {
   const runtimeToken = cfg.scannerToken || (import.meta as any)?.env?.VITE_SCANNER_TOKEN || '';
   let sessionToken = '';
   try {
-    sessionToken = JSON.parse(localStorage.getItem('personalv5.session') || '{}')?.accessToken || '';
+    // Intentar localStorage, sessionStorage y memory en orden
+    const raw = localStorage.getItem('personalv5.session') || sessionStorage.getItem('personalv5.session') || '';
+    sessionToken = JSON.parse(raw || '{}')?.accessToken || '';
   } catch {}
   const token = runtimeToken || sessionToken;
   return {
