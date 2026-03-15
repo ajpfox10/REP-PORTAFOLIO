@@ -88,7 +88,7 @@ function ResetPasswordModal({ user, saving, onClose, onSubmit }: {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box">
         <p className="modal-title">🔑 Cambiar contraseña</p>
-        <p style={{ color: '#555', marginBottom: '1rem', fontSize: '0.9rem' }}>
+        <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
           Usuario: <strong>{user.email}</strong>
         </p>
         <div className="form-field">
@@ -122,7 +122,7 @@ function AssignRoleModal({ user, roles, saving, onClose, onSubmit }: {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box">
         <p className="modal-title">🏷 Asignar rol</p>
-        <p style={{ color: '#555', fontSize: '0.9rem', marginBottom: '1rem' }}>
+        <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
           Usuario: <strong>{user.email}</strong>
         </p>
         <div className="form-field">
@@ -192,8 +192,8 @@ function RolePermissionsModal({ role, allPerms, rolePerms, saving, onToggle, onC
             Solo activos
           </label>
           <span style={{
-            padding: '2px 10px', borderRadius: 999, background: '#f1f5f9',
-            fontSize: '0.78rem', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap',
+            padding: '2px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.08)',
+            fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', whiteSpace: 'nowrap',
           }}>
             {rolePerms.size} / {allPerms.length} activos
           </span>
@@ -205,9 +205,9 @@ function RolePermissionsModal({ role, allPerms, rolePerms, saving, onToggle, onC
             return (
               <div key={grp}>
                 <div style={{
-                  fontWeight: 700, fontSize: '0.72rem', color: '#64748b',
+                  fontWeight: 700, fontSize: '0.72rem', color: 'var(--muted)',
                   textTransform: 'uppercase', letterSpacing: '0.06em',
-                  marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid #e2e8f0',
+                  marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid var(--border)',
                 }}>
                   {grp} ({activeInGroup}/{perms.length})
                 </div>
@@ -218,18 +218,18 @@ function RolePermissionsModal({ role, allPerms, rolePerms, saving, onToggle, onC
                       <label key={p.id} style={{
                         display: 'flex', alignItems: 'flex-start', gap: 8,
                         padding: '6px 10px', borderRadius: 8, cursor: 'pointer',
-                        background: has ? '#f0fdf4' : '#f8fafc',
-                        border: `1px solid ${has ? '#bbf7d0' : '#e2e8f0'}`,
+                        background: has ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${has ? 'rgba(16,185,129,0.3)' : 'var(--border)'}`,
                         transition: 'all 0.12s',
                       }}>
                         <input type="checkbox" checked={has} disabled={saving}
                           onChange={() => onToggle(p.id, has)} style={{ marginTop: 2 }} />
                         <div>
-                          <div style={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 600, color: has ? '#15803d' : '#374151' }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 600, color: has ? '#10b981' : 'var(--text)' }}>
                             {p.clave}
                           </div>
                           {p.descripcion && (
-                            <div style={{ fontSize: '0.7rem', color: '#6b7280', marginTop: 1 }}>{p.descripcion}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>{p.descripcion}</div>
                           )}
                         </div>
                       </label>
@@ -245,7 +245,7 @@ function RolePermissionsModal({ role, allPerms, rolePerms, saving, onToggle, onC
         </div>
 
         <div className="modal-footer" style={{ marginTop: 12 }}>
-          {saving && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>⏳ Guardando…</span>}
+          {saving && <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>⏳ Guardando…</span>}
           <button className="btn btn-primary" onClick={onClose}>✓ Cerrar</button>
         </div>
       </div>
@@ -285,7 +285,7 @@ function UserPermissionsModal({ user, allPerms, userPerms, saving, onToggle, onC
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-box modal-box-wide">
         <p className="modal-title">🔑 Permisos directos: <strong>{user.email}</strong></p>
-        <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: 10 }}>
+        <p style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: 10 }}>
           Los permisos directos se suman a los que otorga el rol asignado.
         </p>
         <input className="admin-search" style={{ width: '100%', marginBottom: 12 }}
@@ -294,7 +294,7 @@ function UserPermissionsModal({ user, allPerms, userPerms, saving, onToggle, onC
         <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {Object.entries(visible).map(([grp, perms]) => (
             <div key={grp}>
-              <div style={{ fontWeight: 700, fontSize: '0.72rem', color: '#64748b',
+              <div style={{ fontWeight: 700, fontSize: '0.72rem', color: 'var(--muted)',
                 textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>{grp}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 4 }}>
                 {perms.map(p => {
@@ -303,12 +303,12 @@ function UserPermissionsModal({ user, allPerms, userPerms, saving, onToggle, onC
                     <label key={p.id} style={{
                       display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px',
                       borderRadius: 7, cursor: 'pointer',
-                      background: has ? '#f0fdf4' : '#f8fafc',
-                      border: `1px solid ${has ? '#bbf7d0' : '#e2e8f0'}`,
+                      background: has ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${has ? 'rgba(16,185,129,0.3)' : 'var(--border)'}`,
                     }}>
                       <input type="checkbox" checked={has} disabled={saving}
                         onChange={() => onToggle(p.id, has)} />
-                      <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: has ? '#15803d' : '#374151' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: has ? '#10b981' : 'var(--text)' }}>
                         {p.clave}
                       </span>
                     </label>
@@ -319,7 +319,7 @@ function UserPermissionsModal({ user, allPerms, userPerms, saving, onToggle, onC
           ))}
         </div>
         <div className="modal-footer">
-          {saving && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>⏳ Guardando…</span>}
+          {saving && <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>⏳ Guardando…</span>}
           <button className="btn btn-primary" onClick={onClose}>✓ Cerrar</button>
         </div>
       </div>
@@ -386,8 +386,8 @@ function RolesTab({ roles, permissions, onRefresh }: {
     <div>
       {/* Crear rol */}
       <div style={{
-        background: '#f8fafc', borderRadius: 12, padding: '14px 18px',
-        border: '1px solid #e2e8f0', marginBottom: 16,
+        background: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: '14px 18px',
+        border: '1px solid var(--border)', marginBottom: 16,
       }}>
         <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 10 }}>➕ Nuevo rol</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -408,12 +408,12 @@ function RolesTab({ roles, permissions, onRefresh }: {
           <div key={r.id} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '10px 16px', borderRadius: 10,
-            border: '1px solid #e2e8f0', background: '#fff',
+            border: '1px solid var(--border)', background: 'var(--card)',
             flexWrap: 'wrap', gap: 8,
           }}>
             <div>
               <span style={{ fontWeight: 600 }}>{r.nombre}</span>
-              {r.descripcion && <span style={{ color: '#64748b', fontSize: '0.82rem', marginLeft: 10 }}>{r.descripcion}</span>}
+              {r.descripcion && <span style={{ color: 'var(--muted)', fontSize: '0.82rem', marginLeft: 10 }}>{r.descripcion}</span>}
             </div>
             <button className="btn" onClick={() => openRole(r)}>🔐 Gestionar permisos</button>
           </div>

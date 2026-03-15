@@ -67,10 +67,9 @@ const http_client: AxiosInstance = axios.create({
 })
 
 http_client.interceptors.request.use((cfg) => {
-  cfg.headers = cfg.headers || {}
-  cfg.headers["x-tenant"]   = TENANT
-  cfg.headers["content-type"] = "application/json"
-  if (jwt_token) cfg.headers["Authorization"] = `Bearer ${jwt_token}`
+  cfg.headers.set("x-tenant", TENANT)
+  cfg.headers.set("content-type", "application/json")
+  if (jwt_token) cfg.headers.set("Authorization", `Bearer ${jwt_token}`)
   return cfg
 })
 
@@ -78,11 +77,10 @@ http_client.interceptors.request.use((cfg) => {
 function makeDeviceClient(deviceKey: string): AxiosInstance {
   const c = axios.create({ baseURL: `${API}/v1`, timeout: 60_000 })
   c.interceptors.request.use((cfg) => {
-    cfg.headers = cfg.headers || {}
-    cfg.headers["x-tenant"]         = TENANT
-    cfg.headers["x-device-key"]     = deviceKey
-    cfg.headers["x-agent-version"]  = "3.1.0-multi"
-    cfg.headers["content-type"]     = "application/json"
+    cfg.headers.set("x-tenant", TENANT)
+    cfg.headers.set("x-device-key", deviceKey)
+    cfg.headers.set("x-agent-version", "3.1.0-multi")
+    cfg.headers.set("content-type", "application/json")
     // NO enviamos x-agent-hostname para no sobreescribir la IP del escáner en la BD
     return cfg
   })

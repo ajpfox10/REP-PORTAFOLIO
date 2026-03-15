@@ -34,7 +34,9 @@ interface Embarazada {
 
 function diasHastaFPP(fpp: string): number {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
-  const f = new Date(fpp); f.setHours(0,0,0,0);
+  // Parsear como fecha local para evitar el offset UTC que suma un día
+  const [y, m, d] = fpp.slice(0, 10).split('-').map(Number);
+  const f = new Date(y, m - 1, d);
   return Math.round((f.getTime() - hoy.getTime()) / (1000*60*60*24));
 }
 

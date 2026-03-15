@@ -21,7 +21,7 @@ function getScannerHeaders(): Record<string, string> {
   const tenant = cfg.scannerTenantId || (import.meta as any)?.env?.VITE_SCANNER_TENANT_ID || '1';
   const runtimeToken = cfg.scannerToken || (import.meta as any)?.env?.VITE_SCANNER_TOKEN || '';
   let sessionToken = '';
-  try { sessionToken = JSON.parse(localStorage.getItem('personalv5.session') || '{}')?.accessToken || ''; } catch {}
+  try { sessionToken = JSON.parse(localStorage.getItem('personalv5.session') || sessionStorage.getItem('personalv5.session') || '{}')?.accessToken || ''; } catch {}
   const token = runtimeToken || sessionToken;
   return { 'x-tenant': tenant, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }

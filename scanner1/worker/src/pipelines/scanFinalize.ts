@@ -4,18 +4,17 @@ import type { Pool } from "mysql2/promise"
 import { ocrQueue } from "../queues.js"
 import { deliverWebhookToSubscribersFromWorker } from "../webhookClient.js"
 import { storageWorker } from "../storage.js"
+import { notifyPersonalApiFromWorker } from "../personalClient.js"
 
 export async function runScanFinalize(pool: Pool, data: any) {
   const { tenant_id, scan_job_id, storage_keys, page_count, personal_dni, personal_ref } = data
 
-  // 1) Marcar job iniciado
   await pool.query(
     "UPDATE scan_jobs SET status='in_progress', started_at=now(), updated_at=now() WHERE tenant_id=? AND id=?",
     [tenant_id, scan_job_id]
   )
 
   try {
-    // 2) Crear registro de documento principal (primer archivo o único)
     const primaryKey = (storage_keys as string[])?.[0]
     if (!primaryKey) throw new Error("no storage_keys in finalize payload")
 
@@ -26,7 +25,6 @@ export async function runScanFinalize(pool: Pool, data: any) {
     )
     const document_id = Number((result as any).insertId)
 
-    // 3) Registrar páginas individuales si hay múltiples keys
     if (storage_keys?.length > 1) {
       for (let i = 1; i < storage_keys.length; i++) {
         await pool.query(
@@ -37,13 +35,25 @@ export async function runScanFinalize(pool: Pool, data: any) {
       }
     }
 
-    // 4) Actualizar job: completado, page_count, document_id
     await pool.query(
       "UPDATE scan_jobs SET status='completed', page_count=?, completed_at=now(), updated_at=now() WHERE tenant_id=? AND id=?",
       [page_count || null, tenant_id, scan_job_id]
     )
 
-    // 5) Encolar OCR
+    // NOTIFICAR A APIPERSONAL SI HAY DNI VINCULADO
+    if (personal_dni) {
+      await notifyPersonalApiFromWorker(pool, tenant_id, {
+        personal_dni,
+        personal_ref: personal_ref || null,
+        document_id,
+        scan_job_id,
+        doc_class: "unknown",
+        page_count: page_count || null,
+        storage_key: primaryKey,
+        ocr_text: undefined,
+      })
+    }
+
     const ocrProvider = process.env.OCR_PROVIDER || "none"
     if (ocrProvider !== "none") {
       await ocrQueue.add("ocr_job", { tenant_id, document_id }, { priority: 8 })
@@ -52,7 +62,6 @@ export async function runScanFinalize(pool: Pool, data: any) {
       console.log(`[finalize] job ${scan_job_id} → doc ${document_id} (OCR disabled)`)
     }
 
-    // 6) Emitir webhook scan.completed
     await deliverWebhookToSubscribersFromWorker(pool, tenant_id, "scan.completed", {
       scan_job_id,
       document_id,
@@ -60,7 +69,6 @@ export async function runScanFinalize(pool: Pool, data: any) {
       personal_dni: personal_dni || null,
     })
 
-    // 7) Emitir document.created
     await deliverWebhookToSubscribersFromWorker(pool, tenant_id, "document.created", {
       document_id,
       scan_job_id,
