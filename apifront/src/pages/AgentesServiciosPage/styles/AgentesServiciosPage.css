@@ -1,0 +1,506 @@
+/*
+  ==============================
+  AgentesServiciosPage — /app/agentes-servicios
+  Historial de pases de agentes por servicio/sector
+  ==============================
+*/
+
+/* ─── Layout ─── */
+.asv-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ─── Filtros ─── */
+.asv-filters-card {
+  padding: 1.1rem 1.2rem;
+}
+
+.asv-filters-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 12px;
+}
+
+.asv-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .asv-filters-grid { grid-template-columns: 1fr; }
+}
+
+.asv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asv-field-full {
+  grid-column: 1 / -1;
+}
+
+.asv-field-action {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.asv-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.asv-mt-8  { margin-top: 8px; }
+.asv-mt-12 { margin-top: 12px; }
+
+/* Estado buttons */
+.asv-estado-btns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.asv-estado-btn {
+  font-size: 0.75rem;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.asv-estado-btn:hover {
+  background: rgba(99,102,241,0.15);
+  border-color: rgba(99,102,241,0.4);
+  color: #e2e8f0;
+}
+
+.asv-estado-btn.active {
+  background: rgba(99,102,241,0.3);
+  border-color: #6366f1;
+  color: #c7d2fe;
+  font-weight: 600;
+}
+
+/* Botones filtro */
+.asv-btn-buscar {
+  flex: 1;
+  background: rgba(99,102,241,0.25);
+  border-color: rgba(99,102,241,0.5);
+  color: #c7d2fe;
+}
+
+.asv-btn-buscar:hover {
+  background: rgba(99,102,241,0.4);
+}
+
+/* Matches */
+.asv-matches {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 10px;
+}
+
+.asv-matches-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.asv-match-item {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  color: inherit;
+  font-size: 0.82rem;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.asv-match-item:hover {
+  background: rgba(99,102,241,0.18);
+  border-color: rgba(99,102,241,0.4);
+}
+
+/* ─── Tabla ─── */
+.asv-table-card {
+  padding: 1.1rem 1.2rem;
+}
+
+.asv-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.asv-table-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asv-total-badge {
+  font-size: 0.72rem;
+  background: rgba(99,102,241,0.2);
+  color: #a5b4fc;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-weight: 600;
+}
+
+.asv-table-pag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asv-pag-info {
+  font-size: 0.78rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.asv-loading {
+  text-align: center;
+  padding: 32px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.asv-empty {
+  text-align: center;
+  padding: 32px;
+  color: #475569;
+  font-size: 0.88rem;
+}
+
+.asv-table-wrap {
+  overflow-x: auto;
+}
+
+.asv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.asv-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  white-space: nowrap;
+}
+
+.asv-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.asv-table tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.asv-row-activo {
+  background: rgba(34,197,94,0.04);
+}
+
+.asv-td-dni     { font-family: monospace; font-size: 0.8rem; white-space: nowrap; }
+.asv-td-nombre  { font-weight: 600; min-width: 160px; }
+.asv-td-servicio { min-width: 140px; }
+.asv-td-dep     { color: #94a3b8; min-width: 120px; }
+.asv-td-fecha   { white-space: nowrap; color: #94a3b8; font-size: 0.78rem; }
+.asv-td-motivo  { color: #64748b; font-size: 0.78rem; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asv-td-actions { white-space: nowrap; display: flex; gap: 4px; align-items: center; }
+
+/* Badges */
+.asv-badge-open {
+  background: rgba(34,197,94,0.18);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,0.3);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.asv-badge-closed {
+  background: rgba(100,116,139,0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(100,116,139,0.2);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.asv-abierto-label {
+  color: #f59e0b;
+  font-size: 0.72rem;
+  font-style: italic;
+}
+
+/* Botones acción en tabla */
+.asv-btn-sm {
+  font-size: 0.72rem !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+}
+
+.asv-btn-danger {
+  background: rgba(239,68,68,0.15) !important;
+  border-color: rgba(239,68,68,0.3) !important;
+  color: #fca5a5 !important;
+}
+
+.asv-btn-danger:hover {
+  background: rgba(239,68,68,0.3) !important;
+}
+
+.asv-btn-new {
+  background: rgba(34,197,94,0.12) !important;
+  border-color: rgba(34,197,94,0.3) !important;
+  color: #86efac !important;
+}
+
+.asv-btn-new:hover {
+  background: rgba(34,197,94,0.25) !important;
+}
+
+/* Paginación inferior */
+.asv-pag-bottom {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ─── Modal base ─── */
+.asv-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  backdrop-filter: blur(2px);
+}
+
+.asv-modal {
+  background: #1e293b;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+
+.asv-modal-sm {
+  max-width: 420px;
+}
+
+.asv-modal-form {
+  max-width: 560px;
+}
+
+.asv-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.asv-modal-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.asv-modal-sub {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.asv-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.asv-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.asv-btn-save {
+  background: rgba(99,102,241,0.3) !important;
+  border-color: rgba(99,102,241,0.5) !important;
+  color: #c7d2fe !important;
+}
+
+.asv-btn-save:hover {
+  background: rgba(99,102,241,0.45) !important;
+}
+
+/* ─── Formulario en modal ─── */
+.asv-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .asv-form-grid { grid-template-columns: 1fr; }
+}
+
+.asv-info-row {
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  color: #cbd5e1;
+}
+
+/* ─── Timeline de historial ─── */
+.asv-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding-left: 20px;
+}
+
+.asv-timeline::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+}
+
+.asv-timeline-item {
+  position: relative;
+  padding: 12px 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.15s;
+}
+
+.asv-timeline-item.asv-abierto {
+  background: rgba(34,197,94,0.06);
+  border-color: rgba(34,197,94,0.2);
+}
+
+.asv-timeline-dot {
+  position: absolute;
+  left: -18px;
+  top: 16px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #475569;
+  border: 2px solid #1e293b;
+  z-index: 1;
+}
+
+.asv-timeline-item.asv-abierto .asv-timeline-dot {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34,197,94,0.5);
+}
+
+.asv-timeline-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.asv-timeline-servicio {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #e2e8f0;
+}
+
+.asv-timeline-dates {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.asv-timeline-motivo {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  margin: 3px 0;
+}
+
+.asv-timeline-jefe {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.asv-timeline-obs {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-style: italic;
+  margin-top: 3px;
+}
+
+.asv-timeline-meta {
+  font-size: 0.68rem;
+  color: #475569;
+  margin-top: 5px;
+}

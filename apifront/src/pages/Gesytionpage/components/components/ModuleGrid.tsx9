@@ -8,8 +8,6 @@ interface Props {
   onToggleModule: (key: ModuleKey) => void;
   onOpenPedidoModal: () => void;
   onCloseModule: (key: ModuleKey) => void;
-  onOpenCitaciones?: () => void;
-  citacionesActivas?: number;
 }
 
 export function ModuleGrid({
@@ -17,9 +15,7 @@ export function ModuleGrid({
   cleanDni,
   onToggleModule,
   onOpenPedidoModal,
-  onCloseModule,
-  onOpenCitaciones,
-  citacionesActivas = 0,
+  onCloseModule
 }: Props) {
   return (
     <div className="card gp-card-14">
@@ -45,8 +41,8 @@ export function ModuleGrid({
             <button
               className="btn"
               type="button"
-              onClick={() => modules.consultas.open
-                ? onCloseModule("consultas")
+              onClick={() => modules.consultas.open 
+                ? onCloseModule("consultas") 
                 : onToggleModule("consultas")
               }
               disabled={modules.consultas.loading}
@@ -68,8 +64,8 @@ export function ModuleGrid({
             <button
               className="btn"
               type="button"
-              onClick={() => modules.pedidos.open
-                ? onCloseModule("pedidos")
+              onClick={() => modules.pedidos.open 
+                ? onCloseModule("pedidos") 
                 : onToggleModule("pedidos")
               }
               disabled={modules.pedidos.loading}
@@ -91,8 +87,8 @@ export function ModuleGrid({
             <button
               className="btn"
               type="button"
-              onClick={() => modules.documentos.open
-                ? onCloseModule("documentos")
+              onClick={() => modules.documentos.open 
+                ? onCloseModule("documentos") 
                 : onToggleModule("documentos")
               }
               disabled={modules.documentos.loading}
@@ -118,30 +114,6 @@ export function ModuleGrid({
               disabled={modules.pedidos.loading}
             >
               {modules.pedidos.loading ? 'Cargando…' : 'Cargar pedido'}
-            </button>
-          </div>
-        </div>
-
-        {/* CITACIONES */}
-        <div className="card gp-card-12" style={{ borderTop: citacionesActivas > 0 ? '2px solid #ef4444' : undefined }}>
-          <div className="row gp-row-between-center">
-            <b>Citaciones</b>
-            {citacionesActivas > 0
-              ? <span className="badge" style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)' }}>
-                  {citacionesActivas} activa{citacionesActivas > 1 ? 's' : ''}
-                </span>
-              : <span className="badge">/citaciones</span>
-            }
-          </div>
-          <p className="muted gp-mt-6">Registrar, ver y cerrar citaciones del agente.</p>
-          <div className="row gp-row-between-center">
-            <button
-              className="btn"
-              type="button"
-              onClick={onOpenCitaciones}
-              style={citacionesActivas > 0 ? { borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' } : undefined}
-            >
-              ⚠️ Citaciones
             </button>
           </div>
         </div>

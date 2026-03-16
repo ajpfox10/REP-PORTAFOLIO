@@ -104,6 +104,7 @@ export function DashboardPage() {
           <Tile to="/app/consultas" title="💬 Consultas" desc="Historial de consultas del sistema." accent="#10b981" />
           <StatTile to="/app/pedidos" title="📨 Pedidos" desc="Ver pedidos y exportar." stat={pedidosTotal === null ? '—' : `${pedidosTotal}`} disabled={!canPedidos} />
           <Tile to="/app/documentos" title="📂 Documentos" desc="Listado y visor de documentos PDF." disabled={!canDocs} accent="#22d3ee" />
+          <Tile to="/app/citaciones" title="⚠️ Citaciones" desc="Registro y seguimiento de citaciones por agente." accent="#ef4444" />
         </div>
       </div>
 
@@ -117,6 +118,7 @@ export function DashboardPage() {
           <Tile to="/app/organigrama" title="🏗️ Organigrama" desc="Distribución visual del personal por jefatura, sector, servicio y dependencia." accent="#f59e0b" />
           <Tile to="/app/alertas" title="🔔 Alertas" desc="Cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos." accent="#ef4444" />
           <Tile to="/app/atencion" title="🏛️ Atención al Público" desc="Recepción de agentes, motivo de consulta y emisión de ticket de atención." accent="#0f766e" />
+          <Tile to="/app/agentes-servicios" title="🏥 Agentes por Servicio" desc="..." accent="#0891b2" />
         </div>
       </div>
 
