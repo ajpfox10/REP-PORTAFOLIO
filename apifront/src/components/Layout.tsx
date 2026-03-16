@@ -71,6 +71,7 @@ export function Layout({ title, children, showBack }: {
                 {navLink('/app/pedidos', '📨 Pedidos')}
                 {navLink('/app/documentos', '📂 Docs')}
                 {navLink('/app/reportes', '🎂 Reportes')}
+                {navLink('/app/citaciones', '⚠️ Citaciones')}
 
                 <div style={{ position: 'relative' }}>
                   <button
@@ -113,6 +114,7 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
                       {navLink('/app/alertas', '🔔 Alertas')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
+                      {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 
