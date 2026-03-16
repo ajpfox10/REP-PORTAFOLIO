@@ -11446,6 +11446,231 @@
         }
       }
     },
+    "/api/v1/residentes_rotacion": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List residentes_rotacion",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_residentes_rotacion"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create residentes_rotacion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_residentes_rotacion_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/residentes_rotacion/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get residentes_rotacion by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update residentes_rotacion by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_residentes_rotacion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch residentes_rotacion by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_residentes_rotacion_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete residentes_rotacion by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/resoluciones": {
       "get": {
         "tags": [
@@ -23413,6 +23638,252 @@
           }
         }
       },
+      "Table_residentes_rotacion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "deleted_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_by_nombre": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "fecha_desde"
+        ]
+      },
+      "Table_residentes_rotacion_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "deleted_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_by_nombre": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dni",
+          "fecha_desde"
+        ]
+      },
+      "Table_residentes_rotacion_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "deleted_by_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "deleted_by_nombre": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "Table_resoluciones": {
         "type": "object",
         "additionalProperties": false,
@@ -24320,28 +24791,26 @@
           "id": {
             "type": "number"
           },
-          "Columna 2": {
-            "type": "number"
-          },
           "nombre": {
-            "type": "number"
+            "type": "string"
           }
         },
         "required": [
-          "id"
+          "id",
+          "nombre"
         ]
       },
       "Table_servicios_Create": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "Columna 2": {
-            "type": "number"
-          },
           "nombre": {
-            "type": "number"
+            "type": "string"
           }
-        }
+        },
+        "required": [
+          "nombre"
+        ]
       },
       "Table_servicios_Patch": {
         "type": "object",
@@ -24350,11 +24819,8 @@
           "id": {
             "type": "number"
           },
-          "Columna 2": {
-            "type": "number"
-          },
           "nombre": {
-            "type": "number"
+            "type": "string"
           }
         }
       },
