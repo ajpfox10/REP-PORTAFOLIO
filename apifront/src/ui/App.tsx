@@ -35,6 +35,8 @@ import { AsistenciaPage } from '../pages/AsistenciaPage';
 import { AtencionPublicoPage } from '../pages/AtencionPublicoPage';
 import { EscaneoPage } from '../pages/EscaneoPage';
 import { EscaneoAgentePage } from '../pages/EscaneoAgentePage';
+import { AgentesServiciosPage } from '../pages/AgentesServiciosPage';
+import { CitacionesPage } from '../pages/CitacionesPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -353,6 +355,27 @@ export function App() {
                 </Private>
               }
             />
+            <Route
+              path="/app/agentes-servicios"
+              element={
+                <Private>
+                 <Guard perm="crud:*:*">
+                  <AgentesServiciosPage />
+                 </Guard>
+               </Private>
+              }
+             />
+             <Route 
+                path="/app/citaciones" 
+                element={
+                  <Private>
+                   <Guard perm="crud:*:*">
+                     <CitacionesPage />
+                   </Guard>
+                  </Private>
+                }
+               />
+            
 
             {/* Misc */}
             <Route path="/app/forbidden" element={<Private><ForbiddenPage /></Private>} />
