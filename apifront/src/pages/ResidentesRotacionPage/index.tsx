@@ -34,7 +34,11 @@ interface Rotacion {
 
 function fmt(d?: string | null): string {
   if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('es-AR'); } catch { return String(d); }
+  try {
+    const s = String(d).slice(0, 10);
+    const [y, m, day] = s.split('-').map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString('es-AR');
+  } catch { return String(d); }
 }
 
 function duracion(desde: string, hasta: string | null): string {

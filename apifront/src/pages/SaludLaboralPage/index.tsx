@@ -255,7 +255,7 @@ export function SaludLaboralPage() {
   const [allRecs, setAllRecs] = useState<ReconocimientoMedico[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [editingRec, setEditingRec] = useState<ReconocimientoMedico | null>(null);
-  const [formRec, setFormRec] = useState({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '' });
+  const [formRec, setFormRec] = useState({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '', ausentismo: false });
   const [savingRec, setSavingRec] = useState(false);
 
   // ── Exámenes ──
@@ -275,7 +275,22 @@ export function SaludLaboralPage() {
   const loadAllRecs = useCallback(async () => {
     if (!canCrud('reconocimientos_medicos', 'read')) return;
     setLoadingRecs(true);
-    try { const r = await apiFetch<any>('/reconocimientos_medicos?limit=500&sort=-created_at'); setAllRecs(r?.data || []); }
+      try {
+          let allData: any[] = [];
+          let pg = 1, tot = Infinity;
+          while (allData.length < tot) {
+              const r = await apiFetch<any>(`/reconocimientos_medicos?limit=200&page=${pg}&sort=-created_at`);
+              const rows = r?.data || [];
+              if (!rows.length) break;
+              allData = [...allData, ...rows];
+              if (r?.meta?.total) tot = Number(r.meta.total);
+              else tot = allData.length;
+              if (rows.length < 200) break;
+              pg++;
+          }
+          setAllRecs(allData);
+      }
+	
     catch (e: any) { toast.error('Error', e?.message); }
     finally { setLoadingRecs(false); }
   }, []);
@@ -300,7 +315,7 @@ export function SaludLaboralPage() {
   // Reset forms al cambiar selección
   useEffect(() => {
     setEditingRec(null);
-    setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '' });
+    setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '', ausentismo: false });
   }, [recSearch.selected]);
 
   useEffect(() => {
@@ -322,7 +337,7 @@ export function SaludLaboralPage() {
     if (!recSearch.selected) { toast.error('Sin becado', 'Seleccioná un becado primero.'); return; }
     // fecha_desde es opcional — solo requerida para el rol salud_laboral (no admin)
     const isSaludLaboral = canCrud('reconocimientos_medicos', 'write') && !isAdmin;
-    if (isSaludLaboral && !formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
+    if (isSaludLaboral && !formRec.ausentismo && !formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
     setSavingRec(true);
     try {
       const dni = String(recSearch.selected.dni).replace(/\D/g, '');
@@ -331,6 +346,7 @@ export function SaludLaboralPage() {
         fecha_desde: formRec.fecha_desde || null, fecha_hasta: formRec.fecha_hasta || null,
         cantidad_dias: formRec.cantidad_dias ? Number(formRec.cantidad_dias) : null,
         tipo: formRec.tipo || null, resultado: formRec.resultado || null, observaciones: formRec.observaciones || null,
+        ausentismo: formRec.ausentismo ? 1 : 0,
       };
       if (editingRec) {
         await apiFetch(`/reconocimientos_medicos/${editingRec.id}`, {
@@ -544,70 +560,99 @@ export function SaludLaboralPage() {
           </div>
 
           {/* Formulario reconocimientos */}
-          {canCrud('reconocimientos_medicos', 'create') && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div className="h2" style={{ marginBottom: 10 }}>
-                {editingRec ? '✏️ Editar reconocimiento' : '➕ Nuevo reconocimiento médico'}
-                {recSearch.selected && <span style={{ fontWeight: 400, fontSize: '0.85rem', marginLeft: 8, color: 'rgba(255,255,255,0.5)' }}>— {recSearch.selected.apellido}, {recSearch.selected.nombre}</span>}
-              </div>
-              {!recSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un becado antes de cargar.</div>}
-              <form onSubmit={handleSaveRec}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                  <div style={fg}>
-                    <label style={lbl}>Fecha desde</label>
-                    <input className="input" type="date" value={formRec.fecha_desde}
-                      onChange={e => setFormRec(f => ({ ...f, fecha_desde: e.target.value, fecha: e.target.value }))} />
-                  </div>
-                  <div style={fg}>
-                    <label style={lbl}>Fecha hasta</label>
-                    <input className="input" type="date" value={formRec.fecha_hasta}
-                      min={formRec.fecha_desde || undefined}
-                      onChange={e => setFormRec(f => ({ ...f, fecha_hasta: e.target.value }))} />
-                  </div>
-                  <div style={fg}>
-                    <label style={lbl}>
-                      Cantidad de días
-                      {formRec.cantidad_dias && <span style={{ marginLeft: 6, color: '#10b981', fontWeight: 700 }}>{formRec.cantidad_dias}d</span>}
-                    </label>
-                    <input className="input" type="number" min={1} value={formRec.cantidad_dias}
-                      onChange={e => setFormRec(f => ({ ...f, cantidad_dias: e.target.value }))}
-                      placeholder="Se calcula automático" />
-                  </div>
-                  <div style={fg}>
-                    <label style={lbl}>Tipo</label>
-                    <input className="input" type="text" placeholder="Ej: Preocupacional" value={formRec.tipo}
-                      onChange={e => setFormRec(f => ({ ...f, tipo: e.target.value }))} />
-                  </div>
-                  <div style={fg}>
-                    <label style={lbl}>Resultado</label>
-                    <input className="input" type="text" placeholder="Ej: Apto" value={formRec.resultado}
-                      onChange={e => setFormRec(f => ({ ...f, resultado: e.target.value }))} />
-                  </div>
-                  <div style={fg}>
-                    <label style={lbl}>Observaciones</label>
-                    <input className="input" type="text" placeholder="Observaciones" value={formRec.observaciones}
-                      onChange={e => setFormRec(f => ({ ...f, observaciones: e.target.value }))} />
-                  </div>
-                </div>
-                {formRec.fecha_desde && formRec.fecha_hasta && (
-                  <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 6, fontSize: '0.82rem' }}>
-                    📅 Del <strong>{fmt(formRec.fecha_desde)}</strong> al <strong>{fmt(formRec.fecha_hasta)}</strong>
-                    {formRec.cantidad_dias && <> — <strong style={{ color: '#10b981' }}>{formRec.cantidad_dias} días</strong></>}
-                  </div>
-                )}
-                <div className="row" style={{ gap: 8, marginTop: 12 }}>
-                  <button className="btn ok" type="submit" disabled={savingRec || !recSearch.selected}>
-                    {savingRec ? 'Guardando...' : editingRec ? 'Actualizar' : 'Guardar'}
-                  </button>
-                  {editingRec && (
-                    <button className="btn" type="button" onClick={() => { setEditingRec(null); setFormRec({ fecha:'',fecha_desde:'',fecha_hasta:'',cantidad_dias:'',tipo:'',resultado:'',observaciones:'' }); }}>
-                      Cancelar
-                    </button>
+                  {/* Formulario reconocimientos */}
+                  {canCrud('reconocimientos_medicos', 'create') && (
+                      <div className="card" style={{ marginBottom: 16 }}>
+                          <div className="h2" style={{ marginBottom: 10 }}>
+                              {editingRec ? '✏️ Editar reconocimiento' : '➕ Nuevo reconocimiento médico'}
+                              {recSearch.selected && <span style={{ fontWeight: 400, fontSize: '0.85rem', marginLeft: 8, color: 'rgba(255,255,255,0.5)' }}>— {recSearch.selected.apellido}, {recSearch.selected.nombre}</span>}
+                          </div>
+                          {!recSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un becado antes de cargar.</div>}
+                          <form onSubmit={handleSaveRec}>
+
+                              {/* Checkbox ausentismo */}
+                              <div style={{ marginBottom: 12 }}>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.88rem' }}>
+                                      <input
+                                          type="checkbox"
+                                          checked={formRec.ausentismo}
+                                          onChange={e => setFormRec(f => ({
+                                              ...f,
+                                              ausentismo: e.target.checked,
+                                              fecha_desde: e.target.checked ? '' : f.fecha_desde,
+                                              fecha_hasta: e.target.checked ? '' : f.fecha_hasta,
+                                              cantidad_dias: e.target.checked ? '' : f.cantidad_dias,
+                                          }))}
+                                      />
+                                      Ausentismo (sin fechas)
+                                  </label>
+                              </div>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+
+                                  {/* Fechas y días — solo si NO es ausentismo */}
+                                  {!formRec.ausentismo && (
+                                      <>
+                                          <div style={fg}>
+                                              <label style={lbl}>Fecha desde</label>
+                                              <input className="input" type="date" value={formRec.fecha_desde}
+                                                  onChange={e => setFormRec(f => ({ ...f, fecha_desde: e.target.value, fecha: e.target.value }))} />
+                                          </div>
+                                          <div style={fg}>
+                                              <label style={lbl}>Fecha hasta</label>
+                                              <input className="input" type="date" value={formRec.fecha_hasta}
+                                                  min={formRec.fecha_desde || undefined}
+                                                  onChange={e => setFormRec(f => ({ ...f, fecha_hasta: e.target.value }))} />
+                                          </div>
+                                          <div style={fg}>
+                                              <label style={lbl}>
+                                                  Cantidad de días
+                                                  {formRec.cantidad_dias && <span style={{ marginLeft: 6, color: '#10b981', fontWeight: 700 }}>{formRec.cantidad_dias}d</span>}
+                                              </label>
+                                              <input className="input" type="number" min={1} value={formRec.cantidad_dias}
+                                                  onChange={e => setFormRec(f => ({ ...f, cantidad_dias: e.target.value }))}
+                                                  placeholder="Se calcula automático" />
+                                          </div>
+                                      </>
+                                  )}
+
+                                  <div style={fg}>
+                                      <label style={lbl}>Tipo</label>
+                                      <input className="input" type="text" placeholder="Ej: Preocupacional" value={formRec.tipo}
+                                          onChange={e => setFormRec(f => ({ ...f, tipo: e.target.value }))} />
+                                  </div>
+                                  <div style={fg}>
+                                      <label style={lbl}>Resultado</label>
+                                      <input className="input" type="text" placeholder="Ej: Apto" value={formRec.resultado}
+                                          onChange={e => setFormRec(f => ({ ...f, resultado: e.target.value }))} />
+                                  </div>
+                                  <div style={fg}>
+                                      <label style={lbl}>Observaciones</label>
+                                      <input className="input" type="text" placeholder="Observaciones" value={formRec.observaciones}
+                                          onChange={e => setFormRec(f => ({ ...f, observaciones: e.target.value }))} />
+                                  </div>
+                              </div>
+
+                              {!formRec.ausentismo && formRec.fecha_desde && formRec.fecha_hasta && (
+                                  <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 6, fontSize: '0.82rem' }}>
+                                      📅 Del <strong>{fmt(formRec.fecha_desde)}</strong> al <strong>{fmt(formRec.fecha_hasta)}</strong>
+                                      {formRec.cantidad_dias && <> — <strong style={{ color: '#10b981' }}>{formRec.cantidad_dias} días</strong></>}
+                                  </div>
+                              )}
+
+                              <div className="row" style={{ gap: 8, marginTop: 12 }}>
+                                  <button className="btn ok" type="submit" disabled={savingRec || !recSearch.selected}>
+                                      {savingRec ? 'Guardando...' : editingRec ? 'Actualizar' : 'Guardar'}
+                                  </button>
+                                  {editingRec && (
+                                      <button className="btn" type="button" onClick={() => { setEditingRec(null); setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '', ausentismo: false }); }}>
+                                          Cancelar
+                                      </button>
+                                  )}
+                              </div>
+                          </form>
+                      </div>
                   )}
-                </div>
-              </form>
-            </div>
-          )}
 
           {/* Tabla reconocimientos */}
           <div className="card">

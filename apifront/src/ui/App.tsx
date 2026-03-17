@@ -37,6 +37,7 @@ import { EscaneoPage } from '../pages/EscaneoPage';
 import { EscaneoAgentePage } from '../pages/EscaneoAgentePage';
 import { AgentesServiciosPage } from '../pages/AgentesServiciosPage';
 import { CitacionesPage } from '../pages/CitacionesPage';
+import { JefeServicioPage } from '../pages/JefeServicioPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -365,6 +366,7 @@ export function App() {
                </Private>
               }
              />
+
              <Route 
                 path="/app/citaciones" 
                 element={
@@ -375,7 +377,17 @@ export function App() {
                   </Private>
                 }
                />
-            
+             
+   <Route
+  path="/app/mi-sector"
+  element={
+    <Private>
+      <Guard anyOf={['app:jefe_servicio:access', 'crud:*:*']}>
+        <JefeServicioPage />
+      </Guard>
+    </Private>
+  }
+/>
 
             {/* Misc */}
             <Route path="/app/forbidden" element={<Private><ForbiddenPage /></Private>} />
