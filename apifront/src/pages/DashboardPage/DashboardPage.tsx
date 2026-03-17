@@ -88,7 +88,31 @@ export function DashboardPage() {
       </Layout>
     );
   }
-
+  if (isJefeServicio) {
+    return (
+      <Layout title="Panel">
+        <div style={{ marginBottom: 6 }}>
+          <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Mi Sector
+          </div>
+          <div className="grid">
+            <Tile
+              to="/app/mi-sector"
+              title="🏢 Mi Sector"
+              desc="Gestión de agentes y servicios de tu sector."
+              accent="#6366f1"
+            />
+            <Tile
+              to="/app/mi-cuenta"
+              title="👤 Mi cuenta"
+              desc="Perfil, permisos y cambio de contraseña."
+              accent="#0ea5e9"
+            />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
   return (
     <Layout title="Panel">
       {shouldShowEmbarazadasBanner && <EmbarazadasAlertaBanner />}
@@ -105,6 +129,7 @@ export function DashboardPage() {
           <StatTile to="/app/pedidos" title="📨 Pedidos" desc="Ver pedidos y exportar." stat={pedidosTotal === null ? '—' : `${pedidosTotal}`} disabled={!canPedidos} />
           <Tile to="/app/documentos" title="📂 Documentos" desc="Listado y visor de documentos PDF." disabled={!canDocs} accent="#22d3ee" />
           <Tile to="/app/citaciones" title="⚠️ Citaciones" desc="Registro y seguimiento de citaciones por agente." accent="#ef4444" />
+          <Tile to="/app/mi-sector" title="🏢 Mi Sector" desc="Gestión de agentes y servicios por sector." accent="#6366f1" />
         </div>
       </div>
 

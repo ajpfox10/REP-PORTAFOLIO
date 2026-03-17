@@ -115,6 +115,7 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/alertas', '🔔 Alertas')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
                       {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
+                      {navLink('/app/mi-sector', '🏢 Mi Sector')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 

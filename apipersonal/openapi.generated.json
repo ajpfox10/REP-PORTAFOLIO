@@ -25870,6 +25870,14 @@
           "created_at": {
             "type": "string",
             "nullable": true
+          },
+          "sector_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "jefatura_id": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -25921,6 +25929,14 @@
           },
           "created_at": {
             "type": "string",
+            "nullable": true
+          },
+          "sector_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "jefatura_id": {
+            "type": "number",
             "nullable": true
           }
         },
@@ -25975,6 +25991,14 @@
           },
           "created_at": {
             "type": "string",
+            "nullable": true
+          },
+          "sector_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "jefatura_id": {
+            "type": "number",
             "nullable": true
           }
         }
