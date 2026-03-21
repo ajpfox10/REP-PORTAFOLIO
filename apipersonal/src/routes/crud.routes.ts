@@ -209,7 +209,11 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
       if (!model) return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
 
       const page = pickQueryInt(req.query.page, 1, 1);
-      const limit = Math.min(pickQueryInt(req.query.limit, 50, 1), 200);
+      const DEFAULT_LIMIT = Number(process.env.CRUD_DEFAULT_LIMIT || 50);
+      const MAX_LIMIT = Number(process.env.CRUD_MAX_LIMIT || 200);
+
+      const requestedLimit = pickQueryInt(req.query.limit, DEFAULT_LIMIT, 1);
+      const limit = Math.min(requestedLimit, MAX_LIMIT);
       const offset = (page - 1) * limit;
 
       const where = buildWhereClause(req.query, schema.tables?.[table]);

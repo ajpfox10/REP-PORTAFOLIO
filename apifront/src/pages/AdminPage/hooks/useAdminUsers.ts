@@ -65,30 +65,19 @@ export function useAdminUsers() {
         descripcion: p.descripcion || '',
       })));
 
-      // Cargar roles de cada usuario
-      const usersWithRoles: UserRow[] = await Promise.all(
-        userList.map(async (u: any) => {
-          let roleId = null;
-          let roleName = null;
-          try {
-            const urRes = await apiFetch<any>(`/usuarios_roles?usuario_id=${u.id}&limit=1&page=1`);
-            const ur = urRes?.data?.[0];
-            if (ur?.rol_id) {
-              roleId = Number(ur.rol_id);
-              roleName = roleList.find(r => r.id === roleId)?.nombre ?? null;
-            }
-          } catch {}
-          return {
-            id: Number(u.id),
-            email: String(u.email || ''),
-            nombre: u.nombre || null,
-            estado: String(u.estado || 'activo'),
-            created_at: u.created_at || '',
-            roleId,
-            roleName,
-          };
-        })
-      );
+      // rol_id ya viene en la respuesta de GET /usuarios (MIN(ur.rol_id))
+      const usersWithRoles: UserRow[] = userList.map((u: any) => {
+        const roleId = u.rol_id ? Number(u.rol_id) : null;
+        return {
+          id: Number(u.id),
+          email: String(u.email || ''),
+          nombre: u.nombre || null,
+          estado: String(u.estado || 'activo'),
+          created_at: u.created_at || '',
+          roleId,
+          roleName: roleId ? (roleList.find(r => r.id === roleId)?.nombre ?? null) : null,
+        };
+      });
 
       setUsers(usersWithRoles);
     } catch (e: any) {
@@ -220,7 +209,7 @@ export function useAdminUsers() {
     const newEstado = user.estado === 'activo' ? 'inactivo' : 'activo';
     setSaving(true);
     try {
-      await apiFetch<any>(`/usuarios/${user.id}`, {
+      await apiFetch<any>(`/usuarios/${user.id}/estado`, {
         method: 'PATCH',
         body: JSON.stringify({ estado: newEstado }),
       });
@@ -241,7 +230,7 @@ export function useAdminUsers() {
     }
     setSaving(true);
     try {
-      await apiFetch<any>(`/usuarios/${userId}`, {
+      await apiFetch<any>(`/usuarios/${userId}/password`, {
         method: 'PATCH',
         body: JSON.stringify({ password: newPassword }),
       });
