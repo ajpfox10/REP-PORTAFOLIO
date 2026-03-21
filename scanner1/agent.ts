@@ -74,7 +74,6 @@ function makeDeviceClient(deviceKey: string): AxiosInstance {
 interface DeviceRow {
   id: number; name: string; driver: string
   device_key: string; hostname: string | null; is_active: number
-  escl_port?: number | null   // puerto eSCL real del SRV mDNS record, null si no se conoce
 }
 interface JobResponse {
   job_id: number | null; upload_nonce?: string
@@ -102,11 +101,10 @@ async function getDevices(): Promise<DeviceRow[]> {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
-  const dpi       = profile?.dpi    ?? 300
-  const color     = profile?.color  !== false
-  const source    = profile?.source ?? "flatbed"
-  const duplex    = !!profile?.duplex
-  const escl_port = profile?.escl_port ?? null  // puerto real del mDNS SRV record
+  const dpi    = profile?.dpi    ?? 300
+  const color  = profile?.color  !== false
+  const source = profile?.source ?? "flatbed"
+  const duplex = !!profile?.duplex
 
   // 1. Windows → WIA (más confiable para Kyocera/Olivetti via WSD)
   if (process.platform === "win32") {
@@ -119,25 +117,16 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
     }
   }
 
-  // 2. eSCL / AirScan (estándar moderno, HP/Canon/Ricoh/Brother)
+  // 2. eSCL / AirScan (estándar moderno, Kyocera/Olivetti/HP/Canon/Ricoh/Brother)
   try {
-    const pages = await scanESCL(ip, { dpi, color, source, duplex, escl_port })
+    const pages = await scanESCL(ip, { dpi, color, source, duplex })
     console.log(`[escl] ✅ ${ip} → ${pages.length} pág.`)
     return pages
   } catch (e: any) {
-    console.warn(`[escl] ${ip} falló: ${e.message} — probando WSD-Scan…`)
+    console.warn(`[escl] ${ip} falló: ${e.message} — probando IPP…`)
   }
 
-  // 3. WS-Scan / WSD-Scan via puerto 5357 (Kyocera, Olivetti, Canon)
-  try {
-    const pages = await scanWSDScan(ip, { dpi, color, source, duplex })
-    console.log(`[wsd-scan] ✅ ${ip} → ${pages.length} pág.`)
-    return pages
-  } catch (e: any) {
-    console.warn(`[wsd-scan] ${ip} falló: ${e.message} — probando IPP…`)
-  }
-
-  // 4. IPP con probe de paths (fallback legacy)
+  // 3. IPP con probe de paths (fallback legacy)
   return await scanIPP(ip, { dpi, color, source })
 }
 
@@ -258,51 +247,41 @@ try {
 // Protocolo estándar soportado por Kyocera, Olivetti, HP, Canon, Ricoh, Brother, Epson
 // RFC: https://www.mopria.org/spec-archive
 async function scanESCL(ip: string, opts: {
-  dpi: number; color: boolean; source: string; duplex: boolean; escl_port?: number | null
+  dpi: number; color: boolean; source: string; duplex: boolean
 }): Promise<Buffer[]> {
-  let base: string
+  // Probar puertos en PARALELO (fix: antes era secuencial, 5×3s = 15s de overhead)
+  // Kyocera/Olivetti: 80, 9090 | HP: 9280 | WSD-HTTPS: 5358/9443 | General: 443,8080
+  const candidates = [
+    { proto: "http",  port: 80   },
+    { proto: "https", port: 443  },
+    { proto: "http",  port: 8080 },
+    { proto: "http",  port: 9090 }, // Kyocera / Olivetti
+    { proto: "https", port: 5358 }, // WSD-HTTPS Kyocera
+    { proto: "https", port: 9443 },
+    { proto: "http",  port: 9280 }, // HP
+  ]
 
-  if (opts.escl_port) {
-    // Puerto conocido del registro mDNS SRV — no necesitamos probe
-    const proto = opts.escl_port === 443 || opts.escl_port === 9096 ? "https" : "http"
-    base = `${proto}://${ip}:${opts.escl_port}`
-    console.log(`[escl] ${ip} → usando puerto mDNS: ${base}`)
-    // Verificar que responde
-    await httpGet(`${base}/eSCL/ScannerCapabilities`, 4000).catch((e: any) => {
-      throw new Error(`eSCL port ${opts.escl_port} no responde: ${e.message}`)
-    })
-  } else {
-    // Puerto desconocido — probar en paralelo los más comunes
-    const candidates = [
-      { proto: "http",  port: 80   },
-      { proto: "https", port: 443  },
-      { proto: "http",  port: 8080 },
-      { proto: "http",  port: 9090 },
-      { proto: "https", port: 5358 },
-      { proto: "http",  port: 9280 }, // HP
-    ]
-    base = await new Promise<string>((resolve, reject) => {
-      let resolved = false
-      let pending = candidates.length
-      for (const c of candidates) {
-        const url = `${c.proto}://${ip}:${c.port}/eSCL/ScannerCapabilities`
-        httpGet(url, 2000)
-          .then(() => {
-            if (!resolved) {
-              resolved = true
-              resolve(`${c.proto}://${ip}:${c.port}`)
-              console.log(`[escl] ${ip} → accesible en ${c.proto}:${c.port}`)
-            }
-          })
-          .catch(() => {
-            pending--
-            if (pending === 0 && !resolved) {
-              reject(new Error(`No se encontró eSCL en ${ip} (probados 80,443,8080,9090,5358,9280)`))
-            }
-          })
-      }
-    })
-  }
+  const base = await new Promise<string>((resolve, reject) => {
+    let resolved = false
+    let pending = candidates.length
+    for (const c of candidates) {
+      const url = `${c.proto}://${ip}:${c.port}/eSCL/ScannerCapabilities`
+      httpGet(url, 2000)
+        .then(() => {
+          if (!resolved) {
+            resolved = true
+            resolve(`${c.proto}://${ip}:${c.port}`)
+            console.log(`[escl] ${ip} → accesible en ${c.proto}:${c.port}`)
+          }
+        })
+        .catch(() => {
+          pending--
+          if (pending === 0 && !resolved) {
+            reject(new Error(`No se encontró eSCL en ${ip} (probados 80,443,8080,9090,5358,9443,9280)`))
+          }
+        })
+    }
+  })
 
   // Construir XML de scan settings
   const inputSource = (opts.source === "adf" || opts.source === "adf_duplex") ? "Feeder" : "Platen"
@@ -361,275 +340,6 @@ async function scanESCL(ip: string, opts: {
   return pages
 }
 
-
-// ── 2b. WS-Scan / WSD-Scan ───────────────────────────────────────────────────
-// Protocolo nativo de Kyocera, Olivetti, Canon, Ricoh y Brother via puerto 5357
-// Más confiable que eSCL para MFPs de red en entornos Windows
-async function scanWSDScan(ip: string, opts: {
-  dpi: number; color: boolean; source: string; duplex: boolean
-}): Promise<Buffer[]> {
-  // Probar puertos WSD en paralelo: 5357 (HTTP) y 5358 (HTTPS) — Kyocera usa ambos
-  const wsdPort = await new Promise<{ port: number; mod: typeof http | typeof https }>((resolve, reject) => {
-    let done = false
-    let pending = 2
-    const tryPort = (port: number, mod: typeof http | typeof https) => {
-      const req = mod.request({ hostname: ip, port, path: "/", method: "GET",
-        timeout: 2000, rejectUnauthorized: false },
-        (res) => { res.resume(); if (!done) { done = true; resolve({ port, mod }) } })
-      req.on("error", () => { pending--; if (pending === 0 && !done) reject(new Error("WSD puertos 5357/5358 no disponibles")) })
-      req.on("timeout", () => { req.destroy(); pending--; if (pending === 0 && !done) reject(new Error("WSD timeout")) })
-      req.end()
-    }
-    tryPort(5357, http)
-    tryPort(5358, https)
-  })
-  const wsdBase = `${wsdPort.mod === https ? "https" : "http"}://${ip}:${wsdPort.port}`
-  console.log(`[wsd-scan] ${ip} → accesible en ${wsdBase}`)
-
-  const msgId  = () => `urn:uuid:${Math.random().toString(16).slice(2)}-${Date.now()}`
-  const colorMode = opts.color ? "RGB" : "Grayscale"
-  const inputSrc  = (opts.source === "adf" || opts.source === "adf_duplex") ? "ADF" : "Platen"
-  const dpi = opts.dpi || 300
-
-  // ── Paso 1: CreateScanJobRequest ──────────────────────────────────────────
-  const createJobXml = `<?xml version="1.0" encoding="UTF-8"?>
-<s:Envelope
-  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
-  xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
-  xmlns:w="http://schemas.microsoft.com/windows/2006/08/wdp/scan">
-  <s:Header>
-    <a:To>${wsdBase}/</a:To>
-    <a:Action>http://schemas.microsoft.com/windows/2006/08/wdp/scan/CreateScanJob</a:Action>
-    <a:MessageID>${msgId()}</a:MessageID>
-    <a:ReplyTo><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>
-  </s:Header>
-  <s:Body>
-    <w:CreateScanJobRequest>
-      <w:ScanTicket>
-        <w:JobDescription>
-          <w:JobName>Scan</w:JobName>
-          <w:JobOriginatingUserName>scanner-agent</w:JobOriginatingUserName>
-        </w:JobDescription>
-        <w:DocumentParameters>
-          <w:Format>jfif</w:Format>
-          <w:CompressionQualityFactor>75</w:CompressionQualityFactor>
-          <w:ImagingParameters>
-            <w:Exposure>
-              <w:AutoExposure/>
-            </w:Exposure>
-            <w:Scaling>
-              <w:ScalingHeight>100</w:ScalingHeight>
-              <w:ScalingWidth>100</w:ScalingWidth>
-            </w:Scaling>
-            <w:MediaSides>
-              <w:MediaFront>
-                <w:ScanRegion>
-                  <w:ScanRegionXOffset>0</w:ScanRegionXOffset>
-                  <w:ScanRegionYOffset>0</w:ScanRegionYOffset>
-                  <w:ScanRegionWidth>${Math.round(dpi * 8.27)}</w:ScanRegionWidth>
-                  <w:ScanRegionHeight>${Math.round(dpi * 11.69)}</w:ScanRegionHeight>
-                </w:ScanRegion>
-                <w:ColorProcessing>${colorMode}</w:ColorProcessing>
-                <w:Resolution>
-                  <w:Width>${dpi}</w:Width>
-                  <w:Height>${dpi}</w:Height>
-                </w:Resolution>
-              </w:MediaFront>
-              ${opts.duplex ? `<w:MediaBack>
-                <w:ScanRegion>
-                  <w:ScanRegionXOffset>0</w:ScanRegionXOffset>
-                  <w:ScanRegionYOffset>0</w:ScanRegionYOffset>
-                  <w:ScanRegionWidth>${Math.round(dpi * 8.27)}</w:ScanRegionWidth>
-                  <w:ScanRegionHeight>${Math.round(dpi * 11.69)}</w:ScanRegionHeight>
-                </w:ScanRegion>
-                <w:ColorProcessing>${colorMode}</w:ColorProcessing>
-                <w:Resolution>
-                  <w:Width>${dpi}</w:Width>
-                  <w:Height>${dpi}</w:Height>
-                </w:Resolution>
-              </w:MediaBack>` : ""}
-            </w:MediaSides>
-          </w:ImagingParameters>
-          <w:InputSource>${inputSrc}</w:InputSource>
-        </w:DocumentParameters>
-      </w:ScanTicket>
-    </w:CreateScanJobRequest>
-  </s:Body>
-</s:Envelope>`
-
-  const createResp = await httpPostSoap(wsdBase, createJobXml,
-    "http://schemas.microsoft.com/windows/2006/08/wdp/scan/CreateScanJob", 15_000)
-
-  // Extraer JobId y JobToken del response
-  const jobIdMatch    = createResp.match(/<[^:>]*:?JobId[^>]*>([^<]+)<\//)
-  const jobTokenMatch = createResp.match(/<[^:>]*:?JobToken[^>]*>([^<]+)<\//)
-  if (!jobIdMatch?.[1]) throw new Error("WSD-Scan: no se recibió JobId en CreateScanJob")
-  const jobId    = jobIdMatch[1].trim()
-  const jobToken = jobTokenMatch?.[1]?.trim() || ""
-  console.log(`[wsd-scan] JobId=${jobId} JobToken=${jobToken}`)
-
-  // ── Paso 2: RetrieveImageRequest (repetir hasta que no haya más páginas) ──
-  const pages: Buffer[] = []
-
-  for (let pageNum = 1; pageNum <= 50; pageNum++) {
-    const retrieveXml = `<?xml version="1.0" encoding="UTF-8"?>
-<s:Envelope
-  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
-  xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
-  xmlns:w="http://schemas.microsoft.com/windows/2006/08/wdp/scan">
-  <s:Header>
-    <a:To>${wsdBase}/</a:To>
-    <a:Action>http://schemas.microsoft.com/windows/2006/08/wdp/scan/RetrieveImage</a:Action>
-    <a:MessageID>${msgId()}</a:MessageID>
-    <a:ReplyTo><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>
-  </s:Header>
-  <s:Body>
-    <w:RetrieveImageRequest>
-      <w:JobId>${jobId}</w:JobId>
-      <w:JobToken>${jobToken}</w:JobToken>
-    </w:RetrieveImageRequest>
-  </s:Body>
-</s:Envelope>`
-
-    try {
-      const imgData = await httpPostSoapBinary(wsdBase, retrieveXml,
-        "http://schemas.microsoft.com/windows/2006/08/wdp/scan/RetrieveImage", 30_000)
-      if (!imgData || imgData.length < 100) break
-      pages.push(imgData)
-      console.log(`[wsd-scan] página ${pageNum} → ${imgData.length} bytes`)
-    } catch (e: any) {
-      // ServerErrorNotAvailable o similar = no más páginas
-      if (e?.message?.includes("NotAvail") || e?.message?.includes("JobEnded") ||
-          e?.message?.includes("404") || e?.message?.includes("500")) break
-      throw e
-    }
-  }
-
-  if (!pages.length) throw new Error("WSD-Scan: el escáner no devolvió páginas")
-  return pages
-}
-
-async function httpPostSoap(base: string, xml: string, action: string, timeoutMs: number): Promise<string> {
-  const parsed = new URL(base)
-  const mod = parsed.protocol === "https:" ? https : http
-  const defaultPort = parsed.protocol === "https:" ? 5358 : 5357
-  const bodyBuf = Buffer.from(xml, "utf8")
-  return new Promise((resolve, reject) => {
-    const req = (mod as any).request({
-      hostname: parsed.hostname,
-      port: Number(parsed.port) || defaultPort,
-      path: "/",
-      method: "POST",
-      rejectUnauthorized: false,
-      headers: {
-        "Content-Type": "application/soap+xml; charset=utf-8",
-        "Content-Length": bodyBuf.length,
-        "SOAPAction": `"${action}"`,
-      },
-      timeout: timeoutMs,
-    }, (res: any) => {
-      let data = ""
-      res.on("data", (c: any) => data += c)
-      res.on("end", () => {
-        if (res.statusCode && res.statusCode >= 400)
-          reject(new Error(`SOAP HTTP ${res.statusCode}: ${data.slice(0, 300)}`))
-        else resolve(data)
-      })
-    })
-    req.on("error", reject)
-    req.on("timeout", () => { req.destroy(); reject(new Error("SOAP timeout")) })
-    req.write(bodyBuf)
-    req.end()
-  })
-}
-
-// RetrieveImage puede devolver MTOM (multipart con imagen binaria) o base64 inline
-async function httpPostSoapBinary(base: string, xml: string, action: string, timeoutMs: number): Promise<Buffer> {
-  const parsed = new URL(base)
-  const mod = parsed.protocol === "https:" ? https : http
-  const defaultPort = parsed.protocol === "https:" ? 5358 : 5357
-  const bodyBuf = Buffer.from(xml, "utf8")
-  return new Promise((resolve, reject) => {
-    const req = (mod as any).request({
-      hostname: parsed.hostname,
-      port: Number(parsed.port) || defaultPort,
-      path: "/",
-      method: "POST",
-      rejectUnauthorized: false,
-      headers: {
-        "Content-Type": "application/soap+xml; charset=utf-8",
-        "Content-Length": bodyBuf.length,
-        "SOAPAction": `"${action}"`,
-        "Accept": "application/soap+xml, multipart/related, */*",
-      },
-      timeout: timeoutMs,
-    }, (res: any) => {
-      const chunks: Buffer[] = []
-      res.on("data", (c: any) => chunks.push(c))
-      res.on("end", () => {
-        if (res.statusCode && res.statusCode >= 400) {
-          const txt = Buffer.concat(chunks).toString("utf8")
-          reject(new Error(`SOAP HTTP ${res.statusCode}: ${txt.slice(0, 300)}`))
-          return
-        }
-        const data = Buffer.concat(chunks)
-        const ct = res.headers["content-type"] || ""
-
-        // MTOM multipart
-        if (ct.includes("multipart/related")) {
-          const img = extractMTOMImage(data)
-          if (img && img.length > 100) { resolve(img); return }
-        }
-
-        // Intentar extraer imagen inline (JPEG/PNG) del body
-        const img = extractIppDocument(data)
-        if (img && img.length > 100) { resolve(img); return }
-
-        // Base64 en XML
-        const b64Match = data.toString("utf8").match(new RegExp("<[^>]*ImageData[^>]*>([A-Za-z0-9+\/=\r\n\s]+)<"))
-        if (b64Match?.[1]) {
-          try {
-            const decoded = Buffer.from(b64Match[1].replace(/\s/g, ""), "base64")
-            if (decoded.length > 100) { resolve(decoded); return }
-          } catch {}
-        }
-
-        reject(new Error("WSD-Scan: no se pudo extraer imagen del response"))
-      })
-    })
-    req.on("error", reject)
-    req.on("timeout", () => { req.destroy(); reject(new Error("SOAP timeout")) })
-    req.write(bodyBuf)
-    req.end()
-  })
-}
-
-function extractMTOMImage(data: Buffer): Buffer | null {
-  // Buscar boundary en el body y extraer la parte binaria
-  const str = data.slice(0, 500).toString("ascii")
-  const boundaryMatch = str.match(/boundary="?([^"\r\n;]+)"?/i)
-  if (!boundaryMatch) return null
-  const boundary = Buffer.from("--" + boundaryMatch[1].trim())
-  let pos = data.indexOf(boundary)
-  while (pos !== -1) {
-    pos += boundary.length
-    // Saltar headers de esta parte
-    const headerEnd = data.indexOf(Buffer.from("\r\n\r\n"), pos)
-    if (headerEnd === -1) break
-    const partStart = headerEnd + 4
-    const nextBoundary = data.indexOf(boundary, partStart)
-    const partEnd = nextBoundary === -1 ? data.length : nextBoundary - 2
-    const part = data.slice(partStart, partEnd)
-    // Verificar si es JPEG o PNG
-    if ((part[0] === 0xFF && part[1] === 0xD8) ||
-        (part[0] === 0x89 && part[1] === 0x50)) {
-      return part
-    }
-    pos = nextBoundary
-  }
-  return null
-}
-
 // ── 3. IPP con probe de paths ────────────────────────────────────────────────
 // Fallback para escáneres más viejos
 const IPP_PATHS = ["/ipp/scan", "/ipp", "/ipp/printer", "/ipp/print", "/ipp/scan/0", "/scanner"]
@@ -641,9 +351,22 @@ async function scanIPP(ip: string, opts: {
 
   for (const tryPath of IPP_PATHS) {
     try {
-      // Enviar directamente un IPP request real — más confiable que GET probe
-      // (Kyocera responde a GET con 200 pero ECONNRESET al POST real)
-      console.log(`[ipp] ${ip} probando ${tryPath}…`)
+      // Primero verificar que el path existe (HEAD o GET)
+      await new Promise<void>((resolve, reject) => {
+        const req = http.request({
+          hostname: ip, port: 631, path: tryPath,
+          method: "GET", timeout: 2000,
+        }, (res) => {
+          // 200, 400, 405 = path existe (aunque devuelva error de método)
+          if (res.statusCode && res.statusCode < 500) resolve()
+          else reject(new Error(`HTTP ${res.statusCode}`))
+        })
+        req.on("error", reject)
+        req.on("timeout", () => { req.destroy(); reject(new Error("timeout")) })
+        req.end()
+      })
+
+      console.log(`[ipp] ${ip} path ${tryPath} existe, intentando escaneo…`)
       const pages = await scanViaIPP(ip, tryPath, opts.dpi, opts.color, opts.source)
       return pages
     } catch (e: any) {
@@ -941,7 +664,7 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
 
         let pages: Buffer[]
         try {
-          pages = await scanDevice(ip, { ...profile, source: src, duplex: dup, escl_port: dev.escl_port || null })
+          pages = await scanDevice(ip, { ...profile, source: src, duplex: dup })
         } catch (scanErr: any) {
           console.error(`[scan] ❌ job ${job_id} falló:`, scanErr.message)
           await client.post("/agent/fail", {

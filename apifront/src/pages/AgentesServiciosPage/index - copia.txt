@@ -40,7 +40,7 @@ function PasesModal({ dni, nombre, onClose }: PasesModalProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch<any>(`/agentes_servicios?dni=${dni}&sort=-fecha_desde&limit=100`)
+    apiFetch<any>(`/crud/agentes_servicios?dni=${dni}&sort=-fecha_desde&limit=100`)
       .then(r => setPases(Array.isArray(r?.data) ? r.data : []))
       .catch(() => setPases([]))
       .finally(() => setLoading(false));
@@ -124,7 +124,7 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
     if (!form.fecha_desde) { toast.error('Ingresá fecha de inicio'); return; }
     setSaving(true);
     try {
-      await apiFetch<any>('/agentes_servicios', {
+      await apiFetch<any>('/crud/agentes_servicios', {
         method: 'POST',
         body: JSON.stringify({
           dni: agente.dni,
@@ -220,7 +220,7 @@ function CerrarPaseModal({ pase, onClose, onSaved }: CerrarPaseModalProps) {
     if (!fechaHasta) { toast.error('Ingresá fecha de cierre'); return; }
     setSaving(true);
     try {
-      await apiFetch<any>(`/agentes_servicios/${pase.id}`, {
+      await apiFetch<any>(`/crud/agentes_servicios/${pase.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ fecha_hasta: fechaHasta }),
       });
@@ -299,8 +299,8 @@ export function AgentesServiciosPage() {
   // ── Cargar maestros ───────────────────────────────────────────────────────
   useEffect(() => {
     Promise.allSettled([
-      apiFetch<any>('/servicios?limit=500').then(r => setServicios(Array.isArray(r?.data) ? r.data : [])),
-      apiFetch<any>('/reparticiones?limit=500').then(r => setDependencias(Array.isArray(r?.data) ? r.data : [])),
+      apiFetch<any>('/crud/servicios?limit=500').then(r => setServicios(Array.isArray(r?.data) ? r.data : [])),
+      apiFetch<any>('/crud/reparticiones?limit=500').then(r => setDependencias(Array.isArray(r?.data) ? r.data : [])),
     ]).finally(() => setLoadingMaestros(false));
   }, []);
 
@@ -319,7 +319,7 @@ export function AgentesServiciosPage() {
       if (filtroEstado === 'activo')  params.set('fecha_hasta', 'null');    // sin fecha_hasta
       // filtroEstado === 'cerrado' → filtramos del lado cliente tras recibir datos
 
-      const res = await apiFetch<any>(`/agentes_servicios?${params.toString()}`);
+      const res = await apiFetch<any>(`/crud/agentes_servicios?${params.toString()}`);
       let data: any[] = Array.isArray(res?.data) ? res.data : [];
 
       // Filtro estado cerrado (fecha_hasta no nula)
@@ -365,7 +365,7 @@ export function AgentesServiciosPage() {
   const abrirNuevoPase = useCallback(async (agente: any) => {
     setCheckandoPase(true);
     try {
-      const res = await apiFetch<any>(`/agentes_servicios?dni=${agente.dni}&limit=100&sort=-fecha_desde`);
+      const res = await apiFetch<any>(`/crud/agentes_servicios?dni=${agente.dni}&limit=100&sort=-fecha_desde`);
       const pases: any[] = Array.isArray(res?.data) ? res.data : [];
       const abierto = pases.find((p: any) => !p.fecha_hasta);
       if (abierto) {

@@ -34,8 +34,10 @@ const createUserSchema = z.object({
 });
 
 const patchUserSchema = z.object({
-  email:  z.string().email().max(190).optional(),
-  nombre: z.string().min(1).max(190).trim().optional(),
+  email:        z.string().email().max(190).optional(),
+  nombre:       z.string().min(1).max(190).trim().optional(),
+  sector_id:    z.number().int().positive().nullable().optional(),
+  jefatura_id:  z.number().int().positive().nullable().optional(),
 }).strict();
 
 const estadoSchema = z.object({
@@ -72,10 +74,13 @@ export function buildUsuariosRouter(sequelize: Sequelize) {
         const [rows, countRows] = await Promise.all([
           sequelize.query(`
             SELECT u.id, u.email, u.nombre, u.estado, u.created_at,
+                   u.sector_id, rep.reparticion_nombre AS sector_nombre,
+                   MIN(ur.rol_id) AS rol_id,
                    GROUP_CONCAT(r.nombre SEPARATOR ', ') AS roles
             FROM usuarios u
             LEFT JOIN usuarios_roles ur ON ur.usuario_id = u.id AND ur.deleted_at IS NULL
             LEFT JOIN roles r           ON r.id = ur.rol_id AND r.deleted_at IS NULL
+            LEFT JOIN reparticiones rep ON rep.id = u.sector_id
             WHERE ${whereStr}
             GROUP BY u.id
             ORDER BY u.nombre ASC
@@ -253,6 +258,37 @@ export function buildUsuariosRouter(sequelize: Sequelize) {
       logger.info({ msg: 'Estado usuario cambiado', id, estado: parsed.data.estado, actor: (req as any).auth?.principalId });
 
       return res.json({ ok: true, message: `Usuario ${parsed.data.estado}` });
+    }
+  );
+
+  // ── PATCH /usuarios/:id/password ─────────────────────────────────────────
+  router.patch(
+    '/:id/password',
+    requirePermission('admin:write'),
+    async (req: Request, res: Response) => {
+      const id = parseInt(req.params.id, 10);
+      if (!id) return res.status(400).json({ ok: false, error: 'ID inválido' });
+
+      const parsed = z.object({
+        password: z.string().min(8, 'Mínimo 8 caracteres'),
+      }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.flatten() });
+
+      try {
+        const passwordHash = await hashPassword(parsed.data.password);
+        await sequelize.query(
+          'UPDATE usuarios SET password = :passwordHash WHERE id = :id AND deleted_at IS NULL',
+          { replacements: { passwordHash, id } }
+        );
+        await revokeAllRefreshTokensForUser(sequelize, id).catch(() => {});
+
+        (res.locals as any).audit = { action: 'usuario_password_reset', table_name: 'usuarios', record_pk: id };
+        logger.info({ msg: 'Contraseña reseteada', id, actor: (req as any).auth?.principalId });
+
+        return res.json({ ok: true, message: 'Contraseña actualizada' });
+      } catch (err: any) {
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
     }
   );
 

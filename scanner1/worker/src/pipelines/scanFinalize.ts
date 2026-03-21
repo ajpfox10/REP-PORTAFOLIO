@@ -25,14 +25,13 @@ export async function runScanFinalize(pool: Pool, data: any) {
     )
     const document_id = Number((result as any).insertId)
 
-    if (storage_keys?.length > 1) {
-      for (let i = 1; i < storage_keys.length; i++) {
-        await pool.query(
-          `INSERT INTO document_pages (tenant_id,document_id,page_number,storage_key,created_at)
-           VALUES (?,?,?,?,now())`,
-          [tenant_id, document_id, i, storage_keys[i]]
-        )
-      }
+    // Guardar TODAS las páginas en document_pages (incluida la página 1)
+    for (let i = 0; i < (storage_keys as string[]).length; i++) {
+      await pool.query(
+        `INSERT INTO document_pages (tenant_id,document_id,page_number,storage_key,created_at)
+         VALUES (?,?,?,?,now())`,
+        [tenant_id, document_id, i + 1, storage_keys[i]]  // page_number empieza en 1
+      )
     }
 
     await pool.query(

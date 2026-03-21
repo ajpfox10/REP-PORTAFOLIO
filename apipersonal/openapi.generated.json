@@ -23143,6 +23143,10 @@
           "realizado": {
             "type": "number",
             "nullable": true
+          },
+          "asuentismo": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -23236,6 +23240,10 @@
             "nullable": true
           },
           "realizado": {
+            "type": "number",
+            "nullable": true
+          },
+          "asuentismo": {
             "type": "number",
             "nullable": true
           }
@@ -23333,6 +23341,10 @@
             "nullable": true
           },
           "realizado": {
+            "type": "number",
+            "nullable": true
+          },
+          "asuentismo": {
             "type": "number",
             "nullable": true
           }
