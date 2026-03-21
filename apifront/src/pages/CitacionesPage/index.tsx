@@ -53,7 +53,7 @@ function NuevaCitacionModal({ agente, onClose, onSaved }: NuevaCitacionModalProp
     if (!form.fecha_citacion) { toast.error('Ingresá la fecha de citación'); return; }
     setSaving(true);
     try {
-      await apiFetch<any>('/crud/citaciones', {
+      await apiFetch<any>('/citaciones', {
         method: 'POST',
         body: JSON.stringify({
           dni: agente.dni,
@@ -140,7 +140,7 @@ function CerrarCitacionModal({ citacion, onClose, onSaved }: CerrarCitacionModal
   const cerrar = async () => {
     setSaving(true);
     try {
-      await apiFetch<any>(`/crud/citaciones/${citacion.id}`, {
+      await apiFetch<any>(`/citaciones/${citacion.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           citacion_activa: 0,
@@ -216,7 +216,7 @@ export function CitacionesPage() {
     if (!dni) return;
     setLoadingCit(true);
     try {
-      const res = await apiFetch<any>(`/crud/citaciones?dni=${dni}&limit=100&sort=-created_at`);
+      const res = await apiFetch<any>(`/citaciones?dni=${dni}&limit=100&sort=-created_at`);
       setCitaciones(Array.isArray(res?.data) ? res.data : []);
     } catch {
       setCitaciones([]);

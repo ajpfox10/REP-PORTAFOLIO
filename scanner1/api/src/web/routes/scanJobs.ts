@@ -64,9 +64,10 @@ r.post("/", validate(createScanJobSchema, "body"), async (req, res) => {
   const nonce = crypto.randomBytes(32).toString("hex")
 
   const [result] = await pool.query(
-    `INSERT INTO scan_jobs (tenant_id,device_id,profile_id,priority,status,personal_dni,personal_ref,upload_nonce,created_at)
-     VALUES (?,?,?,?,'queued',?,?,?,now())`,
+    `INSERT INTO scan_jobs (tenant_id,device_id,profile_id,priority,status,source,duplex,personal_dni,personal_ref,upload_nonce,created_at)
+     VALUES (?,?,?,?,'queued',?,?,?,?,?,now())`,
     [tenant_id, body.device_id, body.profile_id || null, body.priority,
+     body.source || "flatbed", body.duplex ? 1 : 0,
      body.personal_dni || null, body.personal_ref || null, nonce]
   )
   const id = Number((result as any).insertId)
@@ -88,6 +89,45 @@ r.post("/", validate(createScanJobSchema, "body"), async (req, res) => {
   }
 
   res.status(201).json({ id, upload_nonce: nonce, pending_tramites })
+})
+
+// ── GET /v1/scan-jobs/:id/pages — páginas escaneadas de un job ────────────────
+r.get("/:id/pages", async (req, res) => {
+  const tenant_id = (req as any).tenant_id as number
+  const job_id = Number(req.params.id)
+
+  // Buscar el documento asociado al job
+  const [docRows] = await pool.query(
+    "SELECT id, storage_key, page_count FROM documents WHERE tenant_id=? AND scan_job_id=? AND deleted_at IS NULL LIMIT 1",
+    [tenant_id, job_id]
+  )
+  const doc = (docRows as any[])[0]
+  if (!doc) return res.json({ pages: [], doc_id: null, status: "no_document" })
+
+  // Buscar páginas en document_pages (ya incluye página 1 tras el fix de scanFinalize)
+  const [pageRows] = await pool.query(
+    "SELECT page_number, storage_key, is_blank FROM document_pages WHERE tenant_id=? AND document_id=? ORDER BY page_number ASC",
+    [tenant_id, doc.id]
+  )
+  const pages = pageRows as any[]
+
+  // Si no hay entradas en document_pages (docs escaneados antes del fix),
+  // exponer el storage_key del documento como página 1
+  if (!pages.length && doc.storage_key) {
+    return res.json({
+      doc_id: doc.id,
+      pages: [{ page_number: 1, storage_key: doc.storage_key, is_blank: 0 }],
+    })
+  }
+
+  // Para docs viejos con document_pages pero sin página 1 (bug previo):
+  // si la página 1 no está en el resultado, agregarla desde documents.storage_key
+  const hasPage1 = pages.some((p: any) => p.page_number === 1)
+  if (!hasPage1 && doc.storage_key) {
+    pages.unshift({ page_number: 1, storage_key: doc.storage_key, is_blank: 0 })
+  }
+
+  res.json({ doc_id: doc.id, pages })
 })
 
 // ── POST /v1/scan-jobs/:id/cancel ────────────────────────────────────────────

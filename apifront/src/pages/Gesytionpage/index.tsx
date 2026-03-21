@@ -62,7 +62,7 @@ function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) 
     if (!row?.dni) return;
     setLoadingCit(true);
     try {
-      const res = await apiFetch<any>(`/crud/citaciones?dni=${row.dni}&limit=100&sort=-created_at`);
+      const res = await apiFetch<any>(`/citaciones?dni=${row.dni}&limit=100&sort=-created_at`);
       const data = Array.isArray(res?.data) ? res.data : [];
       setCitaciones(data);
       onCountChange(data.filter((c: any) => c.citacion_activa).length);
@@ -87,7 +87,7 @@ function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) 
     if (!formNueva.fecha_citacion) { toast.error('Ingresá la fecha'); return; }
     setSavingNueva(true);
     try {
-      await apiFetch<any>('/crud/citaciones', {
+      await apiFetch<any>('/citaciones', {
         method: 'POST',
         body: JSON.stringify({
           dni: row.dni,
@@ -111,7 +111,7 @@ function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) 
     if (!citCerrar) return;
     setSavingCerrar(true);
     try {
-      await apiFetch<any>(`/crud/citaciones/${citCerrar.id}`, {
+      await apiFetch<any>(`/citaciones/${citCerrar.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ citacion_activa: 0, cierre_citacion: new Date().toISOString() }),
       });
@@ -666,7 +666,7 @@ export function GestionPage() {
     setCitacionesActivas(0);
     setModalCitaciones(false);
     if (!agenteSearch.cleanDni) return;
-    apiFetch<any>(`/crud/citaciones?dni=${agenteSearch.cleanDni}&citacion_activa=1&limit=100`)
+    apiFetch<any>(`/citaciones?dni=${agenteSearch.cleanDni}&citacion_activa=1&limit=100`)
       .then(r => setCitacionesActivas(Array.isArray(r?.data) ? r.data.length : 0))
       .catch(() => setCitacionesActivas(0));
   }, [agenteSearch.cleanDni]);

@@ -45,16 +45,84 @@
   gap: 10px; padding: 20px; text-align: center; color: rgba(255,255,255,0.5);
 }
 .scan-device-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* Lista scrolleable cuando hay muchos dispositivos */
+.scan-device-list-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99,102,241,0.3) transparent;
+}
+.scan-device-list-scroll::-webkit-scrollbar { width: 4px; }
+.scan-device-list-scroll::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 2px; }
+
+/* Sección de favoritos */
+.scan-device-section-label {
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em;
+  color: #94a3b8; text-transform: uppercase;
+  padding: 2px 0 4px; margin-top: 4px;
+}
+.scan-device-section-label.fav { color: #f59e0b; }
+
 .scan-device-btn {
-  display: flex; flex-direction: column; gap: 3px;
-  padding: 10px 12px; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; border-radius: 8px;
   background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
   cursor: pointer; color: inherit; text-align: left; transition: all 0.15s;
 }
 .scan-device-btn:hover { background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.3); }
 .scan-device-btn.selected { background: rgba(99,102,241,0.18); border-color: #6366f1; }
-.scan-device-btn.offline { opacity: 0.55; }
-.scan-device-row { display:flex; align-items:center; gap:8px; }
+.scan-device-btn.offline { opacity: 0.5; }
+.scan-device-btn.favorito { border-color: rgba(245,158,11,0.3); }
+.scan-device-btn.favorito.selected { border-color: #f59e0b; }
+.scan-device-row { display:flex; align-items:center; gap:6px; min-width:0; }
+
+/* Botón estrella favorito */
+.scan-fav-btn {
+  font-size: 0.95rem; color: #475569; cursor: pointer;
+  padding: 0 2px; line-height: 1; flex-shrink: 0;
+  transition: color 0.15s; margin-left: auto;
+}
+.scan-fav-btn:hover { color: #f59e0b; }
+.scan-device-btn.favorito .scan-fav-btn { color: #f59e0b; }
+
+/* ── Preview de páginas escaneadas ── */
+.scan-preview-card { border-left: 3px solid #6366f1; }
+.scan-preview-empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px 0 12px;
+}
+.scan-preview-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid rgba(99,102,241,0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.scan-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px; margin-top: 8px;
+}
+.scan-preview-thumb {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 7px; overflow: hidden; cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.scan-preview-thumb:hover { transform: scale(1.04); border-color: rgba(99,102,241,0.4); }
+.scan-preview-num {
+  font-size: 0.62rem; color: #94a3b8; padding: 3px 0 1px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.scan-preview-img {
+  width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block;
+}
 
 /* ── Dot indicador ── */
 .scan-dot {

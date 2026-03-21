@@ -83,10 +83,8 @@ pm2 describe scanner-api-prod >nul 2>&1
 if errorlevel 1 (
   pm2 start "%DST%\ecosystem.config.js"
 ) else (
-  pm2 restart scanner-api-prod
-  pm2 restart scanner-agent-prod
+  pm2 restart "%DST%\ecosystem.config.js" --only scanner-api-prod,scanner-agent-prod --update-env
 )
-pm2 save >> %LOG% 2>&1
 
 echo.
 echo ════════════════════════════════════════
