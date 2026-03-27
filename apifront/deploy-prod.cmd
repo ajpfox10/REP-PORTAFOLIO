@@ -4,9 +4,9 @@ REM  deploy-prod.cmd — apifront
 REM  Uso: doble click o desde cmd
 REM  Rollback: deploy-prod.cmd rollback
 REM ═══════════════════════════════════════════════════════════════
-set SRC=C:\apps\apifront
-set DST=C:\apps\apifront-prod
-set BCK=C:\apps\apifront-backup
+set SRC=C:\apps\personaldev\apifront
+set DST=C:\apps\personalprod\apifront-prod
+set BCK=C:\apps\personalback\apifront-backup
 set LOG=C:\apps\logs\deploy-apifront.log
 set NPM="C:\Program Files\nodejs\npm.cmd"
 

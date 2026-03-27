@@ -1,12 +1,12 @@
-@echo off
+.@echo off
 REM ═══════════════════════════════════════════════════════════════
 REM  deploy-prod.cmd — scanner1
 REM  Uso: doble click o desde cmd
 REM  Rollback: deploy-prod.cmd rollback
 REM ═══════════════════════════════════════════════════════════════
-set SRC=C:\apps\scanner1
-set DST=C:\apps\scanner1-prod
-set BCK=C:\apps\scanner1-backup
+set SRC=C:\apps\personaldev\scanner1
+set DST=C:\apps\personalprod\scanner1-prod
+set BCK=C:\apps\personalback\scanner1-backup
 set LOG=C:\apps\logs\deploy-scanner.log
 set NPM="C:\Program Files\nodejs\npm.cmd"
 

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useDashboard } from './hooks/useDashboard';
 import { useAuth } from '../../auth/AuthProvider';
+import { useKiosk } from '../../hooks/useKiosk';
 import { EmbarazadasAlertaBanner } from '../EmbarazadasPage';
 import './styles/DashboardPage.css';
 
@@ -41,6 +42,7 @@ function StatTile({ to, title, desc, stat, disabled }: {
 export function DashboardPage() {
   const { pedidosTotal, canDocs, canTables, canGestion, canPedidos } = useDashboard();
   const { hasPerm } = useAuth();
+  const { isKiosk, kioskLoading } = useKiosk();
 
   const canSeeSaludLaboral =
     hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read');
@@ -56,7 +58,39 @@ export function DashboardPage() {
     hasPerm('app:jefe_servicio:access') &&
     !hasPerm('crud:*:*');
 
-  const shouldShowEmbarazadasBanner = !isSaludLaboral && !isJefeServicio;
+  const isSamo =
+    hasPerm('app:samo:access') &&
+    !hasPerm('crud:*:*');
+
+  const shouldShowEmbarazadasBanner = !isSaludLaboral && !isJefeServicio && !isSamo && !isKiosk;
+
+  // ── Kiosco: PC de atención al público ─────────────────────────────────────
+  if (kioskLoading) return null; // evita flash antes de resolver la IP
+  if (isKiosk) {
+    return (
+      <Layout title="Atención al Público">
+        <div style={{ marginBottom: 6 }}>
+          <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Módulo activo
+          </div>
+          <div className="grid">
+            <Tile
+              to="/app/atencion"
+              title="🏛️ Atención al Público"
+              desc="Recepción de agentes, motivo de consulta y emisión de ticket de atención."
+              accent="#0f766e"
+            />
+            <Tile
+              to="/app/mi-cuenta"
+              title="👤 Mi cuenta"
+              desc="Perfil y cambio de contraseña."
+              accent="#0ea5e9"
+            />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   if (isSaludLaboral) {
     return (
@@ -113,6 +147,33 @@ export function DashboardPage() {
       </Layout>
     );
   }
+
+  if (isSamo) {
+    return (
+      <Layout title="Panel — SAMO">
+        <div style={{ marginBottom: 6 }}>
+          <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            SAMO
+          </div>
+          <div className="grid">
+            <Tile
+              to="/app/samo"
+              title="🏥 Licencias Médicas"
+              desc="Gestión y seguimiento de licencias médicas del personal."
+              accent="#14b8a6"
+            />
+            <Tile
+              to="/app/mi-cuenta"
+              title="👤 Mi cuenta"
+              desc="Perfil, permisos y cambio de contraseña."
+              accent="#0ea5e9"
+            />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout title="Panel">
       {shouldShowEmbarazadasBanner && <EmbarazadasAlertaBanner />}

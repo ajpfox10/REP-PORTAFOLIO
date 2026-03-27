@@ -4,9 +4,9 @@ REM  deploy-prod.cmd — api_personal
 REM  Uso: doble click o desde cmd
 REM  Rollback: deploy-prod.cmd rollback
 REM ═══════════════════════════════════════════════════════════════
-set SRC=C:\apps\apipersonal
-set DST=C:\apps\apipersonal-prod
-set BCK=C:\apps\apipersonal-backup
+set SRC=C:\apps\personaldev\apipersonal
+set DST=C:\apps\personalprod\apipersonal-prod
+set BCK=C:\apps\personalback\apipersonal-backup
 set LOG=C:\apps\logs\deploy-apipersonal.log
 set NPM="C:\Program Files\nodejs\npm.cmd"
 
