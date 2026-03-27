@@ -17,12 +17,33 @@ const execAsync = promisify(exec);
 r.get("/", validate(paginationSchema, "query"), async (req, res) => {
     const tenant_id = req.tenant_id;
     const { limit, cursor } = req.query;
-    const [rows] = await pool.query("SELECT id,name,driver,device_key,is_active,hostname,agent_version,last_seen_at,created_at FROM devices WHERE tenant_id=? AND id>? ORDER BY id ASC LIMIT ?", [tenant_id, cursor, limit]);
+    const [rows] = await pool.query(`SELECT d.id, d.name, d.driver, d.device_key, d.is_active, d.hostname,
+            d.agent_version, d.last_seen_at, d.created_at,
+            dc.capabilities_json
+     FROM devices d
+     LEFT JOIN device_capabilities dc ON dc.device_id = d.id
+     WHERE d.tenant_id=? AND d.id>? ORDER BY d.id ASC LIMIT ?`, [tenant_id, cursor, limit]);
     const rows_ = rows;
-    const items = await Promise.all(rows_.map(async (dev) => ({
-        ...dev,
-        online: await isOnline(dev.last_seen_at, dev.hostname),
-    })));
+    const items = await Promise.all(rows_.map(async (dev) => {
+        // Extraer escl_port de capabilities si existe
+        let escl_port = null;
+        if (dev.capabilities_json) {
+            try {
+                const caps = typeof dev.capabilities_json === "string"
+                    ? JSON.parse(dev.capabilities_json) : dev.capabilities_json;
+                escl_port = caps.escl_port || null;
+            }
+            catch { }
+        }
+        return {
+            id: dev.id, name: dev.name, driver: dev.driver,
+            device_key: dev.device_key, is_active: dev.is_active,
+            hostname: dev.hostname, agent_version: dev.agent_version,
+            last_seen_at: dev.last_seen_at, created_at: dev.created_at,
+            escl_port,
+            online: await isOnline(dev.last_seen_at, dev.hostname),
+        };
+    }));
     res.json({ items, next_cursor: items.at(-1)?.id || cursor });
 });
 // ── GET /v1/devices/:id ───────────────────────────────────────────────────────
@@ -119,7 +140,15 @@ r.post("/discover", async (req, res) => {
             continue;
         }
         const [result] = await pool.query("INSERT INTO devices (tenant_id,name,driver,device_key,is_active,hostname,created_at) VALUES (?,?,?,?,1,?,now())", [tenant_id, dev.name || dev.ip || "Device", dev.driver || "wia", key, hostname]);
-        newDevices.push({ id: Number(result.insertId), ...dev });
+        const newId = Number(result.insertId);
+        // Guardar escl_port en capabilities si viene del mDNS SRV record
+        const esclPort = dev.raw?.escl_port;
+        if (esclPort) {
+            await pool.query(`INSERT INTO device_capabilities (device_id, capabilities_json)
+         VALUES (?, ?) ON DUPLICATE KEY UPDATE
+         capabilities_json = JSON_MERGE_PATCH(COALESCE(capabilities_json, '{}'), ?)`, [newId, JSON.stringify({ escl_port: esclPort }), JSON.stringify({ escl_port: esclPort })]).catch(() => { });
+        }
+        newDevices.push({ id: newId, ...dev });
     }
     res.json({ devices: found, registered: newDevices.length, updated: updatedDevices.length, diagnostics });
 });
@@ -703,6 +732,9 @@ async function discoverMDNS() {
             const name = parsed.instance || parsed.target || service;
             console.log(`[mDNS] ${rinfo.address} => ${name}`);
             if (!found.some((f) => f.ip === rinfo.address)) {
+                // srvPort es el puerto real anunciado via mDNS SRV record
+                // Para _uscan._tcp y _scanner._tcp es el puerto eSCL/AirScan
+                const esclPort = parsed.srvPort && parsed.srvPort > 0 ? parsed.srvPort : null;
                 found.push({
                     ip: rinfo.address,
                     hostname: parsed.target || rinfo.address,
@@ -712,8 +744,11 @@ async function discoverMDNS() {
                     source: "network",
                     online: true,
                     confidence: 80,
-                    raw: parsed,
+                    raw: { ...parsed, escl_port: esclPort },
                 });
+                if (esclPort) {
+                    console.log(`[mDNS] ${rinfo.address} → eSCL port: ${esclPort} (${name})`);
+                }
             }
         });
         sock.on("error", () => { try {
@@ -782,27 +817,30 @@ function parseMdnsPacket(buf) {
     }
     let target = "";
     let instance = "";
+    let srvPort = 0;
     for (let i = 0; i < an; i++) {
         const n = readName(off);
         off = n.next;
         const type = buf.readUInt16BE(off);
         off += 2;
         off += 2;
-        off += 4;
+        off += 4; // class(2) + ttl(4)
         const rdlen = buf.readUInt16BE(off);
         off += 2;
         if (type === 12) {
             instance = readName(off).name;
-        }
-        else if (type === 33) {
+        } // PTR
+        else if (type === 33) { // SRV: priority(2)+weight(2)+port(2)+target
+            if (rdlen >= 6)
+                srvPort = buf.readUInt16BE(off + 4); // ← puerto real del servicio
             target = readName(off + 6).name;
         }
         else if (type === 1 && !target) {
             target = n.name;
-        }
+        } // A record
         off += rdlen;
     }
-    return { instance, target };
+    return { instance, target, srvPort };
 }
 // ── SNMP Discovery ────────────────────────────────────────────────────────────
 async function discoverSNMP(rangeBase, manualIps) {

@@ -38,6 +38,8 @@ import { EscaneoAgentePage } from '../pages/EscaneoAgentePage';
 import { AgentesServiciosPage } from '../pages/AgentesServiciosPage';
 import { CitacionesPage } from '../pages/CitacionesPage';
 import { JefeServicioPage } from '../pages/JefeServicioPage';
+import { SamoPage } from '../pages/SamoPage';
+import { useKiosk } from '../hooks/useKiosk';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -45,6 +47,18 @@ function Private({ children }: { children: React.ReactNode }) {
 
   if (!isReady) return null;
   if (!session) return <Navigate to="/gate" state={{ from: loc.pathname }} replace />;
+  return <>{children}</>;
+}
+
+// Redirige cualquier ruta al kiosco de atención al público si la IP está configurada
+function KioskRedirect({ children }: { children: React.ReactNode }) {
+  const { isKiosk, kioskLoading } = useKiosk();
+  const loc = useLocation();
+
+  if (kioskLoading) return null; // espera a resolver la IP antes de renderizar
+  if (isKiosk && loc.pathname !== '/app/atencion') {
+    return <Navigate to="/app/atencion" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -73,6 +87,7 @@ export function App() {
       <AuthProvider>
         <ErrorBoundary>
           <Routes>
+            {/* KioskRedirect envuelve todas las rutas privadas */}
             <Route path="/gate" element={<GatePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/solicitar-acceso" element={<SolicitarAccesoPage />} />
@@ -82,9 +97,11 @@ export function App() {
               path="/app"
               element={
                 <Private>
-                  <Guard perm="api:access">
-                    <DashboardPage />
-                  </Guard>
+                  <KioskRedirect>
+                    <Guard perm="api:access">
+                      <DashboardPage />
+                    </Guard>
+                  </KioskRedirect>
                 </Private>
               }
             />
@@ -330,8 +347,18 @@ export function App() {
               path="/app/atencion"
               element={
                 <Private>
-                  <Guard perm="crud:*:*">
+                  <Guard anyOf={['app:atencion:access', 'crud:*:*']}>
                     <AtencionPublicoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/samo"
+              element={
+                <Private>
+                  <Guard perm="app:samo:access">
+                    <SamoPage />
                   </Guard>
                 </Private>
               }
