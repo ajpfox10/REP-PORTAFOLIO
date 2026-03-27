@@ -116,6 +116,20 @@ function Busqueda({ value, onChange }: { value: string; onChange: (v: string) =>
   );
 }
 
+// ─── Constantes de fecha ──────────────────────────────────────────────────────
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const _HOY        = new Date();
+const AÑO_ACTUAL  = _HOY.getFullYear();
+const MES_ACTUAL  = _HOY.getMonth() + 1; // 1-12
+
+/** Chequea si una fecha ISO (YYYY-MM-DD) cae en un mes/año dado */
+function enMesAño(fechaStr: string | null | undefined, mes: number, año: number): boolean {
+  if (!fechaStr) return false;
+  const s = String(fechaStr).slice(0, 10);
+  const [y, m] = s.split('-').map(Number);
+  return y === año && m === mes;
+}
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio';
 
@@ -132,18 +146,21 @@ export function SamoPage() {
   const [loading,      setLoading]      = useState(true);
 
   // ── UI ─────────────────────────────────────────────────────────────────────
-  const [tab,      setTab]      = useState<TabId>('licencias');
-  const [busqueda, setBusqueda] = useState('');
+  const [tab,       setTab]       = useState<TabId>('licencias');
+  const [busqueda,  setBusqueda]  = useState('');
+  const [mesFiltro, setMesFiltro] = useState(MES_ACTUAL);
+  // año fijo = año actual; solo mes es seleccionable (enero → mes actual)
+  const mesesDisponibles = Array.from({ length: MES_ACTUAL }, (_, i) => i + 1);
 
   // ── Carga ──────────────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
       const [rLic, rAg, rPers, rSect, rServ] = await Promise.allSettled([
-        fetchAll('/crud/reconocimientos_medicos', '-fecha_desde'),
-        fetchAll('/crud/agentes'),
-        fetchAll('/personal'),
-        apiFetch<any>('/crud/reparticiones?limit=500'),
+        fetchAll('/reconocimientos_medicos', '-fecha_desde'),
+        fetchAll('/agentes'),
+        fetchAll('/personal/search'),
+        apiFetch<any>('/reparticiones?limit=500'),
         fetchAll('/agentes_servicios'),
       ]);
 
@@ -216,6 +233,27 @@ export function SamoPage() {
     [agentes, personalMap, sectoresMap]   // eslint-disable-line
   );
 
+  // ── KPIs mes actual ────────────────────────────────────────────────────────
+  const altasMesActual  = useMemo(() =>
+    agentes.filter(a => a.estado_empleo === 'ACTIVO' && enMesAño(a.fecha_ingreso, MES_ACTUAL, AÑO_ACTUAL)).map(enriquece),
+    [agentes, personalMap, sectoresMap]   // eslint-disable-line
+  );
+  const bajasMesActual  = useMemo(() =>
+    agentes.filter(a => (a.estado_empleo === 'BAJA' || a.fecha_egreso) && enMesAño(a.fecha_egreso, MES_ACTUAL, AÑO_ACTUAL)).map(enriquece),
+    [agentes, personalMap, sectoresMap]   // eslint-disable-line
+  );
+
+  // ── Filtrados por mes seleccionado ─────────────────────────────────────────
+  const altasFiltradas = useMemo(() =>
+    altas.filter(a => enMesAño(a.fecha_ingreso, mesFiltro, AÑO_ACTUAL)),
+    [altas, mesFiltro]
+  );
+  const bajasFiltradas = useMemo(() =>
+    bajas.filter(a => enMesAño(a.fecha_egreso, mesFiltro, AÑO_ACTUAL)),
+    [bajas, mesFiltro]
+  );
+
+  // Totales generales (sin filtro de mes, para los KPIs globales)
   const licActivas  = licencias.filter(r => !r.fecha_hasta);
   const licCerradas = licencias.filter(r =>  r.fecha_hasta);
 
@@ -244,36 +282,45 @@ export function SamoPage() {
   ];
 
   const colsLic = [
-    { key: 'dni',          label: 'DNI',    mono: true },
+    { key: 'fecha_desde',  label: 'Desde',    mono: true },
+    { key: 'fecha_hasta',  label: 'Hasta',    mono: true },
+    { key: 'dni',          label: 'DNI',      mono: true },
     { key: 'apellido',     label: 'Apellido' },
     { key: 'nombre',       label: 'Nombre' },
     { key: 'tipo',         label: 'Tipo' },
-    { key: 'fecha_desde',  label: 'Desde' },
-    { key: 'fecha_hasta',  label: 'Hasta' },
-    { key: 'cantidad_dias',label: 'Días' },
+    { key: 'cantidad_dias',label: 'Días',     mono: true },
     { key: 'resultado',    label: 'Resultado' },
     { key: 'activa',       label: 'Estado',
       badge: (v: any) => v ? { text: '🔴 Activa', color: '#ef4444' } : { text: '✅ Cerrada', color: '#10b981' } },
   ];
 
-  // Filas formateadas para licencias
-  const licRows = licencias.map(r => ({
-    ...r,
-    apellido:   personalMap[String(r.dni)]?.apellido || r.apellido || '—',
-    nombre:     personalMap[String(r.dni)]?.nombre   || r.nombre   || '—',
-    fecha_desde: fmt(r.fecha_desde),
-    fecha_hasta: r.fecha_hasta ? fmt(r.fecha_hasta) : '—',
-    activa:      !r.fecha_hasta,
-  }));
+  // Licencias filtradas por mes seleccionado (fecha_desde o fecha como fallback)
+  const licenciasFiltradas = useMemo(() =>
+    licencias.filter(r => enMesAño(r.fecha_desde || r.fecha, mesFiltro, AÑO_ACTUAL)),
+    [licencias, mesFiltro]
+  );
 
-  // Filas formateadas para bajas/altas
-  const bajasRows = bajas.map(a => ({
+  // Filas formateadas para licencias (filtradas por mes)
+  const licRows = licenciasFiltradas.map(r => {
+    const fechaInicio = r.fecha_desde || r.fecha;
+    return {
+      ...r,
+      apellido:    personalMap[String(r.dni)]?.apellido || r.apellido || '—',
+      nombre:      personalMap[String(r.dni)]?.nombre   || r.nombre   || '—',
+      fecha_desde: fechaInicio ? fmt(fechaInicio) : '—',
+      fecha_hasta: r.fecha_hasta ? fmt(r.fecha_hasta) : '—',
+      activa:      !r.fecha_hasta,
+    };
+  });
+
+  // Filas formateadas para bajas/altas (filtradas por mes)
+  const bajasRows = bajasFiltradas.map(a => ({
     ...a,
     fecha_ingreso: fmt(a.fecha_ingreso),
     fecha_egreso:  fmt(a.fecha_egreso),
   }));
 
-  const altasRows = altas.map(a => ({
+  const altasRows = altasFiltradas.map(a => ({
     ...a,
     fecha_ingreso: fmt(a.fecha_ingreso),
   }));
@@ -318,12 +365,24 @@ export function SamoPage() {
       </div>
 
       {/* ── KPIs ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px,1fr))', gap: 10, marginBottom: 16 }}>
-        <KpiCard label="Activos"           value={altas.length}      color="#10b981" />
-        <KpiCard label="Bajas / Renuncias" value={bajas.length}      color="#ef4444" />
-        <KpiCard label="Licencias activas" value={licActivas.length} color="#f59e0b" />
-        <KpiCard label="Licencias cerradas"value={licCerradas.length}color="#64748b" />
-        <KpiCard label="Servicios activos" value={Object.keys(serviciosMap).length} color="#7c3aed" />
+      <div style={{ marginBottom: 6 }}>
+        <div className="muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+          Totales generales
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
+          <KpiCard label="Activos totales"    value={altas.length}      color="#10b981" />
+          <KpiCard label="Bajas totales"      value={bajas.length}      color="#ef4444" />
+          <KpiCard label="Licencias activas"  value={licActivas.length} color="#f59e0b" />
+          <KpiCard label="Licencias cerradas" value={licCerradas.length}color="#64748b" />
+          <KpiCard label="Servicios activos"  value={Object.keys(serviciosMap).length} color="#7c3aed" />
+        </div>
+        <div className="muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+          {MESES[MES_ACTUAL - 1]} {AÑO_ACTUAL}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
+          <KpiCard label="Altas este mes"  value={altasMesActual.length}  color="#34d399" />
+          <KpiCard label="Bajas este mes"  value={bajasMesActual.length}  color="#f87171" />
+        </div>
       </div>
 
       {/* ── Tabs ── */}
@@ -351,10 +410,25 @@ export function SamoPage() {
             {/* Tab: Licencias */}
             {tab === 'licencias' && (
               <>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                  <div className="muted" style={{ fontSize: '0.72rem', alignSelf: 'center' }}>
-                    {licActivas.length} activas · {licCerradas.length} cerradas
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div className="muted" style={{ fontSize: '0.72rem' }}>
+                    Filtrando por mes de inicio:
                   </div>
+                  <select
+                    className="input"
+                    style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                    value={mesFiltro}
+                    onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}
+                  >
+                    {mesesDisponibles.map(m => (
+                      <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>
+                    ))}
+                  </select>
+                  <span className="muted" style={{ fontSize: '0.72rem' }}>
+                    {licenciasFiltradas.length} licencia{licenciasFiltradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]}
+                    {' · '}{licenciasFiltradas.filter(r => !r.fecha_hasta).length} activas
+                    {' · '}{licenciasFiltradas.filter(r =>  r.fecha_hasta).length} cerradas
+                  </span>
                 </div>
                 <Busqueda value={busqueda} onChange={setBusqueda} />
                 <MiniTabla rows={filtrar(licRows)} cols={colsLic} />
@@ -364,8 +438,23 @@ export function SamoPage() {
             {/* Tab: Bajas */}
             {tab === 'bajas' && (
               <>
-                <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 10 }}>
-                  {bajas.length} agentes con fecha de egreso o estado BAJA
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div className="muted" style={{ fontSize: '0.72rem' }}>
+                    Filtrando por mes de egreso:
+                  </div>
+                  <select
+                    className="input"
+                    style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                    value={mesFiltro}
+                    onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}
+                  >
+                    {mesesDisponibles.map(m => (
+                      <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>
+                    ))}
+                  </select>
+                  <span className="muted" style={{ fontSize: '0.72rem' }}>
+                    {bajasFiltradas.length} baja{bajasFiltradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]}
+                  </span>
                 </div>
                 <Busqueda value={busqueda} onChange={setBusqueda} />
                 <MiniTabla rows={filtrar(bajasRows)} cols={colsBajas} />
@@ -375,8 +464,23 @@ export function SamoPage() {
             {/* Tab: Altas / Activos */}
             {tab === 'altas' && (
               <>
-                <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 10 }}>
-                  {altas.length} agentes activos en el sistema
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div className="muted" style={{ fontSize: '0.72rem' }}>
+                    Filtrando por mes de ingreso:
+                  </div>
+                  <select
+                    className="input"
+                    style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                    value={mesFiltro}
+                    onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}
+                  >
+                    {mesesDisponibles.map(m => (
+                      <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>
+                    ))}
+                  </select>
+                  <span className="muted" style={{ fontSize: '0.72rem' }}>
+                    {altasFiltradas.length} alta{altasFiltradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]}
+                  </span>
                 </div>
                 <Busqueda value={busqueda} onChange={setBusqueda} />
                 <MiniTabla rows={filtrar(altasRows)} cols={colsAltas} />
