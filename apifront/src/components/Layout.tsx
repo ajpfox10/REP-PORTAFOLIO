@@ -144,6 +144,7 @@ export function Layout({ title, children, showBack }: {
                       )}
 
                       {canWrite && navLink('/app/carga-agente', '➕ Alta Agentes')}
+                      {(hasPerm('crud:resoluciones:read') || hasPerm('crud:*:*')) && navLink('/app/resoluciones', '📋 Resoluciones')}
                       {isAdmin && navLink('/app/admin', '⚙ Admin')}
                     </div>
                   )}

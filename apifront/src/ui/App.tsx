@@ -39,6 +39,7 @@ import { AgentesServiciosPage } from '../pages/AgentesServiciosPage';
 import { CitacionesPage } from '../pages/CitacionesPage';
 import { JefeServicioPage } from '../pages/JefeServicioPage';
 import { SamoPage } from '../pages/SamoPage';
+import { ResolucionesPage } from '../pages/ResolucionesPage';
 import { useKiosk } from '../hooks/useKiosk';
 
 function Private({ children }: { children: React.ReactNode }) {
@@ -357,8 +358,18 @@ export function App() {
               path="/app/samo"
               element={
                 <Private>
-                  <Guard perm="app:samo:access">
+                  <Guard anyOf={['app:samo:access', 'crud:*:*']}>
                     <SamoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/resoluciones"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:resoluciones:read', 'crud:*:*']}>
+                    <ResolucionesPage />
                   </Guard>
                 </Private>
               }
