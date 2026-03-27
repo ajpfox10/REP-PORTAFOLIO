@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'scanner-api-prod',
-      cwd: 'C:\\apps\\scanner1-prod\\api',
+      cwd: 'C:\\apps\\personalprod\\scanner1-prod\\api',
       script: 'dist/server.js',
       instances: 1,
       exec_mode: 'fork',

@@ -3,7 +3,7 @@ module.exports = {
   apps: [{
     name:         'apipersonal-prod',
     script:       'dist/server.js',
-    cwd:          'C:\\apps\\apipersonal-prod',
+    cwd:          'C:\\apps\\personalprod\\apipersonal-prod',
     instances:    1,
     autorestart:  true,
     watch:        false,

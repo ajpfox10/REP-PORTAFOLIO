@@ -452,6 +452,12 @@ export function EstadisticasPage() {
 
   const COLORES = ['#7c3aed','#2563eb','#10b981','#f59e0b','#ec4899','#06b6d4','#a3e635','#fb923c','#ef4444','#8b5cf6'];
 
+  // ── Mapa dni → {apellido, nombre} para enriquecer tablas de agentes ──
+  const personalMap: Record<string, { apellido: string; nombre: string }> = {};
+  for (const p of personal) {
+    if (p.dni != null) personalMap[String(p.dni)] = { apellido: p.apellido || '', nombre: p.nombre || '' };
+  }
+
   // ── Listados exportables ──
   const cumpleMesExport = cumpleMes.map(p => ({
     DNI: p.dni, Apellido: p.apellido, Nombre: p.nombre,
@@ -461,7 +467,10 @@ export function EstadisticasPage() {
   })).sort((a, b) => Number(a.Día) - Number(b.Día));
 
   const antigMesExport = antigMes.map(a => ({
-    DNI: a.dni, Estado: a.estado_empleo,
+    DNI: a.dni,
+    Apellido: personalMap[String(a.dni)]?.apellido || '—',
+    Nombre: personalMap[String(a.dni)]?.nombre || '—',
+    Estado: a.estado_empleo,
     'Fecha Ingreso': a.fecha_ingreso ? new Date(a.fecha_ingreso).toLocaleDateString('es-AR') : '',
     'Años Antigüedad': calcAnios(a.fecha_ingreso),
     Ley: catalogos.ley[a.ley_id] || a.ley_id || '',
@@ -469,7 +478,10 @@ export function EstadisticasPage() {
   })).sort((a, b) => b['Años Antigüedad'] - a['Años Antigüedad']);
 
   const antig20Export = antig20plus.map(a => ({
-    DNI: a.dni, Estado: a.estado_empleo,
+    DNI: a.dni,
+    Apellido: personalMap[String(a.dni)]?.apellido || '—',
+    Nombre: personalMap[String(a.dni)]?.nombre || '—',
+    Estado: a.estado_empleo,
     'Fecha Ingreso': a.fecha_ingreso ? new Date(a.fecha_ingreso).toLocaleDateString('es-AR') : '',
     'Años Antigüedad': calcAnios(a.fecha_ingreso),
     Ley: catalogos.ley[a.ley_id] || a.ley_id || '',
@@ -479,7 +491,10 @@ export function EstadisticasPage() {
   }));
 
   const ingresosAnioExport = ingresosAnioActual.map(a => ({
-    DNI: a.dni, Estado: a.estado_empleo,
+    DNI: a.dni,
+    Apellido: personalMap[String(a.dni)]?.apellido || '—',
+    Nombre: personalMap[String(a.dni)]?.nombre || '—',
+    Estado: a.estado_empleo,
     'Fecha Ingreso': a.fecha_ingreso ? new Date(a.fecha_ingreso).toLocaleDateString('es-AR') : '',
     Ley: catalogos.ley[a.ley_id] || a.ley_id || '',
     Planta: catalogos.planta[a.planta_id] || a.planta_id || '',
@@ -745,6 +760,8 @@ export function EstadisticasPage() {
           rows={antigMesExport} filename="aniversarios_ingreso_mes_actual">
           <MiniTable rows={antigMesExport} cols={[
             { key: 'DNI', label: 'DNI' },
+            { key: 'Apellido', label: 'Apellido' },
+            { key: 'Nombre', label: 'Nombre' },
             { key: 'Fecha Ingreso', label: 'Ingreso', date: false },
             { key: 'Años Antigüedad', label: 'Años' },
             { key: 'Estado', label: 'Estado' },
@@ -759,6 +776,8 @@ export function EstadisticasPage() {
           rows={antig20Export} filename="agentes_20_anios_o_mas">
           <MiniTable rows={antig20Export} cols={[
             { key: 'DNI', label: 'DNI' },
+            { key: 'Apellido', label: 'Apellido' },
+            { key: 'Nombre', label: 'Nombre' },
             { key: 'Años Antigüedad', label: 'Años' },
             { key: 'Fecha Ingreso', label: 'Ingreso' },
             { key: 'Estado', label: 'Estado' },
@@ -775,6 +794,8 @@ export function EstadisticasPage() {
           rows={ingresosAnioExport} filename={`ingresos_${anioActual}`}>
           <MiniTable rows={ingresosAnioExport} cols={[
             { key: 'DNI', label: 'DNI' },
+            { key: 'Apellido', label: 'Apellido' },
+            { key: 'Nombre', label: 'Nombre' },
             { key: 'Fecha Ingreso', label: 'Fecha Ingreso' },
             { key: 'Estado', label: 'Estado' },
             { key: 'Ley', label: 'Ley' },

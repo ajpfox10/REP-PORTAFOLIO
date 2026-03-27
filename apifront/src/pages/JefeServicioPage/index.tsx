@@ -282,6 +282,217 @@ function RecMedicos({ dni }: RecMedicosProps) {
   );
 }
 
+// ─── Modal: Nuevo franco compensatorio ───────────────────────────────────────
+interface NuevoFrancoModalProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+function NuevoFrancoModal({ agente, sectorId, jefeNombre, onClose, onSaved }: NuevoFrancoModalProps) {
+  const toast = useToast();
+  const [form, setForm] = useState({
+    fecha_franco:  '',
+    fecha_trabajo: '',
+    motivo:        '',
+    observaciones: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+
+  const guardar = async () => {
+    if (!form.fecha_franco) { toast.error('Ingresá la fecha del franco'); return; }
+    setSaving(true);
+    try {
+      await apiFetch<any>('/crud/francos_compensatorios', {
+        method: 'POST',
+        body: JSON.stringify({
+          dni:           agente.dni,
+          fecha_franco:  form.fecha_franco,
+          fecha_trabajo: form.fecha_trabajo || null,
+          motivo:        form.motivo        || null,
+          observaciones: form.observaciones || null,
+          estado:        'PENDIENTE',
+          jefe_nombre:   jefeNombre         || null,
+          sector_id:     sectorId           ?? null,
+        }),
+      });
+      toast.ok('Franco cargado', `${agente.apellido}, ${agente.nombre}`);
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al guardar', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div>
+            <div className="js-modal-title">📅 Cargar Franco Compensatorio</div>
+            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+          </div>
+          <button className="btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <div className="js-modal-body">
+          <div className="js-form-grid">
+            <div className="js-field">
+              <div style={lbl}>Fecha del franco *</div>
+              <input type="date" className="input" style={fld}
+                value={form.fecha_franco} onChange={e => set('fecha_franco', e.target.value)} />
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Día trabajado que lo origina</div>
+              <input type="date" className="input" style={fld}
+                value={form.fecha_trabajo} onChange={e => set('fecha_trabajo', e.target.value)} />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Motivo</div>
+              <input type="text" className="input" style={fld}
+                value={form.motivo} onChange={e => set('motivo', e.target.value)}
+                placeholder="Ej: Guardia 24hs, feriado trabajado…" />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Observaciones</div>
+              <textarea className="input" rows={2}
+                style={{ ...fld, resize: 'vertical' }}
+                value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Jefe / Responsable</div>
+              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }}
+                value={jefeNombre} disabled />
+            </div>
+          </div>
+          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6,
+            background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
+            fontSize: '0.74rem', color: '#fbbf24' }}>
+            ⚠️ El franco queda en estado <b>PENDIENTE</b> hasta que el administrador lo apruebe.
+          </div>
+          <div className="js-modal-actions">
+            <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
+              {saving ? '⏳ Guardando…' : '💾 Cargar Franco'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Panel de francos compensatorios ─────────────────────────────────────────
+interface FrancosAgenteProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+}
+function FrancosAgente({ agente, sectorId, jefeNombre }: FrancosAgenteProps) {
+  const [francos,   setFrancos]   = useState<any[]>([]);
+  const [loading,   setLoading]   = useState(false);
+  const [expanded,  setExpanded]  = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const cargar = () => {
+    if (!agente?.dni) return;
+    setLoading(true);
+    apiFetch<any>(`/crud/francos_compensatorios?dni=${agente.dni}&limit=100&sort=-fecha_franco`)
+      .then(r => setFrancos(Array.isArray(r?.data) ? r.data : []))
+      .catch(() => setFrancos([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { cargar(); }, [agente?.dni]);
+
+  const pendientes = francos.filter(f => f.estado === 'PENDIENTE').length;
+  const ESTADO_COLOR: Record<string, string> = {
+    PENDIENTE: '#fbbf24', APROBADO: '#22c55e', TOMADO: '#64748b', ANULADO: '#ef4444',
+  };
+
+  return (
+    <>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0' }}>
+            📅 Francos compensatorios
+            <span style={{ marginLeft: 8, fontSize: '0.7rem', color: '#64748b' }}>
+              {francos.length} registro{francos.length !== 1 ? 's' : ''}
+              {pendientes > 0 && (
+                <span style={{ marginLeft: 6, color: '#fbbf24' }}>· {pendientes} pendiente{pendientes !== 1 ? 's' : ''}</span>
+              )}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button className="btn js-btn-save" type="button"
+              style={{ padding: '2px 9px', fontSize: '0.73rem' }}
+              onClick={() => setModalOpen(true)}>
+              ➕ Cargar
+            </button>
+            <button className="btn" type="button"
+              style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+              onClick={() => setExpanded(v => !v)}>
+              {expanded ? '▲' : '▼'}
+            </button>
+          </div>
+        </div>
+
+        {expanded && (
+          loading ? (
+            <div style={{ color: '#64748b', fontSize: '0.8rem' }}>🔄 Cargando…</div>
+          ) : francos.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: '0.8rem' }}>Sin francos compensatorios registrados</div>
+          ) : (
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {francos.map((f: any) => (
+                <div key={f.id} style={{
+                  padding: '7px 10px', marginBottom: 5, borderRadius: 7,
+                  background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                  fontSize: '0.78rem',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <span style={{ fontWeight: 600,
+                      color: ESTADO_COLOR[f.estado] || '#e2e8f0' }}>
+                      {f.estado || 'PENDIENTE'}
+                    </span>
+                    <span style={{ color: '#64748b' }}>#{f.id}</span>
+                  </div>
+                  <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                    <span>Franco: <b>{fmt(f.fecha_franco)}</b></span>
+                    {f.fecha_trabajo && <span>Trabajó: <b>{fmt(f.fecha_trabajo)}</b></span>}
+                    {f.jefe_nombre   && <span>👤 {f.jefe_nombre}</span>}
+                  </div>
+                  {f.motivo && (
+                    <div style={{ color: '#cbd5e1', marginTop: 3 }}>{f.motivo}</div>
+                  )}
+                  {f.observaciones && (
+                    <div style={{ color: '#64748b', marginTop: 2, fontStyle: 'italic' }}>{f.observaciones}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+
+      {modalOpen && (
+        <NuevoFrancoModal
+          agente={agente}
+          sectorId={sectorId}
+          jefeNombre={jefeNombre}
+          onClose={() => setModalOpen(false)}
+          onSaved={() => { setExpanded(true); cargar(); }}
+        />
+      )}
+    </>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function JefeServicioPage() {
   const toast = useToast();
@@ -315,7 +526,12 @@ export function JefeServicioPage() {
   const [modalCerrar,  setModalCerrar]  = useState<any>(null);
 
   // Tab
-  const [tab, setTab] = useState<'agentes' | 'todos_pases'>('agentes');
+  const [tab, setTab] = useState<'agentes' | 'todos_pases' | 'licencias'>('agentes');
+
+  // Agentes de licencia (reconocimientos médicos activos del sector)
+  const [licenciasActivas, setLicenciasActivas] = useState<any[]>([]);
+  const [loadingLicencias, setLoadingLicencias] = useState(false);
+  const [licenciasSet, setLicenciasSet] = useState<Set<string>>(new Set());
 
   // Todos los pases del sector (tab 2)
   const [todosPases,      setTodosPases]      = useState<any[]>([]);
@@ -328,6 +544,40 @@ export function JefeServicioPage() {
       apiFetch<any>('/crud/servicios?limit=500').then(r => setServicios(Array.isArray(r?.data) ? r.data : [])),
       apiFetch<any>('/crud/reparticiones?limit=500').then(r => setDependencias(Array.isArray(r?.data) ? r.data : [])),
     ]).finally(() => setLoadingMaestros(false));
+  }, []);
+
+  // ── Cargar licencias activas del sector (paginado completo) ──────────────
+  const cargarLicencias = useCallback(async (sectorAgentes: any[]) => {
+    if (!sectorAgentes.length) return;
+    setLoadingLicencias(true);
+    try {
+      const dniSet = new Set(sectorAgentes.map((a: any) => String(a.dni)));
+      // Paginar completo — puede haber miles de reconocimientos
+      const PAGE = 200;
+      let page = 1;
+      let all: any[] = [];
+      let total = Infinity;
+      while (all.length < total) {
+        const res = await apiFetch<any>(
+          `/crud/reconocimientos_medicos?limit=${PAGE}&page=${page}&sort=-fecha_desde`
+        );
+        const rows: any[] = res?.data || [];
+        if (!rows.length) break;
+        all = [...all, ...rows];
+        if (res?.meta?.total) total = Number(res.meta.total);
+        else total = all.length;
+        if (rows.length < PAGE) break;
+        page++;
+      }
+      // Filtrar: sin fecha_hasta y que el DNI esté en el sector
+      const activos = all.filter((r: any) => !r.fecha_hasta && dniSet.has(String(r.dni)));
+      setLicenciasActivas(activos);
+      setLicenciasSet(new Set(activos.map((r: any) => String(r.dni))));
+    } catch {
+      setLicenciasActivas([]);
+    } finally {
+      setLoadingLicencias(false);
+    }
   }, []);
 
   // ── Cargar agentes del sector ─────────────────────────────────────────────
@@ -343,7 +593,6 @@ export function JefeServicioPage() {
         const res = await apiFetch<any>(
           `/personal/search?q=&limit=200&page=${page}&sector_id=${sectorId}`
         ).catch(() => apiFetch<any>(
-          // fallback: buscar por sector via crud/agentes
           `/crud/agentes?sector_id=${sectorId}&estado_empleo=ACTIVO&limit=200&page=${page}`
         ));
         const rows: any[] = res?.data || [];
@@ -354,7 +603,8 @@ export function JefeServicioPage() {
         if (rows.length < 200) break;
         page++;
       }
-      setAgentes(all.filter((a: any) => a.estado_empleo === 'ACTIVO' || !a.estado_empleo));
+      const filtrados = all.filter((a: any) => a.estado_empleo === 'ACTIVO' || !a.estado_empleo);
+      setAgentes(filtrados);
     } catch (e: any) {
       toast.error('Error cargando agentes', e?.message);
     } finally {
@@ -363,6 +613,11 @@ export function JefeServicioPage() {
   }, [sectorId]);
 
   useEffect(() => { cargarAgentes(); }, [cargarAgentes]);
+
+  // Cuando los agentes están listos, cargar sus licencias activas
+  useEffect(() => {
+    if (agentes.length > 0) cargarLicencias(agentes);
+  }, [agentes, cargarLicencias]);
 
   // ── Cargar pases del agente seleccionado ─────────────────────────────────
   const cargarPases = useCallback(async (dni: string | number) => {
@@ -450,15 +705,25 @@ export function JefeServicioPage() {
     if (tipo === 'print') printTable(title, rows);
   };
 
+  // Mapa dni → agente para enriquecer exports con nombre
+  const agentesMap: Record<string, any> = {};
+  for (const a of agentes) { if (a.dni != null) agentesMap[String(a.dni)] = a; }
+
   const exportarPases = (tipo: 'excel' | 'pdf' | 'print') => {
-    const rows = pasesFiltrados.map((p: any) => ({
-      DNI:      p.dni,
-      Servicio: p.nombre || p.servicio_nombre || `#${p.servicio_id}`,
-      Desde:    fmt(p.fecha_desde),
-      Hasta:    p.fecha_hasta ? fmt(p.fecha_hasta) : 'Activo',
-      Motivo:   p.motivo || '',
-      Jefe:     p.jefe_nombre || '',
-    }));
+    const rows = pasesFiltrados.map((p: any) => {
+      const ag = agentesMap[String(p.dni)];
+      return {
+        DNI:      p.dni,
+        Apellido: ag?.apellido || p.apellido || '—',
+        Nombre:   ag?.nombre   || p.nombre   || '—',
+        Servicio: p.nombre || p.servicio_nombre || `#${p.servicio_id}`,
+        Desde:    fmt(p.fecha_desde),
+        Hasta:    p.fecha_hasta ? fmt(p.fecha_hasta) : 'Activo',
+        Estado:   p.fecha_hasta ? 'Cerrado' : 'Activo',
+        Motivo:   p.motivo || '',
+        Jefe:     p.jefe_nombre || '',
+      };
+    });
     const file = `pases_sector_${sectorId}`;
     if (tipo === 'excel') exportToExcel(`${file}.xlsx`, rows);
     if (tipo === 'pdf')   exportToPdf(`${file}.pdf`, rows);
@@ -558,8 +823,14 @@ export function JefeServicioPage() {
                     className={`js-agente-item${agenteActivo?.dni === a.dni ? ' active' : ''}`}
                     onClick={() => seleccionarAgente(a)}
                   >
-                    <div className="js-agente-nombre">
+                    <div className="js-agente-nombre" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {a.apellido}, {a.nombre}
+                      {licenciasSet.has(String(a.dni)) && (
+                        <span title="De licencia médica" style={{
+                          fontSize: '0.65rem', background: 'rgba(220,38,38,0.2)',
+                          color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                        }}>🏥 LICENCIA</span>
+                      )}
                     </div>
                     <div className="js-agente-meta">
                       DNI {a.dni}
@@ -589,6 +860,19 @@ export function JefeServicioPage() {
                 className={`js-tab${tab === 'todos_pases' ? ' active' : ''}`}
                 onClick={() => setTab('todos_pases')}
               >📋 Todos los Pases del Sector</button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'licencias' ? ' active' : ''}`}
+                onClick={() => setTab('licencias')}
+              >
+                🏥 De Licencia
+                {licenciasActivas.length > 0 && (
+                  <span style={{
+                    marginLeft: 6, background: '#dc2626', color: '#fff',
+                    borderRadius: 99, fontSize: '0.68rem', padding: '1px 7px', fontWeight: 700,
+                  }}>{licenciasActivas.length}</span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -623,6 +907,15 @@ export function JefeServicioPage() {
                     {/* Reconocimientos médicos (solo lectura) */}
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 12, paddingTop: 10 }}>
                       <RecMedicos dni={agenteActivo.dni} />
+                    </div>
+
+                    {/* Francos compensatorios (lectura + carga) */}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                      <FrancosAgente
+                        agente={agenteActivo}
+                        sectorId={sectorId}
+                        jefeNombre={u?.nombre || ''}
+                      />
                     </div>
                   </div>
 
@@ -754,6 +1047,66 @@ export function JefeServicioPage() {
                               </span>
                             </td>
                             <td className="js-td-muted">{p.jefe_nombre || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Tab Licencias activas ── */}
+          {tab === 'licencias' && (
+            <div className="card js-card">
+              <div className="js-section-header">
+                <div className="js-section-title">
+                  🏥 Agentes de licencia médica activa
+                  {licenciasActivas.length > 0 && (
+                    <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#fca5a5' }}>
+                      {licenciasActivas.length} con licencia activa
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {loadingLicencias ? (
+                <div className="js-loading">🔄 Cargando licencias…</div>
+              ) : licenciasActivas.length === 0 ? (
+                <div className="js-empty">
+                  {loadingAg ? 'Esperando agentes…' : 'No hay agentes con licencia médica activa en este sector.'}
+                </div>
+              ) : (
+                <div className="js-tabla-wrap">
+                  <table className="js-tabla">
+                    <thead>
+                      <tr>
+                        <th>DNI</th>
+                        <th>Agente</th>
+                        <th>Tipo</th>
+                        <th>Desde</th>
+                        <th>Días</th>
+                        <th>Resultado</th>
+                        <th>Observaciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {licenciasActivas.map((r: any) => {
+                        const ag = agentes.find((a: any) => String(a.dni) === String(r.dni));
+                        return (
+                          <tr key={r.id} style={{ background: 'rgba(220,38,38,0.06)' }}>
+                            <td className="js-td-dni">{r.dni}</td>
+                            <td>
+                              {ag ? `${ag.apellido}, ${ag.nombre}` : '—'}
+                            </td>
+                            <td style={{ fontWeight: 600, color: '#fca5a5' }}>{r.tipo || '—'}</td>
+                            <td>{fmt(r.fecha_desde)}</td>
+                            <td>{r.cantidad_dias ? `${r.cantidad_dias}d` : '—'}</td>
+                            <td className="js-td-muted">{r.resultado || '—'}</td>
+                            <td className="js-td-muted" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.observaciones || '—'}
+                            </td>
                           </tr>
                         );
                       })}

@@ -3822,6 +3822,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/francos_compensatorios:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List francos_compensatorios
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_francos_compensatorios"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create francos_compensatorios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_francos_compensatorios_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/francos_compensatorios/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get francos_compensatorios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update francos_compensatorios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_francos_compensatorios"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch francos_compensatorios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_francos_compensatorios_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete francos_compensatorios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/funciones:
     get:
       tags:
@@ -12798,6 +12930,137 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_francos_compensatorios:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha_franco:
+          type: string
+          format: date-time
+        fecha_trabajo:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha_franco
+    Table_francos_compensatorios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha_franco:
+          type: string
+          format: date-time
+        fecha_trabajo:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - fecha_franco
+    Table_francos_compensatorios_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha_franco:
+          type: string
+          format: date-time
+        fecha_trabajo:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_funciones:
       type: object
       additionalProperties: false
@@ -14551,6 +14814,9 @@ components:
         realizado:
           type: number
           nullable: true
+        asuentismo:
+          type: number
+          nullable: true
       required:
         - id
         - dni
@@ -14621,6 +14887,9 @@ components:
           format: date-time
           nullable: true
         realizado:
+          type: number
+          nullable: true
+        asuentismo:
           type: number
           nullable: true
       required:
@@ -14694,6 +14963,9 @@ components:
           format: date-time
           nullable: true
         realizado:
+          type: number
+          nullable: true
+        asuentismo:
           type: number
           nullable: true
     Table_refresh_tokens:
@@ -15367,6 +15639,10 @@ components:
           nullable: true
         priority:
           type: number
+        source:
+          type: string
+        duplex:
+          type: number
         status:
           type: string
         page_count:
@@ -15415,6 +15691,10 @@ components:
           type: number
           nullable: true
         priority:
+          type: number
+        source:
+          type: string
+        duplex:
           type: number
         status:
           type: string
@@ -15465,6 +15745,10 @@ components:
           type: number
           nullable: true
         priority:
+          type: number
+        source:
+          type: string
+        duplex:
           type: number
         status:
           type: string
@@ -16554,6 +16838,12 @@ components:
         created_at:
           type: string
           nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        jefatura_id:
+          type: number
+          nullable: true
       required:
         - id
         - email
@@ -16592,6 +16882,12 @@ components:
           nullable: true
         created_at:
           type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        jefatura_id:
+          type: number
           nullable: true
       required:
         - email
@@ -16632,6 +16928,12 @@ components:
           nullable: true
         created_at:
           type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        jefatura_id:
+          type: number
           nullable: true
     Table_usuarios_dominios:
       type: object

@@ -76,6 +76,18 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(buildHealthRouter(sequelize));
   // Aliases bajo /api/v1/ para clientes que los necesiten
   app.get(`${apiPrefix}/health`, (_req, res) => res.json({ ok: true, status: 'up' }));
+
+  // ── My-IP (público — usado por el frontend para detección de kiosco) ───────
+  app.get(`${apiPrefix}/my-ip`, (req, res) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    const ip =
+      (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0].trim()
+      || req.socket.remoteAddress
+      || req.ip
+      || '';
+    res.json({ ok: true, ip });
+  });
+
   app.get(`${apiPrefix}/ready`, async (_req, res) => {
     try {
       await sequelize.query('SELECT 1');
