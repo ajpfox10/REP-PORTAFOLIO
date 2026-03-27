@@ -85,26 +85,25 @@ export function buildPersonalRouter(sequelize: Sequelize) {
    * Búsqueda de personal con datos laborales básicos (JOIN agentes).
    * Retorna: dni, apellido, nombre, cuil, email, telefono,
    *          ley_nombre, planta_nombre, categoria_nombre, servicio_nombre, estado_empleo
-   * Query: ?dni= | ?apellido= | ?nombre= | ?q=  + paginado ?page= ?limit=
+   * Query: ?dni= | ?apellido= | ?nombre= | ?q= | ?sector_id= | ?estado_empleo=
+   *        + paginado ?page= ?limit=
+   * Sin filtros de búsqueda devuelve todos (útil para listar el sector completo).
    */
   router.get(
     '/search',
     requireCrudFor('personal', 'read'),
     async (req: Request, res: Response) => {
       const page   = pickQueryInt(req.query.page, 1, 1);
-      const limit  = Math.min(pickQueryInt(req.query.limit, 20, 1), 200);
+      const limit  = Math.min(pickQueryInt(req.query.limit, 20, 1), 500);
       const offset = (page - 1) * limit;
 
-      const dni      = cleanDigits(String(req.query.dni || ''));
-      const apellido = normalizeLike(String(req.query.apellido || ''));
-      const nombre   = normalizeLike(String(req.query.nombre || ''));
-      const qRaw     = normalizeLike(String(req.query.q || ''));
-      const qDigits  = cleanDigits(qRaw);
-
-      const hasAny = Boolean(dni || apellido || nombre || qRaw);
-      if (!hasAny) {
-        return res.status(400).json({ ok: false, error: 'Parámetros requeridos: dni / apellido / nombre / q' });
-      }
+      const dni           = cleanDigits(String(req.query.dni || ''));
+      const apellido      = normalizeLike(String(req.query.apellido || ''));
+      const nombre        = normalizeLike(String(req.query.nombre || ''));
+      const qRaw          = normalizeLike(String(req.query.q || ''));
+      const qDigits       = cleanDigits(qRaw);
+      const sectorId      = req.query.sector_id ? Number(req.query.sector_id) : null;
+      const estadoEmpleo  = String(req.query.estado_empleo || '').trim().toUpperCase() || null;
 
       const whereParts: string[] = ['p.deleted_at IS NULL'];
       const repl: Record<string, any> = { limit, offset };
@@ -124,6 +123,16 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           whereParts.push('(p.apellido LIKE :qLike OR p.nombre LIKE :qLike)');
           repl.qLike = `%${qRaw}%`;
         }
+      }
+
+      if (sectorId) {
+        whereParts.push('a.sector_id = :sectorId');
+        repl.sectorId = sectorId;
+      }
+
+      if (estadoEmpleo) {
+        whereParts.push('a.estado_empleo = :estadoEmpleo');
+        repl.estadoEmpleo = estadoEmpleo;
       }
 
       const where = `WHERE ${whereParts.join(' AND ')}`;
@@ -152,7 +161,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           ORDER BY p.apellido ASC, p.nombre ASC
           LIMIT :limit OFFSET :offset
         `, { replacements: repl, type: QueryTypes.SELECT }),
-        sequelize.query(`SELECT COUNT(1) AS total FROM personal p ${where}`,
+        sequelize.query(`SELECT COUNT(1) AS total FROM personal p LEFT JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL ${where}`,
           { replacements: repl, type: QueryTypes.SELECT }),
       ]);
 

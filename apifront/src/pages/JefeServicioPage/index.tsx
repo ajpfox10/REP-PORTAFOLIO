@@ -12,8 +12,28 @@ import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
 import { apiFetch } from '../../api/http';
 import { loadSession } from '../../auth/session';
+import { hasPermission } from '../../auth/permissions';
 import { exportToExcel, exportToPdf, exportToWord, printTable } from '../../utils/export';
 import './styles/JefeServicioPage.css';
+
+// ─── Helper: trae TODAS las páginas de un endpoint CRUD ──────────────────────
+async function fetchAll<T = any>(baseUrl: string, pageSize = 500): Promise<T[]> {
+  let all: T[] = [];
+  let page = 1;
+  let total = Infinity;
+  while (all.length < total) {
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    const res = await apiFetch<any>(`${baseUrl}${sep}limit=${pageSize}&page=${page}`);
+    const rows: T[] = res?.data || [];
+    if (!rows.length) break;
+    all = [...all, ...rows];
+    if (res?.meta?.total) total = Number(res.meta.total);
+    else total = all.length;
+    if (rows.length < pageSize) break;
+    page++;
+  }
+  return all;
+}
 
 // ─── Helpers fecha (sin offset UTC — mismo fix que embarazadas) ───────────────
 function fmt(d?: string | null): string {
@@ -70,7 +90,7 @@ function AsignarServicioModal({ agente, servicios, dependencias, onClose, onSave
     if (!form.fecha_desde) { toast.error('Ingresá la fecha de inicio'); return; }
     setSaving(true);
     try {
-      await apiFetch<any>('/crud/agentes_servicios', {
+      await apiFetch<any>('/agentes_servicios', {
         method: 'POST',
         body: JSON.stringify({
           dni: agente.dni,
@@ -169,7 +189,7 @@ function CerrarServicioModal({ pase, onClose, onSaved }: CerrarServicioModalProp
     if (!fechaHasta) { toast.error('Ingresá la fecha de cierre'); return; }
     setSaving(true);
     try {
-      await apiFetch<any>(`/crud/agentes_servicios/${pase.id}`, {
+      await apiFetch<any>(`/agentes_servicios/${pase.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ fecha_hasta: fechaHasta }),
       });
@@ -221,8 +241,8 @@ function RecMedicos({ dni }: RecMedicosProps) {
   useEffect(() => {
     if (!dni) return;
     setLoading(true);
-    apiFetch<any>(`/crud/reconocimientos_medicos?dni=${dni}&limit=50&sort=-fecha_desde`)
-      .then(r => setRecs(Array.isArray(r?.data) ? r.data : []))
+    fetchAll(`/reconocimientos_medicos?dni=${dni}&sort=-fecha_desde`)
+      .then(rows => setRecs(rows))
       .catch(() => setRecs([]))
       .finally(() => setLoading(false));
   }, [dni]);
@@ -307,7 +327,7 @@ function NuevoFrancoModal({ agente, sectorId, jefeNombre, onClose, onSaved }: Nu
     if (!form.fecha_franco) { toast.error('Ingresá la fecha del franco'); return; }
     setSaving(true);
     try {
-      await apiFetch<any>('/crud/francos_compensatorios', {
+      await apiFetch<any>('/francos_compensatorios', {
         method: 'POST',
         body: JSON.stringify({
           dni:           agente.dni,
@@ -402,8 +422,8 @@ function FrancosAgente({ agente, sectorId, jefeNombre }: FrancosAgenteProps) {
   const cargar = () => {
     if (!agente?.dni) return;
     setLoading(true);
-    apiFetch<any>(`/crud/francos_compensatorios?dni=${agente.dni}&limit=100&sort=-fecha_franco`)
-      .then(r => setFrancos(Array.isArray(r?.data) ? r.data : []))
+    fetchAll(`/francos_compensatorios?dni=${agente.dni}&sort=-fecha_franco`)
+      .then(rows => setFrancos(rows))
       .catch(() => setFrancos([]))
       .finally(() => setLoading(false));
   };
@@ -498,8 +518,13 @@ export function JefeServicioPage() {
   const toast = useToast();
   const { session } = useAuth();
   const u: any = session?.user || {};
+  const perms: string[] = session?.permissions ?? [];
   const sectorId: number | null = u?.sector_id ?? null;
   const sectorNombre: string = u?.sector_nombre || `Sector #${sectorId}`;
+
+  // admin (crud:*:*) o reader (sin sector_id) ven TODOS los agentes
+  // jefe_servicio: tiene sector_id pero NO crud:*:*
+  const isGlobal = hasPermission(perms, 'crud:*:*') || !sectorId;
 
   // Datos maestros
   const [servicios,    setServicios]    = useState<any[]>([]);
@@ -541,8 +566,8 @@ export function JefeServicioPage() {
   // ── Cargar maestros ───────────────────────────────────────────────────────
   useEffect(() => {
     Promise.allSettled([
-      apiFetch<any>('/crud/servicios?limit=500').then(r => setServicios(Array.isArray(r?.data) ? r.data : [])),
-      apiFetch<any>('/crud/reparticiones?limit=500').then(r => setDependencias(Array.isArray(r?.data) ? r.data : [])),
+      fetchAll('/servicios').then(rows => setServicios(rows)),
+      fetchAll('/reparticiones').then(rows => setDependencias(rows)),
     ]).finally(() => setLoadingMaestros(false));
   }, []);
 
@@ -552,25 +577,11 @@ export function JefeServicioPage() {
     setLoadingLicencias(true);
     try {
       const dniSet = new Set(sectorAgentes.map((a: any) => String(a.dni)));
-      // Paginar completo — puede haber miles de reconocimientos
-      const PAGE = 200;
-      let page = 1;
-      let all: any[] = [];
-      let total = Infinity;
-      while (all.length < total) {
-        const res = await apiFetch<any>(
-          `/crud/reconocimientos_medicos?limit=${PAGE}&page=${page}&sort=-fecha_desde`
-        );
-        const rows: any[] = res?.data || [];
-        if (!rows.length) break;
-        all = [...all, ...rows];
-        if (res?.meta?.total) total = Number(res.meta.total);
-        else total = all.length;
-        if (rows.length < PAGE) break;
-        page++;
-      }
-      // Filtrar: sin fecha_hasta y que el DNI esté en el sector
-      const activos = all.filter((r: any) => !r.fecha_hasta && dniSet.has(String(r.dni)));
+      const all = await fetchAll('/reconocimientos_medicos?sort=-fecha_desde');
+      // global: todos sin fecha_hasta; jefe: solo los de su sector
+      const activos = isGlobal
+        ? all.filter((r: any) => !r.fecha_hasta)
+        : all.filter((r: any) => !r.fecha_hasta && dniSet.has(String(r.dni)));
       setLicenciasActivas(activos);
       setLicenciasSet(new Set(activos.map((r: any) => String(r.dni))));
     } catch {
@@ -578,39 +589,24 @@ export function JefeServicioPage() {
     } finally {
       setLoadingLicencias(false);
     }
-  }, []);
+  }, [isGlobal]);
 
-  // ── Cargar agentes del sector ─────────────────────────────────────────────
+  // ── Cargar agentes (todos si global, solo sector si jefe) ────────────────
   const cargarAgentes = useCallback(async () => {
-    if (!sectorId) return;
+    if (!isGlobal && !sectorId) return;
     setLoadingAg(true);
     try {
-      // Paginado para no perder agentes si son muchos
-      let all: any[] = [];
-      let page = 1;
-      let total = Infinity;
-      while (all.length < total) {
-        const res = await apiFetch<any>(
-          `/personal/search?q=&limit=200&page=${page}&sector_id=${sectorId}`
-        ).catch(() => apiFetch<any>(
-          `/crud/agentes?sector_id=${sectorId}&estado_empleo=ACTIVO&limit=200&page=${page}`
-        ));
-        const rows: any[] = res?.data || [];
-        if (!rows.length) break;
-        all = [...all, ...rows];
-        if (res?.meta?.total) total = Number(res.meta.total);
-        else total = all.length;
-        if (rows.length < 200) break;
-        page++;
-      }
-      const filtrados = all.filter((a: any) => a.estado_empleo === 'ACTIVO' || !a.estado_empleo);
-      setAgentes(filtrados);
+      const base = isGlobal
+        ? `/personal/search?estado_empleo=ACTIVO`
+        : `/personal/search?sector_id=${sectorId}&estado_empleo=ACTIVO`;
+      const all = await fetchAll(base);
+      setAgentes(all);
     } catch (e: any) {
       toast.error('Error cargando agentes', e?.message);
     } finally {
       setLoadingAg(false);
     }
-  }, [sectorId]);
+  }, [isGlobal, sectorId]);
 
   useEffect(() => { cargarAgentes(); }, [cargarAgentes]);
 
@@ -624,8 +620,8 @@ export function JefeServicioPage() {
     if (!dni) return;
     setLoadingPases(true);
     try {
-      const res = await apiFetch<any>(`/crud/agentes_servicios?dni=${dni}&limit=100&sort=-fecha_desde`);
-      setPases(Array.isArray(res?.data) ? res.data : []);
+      const rows = await fetchAll(`/agentes_servicios?dni=${dni}&sort=-fecha_desde`);
+      setPases(rows);
     } catch { setPases([]); }
     finally { setLoadingPases(false); }
   }, []);
@@ -649,16 +645,19 @@ export function JefeServicioPage() {
     setModalAsignar(true);
   }, [agenteActivo, pases]);
 
-  // ── Cargar todos los pases del sector ────────────────────────────────────
+  // ── Cargar todos los pases (todos si global, solo sector si jefe) ────────
   const cargarTodosPases = useCallback(async () => {
-    if (!sectorId) return;
+    if (!isGlobal && !sectorId) return;
     setLoadingTodosPases(true);
     try {
-      const res = await apiFetch<any>(`/crud/agentes_servicios?dependencia_id=${sectorId}&limit=500&sort=-created_at`);
-      setTodosPases(Array.isArray(res?.data) ? res.data : []);
+      const url = isGlobal
+        ? `/agentes_servicios?sort=-created_at`
+        : `/agentes_servicios?dependencia_id=${sectorId}&sort=-created_at`;
+      const rows = await fetchAll(url);
+      setTodosPases(rows);
     } catch { setTodosPases([]); }
     finally { setLoadingTodosPases(false); }
-  }, [sectorId]);
+  }, [isGlobal, sectorId]);
 
   useEffect(() => {
     if (tab === 'todos_pases') cargarTodosPases();
@@ -730,7 +729,8 @@ export function JefeServicioPage() {
     if (tipo === 'print') printTable(`Pases Sector ${sectorId}`, rows);
   };
 
-  if (!sectorId) {
+  // Solo bloqueamos si NO es global Y no tiene sector asignado
+  if (!isGlobal && !sectorId) {
     return (
       <Layout title="Mi Sector" showBack>
         <div className="card js-card" style={{ textAlign: 'center', padding: '3rem' }}>
@@ -744,8 +744,11 @@ export function JefeServicioPage() {
     );
   }
 
+  const headerTitle  = isGlobal ? 'Todos los sectores' : sectorNombre;
+  const headerIcon   = isGlobal ? '🌐' : '🏢';
+
   return (
-    <Layout title="Mi Sector" showBack>
+    <Layout title={isGlobal ? 'Gestión de Sectores' : 'Mi Sector'} showBack>
       <div className="js-layout">
 
         {/* ── PANEL IZQUIERDO: Lista de agentes ── */}
@@ -753,7 +756,7 @@ export function JefeServicioPage() {
 
           {/* Header sector */}
           <div className="card js-card js-sector-header">
-            <div className="js-sector-title">🏢 {sectorNombre}</div>
+            <div className="js-sector-title">{headerIcon} {headerTitle}</div>
             <div className="js-sector-meta">
               {loadingAg ? '🔄 Cargando…' : `${agentes.length} agentes activos`}
             </div>
@@ -988,7 +991,7 @@ export function JefeServicioPage() {
           {tab === 'todos_pases' && (
             <div className="card js-card">
               <div className="js-section-header">
-                <div className="js-section-title">📋 Pases del Sector</div>
+                <div className="js-section-title">📋 {isGlobal ? 'Todos los Pases' : 'Pases del Sector'}</div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' as const }}>
                   {/* Filtro estado */}
                   <div style={{ display: 'flex', gap: 3 }}>

@@ -49,6 +49,7 @@ export function DashboardPage() {
 
   const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
   const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
+  const canSeeSamo = hasPerm('app:samo:access') || hasPerm('crud:*:*');
 
   const isSaludLaboral =
     canSeeSaludLaboral &&
@@ -191,6 +192,9 @@ export function DashboardPage() {
           <Tile to="/app/documentos" title="📂 Documentos" desc="Listado y visor de documentos PDF." disabled={!canDocs} accent="#22d3ee" />
           <Tile to="/app/citaciones" title="⚠️ Citaciones" desc="Registro y seguimiento de citaciones por agente." accent="#ef4444" />
           <Tile to="/app/mi-sector" title="🏢 Mi Sector" desc="Gestión de agentes y servicios por sector." accent="#6366f1" />
+          {(hasPerm('crud:resoluciones:read') || hasPerm('crud:*:*')) && (
+            <Tile to="/app/resoluciones" title="📋 Resoluciones" desc="Resoluciones, expedientes y archivos escaneados por agente." accent="#0d9488" />
+          )}
         </div>
       </div>
 
@@ -225,7 +229,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeResidentesRotacion) && (
+      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeResidentesRotacion || canSeeSamo) && (
         <div style={{ marginTop: 24, marginBottom: 6 }}>
           <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
             Salud Laboral
@@ -233,6 +237,9 @@ export function DashboardPage() {
           <div className="grid">
             {canSeeSaludLaboral && (
               <Tile to="/app/salud-laboral" title="🏥 Salud Laboral" desc="Reconocimientos médicos y exámenes anuales del personal." accent="#14b8a6" />
+            )}
+            {canSeeSamo && (
+              <Tile to="/app/samo" title="🏥 SAMO" desc="Gestión y seguimiento de licencias médicas del personal." accent="#0d9488" />
             )}
             {canSeeEmbarazadas && (
               <Tile to="/app/embarazadas" title="🤰 Embarazadas" desc="Registro de agentes embarazadas, FPP y alertas de licencia." accent="#f472b6" />
