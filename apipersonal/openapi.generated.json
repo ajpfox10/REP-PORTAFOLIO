@@ -13246,6 +13246,231 @@
         }
       }
     },
+    "/api/v1/sectores": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List sectores",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_sectores"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create sectores",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_sectores_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/sectores/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get sectores by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update sectores by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_sectores"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch sectores by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_sectores_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete sectores by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/security_bans": {
       "get": {
         "tags": [
@@ -17175,11 +17400,15 @@
             "type": "number",
             "nullable": true
           },
+          "reparticion_id": {
+            "type": "number",
+            "nullable": true
+          },
           "funcion_id": {
             "type": "number",
             "nullable": true
           },
-          "servicios_id": {
+          "servicio_id": {
             "type": "number",
             "nullable": true
           }
@@ -17287,11 +17516,15 @@
             "type": "number",
             "nullable": true
           },
+          "reparticion_id": {
+            "type": "number",
+            "nullable": true
+          },
           "funcion_id": {
             "type": "number",
             "nullable": true
           },
-          "servicios_id": {
+          "servicio_id": {
             "type": "number",
             "nullable": true
           }
@@ -17401,11 +17634,15 @@
             "type": "number",
             "nullable": true
           },
+          "reparticion_id": {
+            "type": "number",
+            "nullable": true
+          },
           "funcion_id": {
             "type": "number",
             "nullable": true
           },
-          "servicios_id": {
+          "servicio_id": {
             "type": "number",
             "nullable": true
           }
@@ -17475,6 +17712,10 @@
             "nullable": true
           },
           "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_id": {
             "type": "number",
             "nullable": true
           }
@@ -17547,6 +17788,10 @@
           "servicio_id": {
             "type": "number",
             "nullable": true
+          },
+          "sector_id": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -17617,6 +17862,10 @@
             "nullable": true
           },
           "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_id": {
             "type": "number",
             "nullable": true
           }
@@ -19226,12 +19475,33 @@
             "type": "number"
           },
           "nombre": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
             "type": "number",
             "nullable": true
           }
         },
         "required": [
-          "id"
+          "id",
+          "nombre"
         ]
       },
       "Table_dependencias_Create": {
@@ -19239,10 +19509,33 @@
         "additionalProperties": false,
         "properties": {
           "nombre": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
             "type": "number",
             "nullable": true
           }
-        }
+        },
+        "required": [
+          "nombre"
+        ]
       },
       "Table_dependencias_Patch": {
         "type": "object",
@@ -19252,6 +19545,26 @@
             "type": "number"
           },
           "nombre": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
             "type": "number",
             "nullable": true
           }
@@ -23983,6 +24296,18 @@
           "reparticion_nombre": {
             "type": "string"
           },
+          "dependencia_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "deleted_at": {
             "type": "string",
             "format": "date-time",
@@ -24008,6 +24333,18 @@
         "properties": {
           "reparticion_nombre": {
             "type": "string"
+          },
+          "dependencia_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
             "type": "string",
@@ -24036,6 +24373,18 @@
           },
           "reparticion_nombre": {
             "type": "string"
+          },
+          "dependencia_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
             "type": "string",
@@ -25050,6 +25399,121 @@
           }
         }
       },
+      "Table_sectores": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "nombre"
+        ]
+      },
+      "Table_sectores_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "Table_sectores_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
       "Table_security_bans": {
         "type": "object",
         "additionalProperties": false,
@@ -25225,6 +25689,31 @@
           },
           "nombre": {
             "type": "string"
+          },
+          "reparticion_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -25238,6 +25727,31 @@
         "properties": {
           "nombre": {
             "type": "string"
+          },
+          "reparticion_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -25253,6 +25767,31 @@
           },
           "nombre": {
             "type": "string"
+          },
+          "reparticion_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
           }
         }
       },
@@ -26307,6 +26846,10 @@
             "type": "number",
             "nullable": true
           },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
           "jefatura_id": {
             "type": "number",
             "nullable": true
@@ -26364,6 +26907,10 @@
             "nullable": true
           },
           "sector_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "servicio_id": {
             "type": "number",
             "nullable": true
           },
@@ -26426,6 +26973,10 @@
             "nullable": true
           },
           "sector_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "servicio_id": {
             "type": "number",
             "nullable": true
           },

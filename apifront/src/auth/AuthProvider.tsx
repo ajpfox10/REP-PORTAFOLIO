@@ -87,15 +87,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (alive) setSession(next);
         }
 
-        // Ping a endpoint ligero: solo verifica que el token sea válido.
-        // /tables siempre devuelve { ok: true } si hay sesión válida,
-        // independientemente de si el usuario tiene datos.
-        // ANTES: /documents podía devolver 404/vacío y matar la sesión.
+        // Verificar token y refrescar permisos/datos del usuario desde la API.
+        // Esto garantiza que cambios de rol/permiso se reflejen sin re-login.
         const check = await apiFetch('/auth/me', { method: 'GET' });
         if (!check?.ok) {
           logEvent({ level: 'warn', what: 'boot_token_invalid', where: 'AuthProvider.boot', status: 401, details: check });
           clearSession();
           if (alive) setSession(null);
+        } else if (check?.data) {
+          // Actualizar session con datos frescos de /auth/me (permisos, user, servicio_id, etc.)
+          const s = loadSession();
+          if (s && alive) {
+            const fresh: Session = {
+              ...s,
+              user: {
+                ...s.user,
+                ...(check.data.id              !== undefined ? { id:              check.data.id }              : {}),
+                ...(check.data.email           !== undefined ? { email:           check.data.email }           : {}),
+                ...(check.data.nombre          !== undefined ? { nombre:          check.data.nombre }          : {}),
+                ...(check.data.roleId          !== undefined ? { roleId:          check.data.roleId }          : {}),
+                ...(check.data.sector_id       !== undefined ? { sector_id:       check.data.sector_id }       : {}),
+                ...(check.data.sector_nombre   !== undefined ? { sector_nombre:   check.data.sector_nombre }   : {}),
+                ...(check.data.servicio_id     !== undefined ? { servicio_id:     check.data.servicio_id }     : {}),
+                ...(check.data.servicio_nombre !== undefined ? { servicio_nombre: check.data.servicio_nombre } : {}),
+              },
+              permissions: Array.isArray(check.data.permissions) ? check.data.permissions : s.permissions,
+            };
+            saveSession(fresh);
+            setSession(fresh);
+          }
         }
       } catch (e: any) {
         logEvent({ level: 'warn', what: 'boot_auth_exception', where: 'AuthProvider.boot', details: e });

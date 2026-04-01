@@ -60,19 +60,22 @@ function fmtDateTime(dt?: string | null): string {
 interface AsignarServicioModalProps {
   agente: any;
   servicios: any[];
-  dependencias: any[];
+  dependencias: any[];  // reparticiones
+  sectores: any[];
   onClose: () => void;
   onSaved: () => void;
 }
-function AsignarServicioModal({ agente, servicios, dependencias, onClose, onSaved }: AsignarServicioModalProps) {
+function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClose, onSaved }: AsignarServicioModalProps) {
   const toast = useToast();
+  const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
-    servicio_id: '',
-    dependencia_id: '',
-    fecha_desde: '',
-    motivo: '',
-    jefe_nombre: '',
-    observaciones: '',
+    dependencia_id: '',   // reparticion seleccionada
+    servicio_id:    '',   // servicio filtrado por reparticion
+    sector_id:      '',   // sector filtrado por servicio
+    fecha_desde:    hoy,
+    motivo:         '',
+    jefe_nombre:    '',
+    observaciones:  '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -85,6 +88,26 @@ function AsignarServicioModal({ agente, servicios, dependencias, onClose, onSave
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
+  // Cascade: al cambiar dependencia, resetear servicio y sector
+  const onChangeDependencia = (v: string) => {
+    setForm(f => ({ ...f, dependencia_id: v, servicio_id: '', sector_id: '' }));
+  };
+
+  // Cascade: al cambiar servicio, resetear sector
+  const onChangeServicio = (v: string) => {
+    setForm(f => ({ ...f, servicio_id: v, sector_id: '' }));
+  };
+
+  // Servicios filtrados por reparticion seleccionada
+  const serviciosFiltrados = form.dependencia_id
+    ? servicios.filter((s: any) => String(s.reparticion_id) === form.dependencia_id)
+    : servicios;
+
+  // Sectores filtrados por servicio seleccionado
+  const sectoresFiltrados = form.servicio_id
+    ? sectores.filter((s: any) => String(s.servicio_id) === form.servicio_id)
+    : [];
+
   const guardar = async () => {
     if (!form.servicio_id) { toast.error('Seleccioná un servicio'); return; }
     if (!form.fecha_desde) { toast.error('Ingresá la fecha de inicio'); return; }
@@ -93,13 +116,14 @@ function AsignarServicioModal({ agente, servicios, dependencias, onClose, onSave
       await apiFetch<any>('/agentes_servicios', {
         method: 'POST',
         body: JSON.stringify({
-          dni: agente.dni,
-          servicio_id: Number(form.servicio_id),
+          dni:            agente.dni,
+          servicio_id:    Number(form.servicio_id),
+          sector_id:      form.sector_id    ? Number(form.sector_id)    : null,
           dependencia_id: form.dependencia_id ? Number(form.dependencia_id) : null,
-          fecha_desde: form.fecha_desde,
-          motivo: form.motivo || null,
-          jefe_nombre: form.jefe_nombre || null,
-          observaciones: form.observaciones || null,
+          fecha_desde:    form.fecha_desde,
+          motivo:         form.motivo       || null,
+          jefe_nombre:    form.jefe_nombre  || null,
+          observaciones:  form.observaciones || null,
         }),
       });
       toast.ok('Servicio asignado', `${agente.apellido}, ${agente.nombre}`);
@@ -127,40 +151,80 @@ function AsignarServicioModal({ agente, servicios, dependencias, onClose, onSave
         </div>
         <div className="js-modal-body">
           <div className="js-form-grid">
+
+            {/* ── Dependencia (Repartición) ── */}
             <div className="js-field">
-              <div style={labelStyle}>Servicio *</div>
-              <select className="input" style={fieldStyle} value={form.servicio_id} onChange={e => set('servicio_id', e.target.value)}>
-                <option value="">— Seleccioná —</option>
-                {servicios.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
-                ))}
-              </select>
-            </div>
-            <div className="js-field">
-              <div style={labelStyle}>Dependencia</div>
-              <select className="input" style={fieldStyle} value={form.dependencia_id} onChange={e => set('dependencia_id', e.target.value)}>
-                <option value="">— Ninguna —</option>
+              <div style={labelStyle}>Dependencia / Repartición</div>
+              <select className="input" style={fieldStyle} value={form.dependencia_id} onChange={e => onChangeDependencia(e.target.value)}>
+                <option value="">— Todas —</option>
                 {dependencias.map((d: any) => (
                   <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre}</option>
                 ))}
               </select>
             </div>
+
+            {/* ── Servicio (filtrado por dependencia) ── */}
+            <div className="js-field">
+              <div style={labelStyle}>Servicio *</div>
+              <select className="input" style={fieldStyle} value={form.servicio_id} onChange={e => onChangeServicio(e.target.value)}>
+                <option value="">— Seleccioná —</option>
+                {serviciosFiltrados.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
+                ))}
+              </select>
+              {form.dependencia_id && serviciosFiltrados.length === 0 && (
+                <div style={{ fontSize: '0.68rem', color: '#f59e0b', marginTop: 3 }}>
+                  Sin servicios para esta dependencia
+                </div>
+              )}
+            </div>
+
+            {/* ── Sector (filtrado por servicio) ── */}
+            <div className="js-field">
+              <div style={labelStyle}>Sector</div>
+              <select
+                className="input"
+                style={{ ...fieldStyle, opacity: !form.servicio_id ? 0.5 : 1 }}
+                value={form.sector_id}
+                onChange={e => set('sector_id', e.target.value)}
+                disabled={!form.servicio_id}
+              >
+                <option value="">— Ninguno —</option>
+                {sectoresFiltrados.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.nombre || `Sector #${s.id}`}</option>
+                ))}
+              </select>
+              {form.servicio_id && sectoresFiltrados.length === 0 && (
+                <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 3 }}>
+                  Sin sectores para este servicio
+                </div>
+              )}
+            </div>
+
+            {/* ── Fecha desde ── */}
             <div className="js-field">
               <div style={labelStyle}>Fecha desde *</div>
               <input type="date" className="input" style={fieldStyle} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
             </div>
-            <div className="js-field">
+
+            {/* ── Jefe ── */}
+            <div className="js-field js-field-full">
               <div style={labelStyle}>Jefe / Responsable</div>
               <input type="text" className="input" style={fieldStyle} value={form.jefe_nombre} onChange={e => set('jefe_nombre', e.target.value)} />
             </div>
+
+            {/* ── Motivo ── */}
             <div className="js-field js-field-full">
               <div style={labelStyle}>Motivo del pase</div>
               <input type="text" className="input" style={fieldStyle} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
             </div>
+
+            {/* ── Observaciones ── */}
             <div className="js-field js-field-full">
               <div style={labelStyle}>Observaciones</div>
               <textarea className="input" rows={2} style={{ ...fieldStyle, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
             </div>
+
           </div>
           <div className="js-modal-actions">
             <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
@@ -226,6 +290,288 @@ function CerrarServicioModal({ pase, onClose, onSaved }: CerrarServicioModalProp
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Modal cambiar sector en servicio activo ─────────────────────────────────
+// ─── Modal: Asignar sector ────────────────────────────────────────────────────
+interface AsignarSectorModalProps {
+  agente: any;
+  servicioId: number | null;
+  sectores: any[];
+  jefeNombre: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+function AsignarSectorModal({ agente, servicioId, sectores, jefeNombre, onClose, onSaved }: AsignarSectorModalProps) {
+  const toast = useToast();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({ sector_id: '', fecha_desde: hoy, motivo: '', observaciones: '' });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+
+  const sectoresFiltrados = servicioId
+    ? sectores.filter((s: any) => String(s.servicio_id) === String(servicioId))
+    : sectores;
+
+  const guardar = async () => {
+    if (!form.sector_id) { toast.error('Seleccioná un sector'); return; }
+    if (!form.fecha_desde) { toast.error('Ingresá la fecha de inicio'); return; }
+    setSaving(true);
+    try {
+      await apiFetch<any>('/agentes_sectores', {
+        method: 'POST',
+        body: JSON.stringify({
+          dni:          agente.dni,
+          sector_id:    Number(form.sector_id),
+          servicio_id:  servicioId ?? null,
+          fecha_desde:  form.fecha_desde,
+          motivo:       form.motivo       || null,
+          jefe_nombre:  jefeNombre        || null,
+          observaciones: form.observaciones || null,
+        }),
+      });
+      toast.ok('Sector asignado', `${agente.apellido}, ${agente.nombre}`);
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al asignar sector', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal js-modal-sm" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div>
+            <div className="js-modal-title">📍 Asignar Sector</div>
+            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+          </div>
+          <button className="btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="js-modal-body">
+          <div className="js-form-grid">
+            <div className="js-field js-field-full">
+              <div style={lbl}>Sector *</div>
+              <select className="input" style={fld} value={form.sector_id} onChange={e => set('sector_id', e.target.value)}>
+                <option value="">— Seleccioná —</option>
+                {sectoresFiltrados.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.nombre || `Sector #${s.id}`}</option>
+                ))}
+              </select>
+              {sectoresFiltrados.length === 0 && (
+                <div style={{ fontSize: '0.7rem', color: '#f59e0b', marginTop: 3 }}>Sin sectores para este servicio</div>
+              )}
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Fecha desde *</div>
+              <input type="date" className="input" style={fld} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Motivo</div>
+              <input type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Motivo del pase de sector…" />
+            </div>
+          </div>
+          <div className="js-modal-actions">
+            <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
+              {saving ? '⏳…' : '💾 Asignar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal: Cerrar sector ─────────────────────────────────────────────────────
+interface CerrarSectorModalProps {
+  pase: any;
+  sectores: any[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+function CerrarSectorModal({ pase, sectores, onClose, onSaved }: CerrarSectorModalProps) {
+  const toast = useToast();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [fechaHasta, setFechaHasta] = useState(hoy);
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+  const sectorNom = sectores.find((s: any) => String(s.id) === String(pase.sector_id))?.nombre || `Sector #${pase.sector_id}`;
+
+  const guardar = async () => {
+    if (!fechaHasta) { toast.error('Ingresá la fecha de cierre'); return; }
+    setSaving(true);
+    try {
+      await apiFetch<any>(`/agentes_sectores/${pase.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fecha_hasta: fechaHasta, motivo: motivo || null }),
+      });
+      toast.ok('Sector cerrado', sectorNom);
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al cerrar sector', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal js-modal-sm" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div className="js-modal-title">🔒 Cerrar Sector</div>
+          <button className="btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="js-modal-body">
+          <div style={{ fontSize: '0.84rem', marginBottom: 10 }}>
+            Cerrando pase en sector <b>{sectorNom}</b>
+          </div>
+          <div className="js-form-grid">
+            <div className="js-field">
+              <div style={lbl}>Fecha hasta *</div>
+              <input type="date" className="input" style={fld} value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Motivo</div>
+              <input type="text" className="input" style={fld} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo del cierre…" />
+            </div>
+          </div>
+          <div className="js-modal-actions">
+            <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="btn js-btn-cerrar" onClick={guardar} disabled={saving}>
+              {saving ? '⏳…' : '🔒 Cerrar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Panel historial de sectores del agente ───────────────────────────────────
+interface SectoresAgenteProps {
+  agente: any;
+  servicioId: number | null;
+  sectores: any[];
+  jefeNombre: string;
+}
+function SectoresAgente({ agente, servicioId, sectores, jefeNombre }: SectoresAgenteProps) {
+  const toast = useToast();
+  const [pases,          setPases]          = useState<any[]>([]);
+  const [loading,        setLoading]        = useState(false);
+  const [modalAsignar,   setModalAsignar]   = useState(false);
+  const [modalCerrar,    setModalCerrar]    = useState<any>(null);
+
+  const cargar = () => {
+    if (!agente?.dni) return;
+    setLoading(true);
+    fetchAll(`/agentes_sectores?dni=${agente.dni}&sort=-fecha_desde`)
+      .then(rows => setPases(rows))
+      .catch(() => setPases([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { cargar(); }, [agente?.dni]);
+
+  const paseActivo = pases.find((p: any) => !p.fecha_hasta);
+
+  const intentarAsignar = () => {
+    if (paseActivo) {
+      toast.error('⛔ Sector activo sin cerrar', 'Cerrá el sector actual antes de asignar uno nuevo.');
+      return;
+    }
+    setModalAsignar(true);
+  };
+
+  return (
+    <>
+      <div className="js-section-header" style={{ marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 600 }}>
+          📍 Sectores
+          {paseActivo && <span className="js-badge-activo">🟢 Activo</span>}
+          <span style={{ color: '#475569', fontSize: '0.72rem', fontWeight: 400 }}>{pases.length} registros</span>
+        </div>
+        <button
+          className="btn"
+          type="button"
+          style={{ fontSize: '0.72rem', padding: '3px 10px', background: paseActivo ? undefined : 'rgba(99,102,241,0.2)', color: paseActivo ? undefined : '#a5b4fc', border: '1px solid rgba(99,102,241,0.3)' }}
+          onClick={intentarAsignar}
+          title={paseActivo ? 'Cerrá el sector actual antes de asignar uno nuevo' : 'Asignar nuevo sector'}
+        >
+          📍 Asignar Sector
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ color: '#475569', fontSize: '0.78rem' }}>🔄 Cargando…</div>
+      ) : pases.length === 0 ? (
+        <div style={{ color: '#475569', fontSize: '0.78rem' }}>Sin sectores asignados</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {pases.map((p: any) => {
+            const abierto = !p.fecha_hasta;
+            const sectorNom = sectores.find((s: any) => String(s.id) === String(p.sector_id))?.nombre || `Sector #${p.sector_id}`;
+            return (
+              <div key={p.id} style={{
+                borderRadius: 8, padding: '8px 10px',
+                background: abierto ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${abierto ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.07)'}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: abierto ? '#a5b4fc' : '#64748b' }}>
+                      {abierto ? '🟢 ACTIVO' : '⬜ CERRADO'}
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{sectorNom}</span>
+                  </div>
+                  {abierto && (
+                    <button
+                      className="btn js-btn-cerrar"
+                      type="button"
+                      style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+                      onClick={() => setModalCerrar(p)}
+                    >🔒 Cerrar</button>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <span>📅 Desde: <b style={{ color: '#94a3b8' }}>{fmt(p.fecha_desde)}</b></span>
+                  {p.fecha_hasta && <span>Hasta: <b style={{ color: '#94a3b8' }}>{fmt(p.fecha_hasta)}</b></span>}
+                  {p.jefe_nombre && <span>👤 {p.jefe_nombre}</span>}
+                  {p.motivo && <span>— {p.motivo}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {modalAsignar && (
+        <AsignarSectorModal
+          agente={agente}
+          servicioId={servicioId}
+          sectores={sectores}
+          jefeNombre={jefeNombre}
+          onClose={() => setModalAsignar(false)}
+          onSaved={cargar}
+        />
+      )}
+      {modalCerrar && (
+        <CerrarSectorModal
+          pase={modalCerrar}
+          sectores={sectores}
+          onClose={() => setModalCerrar(null)}
+          onSaved={cargar}
+        />
+      )}
+    </>
   );
 }
 
@@ -298,6 +644,129 @@ function RecMedicos({ dni }: RecMedicosProps) {
           </div>
         )
       )}
+    </div>
+  );
+}
+
+// ─── Modal: Nuevo franco desde tab sector (con selector de agente) ────────────
+interface NuevoFrancoSectorModalProps {
+  agentes: any[];
+  sectorId: number | null;
+  jefeNombre: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+function NuevoFrancoSectorModal({ agentes, sectorId, jefeNombre, onClose, onSaved }: NuevoFrancoSectorModalProps) {
+  const toast = useToast();
+  const [dniSel, setDniSel] = useState('');
+  const [form, setForm] = useState({
+    fecha_franco:  '',
+    fecha_trabajo: '',
+    motivo:        '',
+    observaciones: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+
+  const sorted = [...agentes].sort((a, b) =>
+    `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`, 'es')
+  );
+
+  const guardar = async () => {
+    if (!dniSel) { toast.error('Seleccioná un agente'); return; }
+    if (!form.fecha_franco) { toast.error('Ingresá la fecha del franco'); return; }
+    const ag = agentes.find((a: any) => String(a.dni) === dniSel);
+    setSaving(true);
+    try {
+      await apiFetch<any>('/francos_compensatorios', {
+        method: 'POST',
+        body: JSON.stringify({
+          dni:           Number(dniSel),
+          fecha_franco:  form.fecha_franco,
+          fecha_trabajo: form.fecha_trabajo || null,
+          motivo:        form.motivo        || null,
+          observaciones: form.observaciones || null,
+          estado:        'PENDIENTE',
+          jefe_nombre:   jefeNombre         || null,
+          sector_id:     sectorId           ?? null,
+        }),
+      });
+      toast.ok('Franco cargado', ag ? `${ag.apellido}, ${ag.nombre}` : `DNI ${dniSel}`);
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al guardar', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div>
+            <div className="js-modal-title">📅 Cargar Franco Compensatorio</div>
+            <div className="js-modal-sub">Seleccioná el agente del sector</div>
+          </div>
+          <button className="btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <div className="js-modal-body">
+          <div className="js-form-grid">
+            <div className="js-field js-field-full">
+              <div style={lbl}>Agente *</div>
+              <select className="input" style={fld} value={dniSel} onChange={e => setDniSel(e.target.value)}>
+                <option value="">— Seleccioná un agente —</option>
+                {sorted.map((a: any) => (
+                  <option key={a.dni} value={String(a.dni)}>
+                    {a.apellido}, {a.nombre} · DNI {a.dni}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Fecha del franco *</div>
+              <input type="date" className="input" style={fld}
+                value={form.fecha_franco} onChange={e => set('fecha_franco', e.target.value)} />
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Día trabajado que lo origina</div>
+              <input type="date" className="input" style={fld}
+                value={form.fecha_trabajo} onChange={e => set('fecha_trabajo', e.target.value)} />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Motivo</div>
+              <input type="text" className="input" style={fld}
+                value={form.motivo} onChange={e => set('motivo', e.target.value)}
+                placeholder="Ej: Guardia 24hs, feriado trabajado…" />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Observaciones</div>
+              <textarea className="input" rows={2}
+                style={{ ...fld, resize: 'vertical' }}
+                value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Jefe / Responsable</div>
+              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }}
+                value={jefeNombre} disabled />
+            </div>
+          </div>
+          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6,
+            background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
+            fontSize: '0.74rem', color: '#fbbf24' }}>
+            ⚠️ El franco queda en estado <b>PENDIENTE</b> hasta que el administrador lo apruebe.
+          </div>
+          <div className="js-modal-actions">
+            <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
+              {saving ? '⏳ Guardando…' : '💾 Cargar Franco'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -480,7 +949,12 @@ function FrancosAgente({ agente, sectorId, jefeNombre }: FrancosAgenteProps) {
                       color: ESTADO_COLOR[f.estado] || '#e2e8f0' }}>
                       {f.estado || 'PENDIENTE'}
                     </span>
-                    <span style={{ color: '#64748b' }}>#{f.id}</span>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {Date.now() - new Date(f.created_at).getTime() > 48 * 60 * 60 * 1000 && (
+                        <span style={{ fontSize: '0.65rem', color: '#475569' }}>🔒 +48h</span>
+                      )}
+                      <span style={{ color: '#64748b', fontSize: '0.68rem' }}>#{f.id}</span>
+                    </div>
                   </div>
                   <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
                     <span>Franco: <b>{fmt(f.fecha_franco)}</b></span>
@@ -513,6 +987,255 @@ function FrancosAgente({ agente, sectorId, jefeNombre }: FrancosAgenteProps) {
   );
 }
 
+// ─── Panel Artículo 26 ────────────────────────────────────────────────────────
+interface Art26ModalProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+  record?: any; // si existe, es edición
+  onClose: () => void;
+  onSaved: () => void;
+}
+function Art26Modal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: Art26ModalProps) {
+  const toast = useToast();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    fecha:        record?.fecha?.slice(0, 10) || hoy,
+    dias:         record?.dias ? String(record.dias) : '',
+    motivo:       record?.motivo || '',
+    observaciones: record?.observaciones || '',
+    estado:       record?.estado || 'PENDIENTE',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+
+  const guardar = async () => {
+    if (!form.fecha) { toast.error('Ingresá la fecha'); return; }
+    setSaving(true);
+    try {
+      const body = {
+        dni:          agente.dni,
+        fecha:        form.fecha,
+        dias:         form.dias ? Number(form.dias) : null,
+        motivo:       form.motivo || null,
+        observaciones: form.observaciones || null,
+        sector_id:    sectorId ?? null,
+        jefe_nombre:  jefeNombre || null,
+        estado:       form.estado,
+      };
+      if (record?.id) {
+        await apiFetch<any>(`/articulo_26/${record.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        toast.ok('Registro actualizado');
+      } else {
+        await apiFetch<any>('/articulo_26', { method: 'POST', body: JSON.stringify(body) });
+        toast.ok('Artículo 26 cargado', `${agente.apellido}, ${agente.nombre}`);
+      }
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al guardar', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div>
+            <div className="js-modal-title">📋 {record ? 'Editar' : 'Nuevo'} Artículo 26</div>
+            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+          </div>
+          <button className="btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <div className="js-modal-body">
+          <div className="js-form-grid">
+            <div className="js-field">
+              <div style={lbl}>Fecha *</div>
+              <input type="date" className="input" style={fld} value={form.fecha} min={!record ? hoy : undefined} onChange={e => set('fecha', e.target.value)} />
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Días</div>
+              <input type="number" className="input" style={fld} value={form.dias} onChange={e => set('dias', e.target.value)} min="1" placeholder="Ej: 3" />
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Estado</div>
+              <select className="input" style={fld} value={form.estado} onChange={e => set('estado', e.target.value)}>
+                <option value="PENDIENTE">PENDIENTE</option>
+                <option value="APROBADO">APROBADO</option>
+                <option value="RECHAZADO">RECHAZADO</option>
+                <option value="ANULADO">ANULADO</option>
+              </select>
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Jefe</div>
+              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Motivo *</div>
+              <input type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Motivo del Artículo 26…" />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Observaciones</div>
+              <textarea className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+            </div>
+          </div>
+          <div className="js-modal-actions">
+            <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
+              {saving ? '⏳ Guardando…' : '💾 Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Panel Art. 26 por agente ─────────────────────────────────────────────────
+interface Art26AgenteProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+}
+function Art26Agente({ agente, sectorId, jefeNombre }: Art26AgenteProps) {
+  const toast = useToast();
+  const [records,   setRecords]   = useState<any[]>([]);
+  const [loading,   setLoading]   = useState(false);
+  const [expanded,  setExpanded]  = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editRecord, setEditRecord] = useState<any>(null);
+
+  const ESTADO_COLOR: Record<string, string> = {
+    PENDIENTE: '#fbbf24', APROBADO: '#22c55e', RECHAZADO: '#ef4444', ANULADO: '#64748b',
+  };
+
+  const canEdit = (r: any) => {
+    const diffMs = Date.now() - new Date(r.created_at).getTime();
+    return diffMs < 48 * 60 * 60 * 1000; // menos de 48 horas
+  };
+
+  const cargar = () => {
+    if (!agente?.dni) return;
+    setLoading(true);
+    fetchAll(`/articulo_26?dni=${agente.dni}&sort=-fecha`)
+      .then(rows => setRecords(rows))
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { cargar(); }, [agente?.dni]);
+
+  const eliminar = async (id: number, created_at: string) => {
+    if (!canEdit({ created_at })) { toast.error('No se puede eliminar', 'Han pasado más de 48 horas'); return; }
+    if (!confirm('¿Eliminar este registro?')) return;
+    try {
+      await apiFetch<any>(`/articulo_26/${id}`, { method: 'DELETE' });
+      toast.ok('Registro eliminado');
+      cargar();
+    } catch (e: any) {
+      toast.error('Error', e?.message || 'Error');
+    }
+  };
+
+  const pendientes = records.filter(r => r.estado === 'PENDIENTE').length;
+
+  return (
+    <>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0' }}>
+            📋 Artículo 26
+            <span style={{ marginLeft: 8, fontSize: '0.7rem', color: '#64748b' }}>
+              {records.length} registro{records.length !== 1 ? 's' : ''}
+              {pendientes > 0 && <span style={{ marginLeft: 6, color: '#fbbf24' }}>· {pendientes} pendiente{pendientes !== 1 ? 's' : ''}</span>}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button className="btn js-btn-save" type="button"
+              style={{ padding: '2px 9px', fontSize: '0.73rem' }}
+              onClick={() => { setEditRecord(null); setModalOpen(true); }}>
+              ➕ Cargar
+            </button>
+            <button className="btn" type="button"
+              style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+              onClick={() => setExpanded(v => !v)}>
+              {expanded ? '▲' : '▼'}
+            </button>
+          </div>
+        </div>
+
+        {expanded && (
+          loading ? (
+            <div style={{ color: '#64748b', fontSize: '0.8rem' }}>🔄 Cargando…</div>
+          ) : records.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: '0.8rem' }}>Sin registros de Artículo 26</div>
+          ) : (
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {records.map((r: any) => {
+                const editable = canEdit(r);
+                return (
+                  <div key={r.id} style={{
+                    padding: '7px 10px', marginBottom: 5, borderRadius: 7,
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                    fontSize: '0.78rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                      <span style={{ fontWeight: 600, color: ESTADO_COLOR[r.estado] || '#e2e8f0' }}>
+                        {r.estado}
+                        {r.dias && <span style={{ marginLeft: 6, color: '#94a3b8' }}>{r.dias} días</span>}
+                      </span>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {editable && (
+                          <>
+                            <button className="btn" type="button"
+                              style={{ padding: '1px 7px', fontSize: '0.68rem' }}
+                              onClick={() => { setEditRecord(r); setModalOpen(true); }}>
+                              ✏️
+                            </button>
+                            <button className="btn js-btn-danger" type="button"
+                              style={{ padding: '1px 7px', fontSize: '0.68rem' }}
+                              onClick={() => eliminar(r.id, r.created_at)}>
+                              🗑️
+                            </button>
+                          </>
+                        )}
+                        {!editable && (
+                          <span style={{ fontSize: '0.65rem', color: '#475569' }}>🔒 +48h</span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                      <span>Fecha: <b>{fmt(r.fecha)}</b></span>
+                      {r.jefe_nombre && <span>👤 {r.jefe_nombre}</span>}
+                    </div>
+                    {r.motivo && <div style={{ color: '#cbd5e1', marginTop: 3 }}>{r.motivo}</div>}
+                    {r.observaciones && <div style={{ color: '#64748b', marginTop: 2, fontStyle: 'italic' }}>{r.observaciones}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
+
+      {modalOpen && (
+        <Art26Modal
+          agente={agente}
+          sectorId={sectorId}
+          jefeNombre={jefeNombre}
+          record={editRecord}
+          onClose={() => { setModalOpen(false); setEditRecord(null); }}
+          onSaved={() => { setExpanded(true); cargar(); }}
+        />
+      )}
+    </>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function JefeServicioPage() {
   const toast = useToast();
@@ -522,13 +1245,17 @@ export function JefeServicioPage() {
   const sectorId: number | null = u?.sector_id ?? null;
   const sectorNombre: string = u?.sector_nombre || `Sector #${sectorId}`;
 
-  // admin (crud:*:*) o reader (sin sector_id) ven TODOS los agentes
-  // jefe_servicio: tiene sector_id pero NO crud:*:*
-  const isGlobal = hasPermission(perms, 'crud:*:*') || !sectorId;
+  // jefe_servicio se identifica por servicio_id en su usuario
+  const servicioId: number | null = u?.servicio_id ?? null;
+  const servicioNombre: string = u?.servicio_nombre || `Servicio #${servicioId}`;
+
+  // admin (crud:*:*) ve TODO; jefe_servicio tiene servicio_id asignado
+  const isGlobal = hasPermission(perms, 'crud:*:*') || !servicioId;
 
   // Datos maestros
   const [servicios,    setServicios]    = useState<any[]>([]);
   const [dependencias, setDependencias] = useState<any[]>([]);
+  const [sectores,     setSectores]     = useState<any[]>([]);
   const [loadingMaestros, setLoadingMaestros] = useState(true);
 
   // Agentes del sector
@@ -547,11 +1274,11 @@ export function JefeServicioPage() {
   const [loadingPases, setLoadingPases] = useState(false);
 
   // Modales
-  const [modalAsignar, setModalAsignar] = useState(false);
-  const [modalCerrar,  setModalCerrar]  = useState<any>(null);
+  const [modalAsignar,       setModalAsignar]       = useState(false);
+  const [modalCerrar,        setModalCerrar]        = useState<any>(null);
 
   // Tab
-  const [tab, setTab] = useState<'agentes' | 'todos_pases' | 'licencias'>('agentes');
+  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos'>('agentes');
 
   // Agentes de licencia (reconocimientos médicos activos del sector)
   const [licenciasActivas, setLicenciasActivas] = useState<any[]>([]);
@@ -563,11 +1290,19 @@ export function JefeServicioPage() {
   const [loadingTodosPases, setLoadingTodosPases] = useState(false);
   const [filtroPases,     setFiltroPases]     = useState<'todos' | 'activos' | 'cerrados'>('todos');
 
+  // Francos compensatorios del sector
+  const [francosSector,          setFrancosSector]          = useState<any[]>([]);
+  const [loadingFrancos,         setLoadingFrancos]         = useState(false);
+  const [filtroFrancos,          setFiltroFrancos]          = useState<'todos' | 'PENDIENTE' | 'APROBADO' | 'TOMADO' | 'ANULADO'>('PENDIENTE');
+  const [modalNuevoFrancoSector, setModalNuevoFrancoSector] = useState(false);
+  const [savingFrancoId,         setSavingFrancoId]         = useState<number | null>(null);
+
   // ── Cargar maestros ───────────────────────────────────────────────────────
   useEffect(() => {
     Promise.allSettled([
       fetchAll('/servicios').then(rows => setServicios(rows)),
       fetchAll('/reparticiones').then(rows => setDependencias(rows)),
+      fetchAll('/sectores').then(rows => setSectores(rows)),
     ]).finally(() => setLoadingMaestros(false));
   }, []);
 
@@ -591,22 +1326,50 @@ export function JefeServicioPage() {
     }
   }, [isGlobal]);
 
-  // ── Cargar agentes (todos si global, solo sector si jefe) ────────────────
+  // ── DNIs con servicio activo (sin fecha_hasta) ───────────────────────────
+  const [dniConServicio,  setDniConServicio]  = useState<Set<string>>(new Set());
+  const [dniConArt26,     setDniConArt26]     = useState<Set<string>>(new Set());
+
+  const cargarDniConServicio = useCallback(async () => {
+    try {
+      const pases = await fetchAll('/agentes_servicios');
+      const activos = pases.filter((p: any) => !p.fecha_hasta);
+      setDniConServicio(new Set(activos.map((p: any) => String(p.dni))));
+    } catch { /* no bloquear */ }
+  }, []);
+
+  const cargarDniConArt26 = useCallback(async () => {
+    try {
+      const rows = await fetchAll('/articulo_26');
+      setDniConArt26(new Set(rows.map((r: any) => String(r.dni))));
+    } catch { /* no bloquear */ }
+  }, []);
+
+  // ── Cargar agentes (todos si global, por sector_id si disponible, sino servicio_id) ──
   const cargarAgentes = useCallback(async () => {
-    if (!isGlobal && !sectorId) return;
+    if (!isGlobal && !servicioId) return;
     setLoadingAg(true);
     try {
-      const base = isGlobal
-        ? `/personal/search?estado_empleo=ACTIVO`
-        : `/personal/search?sector_id=${sectorId}&estado_empleo=ACTIVO`;
-      const all = await fetchAll(base);
+      let all: any[] = [];
+      if (isGlobal) {
+        all = await fetchAll(`/personal/search?estado_empleo=ACTIVO`);
+      } else if (sectorId) {
+        // Intentar filtrar por sector
+        all = await fetchAll(`/personal/search?sector_id=${sectorId}&estado_empleo=ACTIVO`);
+        // Si los agentes no tienen sector asignado aún, caer a servicio
+        if (all.length === 0) {
+          all = await fetchAll(`/personal/search?servicio_id=${servicioId}&estado_empleo=ACTIVO`);
+        }
+      } else {
+        all = await fetchAll(`/personal/search?servicio_id=${servicioId}&estado_empleo=ACTIVO`);
+      }
       setAgentes(all);
     } catch (e: any) {
       toast.error('Error cargando agentes', e?.message);
     } finally {
       setLoadingAg(false);
     }
-  }, [isGlobal, sectorId]);
+  }, [isGlobal, servicioId, sectorId]);
 
   useEffect(() => { cargarAgentes(); }, [cargarAgentes]);
 
@@ -614,6 +1377,9 @@ export function JefeServicioPage() {
   useEffect(() => {
     if (agentes.length > 0) cargarLicencias(agentes);
   }, [agentes, cargarLicencias]);
+
+  useEffect(() => { cargarDniConServicio(); }, [cargarDniConServicio]);
+  useEffect(() => { cargarDniConArt26(); }, [cargarDniConArt26]);
 
   // ── Cargar pases del agente seleccionado ─────────────────────────────────
   const cargarPases = useCallback(async (dni: string | number) => {
@@ -645,26 +1411,66 @@ export function JefeServicioPage() {
     setModalAsignar(true);
   }, [agenteActivo, pases]);
 
-  // ── Cargar todos los pases (todos si global, solo sector si jefe) ────────
+  // ── Cargar todos los pases (todos si global, solo servicio si jefe) ──────
   const cargarTodosPases = useCallback(async () => {
-    if (!isGlobal && !sectorId) return;
+    if (!isGlobal && !servicioId) return;
     setLoadingTodosPases(true);
     try {
       const url = isGlobal
         ? `/agentes_servicios?sort=-created_at`
-        : `/agentes_servicios?dependencia_id=${sectorId}&sort=-created_at`;
+        : `/agentes_servicios?servicio_id=${servicioId}&sort=-created_at`;
       const rows = await fetchAll(url);
       setTodosPases(rows);
     } catch { setTodosPases([]); }
     finally { setLoadingTodosPases(false); }
-  }, [isGlobal, sectorId]);
+  }, [isGlobal, servicioId]);
 
   useEffect(() => {
     if (tab === 'todos_pases') cargarTodosPases();
   }, [tab, cargarTodosPases]);
 
-  // ── Búsqueda local ────────────────────────────────────────────────────────
-  const agentesFiltrados = agentes.filter((a: any) => {
+  // ── Cargar francos del sector ─────────────────────────────────────────────
+  const cargarFrancos = useCallback(async () => {
+    if (!isGlobal && !servicioId) return;
+    setLoadingFrancos(true);
+    try {
+      const url = isGlobal
+        ? `/francos_compensatorios?sort=-fecha_franco`
+        : `/francos_compensatorios?servicio_id=${servicioId}&sort=-fecha_franco`;
+      const rows = await fetchAll(url);
+      // Si es jefe con sector, filtrar solo francos de agentes del sector
+      if (!isGlobal && agentes.length > 0) {
+        const dniSet = new Set(agentes.map((a: any) => String(a.dni)));
+        setFrancosSector(rows.filter((f: any) => dniSet.has(String(f.dni))));
+      } else {
+        setFrancosSector(rows);
+      }
+    } catch { setFrancosSector([]); }
+    finally { setLoadingFrancos(false); }
+  }, [isGlobal, servicioId, agentes]);
+
+  useEffect(() => {
+    if (tab === 'francos') cargarFrancos();
+  }, [tab, cargarFrancos]);
+
+  const cambiarEstadoFranco = useCallback(async (id: number, estado: string) => {
+    setSavingFrancoId(id);
+    try {
+      await apiFetch<any>(`/francos_compensatorios/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ estado }),
+      });
+      setFrancosSector(prev => prev.map(f => f.id === id ? { ...f, estado } : f));
+      toast.ok(`Franco ${estado.toLowerCase()}`);
+    } catch (e: any) {
+      toast.error('Error al actualizar franco', e?.message || 'Error');
+    } finally {
+      setSavingFrancoId(null);
+    }
+  }, []);
+
+  // ── Búsqueda local ───────────────────────────────────────────────────────
+  const busquedaFn = (a: any) => {
     if (busquedaDni.trim()) return String(a.dni).includes(busquedaDni.trim());
     if (busquedaNombre.trim()) {
       const q = busquedaNombre.toLowerCase();
@@ -674,7 +1480,15 @@ export function JefeServicioPage() {
       );
     }
     return true;
-  });
+  };
+  // Sin servicio activo → tab Agentes
+  const agentesFiltrados = agentes
+    .filter((a: any) => !dniConServicio.has(String(a.dni)))
+    .filter(busquedaFn);
+  // Con servicio activo → tab Asignados
+  const asignadosFiltrados = agentes
+    .filter((a: any) => dniConServicio.has(String(a.dni)))
+    .filter(busquedaFn);
 
   const pasesFiltrados = todosPases.filter((p: any) => {
     if (filtroPases === 'activos')  return !p.fecha_hasta;
@@ -696,8 +1510,8 @@ export function JefeServicioPage() {
       Ingreso:     fmt(a.fecha_ingreso),
       Estado:      a.estado_empleo || '',
     }));
-    const title = `Agentes Sector ${sectorId}`;
-    const file  = `agentes_sector_${sectorId}`;
+    const title = `Agentes Servicio ${servicioNombre}`;
+    const file  = `agentes_servicio_${servicioId}`;
     if (tipo === 'excel') exportToExcel(`${file}.xlsx`, rows);
     if (tipo === 'pdf')   exportToPdf(`${file}.pdf`, rows);
     if (tipo === 'word')  exportToWord(`${file}.docx`, rows);
@@ -723,32 +1537,32 @@ export function JefeServicioPage() {
         Jefe:     p.jefe_nombre || '',
       };
     });
-    const file = `pases_sector_${sectorId}`;
+    const file = `pases_servicio_${servicioId}`;
     if (tipo === 'excel') exportToExcel(`${file}.xlsx`, rows);
     if (tipo === 'pdf')   exportToPdf(`${file}.pdf`, rows);
-    if (tipo === 'print') printTable(`Pases Sector ${sectorId}`, rows);
+    if (tipo === 'print') printTable(`Pases Servicio ${servicioNombre}`, rows);
   };
 
-  // Solo bloqueamos si NO es global Y no tiene sector asignado
-  if (!isGlobal && !sectorId) {
+  // Solo bloqueamos si NO es global Y no tiene servicio asignado
+  if (!isGlobal && !servicioId) {
     return (
-      <Layout title="Mi Sector" showBack>
+      <Layout title="Gestión de Sectores" showBack>
         <div className="card js-card" style={{ textAlign: 'center', padding: '3rem' }}>
           <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠️</div>
-          <div style={{ color: '#f59e0b', fontWeight: 600 }}>Sin sector asignado</div>
+          <div style={{ color: '#f59e0b', fontWeight: 600 }}>Sin servicio asignado</div>
           <div className="muted" style={{ marginTop: 8 }}>
-            Tu usuario no tiene un sector asignado. Solicitá al administrador que configure tu sector_id.
+            Tu usuario no tiene un servicio asignado. Solicitá al administrador que configure tu servicio_id.
           </div>
         </div>
       </Layout>
     );
   }
 
-  const headerTitle  = isGlobal ? 'Todos los sectores' : sectorNombre;
-  const headerIcon   = isGlobal ? '🌐' : '🏢';
+  const headerTitle = isGlobal ? 'Todos los sectores' : servicioNombre;
+  const headerIcon  = isGlobal ? '🌐' : '🏥';
 
   return (
-    <Layout title={isGlobal ? 'Gestión de Sectores' : 'Mi Sector'} showBack>
+    <Layout title="Gestión de Sectores" showBack>
       <div className="js-layout">
 
         {/* ── PANEL IZQUIERDO: Lista de agentes ── */}
@@ -834,6 +1648,18 @@ export function JefeServicioPage() {
                           color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
                         }}>🏥 LICENCIA</span>
                       )}
+                      {dniConServicio.has(String(a.dni)) && (
+                        <span title="Tiene servicio activo" style={{
+                          fontSize: '0.65rem', background: 'rgba(34,197,94,0.15)',
+                          color: '#4ade80', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                        }}>🟢 En servicio</span>
+                      )}
+                      {dniConArt26.has(String(a.dni)) && (
+                        <span title="Tiene Artículo 26" style={{
+                          fontSize: '0.65rem', background: 'rgba(99,102,241,0.2)',
+                          color: '#a5b4fc', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                        }}>📋 Art. 26</span>
+                      )}
                     </div>
                     <div className="js-agente-meta">
                       DNI {a.dni}
@@ -876,6 +1702,29 @@ export function JefeServicioPage() {
                   }}>{licenciasActivas.length}</span>
                 )}
               </button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'articulo26' ? ' active' : ''}`}
+                onClick={() => setTab('articulo26')}
+              >📋 Art. 26</button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'asignados' ? ' active' : ''}`}
+                onClick={() => setTab('asignados')}
+              >
+                🟢 Agentes Asignados
+                {asignadosFiltrados.length > 0 && (
+                  <span style={{
+                    marginLeft: 6, background: '#22c55e', color: '#fff',
+                    borderRadius: 99, fontSize: '0.68rem', padding: '1px 7px', fontWeight: 700,
+                  }}>{asignadosFiltrados.length}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'francos' ? ' active' : ''}`}
+                onClick={() => setTab('francos')}
+              >📅 Francos</button>
             </div>
           </div>
 
@@ -915,6 +1764,15 @@ export function JefeServicioPage() {
                     {/* Francos compensatorios (lectura + carga) */}
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
                       <FrancosAgente
+                        agente={agenteActivo}
+                        sectorId={servicioId}
+                        jefeNombre={u?.nombre || ''}
+                      />
+                    </div>
+
+                    {/* Artículo 26 (lectura + carga) */}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                      <Art26Agente
                         agente={agenteActivo}
                         sectorId={sectorId}
                         jefeNombre={u?.nombre || ''}
@@ -965,10 +1823,14 @@ export function JefeServicioPage() {
                                 <span>📅 Desde: <b>{fmt(p.fecha_desde)}</b></span>
                                 {p.fecha_hasta && <span>Hasta: <b>{fmt(p.fecha_hasta)}</b></span>}
                                 {p.jefe_nombre && <span>👤 {p.jefe_nombre}</span>}
+                                {p.sector_id && <span style={{ color: '#a5b4fc' }}>
+                                  📍 {sectores.find((s: any) => String(s.id) === String(p.sector_id))?.nombre || `Sector #${p.sector_id}`}
+                                </span>}
+                                {!p.sector_id && !p.fecha_hasta && <span style={{ color: '#64748b', fontSize: '0.7rem' }}>Sin sector asignado</span>}
                               </div>
                               {p.motivo && <div className="js-pase-motivo">{p.motivo}</div>}
                               {abierto && (
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
                                   <button
                                     className="btn js-btn-cerrar"
                                     type="button"
@@ -981,6 +1843,16 @@ export function JefeServicioPage() {
                         })}
                       </div>
                     )}
+                  </div>
+
+                  {/* Sectores del agente (historial) */}
+                  <div className="card js-card">
+                    <SectoresAgente
+                      agente={agenteActivo}
+                      servicioId={servicioId}
+                      sectores={sectores}
+                      jefeNombre={u?.nombre || ''}
+                    />
                   </div>
                 </>
               )}
@@ -1028,6 +1900,7 @@ export function JefeServicioPage() {
                         <th>DNI</th>
                         <th>Agente</th>
                         <th>Servicio</th>
+                        <th>Sector</th>
                         <th>Desde</th>
                         <th>Hasta</th>
                         <th>Estado</th>
@@ -1037,11 +1910,20 @@ export function JefeServicioPage() {
                     <tbody>
                       {pasesFiltrados.map((p: any) => {
                         const abierto = !p.fecha_hasta;
+                        const sectorNom = p.sector_id ? sectores.find((s: any) => String(s.id) === String(p.sector_id))?.nombre || `Sector #${p.sector_id}` : null;
                         return (
                           <tr key={p.id} className={abierto ? 'js-tr-activo' : ''}>
                             <td className="js-td-dni">{p.dni}</td>
-                            <td>{p.apellido && p.nombre ? `${p.apellido}, ${p.nombre}` : p.agente_nombre || '—'}</td>
-                            <td>{p.nombre || p.servicio_nombre || `#${p.servicio_id}`}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {(() => { const ag = agentesMap[String(p.dni)]; return ag ? `${ag.apellido}, ${ag.nombre}` : (p.apellido ? `${p.apellido}, ${p.nombre}` : `DNI ${p.dni}`); })()}
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{p.servicio_nombre || servicios.find((s: any) => String(s.id) === String(p.servicio_id))?.nombre || `#${p.servicio_id}`}</td>
+                            <td>
+                              {sectorNom
+                                ? <span style={{ color: '#a5b4fc', fontSize: '0.8rem' }}>{sectorNom}</span>
+                                : <span style={{ color: '#475569', fontSize: '0.75rem' }}>—</span>
+                              }
+                            </td>
                             <td>{fmt(p.fecha_desde)}</td>
                             <td>{p.fecha_hasta ? fmt(p.fecha_hasta) : <span style={{ color: '#22c55e' }}>Activo</span>}</td>
                             <td>
@@ -1119,6 +2001,237 @@ export function JefeServicioPage() {
               )}
             </div>
           )}
+
+          {/* ── Tab Artículo 26 (becados) ── */}
+          {tab === 'articulo26' && (() => {
+            const becados = agentes.filter((a: any) => (a.ley_nombre || '').toLowerCase().includes('beca'));
+            return (
+              <div className="card js-card">
+                <div className="js-section-title" style={{ marginBottom: 12 }}>
+                  📋 Artículo 26 — Agentes Becados
+                  <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+                    ({becados.length} en {isGlobal ? 'todo el sistema' : 'este sector'})
+                  </span>
+                </div>
+                {loadingAg ? (
+                  <div className="js-loading">🔄 Cargando agentes…</div>
+                ) : becados.length === 0 ? (
+                  <div className="js-empty">No hay agentes becados en este sector</div>
+                ) : (
+                  <div className="js-tabla-wrap">
+                    <table className="js-tabla">
+                      <thead>
+                        <tr>
+                          <th>Apellido y Nombre</th>
+                          <th>DNI</th>
+                          <th>Ley / Programa</th>
+                          <th>Ingreso</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {becados.map((a: any) => (
+                          <tr
+                            key={a.dni}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => { seleccionarAgente(a); setTab('agentes'); }}
+                          >
+                            <td style={{ fontWeight: 600 }}>{a.apellido}, {a.nombre}</td>
+                            <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{a.dni}</td>
+                            <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{a.ley_nombre || '—'}</td>
+                            <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{fmt(a.fecha_ingreso)}</td>
+                            <td>
+                              <span style={{
+                                fontSize: '0.68rem', padding: '2px 7px', borderRadius: 5, fontWeight: 700,
+                                background: a.estado_empleo === 'ACTIVO' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                                color: a.estado_empleo === 'ACTIVO' ? '#4ade80' : '#f87171',
+                              }}>{a.estado_empleo || 'ACTIVO'}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          {/* ── Tab Agentes Asignados ── */}
+          {tab === 'asignados' && (
+            <div className="card js-card">
+              <div className="js-section-title" style={{ marginBottom: 12 }}>
+                🟢 Agentes con Servicio Activo
+                <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+                  ({asignadosFiltrados.length} agentes)
+                </span>
+              </div>
+              {loadingAg ? (
+                <div className="js-loading">🔄 Cargando…</div>
+              ) : asignadosFiltrados.length === 0 ? (
+                <div className="js-empty">Sin agentes asignados a servicio actualmente</div>
+              ) : (
+                <div className="js-agentes-list">
+                  {asignadosFiltrados.map((a: any) => (
+                    <button
+                      key={a.dni}
+                      type="button"
+                      className={`js-agente-item${agenteActivo?.dni === a.dni ? ' active' : ''}`}
+                      onClick={() => { seleccionarAgente(a); setTab('agentes'); }}
+                    >
+                      <div className="js-agente-nombre">
+                        {a.apellido}, {a.nombre}
+                        <span title="Tiene servicio activo" style={{
+                          fontSize: '0.65rem', background: 'rgba(34,197,94,0.15)',
+                          color: '#4ade80', borderRadius: 4, padding: '1px 5px', fontWeight: 600, marginLeft: 6,
+                        }}>🟢 En servicio</span>
+                      </div>
+                      <div className="js-agente-meta">
+                        DNI {a.dni}
+                        {a.ley_nombre && ` · ${a.ley_nombre}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {/* ── Tab Francos Compensatorios ── */}
+          {tab === 'francos' && (() => {
+            const FRANCO_COLOR: Record<string, string> = {
+              PENDIENTE: '#fbbf24', APROBADO: '#22c55e', TOMADO: '#64748b', ANULADO: '#ef4444',
+            };
+            const francosFiltrados = filtroFrancos === 'todos'
+              ? francosSector
+              : francosSector.filter((f: any) => f.estado === filtroFrancos);
+            const pendientesCount = francosSector.filter((f: any) => f.estado === 'PENDIENTE').length;
+            return (
+              <div className="card js-card">
+                <div className="js-section-header">
+                  <div className="js-section-title">
+                    📅 Francos Compensatorios
+                    {pendientesCount > 0 && (
+                      <span style={{
+                        marginLeft: 8, fontSize: '0.68rem', background: 'rgba(251,191,36,0.2)',
+                        color: '#fbbf24', borderRadius: 5, padding: '2px 7px', fontWeight: 700,
+                      }}>{pendientesCount} pendientes</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn js-btn-save" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                      onClick={() => setModalNuevoFrancoSector(true)}>+ Nuevo Franco</button>
+                    <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                      onClick={cargarFrancos} disabled={loadingFrancos}>🔄</button>
+                  </div>
+                </div>
+
+                {/* Filtro estado */}
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const, marginBottom: 10 }}>
+                  {(['todos', 'PENDIENTE', 'APROBADO', 'TOMADO', 'ANULADO'] as const).map(f => (
+                    <button key={f} type="button"
+                      style={{
+                        fontSize: '0.7rem', padding: '3px 10px', borderRadius: 7, cursor: 'pointer',
+                        border: `1px solid ${filtroFrancos === f ? '#6366f1' : 'rgba(255,255,255,0.1)'}`,
+                        background: filtroFrancos === f ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.04)',
+                        color: filtroFrancos === f ? '#c7d2fe' : '#94a3b8',
+                      }}
+                      onClick={() => setFiltroFrancos(f)}
+                    >{f === 'todos' ? 'Todos' : f}</button>
+                  ))}
+                </div>
+
+                {loadingFrancos ? (
+                  <div className="js-loading">🔄 Cargando francos…</div>
+                ) : francosFiltrados.length === 0 ? (
+                  <div className="js-empty">Sin francos {filtroFrancos !== 'todos' ? filtroFrancos.toLowerCase() + 's' : ''} en este sector</div>
+                ) : (
+                  <div className="js-tabla-wrap">
+                    <table className="js-tabla">
+                      <thead>
+                        <tr>
+                          <th>DNI</th>
+                          <th>Agente</th>
+                          <th>Fecha Franco</th>
+                          <th>Día Trabajado</th>
+                          <th>Estado</th>
+                          <th>Motivo</th>
+                          <th>Jefe</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {francosFiltrados.map((f: any) => {
+                          const ag = agentesMap[String(f.dni)];
+                          const nombre = ag ? `${ag.apellido}, ${ag.nombre}` : `DNI ${f.dni}`;
+                          const color = FRANCO_COLOR[f.estado] || '#94a3b8';
+                          const isSaving = savingFrancoId === f.id;
+                          return (
+                            <tr key={f.id}>
+                              <td className="js-td-dni"
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => {
+                                  const agente = agentes.find((a: any) => String(a.dni) === String(f.dni));
+                                  if (agente) { seleccionarAgente(agente); setTab('agentes'); }
+                                }}
+                              >{f.dni}</td>
+                              <td style={{ fontWeight: 600, cursor: 'pointer' }}
+                                onClick={() => {
+                                  const agente = agentes.find((a: any) => String(a.dni) === String(f.dni));
+                                  if (agente) { seleccionarAgente(agente); setTab('agentes'); }
+                                }}
+                              >{nombre}</td>
+                              <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{fmt(f.fecha_franco)}</td>
+                              <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{f.fecha_trabajo ? fmt(f.fecha_trabajo) : '—'}</td>
+                              <td>
+                                <span style={{
+                                  fontSize: '0.68rem', padding: '2px 7px', borderRadius: 5, fontWeight: 700,
+                                  background: color + '28', color,
+                                }}>{f.estado || 'PENDIENTE'}</span>
+                              </td>
+                              <td className="js-td-muted" style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {f.motivo || '—'}
+                              </td>
+                              <td className="js-td-muted">{f.jefe_nombre || '—'}</td>
+                              <td onClick={e => e.stopPropagation()}>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+                                  {f.estado === 'PENDIENTE' && (
+                                    <button
+                                      type="button" disabled={isSaving}
+                                      style={{ fontSize: '0.66rem', padding: '2px 7px', borderRadius: 5, cursor: 'pointer',
+                                        background: 'rgba(34,197,94,0.15)', color: '#22c55e',
+                                        border: '1px solid rgba(34,197,94,0.3)' }}
+                                      onClick={() => cambiarEstadoFranco(f.id, 'APROBADO')}
+                                    >{isSaving ? '…' : '✔ Aprobar'}</button>
+                                  )}
+                                  {f.estado === 'APROBADO' && (
+                                    <button
+                                      type="button" disabled={isSaving}
+                                      style={{ fontSize: '0.66rem', padding: '2px 7px', borderRadius: 5, cursor: 'pointer',
+                                        background: 'rgba(100,116,139,0.15)', color: '#94a3b8',
+                                        border: '1px solid rgba(100,116,139,0.3)' }}
+                                      onClick={() => cambiarEstadoFranco(f.id, 'TOMADO')}
+                                    >{isSaving ? '…' : '✔ Tomado'}</button>
+                                  )}
+                                  {(f.estado === 'PENDIENTE' || f.estado === 'APROBADO') && (
+                                    <button
+                                      type="button" disabled={isSaving}
+                                      style={{ fontSize: '0.66rem', padding: '2px 7px', borderRadius: 5, cursor: 'pointer',
+                                        background: 'rgba(239,68,68,0.12)', color: '#ef4444',
+                                        border: '1px solid rgba(239,68,68,0.25)' }}
+                                      onClick={() => cambiarEstadoFranco(f.id, 'ANULADO')}
+                                    >{isSaving ? '…' : '✕ Anular'}</button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -1128,15 +2241,25 @@ export function JefeServicioPage() {
           agente={agenteActivo}
           servicios={servicios}
           dependencias={dependencias}
+          sectores={sectores}
           onClose={() => setModalAsignar(false)}
-          onSaved={() => cargarPases(agenteActivo.dni)}
+          onSaved={() => { cargarPases(agenteActivo.dni); cargarDniConServicio(); }}
         />
       )}
       {modalCerrar && (
         <CerrarServicioModal
           pase={modalCerrar}
           onClose={() => setModalCerrar(null)}
-          onSaved={() => cargarPases(agenteActivo?.dni)}
+          onSaved={() => { cargarPases(agenteActivo?.dni); cargarDniConServicio(); }}
+        />
+      )}
+      {modalNuevoFrancoSector && (
+        <NuevoFrancoSectorModal
+          agentes={agentes}
+          sectorId={sectorId}
+          jefeNombre={u?.nombre || ''}
+          onClose={() => setModalNuevoFrancoSector(false)}
+          onSaved={cargarFrancos}
         />
       )}
     </Layout>
