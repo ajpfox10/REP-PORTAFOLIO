@@ -10,7 +10,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
-import { searchPersonal } from '../../api/searchPersonal';
+import { searchPersonal, getAllPersonal } from '../../api/searchPersonal';
 import './styles/AgentesServiciosPage.css';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -172,7 +172,7 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
               <select className="input" value={form.dependencia_id} onChange={e => set('dependencia_id', e.target.value)}>
                 <option value="">— Ninguna —</option>
                 {dependencias.map((d: any) => (
-                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                  <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
                 ))}
               </select>
             </div>
@@ -292,6 +292,9 @@ export function AgentesServiciosPage() {
   const [modalNuevo,     setModalNuevo]     = useState<any>(null); // agente obj
   const [modalCerrar,    setModalCerrar]    = useState<any>(null); // pase obj
 
+  // Mapa DNI → { apellido, nombre } (cargado una vez, usa cache global de personal)
+  const [personalMap, setPersonalMap] = useState<Record<string, { apellido: string; nombre: string }>>({});
+
   // Agente seleccionado para nuevo pase
   const [agenteSeleccionado, setAgenteSeleccionado] = useState<any>(null);
   const [checkandoPase, setCheckandoPase] = useState(false);
@@ -301,6 +304,14 @@ export function AgentesServiciosPage() {
     Promise.allSettled([
       apiFetch<any>('/servicios?limit=500').then(r => setServicios(Array.isArray(r?.data) ? r.data : [])),
       apiFetch<any>('/reparticiones?limit=500').then(r => setDependencias(Array.isArray(r?.data) ? r.data : [])),
+      // Cargar mapa DNI→nombre de personal (usa cache global)
+      getAllPersonal().then(all => {
+        const map: Record<string, { apellido: string; nombre: string }> = {};
+        for (const p of all) {
+          if (p.dni != null) map[String(p.dni)] = { apellido: p.apellido || '', nombre: p.nombre || '' };
+        }
+        setPersonalMap(map);
+      }),
     ]).finally(() => setLoadingMaestros(false));
   }, []);
 
@@ -316,8 +327,7 @@ export function AgentesServiciosPage() {
       if (filtroDni.trim())           params.set('dni', filtroDni.trim());
       if (filtroServicio)             params.set('servicio_id', filtroServicio);
       if (filtroDependencia)          params.set('dependencia_id', filtroDependencia);
-      if (filtroEstado === 'activo')  params.set('fecha_hasta', 'null');    // sin fecha_hasta
-      // filtroEstado === 'cerrado' → filtramos del lado cliente tras recibir datos
+      // estado activo/cerrado → filtro client-side (el backend no soporta fecha_hasta=null)
 
       const res = await apiFetch<any>(`/agentes_servicios?${params.toString()}`);
       let data: any[] = Array.isArray(res?.data) ? res.data : [];
@@ -387,9 +397,15 @@ export function AgentesServiciosPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const nombreServicio = (row: any) =>
-    row.nombre || servicios.find((s: any) => s.id === row.servicio_id)?.nombre || `#${row.servicio_id ?? '?'}`;
+    row.servicio_nombre || servicios.find((s: any) => s.id === row.servicio_id)?.nombre || row.nombre || `#${row.servicio_id ?? '?'}`;
   const nombreDep = (row: any) =>
-    row.dependencia_nombre || dependencias.find((d: any) => d.id === row.dependencia_id)?.nombre || '—';
+    row.dependencia_nombre ||
+    dependencias.find((d: any) => d.id === row.dependencia_id)?.reparticion_nombre || '—';
+  const nombreAgente = (row: any) => {
+    const p = personalMap[String(row.dni)];
+    if (p?.apellido || p?.nombre) return `${p.apellido}, ${p.nombre}`;
+    return row.apellido ? `${row.apellido}, ${row.nombre}` : `DNI ${row.dni}`;
+  };
 
   return (
     <Layout title="Agentes por Servicio" showBack>
@@ -447,7 +463,7 @@ export function AgentesServiciosPage() {
               <select className="input" value={filtroDependencia} onChange={e => setFiltroDependencia(e.target.value)} disabled={loadingMaestros}>
                 <option value="">Todas</option>
                 {dependencias.map((d: any) => (
-                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                  <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
                 ))}
               </select>
             </div>
@@ -543,11 +559,7 @@ export function AgentesServiciosPage() {
                     return (
                       <tr key={row.id} className={abierto ? 'asv-row-activo' : ''}>
                         <td className="asv-td-dni">{row.dni}</td>
-                        <td className="asv-td-nombre">
-                          {row.apellido && row.nombre
-                            ? `${row.apellido}, ${row.nombre}`
-                            : row.agente_nombre || '—'}
-                        </td>
+                        <td className="asv-td-nombre">{nombreAgente(row)}</td>
                         <td className="asv-td-servicio">{nombreServicio(row)}</td>
                         <td className="asv-td-dep">{nombreDep(row)}</td>
                         <td className="asv-td-fecha">{fmtDate(row.fecha_desde)}</td>
@@ -566,9 +578,7 @@ export function AgentesServiciosPage() {
                             title="Ver historial de pases"
                             onClick={() => setModalHistorial({
                               dni: row.dni,
-                              nombre: row.apellido && row.nombre
-                                ? `${row.apellido}, ${row.nombre}`
-                                : row.agente_nombre || `DNI ${row.dni}`,
+                              nombre: nombreAgente(row),
                             })}
                           >
                             🕑 Historial
@@ -593,11 +603,14 @@ export function AgentesServiciosPage() {
                               type="button"
                               title="Agregar nuevo pase para este agente"
                               disabled={checkandoPase}
-                              onClick={() => abrirNuevoPase({
-                                dni: row.dni,
-                                apellido: row.apellido || '',
-                                nombre: row.nombre || '',
-                              })}
+                              onClick={() => {
+                                const p = personalMap[String(row.dni)];
+                                abrirNuevoPase({
+                                  dni: row.dni,
+                                  apellido: p?.apellido || row.apellido || '',
+                                  nombre:   p?.nombre   || row.nombre   || '',
+                                });
+                              }}
                             >
                               ➕ Nuevo
                             </button>

@@ -1,161 +1,385 @@
 // src/pages/PedidosPage/index.tsx
-import React, { useState } from 'react';
+// Carga todos los pedidos pendientes al entrar.
+// Filtros client-side: DNI, apellido, estado.
+// Búsqueda por apellido usa el cache global de personal.
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
-import { searchPersonal } from '../../api/searchPersonal';
+import { getAllPersonal } from '../../api/searchPersonal';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf, printTable } from '../../utils/export';
 
-const ESTADOS_PEDIDO = ['', 'pendiente', 'hecho', 'baja'];
-const COLS = ['id','dni','pedido','estado','lugar','fecha','observacion','created_at'];
+// ─── helpers ────────────────────────────────────────────────────────────────
+function fmt(d?: string | null) {
+  if (!d) return '—';
+  try {
+    const s = String(d).slice(0, 10);
+    const [y, m, day] = s.split('-').map(Number);
+    if (!y) return String(d);
+    return new Date(y, m - 1, day).toLocaleDateString('es-AR');
+  } catch { return String(d); }
+}
 
+async function fetchAllPedidos(params: string): Promise<any[]> {
+  const PAGE = 200;
+  let page = 1;
+  let all: any[] = [];
+  let total = Infinity;
+  while (all.length < total) {
+    const sep = params ? '&' : '?';
+    const res = await apiFetch<any>(`/pedidos?limit=${PAGE}&page=${page}${params ? sep + params : ''}`);
+    const rows: any[] = res?.data || [];
+    if (!rows.length) break;
+    all = [...all, ...rows];
+    if (res?.meta?.total) total = Number(res.meta.total);
+    else total = all.length;
+    if (rows.length < PAGE) break;
+    page++;
+  }
+  return all;
+}
+
+const ESTADOS = ['pendiente', 'hecho', 'baja'];
+const estadoColor: Record<string, string> = {
+  pendiente: '#f59e0b',
+  hecho:     '#22c55e',
+  baja:      '#ef4444',
+};
+
+const PAGE_SIZE = 50;
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 export function PedidosPage() {
   const toast = useToast();
-  const [dni, setDni] = useState('');
-  const [apellido, setApellido] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState('');
-  const [rows, setRows] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState(-1);
-  const [page, setPage] = useState(1);
-  const pageSize = 50;
 
-  const search = async () => {
-    const cleanDni = dni.replace(/\D/g, '');
-    const cleanApe = apellido.trim();
-    if (!cleanDni && !cleanApe) { toast.error('Ingresá DNI o Apellido'); return; }
-    setLoading(true); setRows([]); setSelectedIdx(-1); setPage(1);
+  // Datos
+  const [todos,        setTodos]        = useState<any[]>([]);
+  const [personalMap,  setPersonalMap]  = useState<Record<string, { apellido: string; nombre: string }>>({});
+  const [loading,      setLoading]      = useState(true);
+  const [refreshKey,   setRefreshKey]   = useState(0);
+  const [savingId,     setSavingId]     = useState<number | null>(null);
+
+  // Filtros UI
+  const [filtroDni,    setFiltroDni]    = useState('');
+  const [filtroNombre, setFiltroNombre] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('pendiente');
+
+  // Tabla
+  const [page,         setPage]         = useState(1);
+  const [selectedId,   setSelectedId]   = useState<number | null>(null);
+
+  // ── Cambiar estado de pedido ────────────────────────────────────────────────
+  const cambiarEstado = useCallback(async (id: number, estado: string) => {
+    setSavingId(id);
     try {
-      let data: any[] = [];
-      if (cleanDni) {
-        const q = estadoFilter ? `&estado=${estadoFilter}` : '';
-        const res = await apiFetch<any>(`/pedidos?dni=${cleanDni}&limit=300&page=1${q}`);
-        data = res?.data || [];
-      } else {
-        // Usar cache local — /personal/search tiene bug SQL en el backend
-        const persons = await searchPersonal(cleanApe, 20);
-        for (const p of persons.slice(0, 10)) {
-          const q = estadoFilter ? `&estado=${estadoFilter}` : '';
-          const res = await apiFetch<any>(`/pedidos?dni=${p.dni}&limit=100&page=1${q}`);
-          data = [...data, ...(res?.data || [])];
-        }
+      await apiFetch<any>(`/pedidos/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ estado }),
+      });
+      setTodos(prev => prev.map(r => r.id === id ? { ...r, estado } : r));
+      toast.ok(`Pedido marcado como ${estado}`);
+    } catch (e: any) {
+      toast.error('Error al actualizar pedido', e?.message);
+    } finally {
+      setSavingId(null);
+    }
+  }, []); // eslint-disable-line
+
+  // ── Carga inicial ───────────────────────────────────────────────────────────
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [pedidos, personal] = await Promise.all([
+        fetchAllPedidos('sort=-created_at'),
+        getAllPersonal(),
+      ]);
+      setTodos(pedidos);
+      const map: Record<string, { apellido: string; nombre: string }> = {};
+      for (const p of personal) {
+        if (p.dni != null) map[String(p.dni)] = { apellido: p.apellido || '', nombre: p.nombre || '' };
       }
-      setRows(data);
-      if (!data.length) toast.error('Sin pedidos', 'No se encontraron registros');
-      else toast.ok(`${data.length} pedido(s)`);
-    } catch (e: any) { toast.error('Error', e?.message); }
-    finally { setLoading(false); }
+      setPersonalMap(map);
+    } catch (e: any) {
+      toast.error('Error al cargar pedidos', e?.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshKey]); // eslint-disable-line
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  // ── Filtrado client-side ────────────────────────────────────────────────────
+  const filtrados = useMemo(() => {
+    let arr = todos;
+
+    if (filtroEstado) {
+      arr = arr.filter(r => (r.estado || '').toLowerCase() === filtroEstado);
+    }
+
+    const dniQ = filtroDni.replace(/\D/g, '');
+    if (dniQ) {
+      arr = arr.filter(r => String(r.dni || '').includes(dniQ));
+    }
+
+    const nomQ = filtroNombre.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (nomQ) {
+      arr = arr.filter(r => {
+        const p = personalMap[String(r.dni)];
+        const ape = (p?.apellido || r.apellido || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const nom = (p?.nombre   || r.nombre   || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return ape.includes(nomQ) || nom.includes(nomQ) || `${ape} ${nom}`.includes(nomQ);
+      });
+    }
+
+    return arr;
+  }, [todos, filtroEstado, filtroDni, filtroNombre, personalMap]);
+
+  // reset page cuando cambian filtros
+  useEffect(() => { setPage(1); setSelectedId(null); }, [filtroEstado, filtroDni, filtroNombre]);
+
+  // ── Paginación ──────────────────────────────────────────────────────────────
+  const totalPages = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE));
+  const curPage    = Math.min(page, totalPages);
+  const pageRows   = filtrados.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+  const selected   = selectedId != null ? todos.find(r => r.id === selectedId) ?? null : null;
+
+  // ── Nombre agente ───────────────────────────────────────────────────────────
+  const nombreAgente = (row: any) => {
+    const p = personalMap[String(row.dni)];
+    if (p?.apellido) return `${p.apellido}, ${p.nombre}`;
+    return row.apellido ? `${row.apellido}, ${row.nombre}` : `DNI ${row.dni}`;
   };
 
-  const cols = rows.length ? COLS.filter(c => rows[0].hasOwnProperty(c)) : COLS;
-  const total = Math.max(1, Math.ceil(rows.length / pageSize));
-  const curPage = Math.min(page, total);
-  const start = (curPage - 1) * pageSize;
-  const pageRows = rows.slice(start, start + pageSize);
-  const selected = selectedIdx >= 0 ? rows[selectedIdx] : null;
+  // ── Contadores para badges ──────────────────────────────────────────────────
+  const cntPend = useMemo(() => todos.filter(r => r.estado === 'pendiente').length, [todos]);
+  const cntHech = useMemo(() => todos.filter(r => r.estado === 'hecho').length,     [todos]);
+  const cntBaja = useMemo(() => todos.filter(r => r.estado === 'baja').length,      [todos]);
 
-  const estadoColor: Record<string, string> = {
-    pendiente: '#f59e0b', hecho: '#22c55e', baja: '#ef4444',
-  };
+  // ── Export ──────────────────────────────────────────────────────────────────
+  const exportRows = filtrados.map(r => ({
+    id:          r.id,
+    dni:         r.dni,
+    agente:      nombreAgente(r),
+    pedido:      r.pedido,
+    estado:      r.estado,
+    lugar:       r.lugar,
+    fecha:       fmt(r.fecha),
+    observacion: r.observacion,
+    creado:      fmt(r.created_at),
+  }));
 
   return (
     <Layout title="Pedidos" showBack>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        <div className="card" style={{ padding: '1.2rem' }}>
-          <h3 style={{ marginBottom: 12, fontSize: '0.95rem' }}>🔍 Buscar pedidos</h3>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 3 }}>DNI</div>
-              <input className="input" placeholder="Número de DNI" value={dni}
-                onChange={e => setDni(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && search()}
-                style={{ width: '100%', boxSizing: 'border-box' }} />
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <strong style={{ fontSize: '1.05rem' }}>📋 Pedidos</strong>
+            <div className="muted" style={{ fontSize: '0.73rem', marginTop: 3 }}>
+              {loading ? 'Cargando…' : `${todos.length} registros totales`}
             </div>
-            <div style={{ flex: 2, minWidth: 180 }}>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 3 }}>APELLIDO</div>
-              <input className="input" placeholder="Buscar por apellido" value={apellido}
-                onChange={e => setApellido(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && search()}
-                style={{ width: '100%', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ minWidth: 140 }}>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 3 }}>ESTADO</div>
-              <select className="input" value={estadoFilter} onChange={e => setEstadoFilter(e.target.value)}
-                style={{ width: '100%', boxSizing: 'border-box' }}>
-                <option value="">Todos</option>
-                {ESTADOS_PEDIDO.filter(Boolean).map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={search} disabled={loading}>
-                {loading ? '⏳…' : '🔍 Buscar'}
-              </button>
-            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn" style={{ fontSize: '0.75rem', background: '#16a34a', color: '#fff' }}
+              onClick={() => exportToExcel('pedidos', exportRows)} disabled={loading || !filtrados.length}>📊 Excel</button>
+            <button className="btn" style={{ fontSize: '0.75rem', background: '#dc2626', color: '#fff' }}
+              onClick={() => exportToPdf('pedidos', exportRows)} disabled={loading || !filtrados.length}>📕 PDF</button>
+            <button className="btn" style={{ fontSize: '0.75rem' }}
+              onClick={() => printTable('Pedidos', exportRows)} disabled={loading || !filtrados.length}>🖨 Imprimir</button>
+            <button className="btn" style={{ fontSize: '0.75rem' }}
+              onClick={() => setRefreshKey(k => k + 1)} disabled={loading}>🔄 Actualizar</button>
           </div>
         </div>
 
-        {rows.length > 0 && (
-          <div className="card" style={{ padding: '1.2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-              <strong style={{ fontSize: '0.9rem' }}>📋 {rows.length} pedidos</strong>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn" onClick={() => printTable('Pedidos', rows)}>🖨</button>
-                <button className="btn" onClick={() => exportToExcel('pedidos.xlsx', rows)}>Excel</button>
-                <button className="btn" onClick={() => exportToPdf('pedidos.pdf', rows)}>PDF</button>
+        {/* ── KPIs ── */}
+        {!loading && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Pendientes', count: cntPend, color: '#f59e0b' },
+              { label: 'Hechos',     count: cntHech, color: '#22c55e' },
+              { label: 'Baja',       count: cntBaja, color: '#ef4444' },
+            ].map(k => (
+              <div key={k.label} className="card" style={{ padding: '10px 18px', flex: 1, minWidth: 100, position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: k.color, borderRadius: '16px 0 0 16px' }} />
+                <div style={{ paddingLeft: 8 }}>
+                  <div className="muted" style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: k.color, lineHeight: 1.2 }}>{k.count}</div>
+                </div>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Filtros ── */}
+        <div className="card" style={{ padding: '1rem 1.2rem' }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: 12, color: '#e2e8f0' }}>🔍 Buscar pedidos</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+
+            <div style={{ flex: 1, minWidth: 130 }}>
+              <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>DNI</div>
+              <input className="input" placeholder="Número de DNI" value={filtroDni}
+                onChange={e => setFiltroDni(e.target.value.replace(/\D/g, ''))}
+                style={{ width: '100%', boxSizing: 'border-box' }} />
             </div>
-            <div className="gp-tablewrap">
-              <table className="table">
-                <thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+
+            <div style={{ flex: 2, minWidth: 180 }}>
+              <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>APELLIDO</div>
+              <input className="input" placeholder="Buscar por apellido" value={filtroNombre}
+                onChange={e => setFiltroNombre(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ minWidth: 140 }}>
+              <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>ESTADO</div>
+              <select className="input" value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box' }}>
+                <option value="">Todos</option>
+                {ESTADOS.map(e => <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>)}
+              </select>
+            </div>
+
+            <button className="btn"
+              onClick={() => { setFiltroDni(''); setFiltroNombre(''); setFiltroEstado('pendiente'); }}
+              style={{ whiteSpace: 'nowrap' }}>
+              ✕ Limpiar
+            </button>
+          </div>
+        </div>
+
+        {/* ── Tabla ── */}
+        <div className="card" style={{ padding: '1rem 1.2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <strong style={{ fontSize: '0.88rem', color: '#e2e8f0' }}>
+              {loading ? 'Cargando…' : `${filtrados.length} pedido${filtrados.length !== 1 ? 's' : ''}${filtroEstado ? ` · ${filtroEstado}` : ''}`}
+            </strong>
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button className="btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={curPage <= 1}>‹</button>
+                <span className="muted" style={{ fontSize: '0.78rem' }}>Pág. {curPage} / {totalPages}</span>
+                <button className="btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages}>›</button>
+              </div>
+            )}
+          </div>
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>🔄 Cargando pedidos…</div>
+          ) : filtrados.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 48, color: '#475569', fontSize: '0.88rem' }}>
+              Sin pedidos para los filtros seleccionados
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.81rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    {['#', 'DNI', 'Agente', 'Pedido', 'Estado', 'Lugar', 'Fecha', 'Observación'].map(h => (
+                      <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#64748b', fontSize: '0.67rem', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
-                  {pageRows.map((row, i) => {
-                    const ri = start + i;
+                  {pageRows.map((row: any) => {
                     const color = estadoColor[row.estado] || '#64748b';
+                    const isSelected = row.id === selectedId;
                     return (
-                      <tr key={ri} className={ri === selectedIdx ? 'gp-row-active' : ''}
-                        style={{ cursor: 'pointer' }} onClick={() => setSelectedIdx(ri)}>
-                        {cols.map(c => (
-                          <td key={c} className="cell"
-                            style={c === 'estado' ? { color, fontWeight: 700 } : undefined}>
-                            {String(row[c] ?? '').substring(0, 100)}
-                          </td>
-                        ))}
+                      <tr key={row.id}
+                        onClick={() => setSelectedId(isSelected ? null : row.id)}
+                        style={{
+                          borderTop: '1px solid rgba(255,255,255,0.05)',
+                          cursor: 'pointer',
+                          background: isSelected ? 'rgba(124,58,237,0.15)' : undefined,
+                        }}>
+                        <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '0.74rem', color: '#475569' }}>{row.id}</td>
+                        <td style={{ padding: '8px 10px', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.dni}</td>
+                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', fontWeight: 600 }}>{nombreAgente(row)}</td>
+                        <td style={{ padding: '8px 10px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.pedido}>{row.pedido || '—'}</td>
+                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 5, background: color + '28', color, fontWeight: 700 }}>
+                            {row.estado || '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 10px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{row.lugar || '—'}</td>
+                        <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '0.76rem', whiteSpace: 'nowrap' }}>{fmt(row.fecha || row.created_at)}</td>
+                        <td style={{ padding: '8px 10px', color: '#64748b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.observacion}>{row.observacion || '—'}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            {total > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
-                <button className="btn" onClick={() => setPage(p => Math.max(1, p-1))} disabled={curPage <= 1}>◀</button>
-                <span className="badge">Pág. {curPage}/{total}</span>
-                <button className="btn" onClick={() => setPage(p => Math.min(total, p+1))} disabled={curPage >= total}>▶</button>
-              </div>
-            )}
-          </div>
-        )}
+          )}
 
+          {/* Paginación inferior */}
+          {!loading && totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 14 }}>
+              <button className="btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={curPage <= 1}>‹ Anterior</button>
+              <span className="muted" style={{ fontSize: '0.78rem', alignSelf: 'center' }}>Pág. {curPage} / {totalPages}</span>
+              <button className="btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages}>Siguiente ›</button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Detalle del pedido seleccionado ── */}
         {selected && (
-          <div className="card" style={{ padding: '1.2rem' }}>
-            <strong style={{ fontSize: '0.9rem', marginBottom: 10, display: 'block' }}>
-              📄 Detalle pedido #{selected.id}
-              {selected.estado && (
-                <span style={{ marginLeft: 10, color: estadoColor[selected.estado] || '#64748b',
-                  fontSize: '0.82rem', fontWeight: 700 }}>{selected.estado}</span>
-              )}
-            </strong>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-              {Object.entries(selected).map(([k, v]) => (
+          <div className="card" style={{ padding: '1.2rem', borderLeft: `3px solid ${estadoColor[selected.estado] || '#64748b'}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ fontSize: '0.9rem', color: '#e2e8f0' }}>
+                📄 Pedido #{selected.id}
+                {selected.estado && (
+                  <span style={{ marginLeft: 10, color: estadoColor[selected.estado] || '#64748b', fontSize: '0.8rem', fontWeight: 700 }}>
+                    {selected.estado.toUpperCase()}
+                  </span>
+                )}
+              </strong>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {selected.estado !== 'hecho' && (
+                  <button
+                    className="btn"
+                    style={{ fontSize: '0.73rem', background: '#16a34a', color: '#fff' }}
+                    disabled={savingId === selected.id}
+                    onClick={() => cambiarEstado(selected.id, 'hecho')}
+                  >✅ Marcar Hecho</button>
+                )}
+                {selected.estado !== 'baja' && (
+                  <button
+                    className="btn"
+                    style={{ fontSize: '0.73rem', background: '#dc2626', color: '#fff' }}
+                    disabled={savingId === selected.id}
+                    onClick={() => cambiarEstado(selected.id, 'baja')}
+                  >🗑️ Dar de Baja</button>
+                )}
+                {selected.estado !== 'pendiente' && (
+                  <button
+                    className="btn"
+                    style={{ fontSize: '0.73rem' }}
+                    disabled={savingId === selected.id}
+                    onClick={() => cambiarEstado(selected.id, 'pendiente')}
+                  >↩️ Restaurar</button>
+                )}
+                <button className="btn" style={{ fontSize: '0.72rem' }} onClick={() => setSelectedId(null)}>✕ Cerrar</button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+              {[
+                { k: 'Agente',      v: nombreAgente(selected) },
+                { k: 'DNI',         v: selected.dni },
+                { k: 'Pedido',      v: selected.pedido },
+                { k: 'Estado',      v: selected.estado },
+                { k: 'Lugar',       v: selected.lugar },
+                { k: 'Fecha',       v: fmt(selected.fecha || selected.created_at) },
+                { k: 'Observación', v: selected.observacion },
+              ].map(({ k, v }) => (
                 <div key={k}>
-                  <div className="muted" style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k}</div>
-                  <div style={{ fontSize: '0.88rem', wordBreak: 'break-word' }}>{String(v ?? '—')}</div>
+                  <div className="muted" style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{k}</div>
+                  <div style={{ fontSize: '0.88rem', wordBreak: 'break-word', color: '#e2e8f0' }}>{String(v ?? '—')}</div>
                 </div>
               ))}
             </div>
           </div>
         )}
+
       </div>
     </Layout>
   );

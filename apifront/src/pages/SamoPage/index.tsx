@@ -131,19 +131,23 @@ function enMesAño(fechaStr: string | null | undefined, mes: number, año: numbe
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio';
+type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio' | 'articulo26' | 'art48';
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function SamoPage() {
   const toast = useToast();
 
   // ── Datos ──────────────────────────────────────────────────────────────────
-  const [licencias,    setLicencias]    = useState<any[]>([]);
-  const [agentes,      setAgentes]      = useState<any[]>([]);
-  const [personalMap,  setPersonalMap]  = useState<Record<string, { apellido: string; nombre: string; legajo?: string }>>({});
-  const [sectoresMap,  setSectoresMap]  = useState<Record<number, string>>({});
-  const [serviciosMap, setServiciosMap] = useState<Record<string, number>>({});  // servicio_nombre → count
-  const [loading,      setLoading]      = useState(true);
+  const [licencias,       setLicencias]       = useState<any[]>([]);
+  const [agentes,         setAgentes]         = useState<any[]>([]);
+  const [personalMap,     setPersonalMap]      = useState<Record<string, { apellido: string; nombre: string; legajo?: string }>>({});
+  const [sectoresMap,     setSectoresMap]      = useState<Record<number, string>>({});   // id → nombre sector
+  const [serviciosMap,    setServiciosMap]     = useState<Record<number, string>>({});   // id → nombre servicio
+  const [reparticionMap,  setReparticionMap]   = useState<Record<number, string>>({});   // id → nombre reparticion
+  const [servicioTotales, setServicioTotales]  = useState<Record<string, number>>({});   // nombre servicio → count agentes
+  const [art26,           setArt26]            = useState<any[]>([]);
+  const [art48,           setArt48]            = useState<any[]>([]);
+  const [loading,         setLoading]          = useState(true);
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   const [tab,       setTab]       = useState<TabId>('licencias');
@@ -156,16 +160,19 @@ export function SamoPage() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [rLic, rAg, rPers, rSect, rServ] = await Promise.allSettled([
+      const [rLic, rAg, rPers, rSect, rServ, rRep, rArt26, rArt48] = await Promise.allSettled([
         fetchAll('/reconocimientos_medicos', '-fecha_desde'),
         fetchAll('/agentes'),
         fetchAll('/personal/search'),
-        apiFetch<any>('/reparticiones?limit=500'),
-        fetchAll('/agentes_servicios'),
+        fetchAll('/sectores'),
+        fetchAll('/servicios'),
+        fetchAll('/reparticiones'),
+        fetchAll('/articulo_26', '-fecha'),
+        fetchAll('/personal?ley_id=14'),
       ]);
 
-      if (rLic.status === 'fulfilled')  setLicencias(rLic.value);
-      if (rAg.status  === 'fulfilled')  setAgentes(rAg.value);
+      if (rLic.status === 'fulfilled') setLicencias(rLic.value);
+      if (rAg.status  === 'fulfilled') setAgentes(rAg.value);
 
       if (rPers.status === 'fulfilled') {
         const map: Record<string, { apellido: string; nombre: string; legajo?: string }> = {};
@@ -175,23 +182,45 @@ export function SamoPage() {
         setPersonalMap(map);
       }
 
+      // Sectores: id → nombre
       if (rSect.status === 'fulfilled') {
-        const rows = rSect.value?.data || [];
         const m: Record<number, string> = {};
-        for (const r of rows) m[Number(r.id)] = r.reparticion_nombre || r.nombre || `#${r.id}`;
+        for (const s of rSect.value) m[Number(s.id)] = s.nombre || `#${s.id}`;
         setSectoresMap(m);
       }
 
-      // Totales por servicio_nombre activos (sin fecha_hasta)
+      // Servicios: id → nombre
       if (rServ.status === 'fulfilled') {
-        const activos = rServ.value.filter((s: any) => !s.fecha_hasta && s.servicio_nombre);
-        const m: Record<string, number> = {};
-        for (const s of activos) {
-          const k = s.servicio_nombre as string;
-          m[k] = (m[k] || 0) + 1;
-        }
+        const m: Record<number, string> = {};
+        for (const s of rServ.value) m[Number(s.id)] = s.nombre || `#${s.id}`;
         setServiciosMap(m);
+
+        // Totales por servicio (agentes activos con servicio_id)
+        if (rAg.status === 'fulfilled') {
+          const totales: Record<string, number> = {};
+          for (const a of rAg.value) {
+            if (a.estado_empleo === 'ACTIVO' && a.servicio_id) {
+              const k = m[Number(a.servicio_id)] || `Servicio #${a.servicio_id}`;
+              totales[k] = (totales[k] || 0) + 1;
+            }
+          }
+          setServicioTotales(totales);
+        }
       }
+
+      // Reparticiones: id → nombre
+      if (rRep.status === 'fulfilled') {
+        const m: Record<number, string> = {};
+        for (const r of rRep.value) m[Number(r.id)] = r.reparticion_nombre || r.nombre || `#${r.id}`;
+        setReparticionMap(m);
+      }
+
+      // Artículo 26
+      if (rArt26.status === 'fulfilled') setArt26(rArt26.value);
+
+      // Artículo 48
+      if (rArt48.status === 'fulfilled') setArt48(rArt48.value);
+
     } catch (e: any) {
       toast.error('Error al cargar SAMO', e?.message);
     } finally {
@@ -206,10 +235,12 @@ export function SamoPage() {
     const p = personalMap[String(a.dni)] || { apellido: '', nombre: '', legajo: '' };
     return {
       ...a,
-      apellido: p.apellido || a.apellido || '—',
-      nombre:   p.nombre   || a.nombre   || '—',
-      legajo:   a.legajo   || p.legajo   || '—',
-      sector:   sectoresMap[a.sector_id] || '—',
+      apellido:     p.apellido || a.apellido || '—',
+      nombre:       p.nombre   || a.nombre   || '—',
+      legajo:       a.legajo   || p.legajo   || '—',
+      sector:       sectoresMap[Number(a.sector_id)]       || '—',
+      servicio:     serviciosMap[Number(a.servicio_id)]    || '—',
+      reparticion:  reparticionMap[Number(a.reparticion_id)] || '—',
     };
   };
 
@@ -259,24 +290,28 @@ export function SamoPage() {
 
   // ── Columnas por tab ───────────────────────────────────────────────────────
   const colsBajas = [
-    { key: 'legajo',       label: 'Legajo', mono: true },
-    { key: 'dni',          label: 'DNI',    mono: true },
+    { key: 'legajo',       label: 'Legajo',      mono: true },
+    { key: 'dni',          label: 'DNI',         mono: true },
     { key: 'apellido',     label: 'Apellido' },
     { key: 'nombre',       label: 'Nombre' },
+    { key: 'reparticion',  label: 'Repartición' },
+    { key: 'servicio',     label: 'Servicio' },
     { key: 'sector',       label: 'Sector' },
-    { key: 'fecha_ingreso',label: 'Fecha Alta',  badge: undefined, key2: 'fecha_ingreso_fmt' },
-    { key: 'fecha_egreso', label: 'Fecha Baja',  badge: undefined, key2: 'fecha_egreso_fmt'  },
+    { key: 'fecha_ingreso',label: 'Fecha Alta' },
+    { key: 'fecha_egreso', label: 'Fecha Baja' },
     { key: 'estado_empleo',label: 'Estado',
       badge: (v: string) => v === 'BAJA' ? { text: 'BAJA', color: '#ef4444' } : { text: v || '?', color: '#94a3b8' } },
   ];
 
   const colsAltas = [
-    { key: 'legajo',        label: 'Legajo', mono: true },
-    { key: 'dni',           label: 'DNI',    mono: true },
+    { key: 'legajo',        label: 'Legajo',      mono: true },
+    { key: 'dni',           label: 'DNI',         mono: true },
     { key: 'apellido',      label: 'Apellido' },
     { key: 'nombre',        label: 'Nombre' },
+    { key: 'reparticion',   label: 'Repartición' },
+    { key: 'servicio',      label: 'Servicio' },
     { key: 'sector',        label: 'Sector' },
-    { key: 'fecha_ingreso', label: 'Fecha Alta', badge: undefined },
+    { key: 'fecha_ingreso', label: 'Fecha Alta' },
     { key: 'estado_empleo', label: 'Estado',
       badge: (v: string) => v === 'ACTIVO' ? { text: 'ACTIVO', color: '#10b981' } : { text: v || '?', color: '#94a3b8' } },
   ];
@@ -325,19 +360,79 @@ export function SamoPage() {
     fecha_ingreso: fmt(a.fecha_ingreso),
   }));
 
-  // Totales por servicio
-  const servicioRows = Object.entries(serviciosMap)
+  // Totales por servicio (agentes activos con servicio_id asignado)
+  const servicioRows = Object.entries(servicioTotales)
     .sort(([, a], [, b]) => b - a)
     .map(([servicio, total]) => ({ Servicio: servicio, Total: total }));
+
+  // ── Artículo 26 ────────────────────────────────────────────────────────────
+  const art26Filtradas = useMemo(() =>
+    art26.filter(r => enMesAño(r.fecha, mesFiltro, AÑO_ACTUAL)),
+    [art26, mesFiltro]
+  );
+
+  const art26Rows = art26Filtradas.map(r => ({
+    ...r,
+    apellido:   personalMap[String(r.dni)]?.apellido || '—',
+    nombre:     personalMap[String(r.dni)]?.nombre   || '—',
+    servicio:   serviciosMap[Number(r.sector_id)]    || '—',
+    fecha:      fmt(r.fecha),
+  }));
+
+  const colsArt26 = [
+    { key: 'dni',           label: 'DNI',      mono: true },
+    { key: 'apellido',      label: 'Apellido' },
+    { key: 'nombre',        label: 'Nombre' },
+    { key: 'fecha',         label: 'Fecha',    mono: true },
+    { key: 'dias',          label: 'Días',     mono: true },
+    { key: 'motivo',        label: 'Motivo' },
+    { key: 'jefe_nombre',   label: 'Jefe' },
+    { key: 'estado',        label: 'Estado',
+      badge: (v: string) => {
+        const MAP: Record<string, string> = { PENDIENTE: '#fbbf24', APROBADO: '#22c55e', RECHAZADO: '#ef4444', ANULADO: '#64748b' };
+        return { text: v || '—', color: MAP[v] || '#94a3b8' };
+      }
+    },
+  ];
+
+  // ── Artículo 48 ────────────────────────────────────────────────────────────
+  // Todos los agentes con ley_id = 14 (ART. 48), sin filtro de mes
+  const art48Rows = useMemo(() =>
+    art48.map(p => ({
+      ...p,
+      apellido:    p.apellido    || '—',
+      nombre:      p.nombre      || '—',
+      legajo:      p.legajo      || '—',
+      reparticion: reparticionMap[Number(p.reparticion_id)] || '—',
+      servicio:    serviciosMap[Number(p.servicio_id)]      || '—',
+      sector:      sectoresMap[Number(p.sector_id)]         || '—',
+    })),
+    [art48, reparticionMap, serviciosMap, sectoresMap]
+  );
+
+  const colsArt48 = [
+    { key: 'legajo',        label: 'Legajo',      mono: true },
+    { key: 'dni',           label: 'DNI',         mono: true },
+    { key: 'apellido',      label: 'Apellido' },
+    { key: 'nombre',        label: 'Nombre' },
+    { key: 'reparticion',   label: 'Repartición' },
+    { key: 'servicio',      label: 'Servicio' },
+    { key: 'sector',        label: 'Sector' },
+    { key: 'fecha_ingreso', label: 'Fecha Ingreso', mono: true },
+    { key: 'estado_empleo', label: 'Estado',
+      badge: (v: string) => v === 'ACTIVO' ? { text: 'ACTIVO', color: '#10b981' } : { text: v || '—', color: '#94a3b8' } },
+  ];
 
   // ── Exports ────────────────────────────────────────────────────────────────
   const exportar = (tipo: 'excel' | 'pdf') => {
     let rows: any[] = [];
     let file = 'samo';
-    if (tab === 'licencias') { rows = filtrar(licRows);   file = 'samo_licencias'; }
-    if (tab === 'bajas')     { rows = filtrar(bajasRows); file = 'samo_bajas'; }
-    if (tab === 'altas')     { rows = filtrar(altasRows); file = 'samo_altas'; }
-    if (tab === 'servicio')  { rows = servicioRows;        file = 'samo_por_servicio'; }
+    if (tab === 'licencias')  { rows = filtrar(licRows);          file = 'samo_licencias'; }
+    if (tab === 'bajas')      { rows = filtrar(bajasRows);        file = 'samo_bajas'; }
+    if (tab === 'altas')      { rows = filtrar(altasRows);        file = 'samo_altas'; }
+    if (tab === 'servicio')   { rows = servicioRows;         file = 'samo_por_servicio'; }
+    if (tab === 'articulo26') { rows = filtrar(art26Rows);         file = 'samo_articulo26'; }
+    if (tab === 'art48')      { rows = filtrar(art48Rows);         file = 'samo_articulo48'; }
     if (tipo === 'excel') exportToExcel(file, rows);
     if (tipo === 'pdf')   exportToPdf(file, rows);
   };
@@ -374,7 +469,7 @@ export function SamoPage() {
           <KpiCard label="Bajas totales"      value={bajas.length}      color="#ef4444" />
           <KpiCard label="Licencias activas"  value={licActivas.length} color="#f59e0b" />
           <KpiCard label="Licencias cerradas" value={licCerradas.length}color="#64748b" />
-          <KpiCard label="Servicios activos"  value={Object.keys(serviciosMap).length} color="#7c3aed" />
+          <KpiCard label="Servicios activos"  value={Object.keys(servicioTotales).length} color="#7c3aed" />
         </div>
         <div className="muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
           {MESES[MES_ACTUAL - 1]} {AÑO_ACTUAL}
@@ -397,7 +492,13 @@ export function SamoPage() {
           📥 Activos / Altas ({altas.length})
         </Tab>
         <Tab active={tab === 'servicio'} onClick={() => { setTab('servicio'); setBusqueda(''); }}>
-          📊 Por Servicio ({Object.keys(serviciosMap).length})
+          📊 Por Servicio ({Object.keys(servicioTotales).length})
+        </Tab>
+        <Tab active={tab === 'articulo26'} onClick={() => { setTab('articulo26'); setBusqueda(''); }}>
+          📋 Art. 26 ({art26Filtradas.length})
+        </Tab>
+        <Tab active={tab === 'art48'} onClick={() => { setTab('art48'); setBusqueda(''); }}>
+          🏅 Art. 48 ({art48Rows.length})
         </Tab>
       </div>
 
@@ -491,7 +592,7 @@ export function SamoPage() {
             {tab === 'servicio' && (
               <>
                 <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 14 }}>
-                  Agentes con servicio activo (sin fecha de baja en agentes_servicios)
+                  Agentes activos agrupados por servicio asignado
                 </div>
                 {/* Barras */}
                 <div style={{ marginBottom: 16 }}>
@@ -523,6 +624,36 @@ export function SamoPage() {
                     { key: 'Total',    label: 'Agentes activos', mono: true },
                   ]}
                 />
+              </>
+            )}
+            {/* Tab: Artículo 48 */}
+            {tab === 'art48' && (
+              <>
+                <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 10 }}>
+                  Agentes con designación <strong style={{ color: '#c4b5fd' }}>ART. 48</strong> — {art48Rows.length} registro{art48Rows.length !== 1 ? 's' : ''} (sin filtro de mes)
+                </div>
+                <Busqueda value={busqueda} onChange={setBusqueda} />
+                <MiniTabla rows={filtrar(art48Rows)} cols={colsArt48} />
+              </>
+            )}
+
+            {/* Tab: Artículo 26 */}
+            {tab === 'articulo26' && (
+              <>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div className="muted" style={{ fontSize: '0.72rem' }}>Filtrando por mes:</div>
+                  <select className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                    value={mesFiltro} onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}>
+                    {mesesDisponibles.map(m => (
+                      <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>
+                    ))}
+                  </select>
+                  <span className="muted" style={{ fontSize: '0.72rem' }}>
+                    {art26Filtradas.length} registro{art26Filtradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]}
+                  </span>
+                </div>
+                <Busqueda value={busqueda} onChange={setBusqueda} />
+                <MiniTabla rows={filtrar(art26Rows)} cols={colsArt26} />
               </>
             )}
           </>

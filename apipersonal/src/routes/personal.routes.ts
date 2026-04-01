@@ -102,7 +102,8 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       const nombre        = normalizeLike(String(req.query.nombre || ''));
       const qRaw          = normalizeLike(String(req.query.q || ''));
       const qDigits       = cleanDigits(qRaw);
-      const sectorId      = req.query.sector_id ? Number(req.query.sector_id) : null;
+      const sectorId      = req.query.sector_id   ? Number(req.query.sector_id)   : null;
+      const servicioId    = req.query.servicio_id  ? Number(req.query.servicio_id)  : null;
       const estadoEmpleo  = String(req.query.estado_empleo || '').trim().toUpperCase() || null;
 
       const whereParts: string[] = ['p.deleted_at IS NULL'];
@@ -128,6 +129,17 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       if (sectorId) {
         whereParts.push('a.sector_id = :sectorId');
         repl.sectorId = sectorId;
+      }
+
+      if (servicioId) {
+        whereParts.push(`EXISTS (
+          SELECT 1 FROM agentes_servicios ags_flt
+          WHERE ags_flt.dni = p.dni
+            AND ags_flt.servicio_id = :servicioId
+            AND ags_flt.fecha_hasta IS NULL
+            AND ags_flt.deleted_at IS NULL
+        )`);
+        repl.servicioId = servicioId;
       }
 
       if (estadoEmpleo) {
