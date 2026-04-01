@@ -48,6 +48,11 @@ export function invalidatePersonalCache() {
   loadingPromise = null;
 }
 
+/** Devuelve todos los registros de personal (usa el mismo cache interno) */
+export async function getAllPersonal(): Promise<any[]> {
+  return loadAll();
+}
+
 /**
  * Busca personas por apellido (y/o nombre) usando el cache local.
  * Si se pasa `dniExacto` hace búsqueda directa por DNI contra la API.

@@ -1,5 +1,5 @@
 // src/components/Layout.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 
@@ -12,15 +12,53 @@ export function Layout({ title, children, showBack }: {
   const loc = useLocation();
   const { session, logout, hasPerm } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  // Cerrar el menú al cambiar de página
+  useEffect(() => { setMenuOpen(false); }, [loc.pathname]);
+
+  // Cerrar si se hace click fuera
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (btnRef.current && !btnRef.current.closest('.mas-menu-wrapper')?.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
+  const toggleMenu = useCallback(() => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 6,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setMenuOpen(o => !o);
+  }, []);
 
   const canWrite = hasPerm('personal:write') || hasPerm('crud:*:*');
   const isAdmin  = hasPerm('usuarios:write') || hasPerm('crud:*:*');
   const isFluid  = title === 'Gestión';
   const isActive = (p: string) => loc.pathname === p || loc.pathname.startsWith(p + '/');
 
+  const isSamo =
+    hasPerm('app:samo:access') &&
+    !hasPerm('crud:*:*');
+
+  const isJefeServicio =
+    hasPerm('app:jefe_servicio:access') &&
+    !hasPerm('crud:*:*') &&
+    !hasPerm('app:samo:access');
+
   const isSaludLaboral =
     (hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read')) &&
-    !hasPerm('crud:*:*');
+    !hasPerm('crud:*:*') &&
+    !hasPerm('app:samo:access');
 
   const canSeeSaludLaboral =
     hasPerm('crud:reconocimientos_medicos:read') || hasPerm('crud:examen_anual:read');
@@ -40,25 +78,53 @@ export function Layout({ title, children, showBack }: {
 
   return (
     <div className={isFluid ? 'container-fluid' : 'container'}>
-      <div className="topbar card" style={{ marginBottom: 0 }}>
-        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem' }}>
-          <div className="row" style={{ gap: '0.6rem' }}>
+      {/* Topbar siempre full-width para que los botones de nav nunca desborden */}
+      <div
+        className="topbar card"
+        style={{
+          marginBottom: 0,
+          borderRadius: 16,
+          padding: '10px 16px',
+          boxSizing: 'border-box',
+          width: '100%',
+          minWidth: 0,
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.4rem',
+          minWidth: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0, flexShrink: 0 }}>
             {showBack
-              ? <button className="btn" onClick={() => nav(-1)} type="button" style={{ fontSize: '0.82rem' }}>← Volver</button>
-              : <Link className="badge" to="/app">Inicio</Link>
+              ? <button className="btn" onClick={() => nav(-1)} type="button" style={{ fontSize: '0.82rem', flexShrink: 0 }}>← Volver</button>
+              : <Link className="badge" to="/app" style={{ flexShrink: 0 }}>Inicio</Link>
             }
-            <div>
-              <div className="h1">{title}</div>
+            <div style={{ minWidth: 0 }}>
+              <div className="h1" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
               {session && (
-                <div className="muted" style={{ marginTop: 2, fontSize: '0.75rem' }}>
+                <div className="muted" style={{ marginTop: 2, fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {session.user?.email ?? ''}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="row" style={{ gap: '0.3rem', flexWrap: 'wrap' }}>
-            {isSaludLaboral ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', flexShrink: 0 }}>
+            {isSamo ? (
+              <>
+                {navLink('/app/samo', '🏥 SAMO')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
+            ) : isJefeServicio ? (
+              <>
+                {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
+            ) : isSaludLaboral ? (
               <>
                 {canSeeSaludLaboral && navLink('/app/salud-laboral', '🏥 Salud Laboral')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
@@ -73,10 +139,11 @@ export function Layout({ title, children, showBack }: {
                 {navLink('/app/reportes', '🎂 Reportes')}
                 {navLink('/app/citaciones', '⚠️ Citaciones')}
 
-                <div style={{ position: 'relative' }}>
+                <div className="mas-menu-wrapper" style={{ position: 'relative' }}>
                   <button
+                    ref={btnRef}
                     className="btn"
-                    onClick={() => setMenuOpen(o => !o)}
+                    onClick={toggleMenu}
                     style={{
                       fontSize: '0.82rem',
                       padding: '7px 12px',
@@ -91,15 +158,17 @@ export function Layout({ title, children, showBack }: {
                     <div
                       onClick={() => setMenuOpen(false)}
                       style={{
-                        position: 'absolute',
-                        top: '110%',
-                        right: 0,
-                        zIndex: 1000,
+                        position: 'fixed',
+                        top: menuPos.top,
+                        right: menuPos.right,
+                        zIndex: 9999,
                         background: '#1e293b',
                         border: '1px solid rgba(255,255,255,0.15)',
                         borderRadius: 12,
                         padding: 8,
                         minWidth: 220,
+                        maxHeight: 'calc(100vh - 80px)',
+                        overflowY: 'auto',
                         boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -115,7 +184,7 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/alertas', '🔔 Alertas')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
                       {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
-                      {navLink('/app/mi-sector', '🏢 Mi Sector')}
+                      {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 

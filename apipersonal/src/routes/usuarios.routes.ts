@@ -37,6 +37,7 @@ const patchUserSchema = z.object({
   email:        z.string().email().max(190).optional(),
   nombre:       z.string().min(1).max(190).trim().optional(),
   sector_id:    z.number().int().positive().nullable().optional(),
+  servicio_id:  z.number().int().positive().nullable().optional(),
   jefatura_id:  z.number().int().positive().nullable().optional(),
 }).strict();
 

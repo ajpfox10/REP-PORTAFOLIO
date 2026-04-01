@@ -9,6 +9,8 @@ export type DbUser = {
   roleId: number | null;
   sector_id: number | null;
   sector_nombre: string | null;
+  servicio_id: number | null;
+  servicio_nombre: string | null;
   jefatura_id: number | null;
 };
 
@@ -24,13 +26,17 @@ export async function findUserByEmail(sequelize: Sequelize, email: string): Prom
       ur.rol_id     AS roleId,
       u.sector_id   AS sector_id,
       rep.reparticion_nombre AS sector_nombre,
-      u.jefatura_id AS jefatura_id
+      u.servicio_id  AS servicio_id,
+      srv.nombre     AS servicio_nombre,
+      u.jefatura_id  AS jefatura_id
     FROM usuarios u
     LEFT JOIN usuarios_roles ur
       ON ur.usuario_id = u.id
      AND ur.deleted_at IS NULL
     LEFT JOIN reparticiones rep
       ON rep.id = u.sector_id
+    LEFT JOIN servicios srv
+      ON srv.id = u.servicio_id
     WHERE u.email = :email
       AND u.deleted_at IS NULL
     ORDER BY ur.created_at DESC
@@ -44,15 +50,17 @@ export async function findUserByEmail(sequelize: Sequelize, email: string): Prom
 
   const r = list[0];
   return {
-    id:            Number(r.id),
-    email:         String(r.email),
-    nombre:        r.nombre ?? null,
-    passwordHash:  String(r.passwordHash),
-    active:        Boolean(r.active),
-    roleId:        r.roleId === null || r.roleId === undefined ? null : Number(r.roleId),
-    sector_id:     r.sector_id != null ? Number(r.sector_id) : null,
-    sector_nombre: r.sector_nombre ?? null,
-    jefatura_id:   r.jefatura_id != null ? Number(r.jefatura_id) : null,
+    id:              Number(r.id),
+    email:           String(r.email),
+    nombre:          r.nombre ?? null,
+    passwordHash:    String(r.passwordHash),
+    active:          Boolean(r.active),
+    roleId:          r.roleId === null || r.roleId === undefined ? null : Number(r.roleId),
+    sector_id:       r.sector_id != null ? Number(r.sector_id) : null,
+    sector_nombre:   r.sector_nombre ?? null,
+    servicio_id:     r.servicio_id != null ? Number(r.servicio_id) : null,
+    servicio_nombre: r.servicio_nombre ?? null,
+    jefatura_id:     r.jefatura_id != null ? Number(r.jefatura_id) : null,
   };
 }
 
@@ -67,13 +75,17 @@ export async function findUserById(sequelize: Sequelize, userId: number): Promis
       ur.rol_id     AS roleId,
       u.sector_id   AS sector_id,
       rep.reparticion_nombre AS sector_nombre,
-      u.jefatura_id AS jefatura_id
+      u.servicio_id  AS servicio_id,
+      srv.nombre     AS servicio_nombre,
+      u.jefatura_id  AS jefatura_id
     FROM usuarios u
     LEFT JOIN usuarios_roles ur
       ON ur.usuario_id = u.id
      AND ur.deleted_at IS NULL
     LEFT JOIN reparticiones rep
       ON rep.id = u.sector_id
+    LEFT JOIN servicios srv
+      ON srv.id = u.servicio_id
     WHERE u.id = :userId
       AND u.deleted_at IS NULL
     ORDER BY ur.created_at DESC
@@ -87,13 +99,15 @@ export async function findUserById(sequelize: Sequelize, userId: number): Promis
 
   const r = list[0];
   return {
-    id:            Number(r.id),
-    email:         String(r.email),
-    nombre:        r.nombre ?? null,
-    active:        Boolean(r.active),
-    roleId:        r.roleId === null || r.roleId === undefined ? null : Number(r.roleId),
-    sector_id:     r.sector_id != null ? Number(r.sector_id) : null,
-    sector_nombre: r.sector_nombre ?? null,
-    jefatura_id:   r.jefatura_id != null ? Number(r.jefatura_id) : null,
+    id:              Number(r.id),
+    email:           String(r.email),
+    nombre:          r.nombre ?? null,
+    active:          Boolean(r.active),
+    roleId:          r.roleId === null || r.roleId === undefined ? null : Number(r.roleId),
+    sector_id:       r.sector_id != null ? Number(r.sector_id) : null,
+    sector_nombre:   r.sector_nombre ?? null,
+    servicio_id:     r.servicio_id != null ? Number(r.servicio_id) : null,
+    servicio_nombre: r.servicio_nombre ?? null,
+    jefatura_id:     r.jefatura_id != null ? Number(r.jefatura_id) : null,
   };
 }

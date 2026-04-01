@@ -112,6 +112,46 @@ function ResetPasswordModal({ user, saving, onClose, onSubmit }: {
   );
 }
 
+// ─── Modal: Asignar servicio (jefe_servicio) ──────────────────────────────────
+function AssignServicioModal({ user, saving, onClose, onSubmit }: {
+  user: UserRow; saving: boolean;
+  onClose: () => void; onSubmit: (servicioId: number | null) => void;
+}) {
+  const [servicios, setServicios] = React.useState<any[]>([]);
+  const [sel, setSel] = React.useState<number | null>((user as any).servicio_id ?? null);
+
+  React.useEffect(() => {
+    apiFetch<any>('/servicios?limit=200&page=1').then(r => setServicios(r?.data || [])).catch(() => {});
+  }, []);
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-box">
+        <p className="modal-title">🏥 Asignar Servicio</p>
+        <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: 12 }}>
+          <strong>{user.nombre || user.email}</strong> — sólo visible si tiene rol <em>jefe_servicio</em>
+        </p>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Servicio</label>
+          <select className="input" style={{ width: '100%', marginTop: 4 }}
+            value={sel ?? ''} onChange={e => setSel(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">— Sin servicio —</option>
+            {servicios.map((s: any) => (
+              <option key={s.id} value={s.id}>{s.nombre}</option>
+            ))}
+          </select>
+        </div>
+        <div className="modal-footer">
+          <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="btn btn-primary" onClick={() => onSubmit(sel)} disabled={saving}>
+            {saving ? '⏳…' : '💾 Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal: Asignar rol ────────────────────────────────────────────────────────
 function AssignRoleModal({ user, roles, saving, onClose, onSubmit }: {
   user: UserRow; roles: Role[]; saving: boolean;
@@ -564,6 +604,7 @@ export function AdminPage() {
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           <button className="btn btn-sm" title="Asignar rol" onClick={() => admin.setRolesModal(u)}>🏷 Rol</button>
                           <button className="btn btn-sm" title="Permisos directos" onClick={() => openUserPerms(u)}>🔑 Permisos</button>
+                          <button className="btn btn-sm" title="Asignar servicio" onClick={() => admin.setServicioModal(u)}>🏥 Servicio</button>
                           <button className="btn btn-sm" title="Cambiar contraseña" onClick={() => admin.setEditModal(u)}>🔒 Pass</button>
                           <button
                             className={`btn btn-sm${u.estado === 'activo' ? ' btn-warn' : ''}`}
@@ -627,6 +668,13 @@ export function AdminPage() {
             user={admin.rolesModal} roles={admin.roles} saving={admin.saving}
             onClose={() => admin.setRolesModal(null)}
             onSubmit={roleId => admin.assignRole(admin.rolesModal!.id, roleId)}
+          />
+        )}
+        {admin.servicioModal && (
+          <AssignServicioModal
+            user={admin.servicioModal} saving={admin.saving}
+            onClose={() => admin.setServicioModal(null)}
+            onSubmit={servicioId => admin.assignServicio(admin.servicioModal!.id, servicioId)}
           />
         )}
         {userPermsModal && (

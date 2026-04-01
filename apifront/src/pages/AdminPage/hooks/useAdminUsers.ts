@@ -36,6 +36,7 @@ export function useAdminUsers() {
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState<UserRow | null>(null);
   const [rolesModal, setRolesModal] = useState<UserRow | null>(null);
+  const [servicioModal, setServicioModal] = useState<UserRow | null>(null);
 
   // Form state
   const [form, setForm] = useState<CreateUserPayload>({
@@ -204,6 +205,24 @@ export function useAdminUsers() {
     }
   }, [toast, loadUsers]);
 
+  // ─── Asignar servicio (para jefe_servicio) ───────────────────────────────────
+  const assignServicio = useCallback(async (userId: number, servicioId: number | null) => {
+    setSaving(true);
+    try {
+      await apiFetch<any>(`/usuarios/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ servicio_id: servicioId }),
+      });
+      toast.ok('Servicio asignado');
+      setServicioModal(null);
+      await loadUsers();
+    } catch (e: any) {
+      toast.error('Error asignando servicio', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  }, [toast, loadUsers]);
+
   // ─── Toggle estado ───────────────────────────────────────────────────────────
   const toggleEstado = useCallback(async (user: UserRow) => {
     const newEstado = user.estado === 'activo' ? 'inactivo' : 'activo';
@@ -246,9 +265,9 @@ export function useAdminUsers() {
   return {
     users, roles, permissions,
     loading, saving,
-    createModal, editModal, rolesModal, form,
-    setForm, setCreateModal, setEditModal, setRolesModal,
-    loadUsers, createUser, assignRole, toggleEstado, resetPassword,
+    createModal, editModal, rolesModal, servicioModal, form,
+    setForm, setCreateModal, setEditModal, setRolesModal, setServicioModal,
+    loadUsers, createUser, assignRole, assignServicio, toggleEstado, resetPassword,
     loadRolePerms, saveRolePerms,
     loadUserPerms, saveUserPerm,
     toast,
