@@ -1,0 +1,64 @@
+version: '3.9'
+
+services:
+  mysql_prod:
+    image: mysql:8.0
+    container_name: dc_mysql_prod
+    environment:
+      MYSQL_ROOT_PASSWORD: Cuernos2503
+      MYSQL_DATABASE: defensacivil_prod
+      MYSQL_USER: defensacivil_user
+      MYSQL_PASSWORD: ProdPass2503!
+    ports:
+      - "4075:3306"
+    volumes:
+      - mysql_prod_data:/var/lib/mysql
+      - ./backend/database/init:/docker-entrypoint-initdb.d
+    networks:
+      - dc_prod_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pCuernos2503"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend_prod:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: dc_backend_prod
+    ports:
+      - "4073:4073"
+    env_file:
+      - .env.prod
+    environment:
+      DB_HOST: mysql_prod
+    depends_on:
+      mysql_prod:
+        condition: service_healthy
+    networks:
+      - dc_prod_net
+    restart: unless-stopped
+
+  frontend_prod:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: /api
+    container_name: dc_frontend_prod
+    ports:
+      - "4072:80"
+    depends_on:
+      - backend_prod
+    networks:
+      - dc_prod_net
+    restart: unless-stopped
+
+networks:
+  dc_prod_net:
+    driver: bridge
+
+volumes:
+  mysql_prod_data:
