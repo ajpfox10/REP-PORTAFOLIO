@@ -5,10 +5,10 @@ services:
     image: mysql:8.0
     container_name: dc_mysql_dev
     environment:
-      MYSQL_ROOT_PASSWORD: Cuernos2503
-      MYSQL_DATABASE: defensacivil_dev
-      MYSQL_USER: defensacivil_user
-      MYSQL_PASSWORD: DevPass2503!
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "4074:3306"
     volumes:
@@ -17,7 +17,7 @@ services:
     networks:
       - dc_dev_net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pCuernos2503"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,8 +39,15 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - dc_logs_dev:/app/logs
     networks:
       - dc_dev_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4071/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   frontend_dev:
     build:
@@ -52,7 +59,8 @@ services:
     environment:
       VITE_API_URL: http://localhost:4071/api
     depends_on:
-      - backend_dev
+      backend_dev:
+        condition: service_healthy
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -65,3 +73,4 @@ networks:
 
 volumes:
   mysql_dev_data:
+  dc_logs_dev:

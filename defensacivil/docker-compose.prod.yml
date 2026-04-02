@@ -5,10 +5,10 @@ services:
     image: mysql:8.0
     container_name: dc_mysql_prod
     environment:
-      MYSQL_ROOT_PASSWORD: Cuernos2503
-      MYSQL_DATABASE: defensacivil_prod
-      MYSQL_USER: defensacivil_user
-      MYSQL_PASSWORD: ProdPass2503!
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "4075:3306"
     volumes:
@@ -18,7 +18,7 @@ services:
       - dc_prod_net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pCuernos2503"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -40,6 +40,14 @@ services:
     networks:
       - dc_prod_net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4073/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - dc_logs_prod:/app/logs
 
   frontend_prod:
     build:
@@ -51,7 +59,8 @@ services:
     ports:
       - "4072:80"
     depends_on:
-      - backend_prod
+      backend_prod:
+        condition: service_healthy
     networks:
       - dc_prod_net
     restart: unless-stopped
@@ -62,3 +71,4 @@ networks:
 
 volumes:
   mysql_prod_data:
+  dc_logs_prod:
