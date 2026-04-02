@@ -25,6 +25,12 @@ async function queryOne(sql, params = []) {
   return rows[0] || null;
 }
 
+// Para INSERT/UPDATE/DELETE: devuelve { insertId, affectedRows }
+async function execute(sql, params = []) {
+  const [result] = await pool.execute(sql, params);
+  return result;
+}
+
 async function testConnection() {
   const conn = await pool.getConnection();
   await conn.query('SELECT 1');
@@ -32,4 +38,4 @@ async function testConnection() {
   logger.info(`Base de datos conectada: ${config.db.name} @ ${config.db.host}:${config.db.port}`);
 }
 
-module.exports = { pool, query, queryOne, testConnection };
+module.exports = { pool, query, queryOne, execute, testConnection };

@@ -30,6 +30,10 @@ async function mapPoints(req, res, next) {
       incident_type_id: req.query.incident_type_id,
       province_id:      req.query.province_id,
     };
+    // El rol medium solo ve sus propios incidentes, también en el mapa
+    if (req.user.role === 'medium') {
+      filters.reported_by_user_id = req.user.id;
+    }
     const points = await incidentModel.findMapPoints(filters);
     res.json(points);
   } catch (err) {

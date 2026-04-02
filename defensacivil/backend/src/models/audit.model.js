@@ -1,4 +1,4 @@
-const { query, pool } = require('../config/database');
+const { query, queryOne } = require('../config/database');
 
 async function findAll(filters = {}, pagination = {}) {
   const conditions = [];
@@ -11,9 +11,10 @@ async function findAll(filters = {}, pagination = {}) {
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const [[{ total }]] = await pool.query(
+  const countRow = await queryOne(
     `SELECT COUNT(*) AS total FROM audit_logs al ${where}`, params
   );
+  const total = countRow.total;
 
   const page   = Math.max(1, parseInt(pagination.page) || 1);
   const limit  = Math.min(100, Math.max(1, parseInt(pagination.limit) || 50));

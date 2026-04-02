@@ -5,8 +5,11 @@ import {
   LayersControl, ScaleControl, ZoomControl,
   useMap,
 } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-markercluster';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { incidentsApi } from '../api/incidents.api';
 import { geoApi } from '../api/geo.api';
 import useGeoStore from '../store/geoStore';
@@ -427,37 +430,43 @@ export default function MapView() {
             </BaseLayer>
           </LayersControl>
 
-          {/* Marcadores de incidentes */}
-          {points.map(p => {
-            const type  = incidentTypes.find(t => t.id === p.incident_type_id);
-            const color = type?.color_hex || p.color_hex || '#FF4500';
-            return (
-              <Marker
-                key={p.uuid}
-                position={[Number(p.latitude), Number(p.longitude)]}
-                icon={makeIncidentIcon(color, p.priority)}
-              >
-                <Popup minWidth={220}>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:'0.875rem', marginBottom:'0.25rem', color:'#1e293b' }}>
-                      {p.incident_number}
+          {/* Marcadores de incidentes — agrupados para mejor rendimiento */}
+          <MarkerClusterGroup
+            chunkedLoading
+            maxClusterRadius={60}
+            showCoverageOnHover={false}
+          >
+            {points.map(p => {
+              const type  = incidentTypes.find(t => t.id === p.incident_type_id);
+              const color = type?.color_hex || p.color_hex || '#FF4500';
+              return (
+                <Marker
+                  key={p.uuid}
+                  position={[Number(p.latitude), Number(p.longitude)]}
+                  icon={makeIncidentIcon(color, p.priority)}
+                >
+                  <Popup minWidth={220}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:'0.875rem', marginBottom:'0.25rem', color:'#1e293b' }}>
+                        {p.incident_number}
+                      </div>
+                      <div style={{ fontSize:'0.8125rem', marginBottom:'0.5rem', color:'#475569' }}>{p.title}</div>
+                      <div style={{ display:'flex', gap:'0.375rem', marginBottom:'0.5rem', flexWrap:'wrap' }}>
+                        <StatusBadge status={p.status} />
+                        <PriorityBadge priority={p.priority} />
+                      </div>
+                      <div style={{ fontSize:'0.75rem', color:'#64748b', marginBottom:'0.5rem' }}>
+                        {p.type_name} · {format(new Date(p.started_at), 'dd/MM/yy HH:mm', { locale:es })}
+                      </div>
+                      <a href={`/incidents/${p.uuid}`} style={{ color:'#1d4ed8', fontSize:'0.8125rem', fontWeight:500 }}>
+                        Ver detalle →
+                      </a>
                     </div>
-                    <div style={{ fontSize:'0.8125rem', marginBottom:'0.5rem', color:'#475569' }}>{p.title}</div>
-                    <div style={{ display:'flex', gap:'0.375rem', marginBottom:'0.5rem', flexWrap:'wrap' }}>
-                      <StatusBadge status={p.status} />
-                      <PriorityBadge priority={p.priority} />
-                    </div>
-                    <div style={{ fontSize:'0.75rem', color:'#64748b', marginBottom:'0.5rem' }}>
-                      {p.type_name} · {format(new Date(p.started_at), 'dd/MM/yy HH:mm', { locale:es })}
-                    </div>
-                    <a href={`/incidents/${p.uuid}`} style={{ color:'#1d4ed8', fontSize:'0.8125rem', fontWeight:500 }}>
-                      Ver detalle →
-                    </a>
-                  </div>
-                </Popup>
-              </Marker>
-            );
-          })}
+                  </Popup>
+                </Marker>
+              );
+            })}
+          </MarkerClusterGroup>
 
           {/* Comisarías */}
           {infraLayers.showPolice && stations
