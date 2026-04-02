@@ -43,6 +43,14 @@ async function checkAndImportData() {
     });
     child.on('error', err => logger.error('Error al iniciar importador', { error: err.message }));
 
+    // Matar el proceso si tarda más de 20 minutos (evita zombies)
+    const IMPORT_TIMEOUT_MS = 20 * 60 * 1000;
+    const killTimer = setTimeout(() => {
+      logger.warn('Importación superó el tiempo límite (20 min), terminando proceso...');
+      child.kill('SIGTERM');
+    }, IMPORT_TIMEOUT_MS);
+    child.on('close', () => clearTimeout(killTimer));
+
   } catch (err) {
     // Si la tabla no existe todavía (antes de correr el schema), no hay problema
     if (err.code !== 'ER_NO_SUCH_TABLE') {

@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [stats, setStats]       = useState(null);
   const [recent, setRecent]     = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -33,10 +34,13 @@ export default function Dashboard() {
     ]).then(([s, r]) => {
       setStats(s.data);
       setRecent(r.data.data);
+    }).catch(err => {
+      setError(err.response?.data?.error || 'Error al cargar el dashboard');
     }).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <p style={{ color:'#64748b' }}>Cargando...</p>;
+  if (error)   return <p style={{ color:'#dc2626', padding:'1rem' }}>⚠️ {error}</p>;
 
   return (
     <div>

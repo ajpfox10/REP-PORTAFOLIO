@@ -1,7 +1,7 @@
 -- =============================================================
 -- DEFENSA CIVIL ARGENTINA - SISTEMA DE REPORTE DE INCIDENTES
 -- Schema v1.0
--- Ejecutar como root con contraseña: Cuernos2503
+-- Ejecutar con usuario con permisos suficientes (ver .env.*)
 -- =============================================================
 
 SET NAMES utf8mb4;
@@ -161,6 +161,10 @@ CREATE TABLE IF NOT EXISTS incidents (
   KEY idx_incidents_coords          (latitude, longitude),
   KEY idx_incidents_started_at      (started_at),
   KEY idx_incidents_is_deleted      (is_deleted),
+  -- Índices compuestos para los filtros más frecuentes
+  KEY idx_incidents_deleted_status  (is_deleted, status),
+  KEY idx_incidents_deleted_started (is_deleted, started_at),
+  KEY idx_incidents_deleted_type    (is_deleted, incident_type_id),
   CONSTRAINT fk_incidents_type      FOREIGN KEY (incident_type_id)    REFERENCES incident_types    (id),
   CONSTRAINT fk_incidents_subtype   FOREIGN KEY (incident_subtype_id) REFERENCES incident_subtypes (id),
   CONSTRAINT fk_incidents_province  FOREIGN KEY (province_id)         REFERENCES provinces         (id),
@@ -260,3 +264,26 @@ CREATE TABLE IF NOT EXISTS police_stations (
   CONSTRAINT fk_police_stations_province FOREIGN KEY (province_id) REFERENCES provinces (id),
   CONSTRAINT fk_police_stations_partido  FOREIGN KEY (partido_id)  REFERENCES partidos  (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================
+-- TABLA: incident_number_sequences
+-- Garantiza numeración correlativa sin race conditions
+-- =============================================================
+CREATE TABLE IF NOT EXISTS incident_number_sequences (
+  year        SMALLINT UNSIGNED NOT NULL,
+  last_seq    INT UNSIGNED      NOT NULL DEFAULT 0,
+  PRIMARY KEY (year)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================
+-- EVENT: limpieza periódica de refresh tokens vencidos/revocados
+-- =============================================================
+SET GLOBAL event_scheduler = ON;
+
+CREATE EVENT IF NOT EXISTS evt_cleanup_refresh_tokens
+  ON SCHEDULE EVERY 1 DAY
+  STARTS (CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 3 HOUR)
+  DO
+    DELETE FROM refresh_tokens
+    WHERE is_revoked = 1
+       OR expires_at < NOW() - INTERVAL 1 DAY;

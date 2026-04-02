@@ -1,13 +1,20 @@
 const { v4: uuidv4 } = require('uuid');
-const { query, queryOne, pool } = require('../config/database');
+const { query, queryOne, execute } = require('../config/database');
 
 async function generateIncidentNumber() {
   const year = new Date().getFullYear();
-  const [[{ count }]] = await pool.query(
-    'SELECT COUNT(*) AS count FROM incidents WHERE YEAR(created_at) = ?', [year]
+  // INSERT ... ON DUPLICATE KEY UPDATE es atómico: incrementa y retorna
+  // el nuevo valor sin race condition aunque haya requests simultáneas.
+  await execute(
+    `INSERT INTO incident_number_sequences (year, last_seq) VALUES (?, 1)
+     ON DUPLICATE KEY UPDATE last_seq = last_seq + 1`,
+    [year]
   );
-  const seq = String(parseInt(count) + 1).padStart(6, '0');
-  return `DC-${year}-${seq}`;
+  const seqRow = await queryOne(
+    'SELECT last_seq AS seq FROM incident_number_sequences WHERE year = ?',
+    [year]
+  );
+  return `DC-${year}-${String(seqRow.seq).padStart(6, '0')}`;
 }
 
 async function findAll(filters = {}, pagination = {}) {
@@ -31,9 +38,10 @@ async function findAll(filters = {}, pagination = {}) {
 
   const where = `WHERE ${conditions.join(' AND ')}`;
 
-  const [[{ total }]] = await pool.query(
+  const countRow = await queryOne(
     `SELECT COUNT(*) AS total FROM incidents i ${where}`, params
   );
+  const total = countRow.total;
 
   const page  = Math.max(1, parseInt(pagination.page) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(pagination.limit) || 20));
@@ -92,9 +100,10 @@ async function findMapPoints(filters = {}) {
   const conditions = ['i.is_deleted = 0', 'i.latitude IS NOT NULL', 'i.longitude IS NOT NULL'];
   const params     = [];
 
-  if (filters.status)           { conditions.push('i.status = ?');           params.push(filters.status); }
-  if (filters.incident_type_id) { conditions.push('i.incident_type_id = ?'); params.push(filters.incident_type_id); }
-  if (filters.province_id)      { conditions.push('i.province_id = ?');      params.push(filters.province_id); }
+  if (filters.status)               { conditions.push('i.status = ?');                params.push(filters.status); }
+  if (filters.incident_type_id)     { conditions.push('i.incident_type_id = ?');      params.push(filters.incident_type_id); }
+  if (filters.province_id)          { conditions.push('i.province_id = ?');           params.push(filters.province_id); }
+  if (filters.reported_by_user_id)  { conditions.push('i.reported_by_user_id = ?');   params.push(filters.reported_by_user_id); }
 
   return query(
     `SELECT i.uuid, i.incident_number, i.title, i.latitude, i.longitude,
@@ -203,7 +212,7 @@ async function softDelete(uuid, userId, userRole) {
 async function addUnit(incidentUuid, unitData) {
   const incident = await queryOne('SELECT id FROM incidents WHERE uuid = ? AND is_deleted = 0', [incidentUuid]);
   if (!incident) return null;
-  const [result] = await pool.query(
+  const result = await execute(
     `INSERT INTO incident_units (incident_id, unit_name, unit_type, unit_number, personnel_count, arrived_at, notes)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -218,7 +227,7 @@ async function addUnit(incidentUuid, unitData) {
 async function removeUnit(incidentUuid, unitId) {
   const incident = await queryOne('SELECT id FROM incidents WHERE uuid = ? AND is_deleted = 0', [incidentUuid]);
   if (!incident) return false;
-  const [result] = await pool.query(
+  const result = await execute(
     'DELETE FROM incident_units WHERE id = ? AND incident_id = ?', [unitId, incident.id]
   );
   return result.affectedRows > 0;
@@ -227,7 +236,7 @@ async function removeUnit(incidentUuid, unitId) {
 async function addResource(incidentUuid, resourceData) {
   const incident = await queryOne('SELECT id FROM incidents WHERE uuid = ? AND is_deleted = 0', [incidentUuid]);
   if (!incident) return null;
-  const [result] = await pool.query(
+  const result = await execute(
     'INSERT INTO incident_resources (incident_id, resource_type, resource_name, quantity, notes) VALUES (?, ?, ?, ?, ?)',
     [incident.id, resourceData.resource_type, resourceData.resource_name, resourceData.quantity || 1, resourceData.notes || null]
   );
@@ -237,7 +246,7 @@ async function addResource(incidentUuid, resourceData) {
 async function removeResource(incidentUuid, resourceId) {
   const incident = await queryOne('SELECT id FROM incidents WHERE uuid = ? AND is_deleted = 0', [incidentUuid]);
   if (!incident) return false;
-  const [result] = await pool.query(
+  const result = await execute(
     'DELETE FROM incident_resources WHERE id = ? AND incident_id = ?', [resourceId, incident.id]
   );
   return result.affectedRows > 0;
