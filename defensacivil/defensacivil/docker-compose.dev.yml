@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  mysql_dev:
+    image: mysql:8.0
+    container_name: dc_mysql_dev
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "4074:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+      - ./backend/database/init:/docker-entrypoint-initdb.d
+    networks:
+      - dc_dev_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend_dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: dc_backend_dev
+    ports:
+      - "4071:4071"
+    env_file:
+      - .env.dev
+    environment:
+      DB_HOST: mysql_dev
+    depends_on:
+      mysql_dev:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - dc_logs_dev:/app/logs
+    networks:
+      - dc_dev_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4071/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend_dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: dc_frontend_dev
+    ports:
+      - "4070:4070"
+    environment:
+      VITE_API_URL: http://localhost:4071/api
+    depends_on:
+      backend_dev:
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - dc_dev_net
+
+networks:
+  dc_dev_net:
+    driver: bridge
+
+volumes:
+  mysql_dev_data:
+  dc_logs_dev:
