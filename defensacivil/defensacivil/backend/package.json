@@ -1,0 +1,31 @@
+{
+  "name": "defensacivil-backend",
+  "version": "1.0.0",
+  "description": "Sistema de Reporte de Incidentes - Defensa Civil Argentina",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "lint": "eslint src/",
+    "import:data": "node scripts/import-data.js",
+    "import:geo": "node scripts/import-data.js --solo-geo",
+    "import:infra": "node scripts/import-data.js --solo-infra",
+    "import:bsas": "node scripts/import-data.js --provincia AR-B"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "express-validator": "^7.1.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.10.1",
+    "uuid": "^10.0.0",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
