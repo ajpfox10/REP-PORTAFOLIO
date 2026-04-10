@@ -300,8 +300,8 @@ export default function CargaTelefonista() {
           </div>
 
           <MapContainer
-            center={[-38.4161, -63.6167]}
-            zoom={5}
+            center={[-34.770, -58.630]}
+            zoom={11}
             style={{ height:'100%', width:'100%' }}
             zoomControl={false}
           >

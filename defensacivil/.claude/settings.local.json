@@ -14,7 +14,8 @@
       "Bash(robocopy \"D:\\\\Repositorios\\\\defensacivil\" \"C:\\\\apps\\\\defensacivil\" /MIR /NFL /NDL /NJH /NJS)",
       "Bash(cmd /c 'robocopy \"D:\\\\Repositorios\\\\defensacivil\" \"C:\\\\apps\\\\defensacivil\" /MIR /NFL /NDL /NJH /NJS')",
       "Bash(cmd /c \"robocopy \\\\\"D:\\\\\\\\Repositorios\\\\\\\\defensacivil\\\\\" \\\\\"C:\\\\\\\\apps\\\\\\\\defensacivil\\\\\" /MIR\")",
-      "Bash(cmd /c \"D:\\\\Repositorios\\\\git_sync.bat\")"
+      "Bash(cmd /c \"D:\\\\Repositorios\\\\git_sync.bat\")",
+      "Bash(git -C /d/Repositorios status --short)"
     ]
   }
 }
