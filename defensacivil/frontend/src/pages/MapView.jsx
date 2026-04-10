@@ -127,7 +127,7 @@ function MapController({ provinceCode, partidoLatLng }) {
       const c = PROVINCE_CENTERS[provinceCode];
       map.flyTo([c.lat, c.lng], c.zoom, { duration: 1.2 });
     } else if (!provinceCode) {
-      map.flyTo([-38.4161, -63.6167], 5, { duration: 1.2 });
+      map.flyTo([-34.770, -58.630], 11, { duration: 1.2 });
     }
   }, [provinceCode, partidoLatLng, map]);
 
@@ -381,8 +381,8 @@ export default function MapView() {
       {/* Mapa */}
       <div style={{ flex:1, borderRadius:'var(--radius)', overflow:'hidden', boxShadow:'var(--shadow)' }}>
         <MapContainer
-          center={[-38.4161, -63.6167]}
-          zoom={5}
+          center={[-34.770, -58.630]}
+          zoom={11}
           style={{ height:'100%', width:'100%' }}
           zoomControl={false}
         >
