@@ -7,6 +7,9 @@ import { exportToExcel, printTable } from '../../utils/export';
 import { GestionDocumentPreview } from '../Gesytionpage/components/components/GestionDocumentPreview';
 
 const COLS = ['id','nombre','tipo','numero','fecha','descripcion_archivo','nombre_archivo_original'];
+const TIPOS = ['documento','resolución','expediente','nota','certificado','foto','recibo','otro'];
+
+const emptyForm = { nombre: '', numero: '', tipo: 'documento', fecha: '', descripcion_archivo: '' };
 
 export function DocumentosPage() {
   const toast = useToast();
@@ -17,6 +20,13 @@ export function DocumentosPage() {
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const [page, setPage] = useState(1);
   const pageSize = 50;
+
+  // Nuevo documento
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [activeDni, setActiveDni] = useState('');      // DNI activo luego de búsqueda
+  const [agenteNombre, setAgenteNombre] = useState('');
 
   // Visor
   const [viewer, setViewer] = useState<{
@@ -29,16 +39,25 @@ export function DocumentosPage() {
     const cleanApe = apellido.trim();
     if (!cleanDni && !cleanApe) { toast.error('Ingresá DNI o Apellido'); return; }
     setLoading(true); setRows([]); setSelectedIdx(-1); setPage(1);
+    setActiveDni(''); setAgenteNombre(''); setShowForm(false);
     try {
       let data: any[] = [];
       if (cleanDni) {
         const res = await apiFetch<any>(`/tblarchivos?dni=${cleanDni}&limit=300&page=1`);
         data = res?.data || [];
         if (!data.length) {
-          // fallback al endpoint genérico de documentos
           const res2 = await apiFetch<any>(`/documents?q=${cleanDni}&limit=300&page=1`);
           data = res2?.data || [];
         }
+        // Buscar nombre del agente
+        try {
+          const pa = await apiFetch<any>(`/personal/${cleanDni}`);
+          if (pa?.data) {
+            const p = pa.data.personal || pa.data;
+            setAgenteNombre(`${p.apellido || ''}, ${p.nombre || ''}`.trim().replace(/^,\s*/, ''));
+          }
+        } catch { /* no crítico */ }
+        setActiveDni(cleanDni);
       } else {
         const persons = await apiFetch<any>(`/personal/search?apellido=${encodeURIComponent(cleanApe)}&limit=20&page=1`);
         for (const p of (persons?.data || []).slice(0, 8)) {
@@ -51,6 +70,34 @@ export function DocumentosPage() {
       else toast.ok(`${data.length} documento(s)`);
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setLoading(false); }
+  };
+
+  const guardarDocumento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeDni) { toast.error('Sin DNI activo'); return; }
+    setSaving(true);
+    try {
+      await apiFetch('/tblarchivos', {
+        method: 'POST',
+        body: JSON.stringify({
+          dni: Number(activeDni),
+          nombre: form.nombre || null,
+          numero: form.numero || null,
+          tipo: form.tipo || 'documento',
+          fecha: form.fecha || null,
+          descripcion_archivo: form.descripcion_archivo || null,
+          anio: new Date().getFullYear(),
+        }),
+      });
+      toast.ok('Documento cargado');
+      setShowForm(false);
+      setForm(emptyForm);
+      // Refrescar resultados
+      const res = await apiFetch<any>(`/tblarchivos?dni=${activeDni}&limit=300&page=1`);
+      setRows(res?.data || []);
+      setSelectedIdx(-1);
+    } catch (e: any) { toast.error('Error al guardar', e?.message); }
+    finally { setSaving(false); }
   };
 
   const openDoc = async (docId: string, row?: any) => {
@@ -112,8 +159,22 @@ export function DocumentosPage() {
         {rows.length > 0 && (
           <div className="card" style={{ padding: '1.2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-              <strong style={{ fontSize: '0.9rem' }}>📂 {rows.length} documento(s)</strong>
+              <div>
+                <strong style={{ fontSize: '0.9rem' }}>📂 {rows.length} documento(s)</strong>
+                {agenteNombre && (
+                  <span className="muted" style={{ fontSize: '0.78rem', marginLeft: 10 }}>{agenteNombre} · DNI {activeDni}</span>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: 6 }}>
+                {activeDni && (
+                  <button
+                    className="btn"
+                    style={{ background: 'rgba(124,58,237,0.2)', color: '#c4b5fd', border: '1px solid rgba(124,58,237,0.4)', fontWeight: 600 }}
+                    onClick={() => { setShowForm(s => !s); setForm(emptyForm); }}
+                  >
+                    {showForm ? '✕ Cancelar' : '+ Nuevo documento'}
+                  </button>
+                )}
                 {selected?.id && (
                   <button className="btn btn-primary" onClick={() => openDoc(String(selected.id), selected)}>
                     📄 Abrir seleccionado
@@ -123,6 +184,59 @@ export function DocumentosPage() {
                 <button className="btn" onClick={() => exportToExcel('documentos.xlsx', rows)}>Excel</button>
               </div>
             </div>
+
+            {/* Formulario nuevo documento */}
+            {showForm && activeDni && (
+              <form onSubmit={guardarDocumento}
+                style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 12, color: '#c4b5fd' }}>
+                  + Nuevo documento para DNI {activeDni}{agenteNombre ? ` · ${agenteNombre}` : ''}
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div style={{ flex: 2, minWidth: 160 }}>
+                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>NOMBRE DEL DOCUMENTO</div>
+                    <input className="input" placeholder="Ej: Resolución de ascenso" value={form.nombre}
+                      onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+                      style={{ width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>NÚMERO</div>
+                    <input className="input" placeholder="Ej: 1234/2026" value={form.numero}
+                      onChange={e => setForm(f => ({ ...f, numero: e.target.value }))}
+                      style={{ width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ minWidth: 140 }}>
+                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>TIPO</div>
+                    <select className="input" value={form.tipo}
+                      onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+                      style={{ width: '100%', boxSizing: 'border-box' }}>
+                      {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ minWidth: 140 }}>
+                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>FECHA</div>
+                    <input type="date" className="input" value={form.fecha}
+                      onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))}
+                      style={{ width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>DESCRIPCIÓN</div>
+                  <input className="input" placeholder="Descripción del documento" value={form.descripcion_archivo}
+                    onChange={e => setForm(f => ({ ...f, descripcion_archivo: e.target.value }))}
+                    style={{ width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-primary" type="submit" disabled={saving}>
+                    {saving ? '⏳ Guardando…' : '💾 Guardar'}
+                  </button>
+                  <button className="btn" type="button" onClick={() => { setShowForm(false); setForm(emptyForm); }}>
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+
             <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 8 }}>
               💡 Click = seleccionar · Doble click en nombre/tipo/fecha = abrir documento
             </div>

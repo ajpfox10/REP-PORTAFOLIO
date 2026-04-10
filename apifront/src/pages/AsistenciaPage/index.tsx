@@ -67,6 +67,8 @@ const NOVEDADES_OMISIBLES_DEFAULT = [
   "PRESENTE",
   "FRANCO COMPENSATORIO",
   "BOLETA DE SALIDA",
+  "ASUETO",
+  "FRANCO (OPNYA)",
 
   // tarde
   "LLEGO TARDE",
@@ -552,11 +554,7 @@ export function AsistenciaPage() {
 
   const [selectedSiap, setSelectedSiap] = useState("");
 
-  const [skipNovedades, setSkipNovedades] = useState<string[]>([
-    "PRESENTE",
-    "FRANCO COMPENSATORIO",
-    "BOLETA DE SALIDA",
-  ]);
+  const [skipNovedades, setSkipNovedades] = useState<string[]>(NOVEDADES_OMISIBLES_DEFAULT);
   const [customSkip, setCustomSkip] = useState("");
 
   const [mapeo, setMapeo] = useState<Record<string, string[]>>({});

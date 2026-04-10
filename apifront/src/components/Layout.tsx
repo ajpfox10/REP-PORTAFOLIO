@@ -122,6 +122,7 @@ export function Layout({ title, children, showBack }: {
             ) : isJefeServicio ? (
               <>
                 {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
+                {navLink('/app/samo', '🏥 SAMO')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
               </>
             ) : isSaludLaboral ? (

@@ -25,7 +25,7 @@ export async function findUserByEmail(sequelize: Sequelize, email: string): Prom
       (u.estado = 'activo') AS active,
       ur.rol_id     AS roleId,
       u.sector_id   AS sector_id,
-      rep.reparticion_nombre AS sector_nombre,
+      sec.nombre     AS sector_nombre,
       u.servicio_id  AS servicio_id,
       srv.nombre     AS servicio_nombre,
       u.jefatura_id  AS jefatura_id
@@ -33,8 +33,8 @@ export async function findUserByEmail(sequelize: Sequelize, email: string): Prom
     LEFT JOIN usuarios_roles ur
       ON ur.usuario_id = u.id
      AND ur.deleted_at IS NULL
-    LEFT JOIN reparticiones rep
-      ON rep.id = u.sector_id
+    LEFT JOIN sectores sec
+      ON sec.id = u.sector_id
     LEFT JOIN servicios srv
       ON srv.id = u.servicio_id
     WHERE u.email = :email
@@ -74,7 +74,7 @@ export async function findUserById(sequelize: Sequelize, userId: number): Promis
       (u.estado = 'activo') AS active,
       ur.rol_id     AS roleId,
       u.sector_id   AS sector_id,
-      rep.reparticion_nombre AS sector_nombre,
+      sec.nombre     AS sector_nombre,
       u.servicio_id  AS servicio_id,
       srv.nombre     AS servicio_nombre,
       u.jefatura_id  AS jefatura_id
@@ -82,8 +82,8 @@ export async function findUserById(sequelize: Sequelize, userId: number): Promis
     LEFT JOIN usuarios_roles ur
       ON ur.usuario_id = u.id
      AND ur.deleted_at IS NULL
-    LEFT JOIN reparticiones rep
-      ON rep.id = u.sector_id
+    LEFT JOIN sectores sec
+      ON sec.id = u.sector_id
     LEFT JOIN servicios srv
       ON srv.id = u.servicio_id
     WHERE u.id = :userId

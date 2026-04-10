@@ -83,6 +83,12 @@ export function ResolucionesPage() {
   const [editRes,    setEditRes]    = useState<any | null>(null);
   const [editExp,    setEditExp]    = useState<any | null>(null);
 
+  // ── Cargar archivos (registro en tabla) ────────────────────────────────────
+  const emptyUpload = { nombre: '', numero: '', tipo: 'resolución', fecha: '', descripcion: '' };
+  const [uploadForm,     setUploadForm]     = useState(emptyUpload);
+  const [uploading,      setUploading]      = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+
   // ── Cargar tipos de resolución ─────────────────────────────────────────────
   useEffect(() => {
     fetchAll('/tipoderesolucion').then(setTiposRes).catch(() => {});
@@ -194,6 +200,33 @@ export function ResolucionesPage() {
       setExpedientes(rows);
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setSavingExp(false); }
+  };
+
+  // ── Cargar archivo (registro en tabla) ────────────────────────────────────
+  const cargarArchivo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agente) return;
+    setUploading(true);
+    try {
+      await apiFetch('/tblarchivos', {
+        method: 'POST',
+        body: JSON.stringify({
+          dni: agente.dni,
+          nombre: uploadForm.nombre || null,
+          numero: uploadForm.numero || null,
+          tipo: uploadForm.tipo || 'documento',
+          fecha: uploadForm.fecha || null,
+          descripcion_archivo: uploadForm.descripcion || null,
+          anio: new Date().getFullYear(),
+        }),
+      });
+      toast.ok('Archivo cargado');
+      setShowUploadForm(false);
+      setUploadForm(emptyUpload);
+      const rows = await fetchAll<any>(`/tblarchivos?dni=${agente.dni}`);
+      setArchivos(rows);
+    } catch (e: any) { toast.error('Error al cargar', e?.message); }
+    finally { setUploading(false); }
   };
 
   const startEditRes = (r: any) => {
@@ -539,6 +572,68 @@ export function ResolucionesPage() {
 
                 {/* ── Tab Archivos ── */}
                 {tab === 'archivos' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                  {/* Cargar archivo en tabla */}
+                  <div className="card" style={{ padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>🗂️ Archivos del agente</span>
+                      <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => setShowUploadForm(s => !s)}>
+                        {showUploadForm ? 'Cancelar' : '+ Nuevo registro'}
+                      </button>
+                    </div>
+                    {showUploadForm && (
+                      <form onSubmit={cargarArchivo} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ flex: 2, minWidth: 160 }}>
+                            <div style={lbl}>NOMBRE DEL ARCHIVO</div>
+                            <input className="input" placeholder="Ej: Resolución ascenso 2026" value={uploadForm.nombre}
+                              onChange={e => setUploadForm(f => ({ ...f, nombre: e.target.value }))}
+                              style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 120 }}>
+                            <div style={lbl}>NÚMERO</div>
+                            <input className="input" placeholder="Ej: 1234/2026" value={uploadForm.numero}
+                              onChange={e => setUploadForm(f => ({ ...f, numero: e.target.value }))}
+                              style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
+                          </div>
+                          <div style={{ minWidth: 140 }}>
+                            <div style={lbl}>TIPO</div>
+                            <select className="input" value={uploadForm.tipo}
+                              onChange={e => setUploadForm(f => ({ ...f, tipo: e.target.value }))}
+                              style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }}>
+                              <option value="resolución">resolución</option>
+                              <option value="expediente">expediente</option>
+                              <option value="nota">nota</option>
+                              <option value="certificado">certificado</option>
+                              <option value="foto">foto</option>
+                              <option value="documento">documento</option>
+                              <option value="otro">otro</option>
+                            </select>
+                          </div>
+                          <div style={{ minWidth: 130 }}>
+                            <div style={lbl}>FECHA</div>
+                            <input type="date" className="input" value={uploadForm.fecha}
+                              onChange={e => setUploadForm(f => ({ ...f, fecha: e.target.value }))}
+                              style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div style={lbl}>DESCRIPCIÓN</div>
+                          <input className="input" placeholder="Descripción del archivo" value={uploadForm.descripcion}
+                            onChange={e => setUploadForm(f => ({ ...f, descripcion: e.target.value }))}
+                            style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn primary" type="submit" disabled={uploading}>
+                            {uploading ? '⏳ Guardando…' : '💾 Guardar'}
+                          </button>
+                          <button className="btn" type="button" onClick={() => { setShowUploadForm(false); setUploadForm(emptyUpload); }}>Cancelar</button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+
                   <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                     <div style={{ padding: '10px 14px', fontWeight: 600, fontSize: '0.85rem', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                       Archivos escaneados del agente
@@ -583,6 +678,7 @@ export function ResolucionesPage() {
                         </table>
                       </div>
                     )}
+                  </div>
                   </div>
                 )}
               </>
