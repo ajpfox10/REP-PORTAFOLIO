@@ -109,13 +109,14 @@ const DEFAULT_MAPEO: Record<string, string[]> = {
   '1R-ENFERMEDAD DE RIESGO':                                ['ENFERMEDAD'],
   '05-POR ATENCION DE FAMILIAR ENFERMO':                    ['ENFERMEDAD DE FAMILIAR O NIÑO/A O ADOLESCENTE', 'ATENCION FAMILIAR ENFERMO'],
 
-  // Accidente / Maternidad / Recién nacido
+  // Accidente / Maternidad / Recién nacido / Violencia de género
   '04-POR ACCIDENTE DE TRABAJO':                            ['ACCIDENTE DE TRABAJO'],
-  '06-POR MATERNIDAD':                                      ['MATERNIDAD'],
+  '06-POR MATERNIDAD':                                      ['MATERNIDAD', 'NACIMIENTO'],
   'RN1-RECIEN NACIDO':                                      ['NACIMIENTO', 'CUIDADO RECIEN NACIDO/A'],
+  'VV-MUJER VICTIMA DE VIOLENCIA DE GENERO':                ['MUJER VICTIMA DE VIOLENCIA', 'PARA MUJERES VICTIMAS DE VIOLENCIA', 'VIOLENCIA DE GENERO', 'VICTIMA DE VIOLENCIA DE GENERO'],
 
   // Exámenes / Estudios / Salud preventiva
-  '18-POR EXAMEN':                                          ['EXAMEN'],
+  '18-POR EXAMEN':                                          ['EXAMEN', 'INTEGRACION DE MESA EXAMINADORA'],
   '17-POR PRE-EXAMEN':                                      ['PRE-EXAMEN'],
   'DF-EXAMEN DE PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA': ['PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA'],
   'PC-PREVENCION CANCER GENITO MAMARIO DE PROSTATO Y/O COLON':    ['EX.MED.PREV.CANCER MAMARIO/PROSTATA/COLON'],
@@ -513,10 +514,13 @@ function compareRowsSiapVsMinisterio(
 
     const mins = minByUpaAndDni[upa][dniS] || [];
 
+    // Mejor candidato: fila de Ministerio que conecta por novedad pero difiere en fechas
+    let bestCandidate: any = null;
+
     const match = mins.find((m: any) => {
       const novM  = String(m.novedad || '').trim();
       const novMN = normNovedad(novM);
-     const equivs = mapeoN[novMN];
+      const equivs = mapeoN[novMN];
       if (!equivs) {
         vioMinSinMapeo = true;
         return false;
@@ -527,45 +531,49 @@ function compareRowsSiapVsMinisterio(
       // Regla ANUAL COMPLEMENTARIA: usar JUSTIFICADO para distinguir aprobada/denegada
       if (novSN.includes('ANUAL COMPLEMENTARIA')) {
         const minEsDenegada = novMN.includes('DENEGADA');
-        if (justS === 'NO' && !minEsDenegada) return false; // SIAP denegada, min aprobada → no coincide
-        if (justS === 'SI' && minEsDenegada)  return false; // SIAP aprobada, min denegada → no coincide
+        if (justS === 'NO' && !minEsDenegada) return false;
+        if (justS === 'SI' && minEsDenegada)  return false;
       }
 
       const mDesde = parseDate(m.desde);
       const mHasta = parseDate(m.hasta) ?? mDesde;
       if (!mDesde || !mHasta || !sDesde || !sHasta) return false;
-      // diagnostico: se pisan pero no son iguales
-      if (overlap(mDesde, mHasta, sDesde, sHasta)) {
-      vioSolape = true;
-      }
+
+      if (overlap(mDesde, mHasta, sDesde, sHasta)) vioSolape = true;
 
       const ok =
         toUTCMidnight(mDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
-       toUTCMidnight(mHasta).getTime() === toUTCMidnight(sHasta).getTime();
+        toUTCMidnight(mHasta).getTime() === toUTCMidnight(sHasta).getTime();
 
-       if (!ok) vioRangoDistinto = true;
-       return ok;
+      // Guardar como mejor candidato: novedad conecta pero fechas difieren
+      if (!ok && !bestCandidate) bestCandidate = m;
+      if (!ok) vioRangoDistinto = true;
+      return ok;
     });
 
- const motivo =
-  match ? '' :
-  mins.length === 0 ? `DNI_NO_EXISTE_EN_MINISTERIO_PARA_${upa}` :
-  vioRangoDistinto ? 'RANGO_DISTINTO' :
-  vioRangoDistinto ? 'RANGO_DISTINTO' :
-  vioSolape ? 'SOLAPA_PERO_NO_IGUAL' :
-  vioMismoMapeo ? 'MAPEO_OK_PERO_SIN_MATCH' :
-  vioMismoMapeo ? 'MAPEO_OK_PERO_SIN_MATCH' :
-  vioMinSinMapeo ? 'MIN_TIENE_NOVEDAD_SIN_MAPEO' :
-  'MAPEO_NO_ENCUENTRA_EQUIVALENTE';
+    const motivo =
+      match              ? '' :
+      mins.length === 0  ? `DNI_NO_EXISTE_EN_MINISTERIO_PARA_${upa}` :
+      vioRangoDistinto   ? 'RANGO_DISTINTO' :
+      vioSolape          ? 'SOLAPA_PERO_NO_IGUAL' :
+      vioMismoMapeo      ? 'MAPEO_OK_PERO_SIN_MATCH' :
+      vioMinSinMapeo     ? 'MIN_TIENE_NOVEDAD_SIN_MAPEO' :
+                           'MAPEO_NO_ENCUENTRA_EQUIVALENTE';
 
-return {
-  ...baseRow,
-  novedad_ministerio:     match ? match.novedad                                                : '—',
-  fecha_desde_ministerio: match ? dateToStr(parseDate(match.desde))                           : '—',
-  fecha_hasta_ministerio: match ? dateToStr(parseDate(match.hasta) ?? parseDate(match.desde)) : '—',
-  estado: match ? 'COINCIDENTE' : 'NO COINCIDENTE',
-  motivo,
-};
+    // Si no hay match exacto pero el DNI existe en Ministerio → mostrar lo que tiene
+    const displayMin = match ?? bestCandidate;
+    const novedadesMinTexto = mins.length > 0
+      ? [...new Set(mins.map((m: any) => String(m.novedad || '').trim()).filter(Boolean))].join(' / ')
+      : '—';
+
+    return {
+      ...baseRow,
+      novedad_ministerio:     match ? match.novedad : novedadesMinTexto,
+      fecha_desde_ministerio: displayMin ? dateToStr(parseDate(displayMin.desde)) : '—',
+      fecha_hasta_ministerio: displayMin ? dateToStr(parseDate(displayMin.hasta) ?? parseDate(displayMin.desde)) : '—',
+      estado: match ? 'COINCIDENTE' : 'NO COINCIDENTE',
+      motivo,
+    };
   });
 }
 export function buildAsistenciaRouter() {

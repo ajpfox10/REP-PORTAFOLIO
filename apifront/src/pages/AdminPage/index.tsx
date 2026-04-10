@@ -5,6 +5,7 @@ import { useAdminUsers, type UserRow, type Role, type Permission } from './hooks
 import { apiFetch } from '../../api/http';
 import { usePendingRequests } from './hooks/usePendingRequests';
 import { SolicitudesTab } from './components/SolicitudesTab';
+import { CatalogosTab } from './components/CatalogosTab';
 import './styles/AdminPage.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -481,7 +482,7 @@ function RolesTab({ roles, permissions, onRefresh }: {
 export function AdminPage() {
   const admin = useAdminUsers();
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'users' | 'roles' | 'solicitudes'>('users');
+  const [tab, setTab] = useState<'users' | 'roles' | 'solicitudes' | 'catalogos'>('users');
   const pending = usePendingRequests(admin.roles);
   const [userPermsModal, setUserPermsModal] = useState<{ user: UserRow; perms: Set<number> } | null>(null);
   const [userPermsSaving, setUserPermsSaving] = useState(false);
@@ -559,6 +560,9 @@ export function AdminPage() {
           </button>
           <button className={`tab-btn${tab === 'solicitudes' ? ' active' : ''}`} onClick={() => setTab('solicitudes')}>
             📬 Solicitudes{pendingCount > 0 ? ` (${pendingCount})` : ''}
+          </button>
+          <button className={`tab-btn${tab === 'catalogos' ? ' active' : ''}`} onClick={() => setTab('catalogos')}>
+            🗂️ Catálogos
           </button>
         </div>
 
@@ -646,6 +650,9 @@ export function AdminPage() {
         {tab === 'roles' && (
           <RolesTab roles={admin.roles} permissions={admin.permissions} onRefresh={admin.loadUsers} />
         )}
+
+        {/* ── TAB CATÁLOGOS ── */}
+        {tab === 'catalogos' && <CatalogosTab />}
 
         {/* ── MODALES ── */}
         {admin.createModal && (

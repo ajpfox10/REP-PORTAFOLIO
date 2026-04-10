@@ -30,6 +30,7 @@ export function useCamera() {
   /** Enumerar cámaras USB disponibles */
   const enumerateDevices = useCallback(async () => {
     try {
+      if (!navigator?.mediaDevices) return [];
       const all = await navigator.mediaDevices.enumerateDevices();
       const cameras = all
         .filter(d => d.kind === 'videoinput')
@@ -68,6 +69,7 @@ export function useCamera() {
     };
 
     try {
+      if (!navigator?.mediaDevices) { setError('Cámara no disponible (se requiere HTTPS)'); return; }
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       setPermission('granted');
@@ -217,8 +219,9 @@ export function useCamera() {
     };
   }, []);
 
-  // Escuchar cambios de dispositivos (plug/unplug)
+  // Escuchar cambios de dispositivos (plug/unplug) — solo si mediaDevices está disponible (HTTPS)
   useEffect(() => {
+    if (!navigator?.mediaDevices) return;
     navigator.mediaDevices.addEventListener('devicechange', enumerateDevices);
     return () => navigator.mediaDevices.removeEventListener('devicechange', enumerateDevices);
   }, [enumerateDevices]);

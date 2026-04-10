@@ -303,18 +303,26 @@ interface AsignarSectorModalProps {
   onClose: () => void;
   onSaved: () => void;
 }
-function AsignarSectorModal({ agente, servicioId, sectores, jefeNombre, onClose, onSaved }: AsignarSectorModalProps) {
+function AsignarSectorModal({ agente, servicioId, sectores: sectoresProp, jefeNombre, onClose, onSaved }: AsignarSectorModalProps) {
   const toast = useToast();
   const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({ sector_id: '', fecha_desde: hoy, motivo: '', observaciones: '' });
   const [saving, setSaving] = useState(false);
+  const [sectoresLocal, setSectoresLocal] = useState<any[]>(sectoresProp);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
   const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
   const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
 
-  const sectoresFiltrados = servicioId
-    ? sectores.filter((s: any) => String(s.servicio_id) === String(servicioId))
-    : sectores;
+  // Si el padre aún no cargó los sectores, los cargamos aquí
+  useEffect(() => {
+    if (sectoresProp.length > 0) { setSectoresLocal(sectoresProp); return; }
+    fetchAll('/sectores').then(rows => setSectoresLocal(rows)).catch(() => {});
+  }, [sectoresProp]);
+
+  const sectoresPorServicio = servicioId
+    ? sectoresLocal.filter((s: any) => String(s.servicio_id) === String(servicioId))
+    : sectoresLocal;
+  const sectoresFiltrados = sectoresPorServicio.length > 0 ? sectoresPorServicio : sectoresLocal;
 
   const guardar = async () => {
     if (!form.sector_id) { toast.error('Seleccioná un sector'); return; }
@@ -1249,8 +1257,10 @@ export function JefeServicioPage() {
   const servicioId: number | null = u?.servicio_id ?? null;
   const servicioNombre: string = u?.servicio_nombre || `Servicio #${servicioId}`;
 
-  // admin (crud:*:*) ve TODO; jefe_servicio tiene servicio_id asignado
-  const isGlobal = hasPermission(perms, 'crud:*:*') || !servicioId;
+  // admin (crud:*:*) ve TODO; jefe_servicio ve solo su servicio
+  const isGlobal = hasPermission(perms, 'crud:*:*');
+  // Solo el admin puede asignar/cambiar servicios; el jefe solo gestiona sectores
+  const canAsignarServicio = hasPermission(perms, 'crud:*:*');
 
   // Datos maestros
   const [servicios,    setServicios]    = useState<any[]>([]);
@@ -1259,12 +1269,22 @@ export function JefeServicioPage() {
   const [loadingMaestros, setLoadingMaestros] = useState(true);
 
   // Agentes del sector
-  const [agentes,      setAgentes]      = useState<any[]>([]);
-  const [loadingAg,    setLoadingAg]    = useState(false);
+  const [agentes,          setAgentes]          = useState<any[]>([]);
+  const [agentesAsignados, setAgentesAsignados] = useState<any[]>([]);
+  const [loadingAg,        setLoadingAg]        = useState(false);
 
-  // Búsqueda
+  // Búsqueda (panel izquierdo — sin servicio activo)
   const [busquedaDni,    setBusquedaDni]    = useState('');
   const [busquedaNombre, setBusquedaNombre] = useState('');
+
+  // Paginación listas de agentes
+  const PAGE_SIZE = 20;
+  const [paginaAgentes,   setPaginaAgentes]   = useState(1);
+  const [paginaAsignados, setPaginaAsignados] = useState(1);
+
+  // Búsqueda independiente para tab Agentes Asignados
+  const [busquedaAsigDni,    setBusquedaAsigDni]    = useState('');
+  const [busquedaAsigNombre, setBusquedaAsigNombre] = useState('');
 
   // Agente seleccionado
   const [agenteActivo, setAgenteActivo] = useState<any>(null);
@@ -1330,13 +1350,8 @@ export function JefeServicioPage() {
   const [dniConServicio,  setDniConServicio]  = useState<Set<string>>(new Set());
   const [dniConArt26,     setDniConArt26]     = useState<Set<string>>(new Set());
 
-  const cargarDniConServicio = useCallback(async () => {
-    try {
-      const pases = await fetchAll('/agentes_servicios');
-      const activos = pases.filter((p: any) => !p.fecha_hasta);
-      setDniConServicio(new Set(activos.map((p: any) => String(p.dni))));
-    } catch { /* no bloquear */ }
-  }, []);
+  // Mapa dni → sector_id activo (de agentes_sectores, sin fecha_hasta)
+  const [dniSectorActivo, setDniSectorActivo] = useState<Record<string, number | null>>({});
 
   const cargarDniConArt26 = useCallback(async () => {
     try {
@@ -1345,31 +1360,59 @@ export function JefeServicioPage() {
     } catch { /* no bloquear */ }
   }, []);
 
-  // ── Cargar agentes (todos si global, por sector_id si disponible, sino servicio_id) ──
+  // ── Cargar agentes ────────────────────────────────────────────────────────
+  // - Admin (isGlobal): todos los agentes ACTIVOS; agentes_servicios solo para saber quién tiene servicio
+  // - Jefe: solo los agentes de su servicio (agentes_servicios con su servicio_id)
   const cargarAgentes = useCallback(async () => {
     if (!isGlobal && !servicioId) return;
     setLoadingAg(true);
     try {
-      let all: any[] = [];
       if (isGlobal) {
-        all = await fetchAll(`/personal/search?estado_empleo=ACTIVO`);
-      } else if (sectorId) {
-        // Intentar filtrar por sector
-        all = await fetchAll(`/personal/search?sector_id=${sectorId}&estado_empleo=ACTIVO`);
-        // Si los agentes no tienen sector asignado aún, caer a servicio
-        if (all.length === 0) {
-          all = await fetchAll(`/personal/search?servicio_id=${servicioId}&estado_empleo=ACTIVO`);
+        // Admin: carga TODOS los activos, más agentes_servicios para marcar quiénes tienen servicio
+        const [todos, pasesServicio, pasesSector] = await Promise.all([
+          fetchAll(`/personal/search?estado_empleo=ACTIVO`),
+          fetchAll(`/agentes_servicios`),
+          fetchAll(`/agentes_sectores`),
+        ]);
+        const activos = pasesServicio.filter((p: any) => !p.fecha_hasta);
+        const dnisConServicio = new Set(activos.map((p: any) => String(p.dni)));
+        setDniConServicio(dnisConServicio);
+        const mapaSecActivo: Record<string, number | null> = {};
+        for (const ps of pasesSector) {
+          if (!ps.fecha_hasta) mapaSecActivo[String(ps.dni)] = Number(ps.sector_id);
         }
+        setDniSectorActivo(mapaSecActivo);
+        setAgentesAsignados(todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
+        setAgentes(        todos.filter((a: any) => !dnisConServicio.has(String(a.dni))));
       } else {
-        all = await fetchAll(`/personal/search?servicio_id=${servicioId}&estado_empleo=ACTIVO`);
+        // Jefe: filtra por su servicio_id
+        const [pasesServicio, pasesSector] = await Promise.all([
+          fetchAll(`/agentes_servicios?servicio_id=${servicioId}`),
+          fetchAll(`/agentes_sectores?servicio_id=${servicioId}`),
+        ]);
+        const pasesActivos = pasesServicio.filter((p: any) => !p.fecha_hasta);
+        const dnisConServicio = new Set(pasesActivos.map((p: any) => String(p.dni)));
+        setDniConServicio(dnisConServicio);
+        if (dnisConServicio.size === 0) {
+          setAgentes([]);
+          setDniSectorActivo({});
+          return;
+        }
+        const mapaSecActivo: Record<string, number | null> = {};
+        for (const ps of pasesSector) {
+          if (!ps.fecha_hasta) mapaSecActivo[String(ps.dni)] = Number(ps.sector_id);
+        }
+        setDniSectorActivo(mapaSecActivo);
+        const todos = await fetchAll(`/personal/search?estado_empleo=ACTIVO`);
+        setAgentesAsignados(todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
+        setAgentes(         todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
       }
-      setAgentes(all);
     } catch (e: any) {
       toast.error('Error cargando agentes', e?.message);
     } finally {
       setLoadingAg(false);
     }
-  }, [isGlobal, servicioId, sectorId]);
+  }, [isGlobal, servicioId]);
 
   useEffect(() => { cargarAgentes(); }, [cargarAgentes]);
 
@@ -1378,7 +1421,6 @@ export function JefeServicioPage() {
     if (agentes.length > 0) cargarLicencias(agentes);
   }, [agentes, cargarLicencias]);
 
-  useEffect(() => { cargarDniConServicio(); }, [cargarDniConServicio]);
   useEffect(() => { cargarDniConArt26(); }, [cargarDniConArt26]);
 
   // ── Cargar pases del agente seleccionado ─────────────────────────────────
@@ -1481,14 +1523,22 @@ export function JefeServicioPage() {
     }
     return true;
   };
-  // Sin servicio activo → tab Agentes
-  const agentesFiltrados = agentes
-    .filter((a: any) => !dniConServicio.has(String(a.dni)))
-    .filter(busquedaFn);
-  // Con servicio activo → tab Asignados
-  const asignadosFiltrados = agentes
-    .filter((a: any) => dniConServicio.has(String(a.dni)))
-    .filter(busquedaFn);
+  const busquedaAsigFn = (a: any) => {
+    if (busquedaAsigDni.trim()) return String(a.dni).includes(busquedaAsigDni.trim());
+    if (busquedaAsigNombre.trim()) {
+      const q = busquedaAsigNombre.toLowerCase();
+      return (
+        (a.apellido || '').toLowerCase().includes(q) ||
+        (a.nombre   || '').toLowerCase().includes(q)
+      );
+    }
+    return true;
+  };
+  // Todos los agentes del servicio van al panel izquierdo (fuente = agentes_servicios activos)
+  const agentesFiltrados = agentes.filter(busquedaFn);
+  // Tab Asignados: agentes que SÍ tienen servicio activo
+  const asignadosBase = agentesAsignados;
+  const asignadosFiltrados = asignadosBase.filter(busquedaAsigFn);
 
   const pasesFiltrados = todosPases.filter((p: any) => {
     if (filtroPases === 'activos')  return !p.fecha_hasta;
@@ -1543,7 +1593,7 @@ export function JefeServicioPage() {
     if (tipo === 'print') printTable(`Pases Servicio ${servicioNombre}`, rows);
   };
 
-  // Solo bloqueamos si NO es global Y no tiene servicio asignado
+  // Bloqueamos si NO es global Y no tiene servicio_id
   if (!isGlobal && !servicioId) {
     return (
       <Layout title="Gestión de Sectores" showBack>
@@ -1551,7 +1601,7 @@ export function JefeServicioPage() {
           <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠️</div>
           <div style={{ color: '#f59e0b', fontWeight: 600 }}>Sin servicio asignado</div>
           <div className="muted" style={{ marginTop: 8 }}>
-            Tu usuario no tiene un servicio asignado. Solicitá al administrador que configure tu servicio_id.
+            Tu usuario no tiene servicio_id configurado. Solicitá al administrador que lo configure.
           </div>
         </div>
       </Layout>
@@ -1584,7 +1634,7 @@ export function JefeServicioPage() {
                 <input
                   className="input"
                   value={busquedaDni}
-                  onChange={e => { setBusquedaDni(e.target.value); setBusquedaNombre(''); }}
+                  onChange={e => { setBusquedaDni(e.target.value); setBusquedaNombre(''); setPaginaAgentes(1); }}
                   placeholder="Filtrar por DNI"
                   style={{ width: '100%' }}
                 />
@@ -1594,7 +1644,7 @@ export function JefeServicioPage() {
                 <input
                   className="input"
                   value={busquedaNombre}
-                  onChange={e => { setBusquedaNombre(e.target.value); setBusquedaDni(''); }}
+                  onChange={e => { setBusquedaNombre(e.target.value); setBusquedaDni(''); setPaginaAgentes(1); }}
                   placeholder="Filtrar por nombre"
                   style={{ width: '100%' }}
                 />
@@ -1602,7 +1652,7 @@ export function JefeServicioPage() {
             </div>
             {(busquedaDni || busquedaNombre) && (
               <button className="btn" style={{ marginTop: 6, fontSize: '0.75rem' }}
-                onClick={() => { setBusquedaDni(''); setBusquedaNombre(''); }}>
+                onClick={() => { setBusquedaDni(''); setBusquedaNombre(''); setPaginaAgentes(1); }}>
                 ✕ Limpiar filtro
               </button>
             )}
@@ -1631,45 +1681,66 @@ export function JefeServicioPage() {
               <div className="js-loading">🔄 Cargando agentes…</div>
             ) : agentesFiltrados.length === 0 ? (
               <div className="js-empty">Sin agentes en este sector</div>
-            ) : (
-              <div className="js-agentes-list">
-                {agentesFiltrados.map((a: any) => (
-                  <button
-                    key={a.dni}
-                    type="button"
-                    className={`js-agente-item${agenteActivo?.dni === a.dni ? ' active' : ''}`}
-                    onClick={() => seleccionarAgente(a)}
-                  >
-                    <div className="js-agente-nombre" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {a.apellido}, {a.nombre}
-                      {licenciasSet.has(String(a.dni)) && (
-                        <span title="De licencia médica" style={{
-                          fontSize: '0.65rem', background: 'rgba(220,38,38,0.2)',
-                          color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
-                        }}>🏥 LICENCIA</span>
-                      )}
-                      {dniConServicio.has(String(a.dni)) && (
-                        <span title="Tiene servicio activo" style={{
-                          fontSize: '0.65rem', background: 'rgba(34,197,94,0.15)',
-                          color: '#4ade80', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
-                        }}>🟢 En servicio</span>
-                      )}
-                      {dniConArt26.has(String(a.dni)) && (
-                        <span title="Tiene Artículo 26" style={{
-                          fontSize: '0.65rem', background: 'rgba(99,102,241,0.2)',
-                          color: '#a5b4fc', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
-                        }}>📋 Art. 26</span>
-                      )}
+            ) : (() => {
+              const totalPags = Math.ceil(agentesFiltrados.length / PAGE_SIZE);
+              const pagActual = Math.min(paginaAgentes, totalPags);
+              const desde = (pagActual - 1) * PAGE_SIZE;
+              const paginados = agentesFiltrados.slice(desde, desde + PAGE_SIZE);
+              return (
+                <>
+                  <div className="js-agentes-list">
+                    {paginados.map((a: any) => (
+                      <button
+                        key={a.dni}
+                        type="button"
+                        className={`js-agente-item${agenteActivo?.dni === a.dni ? ' active' : ''}`}
+                        onClick={() => seleccionarAgente(a)}
+                      >
+                        <div className="js-agente-nombre" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {a.apellido}, {a.nombre}
+                          {licenciasSet.has(String(a.dni)) && (
+                            <span title="De licencia médica" style={{
+                              fontSize: '0.65rem', background: 'rgba(220,38,38,0.2)',
+                              color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                            }}>🏥 LICENCIA</span>
+                          )}
+                          {dniConArt26.has(String(a.dni)) && (
+                            <span title="Tiene Artículo 26" style={{
+                              fontSize: '0.65rem', background: 'rgba(99,102,241,0.2)',
+                              color: '#a5b4fc', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                            }}>📋 Art. 26</span>
+                          )}
+                        </div>
+                        <div className="js-agente-meta">
+                          DNI {a.dni}
+                          {a.ley_nombre && ` · ${a.ley_nombre}`}
+                          {a.categoria_nombre && ` · ${a.categoria_nombre}`}
+                          {dniSectorActivo[String(a.dni)] != null
+                            ? ` · 📍 ${sectores.find((s: any) => String(s.id) === String(dniSectorActivo[String(a.dni)]))?.nombre || `Sector #${dniSectorActivo[String(a.dni)]}`}`
+                            : ' · 📍 Sin sector'
+                          }
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {totalPags > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                      <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 10px' }}
+                        disabled={pagActual === 1}
+                        onClick={() => setPaginaAgentes(p => Math.max(1, p - 1))}>← Ant</button>
+                      {Array.from({ length: totalPags }, (_, i) => i + 1).map(n => (
+                        <button key={n} className="btn"
+                          style={{ fontSize: '0.72rem', padding: '3px 8px', background: n === pagActual ? '#7c3aed' : undefined, color: n === pagActual ? '#fff' : undefined }}
+                          onClick={() => setPaginaAgentes(n)}>{n}</button>
+                      ))}
+                      <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 10px' }}
+                        disabled={pagActual === totalPags}
+                        onClick={() => setPaginaAgentes(p => Math.min(totalPags, p + 1))}>Sig →</button>
                     </div>
-                    <div className="js-agente-meta">
-                      DNI {a.dni}
-                      {a.ley_nombre && ` · ${a.ley_nombre}`}
-                      {a.categoria_nombre && ` · ${a.categoria_nombre}`}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -1713,11 +1784,11 @@ export function JefeServicioPage() {
                 onClick={() => setTab('asignados')}
               >
                 🟢 Agentes Asignados
-                {asignadosFiltrados.length > 0 && (
+                {asignadosBase.length > 0 && (
                   <span style={{
                     marginLeft: 6, background: '#22c55e', color: '#fff',
                     borderRadius: 99, fontSize: '0.68rem', padding: '1px 7px', fontWeight: 700,
-                  }}>{asignadosFiltrados.length}</span>
+                  }}>{asignadosBase.length}</span>
                 )}
               </button>
               <button
@@ -1770,14 +1841,16 @@ export function JefeServicioPage() {
                       />
                     </div>
 
-                    {/* Artículo 26 (lectura + carga) */}
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
-                      <Art26Agente
-                        agente={agenteActivo}
-                        sectorId={sectorId}
-                        jefeNombre={u?.nombre || ''}
-                      />
-                    </div>
+                    {/* Artículo 26 (lectura + carga) — solo agentes becados */}
+                    {(agenteActivo.ley_nombre || '').toLowerCase().includes('beca') && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                        <Art26Agente
+                          agente={agenteActivo}
+                          sectorId={sectorId}
+                          jefeNombre={u?.nombre || ''}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Servicios del agente */}
@@ -1789,15 +1862,17 @@ export function JefeServicioPage() {
                           <span className="js-badge-activo">🟢 Activo</span>
                         )}
                       </div>
-                      <button
-                        className="btn js-btn-asignar"
-                        type="button"
-                        onClick={intentarAsignar}
-                        disabled={loadingPases}
-                        title={paseActivo ? 'Cerrá el servicio actual antes de asignar uno nuevo' : 'Asignar nuevo servicio'}
-                      >
-                        ➕ Asignar Servicio
-                      </button>
+                      {canAsignarServicio && (
+                        <button
+                          className="btn js-btn-asignar"
+                          type="button"
+                          onClick={intentarAsignar}
+                          disabled={loadingPases}
+                          title={paseActivo ? 'Cerrá el servicio actual antes de asignar uno nuevo' : 'Asignar nuevo servicio'}
+                        >
+                          ➕ Asignar Servicio
+                        </button>
+                      )}
                     </div>
 
                     {loadingPases ? (
@@ -1829,7 +1904,7 @@ export function JefeServicioPage() {
                                 {!p.sector_id && !p.fecha_hasta && <span style={{ color: '#64748b', fontSize: '0.7rem' }}>Sin sector asignado</span>}
                               </div>
                               {p.motivo && <div className="js-pase-motivo">{p.motivo}</div>}
-                              {abierto && (
+                              {abierto && canAsignarServicio && (
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
                                   <button
                                     className="btn js-btn-cerrar"
@@ -2059,40 +2134,92 @@ export function JefeServicioPage() {
           {/* ── Tab Agentes Asignados ── */}
           {tab === 'asignados' && (
             <div className="card js-card">
-              <div className="js-section-title" style={{ marginBottom: 12 }}>
+              <div className="js-section-title" style={{ marginBottom: 10 }}>
                 🟢 Agentes con Servicio Activo
                 <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
-                  ({asignadosFiltrados.length} agentes)
+                  ({asignadosFiltrados.length}{asignadosFiltrados.length !== asignadosBase.length ? ` de ${asignadosBase.length}` : ''} agentes)
                 </span>
               </div>
+              {/* Filtro propio del tab */}
+              <div className="js-search-grid" style={{ marginBottom: 8 }}>
+                <div>
+                  <div className="js-label">DNI</div>
+                  <input
+                    className="input"
+                    value={busquedaAsigDni}
+                    onChange={e => { setBusquedaAsigDni(e.target.value); setBusquedaAsigNombre(''); setPaginaAsignados(1); }}
+                    placeholder="Filtrar por DNI"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <div className="js-label">Apellido / Nombre</div>
+                  <input
+                    className="input"
+                    value={busquedaAsigNombre}
+                    onChange={e => { setBusquedaAsigNombre(e.target.value); setBusquedaAsigDni(''); setPaginaAsignados(1); }}
+                    placeholder="Filtrar por nombre"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+              {(busquedaAsigDni || busquedaAsigNombre) && (
+                <button className="btn" style={{ marginBottom: 8, fontSize: '0.75rem' }}
+                  onClick={() => { setBusquedaAsigDni(''); setBusquedaAsigNombre(''); setPaginaAsignados(1); }}>
+                  ✕ Limpiar filtro
+                </button>
+              )}
               {loadingAg ? (
                 <div className="js-loading">🔄 Cargando…</div>
               ) : asignadosFiltrados.length === 0 ? (
                 <div className="js-empty">Sin agentes asignados a servicio actualmente</div>
-              ) : (
-                <div className="js-agentes-list">
-                  {asignadosFiltrados.map((a: any) => (
-                    <button
-                      key={a.dni}
-                      type="button"
-                      className={`js-agente-item${agenteActivo?.dni === a.dni ? ' active' : ''}`}
-                      onClick={() => { seleccionarAgente(a); setTab('agentes'); }}
-                    >
-                      <div className="js-agente-nombre">
-                        {a.apellido}, {a.nombre}
-                        <span title="Tiene servicio activo" style={{
-                          fontSize: '0.65rem', background: 'rgba(34,197,94,0.15)',
-                          color: '#4ade80', borderRadius: 4, padding: '1px 5px', fontWeight: 600, marginLeft: 6,
-                        }}>🟢 En servicio</span>
+              ) : (() => {
+                const totalPags = Math.ceil(asignadosFiltrados.length / PAGE_SIZE);
+                const pagActual = Math.min(paginaAsignados, totalPags);
+                const desde = (pagActual - 1) * PAGE_SIZE;
+                const paginados = asignadosFiltrados.slice(desde, desde + PAGE_SIZE);
+                return (
+                  <>
+                    <div className="js-agentes-list">
+                      {paginados.map((a: any) => (
+                        <button
+                          key={a.dni}
+                          type="button"
+                          className={`js-agente-item${agenteActivo?.dni === a.dni ? ' active' : ''}`}
+                          onClick={() => { seleccionarAgente(a); setTab('agentes'); }}
+                        >
+                          <div className="js-agente-nombre">
+                            {a.apellido}, {a.nombre}
+                            <span title="Tiene servicio activo" style={{
+                              fontSize: '0.65rem', background: 'rgba(34,197,94,0.15)',
+                              color: '#4ade80', borderRadius: 4, padding: '1px 5px', fontWeight: 600, marginLeft: 6,
+                            }}>🟢 En servicio</span>
+                          </div>
+                          <div className="js-agente-meta">
+                            DNI {a.dni}
+                            {a.ley_nombre && ` · ${a.ley_nombre}`}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    {totalPags > 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                        <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 10px' }}
+                          disabled={pagActual === 1}
+                          onClick={() => setPaginaAsignados(p => Math.max(1, p - 1))}>← Ant</button>
+                        {Array.from({ length: totalPags }, (_, i) => i + 1).map(n => (
+                          <button key={n} className="btn"
+                            style={{ fontSize: '0.72rem', padding: '3px 8px', background: n === pagActual ? '#7c3aed' : undefined, color: n === pagActual ? '#fff' : undefined }}
+                            onClick={() => setPaginaAsignados(n)}>{n}</button>
+                        ))}
+                        <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 10px' }}
+                          disabled={pagActual === totalPags}
+                          onClick={() => setPaginaAsignados(p => Math.min(totalPags, p + 1))}>Sig →</button>
                       </div>
-                      <div className="js-agente-meta">
-                        DNI {a.dni}
-                        {a.ley_nombre && ` · ${a.ley_nombre}`}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
           {/* ── Tab Francos Compensatorios ── */}
@@ -2243,14 +2370,14 @@ export function JefeServicioPage() {
           dependencias={dependencias}
           sectores={sectores}
           onClose={() => setModalAsignar(false)}
-          onSaved={() => { cargarPases(agenteActivo.dni); cargarDniConServicio(); }}
+          onSaved={() => { cargarPases(agenteActivo.dni); cargarAgentes(); }}
         />
       )}
       {modalCerrar && (
         <CerrarServicioModal
           pase={modalCerrar}
           onClose={() => setModalCerrar(null)}
-          onSaved={() => { cargarPases(agenteActivo?.dni); cargarDniConServicio(); }}
+          onSaved={() => { cargarPases(agenteActivo?.dni); cargarAgentes(); }}
         />
       )}
       {modalNuevoFrancoSector && (
