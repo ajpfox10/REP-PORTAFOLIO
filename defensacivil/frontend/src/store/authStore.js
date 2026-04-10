@@ -48,8 +48,10 @@ const useAuthStore = create((set, get) => ({
   },
 
   hasRole: (...roles) => roles.includes(get().user?.role),
-  isAdmin:  () => get().user?.role === 'admin',
-  canWrite: () => ['admin', 'medium'].includes(get().user?.role),
+  isAdmin:       () => get().user?.role === 'admin',
+  canWrite:      () => ['admin', 'medium', 'telefonista', 'chofer'].includes(get().user?.role),
+  isTelefonista: () => get().user?.role === 'telefonista',
+  isChofer:      () => get().user?.role === 'chofer',
 }));
 
 export default useAuthStore;

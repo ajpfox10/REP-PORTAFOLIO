@@ -5,9 +5,11 @@ import { usersApi } from '../api/users.api';
 import Button from '../components/common/Button';
 
 const ROLES = [
-  { value:'admin',  label:'Administrador — acceso completo' },
-  { value:'medium', label:'Operador — crear y editar propios' },
-  { value:'read',   label:'Lector — solo visualización' },
+  { value:'admin',       label:'Administrador — acceso completo' },
+  { value:'medium',      label:'Operador — crear y editar propios' },
+  { value:'read',        label:'Lector — solo visualización' },
+  { value:'telefonista', label:'Telefonista — carga rápida de llamadas' },
+  { value:'chofer',      label:'Chofer — actualiza ubicación y novedades' },
 ];
 
 const inp = { padding:'0.5rem 0.75rem', border:'1px solid #d1d5db', borderRadius:'var(--radius)', fontSize:'0.875rem', background:'#fff', width:'100%' };

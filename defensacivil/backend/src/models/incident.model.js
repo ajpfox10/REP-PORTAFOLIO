@@ -100,14 +100,15 @@ async function findMapPoints(filters = {}) {
   const conditions = ['i.is_deleted = 0', 'i.latitude IS NOT NULL', 'i.longitude IS NOT NULL'];
   const params     = [];
 
-  if (filters.status)               { conditions.push('i.status = ?');                params.push(filters.status); }
-  if (filters.incident_type_id)     { conditions.push('i.incident_type_id = ?');      params.push(filters.incident_type_id); }
-  if (filters.province_id)          { conditions.push('i.province_id = ?');           params.push(filters.province_id); }
-  if (filters.reported_by_user_id)  { conditions.push('i.reported_by_user_id = ?');   params.push(filters.reported_by_user_id); }
+  if (filters.status)           { conditions.push('i.status = ?');             params.push(filters.status); }
+  if (filters.incident_type_id) { conditions.push('i.incident_type_id = ?');   params.push(filters.incident_type_id); }
+  if (filters.province_id)      { conditions.push('i.province_id = ?');        params.push(filters.province_id); }
+  if (filters.partido_id)       { conditions.push('i.partido_id = ?');         params.push(filters.partido_id); }
+  if (filters.locality_id)      { conditions.push('i.locality_id = ?');        params.push(filters.locality_id); }
 
   return query(
     `SELECT i.uuid, i.incident_number, i.title, i.latitude, i.longitude,
-            i.status, i.priority, i.started_at,
+            i.status, i.priority, i.started_at, i.incident_type_id,
             it.name AS type_name, it.icon AS type_icon, it.color_hex
      FROM incidents i
      JOIN incident_types it ON it.id = i.incident_type_id
@@ -115,6 +116,39 @@ async function findMapPoints(filters = {}) {
      ORDER BY i.started_at DESC`,
     params
   );
+}
+
+async function addNote(uuid, userId, { latitude, longitude, notes, status } = {}) {
+  const incident = await queryOne('SELECT * FROM incidents WHERE uuid = ? AND is_deleted = 0', [uuid]);
+  if (!incident) return null;
+
+  const newStatus   = status || incident.status;
+  const updateParts = [];
+  const updateVals  = [];
+
+  if (latitude  != null) { updateParts.push('latitude = ?');  updateVals.push(latitude); }
+  if (longitude != null) { updateParts.push('longitude = ?'); updateVals.push(longitude); }
+
+  if (status && status !== incident.status) {
+    updateParts.push('status = ?');
+    updateVals.push(status);
+    if (status === 'CONTROLADO' && !incident.controlled_at) updateParts.push('controlled_at = NOW()');
+    if ((status === 'CERRADO' || status === 'CANCELADO') && !incident.closed_at) updateParts.push('closed_at = NOW()');
+  }
+
+  if (updateParts.length) {
+    updateVals.push(uuid);
+    await query(`UPDATE incidents SET ${updateParts.join(', ')} WHERE uuid = ?`, updateVals);
+  }
+
+  if (notes || (status && status !== incident.status)) {
+    await query(
+      'INSERT INTO incident_status_history (incident_id, previous_status, new_status, changed_by_user_id, notes) VALUES (?, ?, ?, ?, ?)',
+      [incident.id, incident.status, newStatus, userId, notes || null]
+    );
+  }
+
+  return findByUuid(uuid);
 }
 
 async function create(data, userId) {
@@ -310,5 +344,5 @@ async function getDashboardStats() {
 module.exports = {
   findAll, findByUuid, findMapPoints, create, update, softDelete,
   addUnit, removeUnit, addResource, removeResource,
-  updateStatus, getStatusHistory, getDashboardStats,
+  updateStatus, getStatusHistory, getDashboardStats, addNote,
 };

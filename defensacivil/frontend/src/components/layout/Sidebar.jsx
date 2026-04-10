@@ -1,13 +1,19 @@
 import { NavLink } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 
+const ALL_ROLES = ['admin', 'medium', 'read', 'telefonista', 'chofer'];
+
 const LINKS = [
-  { to:'/dashboard',  label:'Dashboard',        icon:'📊', roles:['admin','medium','read'] },
-  { to:'/incidents',  label:'Incidentes',        icon:'🚨', roles:['admin','medium','read'] },
-  { to:'/incidents/new', label:'Nuevo Incidente',icon:'➕', roles:['admin','medium'] },
-  { to:'/mapa',       label:'Mapa',              icon:'🗺️', roles:['admin','medium','read'] },
-  { to:'/usuarios',   label:'Usuarios',          icon:'👥', roles:['admin'] },
-  { to:'/auditoria',  label:'Auditoría',         icon:'📋', roles:['admin'] },
+  { to:'/dashboard',   label:'Dashboard',          icon:'📊', roles: ALL_ROLES },
+  { to:'/incidents',   label:'Incidentes',          icon:'🚨', roles: ALL_ROLES },
+  { to:'/incidents/new', label:'Nuevo Incidente',   icon:'➕', roles:['admin','medium','telefonista'] },
+  { to:'/mapa',        label:'Mapa',                icon:'🗺️', roles: ALL_ROLES },
+  // ── Páginas específicas por rol ──────────────────────────────────────────
+  { to:'/telefonista', label:'Central Telefonista', icon:'📞', roles:['admin','telefonista'] },
+  { to:'/chofer',      label:'Panel Chofer',         icon:'🚗', roles:['admin','chofer'] },
+  // ── Admin ────────────────────────────────────────────────────────────────
+  { to:'/usuarios',    label:'Usuarios',             icon:'👥', roles:['admin'] },
+  { to:'/auditoria',   label:'Auditoría',            icon:'📋', roles:['admin'] },
 ];
 
 export default function Sidebar({ isOpen }) {

@@ -29,13 +29,27 @@ async function mapPoints(req, res, next) {
       status:           req.query.status,
       incident_type_id: req.query.incident_type_id,
       province_id:      req.query.province_id,
+      partido_id:       req.query.partido_id,
+      locality_id:      req.query.locality_id,
     };
-    // El rol medium solo ve sus propios incidentes, también en el mapa
-    if (req.user.role === 'medium') {
-      filters.reported_by_user_id = req.user.id;
-    }
+    // El mapa muestra todos los incidentes sin restricción de propietario
     const points = await incidentModel.findMapPoints(filters);
     res.json(points);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function addNote(req, res, next) {
+  try {
+    const incident = await incidentModel.addNote(req.params.uuid, req.user.id, {
+      latitude:  req.body.latitude  != null ? Number(req.body.latitude)  : null,
+      longitude: req.body.longitude != null ? Number(req.body.longitude) : null,
+      notes:     req.body.notes,
+      status:    req.body.status,
+    });
+    if (!incident) return res.status(404).json({ error: 'Incidente no encontrado' });
+    res.json(incident);
   } catch (err) {
     next(err);
   }
@@ -168,5 +182,5 @@ async function dashboard(req, res, next) {
 module.exports = {
   list, mapPoints, getOne, create, update, softDelete,
   addUnit, removeUnit, addResource, removeResource,
-  updateStatus, getStatusHistory, dashboard,
+  updateStatus, getStatusHistory, dashboard, addNote,
 };

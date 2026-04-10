@@ -14,7 +14,7 @@ const createUserRules = [
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage('Debe contener mayúsculas, minúsculas y números'),
   body('role')
-    .isIn(['admin', 'medium', 'read']).withMessage('Rol inválido'),
+    .isIn(['admin', 'medium', 'read', 'telefonista', 'chofer']).withMessage('Rol inválido'),
   body('full_name')
     .notEmpty().withMessage('El nombre completo es requerido')
     .isLength({ min: 2, max: 100 }).withMessage('Entre 2 y 100 caracteres')
@@ -23,7 +23,7 @@ const createUserRules = [
 
 const updateUserRules = [
   body('email').optional().isEmail().withMessage('Email inválido').normalizeEmail(),
-  body('role').optional().isIn(['admin', 'medium', 'read']).withMessage('Rol inválido'),
+  body('role').optional().isIn(['admin', 'medium', 'read', 'telefonista', 'chofer']).withMessage('Rol inválido'),
   body('full_name').optional().isLength({ min: 2, max: 100 }).trim(),
 ];
 
