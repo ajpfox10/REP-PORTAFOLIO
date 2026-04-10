@@ -15,9 +15,11 @@ const PRIORITY_COLORS = {
 };
 
 const ROLE_COLORS = {
-  admin:  { bg:'#ede9fe', text:'#7c3aed', label:'Admin' },
-  medium: { bg:'#dbeafe', text:'#1d4ed8', label:'Operador' },
-  read:   { bg:'#f1f5f9', text:'#64748b', label:'Lector' },
+  admin:       { bg:'#ede9fe', text:'#7c3aed', label:'Admin' },
+  medium:      { bg:'#dbeafe', text:'#1d4ed8', label:'Operador' },
+  read:        { bg:'#f1f5f9', text:'#64748b', label:'Lector' },
+  telefonista: { bg:'#fef3c7', text:'#d97706', label:'Telefonista' },
+  chofer:      { bg:'#dcfce7', text:'#16a34a', label:'Chofer' },
 };
 
 export function StatusBadge({ status }) {

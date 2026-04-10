@@ -17,4 +17,5 @@ export const incidentsApi = {
 
   updateStatus:   (uuid, data)   => api.post(`/incidents/${uuid}/status`, data),
   getHistory:     (uuid)         => api.get(`/incidents/${uuid}/history`),
+  addNote:        (uuid, data)   => api.post(`/incidents/${uuid}/note`, data),
 };

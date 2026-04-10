@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Repositorios//**)",
+      "Bash(git -C /d/Repositorios log --oneline -3)",
+      "Bash(git -C /d/Repositorios fetch origin)",
+      "Bash(git -C /d/Repositorios status)",
+      "Bash(git -C /d/Repositorios show --stat HEAD)",
+      "Bash(git -C /d/Repositorios diff HEAD~1 HEAD -- defensacivil/ --stat)",
+      "Bash(git -C /d/Repositorios log --oneline --all -- defensacivil/)",
+      "Bash(git -C /d/Repositorios diff 9bfe182d HEAD -- defensacivil/ --stat)",
+      "Bash(git -C /d/Repositorios show 9bfe182d --stat)",
+      "Bash(rsync -av --delete /d/Repositorios/defensacivil/ /c/apps/defensacivil/)",
+      "Bash(robocopy \"D:\\\\Repositorios\\\\defensacivil\" \"C:\\\\apps\\\\defensacivil\" /MIR /NFL /NDL /NJH /NJS)",
+      "Bash(cmd /c 'robocopy \"D:\\\\Repositorios\\\\defensacivil\" \"C:\\\\apps\\\\defensacivil\" /MIR /NFL /NDL /NJH /NJS')",
+      "Bash(cmd /c \"robocopy \\\\\"D:\\\\\\\\Repositorios\\\\\\\\defensacivil\\\\\" \\\\\"C:\\\\\\\\apps\\\\\\\\defensacivil\\\\\" /MIR\")",
+      "Bash(cmd /c \"D:\\\\Repositorios\\\\git_sync.bat\")"
+    ]
+  }
+}
