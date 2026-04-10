@@ -253,10 +253,12 @@ async function scanESCL(ip, opts) {
         const candidates = [
             { proto: "http", port: 80 },
             { proto: "https", port: 443 },
+            { proto: "https", port: 9096 }, // Kyocera/Olivetti (d-COPIA, TASKalfa)
             { proto: "http", port: 8080 },
             { proto: "http", port: 9090 },
             { proto: "https", port: 5358 },
             { proto: "http", port: 9280 }, // HP
+            { proto: "http", port: 9095 }, // Kyocera alt
         ];
         base = await new Promise((resolve, reject) => {
             let resolved = false;
@@ -936,6 +938,32 @@ async function pollAll(devices) {
     }
 }
 // ══════════════════════════════════════════════════════════════════════════════
+// AUTODISCOVERY — llama al endpoint /discover de la API para escanear la red
+// y registrar automáticamente los escáneres encontrados vía mDNS/WSD/SNMP
+// ══════════════════════════════════════════════════════════════════════════════
+async function discoverAndRegister() {
+    try {
+        await ensureToken();
+        console.log("[autodiscovery] 🔍 Escaneando red en busca de escáneres…");
+        const res = await http_client.post("/devices/discover", {
+            methods: ["wsd", "mdns", "snmp", "probe"],
+        });
+        const { registered, updated, diagnostics } = res.data;
+        console.log(`[autodiscovery] ✅ Nuevos: ${registered} | Actualizados: ${updated}`);
+        for (const [method, info] of Object.entries(diagnostics)) {
+            if (info.ok) {
+                console.log(`[autodiscovery]    ${method}: ${info.count} encontrado(s)`);
+            }
+            else {
+                console.warn(`[autodiscovery]    ${method}: ⚠️  ${info.error}`);
+            }
+        }
+    }
+    catch (e) {
+        console.warn("[autodiscovery] ⚠️  Error al descubrir:", e?.response?.data?.message || e?.message);
+    }
+}
+// ══════════════════════════════════════════════════════════════════════════════
 // STARTUP
 // ══════════════════════════════════════════════════════════════════════════════
 async function main() {
@@ -950,6 +978,8 @@ async function main() {
         setTimeout(() => main(), 10_000);
         return;
     }
+    // Autodiscovery al arrancar
+    await discoverAndRegister();
     let devices = await getDevices();
     console.log(`[agent] 🖨️  Found ${devices.length} active devices:`);
     devices.forEach(d => console.log(`[agent]    - ${d.name} (${d.hostname}) key=${d.device_key}`));
@@ -957,6 +987,14 @@ async function main() {
         console.warn("[agent] ⚠️  Sin devices — reintentando en 30s…");
     if (devices.length)
         await heartbeatAll(devices);
+    // Autodiscovery cada 5 minutos + refresh de device list
+    const DISCOVER_MS = Number(process.env.DISCOVER_INTERVAL_MS || 5 * 60_000);
+    setInterval(async () => {
+        await discoverAndRegister();
+        devices = await getDevices();
+        console.log(`[agent] 🔄 device list: ${devices.length} devices`);
+    }, DISCOVER_MS);
+    // Refresh de device list cada 60s (por si se agregan/modifican desde la UI)
     setInterval(async () => {
         devices = await getDevices();
         console.log(`[agent] 🔄 device list: ${devices.length} devices`);

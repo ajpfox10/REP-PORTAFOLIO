@@ -168,7 +168,7 @@ export function SamoPage() {
         fetchAll('/servicios'),
         fetchAll('/reparticiones'),
         fetchAll('/articulo_26', '-fecha'),
-        fetchAll('/personal?ley_id=14'),
+        fetchAll('/agentes?ley_id=14'),
       ]);
 
       if (rLic.status === 'fulfilled') setLicencias(rLic.value);
@@ -398,16 +398,19 @@ export function SamoPage() {
   // ── Artículo 48 ────────────────────────────────────────────────────────────
   // Todos los agentes con ley_id = 14 (ART. 48), sin filtro de mes
   const art48Rows = useMemo(() =>
-    art48.map(p => ({
-      ...p,
-      apellido:    p.apellido    || '—',
-      nombre:      p.nombre      || '—',
-      legajo:      p.legajo      || '—',
-      reparticion: reparticionMap[Number(p.reparticion_id)] || '—',
-      servicio:    serviciosMap[Number(p.servicio_id)]      || '—',
-      sector:      sectoresMap[Number(p.sector_id)]         || '—',
-    })),
-    [art48, reparticionMap, serviciosMap, sectoresMap]
+    art48.map(p => {
+      const pers = personalMap[String(p.dni)] || {};
+      return {
+        ...p,
+        apellido:    pers.apellido   || p.apellido    || '—',
+        nombre:      pers.nombre     || p.nombre      || '—',
+        legajo:      pers.legajo     || p.legajo      || '—',
+        reparticion: reparticionMap[Number(p.reparticion_id)] || '—',
+        servicio:    serviciosMap[Number(p.servicio_id)]      || '—',
+        sector:      sectoresMap[Number(p.sector_id)]         || '—',
+      };
+    }),
+    [art48, personalMap, reparticionMap, serviciosMap, sectoresMap]
   );
 
   const colsArt48 = [

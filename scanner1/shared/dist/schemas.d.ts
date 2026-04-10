@@ -54,11 +54,15 @@ export declare const createScanJobSchema: z.ZodObject<{
     device_id: z.ZodNumber;
     profile_id: z.ZodOptional<z.ZodNumber>;
     priority: z.ZodDefault<z.ZodNumber>;
+    source: z.ZodDefault<z.ZodEnum<["flatbed", "adf", "adf_duplex"]>>;
+    duplex: z.ZodDefault<z.ZodBoolean>;
     personal_dni: z.ZodOptional<z.ZodNumber>;
     personal_ref: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     device_id: number;
     priority: number;
+    source: "flatbed" | "adf" | "adf_duplex";
+    duplex: boolean;
     profile_id?: number | undefined;
     personal_dni?: number | undefined;
     personal_ref?: string | undefined;
@@ -66,6 +70,8 @@ export declare const createScanJobSchema: z.ZodObject<{
     device_id: number;
     profile_id?: number | undefined;
     priority?: number | undefined;
+    source?: "flatbed" | "adf" | "adf_duplex" | undefined;
+    duplex?: boolean | undefined;
     personal_dni?: number | undefined;
     personal_ref?: string | undefined;
 }>;

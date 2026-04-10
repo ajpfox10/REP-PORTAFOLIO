@@ -43,7 +43,7 @@ export interface LoginDto {
 export interface LoginResult {
   accessToken: string;
   refreshToken: string;
-  user: { id: number; email: string; nombre: string; role: string; sector_id: number | null; sector_nombre: string | null; jefatura_id: number | null };
+  user: { id: number; email: string; nombre: string; role: string; sector_id: number | null; sector_nombre: string | null; servicio_id: number | null; servicio_nombre: string | null; jefatura_id: number | null };
   require2FA?: boolean;
   tempToken?: string;
 }
@@ -136,9 +136,11 @@ export async function loginUser(
       email: user.email,
       nombre: user.nombre || user.email,
       role: String(user.roleId ?? 'usuario'),
-      sector_id:     (user as any).sector_id     ?? null,
-      sector_nombre: (user as any).sector_nombre ?? null,
-      jefatura_id:   (user as any).jefatura_id   ?? null,
+      sector_id:      (user as any).sector_id      ?? null,
+      sector_nombre:  (user as any).sector_nombre  ?? null,
+      servicio_id:    (user as any).servicio_id    ?? null,
+      servicio_nombre:(user as any).servicio_nombre ?? null,
+      jefatura_id:    (user as any).jefatura_id    ?? null,
     },
   };
 }

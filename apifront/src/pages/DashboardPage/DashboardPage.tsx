@@ -110,6 +110,12 @@ export function DashboardPage() {
               accent="#6366f1"
             />
             <Tile
+              to="/app/samo"
+              title="🏥 SAMO"
+              desc="Gestión y seguimiento de licencias médicas del personal."
+              accent="#10b981"
+            />
+            <Tile
               to="/app/mi-cuenta"
               title="👤 Mi cuenta"
               desc="Perfil, permisos y cambio de contraseña."

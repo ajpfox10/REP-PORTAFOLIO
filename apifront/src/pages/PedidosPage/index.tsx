@@ -274,7 +274,7 @@ export function PedidosPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.81rem' }}>
                 <thead>
                   <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
-                    {['#', 'DNI', 'Agente', 'Pedido', 'Estado', 'Lugar', 'Fecha', 'Observación'].map(h => (
+                    {['#', 'DNI', 'Agente', 'Pedido', 'Estado', 'Lugar', 'Fecha', 'Observación', 'Acciones'].map(h => (
                       <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#64748b', fontSize: '0.67rem', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -303,6 +303,33 @@ export function PedidosPage() {
                         <td style={{ padding: '8px 10px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{row.lugar || '—'}</td>
                         <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '0.76rem', whiteSpace: 'nowrap' }}>{fmt(row.fecha || row.created_at)}</td>
                         <td style={{ padding: '8px 10px', color: '#64748b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.observacion}>{row.observacion || '—'}</td>
+                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                          {row.estado === 'pendiente' && (
+                            <>
+                              <button className="btn" title="Marcar Hecho" disabled={savingId === row.id}
+                                style={{ fontSize: '0.68rem', padding: '2px 6px', marginRight: 4 }}
+                                onClick={e => { e.stopPropagation(); cambiarEstado(row.id, 'hecho'); }}>✅</button>
+                              <button className="btn" title="Dar de Baja" disabled={savingId === row.id}
+                                style={{ fontSize: '0.68rem', padding: '2px 6px' }}
+                                onClick={e => { e.stopPropagation(); cambiarEstado(row.id, 'baja'); }}>🗑️</button>
+                            </>
+                          )}
+                          {row.estado === 'hecho' && (
+                            <>
+                              <button className="btn" title="Restaurar" disabled={savingId === row.id}
+                                style={{ fontSize: '0.68rem', padding: '2px 6px', marginRight: 4 }}
+                                onClick={e => { e.stopPropagation(); cambiarEstado(row.id, 'pendiente'); }}>↩️</button>
+                              <button className="btn" title="Dar de Baja" disabled={savingId === row.id}
+                                style={{ fontSize: '0.68rem', padding: '2px 6px' }}
+                                onClick={e => { e.stopPropagation(); cambiarEstado(row.id, 'baja'); }}>🗑️</button>
+                            </>
+                          )}
+                          {row.estado === 'baja' && (
+                            <button className="btn" title="Restaurar" disabled={savingId === row.id}
+                              style={{ fontSize: '0.68rem', padding: '2px 6px' }}
+                              onClick={e => { e.stopPropagation(); cambiarEstado(row.id, 'pendiente'); }}>↩️</button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

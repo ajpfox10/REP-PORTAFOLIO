@@ -276,10 +276,12 @@ async function scanESCL(ip: string, opts: {
     const candidates = [
       { proto: "http",  port: 80   },
       { proto: "https", port: 443  },
+      { proto: "https", port: 9096 }, // Kyocera/Olivetti (d-COPIA, TASKalfa)
       { proto: "http",  port: 8080 },
       { proto: "http",  port: 9090 },
       { proto: "https", port: 5358 },
       { proto: "http",  port: 9280 }, // HP
+      { proto: "http",  port: 9095 }, // Kyocera alt
     ]
     base = await new Promise<string>((resolve, reject) => {
       let resolved = false
@@ -970,6 +972,36 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// AUTODISCOVERY — llama al endpoint /discover de la API para escanear la red
+// y registrar automáticamente los escáneres encontrados vía mDNS/WSD/SNMP
+// ══════════════════════════════════════════════════════════════════════════════
+async function discoverAndRegister(): Promise<void> {
+  try {
+    await ensureToken()
+    console.log("[autodiscovery] 🔍 Escaneando red en busca de escáneres…")
+    const res = await http_client.post<{
+      devices: any[]
+      registered: number
+      updated: number
+      diagnostics: Record<string, any>
+    }>("/devices/discover", {
+      methods: ["wsd", "mdns", "snmp", "probe"],
+    })
+    const { registered, updated, diagnostics } = res.data
+    console.log(`[autodiscovery] ✅ Nuevos: ${registered} | Actualizados: ${updated}`)
+    for (const [method, info] of Object.entries(diagnostics)) {
+      if ((info as any).ok) {
+        console.log(`[autodiscovery]    ${method}: ${(info as any).count} encontrado(s)`)
+      } else {
+        console.warn(`[autodiscovery]    ${method}: ⚠️  ${(info as any).error}`)
+      }
+    }
+  } catch (e: any) {
+    console.warn("[autodiscovery] ⚠️  Error al descubrir:", e?.response?.data?.message || e?.message)
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // STARTUP
 // ══════════════════════════════════════════════════════════════════════════════
 async function main() {
@@ -986,6 +1018,9 @@ async function main() {
     return
   }
 
+  // Autodiscovery al arrancar
+  await discoverAndRegister()
+
   let devices = await getDevices()
   console.log(`[agent] 🖨️  Found ${devices.length} active devices:`)
   devices.forEach(d => console.log(`[agent]    - ${d.name} (${d.hostname}) key=${d.device_key}`))
@@ -993,6 +1028,15 @@ async function main() {
   if (!devices.length) console.warn("[agent] ⚠️  Sin devices — reintentando en 30s…")
   if (devices.length) await heartbeatAll(devices)
 
+  // Autodiscovery cada 5 minutos + refresh de device list
+  const DISCOVER_MS = Number(process.env.DISCOVER_INTERVAL_MS || 5 * 60_000)
+  setInterval(async () => {
+    await discoverAndRegister()
+    devices = await getDevices()
+    console.log(`[agent] 🔄 device list: ${devices.length} devices`)
+  }, DISCOVER_MS)
+
+  // Refresh de device list cada 60s (por si se agregan/modifican desde la UI)
   setInterval(async () => {
     devices = await getDevices()
     console.log(`[agent] 🔄 device list: ${devices.length} devices`)

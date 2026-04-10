@@ -11,11 +11,11 @@ export async function runScanFinalize(pool, data) {
         const [result] = await pool.query(`INSERT INTO documents (tenant_id,scan_job_id,storage_key,mime_type,page_count,personal_dni,personal_ref,created_at)
        VALUES (?,?,?,'application/pdf',?,?,?,now())`, [tenant_id, scan_job_id, primaryKey, page_count || null, personal_dni || null, personal_ref || null]);
         const document_id = Number(result.insertId);
-        if (storage_keys?.length > 1) {
-            for (let i = 1; i < storage_keys.length; i++) {
-                await pool.query(`INSERT INTO document_pages (tenant_id,document_id,page_number,storage_key,created_at)
-           VALUES (?,?,?,?,now())`, [tenant_id, document_id, i, storage_keys[i]]);
-            }
+        // Guardar TODAS las páginas en document_pages (incluida la página 1)
+        for (let i = 0; i < storage_keys.length; i++) {
+            await pool.query(`INSERT INTO document_pages (tenant_id,document_id,page_number,storage_key,created_at)
+         VALUES (?,?,?,?,now())`, [tenant_id, document_id, i + 1, storage_keys[i]] // page_number empieza en 1
+            );
         }
         await pool.query("UPDATE scan_jobs SET status='completed', page_count=?, completed_at=now(), updated_at=now() WHERE tenant_id=? AND id=?", [page_count || null, tenant_id, scan_job_id]);
         // NOTIFICAR A APIPERSONAL SI HAY DNI VINCULADO

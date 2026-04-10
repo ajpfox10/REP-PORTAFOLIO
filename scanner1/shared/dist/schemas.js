@@ -22,6 +22,9 @@ export const createScanJobSchema = z.object({
     device_id: z.number().int().positive(),
     profile_id: z.number().int().positive().optional(),
     priority: z.number().int().min(0).max(10).default(0),
+    // Fuente del escaneo (fix: antes no se guardaba, ADF nunca funcionaba)
+    source: z.enum(["flatbed", "adf", "adf_duplex"]).default("flatbed"),
+    duplex: z.boolean().default(false),
     // Integration: vincular el scan a un agente del backend personal
     personal_dni: z.number().int().positive().optional(),
     personal_ref: z.string().max(200).optional(),
