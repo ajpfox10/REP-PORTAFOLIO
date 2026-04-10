@@ -10,8 +10,8 @@ const {
 } = require('../validators/incident.validator');
 
 const auth    = authenticateToken;
-const all     = authorize('admin', 'medium', 'read');
-const writers = authorize('admin', 'medium');
+const all     = authorize('admin', 'medium', 'read', 'telefonista', 'chofer');
+const writers = authorize('admin', 'medium', 'telefonista', 'chofer');
 const admins  = authorize('admin');
 
 router.get('/',          auth, all,     ctrl.list);
@@ -55,5 +55,6 @@ router.post('/:uuid/status',
   ctrl.updateStatus
 );
 router.get('/:uuid/history', auth, all, ctrl.getStatusHistory);
+router.post('/:uuid/note',   auth, all, ctrl.addNote);;
 
 module.exports = router;
