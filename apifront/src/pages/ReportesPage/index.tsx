@@ -226,10 +226,10 @@ function AntigüedadTab() {
       const fechaDesde = `${anioIngreso}-${String(mesNum).padStart(2,'0')}-01`;
       const fechaHasta = lastDayOfMonth(anioIngreso, mesNum);
 
-      // 1) Traer agentes filtrados por fecha_ingreso (tabla real, siempre disponible)
+      // 1) Traer agentes ACTIVOS filtrados por fecha_ingreso (tabla real, siempre disponible)
       const agentes = await fetchAllPages(
         '/agentes',
-        `fecha_ingreso_gte=${fechaDesde}&fecha_ingreso_lte=${fechaHasta}&sort=dni`
+        `fecha_ingreso_gte=${fechaDesde}&fecha_ingreso_lte=${fechaHasta}&estado_empleo=ACTIVO&sort=dni`
       );
 
       if (!agentes.length) { toast.error('Sin resultados'); setLoading(false); return; }
@@ -509,7 +509,7 @@ function EstadisticasConsultasTab() {
         <div style={{ fontSize: '2.5rem', lineHeight: 1 }}>📋</div>
         <div>
           <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 2 }}>
-            CONSULTAS HOY ({fmtLocalDate(hoyStr())})
+            CONSULTAS DE VENTANILLA HOY ({fmtLocalDate(hoyStr())})
           </div>
           <div style={{ fontSize: '2.2rem', fontWeight: 700, color: '#38bdf8' }}>
             {totalHoy === null ? '…' : totalHoy}
@@ -930,7 +930,7 @@ export function ReportesPage() {
         <button className={`btn${tab === 'antiguedad' ? ' active' : ''}`}
           onClick={() => setTab('antiguedad')}>🏅 Antigüedad</button>
         <button className={`btn${tab === 'estadisticas_consultas' ? ' active' : ''}`}
-          onClick={() => setTab('estadisticas_consultas')}>📋 Consultas</button>
+          onClick={() => setTab('estadisticas_consultas')}>📋 Consultas de Ventanilla</button>
         <button className={`btn${tab === 'consultas_dinamicas' ? ' active' : ''}`}
           onClick={() => setTab('consultas_dinamicas')}>📊 Consultas dinámicas</button>
       </div>

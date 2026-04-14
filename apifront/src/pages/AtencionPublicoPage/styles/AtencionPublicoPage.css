@@ -392,6 +392,18 @@
   gap: 4px;
 }
 
+/* ─── Tabla de registros ─── */
+.ap-tabla { width: 100%; border-collapse: collapse; font-size: 0.8rem; table-layout: fixed; }
+.ap-tabla th { text-align: left; padding: 5px 8px; color: #94a3b8; font-weight: 600; font-size: 0.72rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.ap-tabla td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; word-break: break-word; overflow-wrap: break-word; }
+.ap-tabla-id    { width: 36px; color: #64748b; font-size: 0.72rem; white-space: nowrap; }
+.ap-tabla-fecha { width: 86px; white-space: nowrap; font-size: 0.74rem; }
+.ap-tabla-container { overflow-x: hidden; }
+
+/* ─── Foto del agente ─── */
+.ap-foto-card { padding: 6px !important; }
+.ap-foto-img  { width: 100%; max-height: 280px; object-fit: cover; object-position: top center; border-radius: 8px; display: block; }
+
 /* ─── Print styles ─── */
 @media print {
   @page {

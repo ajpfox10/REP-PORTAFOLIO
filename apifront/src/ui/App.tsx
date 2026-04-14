@@ -40,6 +40,7 @@ import { CitacionesPage } from '../pages/CitacionesPage';
 import { JefeServicioPage } from '../pages/JefeServicioPage';
 import { SamoPage } from '../pages/SamoPage';
 import { ResolucionesPage } from '../pages/ResolucionesPage';
+import { FicheroPage } from '../pages/FicheroPage';
 import { useKiosk } from '../hooks/useKiosk';
 
 function Private({ children }: { children: React.ReactNode }) {
@@ -370,6 +371,16 @@ export function App() {
                 <Private>
                   <Guard anyOf={['crud:resoluciones:read', 'crud:*:*']}>
                     <ResolucionesPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/fichero"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <FicheroPage />
                   </Guard>
                 </Private>
               }

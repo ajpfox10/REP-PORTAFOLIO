@@ -5,7 +5,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { loadSession } from '../../auth/session';
 import './styles/AtencionPublicoPage.css';
@@ -37,10 +37,13 @@ function fmtDateTime(dt?: string) {
 function fmtDateShort(dt?: string) {
   if (!dt) return '—';
   try {
-    return new Date(dt).toLocaleString('es-AR', {
-      day: '2-digit', month: '2-digit', year: '2-digit',
-      hour: '2-digit', minute: '2-digit',
-    });
+    const d = new Date(dt);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(2);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm}/${yy} ${hh}:${mi}`;
   } catch { return dt; }
 }
 
@@ -55,21 +58,24 @@ interface ResumenCardProps {
 }
 function ResumenCard({ icon, label, total, pendiente, color, loading }: ResumenCardProps) {
   return (
-    <div className="ap-resumen-card" style={{ borderTop: `3px solid ${color}` }}>
-      <div className="ap-resumen-icon" style={{ color }}>{icon}</div>
-      <div className="ap-resumen-body">
-        <div className="ap-resumen-label">{label}</div>
+    <div style={{
+      borderLeft: `3px solid ${color}`, background: 'rgba(255,255,255,0.03)',
+      borderRadius: 8, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 7,
+    }}>
+      <span style={{ fontSize: '1rem', color }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.2 }}>{label}</div>
         {loading ? (
-          <div className="ap-resumen-loading">…</div>
+          <div style={{ fontSize: '0.8rem' }}>…</div>
         ) : (
-          <>
-            <div className="ap-resumen-total">{total}</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+            <span style={{ fontWeight: 700, fontSize: '1rem', color: '#e2e8f0' }}>{total}</span>
             {pendiente !== undefined && pendiente > 0 && (
-              <div className="ap-resumen-pendiente" style={{ color }}>
-                {pendiente} pendiente{pendiente > 1 ? 's' : ''}
-              </div>
+              <span style={{ fontSize: '0.68rem', color, fontWeight: 600 }}>
+                {pendiente} pend.
+              </span>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -135,7 +141,8 @@ export function AtencionPublicoPage() {
   const [consultas, setConsultas]       = useState<any[]>([]);
   const [pedidos, setPedidos]           = useState<any[]>([]);
   const [documentos, setDocumentos]     = useState<any[]>([]);
-  const [expedientes, setExpedientes]   = useState<any[]>([]);
+  const [expedientes, setExpedientes]     = useState<any[]>([]);
+  const [resoluciones, setResoluciones]   = useState<any[]>([]);
   const [loadingDatos, setLoadingDatos] = useState(false);
 
   // Citaciones activas
@@ -150,7 +157,15 @@ export function AtencionPublicoPage() {
   const [ticketEmitido, setTicketEmitido] = useState<any>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
 
-  const [tablaTab, setTablaTab] = useState<'consultas' | 'pedidos' | 'documentos' | 'expedientes'>('consultas');
+  const [tablaTab, setTablaTab] = useState<'consultas' | 'pedidos' | 'documentos' | 'resoluciones' | 'expedientes'>('consultas');
+  const [tablaPage, setTablaPage] = useState(1);
+  const [expandedPedidoId, setExpandedPedidoId] = useState<number | null>(null);
+  const [visorArchivo, setVisorArchivo] = useState<{ url: string; nombre: string; tipo: string } | null>(null);
+  const [loadingArchivo, setLoadingArchivo] = useState<number | null>(null);
+  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+  const [fotoExpandida, setFotoExpandida] = useState(false);
+  const TABLA_PAGE_SIZE = 10;
 
   const cargarDatosAgente = useCallback(async (cleanDni: string) => {
     if (!cleanDni) return;
@@ -159,13 +174,16 @@ export function AtencionPublicoPage() {
     setPedidos([]);
     setDocumentos([]);
     setExpedientes([]);
+    setResoluciones([]);
+    setLoadedTabs(new Set(['consultas', 'pedidos']));
 
     await Promise.allSettled([
-      // Citaciones activas — abre modal automáticamente si hay una
-      apiFetch<any>(`/crud/citaciones?dni=${cleanDni}&citacion_activa=1&limit=1`)
+      // Citaciones activas — filtramos client-side por citacion_activa
+      apiFetch<any>(`/citaciones?dni=${cleanDni}&limit=10&sort=-created_at`)
         .then(r => {
-          const c = Array.isArray(r?.data) ? r.data[0] : null;
-          setCitacion(c || null);
+          const all = Array.isArray(r?.data) ? r.data : [];
+          const c = all.find((x: any) => x.citacion_activa == 1 || x.citacion_activa === true) || null;
+          setCitacion(c);
           if (c) setShowCitacionModal(true);
         })
         .catch(() => setCitacion(null)),
@@ -177,19 +195,28 @@ export function AtencionPublicoPage() {
       apiFetch<any>(`/pedidos?dni=${cleanDni}&limit=50`)
         .then(r => setPedidos(Array.isArray(r?.data) ? r.data : []))
         .catch(() => setPedidos([])),
-
-      apiFetch<any>(`/documents?dni=${cleanDni}&limit=50`)
-        .then(r => {
-          const data = Array.isArray(r?.data) ? r.data : (Array.isArray(r?.items) ? r.items : []);
-          setDocumentos(data);
-        })
-        .catch(() => setDocumentos([])),
-
-      apiFetch<any>(`/eventos?dni=${cleanDni}&limit=50`)
-        .then(r => setExpedientes(Array.isArray(r?.data) ? r.data : []))
-        .catch(() => setExpedientes([])),
     ]);
 
+    setLoadingDatos(false);
+  }, []);
+
+  const cargarTab = useCallback(async (tab: string, cleanDni: string) => {
+    if (!cleanDni) return;
+    setLoadingDatos(true);
+    if (tab === 'documentos') {
+      await apiFetch<any>(`/documents?dni=${cleanDni}&limit=100`)
+        .then(r => setDocumentos(Array.isArray(r?.data) ? r.data : []))
+        .catch(() => setDocumentos([]));
+    } else if (tab === 'resoluciones') {
+      await apiFetch<any>(`/resoluciones?dni=${cleanDni}&limit=100&sort=-fecha`)
+        .then(r => setResoluciones(Array.isArray(r?.data) ? r.data : []))
+        .catch(() => setResoluciones([]));
+    } else if (tab === 'expedientes') {
+      await apiFetch<any>(`/eventos?dni=${cleanDni}&limit=50`)
+        .then(r => setExpedientes(Array.isArray(r?.data) ? r.data : []))
+        .catch(() => setExpedientes([]));
+    }
+    setLoadedTabs(prev => new Set([...prev, tab]));
     setLoadingDatos(false);
   }, []);
 
@@ -202,6 +229,11 @@ export function AtencionPublicoPage() {
     setTicketEmitido(null);
     setCitacion(null);
     setShowCitacionModal(false);
+    setLoadedTabs(new Set());
+    setTablaTab('consultas');
+    setTablaPage(1);
+    setFotoUrl(null);
+    setFotoExpandida(false);
     try {
       const res = await apiFetch<any>(`/personal/${clean}`);
       if (!res?.ok || !res?.data) {
@@ -213,6 +245,10 @@ export function AtencionPublicoPage() {
       setRow(rowData);
       toast.ok('Agente cargado', `${rowData.apellido ?? ''}, ${rowData.nombre ?? ''}`);
       cargarDatosAgente(clean);
+      // Cargar foto del agente (silencioso si no tiene)
+      apiFetchBlob(`/agentes/${clean}/foto`)
+        .then(blob => setFotoUrl(URL.createObjectURL(blob)))
+        .catch(() => setFotoUrl(null));
     } catch (e: any) {
       toast.error('Error al buscar agente', e?.message || 'Error');
     } finally {
@@ -312,10 +348,33 @@ export function AtencionPublicoPage() {
     return new Date(c.created_at).toDateString() === new Date().toDateString();
   }).length;
 
-  const ultimasConsultas   = [...consultas].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime()).slice(0, 3);
-  const ultimosPedidos     = [...pedidos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime()).slice(0, 3);
-  const ultimosDocumentos  = [...documentos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime()).slice(0, 3);
-  const ultimosExpedientes = [...expedientes].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime()).slice(0, 3);
+  const sortedConsultas   = [...consultas].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedPedidos     = [...pedidos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedDocumentos  = [...documentos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedResoluciones = [...resoluciones].sort((a,b) => new Date(b.fecha||b.created_at||0).getTime() - new Date(a.fecha||a.created_at||0).getTime());
+  const sortedExpedientes = [...expedientes].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+
+  const tablaData = tablaTab === 'consultas'    ? sortedConsultas
+    : tablaTab === 'pedidos'      ? sortedPedidos
+    : tablaTab === 'documentos'   ? sortedDocumentos
+    : tablaTab === 'resoluciones' ? sortedResoluciones
+    : sortedExpedientes;
+
+  const abrirArchivo = async (id: number, nombre: string) => {
+    setLoadingArchivo(id);
+    try {
+      const { blob, contentType } = await apiFetchBlobWithMeta(`/documents/${id}/file`);
+      const url = URL.createObjectURL(blob);
+      setVisorArchivo({ url, nombre, tipo: contentType });
+    } catch {
+      toast.error('Error al abrir archivo', 'No se pudo cargar el documento');
+    } finally {
+      setLoadingArchivo(null);
+    }
+  };
+  const totalTablaPages = Math.max(1, Math.ceil(tablaData.length / TABLA_PAGE_SIZE));
+  const curTablaPage    = Math.min(tablaPage, totalTablaPages);
+  const tablaRows       = tablaData.slice((curTablaPage - 1) * TABLA_PAGE_SIZE, curTablaPage * TABLA_PAGE_SIZE);
 
   return (
     <>
@@ -379,27 +438,54 @@ export function AtencionPublicoPage() {
 
             {row && (
               <div className="card ap-card ap-agente-card">
-                <div className="row ap-row-between">
-                  <h3 className="ap-agente-name">👤 {row.apellido}, {row.nombre}</h3>
-                  <span className="badge">DNI {row.dni}</span>
-                </div>
-                <div className="ap-agente-grid">
-                  <div><b>CUIL:</b> {row.cuil || '—'}</div>
-                  <div><b>Ley:</b> {row.ley_nombre || row.ley_id || '—'}</div>
-                  <div><b>Dependencia:</b> {row.dependencia_nombre || '—'}</div>
-                  <div><b>Servicio:</b> {row.servicio_nombre || '—'}</div>
-                  <div><b>Categoría:</b> {row.categoria_nombre || '—'}</div>
-                  <div><b>Planta:</b> {row.planta_nombre || '—'}</div>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  {fotoUrl && (
+                    <>
+                      <img
+                        src={fotoUrl}
+                        alt={`${row.apellido}, ${row.nombre}`}
+                        onError={() => setFotoUrl(null)}
+                        onClick={() => setFotoExpandida(true)}
+                        style={{ width: 100, minWidth: 100, height: 110, objectFit: 'cover', objectPosition: 'center 48%', borderRadius: 8, border: '2px solid rgba(255,255,255,0.15)', cursor: 'zoom-in' }}
+                      />
+                      {fotoExpandida && (
+                        <div
+                          onClick={() => setFotoExpandida(false)}
+                          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+                        >
+                          <img
+                            src={fotoUrl}
+                            alt={`${row.apellido}, ${row.nombre}`}
+                            style={{ maxHeight: '85vh', maxWidth: '85vw', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="row ap-row-between">
+                      <h3 className="ap-agente-name">👤 {row.apellido}, {row.nombre}</h3>
+                      <span className="badge">DNI {row.dni}</span>
+                    </div>
+                    <div className="ap-agente-grid">
+                      <div><b>CUIL:</b> {row.cuil || '—'}</div>
+                      <div><b>Ley:</b> {row.ley_nombre || row.ley_id || '—'}</div>
+                      <div><b>Dependencia:</b> {row.dependencia_nombre || '—'}</div>
+                      <div><b>Servicio:</b> {row.servicio_nombre || '—'}</div>
+                      <div><b>Categoría:</b> {row.categoria_nombre || '—'}</div>
+                      <div><b>Planta:</b> {row.planta_nombre || '—'}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
             {row && (
-              <div className="ap-resumen-grid">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                 <ResumenCard icon="💬" label="Consultas" total={consultas.length} pendiente={consultasHoy > 0 ? consultasHoy : undefined} color="#6366f1" loading={loadingDatos} />
                 <ResumenCard icon="📋" label="Pedidos" total={pedidos.length} pendiente={pendientePedidos} color="#f59e0b" loading={loadingDatos} />
-                <ResumenCard icon="📂" label="Documentos" total={documentos.length} color="#10b981" loading={loadingDatos} />
-                <ResumenCard icon="📁" label="Expedientes" total={expedientes.length} pendiente={expedientes.filter((e: any) => e.estado === 'abierto' || e.estado === 'pendiente').length} color="#8b5cf6" loading={loadingDatos} />
+                <ResumenCard icon="📂" label="Docs" total={documentos.length} color="#10b981" loading={loadingDatos} />
+                <ResumenCard icon="📁" label="Expeds." total={expedientes.length} pendiente={expedientes.filter((e: any) => e.estado === 'abierto' || e.estado === 'pendiente').length} color="#8b5cf6" loading={loadingDatos} />
               </div>
             )}
 
@@ -449,6 +535,15 @@ export function AtencionPublicoPage() {
                 </div>
               </div>
             )}
+
+            {/* ── Escanear documento (debajo del formulario) ── */}
+            {row && (
+              <div className="ap-mt-16">
+                <button className="btn ap-btn-emitir" type="button" onClick={() => navigate(`/app/escaneo-agente/${row.dni}`)}>
+                  📷 Escanear documento — {row.apellido}, {row.nombre}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ── COLUMNA DERECHA ── */}
@@ -472,14 +567,42 @@ export function AtencionPublicoPage() {
               </div>
             )}
 
+            {/* ── Citación activa (tarjeta persistente) ── */}
+            {row && !loadingDatos && citacion && (
+              <div className="card ap-card" style={{ border: '2px solid #ef4444', background: 'rgba(239,68,68,0.07)' }}>
+                <div className="ap-alert-title" style={{ color: '#ef4444' }}>🔔 Citación Activa</div>
+                <div style={{ fontSize: '0.83rem', display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                  <div><b>Motivo:</b> {citacion.motivo || '—'}</div>
+                  <div><b>Citado por:</b> {citacion.citado_por || '—'}</div>
+                  <div><b>Fecha:</b> {fmtDateTime(citacion.fecha_citacion)}</div>
+                </div>
+              </div>
+            )}
+
             {row && !loadingDatos && pendientePedidos > 0 && (
               <div className="card ap-card ap-alert-card">
                 <div className="ap-alert-title">⚠️ {pendientePedidos} pedido(s) pendiente(s)</div>
-                {pedidos.filter((t: any) => t.estado === 'pendiente').slice(0, 5).map((t: any, i: number) => (
-                  <div key={i} className="ap-tramite-item">
-                    <span className="badge pend">PENDIENTE</span>
-                    <b>{t.pedido || t.descripcion}</b>
-                    {t.observacion && <span className="muted"> — {t.observacion}</span>}
+                {pedidos.filter((t: any) => t.estado === 'pendiente').slice(0, 10).map((t: any) => (
+                  <div key={t.id}>
+                    <div
+                      className="ap-tramite-item"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setExpandedPedidoId(expandedPedidoId === t.id ? null : t.id)}
+                    >
+                      <span className="badge pend">PENDIENTE</span>
+                      <b style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: expandedPedidoId === t.id ? 'normal' : 'nowrap' }}>
+                        {t.pedido || t.descripcion}
+                      </b>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: 6 }}>{expandedPedidoId === t.id ? '▲' : '▼'}</span>
+                    </div>
+                    {expandedPedidoId === t.id && (
+                      <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '8px 12px', margin: '4px 0 6px', fontSize: '0.82rem' }}>
+                        <div style={{ fontWeight: 600, color: '#fbbf24', marginBottom: 4 }}>Detalle del pedido</div>
+                        <div style={{ color: '#e2e8f0', wordBreak: 'break-word', lineHeight: 1.6 }}>{t.pedido || t.descripcion || '—'}</div>
+                        {t.observacion && <div style={{ color: '#94a3b8', marginTop: 4, fontStyle: 'italic' }}>{t.observacion}</div>}
+                        {t.lugar && <div style={{ color: '#94a3b8', marginTop: 2, fontSize: '0.76rem' }}>Lugar: {t.lugar}</div>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -490,31 +613,23 @@ export function AtencionPublicoPage() {
             )}
 
             {row && (
-              <div className="card ap-card ap-escaneo-card">
-                <div className="ap-escaneo-header">
-                  <span className="ap-escaneo-icon">📷</span>
-                  <div>
-                    <div className="ap-escaneo-title">Escanear documento</div>
-                    <div className="muted" style={{ fontSize: '0.75rem' }}>Abre el escáner con el agente ya cargado</div>
-                  </div>
-                </div>
-                <button className="btn ap-btn-escanear" type="button" onClick={() => navigate(`/app/escaneo-agente/${row.dni}`)}>
-                  📷 Ir a Escanear — {row.apellido}, {row.nombre}
-                </button>
-              </div>
-            )}
-
-            {row && (
               <div className="card ap-card">
-                <h3 className="ap-section-title">📊 Últimos registros</h3>
+                <h3 className="ap-section-title">📊 Registros</h3>
                 <div className="ap-tabla-tabs">
                   {([
-                    ['consultas',   '💬 Consultas',   ultimasConsultas.length],
-                    ['pedidos',     '📋 Pedidos',      ultimosPedidos.length],
-                    ['documentos',  '📂 Documentos',  ultimosDocumentos.length],
-                    ['expedientes', '📁 Expedientes', ultimosExpedientes.length],
+                    ['consultas',    '💬 Consultas',     sortedConsultas.length],
+                    ['pedidos',      '📋 Pedidos',        sortedPedidos.length],
+                    ['documentos',   '📂 Documentos',    sortedDocumentos.length],
+                    ['resoluciones', '📜 Resoluciones',  sortedResoluciones.length],
+                    ['expedientes',  '📁 Expedientes',   sortedExpedientes.length],
                   ] as [typeof tablaTab, string, number][]).map(([t, label, count]) => (
-                    <button key={t} className={`ap-tabla-tab${tablaTab === t ? ' active' : ''}`} onClick={() => setTablaTab(t)}>
+                    <button key={t} className={`ap-tabla-tab${tablaTab === t ? ' active' : ''}`}
+                      onClick={() => {
+                        setTablaTab(t); setTablaPage(1); setExpandedPedidoId(null);
+                        if (!loadedTabs.has(t) && row?.dni) {
+                          cargarTab(t, String(row.dni).replace(/\D/g, ''));
+                        }
+                      }}>
                       {label}
                       {count > 0 && <span className="ap-tab-count">{count}</span>}
                     </button>
@@ -523,77 +638,140 @@ export function AtencionPublicoPage() {
 
                 {loadingDatos ? (
                   <div className="ap-tabla-loading">🔄 Cargando datos…</div>
+                ) : tablaData.length === 0 ? (
+                  <div className="ap-tabla-empty">Sin registros</div>
                 ) : (
-                  <div className="ap-tabla-container">
-                    {tablaTab === 'consultas' && (
-                      ultimasConsultas.length > 0 ? (
-                        <table className="ap-tabla">
-                          <thead><tr><th>#</th><th>Motivo</th><th>Estado</th><th>Fecha</th></tr></thead>
-                          <tbody>
-                            {ultimasConsultas.map((c: any) => (
-                              <tr key={c.id}>
-                                <td className="ap-tabla-id">{c.id}</td>
-                                <td>{c.motivo_consulta || c.motivo || '—'}</td>
-                                <td><span className={`ap-estado-badge ${c.estado === 'pendiente' ? 'pend' : 'ok'}`}>{c.estado || '—'}</span></td>
-                                <td className="muted ap-tabla-fecha">{fmtDateShort(c.created_at)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : <div className="ap-tabla-empty">Sin consultas registradas</div>
+                  <>
+                    <div className="ap-tabla-container">
+                      <table className="ap-tabla">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            {tablaTab === 'consultas'    && <><th>Motivo</th><th>Estado</th><th>Fecha</th></>}
+                            {tablaTab === 'pedidos'      && <><th>Pedido</th><th>Estado</th><th>Fecha</th></>}
+                            {tablaTab === 'documentos'   && <><th>Nombre</th><th>Tipo</th><th>Fecha</th></>}
+                            {tablaTab === 'resoluciones' && <><th>Motivo</th><th>Número</th><th>Fecha</th></>}
+                            {tablaTab === 'expedientes'  && <><th>Tipo</th><th>Estado</th><th>Fecha</th></>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tablaRows.map((item: any) => {
+                            const isExp = expandedPedidoId === item.id;
+                            return (
+                              <React.Fragment key={item.id}>
+                                <tr
+                                  style={{ cursor: 'pointer', background: isExp ? 'rgba(99,102,241,0.12)' : undefined }}
+                                  onClick={() => setExpandedPedidoId(isExp ? null : item.id)}
+                                >
+                                  <td className="ap-tabla-id">{item.id}</td>
+                                  {tablaTab === 'consultas' && <>
+                                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.motivo_consulta || item.motivo || '—'}
+                                    </td>
+                                    <td><span className={`ap-estado-badge ${item.estado === 'pendiente' ? 'pend' : 'ok'}`}>{item.estado || '—'}</span></td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.created_at)}</td>
+                                  </>}
+                                  {tablaTab === 'pedidos' && <>
+                                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.pedido || item.descripcion || '—'}
+                                    </td>
+                                    <td><span className={`ap-estado-badge ${item.estado === 'pendiente' ? 'pend' : 'ok'}`}>{item.estado || '—'}</span></td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.created_at)}</td>
+                                  </>}
+                                  {tablaTab === 'documentos' && <>
+                                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {item.nombre || item.nombre_archivo_original || `Doc #${item.id}`}
+                                    </td>
+                                    <td><span className="ap-tipo-badge">{item.tipo || '—'}</span></td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.created_at || item.fecha)}</td>
+                                  </>}
+                                  {tablaTab === 'resoluciones' && <>
+                                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.motivo || '—'}
+                                    </td>
+                                    <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '0.76rem' }}>{item.numero || '—'}</td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha || item.created_at)}</td>
+                                  </>}
+                                  {tablaTab === 'expedientes' && <>
+                                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.tipo || item.descripcion || item.titulo || '—'}
+                                    </td>
+                                    <td><span className={`ap-estado-badge ${['abierto','pendiente'].includes(item.estado) ? 'pend' : 'ok'}`}>{item.estado || '—'}</span></td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.created_at || item.fecha)}</td>
+                                  </>}
+                                </tr>
+                                {/* Fila expandida */}
+                                {isExp && (
+                                  <tr>
+                                    <td colSpan={4} style={{ padding: 0 }}>
+                                      <div style={{ background: 'rgba(99,102,241,0.07)', borderLeft: '3px solid #6366f1', padding: '10px 14px', fontSize: '0.82rem', lineHeight: 1.7 }}>
+                                        {tablaTab === 'consultas' && <>
+                                          <div><b>Motivo completo:</b> {item.motivo_consulta || item.motivo || '—'}</div>
+                                          {item.explicacion && <div><b>Explicación:</b> {item.explicacion}</div>}
+                                          {item.atendido_por && <div><b>Atendido por:</b> {item.atendido_por}</div>}
+                                          <div className="muted">{fmtDateTime(item.created_at)}</div>
+                                        </>}
+                                        {tablaTab === 'pedidos' && <>
+                                          <div><b>Pedido:</b> {item.pedido || item.descripcion || '—'}</div>
+                                          {item.observacion && <div><b>Observación:</b> {item.observacion}</div>}
+                                          {item.lugar && <div><b>Lugar:</b> {item.lugar}</div>}
+                                          {item.baja_por_nombre && <div style={{ color: '#fca5a5' }}><b>Baja por:</b> {item.baja_por_nombre}</div>}
+                                          <div className="muted">{fmtDateTime(item.created_at)}</div>
+                                        </>}
+                                        {tablaTab === 'documentos' && <>
+                                          <div><b>Nombre:</b> {item.nombre || item.nombre_archivo_original || '—'}</div>
+                                          <div><b>Tipo:</b> {item.tipo || '—'}</div>
+                                          {item.descripcion_archivo && <div><b>Descripción:</b> {item.descripcion_archivo}</div>}
+                                          {item.escaneado_por && <div><b>Escaneado por:</b> {item.escaneado_por}</div>}
+                                          {item.ruta && !/^\d+$/.test(String(item.ruta).trim()) && (
+                                            <button
+                                              className="btn"
+                                              style={{ marginTop: 6, fontSize: '0.74rem', background: 'rgba(99,102,241,0.2)', color: '#a5b4fc' }}
+                                              disabled={loadingArchivo === item.id}
+                                              onClick={e => { e.stopPropagation(); abrirArchivo(item.id, item.nombre || item.nombre_archivo_original || `Doc #${item.id}`); }}
+                                            >
+                                              {loadingArchivo === item.id ? '⏳ Cargando…' : '📎 Ver archivo'}
+                                            </button>
+                                          )}
+                                          {(!item.ruta || /^\d+$/.test(String(item.ruta).trim())) && (
+                                            <div className="muted" style={{ marginTop: 4, fontSize: '0.74rem' }}>📁 Documento histórico sin archivo digital</div>
+                                          )}
+                                          <div className="muted" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at || item.fecha)}</div>
+                                        </>}
+                                        {tablaTab === 'resoluciones' && <>
+                                          <div><b>Motivo:</b> {item.motivo || '—'}</div>
+                                          {item.numero && <div><b>Número:</b> {item.numero}</div>}
+                                          {item.observaciones && <div><b>Observaciones:</b> {item.observaciones}</div>}
+                                          <div className="muted">{fmtDateTime(item.fecha || item.created_at)}</div>
+                                        </>}
+                                        {tablaTab === 'expedientes' && <>
+                                          <div><b>Tipo:</b> {item.tipo || '—'}</div>
+                                          {item.descripcion && <div><b>Descripción:</b> {item.descripcion}</div>}
+                                          {item.titulo && <div><b>Título:</b> {item.titulo}</div>}
+                                          <div className="muted">{fmtDateTime(item.created_at || item.fecha)}</div>
+                                        </>}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Paginación */}
+                    {totalTablaPages > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: '0.78rem' }}>
+                        <button className="btn" style={{ fontSize: '0.74rem', padding: '3px 10px' }}
+                          disabled={curTablaPage <= 1} onClick={() => setTablaPage(p => p - 1)}>‹ Ant.</button>
+                        <span className="muted">Pág. {curTablaPage} / {totalTablaPages} · {tablaData.length} registros</span>
+                        <button className="btn" style={{ fontSize: '0.74rem', padding: '3px 10px' }}
+                          disabled={curTablaPage >= totalTablaPages} onClick={() => setTablaPage(p => p + 1)}>Sig. ›</button>
+                      </div>
                     )}
-                    {tablaTab === 'pedidos' && (
-                      ultimosPedidos.length > 0 ? (
-                        <table className="ap-tabla">
-                          <thead><tr><th>#</th><th>Pedido</th><th>Estado</th><th>Fecha</th></tr></thead>
-                          <tbody>
-                            {ultimosPedidos.map((p: any) => (
-                              <tr key={p.id}>
-                                <td className="ap-tabla-id">{p.id}</td>
-                                <td>{p.pedido || p.descripcion || '—'}</td>
-                                <td><span className={`ap-estado-badge ${p.estado === 'pendiente' ? 'pend' : 'ok'}`}>{p.estado || '—'}</span></td>
-                                <td className="muted ap-tabla-fecha">{fmtDateShort(p.created_at)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : <div className="ap-tabla-empty">Sin pedidos registrados</div>
-                    )}
-                    {tablaTab === 'documentos' && (
-                      ultimosDocumentos.length > 0 ? (
-                        <table className="ap-tabla">
-                          <thead><tr><th>#</th><th>Nombre</th><th>Tipo</th><th>Fecha</th></tr></thead>
-                          <tbody>
-                            {ultimosDocumentos.map((d: any) => (
-                              <tr key={d.id}>
-                                <td className="ap-tabla-id">{d.id}</td>
-                                <td>{d.nombre || d.nombre_archivo_original || `Doc #${d.id}`}</td>
-                                <td><span className="ap-tipo-badge">{d.tipo || '—'}</span></td>
-                                <td className="muted ap-tabla-fecha">{fmtDateShort(d.created_at || d.fecha)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : <div className="ap-tabla-empty">Sin documentos cargados</div>
-                    )}
-                    {tablaTab === 'expedientes' && (
-                      ultimosExpedientes.length > 0 ? (
-                        <table className="ap-tabla">
-                          <thead><tr><th>#</th><th>Tipo</th><th>Estado</th><th>Fecha</th></tr></thead>
-                          <tbody>
-                            {ultimosExpedientes.map((e: any) => (
-                              <tr key={e.id}>
-                                <td className="ap-tabla-id">{e.id}</td>
-                                <td>{e.tipo || e.descripcion || e.titulo || '—'}</td>
-                                <td><span className={`ap-estado-badge ${['abierto','pendiente'].includes(e.estado) ? 'pend' : 'ok'}`}>{e.estado || '—'}</span></td>
-                                <td className="muted ap-tabla-fecha">{fmtDateShort(e.created_at || e.fecha)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : <div className="ap-tabla-empty">Sin expedientes registrados</div>
-                    )}
-                  </div>
+                  </>
                 )}
               </div>
             )}
@@ -601,6 +779,37 @@ export function AtencionPublicoPage() {
 
         </div>
       </Layout>
+
+      {/* ── Visor de archivo inline ── */}
+      {visorArchivo && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 900, background: '#1e293b', borderRadius: 14, border: '1px solid rgba(255,255,255,0.12)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#e2e8f0' }}>📎 {visorArchivo.nombre}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <a href={visorArchivo.url} download={visorArchivo.nombre}
+                  className="btn" style={{ fontSize: '0.74rem' }}
+                  onClick={e => e.stopPropagation()}>⬇ Descargar</a>
+                <button className="btn" style={{ fontSize: '0.74rem' }}
+                  onClick={() => { URL.revokeObjectURL(visorArchivo.url); setVisorArchivo(null); }}>✕ Cerrar</button>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: 8 }}>
+              {visorArchivo.tipo.includes('pdf') ? (
+                <iframe src={visorArchivo.url} style={{ width: '100%', height: '75vh', border: 'none', borderRadius: 8 }} title={visorArchivo.nombre} />
+              ) : visorArchivo.tipo.includes('image') ? (
+                <img src={visorArchivo.url} alt={visorArchivo.nombre} style={{ maxWidth: '100%', borderRadius: 8 }} />
+              ) : (
+                <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: 8 }}>📄</div>
+                  <div>No se puede previsualizar este tipo de archivo ({visorArchivo.tipo})</div>
+                  <a href={visorArchivo.url} download={visorArchivo.nombre} style={{ color: '#818cf8', marginTop: 12, display: 'inline-block' }}>⬇ Descargar archivo</a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal citación activa — se abre automáticamente al cargar el agente ── */}
       {showCitacionModal && citacion && (

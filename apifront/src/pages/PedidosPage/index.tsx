@@ -1,14 +1,11 @@
 // src/pages/PedidosPage/index.tsx
-// Carga todos los pedidos pendientes al entrar.
-// Filtros client-side: DNI, apellido, estado.
-// Búsqueda por apellido usa el cache global de personal.
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { getAllPersonal } from '../../api/searchPersonal';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf, printTable } from '../../utils/export';
+import { useAuth } from '../../auth/AuthProvider';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function fmt(d?: string | null) {
@@ -52,6 +49,7 @@ const PAGE_SIZE = 50;
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function PedidosPage() {
   const toast = useToast();
+  const { session } = useAuth();
 
   // Datos
   const [todos,        setTodos]        = useState<any[]>([]);
@@ -69,22 +67,37 @@ export function PedidosPage() {
   const [page,         setPage]         = useState(1);
   const [selectedId,   setSelectedId]   = useState<number | null>(null);
 
+  // ── Nombre del usuario actual ───────────────────────────────────────────────
+  const nombreUsuarioActual = (): string => {
+    const u = session?.user;
+    if (!u) return 'Sistema';
+    if (u.nombre) return u.nombre;
+    if (u.email) return u.email;
+    return 'Sistema';
+  };
+
   // ── Cambiar estado de pedido ────────────────────────────────────────────────
   const cambiarEstado = useCallback(async (id: number, estado: string) => {
     setSavingId(id);
     try {
+      const body: Record<string, any> = { estado };
+      if (estado === 'baja') {
+        body.baja_por_nombre = nombreUsuarioActual();
+      }
       await apiFetch<any>(`/pedidos/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ estado }),
+        body: JSON.stringify(body),
       });
-      setTodos(prev => prev.map(r => r.id === id ? { ...r, estado } : r));
+      setTodos(prev => prev.map(r =>
+        r.id === id ? { ...r, estado, ...(estado === 'baja' ? { baja_por_nombre: body.baja_por_nombre } : {}) } : r
+      ));
       toast.ok(`Pedido marcado como ${estado}`);
     } catch (e: any) {
       toast.error('Error al actualizar pedido', e?.message);
     } finally {
       setSavingId(null);
     }
-  }, []); // eslint-disable-line
+  }, [session]); // eslint-disable-line
 
   // ── Carga inicial ───────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
@@ -158,15 +171,16 @@ export function PedidosPage() {
 
   // ── Export ──────────────────────────────────────────────────────────────────
   const exportRows = filtrados.map(r => ({
-    id:          r.id,
-    dni:         r.dni,
-    agente:      nombreAgente(r),
-    pedido:      r.pedido,
-    estado:      r.estado,
-    lugar:       r.lugar,
-    fecha:       fmt(r.fecha),
-    observacion: r.observacion,
-    creado:      fmt(r.created_at),
+    id:             r.id,
+    dni:            r.dni,
+    agente:         nombreAgente(r),
+    pedido:         r.pedido,
+    estado:         r.estado,
+    lugar:          r.lugar,
+    fecha:          fmt(r.fecha),
+    observacion:    r.observacion,
+    baja_por:       r.baja_por_nombre,
+    creado:         fmt(r.created_at),
   }));
 
   return (
@@ -274,7 +288,7 @@ export function PedidosPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.81rem' }}>
                 <thead>
                   <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
-                    {['#', 'DNI', 'Agente', 'Pedido', 'Estado', 'Lugar', 'Fecha', 'Observación', 'Acciones'].map(h => (
+                    {['#', 'DNI', 'Agente', 'Pedido', 'Estado', 'Lugar', 'Fecha', 'Acciones'].map(h => (
                       <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#64748b', fontSize: '0.67rem', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -294,15 +308,21 @@ export function PedidosPage() {
                         <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '0.74rem', color: '#475569' }}>{row.id}</td>
                         <td style={{ padding: '8px 10px', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.dni}</td>
                         <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', fontWeight: 600 }}>{nombreAgente(row)}</td>
-                        <td style={{ padding: '8px 10px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.pedido}>{row.pedido || '—'}</td>
+                        <td style={{ padding: '8px 10px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.pedido}>{row.pedido || '—'}</td>
                         <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 5, background: color + '28', color, fontWeight: 700 }}>
-                            {row.estado || '—'}
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 5, background: color + '28', color, fontWeight: 700 }}>
+                              {row.estado || '—'}
+                            </span>
+                            {row.estado === 'baja' && row.baja_por_nombre && (
+                              <span style={{ fontSize: '0.65rem', color: '#94a3b8' }} title="Dado de baja por">
+                                por {row.baja_por_nombre}
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td style={{ padding: '8px 10px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{row.lugar || '—'}</td>
+                        <td style={{ padding: '8px 10px', color: '#94a3b8', whiteSpace: 'nowrap', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.lugar || '—'}</td>
                         <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '0.76rem', whiteSpace: 'nowrap' }}>{fmt(row.fecha || row.created_at)}</td>
-                        <td style={{ padding: '8px 10px', color: '#64748b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.observacion}>{row.observacion || '—'}</td>
                         <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                           {row.estado === 'pendiente' && (
                             <>
@@ -351,59 +371,74 @@ export function PedidosPage() {
         {/* ── Detalle del pedido seleccionado ── */}
         {selected && (
           <div className="card" style={{ padding: '1.2rem', borderLeft: `3px solid ${estadoColor[selected.estado] || '#64748b'}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
               <strong style={{ fontSize: '0.9rem', color: '#e2e8f0' }}>
                 📄 Pedido #{selected.id}
-                {selected.estado && (
-                  <span style={{ marginLeft: 10, color: estadoColor[selected.estado] || '#64748b', fontSize: '0.8rem', fontWeight: 700 }}>
-                    {selected.estado.toUpperCase()}
+                <span style={{ marginLeft: 10, color: estadoColor[selected.estado] || '#64748b', fontSize: '0.8rem', fontWeight: 700 }}>
+                  {(selected.estado || '').toUpperCase()}
+                </span>
+                {selected.estado === 'baja' && selected.baja_por_nombre && (
+                  <span style={{ marginLeft: 8, fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>
+                    · dado de baja por <strong style={{ color: '#fca5a5' }}>{selected.baja_por_nombre}</strong>
                   </span>
                 )}
               </strong>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {selected.estado !== 'hecho' && (
-                  <button
-                    className="btn"
-                    style={{ fontSize: '0.73rem', background: '#16a34a', color: '#fff' }}
+                  <button className="btn" style={{ fontSize: '0.73rem', background: '#16a34a', color: '#fff' }}
                     disabled={savingId === selected.id}
-                    onClick={() => cambiarEstado(selected.id, 'hecho')}
-                  >✅ Marcar Hecho</button>
+                    onClick={() => cambiarEstado(selected.id, 'hecho')}>✅ Marcar Hecho</button>
                 )}
                 {selected.estado !== 'baja' && (
-                  <button
-                    className="btn"
-                    style={{ fontSize: '0.73rem', background: '#dc2626', color: '#fff' }}
+                  <button className="btn" style={{ fontSize: '0.73rem', background: '#dc2626', color: '#fff' }}
                     disabled={savingId === selected.id}
-                    onClick={() => cambiarEstado(selected.id, 'baja')}
-                  >🗑️ Dar de Baja</button>
+                    onClick={() => cambiarEstado(selected.id, 'baja')}>🗑️ Dar de Baja</button>
                 )}
                 {selected.estado !== 'pendiente' && (
-                  <button
-                    className="btn"
-                    style={{ fontSize: '0.73rem' }}
+                  <button className="btn" style={{ fontSize: '0.73rem' }}
                     disabled={savingId === selected.id}
-                    onClick={() => cambiarEstado(selected.id, 'pendiente')}
-                  >↩️ Restaurar</button>
+                    onClick={() => cambiarEstado(selected.id, 'pendiente')}>↩️ Restaurar</button>
                 )}
                 <button className="btn" style={{ fontSize: '0.72rem' }} onClick={() => setSelectedId(null)}>✕ Cerrar</button>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+
+            {/* Grilla de datos — campos cortos */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
               {[
-                { k: 'Agente',      v: nombreAgente(selected) },
-                { k: 'DNI',         v: selected.dni },
-                { k: 'Pedido',      v: selected.pedido },
-                { k: 'Estado',      v: selected.estado },
-                { k: 'Lugar',       v: selected.lugar },
-                { k: 'Fecha',       v: fmt(selected.fecha || selected.created_at) },
-                { k: 'Observación', v: selected.observacion },
+                { k: 'Agente',  v: nombreAgente(selected) },
+                { k: 'DNI',     v: selected.dni },
+                { k: 'Estado',  v: selected.estado },
+                { k: 'Lugar',   v: selected.lugar },
+                { k: 'Fecha',   v: fmt(selected.fecha || selected.created_at) },
+                ...(selected.estado === 'baja' && selected.baja_por_nombre
+                  ? [{ k: 'Baja por', v: selected.baja_por_nombre }]
+                  : []),
               ].map(({ k, v }) => (
                 <div key={k}>
                   <div className="muted" style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{k}</div>
-                  <div style={{ fontSize: '0.88rem', wordBreak: 'break-word', color: '#e2e8f0' }}>{String(v ?? '—')}</div>
+                  <div style={{ fontSize: '0.88rem', color: '#e2e8f0' }}>{String(v ?? '—')}</div>
                 </div>
               ))}
             </div>
+
+            {/* Pedido — ancho completo */}
+            <div style={{ marginBottom: 10 }}>
+              <div className="muted" style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Pedido</div>
+              <div style={{ fontSize: '0.9rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 14px', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                {selected.pedido || '—'}
+              </div>
+            </div>
+
+            {/* Observación — ancho completo */}
+            {selected.observacion && (
+              <div>
+                <div className="muted" style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Observación</div>
+                <div style={{ fontSize: '0.88rem', color: '#94a3b8', background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                  {selected.observacion}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
