@@ -225,6 +225,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
                  DAY(p.fecha_nacimiento)   AS dia_cumple,
                  TIMESTAMPDIFF(YEAR, p.fecha_nacimiento, CURDATE()) AS edad
           FROM personal p
+          INNER JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL AND a.estado_empleo = 'ACTIVO'
           WHERE ${where.join(' AND ')}
           ORDER BY mes_cumple ASC, dia_cumple ASC, p.apellido ASC
           LIMIT :limit

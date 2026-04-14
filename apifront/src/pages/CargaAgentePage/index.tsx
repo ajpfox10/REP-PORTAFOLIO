@@ -1,5 +1,6 @@
 // src/pages/CargaAgentePage/index.tsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { apiFetch } from '../../api/http';
 import { useNavigate } from 'react-router-dom';
 import { useCargaAgente, ESTADO_EMPLEO_OPTS } from './hooks/useCargaAgente';
 import { useCamera } from './hooks/useCamera';
@@ -121,10 +122,54 @@ function StepPersonal({ form, setField, errors, cats }: any) {
 
 // ─── Step 2: Datos Laborales ──────────────────────────────────────────────────
 function StepLaboral({ form, setField, errors, cats }: any) {
-  const sel = (label: string, field: string, items: any[]) => (
+  const [reparticiones, setReparticiones] = useState<any[]>([]);
+  const [servicios,     setServicios]     = useState<any[]>([]);
+  const [sectores,      setSectores]      = useState<any[]>([]);
+
+  // Cascade: dependencia → reparticion
+  useEffect(() => {
+    setReparticiones([]); setServicios([]); setSectores([]);
+    if (!form.dependencia_id) return;
+    apiFetch<any>(`/reparticiones?dependencia_id=${form.dependencia_id}&limit=500`)
+      .then(res => {
+        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        setReparticiones(raw.map((o: any) => ({ id: o.id, nombre: o.reparticion_nombre || o.nombre || String(o.id) })));
+      }).catch(() => {});
+  }, [form.dependencia_id]);
+
+  // Cascade: reparticion → servicio
+  useEffect(() => {
+    setServicios([]); setSectores([]);
+    if (!form.reparticion_id) return;
+    apiFetch<any>(`/servicios?reparticion_id=${form.reparticion_id}&limit=500`)
+      .then(res => {
+        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        setServicios(raw.map((o: any) => ({ id: o.id, nombre: o.nombre || String(o.id) })));
+      }).catch(() => {});
+  }, [form.reparticion_id]);
+
+  // Cascade: servicio → sector
+  useEffect(() => {
+    setSectores([]);
+    if (!form.servicio_id) return;
+    apiFetch<any>(`/sectores?servicio_id=${form.servicio_id}&limit=500`)
+      .then(res => {
+        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        setSectores(raw.map((o: any) => ({ id: o.id, nombre: o.nombre || String(o.id) })));
+      }).catch(() => {});
+  }, [form.servicio_id]);
+
+  const sel = (label: string, field: string, items: any[], disabled = false) => (
     <div className="ca-field">
       <label className="ca-label">{label}</label>
-      <select className="ca-select" value={form[field]} onChange={e => setField(field, e.target.value)}>
+      <select className="ca-select" value={form[field] ?? ''} disabled={disabled}
+        onChange={e => {
+          setField(field, e.target.value);
+          // limpiar hijos al cambiar padre
+          if (field === 'dependencia_id') { setField('reparticion_id', ''); setField('servicio_id', ''); setField('sector_id', ''); }
+          if (field === 'reparticion_id') { setField('servicio_id', ''); setField('sector_id', ''); }
+          if (field === 'servicio_id')    { setField('sector_id', ''); }
+        }}>
         <option value="">— Seleccionar —</option>
         {items.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
       </select>
@@ -136,7 +181,6 @@ function StepLaboral({ form, setField, errors, cats }: any) {
       <div className="ca-section-title">💼 Datos Laborales</div>
       <div className="ca-form-grid">
 
-        {/* ── Agente principal ── */}
         <div className="ca-field">
           <label className="ca-label">Fecha de Ingreso</label>
           <input className="ca-input" type="date" value={form.fecha_ingreso}
@@ -159,45 +203,27 @@ function StepLaboral({ form, setField, errors, cats }: any) {
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Salario mensual</label>
-          <input className="ca-input" type="number" value={form.salario_mensual}
-            onChange={e => setField('salario_mensual', e.target.value)} placeholder="0.00" />
+          <label className="ca-label">Decreto de Designación</label>
+          <input className="ca-input" value={form.decreto_designacion}
+            onChange={e => setField('decreto_designacion', e.target.value)} placeholder="Ej: 1234/2024" />
         </div>
 
-        {/* Catálogos de agentes */}
         {sel('Ley', 'ley_id', cats.ley)}
         {sel('Planta', 'planta_id', cats.planta)}
         {sel('Categoría', 'categoria_id', cats.categoria)}
         {sel('Función', 'funcion_id', cats.funcion)}
         {sel('Ocupación', 'ocupacion_id', cats.ocupacion)}
         {sel('Régimen Horario', 'regimen_horario_id', cats.regimenHorario)}
-        {sel('Sector / Repartición (agente)', 'sector_id', cats.reparticion)}
-        {sel('Jefatura', 'jefatura_id', cats.jefatura)}
 
-        {/* ── Agentes Servicios ── */}
+        {/* ── Cascade org ── */}
         <div className="ca-field-separator full">
-          <span className="ca-section-subtitle">📍 Servicio / Dependencia</span>
+          <span className="ca-section-subtitle">🏥 Dependencia / Repartición / Servicio / Sector</span>
         </div>
 
-        {sel('Dependencia (servicio)', 'dependencia_id', cats.reparticion)}
-
-        <div className="ca-field">
-          <label className="ca-label">Nombre del servicio</label>
-          <input className="ca-input" value={form.servicio_nombre}
-            onChange={e => setField('servicio_nombre', e.target.value)} placeholder="Ej: Área de Personal" />
-        </div>
-
-        <div className="ca-field">
-          <label className="ca-label">Jefe inmediato</label>
-          <input className="ca-input" value={form.jefe_nombre}
-            onChange={e => setField('jefe_nombre', e.target.value)} placeholder="Apellido, Nombre" />
-        </div>
-
-        <div className="ca-field">
-          <label className="ca-label">Desde (fecha de asignación)</label>
-          <input className="ca-input" type="date" value={form.fecha_desde}
-            onChange={e => setField('fecha_desde', e.target.value)} />
-        </div>
+        {sel('Dependencia', 'dependencia_id', cats.dependencia)}
+        {sel('Repartición', 'reparticion_id', reparticiones, !form.dependencia_id)}
+        {sel('Servicio',    'servicio_id',    servicios,     !form.reparticion_id)}
+        {sel('Sector',      'sector_id',      sectores,      !form.servicio_id)}
 
         <div className="ca-field full">
           <label className="ca-label">Observaciones</label>
@@ -582,10 +608,9 @@ function Resumen({ form, photo, docs, cats }: any) {
     ['Planta', fn(cats.planta, form.planta_id)],
     ['Categoría', fn(cats.categoria, form.categoria_id)],
     ['Función', fn(cats.funcion, form.funcion_id)],
-    ['Sector/Repartición', fn(cats.reparticion, form.sector_id)],
     ['Ocupación', fn(cats.ocupacion, form.ocupacion_id)],
-    ['Dependencia (servicio)', fn(cats.reparticion, form.dependencia_id)],
-    ['Jefatura', fn(cats.jefatura, form.jefatura_id)],
+    ['Dependencia', fn(cats.dependencia, form.dependencia_id)],
+    ['Decreto', form.decreto_designacion || '—'],
     ['Email', form.email || '—'],
     ['Teléfono', form.telefono || '—'],
   ];

@@ -283,10 +283,36 @@ const schema = z.object({
   // Fotos (si no se define, cae al mismo base dir de documentos)
   PHOTOS_BASE_DIR: strish(""),
 
+  // Directorio adicional donde el escáner guarda archivos (ej: D:\G\DOCU).
+  // Si está definido, el servicio de documentos busca aquí cuando no encuentra en DOCUMENTS_BASE_DIR.
+  DOCUMENTS_SCAN_DIR: strish(""),
+
   // Estadística de asistencia — carpeta donde se buscan los Excel MINISTERIO/SIAP
   // Ejemplo Windows: D:\Asistencia\Excel
   // Ejemplo Linux:   /data/asistencia
   EXCEL_ASISTENCIA_DIR: strish(""),
+
+  // Módulo Fichero
+  FICHERO_LOG_PATH: strish(""),          // legacy, ya no se usa (el log lo gestiona el módulo)
+  // MySQL del reloj biométrico (si no se completa aquí, se puede configurar desde la UI)
+  FICHERO_MYSQL_HOST: strish("127.0.0.1"),
+  FICHERO_MYSQL_PORT: intish(3306),
+  FICHERO_MYSQL_USER: strish("root"),
+  FICHERO_MYSQL_PASS: strish(""),
+  FICHERO_MYSQL_DB:   strish("adms_db"),
+  // SFTP destino
+  FICHERO_SFTP_HOST: strish(""),
+  FICHERO_SFTP_PORT: intish(22),
+  FICHERO_SFTP_USER:       strish(""),
+  FICHERO_SFTP_PASS:       strish(""),
+  FICHERO_SFTP_DIR:        strish("/fichadas"),
+  FICHERO_SFTP_LOCAL_ADDR: strish(""),
+  // Generación de archivos
+  FICHERO_OUTPUT_DIR:    strish("./fichadas"),
+  FICHERO_PREFIJO:       strish("026"),
+  FICHERO_SUFIJO:        strish("048350"),
+  FICHERO_LIMITE:        intish(50000),
+  FICHERO_INTERVALO_MIN: intish(50),
 
   // HTTPS nativo (Node termina TLS directamente, sin Nginx/proxy)
   // Si tenés Nginx/ALB terminando TLS, dejá HTTPS_ENABLE=false y usá TRUST_PROXY=true

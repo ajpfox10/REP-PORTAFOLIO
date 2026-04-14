@@ -56,9 +56,11 @@ export interface ResolvedFile {
 
 export class DocumentService {
   private readonly baseDir: string;
+  private readonly scanDir: string;
 
   constructor(private readonly sequelize: Sequelize) {
     this.baseDir = env.DOCUMENTS_BASE_DIR;
+    this.scanDir = (env as any).DOCUMENTS_SCAN_DIR?.trim() || '';
   }
 
   /**
@@ -98,12 +100,20 @@ export class DocumentService {
     // Intentar resolver usando distintas estrategias
     let fullPath: string | null = null;
 
-    // Estrategia 2 y 3: normalizar la ruta
-    fullPath = this.tryResolvePath(rutaRaw);
+    // Estrategia 2 y 3: normalizar la ruta contra DOCUMENTS_BASE_DIR
+    fullPath = this.tryResolvePath(rutaRaw, this.baseDir);
 
-    // Si no, buscar por nombre de archivo en el arbol de directorios
+    // Si no encontró, intentar contra DOCUMENTS_SCAN_DIR (carpeta del escáner)
+    if (!fullPath && this.scanDir) {
+      fullPath = this.tryResolvePath(rutaRaw, this.scanDir);
+    }
+
+    // Si no, buscar por nombre de archivo en el arbol de directorios (ambos dirs)
     if (!fullPath && nombreOriginal) {
-      fullPath = this.searchByFilename(nombreOriginal);
+      fullPath = this.searchByFilename(nombreOriginal, this.baseDir);
+      if (!fullPath && this.scanDir) {
+        fullPath = this.searchByFilename(nombreOriginal, this.scanDir);
+      }
     }
 
     if (!fullPath) {
@@ -198,11 +208,11 @@ export class DocumentService {
    * Maneja rutas Windows (D:\G\...) en servidor Windows.
    * Retorna null si el archivo no existe o no es seguro.
    */
-  private tryResolvePath(ruta: string): string | null {
-    if (!ruta || !this.baseDir) return null;
+  private tryResolvePath(ruta: string, baseDir: string): string | null {
+    if (!ruta || !baseDir) return null;
 
     const normalized = ruta.replace(/\\/g, '/');
-    const baseNorm = this.baseDir.replace(/\\/g, '/');
+    const baseNorm = baseDir.replace(/\\/g, '/');
 
     let relative: string;
 
@@ -225,12 +235,12 @@ export class DocumentService {
     if (!relative) return null;
 
     try {
-      return resolveSafeRealPath(this.baseDir, relative);
+      return resolveSafeRealPath(baseDir, relative);
     } catch {
       // Probar solo el nombre del archivo si el path completo falla
       const filename = relative.split('/').pop();
       if (filename && filename !== relative) {
-        try { return resolveSafeRealPath(this.baseDir, filename); } catch {}
+        try { return resolveSafeRealPath(baseDir, filename); } catch {}
       }
       return null;
     }
@@ -241,36 +251,36 @@ export class DocumentService {
    * Util cuando solo tenemos el nombre del archivo sin saber en que carpeta esta.
    * Busca hasta 2 niveles de profundidad: baseDir/subdir/filename y baseDir/filename.
    */
-  private searchByFilename(filename: string): string | null {
-    if (!filename || !this.baseDir || !fs.existsSync(this.baseDir)) return null;
+  private searchByFilename(filename: string, baseDir: string): string | null {
+    if (!filename || !baseDir || !fs.existsSync(baseDir)) return null;
 
     try {
       // Nivel 0: directamente en el baseDir
-      const direct = path.join(this.baseDir, filename);
+      const direct = path.join(baseDir, filename);
       if (fs.existsSync(direct)) return direct;
 
-      // Nivel 1: en subdirectorios directos (RESOLUCIONES Y VARIOS, DOCU, etc.)
-      const subdirs = fs.readdirSync(this.baseDir, { withFileTypes: true })
+      // Nivel 1: en subdirectorios directos
+      const subdirs = fs.readdirSync(baseDir, { withFileTypes: true })
         .filter(d => d.isDirectory())
         .map(d => d.name);
 
       for (const subdir of subdirs) {
-        const candidate = path.join(this.baseDir, subdir, filename);
+        const candidate = path.join(baseDir, subdir, filename);
         if (fs.existsSync(candidate)) return candidate;
 
-        // Nivel 2: subdirectorios de años dentro de cada subdir (2024, 2025...)
+        // Nivel 2: cualquier subdirectorio dentro de cada subdir (años, tenants, etc.)
         try {
-          const yearDirs = fs.readdirSync(path.join(this.baseDir, subdir), { withFileTypes: true })
-            .filter(d => d.isDirectory() && /^\d{4}$/.test(d.name))
+          const innerDirs = fs.readdirSync(path.join(baseDir, subdir), { withFileTypes: true })
+            .filter(d => d.isDirectory())
             .map(d => d.name);
-          for (const year of yearDirs) {
-            const yearCandidate = path.join(this.baseDir, subdir, year, filename);
-            if (fs.existsSync(yearCandidate)) return yearCandidate;
+          for (const inner of innerDirs) {
+            const innerCandidate = path.join(baseDir, subdir, inner, filename);
+            if (fs.existsSync(innerCandidate)) return innerCandidate;
           }
         } catch {}
       }
     } catch (err: any) {
-      logger.debug({ msg: 'searchByFilename error', filename, err: err?.message });
+      logger.debug({ msg: 'searchByFilename error', filename, baseDir, err: err?.message });
     }
 
     return null;

@@ -35,6 +35,12 @@ echo ═════════════════════════
 echo   DEPLOY api_personal → PRODUCCION
 echo ════════════════════════════════════════
 
+REM 0. Generar .env.production desde .env (cambia solo NODE_ENV)
+echo [0/6] Generando .env.production...
+cd /d %SRC%
+powershell -Command "(Get-Content '%SRC%\.env') -replace '^NODE_ENV=.*','NODE_ENV=production' | Set-Content '%SRC%\.env.production'"
+echo    .env.production generado OK
+
 REM 1. Build en source
 echo [1/6] Instalando dependencias...
 cd /d %SRC%
@@ -54,40 +60,54 @@ if exist "%DST%" (
   echo    Backup guardado en %BCK%
 )
 
-REM 3. Copiar al destino
-echo [4/6] Copiando archivos...
+REM 3. Copiar dist + archivos necesarios (NO el .env ni node_modules)
+echo [4/6] Copiando archivos compilados...
 if not exist "%DST%" mkdir "%DST%"
-robocopy "%SRC%" "%DST%" /MIR /XD node_modules .git /NFL /NDL >> %LOG% 2>&1
+robocopy "%SRC%\dist"         "%DST%\dist"         /MIR /NFL /NDL >> %LOG% 2>&1
+robocopy "%SRC%\scripts"      "%DST%\scripts"      /MIR /NFL /NDL >> %LOG% 2>&1
+robocopy "%SRC%\src\templates" "%DST%\templates"   /MIR /NFL /NDL >> %LOG% 2>&1
+copy /Y "%SRC%\package.json"        "%DST%\package.json"        >> %LOG% 2>&1
+copy /Y "%SRC%\package-lock.json"   "%DST%\package-lock.json"   >> %LOG% 2>&1
+copy /Y "%SRC%\ecosystem.config.js" "%DST%\ecosystem.config.js" >> %LOG% 2>&1
 
-REM 4. Aplicar .env de producción
+REM 4. Aplicar .env de producción (SIEMPRE desde .env.production, nunca el dev .env)
 echo [5/6] Aplicando configuración de producción...
 if exist "%SRC%\.env.production" (
   copy /Y "%SRC%\.env.production" "%DST%\.env" >> %LOG% 2>&1
+  echo    .env.production aplicado OK
 ) else (
-  echo ⚠️  No se encontró .env.production — usando .env del source
-  copy /Y "%SRC%\.env" "%DST%\.env" >> %LOG% 2>&1
+  echo ❌ Falta .env.production en %SRC% — abortando
+  pause & exit /b 1
 )
 
-REM Copiar ecosystem config
-copy /Y "%SRC%\ecosystem.config.js" "%DST%\ecosystem.config.js" >> %LOG% 2>&1
-
-REM 5. Instalar solo prod dependencies
+REM 5. Instalar dependencias solo si package.json cambió
 echo [6/6] Instalando dependencias de producción...
 cd /d "%DST%"
 set NODE_ENV=production
-if exist node_modules rmdir /s /q node_modules
-call %NPM% install >> %LOG% 2>&1
-if errorlevel 1 ( echo ❌ npm install prod falló. Ver %LOG% & pause & exit /b 1 )
+if not exist node_modules (
+  call %NPM% install --omit=dev >> %LOG% 2>&1
+  if errorlevel 1 ( echo ❌ npm install prod falló. Ver %LOG% & pause & exit /b 1 )
+) else (
+  echo    node_modules ya existe, omitiendo reinstalación
+)
 
-REM 6. Reiniciar con PM2
+REM 6. Reiniciar prod con PM2
 echo.
-echo Reiniciando servicio...
+echo Reiniciando servicio PROD...
 pm2 describe apipersonal-prod >nul 2>&1
 if errorlevel 1 (
   pm2 start "%DST%\ecosystem.config.js"
 ) else (
-  pm2 restart apipersonal-prod
+  pm2 restart apipersonal-prod --update-env
 )
+
+REM 7. Reiniciar también el DEV para que tome el nuevo .env
+echo Reiniciando servicio DEV (para recargar .env)...
+pm2 describe apipersonal-dev >nul 2>&1
+if not errorlevel 1 (
+  pm2 restart apipersonal-dev --update-env
+)
+
 pm2 save >> %LOG% 2>&1
 
 echo.

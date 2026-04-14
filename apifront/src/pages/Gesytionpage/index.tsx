@@ -386,7 +386,9 @@ const CATALOG_DEFS = [
   { key: 'ocupacion_id',       label: 'OCUPACIÓN',       endpoint: '/ocupaciones',        nombreField: 'nombre' },
   { key: 'regimen_horario_id', label: 'RÉGIMEN HORARIO', endpoint: '/regimenes_horarios', nombreField: 'nombre' },
   { key: 'dependencia_id',     label: 'DEPENDENCIA',     endpoint: '/dependencias',       nombreField: 'nombre' },
-  { key: 'sector_id',          label: 'SECTOR/REPART.',  endpoint: '/reparticiones',      nombreField: 'reparticion_nombre' },
+  { key: 'reparticion_id',     label: 'REPARTICIÓN',     endpoint: '/reparticiones',      nombreField: 'reparticion_nombre' },
+  { key: 'servicio_id',        label: 'SERVICIO',        endpoint: '/servicios',          nombreField: 'nombre' },
+  { key: 'sector_id',          label: 'SECTOR',          endpoint: '/sectores',           nombreField: 'nombre' },
 ] as const;
 
 const PATCH_PERSONAL_COLS = [
@@ -396,7 +398,7 @@ const PATCH_PERSONAL_COLS = [
 ];
 const PATCH_AGENTE_COLS = [
   'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
-  'regimen_horario_id','sector_id','dependencia_id','fecha_ingreso','fecha_egreso',
+  'regimen_horario_id','dependencia_id','reparticion_id','servicio_id','sector_id','fecha_ingreso','fecha_egreso',
   'legajo','salario_mensual','estado_empleo',
 ];
 const ALL_PATCH_COLS = [...PATCH_PERSONAL_COLS, ...PATCH_AGENTE_COLS];
@@ -409,11 +411,15 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
   const [catalogs, setCatalogs] = useState<Record<string, { id: number | string; label: string }[]>>({});
   const [loadingCatalogs, setLoadingCatalogs] = useState(false);
 
+  // Catálogos sin cascada (se cargan una sola vez)
   useEffect(() => {
     if (!expanded || Object.keys(catalogs).length > 0) return;
     setLoadingCatalogs(true);
+    const STATIC_DEFS = CATALOG_DEFS.filter(cf =>
+      !['reparticion_id','servicio_id','sector_id'].includes(cf.key)
+    );
     Promise.all(
-      CATALOG_DEFS.map(cf =>
+      STATIC_DEFS.map(cf =>
         apiFetch<any>(`${cf.endpoint}?limit=2000`)
           .then(res => {
             let raw: any[] = [];
@@ -426,19 +432,61 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
                 const id = o.id ?? o.ID;
                 const labelVal = o[nombreField] ?? o.nombre ?? o.ID ?? id;
                 const label = labelVal != null ? String(labelVal) : '';
-                return { id, label };
+                return { id, label, raw: o };
               })
               .filter(o => o.id != null && o.label !== '');
             return { key: cf.key, items };
           })
-          .catch(() => ({ key: cf.key, items: [] }))
+          .catch(() => ({ key: cf.key, items: [] as any[] }))
       )
     ).then(results => {
-      const map: Record<string, { id: number | string; label: string }[]> = {};
+      const map: Record<string, { id: number | string; label: string; raw?: any }[]> = {};
       results.forEach(r => { map[r.key] = r.items; });
-      setCatalogs(map);
+      setCatalogs(prev => ({ ...prev, ...map }));
     }).finally(() => setLoadingCatalogs(false));
   }, [expanded]);
+
+  // Cascada: cargar reparticiones cuando cambia dependencia_id
+  useEffect(() => {
+    if (!expanded) return;
+    const depId = form.dependencia_id;
+    if (!depId) { setCatalogs(prev => ({ ...prev, reparticion_id: [], servicio_id: [], sector_id: [] })); return; }
+    apiFetch<any>(`/reparticiones?dependencia_id=${depId}&limit=500`)
+      .then(res => {
+        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const items = raw.map((o: any) => ({ id: o.id, label: o.reparticion_nombre || o.nombre || String(o.id), raw: o }));
+        setCatalogs(prev => ({ ...prev, reparticion_id: items, servicio_id: [], sector_id: [] }));
+      })
+      .catch(() => {});
+  }, [form.dependencia_id, expanded]); // eslint-disable-line
+
+  // Cascada: cargar servicios cuando cambia reparticion_id
+  useEffect(() => {
+    if (!expanded) return;
+    const repId = form.reparticion_id;
+    if (!repId) { setCatalogs(prev => ({ ...prev, servicio_id: [], sector_id: [] })); return; }
+    apiFetch<any>(`/servicios?reparticion_id=${repId}&limit=500`)
+      .then(res => {
+        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const items = raw.map((o: any) => ({ id: o.id, label: o.nombre || String(o.id), raw: o }));
+        setCatalogs(prev => ({ ...prev, servicio_id: items, sector_id: [] }));
+      })
+      .catch(() => {});
+  }, [form.reparticion_id, expanded]); // eslint-disable-line
+
+  // Cascada: cargar sectores cuando cambia servicio_id
+  useEffect(() => {
+    if (!expanded) return;
+    const srvId = form.servicio_id;
+    if (!srvId) { setCatalogs(prev => ({ ...prev, sector_id: [] })); return; }
+    apiFetch<any>(`/sectores?servicio_id=${srvId}&limit=500`)
+      .then(res => {
+        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const items = raw.map((o: any) => ({ id: o.id, label: o.nombre || String(o.id), raw: o }));
+        setCatalogs(prev => ({ ...prev, sector_id: items }));
+      })
+      .catch(() => {});
+  }, [form.servicio_id, expanded]); // eslint-disable-line
 
   useEffect(() => {
     if (!row) return;
@@ -449,7 +497,14 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
     setForm(f);
   }, [row?.dni]);
 
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const set = (k: string, v: any) => setForm((f: any) => {
+    const next: any = { ...f, [k]: v };
+    // cascada: limpiar hijos al cambiar padre
+    if (k === 'dependencia_id') { next.reparticion_id = ''; next.servicio_id = ''; next.sector_id = ''; }
+    if (k === 'reparticion_id') { next.servicio_id = ''; next.sector_id = ''; }
+    if (k === 'servicio_id')    { next.sector_id = ''; }
+    return next;
+  });
 
   const save = async () => {
     setSaving(true);
@@ -611,7 +666,9 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
             {renderCatalogSelect('ocupacion_id', 'OCUPACIÓN')}
             {renderCatalogSelect('regimen_horario_id', 'RÉGIMEN HORARIO')}
             {renderCatalogSelect('dependencia_id', 'DEPENDENCIA')}
-            {renderCatalogSelect('sector_id', 'SECTOR / REPARTICIÓN')}
+            {renderCatalogSelect('reparticion_id', 'REPARTICIÓN')}
+            {renderCatalogSelect('servicio_id', 'SERVICIO')}
+            {renderCatalogSelect('sector_id', 'SECTOR')}
             {renderText('fecha_ingreso', 'F. INGRESO', 'date')}
             {renderText('fecha_egreso', 'F. EGRESO', 'date')}
             {renderText('legajo', 'LEGAJO')}

@@ -3822,6 +3822,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/examen:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List examen
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_examen"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create examen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/examen/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get examen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update examen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch examen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete examen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/examen_anual:
     get:
       tags:
@@ -5802,6 +5934,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/papcolpo:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List papcolpo
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_papcolpo"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create papcolpo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_papcolpo_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/papcolpo/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get papcolpo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update papcolpo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_papcolpo"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch papcolpo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_papcolpo_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete papcolpo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/pedidos:
     get:
       tags:
@@ -6462,6 +6726,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/personaldetalle:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List personaldetalle
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_personaldetalle"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create personaldetalle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personaldetalle_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/personaldetalle/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get personaldetalle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update personaldetalle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personaldetalle"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch personaldetalle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_personaldetalle_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete personaldetalle by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/plantas:
     get:
       tags:
@@ -6583,6 +6979,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete plantas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/prexamen:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List prexamen
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_prexamen"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create prexamen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_prexamen_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/prexamen/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get prexamen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update prexamen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_prexamen"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch prexamen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_prexamen_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete prexamen by id
       parameters:
         - name: id
           in: path
@@ -10643,6 +11171,9 @@ components:
         servicio_id:
           type: number
           nullable: true
+        decreto_designacion:
+          type: string
+          nullable: true
       required:
         - id
         - dni
@@ -10730,6 +11261,9 @@ components:
           nullable: true
         servicio_id:
           type: number
+          nullable: true
+        decreto_designacion:
+          type: string
           nullable: true
       required:
         - dni
@@ -10819,6 +11353,9 @@ components:
           nullable: true
         servicio_id:
           type: number
+          nullable: true
+        decreto_designacion:
+          type: string
           nullable: true
     Table_agentes_sectores:
       type: object
@@ -13556,6 +14093,137 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_examen:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha
+    Table_examen_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - fecha
+    Table_examen_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
     Table_examen_anual:
       type: object
       additionalProperties: false
@@ -14984,6 +15652,134 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_papcolpo:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha
+    Table_papcolpo_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - fecha
+    Table_papcolpo_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
     Table_pedidos:
       type: object
       additionalProperties: false
@@ -15021,6 +15817,12 @@ components:
           type: string
           nullable: true
         updated_by:
+          type: string
+          nullable: true
+        baja_por_nombre:
+          type: string
+          nullable: true
+        observacion:
           type: string
           nullable: true
       required:
@@ -15063,6 +15865,12 @@ components:
         updated_by:
           type: string
           nullable: true
+        baja_por_nombre:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
       required:
         - dni
     Table_pedidos_Patch:
@@ -15102,6 +15910,12 @@ components:
           type: string
           nullable: true
         updated_by:
+          type: string
+          nullable: true
+        baja_por_nombre:
+          type: string
+          nullable: true
+        observacion:
           type: string
           nullable: true
     Table_pedidospordni:
@@ -15558,6 +16372,269 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_personaldetalle:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        localidad:
+          type: string
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        legajo:
+          type: number
+          nullable: true
+        decreto_designacion:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        ley:
+          type: string
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        reparticion:
+          type: string
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        reparticion_id:
+          type: number
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        categoria_id:
+          type: number
+          nullable: true
+        planta_id:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_personaldetalle_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        localidad:
+          type: string
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        legajo:
+          type: number
+          nullable: true
+        decreto_designacion:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        ley:
+          type: string
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        reparticion:
+          type: string
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        reparticion_id:
+          type: number
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        categoria_id:
+          type: number
+          nullable: true
+        planta_id:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_personaldetalle_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        telefono:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        localidad:
+          type: string
+          nullable: true
+        cuil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        legajo:
+          type: number
+          nullable: true
+        decreto_designacion:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        ley:
+          type: string
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        reparticion:
+          type: string
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        reparticion_id:
+          type: number
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        categoria_id:
+          type: number
+          nullable: true
+        planta_id:
+          type: number
+          nullable: true
     Table_plantas:
       type: object
       additionalProperties: false
@@ -15613,6 +16690,137 @@ components:
           type: number
           nullable: true
         updated_by:
+          type: number
+          nullable: true
+    Table_prexamen:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha
+    Table_prexamen_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - fecha
+    Table_prexamen_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        tipo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
           type: number
           nullable: true
     Table_reconocimientos_medicos:

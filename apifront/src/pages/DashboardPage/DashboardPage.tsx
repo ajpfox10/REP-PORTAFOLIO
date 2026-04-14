@@ -235,6 +235,7 @@ export function DashboardPage() {
           <Tile to="/app/escaneo" title="🖨️ Escaneo" desc="Escaneo de documentos, dispositivos, bandejas y cola de trabajos en tiempo real." accent="#0891b2" />
           <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
           <Tile to="/app/carga-agente" title="🧾 Carga de Agente" desc="Alta manual de agentes y carga inicial de datos en el sistema." accent="#84cc16" />
+          <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP y alerta de red caída." accent="#f59e0b" />
         </div>
       </div>
 

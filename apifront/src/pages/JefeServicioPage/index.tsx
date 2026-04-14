@@ -1244,6 +1244,323 @@ function Art26Agente({ agente, sectorId, jefeNombre }: Art26AgenteProps) {
   );
 }
 
+// ─── Componentes genéricos: Papcolpo / Examen / Pre-examen ──────────────────
+// Reutilizamos un único modal y un único panel por tabla.
+interface MedModalProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+  endpoint: string;         // '/papcolpo' | '/examen' | '/prexamen'
+  label: string;
+  tipoOpciones: string[] | null;  // null → input libre
+  record?: any;
+  onClose: () => void;
+  onSaved: () => void;
+}
+function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones, record, onClose, onSaved }: MedModalProps) {
+  const toast = useToast();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    fecha:        record?.fecha?.slice(0, 10) || hoy,
+    tipo:         record?.tipo || (tipoOpciones ? tipoOpciones[0] : ''),
+    resultado:    record?.resultado || '',
+    observaciones: record?.observaciones || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+
+  const guardar = async () => {
+    if (!form.fecha) { toast.error('Ingresá la fecha'); return; }
+    setSaving(true);
+    try {
+      const body = {
+        dni:          agente.dni,
+        fecha:        form.fecha,
+        tipo:         form.tipo || null,
+        resultado:    form.resultado || null,
+        observaciones: form.observaciones || null,
+        sector_id:    sectorId ?? null,
+        jefe_nombre:  jefeNombre || null,
+      };
+      if (record?.id) {
+        await apiFetch<any>(`${endpoint}/${record.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        toast.ok('Registro actualizado');
+      } else {
+        await apiFetch<any>(endpoint, { method: 'POST', body: JSON.stringify(body) });
+        toast.ok(`${label} cargado`, `${agente.apellido}, ${agente.nombre}`);
+      }
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al guardar', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div>
+            <div className="js-modal-title">{record ? 'Editar' : 'Nuevo'} {label}</div>
+            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+          </div>
+          <button className="btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <div className="js-modal-body">
+          <div className="js-form-grid">
+            <div className="js-field">
+              <div style={lbl}>Fecha *</div>
+              <input type="date" className="input" style={fld} value={form.fecha} onChange={e => set('fecha', e.target.value)} />
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Tipo</div>
+              {tipoOpciones ? (
+                <select className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+                  {tipoOpciones.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              ) : (
+                <input type="text" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)} placeholder="Tipo de examen…" />
+              )}
+            </div>
+            <div className="js-field">
+              <div style={lbl}>Jefe</div>
+              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Resultado</div>
+              <input type="text" className="input" style={fld} value={form.resultado} onChange={e => set('resultado', e.target.value)} placeholder="Resultado…" />
+            </div>
+            <div className="js-field js-field-full">
+              <div style={lbl}>Observaciones</div>
+              <textarea className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+            </div>
+          </div>
+          <div className="js-modal-actions">
+            <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
+              {saving ? '⏳ Guardando…' : '💾 Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface MedAgenteProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+  endpoint: string;
+  label: string;
+  emoji: string;
+  tipoOpciones: string[] | null;
+}
+function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoOpciones }: MedAgenteProps) {
+  const toast = useToast();
+  const [records,    setRecords]    = useState<any[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [expanded,   setExpanded]   = useState(false);
+  const [modalOpen,  setModalOpen]  = useState(false);
+  const [editRecord, setEditRecord] = useState<any>(null);
+
+  const canEdit = (r: any) => Date.now() - new Date(r.created_at).getTime() < 48 * 60 * 60 * 1000;
+
+  const cargar = () => {
+    if (!agente?.dni) return;
+    setLoading(true);
+    fetchAll(`${endpoint}?dni=${agente.dni}&sort=-fecha`)
+      .then(rows => setRecords(rows))
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { cargar(); }, [agente?.dni]);
+
+  const eliminar = async (id: number, created_at: string) => {
+    if (!canEdit({ created_at })) { toast.error('No se puede eliminar', 'Han pasado más de 48 horas'); return; }
+    if (!confirm('¿Eliminar este registro?')) return;
+    try {
+      await apiFetch<any>(`${endpoint}/${id}`, { method: 'DELETE' });
+      toast.ok('Registro eliminado');
+      cargar();
+    } catch (e: any) {
+      toast.error('Error', e?.message || 'Error');
+    }
+  };
+
+  return (
+    <>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0' }}>
+            {emoji} {label}
+            <span style={{ marginLeft: 8, fontSize: '0.7rem', color: '#64748b' }}>
+              {records.length} registro{records.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button className="btn js-btn-save" type="button"
+              style={{ padding: '2px 9px', fontSize: '0.73rem' }}
+              onClick={() => { setEditRecord(null); setModalOpen(true); }}>
+              ➕ Cargar
+            </button>
+            <button className="btn" type="button"
+              style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+              onClick={() => setExpanded(v => !v)}>
+              {expanded ? '▲' : '▼'}
+            </button>
+          </div>
+        </div>
+
+        {expanded && (
+          loading ? (
+            <div style={{ color: '#64748b', fontSize: '0.8rem' }}>🔄 Cargando…</div>
+          ) : records.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: '0.8rem' }}>Sin registros de {label}</div>
+          ) : (
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {records.map((r: any) => {
+                const editable = canEdit(r);
+                return (
+                  <div key={r.id} style={{
+                    padding: '7px 10px', marginBottom: 5, borderRadius: 7,
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                    fontSize: '0.78rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                      <span style={{ fontWeight: 600, color: '#e2e8f0' }}>
+                        {r.tipo || label}
+                        {r.resultado && <span style={{ marginLeft: 6, color: '#94a3b8', fontWeight: 400 }}>→ {r.resultado}</span>}
+                      </span>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {editable && (
+                          <>
+                            <button className="btn" type="button"
+                              style={{ padding: '1px 7px', fontSize: '0.68rem' }}
+                              onClick={() => { setEditRecord(r); setModalOpen(true); }}>
+                              ✏️
+                            </button>
+                            <button className="btn js-btn-danger" type="button"
+                              style={{ padding: '1px 7px', fontSize: '0.68rem' }}
+                              onClick={() => eliminar(r.id, r.created_at)}>
+                              🗑️
+                            </button>
+                          </>
+                        )}
+                        {!editable && <span style={{ fontSize: '0.65rem', color: '#475569' }}>🔒 +48h</span>}
+                      </div>
+                    </div>
+                    <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                      <span>Fecha: <b>{fmt(r.fecha)}</b></span>
+                      {r.jefe_nombre && <span>👤 {r.jefe_nombre}</span>}
+                    </div>
+                    {r.observaciones && <div style={{ color: '#64748b', marginTop: 2, fontStyle: 'italic' }}>{r.observaciones}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
+
+      {modalOpen && (
+        <MedModal
+          agente={agente}
+          sectorId={sectorId}
+          jefeNombre={jefeNombre}
+          endpoint={endpoint}
+          label={label}
+          tipoOpciones={tipoOpciones}
+          record={editRecord}
+          onClose={() => { setModalOpen(false); setEditRecord(null); }}
+          onSaved={() => { setExpanded(true); cargar(); }}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Tabla global de registros médicos (tab-nivel sector/global) ─────────────
+interface MedTablaGlobalProps {
+  endpoint: string;
+  label: string;
+  emoji: string;
+  agentesMap: Record<string, any>;
+  sectorId: number | null;
+  isGlobal: boolean;
+  servicios: any[];
+  sectores: any[];
+}
+function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal, servicios, sectores }: MedTablaGlobalProps) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const url = isGlobal ? `${endpoint}?sort=-fecha` : `${endpoint}?sector_id=${sectorId}&sort=-fecha`;
+    fetchAll(url)
+      .then(r => setRows(r))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [endpoint, sectorId, isGlobal]);
+
+  return (
+    <div className="card js-card">
+      <div className="js-section-title" style={{ marginBottom: 12 }}>
+        {emoji} {label}
+        <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+          ({rows.length} registro{rows.length !== 1 ? 's' : ''} · {isGlobal ? 'todo el sistema' : 'este sector'})
+        </span>
+      </div>
+      {loading ? (
+        <div className="js-loading">🔄 Cargando…</div>
+      ) : rows.length === 0 ? (
+        <div className="js-empty">Sin registros de {label}</div>
+      ) : (
+        <div className="js-tabla-wrap">
+          <table className="js-tabla">
+            <thead>
+              <tr>
+                <th>DNI</th>
+                <th>Agente</th>
+                <th>Tipo</th>
+                <th>Fecha</th>
+                <th>Resultado</th>
+                <th>Jefe</th>
+                <th>Cargado el</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r: any) => {
+                const ag = agentesMap[String(r.dni)];
+                const nombre = ag ? `${ag.apellido}, ${ag.nombre}` : `DNI ${r.dni}`;
+                return (
+                  <tr key={r.id}>
+                    <td className="js-td-dni">{r.dni}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{nombre}</td>
+                    <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{r.tipo || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{fmt(r.fecha)}</td>
+                    <td className="js-td-muted" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.resultado || '—'}
+                    </td>
+                    <td className="js-td-muted">{r.jefe_nombre || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#64748b' }}>{fmtDateTime(r.created_at)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function JefeServicioPage() {
   const toast = useToast();
@@ -1298,7 +1615,7 @@ export function JefeServicioPage() {
   const [modalCerrar,        setModalCerrar]        = useState<any>(null);
 
   // Tab
-  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos'>('agentes');
+  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos' | 'papcolpo' | 'examen' | 'prexamen'>('agentes');
 
   // Agentes de licencia (reconocimientos médicos activos del sector)
   const [licenciasActivas, setLicenciasActivas] = useState<any[]>([]);
@@ -1780,6 +2097,26 @@ export function JefeServicioPage() {
               >📋 Art. 26</button>
               <button
                 type="button"
+                className={`js-tab${tab === 'francos' ? ' active' : ''}`}
+                onClick={() => setTab('francos')}
+              >📅 Francos</button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'papcolpo' ? ' active' : ''}`}
+                onClick={() => setTab('papcolpo')}
+              >🩺 Pap/Colpo</button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'examen' ? ' active' : ''}`}
+                onClick={() => setTab('examen')}
+              >🎓 Examen</button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'prexamen' ? ' active' : ''}`}
+                onClick={() => setTab('prexamen')}
+              >📝 Pre-examen</button>
+              <button
+                type="button"
                 className={`js-tab${tab === 'asignados' ? ' active' : ''}`}
                 onClick={() => setTab('asignados')}
               >
@@ -1791,11 +2128,6 @@ export function JefeServicioPage() {
                   }}>{asignadosBase.length}</span>
                 )}
               </button>
-              <button
-                type="button"
-                className={`js-tab${tab === 'francos' ? ' active' : ''}`}
-                onClick={() => setTab('francos')}
-              >📅 Francos</button>
             </div>
           </div>
 
@@ -1851,6 +2183,45 @@ export function JefeServicioPage() {
                         />
                       </div>
                     )}
+
+                    {/* Papanicolaou / Colposcopía */}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                      <MedAgente
+                        agente={agenteActivo}
+                        sectorId={sectorId}
+                        jefeNombre={u?.nombre || ''}
+                        endpoint="/papcolpo"
+                        label="Pap / Colpo"
+                        emoji="🩺"
+                        tipoOpciones={['PAP', 'COLPO', 'PAP_COLPO']}
+                      />
+                    </div>
+
+                    {/* Examen (académico / facultad) */}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                      <MedAgente
+                        agente={agenteActivo}
+                        sectorId={sectorId}
+                        jefeNombre={u?.nombre || ''}
+                        endpoint="/examen"
+                        label="Examen"
+                        emoji="🎓"
+                        tipoOpciones={null}
+                      />
+                    </div>
+
+                    {/* Pre-examen (académico / facultad) */}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                      <MedAgente
+                        agente={agenteActivo}
+                        sectorId={sectorId}
+                        jefeNombre={u?.nombre || ''}
+                        endpoint="/prexamen"
+                        label="Pre-examen"
+                        emoji="📝"
+                        tipoOpciones={null}
+                      />
+                    </div>
                   </div>
 
                   {/* Servicios del agente */}
@@ -2131,6 +2502,28 @@ export function JefeServicioPage() {
               </div>
             );
           })()}
+          {/* ── Tabs genéricos: Papcolpo / Examen / Pre-examen ── */}
+          {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen') && (() => {
+            const cfg = {
+              papcolpo: { endpoint: '/papcolpo', label: 'Pap / Colposcopía',        emoji: '🩺' },
+              examen:   { endpoint: '/examen',   label: 'Examen (Facultad)',         emoji: '🎓' },
+              prexamen: { endpoint: '/prexamen',  label: 'Pre-examen (Facultad)',    emoji: '📝' },
+            }[tab];
+
+            return (
+              <MedTablaGlobal
+                endpoint={cfg.endpoint}
+                label={cfg.label}
+                emoji={cfg.emoji}
+                agentesMap={agentesMap}
+                sectorId={isGlobal ? null : sectorId}
+                isGlobal={isGlobal}
+                servicios={servicios}
+                sectores={sectores}
+              />
+            );
+          })()}
+
           {/* ── Tab Agentes Asignados ── */}
           {tab === 'asignados' && (
             <div className="card js-card">
