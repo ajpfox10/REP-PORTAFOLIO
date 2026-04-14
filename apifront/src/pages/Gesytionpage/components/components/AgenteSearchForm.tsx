@@ -22,7 +22,7 @@ export function AgenteSearchForm({
 }: Props) {
   return (
     <div className="card gp-card-14">
-      <div className="search-row">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="search-field">
           <label className="label">DNI</label>
           <input
@@ -32,11 +32,12 @@ export function AgenteSearchForm({
             onKeyDown={(e) => e.key === "Enter" && onSearch()}
             placeholder="Enter para buscar"
             disabled={loading}
+            style={{ width: '100%', boxSizing: 'border-box' }}
           />
         </div>
 
         <div className="search-field">
-          <label className="label">Nombre</label>
+          <label className="label">Apellido y Nombre</label>
           <input
             className="input"
             value={fullName}
@@ -44,6 +45,7 @@ export function AgenteSearchForm({
             onKeyDown={(e) => e.key === "Enter" && onSearchByName()}
             placeholder="Apellido Nombre (Enter)"
             disabled={loading}
+            style={{ width: '100%', boxSizing: 'border-box' }}
           />
         </div>
       </div>

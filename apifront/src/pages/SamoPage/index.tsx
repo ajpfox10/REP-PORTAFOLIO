@@ -131,7 +131,7 @@ function enMesAño(fechaStr: string | null | undefined, mes: number, año: numbe
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio' | 'articulo26' | 'art48';
+type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio' | 'articulo26' | 'art48' | 'papcolpo' | 'examen' | 'prexamen';
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function SamoPage() {
@@ -147,6 +147,9 @@ export function SamoPage() {
   const [servicioTotales, setServicioTotales]  = useState<Record<string, number>>({});   // nombre servicio → count agentes
   const [art26,           setArt26]            = useState<any[]>([]);
   const [art48,           setArt48]            = useState<any[]>([]);
+  const [papcolpo,        setPapcolpo]         = useState<any[]>([]);
+  const [examen,          setExamen]           = useState<any[]>([]);
+  const [prexamen,        setPrexamen]         = useState<any[]>([]);
   const [loading,         setLoading]          = useState(true);
 
   // ── UI ─────────────────────────────────────────────────────────────────────
@@ -160,7 +163,7 @@ export function SamoPage() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [rLic, rAg, rPers, rSect, rServ, rRep, rArt26, rArt48] = await Promise.allSettled([
+      const [rLic, rAg, rPers, rSect, rServ, rRep, rArt26, rArt48, rPapcolpo, rExamen, rPrexamen] = await Promise.allSettled([
         fetchAll('/reconocimientos_medicos', '-fecha_desde'),
         fetchAll('/agentes'),
         fetchAll('/personal/search'),
@@ -169,6 +172,9 @@ export function SamoPage() {
         fetchAll('/reparticiones'),
         fetchAll('/articulo_26', '-fecha'),
         fetchAll('/agentes?ley_id=14'),
+        fetchAll('/papcolpo', '-fecha'),
+        fetchAll('/examen', '-fecha'),
+        fetchAll('/prexamen', '-fecha'),
       ]);
 
       if (rLic.status === 'fulfilled') setLicencias(rLic.value);
@@ -220,6 +226,11 @@ export function SamoPage() {
 
       // Artículo 48
       if (rArt48.status === 'fulfilled') setArt48(rArt48.value);
+
+      // Pap/Colpo, Examen, Pre-examen
+      if (rPapcolpo.status  === 'fulfilled') setPapcolpo(rPapcolpo.value);
+      if (rExamen.status    === 'fulfilled') setExamen(rExamen.value);
+      if (rPrexamen.status  === 'fulfilled') setPrexamen(rPrexamen.value);
 
     } catch (e: any) {
       toast.error('Error al cargar SAMO', e?.message);
@@ -395,6 +406,45 @@ export function SamoPage() {
     },
   ];
 
+  // ── Pap/Colpo, Examen, Pre-examen ──────────────────────────────────────────
+  const papcolpoFiltradas = useMemo(() =>
+    papcolpo.filter(r => enMesAño(r.fecha, mesFiltro, AÑO_ACTUAL)),
+    [papcolpo, mesFiltro]
+  );
+  const examenFiltradas = useMemo(() =>
+    examen.filter(r => enMesAño(r.fecha, mesFiltro, AÑO_ACTUAL)),
+    [examen, mesFiltro]
+  );
+  const prexamenFiltradas = useMemo(() =>
+    prexamen.filter(r => enMesAño(r.fecha, mesFiltro, AÑO_ACTUAL)),
+    [prexamen, mesFiltro]
+  );
+
+  const buildMedRows = (data: any[]) => data.map(r => ({
+    ...r,
+    apellido:    personalMap[String(r.dni)]?.apellido || '—',
+    nombre:      personalMap[String(r.dni)]?.nombre   || '—',
+    sector:      sectoresMap[Number(r.sector_id)]     || '—',
+    fecha:       fmt(r.fecha),
+    cargado_el:  r.created_at ? new Date(r.created_at).toLocaleDateString('es-AR') : '—',
+  }));
+
+  const papcolpoRows  = buildMedRows(papcolpoFiltradas);
+  const examenRows    = buildMedRows(examenFiltradas);
+  const prexamenRows  = buildMedRows(prexamenFiltradas);
+
+  const colsMed = [
+    { key: 'dni',        label: 'DNI',      mono: true },
+    { key: 'apellido',   label: 'Apellido' },
+    { key: 'nombre',     label: 'Nombre' },
+    { key: 'tipo',       label: 'Tipo' },
+    { key: 'fecha',      label: 'Fecha',    mono: true },
+    { key: 'resultado',  label: 'Resultado' },
+    { key: 'jefe_nombre',label: 'Jefe' },
+    { key: 'sector',     label: 'Sector' },
+    { key: 'cargado_el', label: 'Cargado el', mono: true },
+  ];
+
   // ── Artículo 48 ────────────────────────────────────────────────────────────
   // Todos los agentes con ley_id = 14 (ART. 48), sin filtro de mes
   const art48Rows = useMemo(() =>
@@ -436,6 +486,9 @@ export function SamoPage() {
     if (tab === 'servicio')   { rows = servicioRows;         file = 'samo_por_servicio'; }
     if (tab === 'articulo26') { rows = filtrar(art26Rows);         file = 'samo_articulo26'; }
     if (tab === 'art48')      { rows = filtrar(art48Rows);         file = 'samo_articulo48'; }
+    if (tab === 'papcolpo')   { rows = filtrar(papcolpoRows);      file = 'samo_papcolpo'; }
+    if (tab === 'examen')     { rows = filtrar(examenRows);        file = 'samo_examen'; }
+    if (tab === 'prexamen')   { rows = filtrar(prexamenRows);      file = 'samo_prexamen'; }
     if (tipo === 'excel') exportToExcel(file, rows);
     if (tipo === 'pdf')   exportToPdf(file, rows);
   };
@@ -502,6 +555,15 @@ export function SamoPage() {
         </Tab>
         <Tab active={tab === 'art48'} onClick={() => { setTab('art48'); setBusqueda(''); }}>
           🏅 Art. 48 ({art48Rows.length})
+        </Tab>
+        <Tab active={tab === 'papcolpo'} onClick={() => { setTab('papcolpo'); setBusqueda(''); }}>
+          🔬 Pap/Colpo ({papcolpoFiltradas.length})
+        </Tab>
+        <Tab active={tab === 'examen'} onClick={() => { setTab('examen'); setBusqueda(''); }}>
+          🩺 Examen ({examenFiltradas.length})
+        </Tab>
+        <Tab active={tab === 'prexamen'} onClick={() => { setTab('prexamen'); setBusqueda(''); }}>
+          📋 Pre-examen ({prexamenFiltradas.length})
         </Tab>
       </div>
 
@@ -659,6 +721,33 @@ export function SamoPage() {
                 <MiniTabla rows={filtrar(art26Rows)} cols={colsArt26} />
               </>
             )}
+
+            {/* Tabs: Pap/Colpo, Examen, Pre-examen */}
+            {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen') && (() => {
+              const cfg = {
+                papcolpo: { rows: papcolpoRows, filtradas: papcolpoFiltradas, label: 'Pap / Colposcopía' },
+                examen:   { rows: examenRows,   filtradas: examenFiltradas,   label: 'Examen' },
+                prexamen: { rows: prexamenRows, filtradas: prexamenFiltradas, label: 'Pre-examen' },
+              }[tab];
+              return (
+                <>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                    <div className="muted" style={{ fontSize: '0.72rem' }}>Filtrando por mes:</div>
+                    <select className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                      value={mesFiltro} onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}>
+                      {mesesDisponibles.map(m => (
+                        <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>
+                      ))}
+                    </select>
+                    <span className="muted" style={{ fontSize: '0.72rem' }}>
+                      {cfg.filtradas.length} registro{cfg.filtradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]} — {cfg.label}
+                    </span>
+                  </div>
+                  <Busqueda value={busqueda} onChange={setBusqueda} />
+                  <MiniTabla rows={filtrar(cfg.rows)} cols={colsMed} />
+                </>
+              );
+            })()}
           </>
         )}
       </div>

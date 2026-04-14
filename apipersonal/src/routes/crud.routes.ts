@@ -228,23 +228,27 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
         attributes,
       };
 
-      const [rows, total] = await Promise.all([
-        model.findAll(options),
-        model.count({ where: options.where }),
-      ]);
+      try {
+        const [rows, total] = await Promise.all([
+          model.findAll(options),
+          model.count({ where: options.where }),
+        ]);
 
-      res.json({
-        ok: true,
-        data: rows,
-        meta: {
-          page,
-          limit,
-          total,
-          filtered: rows.length,
-          where: options.where,
-          order: options.order,
-        },
-      });
+        res.json({
+          ok: true,
+          data: rows,
+          meta: {
+            page,
+            limit,
+            total,
+            filtered: rows.length,
+            where: options.where,
+            order: options.order,
+          },
+        });
+      } catch (err: any) {
+        return res.status(500).json({ ok: false, error: err?.message || 'Error al consultar la tabla' });
+      }
     }
   );
 
@@ -268,10 +272,13 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
       const pk = getPk(table);
       if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
 
-      const row = await model.findOne({ where: { [pk]: req.params.id } as any });
-      if (!row) return res.status(404).json({ ok: false, error: "No encontrado" });
-
-      res.json({ ok: true, data: row });
+      try {
+        const row = await model.findOne({ where: { [pk]: req.params.id } as any });
+        if (!row) return res.status(404).json({ ok: false, error: "No encontrado" });
+        res.json({ ok: true, data: row });
+      } catch (err: any) {
+        return res.status(500).json({ ok: false, error: err?.message || 'Error al consultar el registro' });
+      }
     }
   );
 
@@ -284,25 +291,29 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     const pk = getPk(table);
     if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
 
-    const created = await model.create(req.body);
-    const createdJson = (created as any).toJSON ? (created as any).toJSON() : created;
+    try {
+      const created = await model.create(req.body);
+      const createdJson = (created as any).toJSON ? (created as any).toJSON() : created;
 
-    await cacheInvalidateTags([`table:${table}`]);
+      await cacheInvalidateTags([`table:${table}`]);
 
-    if (table === 'pedidos' && createdJson?.dni) {
-      emitPedidoCreated(createdJson.dni, createdJson);
+      if (table === 'pedidos' && createdJson?.dni) {
+        emitPedidoCreated(createdJson.dni, createdJson);
+      }
+
+      (res.locals as any).audit = {
+        usuario_id: null,
+        action: "create",
+        table_name: table,
+        record_pk: createdJson?.[pk] ?? null,
+        before_json: null,
+        after_json: safeStringify(createdJson),
+      };
+
+      res.status(201).json({ ok: true, data: created });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al crear el registro' });
     }
-
-    (res.locals as any).audit = {
-      usuario_id: null,
-      action: "create",
-      table_name: table,
-      record_pk: createdJson?.[pk] ?? null,
-      before_json: null,
-      after_json: safeStringify(createdJson),
-    };
-
-    res.status(201).json({ ok: true, data: created });
   });
 
   // ── PUT /:table/:id — UPDATE COMPLETO (con transacción) ───────────────────────

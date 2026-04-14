@@ -32,13 +32,12 @@ export type PersonalForm = {
   ocupacion_id: string;
   regimen_horario_id: string;
   jefatura_id: string;
-  sector_id: string;     // FK a reparticiones (agentes.sector_id)
-  funcion_id: string;    // FK a funciones (personal extra)
-  // Servicios (tabla: agentes_servicios)
-  dependencia_id: string;   // FK a reparticiones (agentes_servicios.dependencia_id)
-  servicio_nombre: string;
-  jefe_nombre: string;
-  fecha_desde: string;
+  dependencia_id: string;
+  reparticion_id: string;
+  servicio_id: string;
+  sector_id: string;
+  decreto_designacion: string;
+  funcion_id: string;
   salario_mensual: string;
 };
 
@@ -48,8 +47,9 @@ export const EMPTY_FORM: PersonalForm = {
   nacionalidad: '', observaciones: '',
   fecha_ingreso: '', fecha_baja: '', estado_empleo: 'ACTIVO', legajo: '',
   ley_id: '', planta_id: '', categoria_id: '', ocupacion_id: '',
-  regimen_horario_id: '', jefatura_id: '', sector_id: '', funcion_id: '',
-  dependencia_id: '', servicio_nombre: '', jefe_nombre: '', fecha_desde: '',
+  regimen_horario_id: '', jefatura_id: '', funcion_id: '',
+  dependencia_id: '', reparticion_id: '', servicio_id: '', sector_id: '',
+  decreto_designacion: '',
   salario_mensual: '',
 };
 
@@ -62,12 +62,11 @@ export type CatalogSet = {
   planta: CatalogItem[];
   funcion: CatalogItem[];
   categoria: CatalogItem[];
-  reparticion: CatalogItem[];
+  dependencia: CatalogItem[];
   localidad: CatalogItem[];
   ley: CatalogItem[];
   ocupacion: CatalogItem[];
   regimenHorario: CatalogItem[];
-  jefatura: CatalogItem[];
 };
 
 function extractNombre(row: any): string {
@@ -95,8 +94,8 @@ export function useCargaAgente() {
   const [errors, setErrors] = useState<Partial<Record<keyof PersonalForm, string>>>({});
 
   const [cats, setCats] = useState<CatalogSet>({
-    sexo: [], planta: [], funcion: [], categoria: [], reparticion: [],
-    localidad: [], ley: [], ocupacion: [], regimenHorario: [], jefatura: [],
+    sexo: [], planta: [], funcion: [], categoria: [], dependencia: [],
+    localidad: [], ley: [], ocupacion: [], regimenHorario: [],
   });
 
   const loadCatalog = useCallback(async (table: string): Promise<CatalogItem[]> => {
@@ -117,14 +116,13 @@ export function useCargaAgente() {
       loadCatalog('planta'),
       loadCatalog('funciones'),
       loadCatalog('categoria'),
-      loadCatalog('reparticiones'),
+      loadCatalog('dependencias'),
       loadCatalog('localidades'),
       loadCatalog('ley'),
       loadCatalog('ocupacion'),
       loadCatalog('regimenhorario'),
-      loadCatalog('jefaturas'),
-    ]).then(([sexo, planta, funcion, categoria, reparticion, localidad, ley, ocupacion, regimenHorario, jefatura]) => {
-      setCats({ sexo, planta, funcion, categoria, reparticion, localidad, ley, ocupacion, regimenHorario, jefatura });
+    ]).then(([sexo, planta, funcion, categoria, dependencia, localidad, ley, ocupacion, regimenHorario]) => {
+      setCats({ sexo, planta, funcion, categoria, dependencia, localidad, ley, ocupacion, regimenHorario });
     });
   }, [loadCatalog]);
 
@@ -204,25 +202,14 @@ export function useCargaAgente() {
         ...(form.categoria_id ? { categoria_id: Number(form.categoria_id) } : {}),
         ...(form.ocupacion_id ? { ocupacion_id: Number(form.ocupacion_id) } : {}),
         ...(form.regimen_horario_id ? { regimen_horario_id: Number(form.regimen_horario_id) } : {}),
-        ...(form.jefatura_id ? { jefatura_id: Number(form.jefatura_id) } : {}),
+        ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
+        ...(form.reparticion_id ? { reparticion_id: Number(form.reparticion_id) } : {}),
+        ...(form.servicio_id ? { servicio_id: Number(form.servicio_id) } : {}),
         ...(form.sector_id ? { sector_id: Number(form.sector_id) } : {}),
+        ...(form.decreto_designacion ? { decreto_designacion: form.decreto_designacion } : {}),
         ...(form.salario_mensual ? { salario_mensual: parseFloat(form.salario_mensual) } : {}),
       };
       const aRes = await apiFetch<any>('/agentes', { method: 'POST', body: JSON.stringify(agentePayload) });
-
-      // 3) Crear agentes_servicios si tiene dependencia
-      if (form.dependencia_id || form.servicio_nombre) {
-        await apiFetch<any>('/agentes_servicios', {
-          method: 'POST',
-          body: JSON.stringify({
-            dni: dniNum,
-            ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
-            ...(form.servicio_nombre ? { servicio_nombre: form.servicio_nombre } : {}),
-            ...(form.jefe_nombre ? { jefe_nombre: form.jefe_nombre } : {}),
-            ...(form.fecha_desde ? { fecha_desde: form.fecha_desde } : {}),
-          }),
-        }).catch(() => {});
-      }
 
       setSavedDni(dniNum);
 
