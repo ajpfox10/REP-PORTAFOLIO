@@ -1,0 +1,21 @@
+{
+  "mysqlHost": "127.0.0.1",
+  "mysqlPort": 3306,
+  "mysqlUser": "root",
+  "mysqlPass": "Cuernos2503",
+  "mysqlDb": "adms_db",
+  "sftpHost": "10.2.250.4",
+  "sftpPort": 22,
+  "sftpUser": "evita",
+  "sftpPass": "3v1t42",
+  "sftpDir": "/fichadas",
+  "sftpLocalAddr": "10.115.31.28",
+  "outputDir": "./fichadas",
+  "modoContinu": true,
+  "fechaDesdeContinu": "2026-04-14",
+  "horaDesdeContinu": "00:00",
+  "prefijo": "026",
+  "sufijo": "048350",
+  "limite": 50000,
+  "intervaloMin": 2
+}

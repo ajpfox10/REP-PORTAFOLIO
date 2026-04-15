@@ -1,7 +1,7 @@
 // src/pages/FicheroPage/index.tsx
 // Módulo Fichero — reemplazo del exe VB.NET
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
@@ -11,6 +11,7 @@ import { useToast } from '../../ui/toast';
 interface FicheroConfig {
   mysqlHost: string; mysqlPort: number; mysqlUser: string; mysqlPass: string; mysqlDb: string;
   sftpHost: string;  sftpPort: number;  sftpUser: string;  sftpPass: string;  sftpDir: string;
+  sftpLocalAddr: string;
   outputDir: string; prefijo: string;   sufijo: string;    limite: number;    intervaloMin: number;
   modoContinu: boolean; fechaDesdeContinu: string | null; horaDesdeContinu: string | null;
 }
@@ -30,6 +31,8 @@ interface EstadoFichero {
   corriendo: boolean; redCaida: boolean;
   total: number; exitosos: number; fallidos: number;
   primerArchivo: string | null; ultimoArchivo: string | null; ultimaSubidaExitosa: string | null;
+  intervaloMin: number | null;
+  proximaEjecucionMs: number | null;
   entradas: LogEntry[];
 }
 
@@ -241,7 +244,19 @@ export function FicheroPage() {
       {hayRedCaida && (
         <div style={S.alertaRed}>
           <span>⚠️</span>
-          <span><strong>Red caída</strong> — La subida está suspendida. Se reintentará automáticamente. Actualizando cada {REFRESH_MS / 1000}s…</span>
+          <div style={{ flex: 1 }}>
+            <strong>Red caída</strong> — La subida está suspendida. Se reintentará automáticamente. Actualizando cada {REFRESH_MS / 1000}s…
+            <div style={{ fontSize: '0.78rem', marginTop: 3, opacity: 0.8 }}>
+              Nota: el servidor ({config?.sftpLocalAddr || 'automático'}) es quien se conecta al SFTP y a la DB del reloj,
+              no esta PC. Esta página puede abrirse desde cualquier equipo.
+            </div>
+          </div>
+          <button onClick={() => accion('resetear', 'Estado reseteado')}
+            style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)',
+              color: '#fff', borderRadius: 6, padding: '4px 12px', cursor: 'pointer',
+              fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            Resetear estado
+          </button>
         </div>
       )}
 
@@ -261,23 +276,31 @@ export function FicheroPage() {
       {tab === 'monitor' && (
         <>
           {estado && (
-            <div style={S.cards}>
-              <StatusCard label="Estado"   value={estado.corriendo ? '▶ Corriendo' : '⏹ Detenido'}
-                color={estado.corriendo ? '#16a34a' : '#6b7280'}
-                bg={estado.corriendo ? '#f0fdf4' : '#f9fafb'}
-                border={estado.corriendo ? '#86efac' : '#e2e8f0'} />
-              <StatusCard label="Red"
-                value={redActiva === null ? '…' : hayRedCaida ? '⚠ Caída' : '✓ Activa'}
-                color={hayRedCaida ? '#b91c1c' : '#16a34a'}
-                bg={hayRedCaida ? '#fef2f2' : '#f0fdf4'}
-                border={hayRedCaida ? '#fca5a5' : '#86efac'} />
-              <NumCard label="Archivos creados" value={estado.total}    color="#2563eb" />
-              <NumCard label="Subidos OK"        value={estado.exitosos} color="#16a34a" />
-              <NumCard label="Fallidos" value={estado.fallidos} color={estado.fallidos > 0 ? '#dc2626' : '#6b7280'} />
-              <InfoCard label="Primer archivo"   value={fmtF(estado.primerArchivo)} />
-              <InfoCard label="Último archivo"   value={fmtF(estado.ultimoArchivo)} />
-              <InfoCard label="Última subida OK" value={fmtF(estado.ultimaSubidaExitosa)} />
-            </div>
+            <>
+              <div style={S.cards}>
+                <StatusCard label="Estado"   value={estado.corriendo ? '▶ Corriendo' : '⏹ Detenido'}
+                  color={estado.corriendo ? '#16a34a' : '#6b7280'}
+                  bg={estado.corriendo ? '#f0fdf4' : '#f9fafb'}
+                  border={estado.corriendo ? '#86efac' : '#e2e8f0'} />
+                <StatusCard label="Red"
+                  value={redActiva === null ? '…' : hayRedCaida ? '⚠ Caída' : '✓ Activa'}
+                  color={hayRedCaida ? '#b91c1c' : '#16a34a'}
+                  bg={hayRedCaida ? '#fef2f2' : '#f0fdf4'}
+                  border={hayRedCaida ? '#fca5a5' : '#86efac'} />
+                <NumCard label="Archivos creados" value={estado.total}    color="#2563eb" />
+                <NumCard label="Subidos OK"        value={estado.exitosos} color="#16a34a" />
+                <NumCard label="Fallidos" value={estado.fallidos} color={estado.fallidos > 0 ? '#dc2626' : '#6b7280'} />
+                <InfoCard label="Primer archivo"   value={fmtF(estado.primerArchivo)} />
+                <InfoCard label="Último archivo"   value={fmtF(estado.ultimoArchivo)} />
+                <InfoCard label="Última subida OK" value={fmtF(estado.ultimaSubidaExitosa)} />
+                {estado.corriendo && estado.proximaEjecucionMs && (
+                  <CountdownCard
+                    proximaEjecucionMs={estado.proximaEjecucionMs}
+                    intervaloMin={estado.intervaloMin ?? 50}
+                  />
+                )}
+              </div>
+            </>
           )}
 
           <div style={S.controles}>
@@ -594,6 +617,37 @@ export function FicheroPage() {
         </div>
       )}
     </Layout>
+  );
+}
+
+// ─── CountdownCard ────────────────────────────────────────────────────────────
+
+function CountdownCard({ proximaEjecucionMs, intervaloMin }: { proximaEjecucionMs: number; intervaloMin: number }) {
+  const [ahora, setAhora] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const restanMs = proximaEjecucionMs - ahora;
+  let display: string;
+  let color: string;
+  if (restanMs <= 0) {
+    display = 'Ejecutando…';
+    color = '#f59e0b';
+  } else {
+    const mins = Math.floor(restanMs / 60_000);
+    const segs = Math.floor((restanMs % 60_000) / 1000);
+    display = `${String(mins).padStart(2, '0')}:${String(segs).padStart(2, '0')}`;
+    color = restanMs < 60_000 ? '#ef4444' : '#1e293b';
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 20px', minWidth: 160, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280' }}>Próxima subida</span>
+      <span style={{ fontSize: '0.9rem', fontWeight: 600, color, fontVariantNumeric: 'tabular-nums' }}>{display}</span>
+    </div>
   );
 }
 

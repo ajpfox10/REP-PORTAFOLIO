@@ -25,6 +25,7 @@ interface Props {
   onRowSelect: (idx: number) => void;
   onPedidoAction?: {
     onOpenPedidoModal: () => void;
+    onIoma?: () => void;
     onMarcarPendiente: () => void;
     onMarcarHecho: () => void;
     onBaja: () => void;

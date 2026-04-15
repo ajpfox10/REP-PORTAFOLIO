@@ -41,6 +41,9 @@ import { JefeServicioPage } from '../pages/JefeServicioPage';
 import { SamoPage } from '../pages/SamoPage';
 import { ResolucionesPage } from '../pages/ResolucionesPage';
 import { FicheroPage } from '../pages/FicheroPage';
+import { AusenciasConFichajesPage } from '../pages/AusenciasConFichajesPage';
+import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
+import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
 import { useKiosk } from '../hooks/useKiosk';
 
 function Private({ children }: { children: React.ReactNode }) {
@@ -386,6 +389,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/ausencias-fichajes"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <AusenciasConFichajesPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/escaneo"
               element={
                 <Private>
@@ -437,6 +450,27 @@ export function App() {
     </Private>
   }
 />
+
+            <Route
+              path="/app/examen-ingreso"
+              element={
+                <Private>
+                  <Guard anyOf={['app:gestion_turnos:access', 'crud:*:*']}>
+                    <ExamenIngresoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/infectologia"
+              element={
+                <Private>
+                  <Guard anyOf={['app:infectologia:access', 'app:cargainfecto:access', 'crud:*:*']}>
+                    <AccidentesPunzoPage />
+                  </Guard>
+                </Private>
+              }
+            />
 
             {/* Misc */}
             <Route path="/app/forbidden" element={<Private><ForbiddenPage /></Private>} />

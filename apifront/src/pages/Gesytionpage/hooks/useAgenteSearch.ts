@@ -61,7 +61,7 @@ export function useAgenteSearch() {
       setState(s => ({ ...s, loading: true, matches: [] }));
       // /personal/search tiene un bug SQL en el backend.
       // Usamos cache local con búsqueda client-side.
-      const results = await searchPersonal(q, 30);
+      const results = await searchPersonal(q);
       setState(s => ({ ...s, loading: false, matches: results }));
       if (!results.length) toast.error("Sin resultados", `No se encontró "${q}"`);
       else toast.ok(`${results.length} resultado(s)`);

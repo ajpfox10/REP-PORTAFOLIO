@@ -1,6 +1,6 @@
 // src/pages/GestionPage/components/ModuleGrid.tsx
 import React from 'react';
-import type { ModuleKey } from '../../hooks/useModules';
+import type { ModuleKey } from '../hooks/useModules';
 
 interface Props {
   modules: Record<ModuleKey, any>;

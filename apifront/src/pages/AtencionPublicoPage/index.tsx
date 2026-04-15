@@ -263,7 +263,7 @@ export function AtencionPublicoPage() {
     setMatches([]);
     setRow(null);
     try {
-      const results = await searchPersonal(q, 30);
+      const results = await searchPersonal(q);
       setMatches(results);
       if (!results.length) toast.error('Sin resultados', `No se encontró "${q}"`);
       else toast.ok(`${results.length} resultado(s)`);

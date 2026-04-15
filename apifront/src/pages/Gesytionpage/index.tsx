@@ -705,7 +705,7 @@ export function GestionPage() {
 
   const pedidos    = usePedidos(agenteSearch.cleanDni, modules.pedidos);
   const documentos = useDocumentos(agenteSearch.cleanDni);
-  const cellModal  = useCellModal(toast);
+  const cellModal  = useCellModal();
 
   const [matches, setMatches] = useState<any[]>([]);
   const [row,     setRow]     = useState<any>(null);

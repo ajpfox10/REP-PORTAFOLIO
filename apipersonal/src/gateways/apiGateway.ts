@@ -35,12 +35,15 @@ import { buildDocumentsUploadRouter } from '../routes/documents.upload.routes';
 import { buildPersonalRouter } from '../routes/personal.routes';
 import { buildAgentesFotoRouter } from '../routes/agentesFoto.routes';
 import { buildCertificadosRouter } from '../routes/certificados.routes';
+import { buildLegajoRouter }      from '../routes/legajo.routes';
 import { buildEventosRouter } from '../routes/eventos.routes';
 import { buildApiKeysRouter } from '../routes/apiKeys.routes';
 import { buildWebhooksRouter } from '../routes/webhooks.routes';
 import { buildAsistenciaRouter } from '../routes/asistencia.routes';
 import { buildScannerRouter } from '../routes/scanner.routes';
 import { buildFicheroRouter } from '../routes/fichero.routes';
+import { buildExamenIngresoRouter } from '../routes/examenIngreso.routes';
+import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
@@ -124,12 +127,15 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/personal`,  ...protect, buildPersonalRouter(sequelize));
   app.use(`${apiPrefix}/agentes`,   ...protect, buildAgentesFotoRouter());
   app.use(`${apiPrefix}/certificados`, ...protect, buildCertificadosRouter(sequelize));
+  app.use(`${apiPrefix}/legajo`,       ...protect, buildLegajoRouter(sequelize));
   app.use(`${apiPrefix}/eventos`,   ...protect, buildEventosRouter(sequelize));
   app.use(`${apiPrefix}/api-keys`,  ...protect, buildApiKeysRouter(sequelize));
   app.use(`${apiPrefix}/usuarios`,  ...protect, buildUsuariosRouter(sequelize));
   app.use(`${apiPrefix}/webhooks`,  ...protect, buildWebhooksRouter(sequelize));
   app.use(`${apiPrefix}/asistencia`, ...protect, buildAsistenciaRouter());
-  app.use(`${apiPrefix}/fichero`,   ...protect, buildFicheroRouter());
+  app.use(`${apiPrefix}/fichero`,          ...protect, buildFicheroRouter());
+  app.use(`${apiPrefix}/examen-ingreso`,   ...protect, buildExamenIngresoRouter(sequelize));
+  app.use(`${apiPrefix}/accidentes-punzo`, ...protect, buildAccidentesPunzoRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)

@@ -8,6 +8,7 @@
 //  PUT  /asistencia/mapeo           → guarda el mapeo editado (persiste en disco)
 //  DELETE /asistencia/mapeo         → restaura el mapeo por defecto
 //  POST /asistencia/comparar        → compara usando los archivos del directorio
+//  GET  /asistencia/ausentes28      → ausentes código 28 cruzados con fichajes y horarios
 //
 // El directorio se configura en .env:
 //   EXCEL_ASISTENCIA_DIR=D:\Asistencia\Excel
@@ -15,13 +16,16 @@
 // Deteccion automatica de archivos:
 //   - El archivo cuyo nombre contenga "ministerio" se usa como fuente Ministerio
 //   - El archivo cuyo nombre contenga "siap"       se usa como fuente SIAP
+//   - El archivo cuyo nombre contenga "horario"    se usa como fuente Horarios
 //   - Tambien se puede indicar nombre explicito en el body del POST
 
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import mysql, { RowDataPacket } from 'mysql2/promise';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
+import { logger } from '../logging/logger';
 
 let ExcelJS: any;
 try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
@@ -793,6 +797,263 @@ export function buildAsistenciaRouter() {
             ministerioFiles: ministerioFiles.map(m => m.file),
             siapFile: siapF.name,
           },
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al procesar' });
+    }
+  });
+
+  // ── GET /ausentes28 ─────────────────────────────────────────────────────────
+  // Devuelve cada día con código 28-INASISTENCIA cruzado con:
+  //   - ¿Le correspondía venir? (desde horarios.xlsx, columna XDIA_CONTROLABLE)
+  //   - ¿Fichó ese día? (desde DB biométrica usando la config de fichero_config.json)
+  //
+  // Query params (todos opcionales):
+  //   periodo        YYYY-MM   → filtra por mes
+  //   ministerioFile nombre.xlsx
+  //   horariosFile   nombre.xlsx
+  router.get('/ausentes28', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!ExcelJS) {
+      return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs en el backend' });
+    }
+    try {
+      const dir   = getDir();
+      const files = listExcelFiles(dir);
+
+      // ── Archivos ────────────────────────────────────────────────────────────
+      const auto = findAutoFiles(files);
+      const ministerioFile = req.query.ministerioFile
+        ? path.join(dir, String(req.query.ministerioFile))
+        : auto.ministerio;
+      if (!ministerioFile || !fs.existsSync(ministerioFile)) {
+        return res.status(400).json({ ok: false, error: 'No se encontró archivo MINISTERIO' });
+      }
+
+      const autoHorarios = files.find(f => f.name.toLowerCase().includes('horario'));
+      const horariosFile = req.query.horariosFile
+        ? path.join(dir, String(req.query.horariosFile))
+        : autoHorarios?.fullPath ?? null;
+
+      // ── Periodo ─────────────────────────────────────────────────────────────
+      const period = req.query.periodo ? parsePeriodoMes(String(req.query.periodo)) : null;
+
+      // ── 1. Leer MINISTERIO → solo novedad 28 ────────────────────────────────
+      const allMin = await parseMinisterio(ministerioFile);
+      let rows28 = allMin.filter(r => {
+        const n = normNovedad(String(r.novedad ?? ''));
+        return n.includes('28') && n.includes('INASISTENCIA');
+      });
+      if (period) {
+        rows28 = rows28.map(r => clipRowToPeriod(r, period)).filter(Boolean) as any[];
+      }
+      if (rows28.length === 0) {
+        return res.json({ ok: true, data: [], meta: { total: 0, conFichaje: 0, sinFichaje: 0, debiaVenir: 0, noDebiaVenir: 0, sinInfoHorario: 0 } });
+      }
+
+      // ── 2. Leer horarios → mapa DNI → días controlables ─────────────────────
+      type HorarioDia = { lunes: boolean; martes: boolean; miercoles: boolean; jueves: boolean; viernes: boolean; sabado: boolean; domingo: boolean };
+      const horariosMap: Record<string, HorarioDia> = {};
+      if (horariosFile && fs.existsSync(horariosFile)) {
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.readFile(horariosFile);
+        const ws = wb.worksheets[0];
+        if (ws) {
+          const hdr: Record<string, number> = {};
+          ws.getRow(1).eachCell((c: any, col: number) => {
+            const v = normHeader(c?.value ?? '');
+            if (v) hdr[v] = col;
+          });
+          const colDniH   = hdr['nro_documento'] ?? hdr['nro documento'] ?? hdr['documento'] ?? 4;
+          const colLun    = hdr['lunes_controlable']     ?? 23;
+          const colMar    = hdr['martes_controlable']    ?? 24;
+          const colMie    = hdr['miercoles_controlable'] ?? 25;
+          const colJue    = hdr['jueves_controlable']    ?? 26;
+          const colVie    = hdr['viernes_controlable']   ?? 27;
+          const colSab    = hdr['sabado_controlable']    ?? 28;
+          const colDom    = hdr['domingo_controlable']   ?? 29;
+          const isSI = (v: any) => String(v ?? '').toUpperCase().trim() === 'SI';
+
+          ws.eachRow((r: any, rn: number) => {
+            if (rn === 1) return;
+            const dni = normDni(r.getCell(colDniH)?.value);
+            if (!dni) return;
+            horariosMap[dni] = {
+              lunes:     isSI(r.getCell(colLun)?.value),
+              martes:    isSI(r.getCell(colMar)?.value),
+              miercoles: isSI(r.getCell(colMie)?.value),
+              jueves:    isSI(r.getCell(colJue)?.value),
+              viernes:   isSI(r.getCell(colVie)?.value),
+              sabado:    isSI(r.getCell(colSab)?.value),
+              domingo:   isSI(r.getCell(colDom)?.value),
+            };
+          });
+        }
+      }
+
+      // ── 3. Expandir rangos a días individuales ───────────────────────────────
+      // DOW (getUTCDay): 0=dom, 1=lun, 2=mar, 3=mie, 4=jue, 5=vie, 6=sab
+      const DOW_KEYS: (keyof HorarioDia)[] = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+      const DOW_LABELS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+      // ── 3b. Leer SIAP (opcional) → mapa DNI → rangos con novedad ───────────────
+      const autoSiap = files.find(f => f.name.toLowerCase().includes('siap'));
+      const siapFile = req.query.siapFile
+        ? path.join(dir, String(req.query.siapFile))
+        : autoSiap?.fullPath ?? null;
+
+      // siapByDni: dni → [{ novedad, desde, hasta }]
+      const siapByDni: Record<string, Array<{ novedad: string; desde: Date; hasta: Date }>> = {};
+      if (siapFile && fs.existsSync(siapFile)) {
+        try {
+          const siapRows = await parseSiap(siapFile);
+          for (const r of siapRows) {
+            const dni = normDni(r.dni);
+            if (!dni) continue;
+            const desde = parseDate(r.desde);
+            const hasta = parseDate(r.hasta) ?? desde;
+            if (!desde || !hasta) continue;
+            if (!siapByDni[dni]) siapByDni[dni] = [];
+            siapByDni[dni].push({ novedad: String(r.novedad ?? '').trim(), desde, hasta });
+          }
+        } catch (e: any) {
+          logger.warn({ msg: 'ausentes28: error leyendo SIAP', error: e?.message });
+        }
+      }
+
+      const getSiapNovedades = (dni: string, fecha: string): string => {
+        const d = parseDate(fecha);
+        if (!d) return '';
+        const dt = toUTCMidnight(d);
+        const matches = (siapByDni[dni] ?? []).filter(e =>
+          toUTCMidnight(e.desde) <= dt && dt <= toUTCMidnight(e.hasta)
+        );
+        return [...new Set(matches.map(e => e.novedad).filter(Boolean))].join(' / ');
+      };
+
+      interface ExpandedRow {
+        dni: string;
+        nombre: string;
+        novedadMinisterio: string;
+        fecha: string;
+        diaSemana: string;
+        debiaVenir: boolean | null;
+      }
+      const expanded: ExpandedRow[] = [];
+
+      for (const row of rows28) {
+        const dni = normDni(row.dni);
+        if (!dni) continue;
+        const desde = parseDate(row.desde);
+        const hasta = parseDate(row.hasta) ?? desde;
+        if (!desde) continue;
+
+        const cur = new Date(Date.UTC(desde.getUTCFullYear(), desde.getUTCMonth(), desde.getUTCDate()));
+        const fin = new Date(Date.UTC((hasta as Date).getUTCFullYear(), (hasta as Date).getUTCMonth(), (hasta as Date).getUTCDate()));
+
+        while (cur <= fin) {
+          const dow   = cur.getUTCDay();
+          const fecha = dateToStr(cur);
+          const hor   = horariosMap[dni] ?? null;
+          const debiaVenir: boolean | null = hor ? (hor[DOW_KEYS[dow]] ?? false) : null;
+          expanded.push({ dni, nombre: row.nombre, novedadMinisterio: String(row.novedad ?? '').trim(), fecha, diaSemana: DOW_LABELS[dow], debiaVenir });
+          cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+      }
+
+      // ── 4. Consultar DB biométrica ───────────────────────────────────────────
+      type FichajeInfo = { entrada: string | null; salida: string | null };
+      const fichajesMap: Record<string, Record<string, FichajeInfo>> = {};
+      let dbError: string | null = null;
+
+      const cfgPath = path.resolve(process.cwd(), 'fichero_config.json');
+      if (fs.existsSync(cfgPath)) {
+        try {
+          const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+          const conn = await mysql.createConnection({
+            host:           cfg.mysqlHost   || '127.0.0.1',
+            port:           cfg.mysqlPort   || 3306,
+            user:           cfg.mysqlUser   || 'root',
+            password:       cfg.mysqlPass   || '',
+            database:       cfg.mysqlDb     || 'adms_db',
+            connectTimeout: 10_000,
+            dateStrings:    true,
+          });
+
+          const allDnis   = [...new Set(expanded.map(r => r.dni))];
+          const allDates  = [...new Set(expanded.map(r => r.fecha))].sort();
+          const minDate   = allDates[0];
+          const maxDate   = allDates[allDates.length - 1];
+
+          if (allDnis.length > 0) {
+            const ph = allDnis.map(() => '?').join(',');
+            const [dbRows] = await conn.query<RowDataPacket[]>(
+              `SELECT ui.badgenumber, ci.checktime, ci.checktype
+                 FROM checkinout ci
+                 INNER JOIN userinfo ui ON ci.userid = ui.userid
+                 WHERE ui.badgenumber IN (${ph})
+                   AND ci.checktime >= ? AND ci.checktime <= ?
+                 ORDER BY ci.checktime ASC`,
+              [...allDnis, `${minDate} 00:00:00`, `${maxDate} 23:59:59`],
+            );
+            await conn.end();
+
+            for (const r of dbRows) {
+              const dniR  = normDni(String(r.badgenumber));
+              const cts   = String(r.checktime);
+              const fecha = cts.slice(0, 10);
+              const hora  = cts.slice(11, 16);
+              const tipo  = String(r.checktype);
+              if (!fichajesMap[dniR]) fichajesMap[dniR] = {};
+              if (!fichajesMap[dniR][fecha]) fichajesMap[dniR][fecha] = { entrada: null, salida: null };
+              if (tipo === '0') {
+                if (!fichajesMap[dniR][fecha].entrada || hora < fichajesMap[dniR][fecha].entrada!) {
+                  fichajesMap[dniR][fecha].entrada = hora;
+                }
+              } else {
+                if (!fichajesMap[dniR][fecha].salida || hora > fichajesMap[dniR][fecha].salida!) {
+                  fichajesMap[dniR][fecha].salida = hora;
+                }
+              }
+            }
+          }
+        } catch (e: any) {
+          dbError = e?.message ?? 'Error al consultar DB biométrica';
+          logger.warn({ msg: 'ausentes28: error DB biométrica', error: dbError });
+        }
+      } else {
+        dbError = 'fichero_config.json no encontrado — configura la conexión en el módulo Fichero';
+      }
+
+      // ── 5. Construir resultado ───────────────────────────────────────────────
+      const data = expanded.map(r => {
+        const fich = fichajesMap[r.dni]?.[r.fecha];
+        return {
+          dni:               r.dni,
+          nombre:            r.nombre,
+          fecha:             r.fecha,
+          diaSemana:         r.diaSemana,
+          debiaVenir:        r.debiaVenir,
+          novedadMinisterio: r.novedadMinisterio,
+          novedadSiap:       getSiapNovedades(r.dni, r.fecha),
+          tieneFichaje:      fich !== undefined,
+          entrada:           fich?.entrada ?? null,
+          salida:            fich?.salida  ?? null,
+        };
+      });
+
+      return res.json({
+        ok: true,
+        data,
+        meta: {
+          total:           data.length,
+          conFichaje:      data.filter(r => r.tieneFichaje).length,
+          sinFichaje:      data.filter(r => !r.tieneFichaje).length,
+          debiaVenir:      data.filter(r => r.debiaVenir === true).length,
+          noDebiaVenir:    data.filter(r => r.debiaVenir === false).length,
+          sinInfoHorario:  data.filter(r => r.debiaVenir === null).length,
+          sinBiometrico:   dbError ? true : false,
+          dbError,
         },
       });
     } catch (err: any) {
