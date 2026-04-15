@@ -16,7 +16,7 @@ export function CellModal({ modalState, onClose }: CellModalProps) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(modalState.value);
-      toast.success('Copiado', 'Se copió el contenido al portapapeles');
+      toast.ok('Copiado', 'Se copió el contenido al portapapeles');
     } catch {
       toast.error('No se pudo copiar', 'El navegador no permitió copiar.');
     }

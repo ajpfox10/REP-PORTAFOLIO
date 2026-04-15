@@ -157,7 +157,7 @@ export function ResolucionesPage() {
         numero: formRes.numero || null,
         observaciones: formRes.observaciones || null,
         fecha: formRes.fecha || null,
-        created_by: session?.id || null,
+        created_by: session?.user?.id || null,
       };
       if (editRes) {
         await apiFetch(`/resoluciones/${editRes.id}`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -186,7 +186,7 @@ export function ResolucionesPage() {
         caratula: formExp.caratula || null,
         fecha: formExp.fecha || null,
         estado: formExp.estado || null,
-        created_by: session?.id || null,
+        created_by: session?.user?.id || null,
       };
       if (editExp) {
         await apiFetch(`/expedientes/${editExp.id}`, { method: 'PATCH', body: JSON.stringify(body) });

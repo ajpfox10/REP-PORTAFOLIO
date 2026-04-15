@@ -320,7 +320,7 @@ export function SaludLaboralPage() {
 
   useEffect(() => {
     setEditingExam(null);
-    setFormExam({ anio: String(new Date().getFullYear()), fecha_examen: '', resultado: '', observaciones: '' });
+    setFormExam({ anio: String(new Date().getFullYear()), fecha_examen: '', resultado: '', observaciones: '', realizado: false });
   }, [examSearch.selected]);
 
   // Auto-calcular días
@@ -336,7 +336,7 @@ export function SaludLaboralPage() {
     e.preventDefault();
     if (!recSearch.selected) { toast.error('Sin becado', 'Seleccioná un becado primero.'); return; }
     // fecha_desde es opcional — solo requerida para el rol salud_laboral (no admin)
-    const isSaludLaboral = canCrud('reconocimientos_medicos', 'write') && !isAdmin;
+    const isSaludLaboral = canCrud('reconocimientos_medicos', 'create') && !isAdmin;
     if (isSaludLaboral && !formRec.ausentismo && !formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
     setSavingRec(true);
     try {
@@ -362,7 +362,7 @@ export function SaludLaboralPage() {
         toast.ok('Guardado', 'Reconocimiento cargado.');
       }
       setEditingRec(null);
-      setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '' });
+      setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '', ausentismo: false });
       loadAllRecs();
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setSavingRec(false); }
@@ -371,7 +371,7 @@ export function SaludLaboralPage() {
   const startEditRec = (r: ReconocimientoMedico) => {
     if (!isAdmin && !isWithin24h(r.created_at)) { toast.error('Sin permiso', 'Solo podés editar dentro de las 24hs de carga.'); return; }
     setEditingRec(r);
-    setFormRec({ fecha: r.fecha?.slice(0,10)||'', fecha_desde: r.fecha_desde?.slice(0,10)||'', fecha_hasta: r.fecha_hasta?.slice(0,10)||'', cantidad_dias: r.cantidad_dias!=null?String(r.cantidad_dias):'', tipo: r.tipo||'', resultado: r.resultado||'', observaciones: r.observaciones||'' });
+    setFormRec({ fecha: r.fecha?.slice(0,10)||'', fecha_desde: r.fecha_desde?.slice(0,10)||'', fecha_hasta: r.fecha_hasta?.slice(0,10)||'', cantidad_dias: r.cantidad_dias!=null?String(r.cantidad_dias):'', tipo: r.tipo||'', resultado: r.resultado||'', observaciones: r.observaciones||'', ausentismo: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

@@ -66,6 +66,16 @@ export function Layout({ title, children, showBack }: {
   const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
   const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
 
+  const isGestionTurnos =
+    hasPerm('app:gestion_turnos:access') && !hasPerm('crud:*:*');
+
+  const isInfectologia =
+    (hasPerm('app:infectologia:access') || hasPerm('app:cargainfecto:access')) &&
+    !hasPerm('crud:*:*');
+
+  const canSeeExamenIngreso  = hasPerm('app:gestion_turnos:access') || hasPerm('crud:*:*');
+  const canSeeInfectologia   = hasPerm('app:infectologia:access') || hasPerm('app:cargainfecto:access') || hasPerm('crud:*:*');
+
   const navLink = (to: string, label: string) => (
     <Link
       className={`btn${isActive(to) ? ' active' : ''}`}
@@ -114,7 +124,17 @@ export function Layout({ title, children, showBack }: {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', flexShrink: 0 }}>
-            {isSamo ? (
+            {isGestionTurnos ? (
+              <>
+                {navLink('/app/examen-ingreso', '🩺 Examen de Ingreso')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
+            ) : isInfectologia ? (
+              <>
+                {navLink('/app/infectologia', '🩹 Infectología')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
+            ) : isSamo ? (
               <>
                 {navLink('/app/samo', '🏥 SAMO')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
@@ -181,6 +201,7 @@ export function Layout({ title, children, showBack }: {
                       </div>
                       {navLink('/app/estadisticas', '📊 Estadísticas')}
                       {navLink('/app/asistencia', '🗓️ Asistencia')}
+                      {navLink('/app/ausencias-fichajes', '🕵️ Ausentes vs Fichajes')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
                       {navLink('/app/alertas', '🔔 Alertas')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
@@ -209,6 +230,18 @@ export function Layout({ title, children, showBack }: {
                             Salud laboral
                           </div>
                           {canSeeSaludLaboral && navLink('/app/salud-laboral', '🏥 Salud Laboral')}
+                          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                        </>
+                      )}
+
+                      {(canSeeExamenIngreso || canSeeInfectologia) && (
+                        <>
+                          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                          <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
+                            RRHH / Infectología
+                          </div>
+                          {canSeeExamenIngreso  && navLink('/app/examen-ingreso', '🩺 Examen de Ingreso')}
+                          {canSeeInfectologia   && navLink('/app/infectologia',   '🩹 Infectología')}
                           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
                         </>
                       )}

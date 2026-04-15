@@ -1,7 +1,7 @@
 // src/pages/LoginPage/hooks/useLogin.ts
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../auth/AuthProvider.tsx';
+import { useAuth } from '../../../auth/AuthProvider';
 import { useToast } from '../../../ui/toast';
 
 function normalizeErrMessage(err: any): string {

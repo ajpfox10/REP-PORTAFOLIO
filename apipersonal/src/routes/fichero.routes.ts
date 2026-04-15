@@ -238,23 +238,32 @@ function buildWhereRango(rango: RangoFechas): { where: string; params: (string |
 
 // ─── Motor principal ──────────────────────────────────────────────────────────
 
-let timer:      ReturnType<typeof setInterval> | null = null;
-let corriendo   = false;
-let redCaida    = false;
-let enEjecucion = false;
+let timer:            ReturnType<typeof setInterval> | null = null;
+let corriendo       = false;
+let redCaida        = false;
+let enEjecucion     = false;
+let ultimaEjecucionMs: number | null = null;   // timestamp epoch de la última vez que arrancó un ciclo
 
 async function verificarRed(): Promise<boolean> {
-  // Verifica conectividad TCP al host SFTP directamente (más preciso que ping a 8.8.8.8)
+  // Verifica conectividad TCP al host SFTP usando la misma interfaz local que usará la conexión SFTP.
+  // Esto es crítico cuando el servidor tiene múltiples interfaces: la conexión TCP de test
+  // debe salir por la misma IP que la conexión SFTP real, para un diagnóstico preciso.
   const cfg = cargarConfig();
   const host = cfg.sftpHost || '8.8.8.8';
   const port = cfg.sftpPort || 22;
+  const localAddr = cfg.sftpLocalAddr || undefined;
 
   return new Promise((resolve) => {
     import('net').then(({ default: net }) => {
       const sock = new net.Socket();
       const timeout = 5000;
       sock.setTimeout(timeout);
-      sock.connect(port, host, () => { sock.destroy(); resolve(true); });
+      // Si hay IP local configurada, salir desde esa interfaz (igual que hará SFTP)
+      if (localAddr) {
+        (sock as any).connect({ port, host, localAddress: localAddr }, () => { sock.destroy(); resolve(true); });
+      } else {
+        sock.connect(port, host, () => { sock.destroy(); resolve(true); });
+      }
       sock.on('error', () => { sock.destroy(); resolve(false); });
       sock.on('timeout', () => { sock.destroy(); resolve(false); });
     }).catch(() => resolve(false));
@@ -268,6 +277,7 @@ async function ejecutarCiclo(rango: RangoFechas | null = null): Promise<{
 }> {
   if (enEjecucion) return { ok: false, registros: 0, archivo: '', error: 'Ya hay un ciclo en ejecución' };
   enEjecucion = true;
+  ultimaEjecucionMs = Date.now();   // registrar cuándo arrancó este ciclo
 
   const cfg           = cargarConfig();
   const fechaCreacion = new Date();
@@ -348,15 +358,22 @@ async function ejecutarCiclo(rango: RangoFechas | null = null): Promise<{
       // Renci.SshNet (VB.NET) no verifica host key por defecto — replicamos ese comportamiento
       hostVerifier:      () => true,
       algorithms: {
-        serverHostKey: ['ssh-rsa', 'rsa-sha2-512', 'rsa-sha2-256',
+        serverHostKey: ['ssh-rsa', 'ssh-dss', 'rsa-sha2-512', 'rsa-sha2-256',
                         'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ssh-ed25519'],
         cipher: ['aes128-ctr', 'aes192-ctr', 'aes256-ctr',
                  'aes128-cbc', 'aes256-cbc', '3des-cbc',
                  'aes128-gcm', 'aes256-gcm'],
         hmac: ['hmac-sha2-256', 'hmac-sha2-512', 'hmac-sha1', 'hmac-md5'],
-        kex: ['ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521',
-              'diffie-hellman-group14-sha256', 'diffie-hellman-group14-sha1',
-              'diffie-hellman-group-exchange-sha256', 'diffie-hellman-group1-sha1'],
+        // OpenSSH 5.3 (servidor remoto) no soporta ECDH ni group14-sha256.
+        // Con diffie-hellman-group-exchange-sha256, ese servidor envía un primo de 1024 bits
+        // que ssh2 v1.x rechaza silenciosamente, causando timeout de handshake.
+        // Solución: group14-sha1 primero (grupo fijo 2048 bits, compatible con OpenSSH 3.x+).
+        kex: ['diffie-hellman-group14-sha1',
+              'diffie-hellman-group-exchange-sha1',
+              'diffie-hellman-group-exchange-sha256',
+              'diffie-hellman-group1-sha1',
+              'diffie-hellman-group14-sha256',
+              'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521'],
         compress: ['none', 'zlib@openssh.com', 'zlib'],
       },
     };
@@ -410,6 +427,7 @@ function iniciarTimer(): void {
   const cfg = cargarConfig();
   corriendo = true;
   redCaida  = false;
+  ultimaEjecucionMs = Date.now();   // permite mostrar el countdown desde el primer momento
   timer = setInterval(() => {
     // Relee config en cada tick para respetar cambios de modo sin reiniciar el timer
     const c = cargarConfig();
@@ -506,9 +524,28 @@ export function buildFicheroRouter(): Router {
     const entradas   = parsearLog();
     const exitosos   = entradas.filter(e => e.exitoso).length;
     const fallidos   = entradas.length - exitosos;
-    const ultimas3   = entradas.slice(-3);
-    const redCaidaLog = ultimas3.length > 0 && ultimas3.every(e => !e.exitoso && /red|sftp|network|connect/i.test(e.error));
+
+    // redCaidaLog: solo se activa si las últimas 3 entradas son RECIENTES (< 2 horas)
+    // y todas fallaron con errores de conectividad.
+    // Usamos errores específicos de red, NO "connect" genérico (evita falso positivo con EADDRNOTAVAIL).
+    const ultimas3  = entradas.slice(-3);
+    const ahoraMs   = Date.now();
+    const dosHorasMs = 2 * 60 * 60 * 1000;
+    const redCaidaLog = ultimas3.length >= 3 && ultimas3.every(e => {
+      if (e.exitoso) return false;
+      const ts = new Date(e.fechaCreacion.replace(' ', 'T')).getTime();
+      if (isNaN(ts) || ahoraMs - ts > dosHorasMs) return false;
+      return /Red no disponible|ECONNREFUSED|ENETUNREACH|EHOSTUNREACH|ETIMEDOUT/i.test(e.error);
+    });
+
     const ultimaExitosa = [...entradas].reverse().find(e => e.exitoso) ?? null;
+
+    const cfg2 = cargarConfig();
+    // próxima ejecución = última ejecución + intervalo (solo tiene sentido si el timer está corriendo)
+    const proximaEjecucionMs: number | null =
+      corriendo && ultimaEjecucionMs
+        ? ultimaEjecucionMs + cfg2.intervaloMin * 60_000
+        : null;
 
     res.json({
       ok: true,
@@ -518,12 +555,20 @@ export function buildFicheroRouter(): Router {
         total:    entradas.length,
         exitosos,
         fallidos,
-        primerArchivo:       entradas.length > 0 ? entradas[0].fechaCreacion : null,
-        ultimoArchivo:       entradas.length > 0 ? entradas[entradas.length - 1].fechaCreacion : null,
-        ultimaSubidaExitosa: ultimaExitosa?.fechaSubida ?? null,
-        entradas:            [...entradas].reverse(),
+        primerArchivo:        entradas.length > 0 ? entradas[0].fechaCreacion : null,
+        ultimoArchivo:        entradas.length > 0 ? entradas[entradas.length - 1].fechaCreacion : null,
+        ultimaSubidaExitosa:  ultimaExitosa?.fechaSubida ?? null,
+        intervaloMin:         cfg2.intervaloMin,
+        proximaEjecucionMs,   // epoch ms — el front hace el countdown desde acá
+        entradas:             [...entradas].reverse(),
       } as EstadoFichero,
     });
+  });
+
+  // POST /fichero/resetear — limpia el flag de redCaida en memoria (útil tras corregir config)
+  router.post('/resetear', admin, (_req: Request, res: Response) => {
+    redCaida = false;
+    res.json({ ok: true, msg: 'Estado de red reseteado' });
   });
 
   // GET /fichero/red

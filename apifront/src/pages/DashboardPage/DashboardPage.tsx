@@ -6,6 +6,8 @@ import { useDashboard } from './hooks/useDashboard';
 import { useAuth } from '../../auth/AuthProvider';
 import { useKiosk } from '../../hooks/useKiosk';
 import { EmbarazadasAlertaBanner } from '../EmbarazadasPage';
+import { ExamenIngresoBanner } from '../ExamenIngresoPage';
+import { AccidentesPunzoBanner } from '../AccidentesPunzoPage';
 import './styles/DashboardPage.css';
 
 function Tile({ to, title, desc, disabled, accent }: {
@@ -65,7 +67,17 @@ export function DashboardPage() {
     hasPerm('app:samo:access') &&
     !hasPerm('crud:*:*');
 
-  const shouldShowEmbarazadasBanner = !isSaludLaboral && !isJefeServicio && !isSamo && !isKiosk;
+  const isGestionTurnos =
+    hasPerm('app:gestion_turnos:access') && !hasPerm('crud:*:*');
+
+  const isInfectologia =
+    (hasPerm('app:infectologia:access') || hasPerm('app:cargainfecto:access')) &&
+    !hasPerm('crud:*:*');
+
+  const canSeeExamenIngreso = hasPerm('app:gestion_turnos:access') || hasPerm('crud:*:*');
+  const canSeeInfectologia  = hasPerm('app:infectologia:access') || hasPerm('app:cargainfecto:access') || hasPerm('crud:*:*');
+
+  const shouldShowEmbarazadasBanner = !isSaludLaboral && !isJefeServicio && !isSamo && !isGestionTurnos && !isInfectologia && !isKiosk;
 
   // ── Kiosco: PC de atención al público ─────────────────────────────────────
   if (kioskLoading) return null; // evita flash antes de resolver la IP
@@ -184,9 +196,45 @@ export function DashboardPage() {
     );
   }
 
+  if (isGestionTurnos) {
+    return (
+      <Layout title="Panel — Gestión de Turnos">
+        <ExamenIngresoBanner />
+        <div style={{ marginBottom: 6 }}>
+          <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Módulo activo
+          </div>
+          <div className="grid">
+            <Tile to="/app/examen-ingreso" title="🩺 Examen de Ingreso" desc="Gestión de turnos para examen de ingreso: laboratorio, rayos, cardiología, psicología, fonoaudiología y odontología." accent="#6366f1" />
+            <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos y cambio de contraseña." accent="#0ea5e9" />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (isInfectologia) {
+    return (
+      <Layout title="Panel — Infectología">
+        <AccidentesPunzoBanner />
+        <div style={{ marginBottom: 6 }}>
+          <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Módulo activo
+          </div>
+          <div className="grid">
+            <Tile to="/app/infectologia" title="🩹 Infectología" desc="Registro y seguimiento de accidentes punzo-cortantes del personal." accent="#ef4444" />
+            <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos y cambio de contraseña." accent="#0ea5e9" />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout title="Panel">
       {shouldShowEmbarazadasBanner && <EmbarazadasAlertaBanner />}
+      {hasPerm('crud:*:*') && <ExamenIngresoBanner />}
+      {hasPerm('crud:*:*') && <AccidentesPunzoBanner />}
 
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -214,6 +262,7 @@ export function DashboardPage() {
         <div className="grid">
           <Tile to="/app/estadisticas" title="📊 Estadísticas" desc="Agentes por sector, servicio, categoría, ingresos por año, cumpleaños del mes y más." accent="#ec4899" />
           <Tile to="/app/asistencia" title="🗓️ Asistencia" desc="Comparación de novedades entre Ministerio y SIAP. Detecta coincidencias y diferencias por DNI." accent="#6366f1" />
+          <Tile to="/app/ausencias-fichajes" title="🕵️ Ausentes vs Fichajes" desc="Agentes con código 28 (inasistencia): cruzado con si debían venir según horario y si ficharon ese día." accent="#f43f5e" />
           <Tile to="/app/organigrama" title="🏗️ Organigrama" desc="Distribución visual del personal por jefatura, sector, servicio y dependencia." accent="#f59e0b" />
           <Tile to="/app/alertas" title="🔔 Alertas" desc="Cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos." accent="#ef4444" />
           <Tile to="/app/atencion" title="🏛️ Atención al Público" desc="Recepción de agentes, motivo de consulta y emisión de ticket de atención." accent="#0f766e" />
@@ -236,6 +285,8 @@ export function DashboardPage() {
           <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
           <Tile to="/app/carga-agente" title="🧾 Carga de Agente" desc="Alta manual de agentes y carga inicial de datos en el sistema." accent="#84cc16" />
           <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP y alerta de red caída." accent="#f59e0b" />
+          {canSeeExamenIngreso && <Tile to="/app/examen-ingreso" title="🩺 Examen de Ingreso" desc="Gestión de turnos de examen de ingreso para candidatos activos y nuevos agentes." accent="#6366f1" />}
+          {canSeeInfectologia  && <Tile to="/app/infectologia" title="🩹 Infectología" desc="Registro y seguimiento de accidentes punzo-cortantes del personal." accent="#ef4444" />}
         </div>
       </div>
 

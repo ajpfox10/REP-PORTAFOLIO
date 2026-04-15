@@ -190,6 +190,389 @@ paths:
       responses:
         "200":
           description: Logout OK
+  /api/v1/accidentes_punzo:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List accidentes_punzo
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_accidentes_punzo"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create accidentes_punzo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_accidentes_punzo_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/accidentes_punzo/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get accidentes_punzo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update accidentes_punzo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_accidentes_punzo"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch accidentes_punzo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_accidentes_punzo_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete accidentes_punzo by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/certificados/certificado-trabajo:
+    post:
+      tags:
+        - docs
+      security:
+        - bearerAuth: []
+      summary: Generar Certificado de Trabajo (DOCX) desde plantilla
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dni
+              additionalProperties: false
+              properties:
+                dni:
+                  type: number
+                dependencia:
+                  type: string
+                legajo:
+                  type: string
+                decreto:
+                  type: string
+                lugar_y_fecha:
+                  type: string
+      responses:
+        "200":
+          description: DOCX generado
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Bad request
+        "404":
+          description: No encontrado
+  /api/v1/documents:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Listar documentos (tblarchivos)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Parámetros inválidos
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+  /api/v1/documents/{id}/file:
+    get:
+      tags:
+        - documents
+      security:
+        - bearerAuth: []
+      summary: Descargar/visualizar documento por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Archivo (stream)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: ID inválido / ruta inválida
+        "401":
+          description: No autenticado
+        "403":
+          description: No autorizado
+        "404":
+          description: No encontrado
+        "413":
+          description: Archivo demasiado grande
+        "415":
+          description: Tipo de archivo no permitido
+        "423":
+          description: Bloqueado (virus detectado)
+        "500":
+          description: Error
+  /api/v1/accidentes_punzo_auditoria:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List accidentes_punzo_auditoria
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_accidentes_punzo_auditoria"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create accidentes_punzo_auditoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_accidentes_punzo_auditoria_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/accidentes_punzo_auditoria/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get accidentes_punzo_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update accidentes_punzo_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_accidentes_punzo_auditoria"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch accidentes_punzo_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_accidentes_punzo_auditoria_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete accidentes_punzo_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/agentes:
     get:
       tags:
@@ -322,125 +705,6 @@ paths:
           description: OK
         "404":
           description: Not found
-  /api/v1/certificados/certificado-trabajo:
-    post:
-      tags:
-        - docs
-      security:
-        - bearerAuth: []
-      summary: Generar Certificado de Trabajo (DOCX) desde plantilla
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - dni
-              additionalProperties: false
-              properties:
-                dni:
-                  type: number
-                dependencia:
-                  type: string
-                legajo:
-                  type: string
-                decreto:
-                  type: string
-                lugar_y_fecha:
-                  type: string
-      responses:
-        "200":
-          description: DOCX generado
-          content:
-            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: Bad request
-        "404":
-          description: No encontrado
-  /api/v1/documents:
-    get:
-      tags:
-        - documents
-      security:
-        - bearerAuth: []
-      summary: Listar documentos (tblarchivos)
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-        - name: q
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Parámetros inválidos
-        "401":
-          description: No autenticado
-        "403":
-          description: No autorizado
-  /api/v1/documents/{id}/file:
-    get:
-      tags:
-        - documents
-      security:
-        - bearerAuth: []
-      summary: Descargar/visualizar documento por ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Archivo (stream)
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-            image/png:
-              schema:
-                type: string
-                format: binary
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: ID inválido / ruta inválida
-        "401":
-          description: No autenticado
-        "403":
-          description: No autorizado
-        "404":
-          description: No encontrado
-        "413":
-          description: Archivo demasiado grande
-        "415":
-          description: Tipo de archivo no permitido
-        "423":
-          description: Bloqueado (virus detectado)
-        "500":
-          description: Error
   /api/v1/agentes_sectores:
     get:
       tags:
@@ -4086,6 +4350,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/examen_ingreso:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List examen_ingreso
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_examen_ingreso"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create examen_ingreso
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_ingreso_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/examen_ingreso/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get examen_ingreso by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update examen_ingreso by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_ingreso"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch examen_ingreso by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_ingreso_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete examen_ingreso by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/examen_ingreso_auditoria:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List examen_ingreso_auditoria
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_examen_ingreso_auditoria"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create examen_ingreso_auditoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_ingreso_auditoria_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/examen_ingreso_auditoria/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get examen_ingreso_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update examen_ingreso_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_ingreso_auditoria"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch examen_ingreso_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_examen_ingreso_auditoria_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete examen_ingreso_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/expedientes:
     get:
       tags:
@@ -4999,6 +5527,1194 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete jefedeptos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_concepto_menciones:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_concepto_menciones
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_concepto_menciones"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_concepto_menciones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_concepto_menciones_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_concepto_menciones/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_concepto_menciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_concepto_menciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_concepto_menciones"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_concepto_menciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_concepto_menciones_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_concepto_menciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_declaracion_bienes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_declaracion_bienes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_declaracion_bienes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_declaracion_bienes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_declaracion_bienes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_declaracion_bienes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_declaracion_bienes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_declaracion_bienes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_declaracion_bienes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_declaracion_bienes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_declaracion_bienes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_declaracion_bienes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_embargos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_embargos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_embargos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_embargos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_embargos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_embargos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_embargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_embargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_embargos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_embargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_embargos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_embargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_familia:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_familia
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_familia"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_familia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_familia_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_familia/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_familia by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_familia by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_familia"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_familia by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_familia_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_familia by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_familia_expedientes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_familia_expedientes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_familia_expedientes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_familia_expedientes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_familia_expedientes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_familia_expedientes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_familia_expedientes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_familia_expedientes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_familia_expedientes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_familia_expedientes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_familia_expedientes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_familia_expedientes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_funcion_destino:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_funcion_destino
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_funcion_destino"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_funcion_destino
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_funcion_destino_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_funcion_destino/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_funcion_destino by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_funcion_destino by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_funcion_destino"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_funcion_destino by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_funcion_destino_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_funcion_destino by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_incompatibilidad:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_incompatibilidad
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_incompatibilidad"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_incompatibilidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_incompatibilidad_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_incompatibilidad/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_incompatibilidad by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_incompatibilidad by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_incompatibilidad"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_incompatibilidad by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_incompatibilidad_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_incompatibilidad by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_licencias:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_licencias
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_licencias"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_licencias
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_licencias_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_licencias/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_licencias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_licencias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_licencias"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_licencias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_licencias_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_licencias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/legajo_penas_disciplinarias:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List legajo_penas_disciplinarias
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_legajo_penas_disciplinarias"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create legajo_penas_disciplinarias
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_penas_disciplinarias_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/legajo_penas_disciplinarias/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get legajo_penas_disciplinarias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update legajo_penas_disciplinarias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_penas_disciplinarias"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch legajo_penas_disciplinarias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_legajo_penas_disciplinarias_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete legajo_penas_disciplinarias by id
       parameters:
         - name: id
           in: path
@@ -11084,6 +12800,254 @@ paths:
           description: Not found
 components:
   schemas:
+    Table_accidentes_punzo:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_dni:
+          type: string
+          nullable: true
+        agente_nombre:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+        caso:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - fecha
+    Table_accidentes_punzo_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agente_dni:
+          type: string
+          nullable: true
+        agente_nombre:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+        caso:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - fecha
+    Table_accidentes_punzo_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_dni:
+          type: string
+          nullable: true
+        agente_nombre:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+        caso:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_accidentes_punzo_auditoria:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        registro_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - registro_id
+        - accion
+    Table_accidentes_punzo_auditoria_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        registro_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - registro_id
+        - accion
+    Table_accidentes_punzo_auditoria_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        registro_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Table_agentes:
       type: object
       additionalProperties: false
@@ -12325,6 +14289,28 @@ components:
         updated_by:
           type: number
           nullable: true
+        norma_legal:
+          type: string
+          nullable: true
+        a_partir:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
       required:
         - id
         - dni
@@ -12359,6 +14345,28 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+        norma_legal:
+          type: string
+          nullable: true
+        a_partir:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
           nullable: true
       required:
         - dni
@@ -12395,6 +14403,28 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+        norma_legal:
+          type: string
+          nullable: true
+        a_partir:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
           nullable: true
     Table_categorias:
       type: object
@@ -14349,6 +16379,338 @@ components:
         realizado:
           type: number
           nullable: true
+    Table_examen_ingreso:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+        es_agente:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        turno_laboratorio:
+          type: string
+          format: date-time
+          nullable: true
+        turno_rayos:
+          type: string
+          format: date-time
+          nullable: true
+        turno_cardiologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_psicologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_fonoaudiologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_odontologia:
+          type: string
+          format: date-time
+          nullable: true
+        avisado:
+          type: number
+        avisado_por_id:
+          type: number
+          nullable: true
+        avisado_por_email:
+          type: string
+          nullable: true
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - nombre
+    Table_examen_ingreso_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+        es_agente:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        turno_laboratorio:
+          type: string
+          format: date-time
+          nullable: true
+        turno_rayos:
+          type: string
+          format: date-time
+          nullable: true
+        turno_cardiologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_psicologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_fonoaudiologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_odontologia:
+          type: string
+          format: date-time
+          nullable: true
+        avisado:
+          type: number
+        avisado_por_id:
+          type: number
+          nullable: true
+        avisado_por_email:
+          type: string
+          nullable: true
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - nombre
+    Table_examen_ingreso_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+        es_agente:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        turno_laboratorio:
+          type: string
+          format: date-time
+          nullable: true
+        turno_rayos:
+          type: string
+          format: date-time
+          nullable: true
+        turno_cardiologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_psicologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_fonoaudiologia:
+          type: string
+          format: date-time
+          nullable: true
+        turno_odontologia:
+          type: string
+          format: date-time
+          nullable: true
+        avisado:
+          type: number
+        avisado_por_id:
+          type: number
+          nullable: true
+        avisado_por_email:
+          type: string
+          nullable: true
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_examen_ingreso_auditoria:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        candidato_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - candidato_id
+        - accion
+    Table_examen_ingreso_auditoria_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        candidato_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - candidato_id
+        - accion
+    Table_examen_ingreso_auditoria_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        candidato_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Table_expedientes:
       type: object
       additionalProperties: false
@@ -15039,6 +17401,1287 @@ components:
         oficinacentral:
           type: string
           nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_concepto_menciones:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        referencias:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_legajo_concepto_menciones_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        referencias:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_legajo_concepto_menciones_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        referencias:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_declaracion_bienes:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        descripcion:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - descripcion
+    Table_legajo_declaracion_bienes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        descripcion:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - descripcion
+    Table_legajo_declaracion_bienes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        descripcion:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_embargos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        expediente:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        suma_embargada:
+          type: number
+          nullable: true
+        autoridad:
+          type: string
+          nullable: true
+        ejecutante:
+          type: string
+          nullable: true
+        fecha_levantamiento:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_legajo_embargos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        expediente:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        suma_embargada:
+          type: number
+          nullable: true
+        autoridad:
+          type: string
+          nullable: true
+        ejecutante:
+          type: string
+          nullable: true
+        fecha_levantamiento:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_legajo_embargos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        expediente:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        suma_embargada:
+          type: number
+          nullable: true
+        autoridad:
+          type: string
+          nullable: true
+        ejecutante:
+          type: string
+          nullable: true
+        fecha_levantamiento:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_familia:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        parentesco:
+          type: string
+        codigo:
+          type: string
+          nullable: true
+        apellido_nombres:
+          type: string
+        sexo:
+          type: string
+          nullable: true
+        vive:
+          type: number
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        es_empleado:
+          type: string
+          nullable: true
+        es_jubilado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - parentesco
+        - apellido_nombres
+    Table_legajo_familia_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        parentesco:
+          type: string
+        codigo:
+          type: string
+          nullable: true
+        apellido_nombres:
+          type: string
+        sexo:
+          type: string
+          nullable: true
+        vive:
+          type: number
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        es_empleado:
+          type: string
+          nullable: true
+        es_jubilado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - parentesco
+        - apellido_nombres
+    Table_legajo_familia_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        parentesco:
+          type: string
+        codigo:
+          type: string
+          nullable: true
+        apellido_nombres:
+          type: string
+        sexo:
+          type: string
+          nullable: true
+        vive:
+          type: number
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        es_empleado:
+          type: string
+          nullable: true
+        es_jubilado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_familia_expedientes:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        expediente:
+          type: string
+          nullable: true
+        fecha_informe:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_legajo_familia_expedientes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        expediente:
+          type: string
+          nullable: true
+        fecha_informe:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_legajo_familia_expedientes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        expediente:
+          type: string
+          nullable: true
+        fecha_informe:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_funcion_destino:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        funcion:
+          type: string
+          nullable: true
+        destino:
+          type: string
+          nullable: true
+        resolucion:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_egreso:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_legajo_funcion_destino_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        funcion:
+          type: string
+          nullable: true
+        destino:
+          type: string
+          nullable: true
+        resolucion:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_egreso:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_legajo_funcion_destino_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        funcion:
+          type: string
+          nullable: true
+        destino:
+          type: string
+          nullable: true
+        resolucion:
+          type: string
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_egreso:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_incompatibilidad:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        tiene_jubilacion:
+          type: number
+        jubilacion_ley:
+          type: string
+          nullable: true
+        jubilacion_caja:
+          type: string
+          nullable: true
+        jubilacion_monto:
+          type: number
+          nullable: true
+        jubilacion_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        otro_cargo:
+          type: number
+        otro_cargo_nivel:
+          type: string
+          nullable: true
+        otro_cargo_lugar:
+          type: string
+          nullable: true
+        otro_cargo_monto:
+          type: number
+          nullable: true
+        otro_cargo_fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        otras_actividades:
+          type: string
+          nullable: true
+        otras_actividades_lugar:
+          type: string
+          nullable: true
+        otras_actividades_monto:
+          type: number
+          nullable: true
+        otras_actividades_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_declaracion:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_legajo_incompatibilidad_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        tiene_jubilacion:
+          type: number
+        jubilacion_ley:
+          type: string
+          nullable: true
+        jubilacion_caja:
+          type: string
+          nullable: true
+        jubilacion_monto:
+          type: number
+          nullable: true
+        jubilacion_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        otro_cargo:
+          type: number
+        otro_cargo_nivel:
+          type: string
+          nullable: true
+        otro_cargo_lugar:
+          type: string
+          nullable: true
+        otro_cargo_monto:
+          type: number
+          nullable: true
+        otro_cargo_fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        otras_actividades:
+          type: string
+          nullable: true
+        otras_actividades_lugar:
+          type: string
+          nullable: true
+        otras_actividades_monto:
+          type: number
+          nullable: true
+        otras_actividades_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_declaracion:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_legajo_incompatibilidad_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        tiene_jubilacion:
+          type: number
+        jubilacion_ley:
+          type: string
+          nullable: true
+        jubilacion_caja:
+          type: string
+          nullable: true
+        jubilacion_monto:
+          type: number
+          nullable: true
+        jubilacion_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        otro_cargo:
+          type: number
+        otro_cargo_nivel:
+          type: string
+          nullable: true
+        otro_cargo_lugar:
+          type: string
+          nullable: true
+        otro_cargo_monto:
+          type: number
+          nullable: true
+        otro_cargo_fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        otras_actividades:
+          type: string
+          nullable: true
+        otras_actividades_lugar:
+          type: string
+          nullable: true
+        otras_actividades_monto:
+          type: number
+          nullable: true
+        otras_actividades_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        fecha_declaracion:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_licencias:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        resolucion:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        termino:
+          type: string
+          nullable: true
+        a_partir_dia:
+          type: number
+          nullable: true
+        a_partir_mes:
+          type: number
+          nullable: true
+        a_partir_anio:
+          type: number
+          nullable: true
+        con_sueldo:
+          type: number
+        con_50pct:
+          type: number
+        sin_sueldo:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_legajo_licencias_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        resolucion:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        termino:
+          type: string
+          nullable: true
+        a_partir_dia:
+          type: number
+          nullable: true
+        a_partir_mes:
+          type: number
+          nullable: true
+        a_partir_anio:
+          type: number
+          nullable: true
+        con_sueldo:
+          type: number
+        con_50pct:
+          type: number
+        sin_sueldo:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_legajo_licencias_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        resolucion:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        termino:
+          type: string
+          nullable: true
+        a_partir_dia:
+          type: number
+          nullable: true
+        a_partir_mes:
+          type: number
+          nullable: true
+        a_partir_anio:
+          type: number
+          nullable: true
+        con_sueldo:
+          type: number
+        con_50pct:
+          type: number
+        sin_sueldo:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_legajo_penas_disciplinarias:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        expediente_letra:
+          type: string
+          nullable: true
+        expediente_nro:
+          type: string
+          nullable: true
+        expediente_anio:
+          type: number
+          nullable: true
+        decreto_resolucion:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        calidad_pena:
+          type: string
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_legajo_penas_disciplinarias_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        expediente_letra:
+          type: string
+          nullable: true
+        expediente_nro:
+          type: string
+          nullable: true
+        expediente_anio:
+          type: number
+          nullable: true
+        decreto_resolucion:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        calidad_pena:
+          type: string
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_legajo_penas_disciplinarias_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        expediente_letra:
+          type: string
+          nullable: true
+        expediente_nro:
+          type: string
+          nullable: true
+        expediente_anio:
+          type: number
+          nullable: true
+        decreto_resolucion:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        calidad_pena:
+          type: string
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
         deleted_at:
           type: string
           format: date-time

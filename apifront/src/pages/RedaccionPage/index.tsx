@@ -94,7 +94,11 @@ function DocModal({ agente, doc, onClose }: {
       <div class="titulo">IOMA</div>
       <p>La que suscribe hace constar que el/la agente <strong>${iomaDatos.apellidoNombre}</strong>,
       DNI N° <strong>${iomaDatos.dni}</strong>${agente.cuil ? `, CUIL ${agente.cuil}` : ''}${iomaDatos.dependencia ? `, dependencia <strong>${iomaDatos.dependencia}</strong>` : ''}${iomaDatos.legajo ? `, legajo <strong>${iomaDatos.legajo}</strong>` : ''}${iomaDatos.decreto ? `, decreto <strong>${iomaDatos.decreto}</strong>` : ''},
-      con ingreso el <strong>${iomaDatos.fechaIngreso}</strong>, desempeñando funciones hasta el <strong>${iomaDatos.hasta}</strong>.
+      con ingreso el <strong>${iomaDatos.fechaIngreso}</strong>,
+      ${iomaDatos.hasta === 'y continúa'
+        ? `desempeñando funciones <strong>y continúa</strong>.`
+        : `cesando funciones el <strong>${iomaDatos.hasta}</strong>.`
+      }
       ${doc.frase}</p>
       <p>La presente se expide a pedido de la parte interesada para ser presentada donde corresponda.</p>
       <p>${iomaDatos.lugarFecha}.</p>
@@ -132,33 +136,13 @@ function DocModal({ agente, doc, onClose }: {
     if (doc.id === 2) {
       if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>⏳ Cargando datos del agente…</p>;
       if (!iomaDatos)   return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+      const previewHtml = buildDocHtml();
       return (
-        <>
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem', letterSpacing: '0.02em' }}>MUNICIPALIDAD</div>
-            <div style={{ fontSize: '0.77rem', color: '#666' }}>Dirección de Recursos Humanos</div>
-          </div>
-          <div style={{ fontWeight: 700, textDecoration: 'underline', marginBottom: 16, fontSize: '0.9rem' }}>IOMA</div>
-          <p style={{ margin: '0 0 14px 0', textAlign: 'justify' }}>
-            La que suscribe hace constar que el/la agente{' '}
-            <strong>{iomaDatos.apellidoNombre}</strong>,{' '}
-            DNI N° <strong>{iomaDatos.dni}</strong>
-            {agente.cuil ? `, CUIL ${agente.cuil}` : ''}
-            {iomaDatos.dependencia ? `, dependencia ${iomaDatos.dependencia}` : ''}
-            {iomaDatos.legajo ? `, legajo ${iomaDatos.legajo}` : ''}
-            {iomaDatos.decreto ? `, decreto ${iomaDatos.decreto}` : ''},
-            {' '}con ingreso el <strong>{iomaDatos.fechaIngreso}</strong>,
-            {' '}desempeñando funciones hasta el <strong>{iomaDatos.hasta}</strong>.{' '}
-            {doc.frase}
-          </p>
-          <p style={{ margin: '0 0 28px 0', color: '#333', textAlign: 'justify' }}>
-            La presente se expide a pedido de la parte interesada para ser presentada donde corresponda.
-          </p>
-          <p style={{ fontSize: '0.83rem', color: '#444' }}>{iomaDatos.lugarFecha}.</p>
-          <div style={{ marginTop: 52, borderTop: '1px solid #ccc', paddingTop: 8, textAlign: 'center', fontSize: '0.74rem', color: '#999' }}>
-            Firma y Sello Autoridad Competente
-          </div>
-        </>
+        <iframe
+          srcDoc={previewHtml}
+          style={{ width: '100%', height: 420, border: 'none', borderRadius: 4 }}
+          title="Preview IOMA"
+        />
       );
     }
 
@@ -195,13 +179,12 @@ function DocModal({ agente, doc, onClose }: {
           <button className="btn" onClick={onClose} style={{ padding: '2px 10px', flexShrink: 0 }}>✕</button>
         </div>
 
-        {/* Preview — hoja blanca */}
+        {/* Preview */}
         <div style={{
-          background: '#fff', color: '#111', borderRadius: 8,
-          padding: '28px 32px', fontFamily: 'Georgia, serif',
-          lineHeight: 1.8, fontSize: '0.87rem', overflowY: 'auto', flex: 1,
+          borderRadius: 8, overflowY: 'auto', flex: 1,
           boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
-          ...(doc.implementado ? {} : { background: '#fffbeb', border: '1px solid #fcd34d' }),
+          background: doc.implementado ? '#fff' : '#fffbeb',
+          border: doc.implementado ? 'none' : '1px solid #fcd34d',
         }}>
           {renderPreview()}
         </div>
@@ -263,7 +246,7 @@ export function RedaccionPage() {
         }
       } else {
         // Usar cache local — /personal/search tiene bug SQL en el backend
-        data = await searchPersonal(query.trim(), 20);
+        data = await searchPersonal(query.trim());
       }
 
       if (!data.length) { toast.error('Sin resultados'); return; }

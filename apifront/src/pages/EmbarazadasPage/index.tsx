@@ -547,8 +547,8 @@ export function EmbarazadasPage() {
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div className="h2" style={{ marginBottom: 8 }}>Listado</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn" type="button" onClick={() => exportToExcel(rows, 'embarazadas.xlsx')} disabled={!rows.length}>⬇️ Excel</button>
-            <button className="btn" type="button" onClick={() => exportToPdf(rows, 'embarazadas.pdf')} disabled={!rows.length}>⬇️ PDF</button>
+            <button className="btn" type="button" onClick={() => exportToExcel('embarazadas', rows)} disabled={!rows.length}>⬇️ Excel</button>
+            <button className="btn" type="button" onClick={() => exportToPdf('embarazadas', rows)} disabled={!rows.length}>⬇️ PDF</button>
           </div>
         </div>
 
