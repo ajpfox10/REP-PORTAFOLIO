@@ -19,7 +19,6 @@ export { useLocalStorage } from './useLocalStorage';
 // Hooks adicionales (puedes agregar más)
 export { usePrevious } from './usePrevious';
 export { useIsMounted } from './useIsMounted';
-export { useOnlineStatus } from './useOnlineStatus';
 
 // Ejemplo de otros hooks útiles:
 /*

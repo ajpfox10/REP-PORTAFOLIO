@@ -394,8 +394,8 @@ export function ResidentesRotacionPage() {
                 {verEliminados ? '🙈 Ocultar eliminados' : `🗑️ Ver eliminados (${rowsEliminados.length})`}
               </button>
             )}
-            <button className="btn" type="button" onClick={() => exportToExcel(rowsVisibles, 'rotacion.xlsx')} disabled={!rowsVisibles.length}>📊 Excel</button>
-            <button className="btn" type="button" onClick={() => exportToPdf(rowsVisibles, 'rotacion.pdf')} disabled={!rowsVisibles.length}>📄 PDF</button>
+            <button className="btn" type="button" onClick={() => exportToExcel('rotacion', rowsVisibles)} disabled={!rowsVisibles.length}>📊 Excel</button>
+            <button className="btn" type="button" onClick={() => exportToPdf('rotacion', rowsVisibles)} disabled={!rowsVisibles.length}>📄 PDF</button>
           </div>
         </div>
 

@@ -33,7 +33,7 @@ export function ConsultasPage() {
         data = res?.data || [];
       } else {
         // Usar cache local — /personal/search tiene bug SQL en el backend
-        const persons = await searchPersonal(cleanApe, 20);
+        const persons = await searchPersonal(cleanApe);
         const dnis = persons.map((p: any) => p.dni);
         for (const d of dnis.slice(0, 10)) {
           const res = await apiFetch<any>(`/consultas?dni=${d}&limit=100&page=1`);

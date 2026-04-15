@@ -58,7 +58,7 @@ function PanelBusqueda({ label, agente, onLoad }: {
         if (r1?.data) data = [r1.data];
       } else {
         // Usar cache local — /personal/search tiene bug SQL en el backend
-        data = await searchPersonal(query.trim(), 15);
+        data = await searchPersonal(query.trim());
       }
       if (!data.length) { toast.error('Sin resultados'); return; }
       if (data.length === 1) {

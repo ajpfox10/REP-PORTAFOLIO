@@ -302,7 +302,7 @@ export function EscaneoPage() {
     if (!q) { toast.error('Ingresá apellido'); return; }
     setLoadingAgente(true); setMatches([]);
     try {
-      const results = await searchPersonal(q, 30);
+      const results = await searchPersonal(q);
       setMatches(results);
       if (!results.length) toast.error('Sin resultados');
     } catch (e: any) { toast.error('Error', e?.message); }

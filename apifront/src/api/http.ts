@@ -88,6 +88,7 @@ async function refreshTokensIfPossible(): Promise<void> {
       accessToken,
       // En CIA mode, el refresh suele quedar en cookie y puede no volver por JSON.
       refreshToken: typeof newRefresh === 'string' ? newRefresh : s?.refreshToken ?? null,
+      permissions: s?.permissions ?? [],
     };
     saveSession(next);
   })().finally(() => {

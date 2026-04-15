@@ -355,7 +355,7 @@ export function AgentesServiciosPage() {
     setLoadingNom(true);
     setMatches([]);
     try {
-      const res = await searchPersonal(q, 20);
+      const res = await searchPersonal(q);
       setMatches(res);
       if (!res.length) toast.error('Sin resultados', `No se encontró "${q}"`);
     } catch (e: any) {
