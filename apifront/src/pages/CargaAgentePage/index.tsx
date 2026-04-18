@@ -188,6 +188,12 @@ function StepLaboral({ form, setField, errors, cats }: any) {
         </div>
 
         <div className="ca-field">
+          <label className="ca-label">Fecha de Egreso <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>(temporarios)</span></label>
+          <input className="ca-input" type="date" value={form.fecha_egreso}
+            onChange={e => setField('fecha_egreso', e.target.value)} />
+        </div>
+
+        <div className="ca-field">
           <label className="ca-label required">Estado Empleo</label>
           <select className="ca-select" value={form.estado_empleo}
             onChange={e => setField('estado_empleo', e.target.value)}>

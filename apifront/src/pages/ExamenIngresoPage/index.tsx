@@ -244,11 +244,11 @@ function FilaCandidato({ c, isAdmin, onUpdate, onDelete, onAvisar }: {
           <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
             {TURNOS.map(t => (
               <span key={t.key as string} style={{
-                fontSize: '0.68rem', padding: '1px 6px', borderRadius: 8, fontWeight: 600,
+                fontSize: '0.68rem', padding: '2px 7px', borderRadius: 8, fontWeight: 600,
                 background: c[t.key] ? 'rgba(34,197,94,0.18)' : 'rgba(100,116,139,0.18)',
                 color: c[t.key] ? '#22c55e' : '#64748b',
-              }} title={t.label}>
-                {t.label.slice(0, 3)}
+              }} title={c[t.key] ? `${t.label}: ${fmt(c[t.key] as string)}` : `${t.label}: sin fecha`}>
+                {t.label.slice(0, 3)}{c[t.key] ? ` ${fmt(c[t.key] as string)}` : ''}
               </span>
             ))}
           </div>
@@ -285,14 +285,23 @@ function FilaCandidato({ c, isAdmin, onUpdate, onDelete, onAvisar }: {
         <tr style={{ background: 'rgba(15,23,42,0.4)' }}>
           <td colSpan={7} style={{ padding: '16px 20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 12, marginBottom: 14 }}>
-              {TURNOS.map(t => (
-                <div key={t.key as string}>
-                  <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>{t.label}</div>
-                  <input type="date" className="input" style={{ width: '100%' }}
-                    value={turnos[t.key as string] ?? ''}
-                    onChange={e => setTurnos(prev => ({ ...prev, [t.key as string]: e.target.value }))} />
-                </div>
-              ))}
+              {TURNOS.map(t => {
+                const fechaActual = c[t.key] as string | null;
+                return (
+                  <div key={t.key as string}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                      <span className="muted" style={{ fontSize: '0.72rem' }}>{t.label}</span>
+                      {fechaActual
+                        ? <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#22c55e' }}>{fmt(fechaActual)}</span>
+                        : <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Sin fecha</span>
+                      }
+                    </div>
+                    <input type="date" className="input" style={{ width: '100%' }}
+                      value={turnos[t.key as string] ?? ''}
+                      onChange={e => setTurnos(prev => ({ ...prev, [t.key as string]: e.target.value }))} />
+                  </div>
+                );
+              })}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button className="btn primary" type="button" onClick={saveTurnos} disabled={saving}>

@@ -142,6 +142,7 @@ export function DashboardPage() {
   if (isSaludLaboral) {
     return (
       <Layout title="Panel">
+        <AccidentesPunzoBanner />
         <div style={{ marginBottom: 6 }}>
           <div
             className="muted"
@@ -158,6 +159,12 @@ export function DashboardPage() {
                 accent="#14b8a6"
               />
             )}
+            <Tile
+              to="/app/infectologia"
+              title="🩹 Infectología"
+              desc="Registro y seguimiento de accidentes punzo-cortantes del personal."
+              accent="#ef4444"
+            />
             <Tile
               to="/app/mi-cuenta"
               title="👤 Mi cuenta"
@@ -263,6 +270,7 @@ export function DashboardPage() {
           <Tile to="/app/estadisticas" title="📊 Estadísticas" desc="Agentes por sector, servicio, categoría, ingresos por año, cumpleaños del mes y más." accent="#ec4899" />
           <Tile to="/app/asistencia" title="🗓️ Asistencia" desc="Comparación de novedades entre Ministerio y SIAP. Detecta coincidencias y diferencias por DNI." accent="#6366f1" />
           <Tile to="/app/ausencias-fichajes" title="🕵️ Ausentes vs Fichajes" desc="Agentes con código 28 (inasistencia): cruzado con si debían venir según horario y si ficharon ese día." accent="#f43f5e" />
+          <Tile to="/app/sin-fichaje-salida" title="🚪 Sin fichaje de salida" desc="Agentes que debían trabajar un día o mes completo pero no registraron salida en el fichaje biométrico. Cruza horarios y SIAP por UPA." accent="#dc2626" />
           <Tile to="/app/organigrama" title="🏗️ Organigrama" desc="Distribución visual del personal por jefatura, sector, servicio y dependencia." accent="#f59e0b" />
           <Tile to="/app/alertas" title="🔔 Alertas" desc="Cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos." accent="#ef4444" />
           <Tile to="/app/atencion" title="🏛️ Atención al Público" desc="Recepción de agentes, motivo de consulta y emisión de ticket de atención." accent="#0f766e" />
@@ -285,12 +293,10 @@ export function DashboardPage() {
           <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
           <Tile to="/app/carga-agente" title="🧾 Carga de Agente" desc="Alta manual de agentes y carga inicial de datos en el sistema." accent="#84cc16" />
           <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP y alerta de red caída." accent="#f59e0b" />
-          {canSeeExamenIngreso && <Tile to="/app/examen-ingreso" title="🩺 Examen de Ingreso" desc="Gestión de turnos de examen de ingreso para candidatos activos y nuevos agentes." accent="#6366f1" />}
-          {canSeeInfectologia  && <Tile to="/app/infectologia" title="🩹 Infectología" desc="Registro y seguimiento de accidentes punzo-cortantes del personal." accent="#ef4444" />}
         </div>
       </div>
 
-      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeResidentesRotacion || canSeeSamo) && (
+      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeResidentesRotacion || canSeeSamo || canSeeExamenIngreso || canSeeInfectologia) && (
         <div style={{ marginTop: 24, marginBottom: 6 }}>
           <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
             Salud Laboral
@@ -307,6 +313,12 @@ export function DashboardPage() {
             )}
             {canSeeResidentesRotacion && (
               <Tile to="/app/residentes-rotacion" title="🔄 Residentes Rotación" desc="Registro de rotaciones de residentes por servicio y período." accent="#a78bfa" />
+            )}
+            {canSeeExamenIngreso && (
+              <Tile to="/app/examen-ingreso" title="🩺 Examen de Ingreso" desc="Gestión de turnos de examen de ingreso para candidatos activos y nuevos agentes." accent="#6366f1" />
+            )}
+            {canSeeInfectologia && (
+              <Tile to="/app/infectologia" title="🩹 Infectología" desc="Registro y seguimiento de accidentes punzo-cortantes del personal." accent="#ef4444" />
             )}
           </div>
         </div>

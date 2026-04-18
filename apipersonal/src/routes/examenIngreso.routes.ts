@@ -8,15 +8,25 @@ import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 
 function getUser(req: Request) {
-  const u = (req as any).user ?? {};
-  const perms: string[] = u.permissions ?? u.perms ?? [];
+  const auth = (req as any).auth ?? {};
+  const perms: string[] = auth.permissions ?? [];
   return {
-    id:    u.id ?? u.principalId ?? null,
-    email: u.email ?? null,
+    id:          auth.principalId ?? null,
     perms,
-    isAdmin:      perms.some(p => p === 'crud:*:*' || p.endsWith(':*:*')),
-    canGestionar: perms.some(p => p === 'crud:*:*' || p.endsWith(':*:*') || p === 'app:gestion_turnos:access'),
+    isAdmin:      perms.some((p: string) => p === 'crud:*:*' || p.endsWith(':*:*')),
+    canGestionar: perms.some((p: string) => p === 'crud:*:*' || p.endsWith(':*:*') || p === 'app:gestion_turnos:access'),
   };
+}
+
+async function getUserEmail(sequelize: Sequelize, userId: number | null): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const [row] = await sequelize.query<any>(
+      `SELECT email FROM usuarios WHERE id = ? LIMIT 1`,
+      { type: QueryTypes.SELECT, replacements: [userId] },
+    );
+    return row?.email ?? null;
+  } catch { return null; }
 }
 
 async function logAudit(
@@ -154,18 +164,19 @@ export function buildExamenIngresoRouter(sequelize: Sequelize) {
     const { dni, nombre, es_agente, observaciones } = req.body ?? {};
     if (!nombre?.trim()) return res.status(400).json({ ok: false, error: 'Nombre requerido' });
     try {
+      const email = await getUserEmail(sequelize, u.id);
       const [result] = await sequelize.query(
         `INSERT INTO examen_ingreso (dni, nombre, es_agente, observaciones, creado_por_id, creado_por_email)
          VALUES (?, ?, ?, ?, ?, ?)`,
         { replacements: [dni?.trim() || null, nombre.trim(), es_agente ? 1 : 0,
-            observaciones?.trim() || null, u.id, u.email] },
+            observaciones?.trim() || null, u.id, email] },
       ) as any;
       const newId = result?.insertId ?? result;
       const [created] = await sequelize.query<any>(
         `SELECT * FROM examen_ingreso WHERE id = ?`,
         { type: QueryTypes.SELECT, replacements: [newId] },
       );
-      await logAudit(sequelize, newId, 'crear', u.id, u.email, null, created);
+      await logAudit(sequelize, newId, 'crear', u.id, email, null, created);
       return res.json({ ok: true, data: created });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
@@ -185,18 +196,19 @@ export function buildExamenIngresoRouter(sequelize: Sequelize) {
         { type: QueryTypes.SELECT, replacements: [id] },
       );
       if (!antes) return res.status(404).json({ ok: false, error: 'No encontrado' });
+      const email = await getUserEmail(sequelize, u.id);
       await sequelize.query(
         `UPDATE examen_ingreso SET dni=?, nombre=?, es_agente=?, observaciones=?,
            modificado_por_id=?, modificado_por_email=?, modificado_at=NOW()
          WHERE id=?`,
         { replacements: [dni?.trim() || null, nombre.trim(), es_agente ? 1 : 0,
-            observaciones?.trim() || null, u.id, u.email, id] },
+            observaciones?.trim() || null, u.id, email, id] },
       );
       const [despues] = await sequelize.query<any>(
         `SELECT * FROM examen_ingreso WHERE id = ?`,
         { type: QueryTypes.SELECT, replacements: [id] },
       );
-      await logAudit(sequelize, id, 'modificar', u.id, u.email, antes, despues);
+      await logAudit(sequelize, id, 'modificar', u.id, email, antes, despues);
       return res.json({ ok: true, data: despues });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
@@ -219,9 +231,10 @@ export function buildExamenIngresoRouter(sequelize: Sequelize) {
       }
     }
     if (!sets.length) return res.status(400).json({ ok: false, error: 'Sin campos a actualizar' });
-    sets.push('modificado_por_id = ?', 'modificado_por_email = ?', 'modificado_at = NOW()');
-    vals.push(u.id, u.email, id);
     try {
+      const email = await getUserEmail(sequelize, u.id);
+      sets.push('modificado_por_id = ?', 'modificado_por_email = ?', 'modificado_at = NOW()');
+      vals.push(u.id, email, id);
       const [antes] = await sequelize.query<any>(
         `SELECT * FROM examen_ingreso WHERE id = ? AND activo = 1`,
         { type: QueryTypes.SELECT, replacements: [id] },
@@ -235,7 +248,7 @@ export function buildExamenIngresoRouter(sequelize: Sequelize) {
         `SELECT * FROM examen_ingreso WHERE id = ?`,
         { type: QueryTypes.SELECT, replacements: [id] },
       );
-      await logAudit(sequelize, id, 'turnos', u.id, u.email, antes, despues);
+      await logAudit(sequelize, id, 'turnos', u.id, email, antes, despues);
       return res.json({ ok: true, data: despues });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
@@ -249,19 +262,20 @@ export function buildExamenIngresoRouter(sequelize: Sequelize) {
     const id = Number(req.params.id);
     const avisado = req.body?.avisado !== false;
     try {
+      const email = await getUserEmail(sequelize, u.id);
       await sequelize.query(
         `UPDATE examen_ingreso SET
            avisado=?, avisado_por_id=?, avisado_por_email=?, avisado_at=?,
            modificado_por_id=?, modificado_por_email=?, modificado_at=NOW()
          WHERE id=? AND activo=1`,
-        { replacements: [avisado ? 1 : 0, u.id, u.email, avisado ? new Date() : null,
-            u.id, u.email, id] },
+        { replacements: [avisado ? 1 : 0, u.id, email, avisado ? new Date() : null,
+            u.id, email, id] },
       );
       const [row] = await sequelize.query<any>(
         `SELECT * FROM examen_ingreso WHERE id = ?`,
         { type: QueryTypes.SELECT, replacements: [id] },
       );
-      await logAudit(sequelize, id, avisado ? 'avisar' : 'desavisar', u.id, u.email, null, { avisado });
+      await logAudit(sequelize, id, avisado ? 'avisar' : 'desavisar', u.id, email, null, { avisado });
       return res.json({ ok: true, data: row });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
@@ -279,11 +293,12 @@ export function buildExamenIngresoRouter(sequelize: Sequelize) {
         { type: QueryTypes.SELECT, replacements: [id] },
       );
       if (!antes) return res.status(404).json({ ok: false, error: 'No encontrado' });
+      const email = await getUserEmail(sequelize, u.id);
       await sequelize.query(
         `UPDATE examen_ingreso SET activo=0, eliminado_por_id=?, eliminado_por_email=?, eliminado_at=NOW() WHERE id=?`,
-        { replacements: [u.id, u.email, id] },
+        { replacements: [u.id, email, id] },
       );
-      await logAudit(sequelize, id, 'eliminar', u.id, u.email, antes, null);
+      await logAudit(sequelize, id, 'eliminar', u.id, email, antes, null);
       return res.json({ ok: true });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
