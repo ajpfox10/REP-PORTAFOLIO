@@ -1,7 +1,7 @@
 // src/pages/RedaccionPage/index.tsx
 import React, { useState, useCallback, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
-import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
+import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { useToast } from '../../ui/toast';
 import { exportToPdf } from '../../utils/export';
@@ -41,11 +41,10 @@ function DocModal({ agente, doc, onClose }: {
   const [descargando, setDescargando] = useState(false);
   const [iomaDatos, setIomaDatos] = useState<any>(null);
   const [loadingDatos, setLoadingDatos] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string>('');
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
-  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const nombre = `${agente.apellido ?? ''} ${agente.nombre ?? ''}`.trim();
-  const LUGAR = 'González Catán';
-  const ingreso = agente.fecha_ingreso ? new Date(agente.fecha_ingreso).toLocaleDateString('es-AR') : '';
 
   useEffect(() => {
     if (doc.id !== 2) return;
@@ -55,6 +54,17 @@ function DocModal({ agente, doc, onClose }: {
       .catch(() => setIomaDatos(null))
       .finally(() => setLoadingDatos(false));
   }, [doc.id, agente.dni]);
+
+  // Cuando iomaDatos está listo, carga el preview HTML del doc1 real
+  useEffect(() => {
+    if (doc.id !== 2 || !iomaDatos) return;
+    setLoadingPreview(true);
+    apiFetchBlob(`/certificados/certificado-trabajo/preview?dni=${agente.dni}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, iomaDatos, agente.dni]);
 
   const descargarDocxIoma = async () => {
     setDescargando(true);
@@ -77,54 +87,21 @@ function DocModal({ agente, doc, onClose }: {
     }
   };
 
-  // Genera HTML del documento para imprimir/PDF (solo doc 2 por ahora)
-  const buildDocHtml = (forPrint = false) => {
-    if (doc.id === 2 && iomaDatos) {
-      return `<html><head><title>IOMA — ${iomaDatos.apellidoNombre}</title>
-      <style>
-        body{font-family:Georgia,serif;padding:48px 56px;color:#111;font-size:13px;line-height:1.8;}
-        h1{font-size:14px;text-align:center;font-weight:bold;margin:0 0 2px 0;}
-        .sub{text-align:center;font-size:11px;color:#555;margin-bottom:36px;}
-        .titulo{font-weight:bold;text-decoration:underline;margin-bottom:20px;font-size:13px;}
-        p{margin:0 0 14px 0;}
-        .firma{margin-top:72px;text-align:center;border-top:1px solid #ccc;padding-top:8px;font-size:11px;color:#666;}
-      </style></head><body>
-      <h1>MUNICIPALIDAD</h1>
-      <div class="sub">Dirección de Recursos Humanos</div>
-      <div class="titulo">IOMA</div>
-      <p>La que suscribe hace constar que el/la agente <strong>${iomaDatos.apellidoNombre}</strong>,
-      DNI N° <strong>${iomaDatos.dni}</strong>${agente.cuil ? `, CUIL ${agente.cuil}` : ''}${iomaDatos.dependencia ? `, dependencia <strong>${iomaDatos.dependencia}</strong>` : ''}${iomaDatos.legajo ? `, legajo <strong>${iomaDatos.legajo}</strong>` : ''}${iomaDatos.decreto ? `, decreto <strong>${iomaDatos.decreto}</strong>` : ''},
-      con ingreso el <strong>${iomaDatos.fechaIngreso}</strong>,
-      ${iomaDatos.hasta === 'y continúa'
-        ? `desempeñando funciones <strong>y continúa</strong>.`
-        : `cesando funciones el <strong>${iomaDatos.hasta}</strong>.`
-      }
-      ${doc.frase}</p>
-      <p>La presente se expide a pedido de la parte interesada para ser presentada donde corresponda.</p>
-      <p>${iomaDatos.lugarFecha}.</p>
-      <div class="firma">Firma y Sello Autoridad Competente</div>
-      </body></html>`;
-    }
-    return '';
-  };
-
   const imprimirDoc = () => {
-    const html = buildDocHtml(true);
-    if (!html) return;
+    if (!previewHtml) return;
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(previewHtml);
     w.document.close();
     w.focus();
     setTimeout(() => { w.print(); }, 400);
   };
 
   const exportarPdf = () => {
-    const html = buildDocHtml(false);
-    if (!html) return;
+    if (!previewHtml) return;
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(html.replace('</style>', `@media print { @page { margin: 0; } }</style>`));
+    w.document.write(previewHtml.replace('</style>', `@media print { @page { margin: 0; } }</style>`));
     w.document.close();
     w.focus();
     setTimeout(() => { w.print(); }, 400);
@@ -134,13 +111,13 @@ function DocModal({ agente, doc, onClose }: {
   const renderPreview = () => {
     // Doc 2 IOMA — implementado
     if (doc.id === 2) {
-      if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>⏳ Cargando datos del agente…</p>;
+      if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>⏳ Cargando documento…</p>;
       if (!iomaDatos)   return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
-      const previewHtml = buildDocHtml();
+      if (!previewHtml) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>;
       return (
         <iframe
           srcDoc={previewHtml}
-          style={{ width: '100%', height: 420, border: 'none', borderRadius: 4 }}
+          style={{ width: '100%', height: 620, border: 'none', borderRadius: 4 }}
           title="Preview IOMA"
         />
       );
@@ -167,8 +144,8 @@ function DocModal({ agente, doc, onClose }: {
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 16, padding: 24, maxWidth: 600, width: '100%',
-        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+        borderRadius: 16, padding: 24, maxWidth: 860, width: '100%',
+        maxHeight: '95vh', display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>

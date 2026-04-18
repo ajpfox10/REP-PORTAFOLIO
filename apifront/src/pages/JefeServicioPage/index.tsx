@@ -1596,6 +1596,16 @@ export function JefeServicioPage() {
 
   // Paginación listas de agentes
   const PAGE_SIZE = 20;
+
+  // Identifica becados Y temporarios (tienen fecha_egreso o ley de programa/beca/residentes)
+  const isBecadoOTemporario = (a: any) => {
+    const ley = (a.ley_nombre || '').toLowerCase();
+    return ley.includes('beca')
+      || ley.includes('programa')
+      || ley.includes('residente')
+      || ley.includes('temporar')
+      || !!a.fecha_egreso;
+  };
   const [paginaAgentes,   setPaginaAgentes]   = useState(1);
   const [paginaAsignados, setPaginaAsignados] = useState(1);
 
@@ -1665,15 +1675,17 @@ export function JefeServicioPage() {
 
   // ── DNIs con servicio activo (sin fecha_hasta) ───────────────────────────
   const [dniConServicio,  setDniConServicio]  = useState<Set<string>>(new Set());
-  const [dniConArt26,     setDniConArt26]     = useState<Set<string>>(new Set());
+  const [art26Records,    setArt26Records]    = useState<any[]>([]);
+  // Set derivado para badges rápidos en la lista de agentes
+  const dniConArt26 = new Set(art26Records.map((r: any) => String(r.dni)));
 
   // Mapa dni → sector_id activo (de agentes_sectores, sin fecha_hasta)
   const [dniSectorActivo, setDniSectorActivo] = useState<Record<string, number | null>>({});
 
   const cargarDniConArt26 = useCallback(async () => {
     try {
-      const rows = await fetchAll('/articulo_26');
-      setDniConArt26(new Set(rows.map((r: any) => String(r.dni))));
+      const rows = await fetchAll('/articulo_26?sort=-fecha&limit=2000');
+      setArt26Records(rows);
     } catch { /* no bloquear */ }
   }, []);
 
@@ -1770,6 +1782,9 @@ export function JefeServicioPage() {
     setModalAsignar(true);
   }, [agenteActivo, pases]);
 
+  // Mapa extra para personal no ACTIVO (pases históricos)
+  const [personalExtra, setPersonalExtra] = useState<Record<string, any>>({});
+
   // ── Cargar todos los pases (todos si global, solo servicio si jefe) ──────
   const cargarTodosPases = useCallback(async () => {
     if (!isGlobal && !servicioId) return;
@@ -1780,6 +1795,25 @@ export function JefeServicioPage() {
         : `/agentes_servicios?servicio_id=${servicioId}&sort=-created_at`;
       const rows = await fetchAll(url);
       setTodosPases(rows);
+
+      // Enriquecer con personal de DNIs que no estén en agentesMap
+      const dnisEnMap = new Set(Object.keys(agentesMap));
+      const dnisExtra = [...new Set(rows.map((r: any) => String(r.dni)))].filter(d => !dnisEnMap.has(d));
+      if (dnisExtra.length > 0) {
+        // Fetch en lotes de 50
+        const extra: Record<string, any> = {};
+        const LOTE = 50;
+        for (let i = 0; i < dnisExtra.length; i += LOTE) {
+          const lote = dnisExtra.slice(i, i + LOTE);
+          const res = await Promise.all(lote.map(d =>
+            apiFetch<any>(`/personal/${d}`).catch(() => null)
+          ));
+          for (const r of res) {
+            if (r?.dni) extra[String(r.dni)] = r;
+          }
+        }
+        setPersonalExtra(extra);
+      }
     } catch { setTodosPases([]); }
     finally { setLoadingTodosPases(false); }
   }, [isGlobal, servicioId]);
@@ -1887,6 +1921,12 @@ export function JefeServicioPage() {
 
   // Mapa dni → agente para enriquecer exports con nombre
   const agentesMap: Record<string, any> = {};
+  // Helper que combina agentesMap + personalExtra para resolución de nombres
+  const resolverNombre = (dni: string | number): string => {
+    const k = String(dni);
+    const ag = agentesMap[k] || personalExtra[k];
+    return ag ? `${ag.apellido}, ${ag.nombre}` : `DNI ${dni}`;
+  };
   for (const a of agentes) { if (a.dni != null) agentesMap[String(a.dni)] = a; }
 
   const exportarPases = (tipo: 'excel' | 'pdf' | 'print') => {
@@ -2157,6 +2197,12 @@ export function JefeServicioPage() {
                       <div><span className="js-label">Categoría</span><div>{agenteActivo.categoria_nombre || '—'}</div></div>
                       <div><span className="js-label">Función</span><div>{agenteActivo.funcion_nombre || '—'}</div></div>
                       <div><span className="js-label">Ingreso</span><div>{fmt(agenteActivo.fecha_ingreso)}</div></div>
+                      {agenteActivo.fecha_egreso && (
+                        <div>
+                          <span className="js-label">Egreso / Venc.</span>
+                          <div style={{ color: '#fbbf24', fontWeight: 600 }}>{fmt(agenteActivo.fecha_egreso)}</div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Reconocimientos médicos (solo lectura) */}
@@ -2173,8 +2219,8 @@ export function JefeServicioPage() {
                       />
                     </div>
 
-                    {/* Artículo 26 (lectura + carga) — solo agentes becados */}
-                    {(agenteActivo.ley_nombre || '').toLowerCase().includes('beca') && (
+                    {/* Artículo 26 — becados Y temporarios */}
+                    {isBecadoOTemporario(agenteActivo) && (
                       <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
                         <Art26Agente
                           agente={agenteActivo}
@@ -2360,8 +2406,8 @@ export function JefeServicioPage() {
                         return (
                           <tr key={p.id} className={abierto ? 'js-tr-activo' : ''}>
                             <td className="js-td-dni">{p.dni}</td>
-                            <td style={{ whiteSpace: 'nowrap' }}>
-                              {(() => { const ag = agentesMap[String(p.dni)]; return ag ? `${ag.apellido}, ${ag.nombre}` : (p.apellido ? `${p.apellido}, ${p.nombre}` : `DNI ${p.dni}`); })()}
+                            <td style={{ fontWeight: 600, minWidth: 160 }}>
+                              {resolverNombre(p.dni)}
                             </td>
                             <td style={{ whiteSpace: 'nowrap' }}>{p.servicio_nombre || servicios.find((s: any) => String(s.id) === String(p.servicio_id))?.nombre || `#${p.servicio_id}`}</td>
                             <td>
@@ -2448,55 +2494,115 @@ export function JefeServicioPage() {
             </div>
           )}
 
-          {/* ── Tab Artículo 26 (becados) ── */}
+          {/* ── Tab Artículo 26 (becados + temporarios) ── */}
           {tab === 'articulo26' && (() => {
-            const becados = agentes.filter((a: any) => (a.ley_nombre || '').toLowerCase().includes('beca'));
+            const becados = agentes.filter(isBecadoOTemporario);
+            // Filtrar registros Art.26 solo de becados/temporarios del sector
+            const dnisBecados = new Set(becados.map((a: any) => String(a.dni)));
+            const registros = art26Records.filter((r: any) => dnisBecados.has(String(r.dni)));
+
+            // Agrupar por año-mes de la fecha del Art.26
+            const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            const porMes: Record<string, any[]> = {};
+            for (const r of registros) {
+              if (!r.fecha) continue;
+              const d = new Date(r.fecha);
+              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+              if (!porMes[key]) porMes[key] = [];
+              porMes[key].push(r);
+            }
+            const mesesOrdenados = Object.keys(porMes).sort().reverse();
+
+            // Mapa dni → agente para mostrar nombre
+            const mapaBecados: Record<string, any> = {};
+            for (const a of becados) mapaBecados[String(a.dni)] = a;
+
+            const estadoColor = (e: string) => {
+              if (e === 'APROBADO') return { bg: 'rgba(34,197,94,0.15)', fg: '#4ade80' };
+              if (e === 'RECHAZADO') return { bg: 'rgba(239,68,68,0.15)', fg: '#f87171' };
+              if (e === 'ANULADO')   return { bg: 'rgba(100,116,139,0.2)', fg: '#94a3b8' };
+              return { bg: 'rgba(251,191,36,0.15)', fg: '#fbbf24' }; // PENDIENTE
+            };
+
             return (
               <div className="card js-card">
                 <div className="js-section-title" style={{ marginBottom: 12 }}>
-                  📋 Artículo 26 — Agentes Becados
+                  📋 Artículo 26 — Becados y Temporarios
                   <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
-                    ({becados.length} en {isGlobal ? 'todo el sistema' : 'este sector'})
+                    {registros.length} registros · {becados.length} agentes ({isGlobal ? 'todo el sistema' : 'este sector'})
                   </span>
                 </div>
                 {loadingAg ? (
-                  <div className="js-loading">🔄 Cargando agentes…</div>
+                  <div className="js-loading">🔄 Cargando…</div>
                 ) : becados.length === 0 ? (
-                  <div className="js-empty">No hay agentes becados en este sector</div>
+                  <div className="js-empty">No hay agentes becados ni temporarios en este sector</div>
                 ) : (
-                  <div className="js-tabla-wrap">
-                    <table className="js-tabla">
-                      <thead>
-                        <tr>
-                          <th>Apellido y Nombre</th>
-                          <th>DNI</th>
-                          <th>Ley / Programa</th>
-                          <th>Ingreso</th>
-                          <th>Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {becados.map((a: any) => (
-                          <tr
-                            key={a.dni}
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => { seleccionarAgente(a); setTab('agentes'); }}
-                          >
-                            <td style={{ fontWeight: 600 }}>{a.apellido}, {a.nombre}</td>
-                            <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{a.dni}</td>
-                            <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{a.ley_nombre || '—'}</td>
-                            <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{fmt(a.fecha_ingreso)}</td>
-                            <td>
-                              <span style={{
-                                fontSize: '0.68rem', padding: '2px 7px', borderRadius: 5, fontWeight: 700,
-                                background: a.estado_empleo === 'ACTIVO' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                                color: a.estado_empleo === 'ACTIVO' ? '#4ade80' : '#f87171',
-                              }}>{a.estado_empleo || 'ACTIVO'}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                    {/* ── Registros agrupados por mes ── */}
+                    {mesesOrdenados.length === 0 && (
+                      <div style={{ color: '#64748b', fontSize: '0.82rem', padding: '8px 0' }}>
+                        Ningún Art.26 cargado aún para estos agentes.
+                      </div>
+                    )}
+                    {mesesOrdenados.map(key => {
+                      const [anio, mes] = key.split('-');
+                      const label = `${MESES[Number(mes) - 1]} ${anio}`;
+                      const rows = porMes[key];
+                      return (
+                        <div key={key} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                          <div style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>📅 {label}</span>
+                            <span style={{ fontSize: '0.72rem', background: 'rgba(59,130,246,0.2)', color: '#60a5fa', borderRadius: 5, padding: '1px 8px', fontWeight: 700 }}>
+                              {rows.length} asignado{rows.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div className="js-tabla-wrap" style={{ margin: 0 }}>
+                            <table className="js-tabla" style={{ margin: 0 }}>
+                              <thead>
+                                <tr>
+                                  <th>Apellido y Nombre</th>
+                                  <th>DNI</th>
+                                  <th>Fecha</th>
+                                  <th>Días</th>
+                                  <th>Motivo</th>
+                                  <th>Estado</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rows.map((r: any) => {
+                                  const ag = mapaBecados[String(r.dni)];
+                                  const ec = estadoColor(r.estado);
+                                  return (
+                                    <tr
+                                      key={r.id}
+                                      style={{ cursor: ag ? 'pointer' : 'default' }}
+                                      onClick={() => ag && (seleccionarAgente(ag), setTab('agentes'))}
+                                    >
+                                      <td style={{ fontWeight: 600 }}>
+                                        {ag ? `${ag.apellido}, ${ag.nombre}` : `DNI ${r.dni}`}
+                                      </td>
+                                      <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{r.dni}</td>
+                                      <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{fmt(r.fecha)}</td>
+                                      <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#fbbf24' }}>{r.dias ?? '—'}</td>
+                                      <td style={{ fontSize: '0.78rem', color: '#94a3b8', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {r.motivo || '—'}
+                                      </td>
+                                      <td>
+                                        <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: 5, fontWeight: 700, background: ec.bg, color: ec.fg }}>
+                                          {r.estado || 'PENDIENTE'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+
                   </div>
                 )}
               </div>

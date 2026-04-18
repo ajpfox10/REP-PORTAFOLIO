@@ -18,6 +18,7 @@ interface AusenteRow {
   debiaVenir: boolean | null;
   novedadMinisterio: string;
   novedadSiap: string;
+  siapJustificada: boolean | null;
   tieneFichaje: boolean;
   entrada: string | null;
   salida: string | null;
@@ -386,7 +387,15 @@ export function AusenciasConFichajesPage() {
                     <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>{fmtFecha(r.fecha)}</td>
                     <td style={{ padding: "8px 12px", color: "#94a3b8" }}>{r.diaSemana}</td>
                     <td style={{ padding: "8px 12px", fontSize: "0.78rem", color: "#cbd5e1", maxWidth: 200 }}>{r.novedadMinisterio || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: "0.78rem", color: r.novedadSiap ? "#a5b4fc" : "#475569", maxWidth: 200 }}>{r.novedadSiap || "—"}</td>
+                    <td style={{ padding: "8px 12px", fontSize: "0.78rem", maxWidth: 200 }}>
+                      {r.novedadSiap ? (
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ color: "#a5b4fc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.novedadSiap}</span>
+                          {r.siapJustificada === true  && <span title="Justificada" style={{ flexShrink: 0, fontSize: "0.68rem", fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(34,197,94,0.18)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.35)" }}>J</span>}
+                          {r.siapJustificada === false && <span title="No justificada" style={{ flexShrink: 0, fontSize: "0.68rem", fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(239,68,68,0.18)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.35)" }}>NJ</span>}
+                        </span>
+                      ) : <span style={{ color: "#475569" }}>—</span>}
+                    </td>
                     <td style={{ padding: "8px 12px" }}>
                       <span style={{ ...badge, ...badgeDebia(r.debiaVenir) }}>
                         {r.debiaVenir === true ? "Sí" : r.debiaVenir === false ? "No" : "—"}

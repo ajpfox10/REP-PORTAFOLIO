@@ -23,6 +23,7 @@ export type PersonalForm = {
   observaciones: string;
   // Agente (tabla: agentes)
   fecha_ingreso: string;
+  fecha_egreso: string;
   fecha_baja: string;
   estado_empleo: string;
   legajo: string;
@@ -45,7 +46,7 @@ export const EMPTY_FORM: PersonalForm = {
   dni: '', apellido: '', nombre: '', cuil: '', fecha_nacimiento: '',
   sexo_id: '', email: '', telefono: '', domicilio: '', localidad_id: '',
   nacionalidad: '', observaciones: '',
-  fecha_ingreso: '', fecha_baja: '', estado_empleo: 'ACTIVO', legajo: '',
+  fecha_ingreso: '', fecha_egreso: '', fecha_baja: '', estado_empleo: 'ACTIVO', legajo: '',
   ley_id: '', planta_id: '', categoria_id: '', ocupacion_id: '',
   regimen_horario_id: '', jefatura_id: '', funcion_id: '',
   dependencia_id: '', reparticion_id: '', servicio_id: '', sector_id: '',
@@ -196,6 +197,7 @@ export function useCargaAgente() {
         dni: dniNum,
         estado_empleo: form.estado_empleo || 'ACTIVO',
         ...(form.fecha_ingreso ? { fecha_ingreso: form.fecha_ingreso } : {}),
+        ...(form.fecha_egreso ? { fecha_egreso: form.fecha_egreso } : {}),
         ...(form.fecha_baja ? { fecha_baja: form.fecha_baja } : {}),
         ...(form.ley_id ? { ley_id: Number(form.ley_id) } : {}),
         ...(form.planta_id ? { planta_id: Number(form.planta_id) } : {}),

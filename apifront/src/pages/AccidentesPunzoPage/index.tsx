@@ -237,8 +237,17 @@ export function AccidentesPunzoPage() {
   const { hasPerm } = useAuth();
   const toast = useToast();
 
-  const isAdmin    = hasPerm('crud:*:*');
-  const canCargar  = isAdmin || hasPerm('app:cargainfecto:access');
+  const isAdmin      = hasPerm('crud:*:*');
+  const canCargar    = isAdmin || hasPerm('app:cargainfecto:access');
+  const esCargainfecto = !isAdmin && hasPerm('app:cargainfecto:access');
+
+  // Para cargainfecto: un registro es editable solo si fue cargado hace menos de 24h
+  const puedeEditar = (r: Accidente) => {
+    if (isAdmin) return true;
+    if (!canCargar) return false;
+    const cargadoAt = new Date(r.creado_at);
+    return (Date.now() - cargadoAt.getTime()) < 24 * 60 * 60 * 1000;
+  };
 
   const [registros, setRegistros] = useState<Accidente[]>([]);
   const [loading,   setLoading]   = useState(false);
@@ -252,13 +261,16 @@ export function AccidentesPunzoPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (desdeFiltro) params.set('desde', desdeFiltro);
-      if (hastaFiltro) params.set('hasta', hastaFiltro);
+      // cargainfecto: el backend filtra por turno (8h); los filtros de fecha solo aplican a admin/infectología
+      if (!esCargainfecto) {
+        if (desdeFiltro) params.set('desde', desdeFiltro);
+        if (hastaFiltro) params.set('hasta', hastaFiltro);
+      }
       const r = await apiFetch<any>(`/accidentes-punzo?${params}`);
       if (r?.ok) setRegistros(r.data ?? []);
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setLoading(false); }
-  }, [toast, desdeFiltro, hastaFiltro]);
+  }, [toast, desdeFiltro, hastaFiltro, esCargainfecto]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -313,12 +325,19 @@ export function AccidentesPunzoPage() {
       <div className="card" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
         <input className="input" placeholder="Buscar agente, servicio, caso…"
           value={busqueda} onChange={e => setBusqueda(e.target.value)} style={{ width: 230 }} />
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span className="muted" style={{ fontSize: '0.72rem' }}>Desde:</span>
-          <input type="date" className="input" value={desdeFiltro} onChange={e => setDesdeFiltro(e.target.value)} style={{ width: 140 }} />
-          <span className="muted" style={{ fontSize: '0.72rem' }}>Hasta:</span>
-          <input type="date" className="input" value={hastaFiltro} onChange={e => setHastaFiltro(e.target.value)} style={{ width: 140 }} />
-        </div>
+        {esCargainfecto ? (
+          <span style={{ fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245,158,11,0.1)',
+            border: '1px solid rgba(245,158,11,0.3)', borderRadius: 6, padding: '4px 10px' }}>
+            🕐 Mostrando registros de las últimas 8 horas (tu turno)
+          </span>
+        ) : (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span className="muted" style={{ fontSize: '0.72rem' }}>Desde:</span>
+            <input type="date" className="input" value={desdeFiltro} onChange={e => setDesdeFiltro(e.target.value)} style={{ width: 140 }} />
+            <span className="muted" style={{ fontSize: '0.72rem' }}>Hasta:</span>
+            <input type="date" className="input" value={hastaFiltro} onChange={e => setHastaFiltro(e.target.value)} style={{ width: 140 }} />
+          </div>
+        )}
         <span className="muted" style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>{filtrados.length} registro{filtrados.length !== 1 ? 's' : ''}</span>
         <button className="btn" type="button" onClick={exportar} disabled={filtrados.length === 0}
           style={{ fontSize: '0.75rem', padding: '4px 12px' }}>📥 Excel</button>
@@ -362,10 +381,16 @@ export function AccidentesPunzoPage() {
                     <td style={{ padding: '8px 12px', fontSize: '0.76rem', color: '#64748b' }}>{r.creado_por_email ?? '—'}</td>
                     <td style={{ padding: '8px 12px' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        {canCargar && (
-                          <button className="btn" type="button" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
-                            onClick={() => setEditando(r)}>✏</button>
-                        )}
+                        {canCargar && (() => {
+                          const editable = puedeEditar(r);
+                          return (
+                            <button className="btn" type="button"
+                              style={{ fontSize: '0.72rem', padding: '3px 8px', opacity: editable ? 1 : 0.4 }}
+                              title={editable ? 'Editar' : 'Solo se puede editar dentro de las 24h de carga'}
+                              disabled={!editable}
+                              onClick={() => editable && setEditando(r)}>✏</button>
+                          );
+                        })()}
                         {isAdmin && (
                           <button className="btn danger" type="button" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
                             onClick={() => handleDelete(r.id)}>✕</button>

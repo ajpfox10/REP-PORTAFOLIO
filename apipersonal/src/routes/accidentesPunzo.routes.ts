@@ -8,12 +8,23 @@ import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 
 function getUser(req: Request) {
-  const u = (req as any).user ?? {};
-  const perms: string[] = u.permissions ?? u.perms ?? [];
-  const isAdmin      = perms.some(p => p === 'crud:*:*' || p.endsWith(':*:*'));
-  const canCargar    = isAdmin || perms.includes('app:cargainfecto:access');
-  const canVer       = canCargar || perms.includes('app:infectologia:access');
-  return { id: u.id ?? null, email: u.email ?? null, perms, isAdmin, canCargar, canVer };
+  const auth = (req as any).auth ?? {};
+  const perms: string[] = auth.permissions ?? [];
+  const isAdmin   = perms.some((p: string) => p === 'crud:*:*' || p.endsWith(':*:*'));
+  const canCargar = isAdmin || perms.includes('app:cargainfecto:access');
+  const canVer    = canCargar || perms.includes('app:infectologia:access');
+  return { id: auth.principalId ?? null, perms, isAdmin, canCargar, canVer };
+}
+
+async function getUserEmail(sequelize: Sequelize, userId: number | null): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const [row] = await sequelize.query<any>(
+      `SELECT email FROM usuarios WHERE id = ? LIMIT 1`,
+      { type: QueryTypes.SELECT, replacements: [userId] },
+    );
+    return row?.email ?? null;
+  } catch { return null; }
 }
 
 async function logAudit(
@@ -89,14 +100,19 @@ export function buildAccidentesPunzoRouter(sequelize: Sequelize) {
       const { desde, hasta, servicio } = req.query as any;
       const conds: string[] = ['activo = 1'];
       const vals: any[] = [];
-      if (desde)    { conds.push('fecha >= ?'); vals.push(desde); }
-      if (hasta)    { conds.push('fecha <= ?'); vals.push(hasta); }
+      // cargainfecto sin admin: solo ve registros de las últimas 8 horas (su turno)
+      if (u.canCargar && !u.isAdmin) {
+        conds.push('creado_at >= DATE_SUB(NOW(), INTERVAL 8 HOUR)');
+      } else {
+        if (desde) { conds.push('fecha >= ?'); vals.push(desde); }
+        if (hasta) { conds.push('fecha <= ?'); vals.push(hasta); }
+      }
       if (servicio) { conds.push('servicio LIKE ?'); vals.push(`%${servicio}%`); }
       const rows = await sequelize.query<any>(
         `SELECT * FROM accidentes_punzo WHERE ${conds.join(' AND ')} ORDER BY fecha DESC, id DESC`,
         { type: QueryTypes.SELECT, replacements: vals },
       );
-      return res.json({ ok: true, data: rows });
+      return res.json({ ok: true, data: rows, soloTurno: u.canCargar && !u.isAdmin });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
     }
@@ -125,19 +141,20 @@ export function buildAccidentesPunzoRouter(sequelize: Sequelize) {
     const { agente_dni, agente_nombre, servicio, fecha, caso, observaciones } = req.body ?? {};
     if (!fecha) return res.status(400).json({ ok: false, error: 'Fecha requerida' });
     try {
+      const email = await getUserEmail(sequelize, u.id);
       const [result] = await sequelize.query(
         `INSERT INTO accidentes_punzo
            (agente_dni, agente_nombre, servicio, fecha, caso, observaciones, creado_por_id, creado_por_email)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         { replacements: [agente_dni || null, agente_nombre || null, servicio || null,
-            fecha, caso || null, observaciones || null, u.id, u.email] },
+            fecha, caso || null, observaciones || null, u.id, email] },
       ) as any;
       const newId = result?.insertId ?? result;
       const [created] = await sequelize.query<any>(
         `SELECT * FROM accidentes_punzo WHERE id = ?`,
         { type: QueryTypes.SELECT, replacements: [newId] },
       );
-      await logAudit(sequelize, newId, 'crear', u.id, u.email, null, created);
+      await logAudit(sequelize, newId, 'crear', u.id, email, null, created);
       return res.json({ ok: true, data: created });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
@@ -153,23 +170,29 @@ export function buildAccidentesPunzoRouter(sequelize: Sequelize) {
     if (!fecha) return res.status(400).json({ ok: false, error: 'Fecha requerida' });
     try {
       const [antes] = await sequelize.query<any>(
-        `SELECT * FROM accidentes_punzo WHERE id = ? AND activo = 1`,
+        `SELECT *, TIMESTAMPDIFF(HOUR, creado_at, NOW()) AS horas_desde_carga
+         FROM accidentes_punzo WHERE id = ? AND activo = 1`,
         { type: QueryTypes.SELECT, replacements: [id] },
       );
       if (!antes) return res.status(404).json({ ok: false, error: 'No encontrado' });
+      // cargainfecto sin admin: no puede editar registros con más de 24 horas
+      if (!u.isAdmin && u.canCargar && Number(antes.horas_desde_carga) > 24) {
+        return res.status(403).json({ ok: false, error: 'No se puede editar un registro con más de 24 horas de cargado' });
+      }
+      const email = await getUserEmail(sequelize, u.id);
       await sequelize.query(
         `UPDATE accidentes_punzo SET
            agente_dni=?, agente_nombre=?, servicio=?, fecha=?, caso=?, observaciones=?,
            modificado_por_id=?, modificado_por_email=?, modificado_at=NOW()
          WHERE id=?`,
         { replacements: [agente_dni || null, agente_nombre || null, servicio || null,
-            fecha, caso || null, observaciones || null, u.id, u.email, id] },
+            fecha, caso || null, observaciones || null, u.id, email, id] },
       );
       const [despues] = await sequelize.query<any>(
         `SELECT * FROM accidentes_punzo WHERE id = ?`,
         { type: QueryTypes.SELECT, replacements: [id] },
       );
-      await logAudit(sequelize, id, 'modificar', u.id, u.email, antes, despues);
+      await logAudit(sequelize, id, 'modificar', u.id, email, antes, despues);
       return res.json({ ok: true, data: despues });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
@@ -187,11 +210,12 @@ export function buildAccidentesPunzoRouter(sequelize: Sequelize) {
         { type: QueryTypes.SELECT, replacements: [id] },
       );
       if (!antes) return res.status(404).json({ ok: false, error: 'No encontrado' });
+      const email = await getUserEmail(sequelize, u.id);
       await sequelize.query(
         `UPDATE accidentes_punzo SET activo=0, eliminado_por_id=?, eliminado_por_email=?, eliminado_at=NOW() WHERE id=?`,
-        { replacements: [u.id, u.email, id] },
+        { replacements: [u.id, email, id] },
       );
-      await logAudit(sequelize, id, 'eliminar', u.id, u.email, antes, null);
+      await logAudit(sequelize, id, 'eliminar', u.id, email, antes, null);
       return res.json({ ok: true });
     } catch (e: any) {
       return res.status(500).json({ ok: false, error: e?.message });
