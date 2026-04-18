@@ -42,8 +42,10 @@ import { SamoPage } from '../pages/SamoPage';
 import { ResolucionesPage } from '../pages/ResolucionesPage';
 import { FicheroPage } from '../pages/FicheroPage';
 import { AusenciasConFichajesPage } from '../pages/AusenciasConFichajesPage';
+import { SinFichajeSalidaPage }    from '../pages/SinFichajeSalidaPage';
 import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
 import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
+import { BajasPorEstructuraPage } from '../pages/BajasPorEstructuraPage';
 import { useKiosk } from '../hooks/useKiosk';
 
 function Private({ children }: { children: React.ReactNode }) {
@@ -399,6 +401,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/sin-fichaje-salida"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <SinFichajeSalidaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/escaneo"
               element={
                 <Private>
@@ -467,6 +479,17 @@ export function App() {
                 <Private>
                   <Guard anyOf={['app:infectologia:access', 'app:cargainfecto:access', 'crud:*:*']}>
                     <AccidentesPunzoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/bajas-estructura"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
+                    <BajasPorEstructuraPage />
                   </Guard>
                 </Private>
               }

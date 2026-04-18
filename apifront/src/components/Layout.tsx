@@ -202,11 +202,13 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/estadisticas', '📊 Estadísticas')}
                       {navLink('/app/asistencia', '🗓️ Asistencia')}
                       {navLink('/app/ausencias-fichajes', '🕵️ Ausentes vs Fichajes')}
+                      {navLink('/app/sin-fichaje-salida', '🚪 Sin fichaje de salida')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
                       {navLink('/app/alertas', '🔔 Alertas')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
                       {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
                       {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
+                      {navLink('/app/bajas-estructura', '📉 Bajas por Estructura')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 

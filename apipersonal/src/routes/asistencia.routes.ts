@@ -902,8 +902,8 @@ export function buildAsistenciaRouter() {
         ? path.join(dir, String(req.query.siapFile))
         : autoSiap?.fullPath ?? null;
 
-      // siapByDni: dni → [{ novedad, desde, hasta }]
-      const siapByDni: Record<string, Array<{ novedad: string; desde: Date; hasta: Date }>> = {};
+      // siapByDni: dni → [{ novedad, desde, hasta, justificado }]
+      const siapByDni: Record<string, Array<{ novedad: string; desde: Date; hasta: Date; justificado: string }>> = {};
       if (siapFile && fs.existsSync(siapFile)) {
         try {
           const siapRows = await parseSiap(siapFile);
@@ -914,7 +914,12 @@ export function buildAsistenciaRouter() {
             const hasta = parseDate(r.hasta) ?? desde;
             if (!desde || !hasta) continue;
             if (!siapByDni[dni]) siapByDni[dni] = [];
-            siapByDni[dni].push({ novedad: String(r.novedad ?? '').trim(), desde, hasta });
+            siapByDni[dni].push({
+              novedad:      String(r.novedad      ?? '').trim(),
+              desde,
+              hasta,
+              justificado:  String(r.justificado  ?? '').trim().toUpperCase(),
+            });
           }
         } catch (e: any) {
           logger.warn({ msg: 'ausentes28: error leyendo SIAP', error: e?.message });
@@ -929,6 +934,18 @@ export function buildAsistenciaRouter() {
           toUTCMidnight(e.desde) <= dt && dt <= toUTCMidnight(e.hasta)
         );
         return [...new Set(matches.map(e => e.novedad).filter(Boolean))].join(' / ');
+      };
+
+      // null = sin novedad SIAP, true = justificada (SI), false = no justificada (NO/vacío)
+      const getSiapJustificada = (dni: string, fecha: string): boolean | null => {
+        const d = parseDate(fecha);
+        if (!d) return null;
+        const dt = toUTCMidnight(d);
+        const matches = (siapByDni[dni] ?? []).filter(e =>
+          toUTCMidnight(e.desde) <= dt && dt <= toUTCMidnight(e.hasta)
+        );
+        if (matches.length === 0) return null;
+        return matches.some(e => e.justificado === 'SI');
       };
 
       interface ExpandedRow {
@@ -1036,6 +1053,7 @@ export function buildAsistenciaRouter() {
           debiaVenir:        r.debiaVenir,
           novedadMinisterio: r.novedadMinisterio,
           novedadSiap:       getSiapNovedades(r.dni, r.fecha),
+          siapJustificada:   getSiapJustificada(r.dni, r.fecha),
           tieneFichaje:      fich !== undefined,
           entrada:           fich?.entrada ?? null,
           salida:            fich?.salida  ?? null,

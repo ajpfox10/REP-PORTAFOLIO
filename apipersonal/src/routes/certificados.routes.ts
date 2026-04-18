@@ -6,48 +6,34 @@ import JSZip from "jszip";
 import { Sequelize, QueryTypes } from "sequelize";
 
 /**
- * Word fragmenta el texto entre múltiples <w:r><w:t> runs (para corrector ortográfico, etc.).
- * Antes de reemplazar, consolidamos el texto visible dentro de cada <w:p> en un solo run,
- * preservando el formato del primer run del párrafo.
+ * Reemplaza placeholders fragmentados por Word entre dos <w:t> separados por
+ * runs/proofErr intermedios. Aplica solo para placeholders {{...}} que Word
+ * suele partir en el corrector ortográfico.
+ *
+ * En lugar de consolidar todos los runs (lo que rompe VML/txbxContent anidados),
+ * hace un reemplazo quirúrgico buscando el patrón exacto: parte1</w:t>...XML...parte2
  */
-function consolidarRunsEnParrafos(xml: string): string {
-  // Reemplaza secuencias de <w:r>...<w:t>texto</w:t></w:r> adyacentes dentro de un <w:p>
-  // Estrategia: dentro de cada párrafo, concatenar todos los <w:t> en el primer <w:r> que tenga <w:t>
-  return xml.replace(
-    /(<w:p\b[^>]*>)([\s\S]*?)(<\/w:p>)/g,
-    (_match, open, inner, close) => {
-      // Extraer todos los fragmentos de texto de los <w:r>
-      const textos: string[] = [];
-      const reT = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
-      let m: RegExpExecArray | null;
-      while ((m = reT.exec(inner)) !== null) {
-        textos.push(m[1]);
-      }
-      const textoTotal = textos.join('');
-
-      // Si no hay texto o solo tiene un run, no tocamos
-      if (textos.length <= 1) return open + inner + close;
-
-      // Reemplazar los <w:r>...</w:r> por un único run con el texto consolidado
-      // Conservamos el primer <w:rPr> encontrado para mantener el formato
-      const rprMatch = inner.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);
-      const rpr = rprMatch ? `<w:rPr>${rprMatch[1]}</w:rPr>` : '';
-
-      // Quitar todos los <w:r>...</w:r> del inner y las marcas de corrección
-      const sinRuns = inner
-        .replace(/<w:r\b[\s\S]*?<\/w:r>/g, '')
-        .replace(/<w:proofErr[^/]*\/>/g, '');
-
-      // Agregar el run consolidado al final del inner limpio
-      const nuevoRun = `<w:r>${rpr}<w:t xml:space="preserve">${textoTotal}</w:t></w:r>`;
-      return open + sinRuns + nuevoRun + close;
+function reemplazarFragmentados(xml: string, placeholder: string, valor: string): string {
+  // Intentar cada posible punto de corte del placeholder
+  for (let i = 1; i < placeholder.length; i++) {
+    const parte1 = placeholder.substring(0, i);
+    const parte2 = placeholder.substring(i);
+    // Escapar para uso en regex
+    const esc1 = parte1.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const esc2 = parte2.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Reemplazar: parte1</w:t> + XML intermedio (no más de ~300 chars) + parte2
+    const re = new RegExp(`${esc1}<\\/w:t>(?:[\\s\\S]{0,300}?)<w:t[^>]*>${esc2}`, 'g');
+    if (re.test(xml)) {
+      xml = xml.replace(re, valor);
     }
-  );
+  }
+  return xml;
 }
 
 /**
  * Reemplaza placeholders en los XML del DOCX.
- * Consolida runs fragmentados por Word antes de reemplazar.
+ * No modifica la estructura de runs (evita romper VML/txbxContent anidados).
+ * Para placeholders {{...}} fragmentados entre runs, usa reemplazo quirúrgico.
  */
 export async function fillDocxTemplate(templateBuffer: Buffer, replacements: Record<string, string>) {
   const zip = await JSZip.loadAsync(templateBuffer);
@@ -63,11 +49,13 @@ export async function fillDocxTemplate(templateBuffer: Buffer, replacements: Rec
     if (!f) continue;
     let xml = await f.async("string");
 
-    // Consolidar runs fragmentados antes de reemplazar
-    xml = consolidarRunsEnParrafos(xml);
-
     for (const [k, v] of Object.entries(replacements)) {
+      // Reemplazo directo (placeholder en un solo run)
       xml = xml.split(k).join(v ?? "");
+      // Reemplazo de placeholder fragmentado entre dos runs (solo para {{...}})
+      if (k.startsWith("{{") && xml.includes(k.substring(0, k.indexOf("}")))) {
+        xml = reemplazarFragmentados(xml, k, v ?? "");
+      }
     }
 
     zip.file(p, xml);
@@ -98,8 +86,12 @@ function calcHasta(leyTxt: string): string {
 
 async function queryPersonaldetalle(sequelize: Sequelize, dni: number) {
   const rows = await sequelize.query(
-    `SELECT dni, apellido, nombre, dependencia, ley, estado_empleo, fecha_ingreso, legajo, decreto_designacion
-     FROM personaldetalle WHERE dni = :dni LIMIT 1`,
+    `SELECT pd.dni, pd.apellido, pd.nombre, pd.dependencia, pd.ley,
+            pd.estado_empleo, pd.fecha_ingreso, pd.decreto_designacion,
+            COALESCE(pd.legajo, a.legajo) AS legajo
+     FROM personaldetalle pd
+     LEFT JOIN agentes a ON a.dni = pd.dni AND a.deleted_at IS NULL
+     WHERE pd.dni = :dni LIMIT 1`,
     { replacements: { dni }, type: QueryTypes.SELECT }
   );
   return (rows as any[])[0] ?? null;
@@ -118,7 +110,7 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     const p = await queryPersonaldetalle(sequelize, dni);
     if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
 
-    const ingresoTxt    = formatDateDMY(p.fecha_ingreso);
+    const ingresoTxt    = formatDateDMY(p.fecha_ingreso) + " ";
     const hasta         = calcHasta(p.ley);
     const hoy           = new Date();
     const lugarFecha    = `González Catán, ${formatDateDMY(hoy)}`;
@@ -140,6 +132,72 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     });
   });
 
+  // GET /api/v1/certificados/certificado-trabajo/preview?dni=X
+  // Devuelve HTML renderizado del DOCX relleno (para mostrar en iframe del preview)
+  router.get("/certificado-trabajo/preview", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) {
+      return res.status(400).json({ ok: false, error: "dni requerido" });
+    }
+
+    const p = await queryPersonaldetalle(sequelize, dni);
+    if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+
+    const ingresoTxt     = formatDateDMY(p.fecha_ingreso) + " ";
+    const hastaTxt       = calcHasta(p.ley);
+    const lugarFechaAuto = `González Catán, ${formatDateDMY(new Date())}`;
+    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+
+    const replacements: Record<string, string> = {
+      "APELLIDOYNOMBRE":    apellidoNombre,
+      "APELLIDOYNOMBRE ":   apellidoNombre,
+      "DNIP":               String(p.dni ?? dni),
+      "DEPENDENCIA":        String(p.dependencia ?? ""),
+      "LEGAJO":             String(p.legajo ?? ""),
+      "DECRETO":            String(p.decreto_designacion ?? ""),
+      "LUGARYFECHA":        lugarFechaAuto,
+      "{{FECHA_INGRESO }}": ingresoTxt,
+      "{{FECHA_INGRESO}}":  ingresoTxt,
+      "{{HASTA}}":          hastaTxt,
+      "FECHA_INGRESO":      ingresoTxt,
+      "HASTA":              hastaTxt,
+    };
+
+    const templatePath = (() => {
+      const prodPath = path.join(process.cwd(), "templates", "1.docx");
+      const devPath  = path.join(process.cwd(), "src", "templates", "1.docx");
+      return fs.existsSync(prodPath) ? prodPath : devPath;
+    })();
+    if (!fs.existsSync(templatePath)) {
+      return res.status(500).send("<p>Plantilla no encontrada</p>");
+    }
+
+
+    const tpl = fs.readFileSync(templatePath);
+    const docxBuffer = await fillDocxTemplate(tpl, replacements);
+
+    // Convertir DOCX a HTML con mammoth
+    const mammoth = await import("mammoth");
+    const result = await mammoth.convertToHtml({ buffer: docxBuffer });
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Georgia, serif; padding: 40px 56px; color: #111; font-size: 13px; line-height: 1.8; max-width: 800px; margin: 0 auto; }
+    p { margin: 0 0 14px 0; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #ccc; padding: 4px 8px; }
+  </style>
+</head>
+<body>${result.value}</body>
+</html>`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
+  });
+
   // POST /api/v1/certificados/certificado-trabajo
   router.post("/certificado-trabajo", async (req: Request, res: Response) => {
     const dni = Number(req.body?.dni);
@@ -150,7 +208,7 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     const p = await queryPersonaldetalle(sequelize, dni);
     if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
 
-    const ingresoTxt     = formatDateDMY(p.fecha_ingreso);
+    const ingresoTxt     = formatDateDMY(p.fecha_ingreso) + " ";
     const hastaTxt       = calcHasta(p.ley);
     const lugarFechaAuto = `González Catán, ${formatDateDMY(new Date())}`;
     const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
