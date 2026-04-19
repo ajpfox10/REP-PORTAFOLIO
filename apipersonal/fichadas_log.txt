@@ -1,8 +1,0 @@
-FechaCreacion|NombreArchivo|FechaSubida|Exitoso|RangoDesde|RangoHasta|Registros|Error
-2026-04-13 16:11:40|026_Fichadas_260413_1611_048350|2026-04-13 16:11:40|NO|2026-04-13 00:00|2026-04-13 23:59|739|getConnection: Timed out while waiting for handshake
-2026-04-13 17:00:06|026_Fichadas_260413_1700_048350|2026-04-13 17:00:07|NO|||50000|getConnection: Timed out while waiting for handshake
-2026-04-13 17:50:06|026_Fichadas_260413_1750_048350|2026-04-13 17:50:08|NO|||50000|getConnection: Timed out while waiting for handshake
-2026-04-13 18:40:06|026_Fichadas_260413_1840_048350|2026-04-13 18:40:08|NO|||50000|getConnection: Timed out while waiting for handshake
-2026-04-13 19:30:06|026_Fichadas_260413_1930_048350|2026-04-13 19:30:08|NO|||50000|getConnection: Timed out while waiting for handshake
-2026-04-14 21:49:45|026_Fichadas_260414_2149_048350|2026-04-14 21:49:46|SI|2026-04-14 00:00||1105|
-2026-04-14 21:51:45|026_Fichadas_260414_2151_048350|2026-04-14 21:51:46|SI|2026-04-14 00:00||1105|
