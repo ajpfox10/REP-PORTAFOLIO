@@ -100,11 +100,30 @@ function listExcelFiles(dir: string) {
     .map(f => ({ name: f, fullPath: path.join(dir, f) }));
 }
 
+// ── Helpers de hora ──────────────────────────────────────────────────────────
+function parseHoraHHMM(val: any): string | null {
+  if (!val) return null;
+  const s = String(val).trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
+
+// Diferencia absoluta en minutos entre dos HH:MM, considerando vuelta a medianoche
+function timeDiffMins(a: string, b: string): number {
+  const [ah, am] = a.split(':').map(Number);
+  const [bh, bm] = b.split(':').map(Number);
+  const diff = Math.abs((ah * 60 + am) - (bh * 60 + bm));
+  return Math.min(diff, 1440 - diff);
+}
+
 // ── Tipos internos ───────────────────────────────────────────────────────────
 type HorarioDia = {
   lunes: boolean; martes: boolean; miercoles: boolean;
   jueves: boolean; viernes: boolean; sabado: boolean; domingo: boolean;
 };
+
+type HorasDia = { horaEntrada: string | null; horaSalida: string | null };
 
 // Umbral de corte para reasignar salidas al día anterior:
 //   agentes normales → salidas hasta las 06:00 del día siguiente
@@ -116,9 +135,11 @@ const DOW_KEYS  = ['domingo','lunes','martes','miercoles','jueves','viernes','sa
 const DOW_LABELS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
 // ── Parser horarios ──────────────────────────────────────────────────────────
-// Lee horarios y también PLANTA_DE_REVISTA para identificar agentes de guardia.
-async function parseHorariosFile(fp: string): Promise<Record<string, { nombre: string; esGuardia: boolean; horario: HorarioDia }>> {
-  const result: Record<string, { nombre: string; esGuardia: boolean; horario: HorarioDia }> = {};
+// Soporta dos formatos:
+//   Formato A (antiguo): tiene columnas _CONTROLABLE (SI/NO) + _ENTRADA/_SALIDA con fechas
+//   Formato B (nuevo):   solo _ENTRADA/_SALIDA con horas "HH:MM" — controlable si tiene hora
+async function parseHorariosFile(fp: string): Promise<Record<string, { nombre: string; esGuardia: boolean; horario: HorarioDia; horas: Record<string, HorasDia> }>> {
+  const result: Record<string, { nombre: string; esGuardia: boolean; horario: HorarioDia; horas: Record<string, HorasDia> }> = {};
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(fp);
   const ws = wb.worksheets[0];
@@ -130,22 +151,43 @@ async function parseHorariosFile(fp: string): Promise<Record<string, { nombre: s
     if (v) hdr[v] = col;
   });
 
-  const colDni      = hdr['nro_documento'] ?? hdr['nro documento'] ?? hdr['documento'] ?? hdr['dni'] ?? 4;
-  const colNomFull  = hdr['apellido y nombres'] ?? hdr['apellido y nombre'] ?? hdr['apellido_nombre'] ?? hdr['apellido_nombre'] ?? 0;
-  const colApellido = hdr['apellido'] ?? 0;
-  const colNomFirst = hdr['nombre'] ?? 0;
-  // APELLIDO_NOMBRE es la columna 2 según el análisis del archivo real
-  const colNombreCol2 = hdr['apellido_nombre'] ?? hdr['apellido nombre'] ?? 2;
-  const colLun      = hdr['lunes_controlable']     ?? 23;
-  const colMar      = hdr['martes_controlable']    ?? 24;
-  const colMie      = hdr['miercoles_controlable'] ?? 25;
-  const colJue      = hdr['jueves_controlable']    ?? 26;
-  const colVie      = hdr['viernes_controlable']   ?? 27;
-  const colSab      = hdr['sabado_controlable']    ?? 28;
-  const colDom      = hdr['domingo_controlable']   ?? 29;
-  // PLANTA_DE_REVISTA → columna 32 según análisis del archivo real
-  const colPlantaRevista = hdr['planta_de_revista'] ?? hdr['planta de revista'] ?? 32;
-  const isSI = (v: any) => String(v ?? '').toUpperCase().trim() === 'SI';
+  // Columnas de identidad
+  const colDni         = hdr['nro_documento'] ?? hdr['nro documento'] ?? hdr['documento'] ?? hdr['dni'] ?? 4;
+  const colNomFull     = hdr['apellido_nombre'] ?? hdr['apellido y nombres'] ?? hdr['apellido y nombre'] ?? 0;
+  const colApellido    = hdr['apellido'] ?? 0;
+  const colNomFirst    = hdr['nombre']   ?? 0;
+  const colPlantaRevista = hdr['planta_de_revista'] ?? hdr['planta de revista'] ?? 0;
+
+  // Columnas de horas programadas (ambos formatos las tienen, aunque con distintos valores)
+  const colLunEnt = hdr['lunes_entrada']     ?? 0;
+  const colLunSal = hdr['lunes_salida']      ?? 0;
+  const colMarEnt = hdr['martes_entrada']    ?? 0;
+  const colMarSal = hdr['martes_salida']     ?? 0;
+  const colMieEnt = hdr['miercoles_entrada'] ?? 0;
+  const colMieSal = hdr['miercoles_salida']  ?? 0;
+  const colJueEnt = hdr['jueves_entrada']    ?? 0;
+  const colJueSal = hdr['jueves_salida']     ?? 0;
+  const colVieEnt = hdr['viernes_entrada']   ?? 0;
+  const colVieSal = hdr['viernes_salida']    ?? 0;
+  const colSabEnt = hdr['sabado_entrada']    ?? 0;
+  const colSabSal = hdr['sabado_salida']     ?? 0;
+  const colDomEnt = hdr['domingo_entrada']   ?? 0;
+  const colDomSal = hdr['domingo_salida']    ?? 0;
+
+  // Columnas _CONTROLABLE (solo Formato A)
+  const colLunCtrl = hdr['lunes_controlable']     ?? 0;
+  const colMarCtrl = hdr['martes_controlable']    ?? 0;
+  const colMieCtrl = hdr['miercoles_controlable'] ?? 0;
+  const colJueCtrl = hdr['jueves_controlable']    ?? 0;
+  const colVieCtrl = hdr['viernes_controlable']   ?? 0;
+  const colSabCtrl = hdr['sabado_controlable']    ?? 0;
+  const colDomCtrl = hdr['domingo_controlable']   ?? 0;
+
+  // Detectar formato: si existen columnas _CONTROLABLE usamos Formato A, si no Formato B
+  const formatoA = colLunCtrl > 0;
+  const isSI     = (v: any) => String(v ?? '').toUpperCase().trim() === 'SI';
+  // En Formato B, el día es controlable si la columna _ENTRADA tiene una hora válida
+  const esControlable = (v: any) => parseHoraHHMM(v) !== null;
 
   ws.eachRow((r: any, rn: number) => {
     if (rn === 1) return;
@@ -153,32 +195,39 @@ async function parseHorariosFile(fp: string): Promise<Record<string, { nombre: s
     if (!dni) return;
 
     let nombre = '';
-    if (colNomFull) {
-      nombre = cellToText(r.getCell(colNomFull)?.value);
-    } else if (colApellido && colNomFirst) {
-      nombre = [
-        cellToText(r.getCell(colApellido)?.value),
-        cellToText(r.getCell(colNomFirst)?.value),
-      ].filter(Boolean).join(', ');
-    } else if (colNombreCol2) {
-      nombre = cellToText(r.getCell(colNombreCol2)?.value);
+    if (colNomFull)   nombre = cellToText(r.getCell(colNomFull)?.value);
+    else if (colApellido && colNomFirst) {
+      nombre = [cellToText(r.getCell(colApellido)?.value), cellToText(r.getCell(colNomFirst)?.value)].filter(Boolean).join(', ');
     }
 
-    // GUARDIA = PLANTA_DE_REVISTA contiene "GUARDIA"
-    const plantaRevista = cellToText(r.getCell(colPlantaRevista)?.value).toUpperCase();
+    const plantaRevista = colPlantaRevista ? cellToText(r.getCell(colPlantaRevista)?.value).toUpperCase() : '';
     const esGuardia     = plantaRevista.includes('GUARDIA');
+
+    const horaEnt = (col: number) => col ? parseHoraHHMM(r.getCell(col)?.value) : null;
+    const horaSal = (col: number) => col ? parseHoraHHMM(r.getCell(col)?.value) : null;
+    const ctrl    = (ctrlCol: number, entCol: number) =>
+      formatoA ? isSI(r.getCell(ctrlCol)?.value) : esControlable(r.getCell(entCol)?.value);
 
     result[dni] = {
       nombre,
       esGuardia,
       horario: {
-        lunes:     isSI(r.getCell(colLun)?.value),
-        martes:    isSI(r.getCell(colMar)?.value),
-        miercoles: isSI(r.getCell(colMie)?.value),
-        jueves:    isSI(r.getCell(colJue)?.value),
-        viernes:   isSI(r.getCell(colVie)?.value),
-        sabado:    isSI(r.getCell(colSab)?.value),
-        domingo:   isSI(r.getCell(colDom)?.value),
+        lunes:     ctrl(colLunCtrl, colLunEnt),
+        martes:    ctrl(colMarCtrl, colMarEnt),
+        miercoles: ctrl(colMieCtrl, colMieEnt),
+        jueves:    ctrl(colJueCtrl, colJueEnt),
+        viernes:   ctrl(colVieCtrl, colVieEnt),
+        sabado:    ctrl(colSabCtrl, colSabEnt),
+        domingo:   ctrl(colDomCtrl, colDomEnt),
+      },
+      horas: {
+        lunes:     { horaEntrada: horaEnt(colLunEnt), horaSalida: horaSal(colLunSal) },
+        martes:    { horaEntrada: horaEnt(colMarEnt), horaSalida: horaSal(colMarSal) },
+        miercoles: { horaEntrada: horaEnt(colMieEnt), horaSalida: horaSal(colMieSal) },
+        jueves:    { horaEntrada: horaEnt(colJueEnt), horaSalida: horaSal(colJueSal) },
+        viernes:   { horaEntrada: horaEnt(colVieEnt), horaSalida: horaSal(colVieSal) },
+        sabado:    { horaEntrada: horaEnt(colSabEnt), horaSalida: horaSal(colSabSal) },
+        domingo:   { horaEntrada: horaEnt(colDomEnt), horaSalida: horaSal(colDomSal) },
       },
     };
   });
@@ -300,7 +349,7 @@ export function buildSinSalidaRouter() {
         : files.filter(f => f.name.toLowerCase().includes('siap')).map(f => f.name);
 
       // ── 1. Leer horarios (todos los archivos, merge por DNI) ──────────────
-      const horariosMap: Record<string, { nombre: string; esGuardia: boolean; horario: HorarioDia }> = {};
+      const horariosMap: Record<string, { nombre: string; esGuardia: boolean; horario: HorarioDia; horas: Record<string, HorasDia> }> = {};
       for (const fileName of horariosFileNames) {
         const fp = path.join(dir, fileName);
         if (!fs.existsSync(fp)) continue;
@@ -360,7 +409,7 @@ export function buildSinSalidaRouter() {
 
       // ── 3. Expandir: agente × fecha donde debe trabajar ───────────────────
       // Para cada fecha del rango, filtrar quién tiene ese día como controlable
-      type ExpandedRow = { dni: string; nombre: string; upa: string; esGuardia: boolean; fecha: string; diaSemana: string };
+      type ExpandedRow = { dni: string; nombre: string; upa: string; esGuardia: boolean; fecha: string; diaSemana: string; horaEntradaProg: string | null; horaSalidaProg: string | null };
       const expanded: ExpandedRow[] = [];
 
       for (const fechaIso of fechas) {
@@ -373,7 +422,12 @@ export function buildSinSalidaRouter() {
           if (!info.horario[dowKey]) continue; // no controlable ese día
           const upa    = siapDniMap[dni]?.upa    ?? 'SIN UPA';
           const nombre = siapDniMap[dni]?.nombre || info.nombre || '';
-          expanded.push({ dni, nombre, upa, esGuardia: info.esGuardia, fecha: fechaIso, diaSemana });
+          const horasDia = info.horas?.[dowKey];
+          expanded.push({
+            dni, nombre, upa, esGuardia: info.esGuardia, fecha: fechaIso, diaSemana,
+            horaEntradaProg: horasDia?.horaEntrada ?? null,
+            horaSalidaProg:  horasDia?.horaSalida  ?? null,
+          });
         }
       }
 
@@ -424,35 +478,51 @@ export function buildSinSalidaRouter() {
           );
           await conn.end();
 
+          // Pasada 1: registrar todas las entradas (tipo=0) sin reasignación
           for (const r of dbRows) {
-            const dniR  = normDni(String(r.badgenumber));
-            const cts   = String(r.checktime);
+            if (String(r.checktype) !== '0') continue;
+            const dniR = normDni(String(r.badgenumber));
+            const cts  = String(r.checktime);
+            const fecha = cts.slice(0, 10);
+            const hora  = cts.slice(11, 16);
+            if (!fichajesMap[dniR]) fichajesMap[dniR] = {};
+            if (!fichajesMap[dniR][fecha]) fichajesMap[dniR][fecha] = { entrada: null, salida: null };
+            if (!fichajesMap[dniR][fecha].entrada || hora < fichajesMap[dniR][fecha].entrada!)
+              fichajesMap[dniR][fecha].entrada = hora;
+          }
+
+          // Pasada 2: registrar salidas (tipo=1) con reasignación condicional.
+          // Reasignar al día anterior SOLO cuando se cumplen las tres condiciones:
+          //   1. La hora de salida cae dentro del cutoff (< 06:00 normal / < 14:00 guardia)
+          //   2. NO hay entrada registrada ese mismo día calendario (si hay entrada ese día,
+          //      la salida pertenece a ese turno sin importar la hora)
+          //   3. SÍ hay entrada registrada el día anterior (confirma turno nocturno cruzado)
+          for (const r of dbRows) {
+            if (String(r.checktype) !== '1') continue;
+            const dniR = normDni(String(r.badgenumber));
+            const cts  = String(r.checktime);
             let   fecha = cts.slice(0, 10);
             const hora  = cts.slice(11, 16);
-            const tipo  = String(r.checktype);
 
-            // Para salidas (checktype=1): si caen de madrugada del día siguiente,
-            // reasignarlas al día anterior (turno nocturno / guardia 24hs).
-            //   - Agentes normales : salidas hasta las 06:00 del día siguiente
-            //   - Agentes GUARDIA  : salidas hasta las 14:00 del día siguiente
-            if (tipo === '1') {
-              const cutoff = guardiaDnis.has(dniR) ? CUTOFF_GUARDIA : CUTOFF_NORMAL;
-              if (hora <= cutoff) {
-                const d = new Date(fecha + 'T00:00:00Z');
-                d.setUTCDate(d.getUTCDate() - 1);
-                fecha = d.toISOString().slice(0, 10);
+            const cutoff = guardiaDnis.has(dniR) ? CUTOFF_GUARDIA : CUTOFF_NORMAL;
+            if (hora < cutoff) {
+              const hayEntradaMismodia = !!fichajesMap[dniR]?.[fecha]?.entrada;
+              if (!hayEntradaMismodia) {
+                // Sin entrada este día: ver si hay entrada el día anterior (turno nocturno)
+                const dPrev = new Date(fecha + 'T00:00:00Z');
+                dPrev.setUTCDate(dPrev.getUTCDate() - 1);
+                const fechaPrev = dPrev.toISOString().slice(0, 10);
+                if (fichajesMap[dniR]?.[fechaPrev]?.entrada) {
+                  fecha = fechaPrev; // reasignar al turno nocturno del día anterior
+                }
               }
+              // Si hay entrada el mismo día → la salida pertenece a ese día, no reasignar
             }
 
             if (!fichajesMap[dniR]) fichajesMap[dniR] = {};
             if (!fichajesMap[dniR][fecha]) fichajesMap[dniR][fecha] = { entrada: null, salida: null };
-            if (tipo === '0') {
-              if (!fichajesMap[dniR][fecha].entrada || hora < fichajesMap[dniR][fecha].entrada!)
-                fichajesMap[dniR][fecha].entrada = hora;
-            } else {
-              if (!fichajesMap[dniR][fecha].salida || hora > fichajesMap[dniR][fecha].salida!)
-                fichajesMap[dniR][fecha].salida = hora;
-            }
+            if (!fichajesMap[dniR][fecha].salida || hora > fichajesMap[dniR][fecha].salida!)
+              fichajesMap[dniR][fecha].salida = hora;
           }
         } catch (e: any) {
           dbError = e?.message ?? 'Error al consultar DB biométrica';
@@ -475,17 +545,38 @@ export function buildSinSalidaRouter() {
         else if (novSiap)                   estado = 'JUSTIFICADO';
         else                                estado = 'SIN_FICHAJE';
 
+        let fichajeInvertido = false;
+        if (fich?.entrada && fich?.salida) {
+          const entProg = row.horaEntradaProg;
+          const salProg = row.horaSalidaProg;
+          if (entProg && salProg) {
+            // Con horas programadas: invertido si la entrada real está más cerca
+            // de la salida programada (y viceversa)
+            const entVsEnt = timeDiffMins(fich.entrada, entProg);
+            const entVsSal = timeDiffMins(fich.entrada, salProg);
+            const salVsEnt = timeDiffMins(fich.salida,  entProg);
+            const salVsSal = timeDiffMins(fich.salida,  salProg);
+            fichajeInvertido = entVsSal < entVsEnt && salVsEnt < salVsSal;
+          } else {
+            // Sin horas programadas: heurística básica
+            fichajeInvertido = fich.entrada > fich.salida;
+          }
+        }
+
         return {
-          dni:        row.dni,
-          nombre:     row.nombre,
-          upa:        row.upa,
-          esGuardia:  row.esGuardia,
-          fecha:      row.fecha,
-          diaSemana:  row.diaSemana,
-          entrada:    fich?.entrada ?? null,
-          salida:     fich?.salida  ?? null,
-          novedadSiap: novSiap,
+          dni:                  row.dni,
+          nombre:               row.nombre,
+          upa:                  row.upa,
+          esGuardia:            row.esGuardia,
+          fecha:                row.fecha,
+          diaSemana:            row.diaSemana,
+          entrada:              fich?.entrada ?? null,
+          salida:               fich?.salida  ?? null,
+          horaEntradaProgramada: row.horaEntradaProg,
+          horaSalidaProgramada:  row.horaSalidaProg,
+          novedadSiap:          novSiap,
           estado,
+          fichajeInvertido,
         };
       });
 
@@ -498,15 +589,25 @@ export function buildSinSalidaRouter() {
         return a.fecha.localeCompare(b.fecha);
       });
 
+      const agentesConProblema = new Set(
+        data.filter(r => r.estado === 'SIN_SALIDA' || r.estado === 'SIN_FICHAJE').map(r => r.dni)
+      ).size;
+
+      const agentesInvertidos = new Set(
+        data.filter(r => r.fichajeInvertido).map(r => r.dni)
+      ).size;
+
       return res.json({
         ok: true,
         data,
         meta: {
-          total:        data.length,
-          sinSalida:    data.filter(r => r.estado === 'SIN_SALIDA').length,
-          sinFichaje:   data.filter(r => r.estado === 'SIN_FICHAJE').length,
-          justificados: data.filter(r => r.estado === 'JUSTIFICADO').length,
-          conSalida:    data.filter(r => r.estado === 'CON_SALIDA').length,
+          total:              data.length,
+          sinSalida:          data.filter(r => r.estado === 'SIN_SALIDA').length,
+          sinFichaje:         data.filter(r => r.estado === 'SIN_FICHAJE').length,
+          justificados:       data.filter(r => r.estado === 'JUSTIFICADO').length,
+          conSalida:          data.filter(r => r.estado === 'CON_SALIDA').length,
+          agentesConProblema,
+          agentesInvertidos,
           sinBiometrico: !!dbError,
           dbError,
         },

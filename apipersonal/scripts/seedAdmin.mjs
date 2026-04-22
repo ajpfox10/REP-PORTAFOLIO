@@ -33,7 +33,7 @@ async function run() {
   );
 
   // Permisos base
-  const permissions = ["crud:*:*", "crud:*:read", "documents:read", "docs:read"];
+  const permissions = ["crud:*:*", "crud:*:read", "documents:read", "docs:read", "api:access"];
 
   for (const p of permissions) {
     await sequelize.query(`INSERT IGNORE INTO permisos (clave) VALUES (:p)`, {

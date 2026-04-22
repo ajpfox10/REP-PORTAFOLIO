@@ -50,6 +50,12 @@ export function Layout({ title, children, showBack }: {
     hasPerm('app:samo:access') &&
     !hasPerm('crud:*:*');
 
+  // Rol 15: tiene acceso a jefe_servicio Y a samo a la vez
+  const isJefeServicioConSamo =
+    hasPerm('app:jefe_servicio:access') &&
+    hasPerm('app:samo:access') &&
+    !hasPerm('crud:*:*');
+
   const isJefeServicio =
     hasPerm('app:jefe_servicio:access') &&
     !hasPerm('crud:*:*') &&
@@ -134,6 +140,12 @@ export function Layout({ title, children, showBack }: {
                 {navLink('/app/infectologia', '🩹 Infectología')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
               </>
+            ) : isJefeServicioConSamo ? (
+              <>
+                {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
+                {navLink('/app/samo', '🏥 SAMO')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
             ) : isSamo ? (
               <>
                 {navLink('/app/samo', '🏥 SAMO')}
@@ -142,7 +154,6 @@ export function Layout({ title, children, showBack }: {
             ) : isJefeServicio ? (
               <>
                 {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
-                {navLink('/app/samo', '🏥 SAMO')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
               </>
             ) : isSaludLaboral ? (
