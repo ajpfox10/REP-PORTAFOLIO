@@ -121,12 +121,14 @@ export function DashboardPage() {
               desc="Gestión de agentes y servicios de tu sector."
               accent="#6366f1"
             />
+            {hasPerm('app:samo:access') && (
             <Tile
               to="/app/samo"
               title="🏥 SAMO"
               desc="Gestión y seguimiento de licencias médicas del personal."
               accent="#10b981"
             />
+            )}
             <Tile
               to="/app/mi-cuenta"
               title="👤 Mi cuenta"

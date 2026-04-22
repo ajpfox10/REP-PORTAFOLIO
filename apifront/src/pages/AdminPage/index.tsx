@@ -607,7 +607,6 @@ export function AdminPage() {
                       <td>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           <button className="btn btn-sm" title="Asignar rol" onClick={() => admin.setRolesModal(u)}>🏷 Rol</button>
-                          <button className="btn btn-sm" title="Permisos directos" onClick={() => openUserPerms(u)}>🔑 Permisos</button>
                           <button className="btn btn-sm" title="Asignar servicio" onClick={() => admin.setServicioModal(u)}>🏥 Servicio</button>
                           <button className="btn btn-sm" title="Cambiar contraseña" onClick={() => admin.setEditModal(u)}>🔒 Pass</button>
                           <button
