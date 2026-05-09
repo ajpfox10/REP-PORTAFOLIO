@@ -131,6 +131,7 @@ export function AtencionPublicoPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const [horaAtencion, setHoraAtencion] = useState('');
+  const [bajandoCitacion, setBajandoCitacion] = useState(false);
 
   const [dni, setDni]           = useState('');
   const [fullName, setFullName] = useState('');
@@ -138,11 +139,24 @@ export function AtencionPublicoPage() {
   const [row, setRow]           = useState<any>(null);
   const [matches, setMatches]   = useState<any[]>([]);
 
-  const [consultas, setConsultas]       = useState<any[]>([]);
-  const [pedidos, setPedidos]           = useState<any[]>([]);
-  const [documentos, setDocumentos]     = useState<any[]>([]);
-  const [expedientes, setExpedientes]     = useState<any[]>([]);
-  const [resoluciones, setResoluciones]   = useState<any[]>([]);
+  const [consultas, setConsultas]           = useState<any[]>([]);
+  const [pedidos, setPedidos]               = useState<any[]>([]);
+  const [documentos, setDocumentos]         = useState<any[]>([]);
+  const [expedientes, setExpedientes]       = useState<any[]>([]);
+  const [resoluciones, setResoluciones]     = useState<any[]>([]);
+  const [citacionesHist, setCitacionesHist] = useState<any[]>([]);
+  const [legajoLicencias, setLegajoLicencias]           = useState<any[]>([]);
+  const [legajoPenas, setLegajoPenas]                   = useState<any[]>([]);
+  const [legajoEmbargos, setLegajoEmbargos]             = useState<any[]>([]);
+  const [legajoFamilia, setLegajoFamilia]               = useState<any[]>([]);
+  const [legajoFamiliaExp, setLegajoFamiliaExp]         = useState<any[]>([]);
+  const [legajoBienes, setLegajoBienes]                 = useState<any[]>([]);
+  const [legajoMenciones, setLegajoMenciones]           = useState<any[]>([]);
+  const [legajoIncompat, setLegajoIncompat]             = useState<any[]>([]);
+  const [legajoFuncion, setLegajoFuncion]               = useState<any[]>([]);
+  const [legajoSubTab, setLegajoSubTab] = useState<
+    'familia' | 'familia_exp' | 'funcion' | 'licencias' | 'penas' | 'embargos' | 'bienes' | 'menciones' | 'incompat'
+  >('familia');
   const [loadingDatos, setLoadingDatos] = useState(false);
 
   // Citaciones activas
@@ -157,7 +171,7 @@ export function AtencionPublicoPage() {
   const [ticketEmitido, setTicketEmitido] = useState<any>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
 
-  const [tablaTab, setTablaTab] = useState<'consultas' | 'pedidos' | 'documentos' | 'resoluciones' | 'expedientes'>('consultas');
+  const [tablaTab, setTablaTab] = useState<'consultas' | 'pedidos' | 'documentos' | 'resoluciones' | 'expedientes' | 'citaciones_hist' | 'legajo'>('consultas');
   const [tablaPage, setTablaPage] = useState(1);
   const [expandedPedidoId, setExpandedPedidoId] = useState<number | null>(null);
   const [visorArchivo, setVisorArchivo] = useState<{ url: string; nombre: string; tipo: string } | null>(null);
@@ -175,6 +189,16 @@ export function AtencionPublicoPage() {
     setDocumentos([]);
     setExpedientes([]);
     setResoluciones([]);
+    setCitacionesHist([]);
+    setLegajoLicencias([]);
+    setLegajoPenas([]);
+    setLegajoEmbargos([]);
+    setLegajoFamilia([]);
+    setLegajoFamiliaExp([]);
+    setLegajoBienes([]);
+    setLegajoMenciones([]);
+    setLegajoIncompat([]);
+    setLegajoFuncion([]);
     setLoadedTabs(new Set(['consultas', 'pedidos']));
 
     await Promise.allSettled([
@@ -215,6 +239,40 @@ export function AtencionPublicoPage() {
       await apiFetch<any>(`/eventos?dni=${cleanDni}&limit=50`)
         .then(r => setExpedientes(Array.isArray(r?.data) ? r.data : []))
         .catch(() => setExpedientes([]));
+    } else if (tab === 'citaciones_hist') {
+      await apiFetch<any>(`/citaciones?dni=${cleanDni}&limit=200&sort=-created_at`)
+        .then(r => setCitacionesHist(Array.isArray(r?.data) ? r.data : []))
+        .catch(() => setCitacionesHist([]));
+    } else if (tab === 'legajo') {
+      await Promise.allSettled([
+        apiFetch<any>(`/legajo_licencias?dni=${cleanDni}&limit=200&sort=-fecha`)
+          .then(r => setLegajoLicencias(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoLicencias([])),
+        apiFetch<any>(`/legajo_penas_disciplinarias?dni=${cleanDni}&limit=200&sort=-fecha`)
+          .then(r => setLegajoPenas(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoPenas([])),
+        apiFetch<any>(`/legajo_embargos?dni=${cleanDni}&limit=200&sort=-fecha`)
+          .then(r => setLegajoEmbargos(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoEmbargos([])),
+        apiFetch<any>(`/legajo_familia?dni=${cleanDni}&limit=200`)
+          .then(r => setLegajoFamilia(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoFamilia([])),
+        apiFetch<any>(`/legajo_familia_expedientes?dni=${cleanDni}&limit=200&sort=-fecha_informe`)
+          .then(r => setLegajoFamiliaExp(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoFamiliaExp([])),
+        apiFetch<any>(`/legajo_declaracion_bienes?dni=${cleanDni}&limit=200&sort=-fecha`)
+          .then(r => setLegajoBienes(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoBienes([])),
+        apiFetch<any>(`/legajo_concepto_menciones?dni=${cleanDni}&limit=200&sort=-fecha`)
+          .then(r => setLegajoMenciones(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoMenciones([])),
+        apiFetch<any>(`/legajo_incompatibilidad?dni=${cleanDni}&limit=200&sort=-fecha_declaracion`)
+          .then(r => setLegajoIncompat(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoIncompat([])),
+        apiFetch<any>(`/legajo_funcion_destino?dni=${cleanDni}&limit=200&sort=-fecha_ingreso`)
+          .then(r => setLegajoFuncion(Array.isArray(r?.data) ? r.data : []))
+          .catch(() => setLegajoFuncion([])),
+      ]);
     }
     setLoadedTabs(prev => new Set([...prev, tab]));
     setLoadingDatos(false);
@@ -348,16 +406,34 @@ export function AtencionPublicoPage() {
     return new Date(c.created_at).toDateString() === new Date().toDateString();
   }).length;
 
-  const sortedConsultas   = [...consultas].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
-  const sortedPedidos     = [...pedidos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
-  const sortedDocumentos  = [...documentos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedConsultas    = [...consultas].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedPedidos      = [...pedidos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedDocumentos   = [...documentos].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
   const sortedResoluciones = [...resoluciones].sort((a,b) => new Date(b.fecha||b.created_at||0).getTime() - new Date(a.fecha||a.created_at||0).getTime());
-  const sortedExpedientes = [...expedientes].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedExpedientes  = [...expedientes].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
+  const sortedCitaciones   = [...citacionesHist].sort((a,b) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime());
 
-  const tablaData = tablaTab === 'consultas'    ? sortedConsultas
-    : tablaTab === 'pedidos'      ? sortedPedidos
-    : tablaTab === 'documentos'   ? sortedDocumentos
-    : tablaTab === 'resoluciones' ? sortedResoluciones
+  const legajoSubData =
+    legajoSubTab === 'familia'     ? legajoFamilia
+    : legajoSubTab === 'familia_exp'? legajoFamiliaExp
+    : legajoSubTab === 'funcion'   ? legajoFuncion
+    : legajoSubTab === 'licencias' ? legajoLicencias
+    : legajoSubTab === 'penas'     ? legajoPenas
+    : legajoSubTab === 'embargos'  ? legajoEmbargos
+    : legajoSubTab === 'bienes'    ? legajoBienes
+    : legajoSubTab === 'menciones' ? legajoMenciones
+    : legajoIncompat;
+
+  const legajoTotal = legajoLicencias.length + legajoPenas.length + legajoEmbargos.length
+    + legajoFamilia.length + legajoFamiliaExp.length + legajoBienes.length
+    + legajoMenciones.length + legajoIncompat.length + legajoFuncion.length;
+
+  const tablaData = tablaTab === 'consultas'      ? sortedConsultas
+    : tablaTab === 'pedidos'        ? sortedPedidos
+    : tablaTab === 'documentos'     ? sortedDocumentos
+    : tablaTab === 'resoluciones'   ? sortedResoluciones
+    : tablaTab === 'citaciones_hist'? sortedCitaciones
+    : tablaTab === 'legajo'         ? legajoSubData
     : sortedExpedientes;
 
   const abrirArchivo = async (id: number, nombre: string) => {
@@ -617,11 +693,13 @@ export function AtencionPublicoPage() {
                 <h3 className="ap-section-title">📊 Registros</h3>
                 <div className="ap-tabla-tabs">
                   {([
-                    ['consultas',    '💬 Consultas',     sortedConsultas.length],
-                    ['pedidos',      '📋 Pedidos',        sortedPedidos.length],
-                    ['documentos',   '📂 Documentos',    sortedDocumentos.length],
-                    ['resoluciones', '📜 Resoluciones',  sortedResoluciones.length],
-                    ['expedientes',  '📁 Expedientes',   sortedExpedientes.length],
+                    ['consultas',      '💬 Consultas',     sortedConsultas.length],
+                    ['pedidos',        '📋 Pedidos',        sortedPedidos.length],
+                    ['documentos',     '📂 Documentos',    sortedDocumentos.length],
+                    ['resoluciones',   '📜 Resoluciones',  sortedResoluciones.length],
+                    ['expedientes',    '📁 Expedientes',   sortedExpedientes.length],
+                    ['citaciones_hist','⚠️ Citaciones',    citacionesHist.length],
+                    ['legajo',         '🗂️ Legajo',        legajoTotal],
                   ] as [typeof tablaTab, string, number][]).map(([t, label, count]) => (
                     <button key={t} className={`ap-tabla-tab${tablaTab === t ? ' active' : ''}`}
                       onClick={() => {
@@ -636,6 +714,36 @@ export function AtencionPublicoPage() {
                   ))}
                 </div>
 
+                {/* Sub-tabs del Legajo */}
+                {tablaTab === 'legajo' && (() => {
+                  const SUBTABS: { key: typeof legajoSubTab; label: string; data: any[] }[] = [
+                    { key: 'familia',     label: '👨‍👩‍👧 Familia',       data: legajoFamilia },
+                    { key: 'familia_exp', label: '📁 Expeds. Familia', data: legajoFamiliaExp },
+                    { key: 'funcion',     label: '🏢 Función/Destino', data: legajoFuncion },
+                    { key: 'licencias',   label: '📅 Licencias',       data: legajoLicencias },
+                    { key: 'penas',       label: '⚖️ Penas',           data: legajoPenas },
+                    { key: 'embargos',    label: '🔒 Embargos',        data: legajoEmbargos },
+                    { key: 'bienes',      label: '🏠 Decl. Bienes',    data: legajoBienes },
+                    { key: 'menciones',   label: '🏅 Menciones',       data: legajoMenciones },
+                    { key: 'incompat',    label: '⚠️ Incompatib.',     data: legajoIncompat },
+                  ];
+                  return (
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+                      {SUBTABS.map(({ key, label, data }) => (
+                        <button
+                          key={key}
+                          className={`ap-tabla-tab${legajoSubTab === key ? ' active' : ''}`}
+                          style={{ fontSize: '0.73rem', padding: '3px 8px' }}
+                          onClick={() => { setLegajoSubTab(key); setTablaPage(1); }}
+                        >
+                          {label}
+                          {data.length > 0 && <span className="ap-tab-count">{data.length}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 {loadingDatos ? (
                   <div className="ap-tabla-loading">🔄 Cargando datos…</div>
                 ) : tablaData.length === 0 ? (
@@ -647,11 +755,21 @@ export function AtencionPublicoPage() {
                         <thead>
                           <tr>
                             <th>#</th>
-                            {tablaTab === 'consultas'    && <><th>Motivo</th><th>Estado</th><th>Fecha</th></>}
-                            {tablaTab === 'pedidos'      && <><th>Pedido</th><th>Estado</th><th>Fecha</th></>}
-                            {tablaTab === 'documentos'   && <><th>Nombre</th><th>Tipo</th><th>Fecha</th></>}
-                            {tablaTab === 'resoluciones' && <><th>Motivo</th><th>Número</th><th>Fecha</th></>}
-                            {tablaTab === 'expedientes'  && <><th>Tipo</th><th>Estado</th><th>Fecha</th></>}
+                            {tablaTab === 'consultas'       && <><th>Motivo</th><th>Estado</th><th>Fecha</th></>}
+                            {tablaTab === 'pedidos'         && <><th>Pedido</th><th>Estado</th><th>Fecha</th></>}
+                            {tablaTab === 'documentos'      && <><th>Nombre</th><th>Tipo</th><th>Fecha</th></>}
+                            {tablaTab === 'resoluciones'    && <><th>Motivo</th><th>Número</th><th>Fecha</th></>}
+                            {tablaTab === 'expedientes'     && <><th>Tipo</th><th>Estado</th><th>Fecha</th></>}
+                            {tablaTab === 'citaciones_hist' && <><th>Motivo</th><th>Citado por</th><th>Estado</th><th>Fecha</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'familia'     && <><th>Parentesco</th><th>Apellido y Nombre</th><th>Sexo</th><th>Nac.</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'familia_exp'&& <><th>Motivo</th><th>Expediente</th><th>Fecha informe</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'funcion'    && <><th>Función</th><th>Destino</th><th>Resolución</th><th>Ingreso</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'licencias'  && <><th>Motivo</th><th>Resolución</th><th>Con sueldo</th><th>Fecha</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'penas'      && <><th>Pena</th><th>Decreto</th><th>Motivo</th><th>Fecha</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'embargos'   && <><th>Ejecutante</th><th>Expediente</th><th>Suma</th><th>Fecha</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'bienes'     && <><th>Descripción</th><th>Fecha</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'menciones'  && <><th>Referencias</th><th>Fecha</th></>}
+                            {tablaTab === 'legajo' && legajoSubTab === 'incompat'   && <><th>Otro cargo</th><th>Jubilación</th><th>Fecha decl.</th></>}
                           </tr>
                         </thead>
                         <tbody>
@@ -699,11 +817,100 @@ export function AtencionPublicoPage() {
                                     <td><span className={`ap-estado-badge ${['abierto','pendiente'].includes(item.estado) ? 'pend' : 'ok'}`}>{item.estado || '—'}</span></td>
                                     <td className="muted ap-tabla-fecha">{fmtDateShort(item.created_at || item.fecha)}</td>
                                   </>}
+                                  {tablaTab === 'citaciones_hist' && <>
+                                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.motivo || '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem' }}>{item.citado_por || '—'}</td>
+                                    <td>
+                                      <span className={`ap-estado-badge ${item.citacion_activa == 1 ? 'pend' : 'ok'}`}>
+                                        {item.citacion_activa == 1 ? 'ACTIVA' : 'CERRADA'}
+                                      </span>
+                                    </td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha_citacion || item.created_at)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'licencias' && <>
+                                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.motivo || '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{item.resolucion || '—'}</td>
+                                    <td style={{ fontSize: '0.78rem' }}>
+                                      {item.con_sueldo ? '✅ Sí' : item.con_50pct ? '🟡 50%' : item.sin_sueldo ? '❌ No' : '—'}
+                                    </td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'penas' && <>
+                                    <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.calidad_pena || '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{item.decreto_resolucion || '—'}</td>
+                                    <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap', fontSize: '0.78rem' }}>
+                                      {item.motivo || '—'}
+                                    </td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'embargos' && <>
+                                    <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.ejecutante || '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{item.expediente || '—'}</td>
+                                    <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                                      {item.suma_embargada ? `$${Number(item.suma_embargada).toLocaleString('es-AR')}` : '—'}
+                                    </td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'familia' && <>
+                                    <td style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>{item.parentesco || '—'}</td>
+                                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.apellido_nombres || '—'}
+                                      {item.vive == 0 && <span className="muted" style={{ marginLeft: 6, fontSize: '0.7rem' }}>†</span>}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem' }}>{item.sexo || '—'}</td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha_nacimiento)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'familia_exp' && <>
+                                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.motivo || '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{item.expediente || '—'}</td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha_informe)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'funcion' && <>
+                                    <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.funcion || '—'}
+                                    </td>
+                                    <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap', fontSize: '0.78rem' }}>
+                                      {item.destino || '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{item.resolucion || '—'}</td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha_ingreso)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'bienes' && <>
+                                    <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.descripcion || '—'}
+                                    </td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'menciones' && <>
+                                    <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isExp ? 'normal' : 'nowrap' }}>
+                                      {item.referencias || '—'}
+                                    </td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha)}</td>
+                                  </>}
+                                  {tablaTab === 'legajo' && legajoSubTab === 'incompat' && <>
+                                    <td style={{ fontSize: '0.78rem' }}>
+                                      {item.otro_cargo ? `${item.otro_cargo_nivel || ''} — ${item.otro_cargo_lugar || ''}`.trim() : '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.78rem' }}>
+                                      {item.tiene_jubilacion ? `${item.jubilacion_ley || ''} ${item.jubilacion_caja || ''}`.trim() || 'Sí' : '—'}
+                                    </td>
+                                    <td className="muted ap-tabla-fecha">{fmtDateShort(item.fecha_declaracion)}</td>
+                                  </>}
                                 </tr>
                                 {/* Fila expandida */}
                                 {isExp && (
                                   <tr>
-                                    <td colSpan={4} style={{ padding: 0 }}>
+                                    <td colSpan={5} style={{ padding: 0 }}>
                                       <div style={{ background: 'rgba(99,102,241,0.07)', borderLeft: '3px solid #6366f1', padding: '10px 14px', fontSize: '0.82rem', lineHeight: 1.7 }}>
                                         {tablaTab === 'consultas' && <>
                                           <div><b>Motivo completo:</b> {item.motivo_consulta || item.motivo || '—'}</div>
@@ -749,6 +956,89 @@ export function AtencionPublicoPage() {
                                           {item.descripcion && <div><b>Descripción:</b> {item.descripcion}</div>}
                                           {item.titulo && <div><b>Título:</b> {item.titulo}</div>}
                                           <div className="muted">{fmtDateTime(item.created_at || item.fecha)}</div>
+                                        </>}
+                                        {tablaTab === 'citaciones_hist' && <>
+                                          <div><b>Motivo:</b> {item.motivo || '—'}</div>
+                                          <div><b>Citado por:</b> {item.citado_por || '—'}</div>
+                                          <div><b>Fecha citación:</b> {fmtDateTime(item.fecha_citacion)}</div>
+                                          {item.cierre_citacion && <div><b>Cerrada:</b> {fmtDateTime(item.cierre_citacion)}</div>}
+                                          <div className="muted">{fmtDateTime(item.created_at)}</div>
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'licencias' && <>
+                                          <div><b>Motivo:</b> {item.motivo || '—'}</div>
+                                          {item.resolucion && <div><b>Resolución:</b> {item.resolucion}</div>}
+                                          {item.termino && <div><b>Término:</b> {item.termino}</div>}
+                                          <div><b>Con sueldo:</b> {item.con_sueldo ? 'Sí' : item.con_50pct ? '50%' : item.sin_sueldo ? 'No' : '—'}</div>
+                                          {item.observaciones && <div><b>Observaciones:</b> {item.observaciones}</div>}
+                                          <div className="muted">{fmtDateShort(item.fecha)}</div>
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'penas' && <>
+                                          <div><b>Calidad de pena:</b> {item.calidad_pena || '—'}</div>
+                                          {item.decreto_resolucion && <div><b>Decreto/Resolución:</b> {item.decreto_resolucion}</div>}
+                                          {item.expediente_nro && <div><b>Expediente:</b> {item.expediente_letra} {item.expediente_nro}/{item.expediente_anio}</div>}
+                                          {item.motivo && <div><b>Motivo:</b> {item.motivo}</div>}
+                                          {item.observaciones && <div><b>Observaciones:</b> {item.observaciones}</div>}
+                                          <div className="muted">{fmtDateShort(item.fecha)}</div>
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'embargos' && <>
+                                          {item.ejecutante && <div><b>Ejecutante:</b> {item.ejecutante}</div>}
+                                          {item.autoridad && <div><b>Autoridad:</b> {item.autoridad}</div>}
+                                          {item.expediente && <div><b>Expediente:</b> {item.expediente}</div>}
+                                          {item.suma_embargada && <div><b>Suma embargada:</b> ${Number(item.suma_embargada).toLocaleString('es-AR')}</div>}
+                                          {item.fecha_levantamiento && <div><b>Levantamiento:</b> {fmtDateShort(item.fecha_levantamiento)}</div>}
+                                          {item.observaciones && <div><b>Observaciones:</b> {item.observaciones}</div>}
+                                          <div className="muted">{fmtDateShort(item.fecha)}</div>
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'familia' && <>
+                                          <div><b>Nombre:</b> {item.apellido_nombres}</div>
+                                          <div><b>Parentesco:</b> {item.parentesco}</div>
+                                          {item.sexo && <div><b>Sexo:</b> {item.sexo}</div>}
+                                          <div><b>Vive:</b> {item.vive ? 'Sí' : 'No'}</div>
+                                          {item.fecha_nacimiento && <div><b>Nacimiento:</b> {fmtDateShort(item.fecha_nacimiento)}</div>}
+                                          {item.es_empleado && <div><b>Es empleado:</b> {item.es_empleado}</div>}
+                                          {item.es_jubilado && <div><b>Es jubilado:</b> {item.es_jubilado}</div>}
+                                          {item.observaciones && <div><b>Observaciones:</b> {item.observaciones}</div>}
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'familia_exp' && <>
+                                          {item.motivo && <div><b>Motivo:</b> {item.motivo}</div>}
+                                          {item.expediente && <div><b>Expediente:</b> {item.expediente}</div>}
+                                          {item.fecha_informe && <div><b>Fecha informe:</b> {fmtDateShort(item.fecha_informe)}</div>}
+                                          {item.observacion && <div><b>Observación:</b> {item.observacion}</div>}
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'funcion' && <>
+                                          {item.funcion && <div><b>Función:</b> {item.funcion}</div>}
+                                          {item.destino && <div><b>Destino:</b> {item.destino}</div>}
+                                          {item.resolucion && <div><b>Resolución:</b> {item.resolucion}</div>}
+                                          {item.fecha_ingreso && <div><b>Ingreso:</b> {fmtDateShort(item.fecha_ingreso)}</div>}
+                                          {item.fecha_egreso && <div><b>Egreso:</b> {fmtDateShort(item.fecha_egreso)}</div>}
+                                          {item.observaciones && <div><b>Observaciones:</b> {item.observaciones}</div>}
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'bienes' && <>
+                                          <div style={{ whiteSpace: 'pre-wrap' }}>{item.descripcion || '—'}</div>
+                                          {item.fecha && <div className="muted">{fmtDateShort(item.fecha)}</div>}
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'menciones' && <>
+                                          <div style={{ whiteSpace: 'pre-wrap' }}>{item.referencias || '—'}</div>
+                                          {item.fecha && <div className="muted">{fmtDateShort(item.fecha)}</div>}
+                                        </>}
+                                        {tablaTab === 'legajo' && legajoSubTab === 'incompat' && <>
+                                          <div><b>Jubilación:</b> {item.tiene_jubilacion ? 'Sí' : 'No'}</div>
+                                          {item.tiene_jubilacion && <>
+                                            {item.jubilacion_ley && <div><b>Ley:</b> {item.jubilacion_ley}</div>}
+                                            {item.jubilacion_caja && <div><b>Caja:</b> {item.jubilacion_caja}</div>}
+                                            {item.jubilacion_monto && <div><b>Monto jub.:</b> ${Number(item.jubilacion_monto).toLocaleString('es-AR')}</div>}
+                                            {item.jubilacion_fecha && <div><b>Fecha jub.:</b> {fmtDateShort(item.jubilacion_fecha)}</div>}
+                                          </>}
+                                          <div><b>Otro cargo:</b> {item.otro_cargo ? 'Sí' : 'No'}</div>
+                                          {item.otro_cargo && <>
+                                            {item.otro_cargo_nivel && <div><b>Nivel:</b> {item.otro_cargo_nivel}</div>}
+                                            {item.otro_cargo_lugar && <div><b>Lugar:</b> {item.otro_cargo_lugar}</div>}
+                                            {item.otro_cargo_monto && <div><b>Monto:</b> ${Number(item.otro_cargo_monto).toLocaleString('es-AR')}</div>}
+                                            {item.otro_cargo_fecha_ingreso && <div><b>Ingreso:</b> {fmtDateShort(item.otro_cargo_fecha_ingreso)}</div>}
+                                          </>}
+                                          {item.otras_actividades && <div><b>Otras actividades:</b> {item.otras_actividades}</div>}
+                                          {item.observaciones && <div><b>Observaciones:</b> {item.observaciones}</div>}
+                                          {item.fecha_declaracion && <div className="muted">Declarado: {fmtDateShort(item.fecha_declaracion)}</div>}
                                         </>}
                                       </div>
                                     </td>
@@ -820,25 +1110,106 @@ export function AtencionPublicoPage() {
           padding: 16,
         }}>
           <div className="card" style={{
-            maxWidth: 460, width: '100%', padding: '1.5rem',
+            maxWidth: 500, width: '100%', padding: '1.5rem',
             border: '3px solid #ef4444', borderRadius: 14,
           }}>
             <div style={{ fontSize: '2.5rem', textAlign: 'center', marginBottom: 8 }}>⚠️</div>
             <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#ef4444', marginBottom: 16, textAlign: 'center' }}>
               CITACIÓN ACTIVA
             </div>
+
             <div style={{ marginBottom: 8 }}><b>Agente:</b> {row?.apellido}, {row?.nombre}</div>
-            <div style={{ marginBottom: 8 }}><b>Motivo:</b> {citacion.motivo || '—'}</div>
+            <div style={{ marginBottom: 8 }}><b>Motivo:</b> <span style={{ color: '#fca5a5' }}>{citacion.motivo || '—'}</span></div>
             <div style={{ marginBottom: 8 }}><b>Citado por:</b> {citacion.citado_por || '—'}</div>
             <div style={{ marginBottom: 8 }}><b>Fecha citación:</b> {fmtDateTime(citacion.fecha_citacion)}</div>
-            <button
-              className="btn danger"
-              style={{ marginTop: 16, width: '100%' }}
-              onClick={() => setShowCitacionModal(false)}
-              type="button"
-            >
-              Entendido — Cerrar
-            </button>
+
+            {/* Pedidos pendientes */}
+            {pedidos.filter((p: any) => p.estado === 'pendiente').length > 0 && (
+              <div style={{
+                marginTop: 14, padding: '10px 12px',
+                background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)',
+                borderRadius: 8,
+              }}>
+                <div style={{ fontWeight: 700, color: '#fbbf24', marginBottom: 6, fontSize: '0.88rem' }}>
+                  ⚠️ {pedidos.filter((p: any) => p.estado === 'pendiente').length} pedido(s) pendiente(s)
+                </div>
+                {pedidos.filter((p: any) => p.estado === 'pendiente').slice(0, 5).map((p: any) => (
+                  <div key={p.id} style={{ fontSize: '0.8rem', color: '#e2e8f0', marginBottom: 3,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    • {p.pedido || p.descripcion || `Pedido #${p.id}`}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+              <button
+                className="btn"
+                style={{ flex: 1 }}
+                disabled={bajandoCitacion}
+                onClick={async () => {
+                  const s = loadSession();
+                  const u: any = s?.user || {};
+                  const operador = u?.nombre || u?.email || `Usuario #${u?.id}` || 'anon';
+                  await apiFetch('/citaciones_vistas', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      citacion_id: citacion.id,
+                      visto_por: operador,
+                      usuario_id: u?.id ?? null,
+                      accion: 'visto',
+                    }),
+                  }).catch(() => {});
+                  setShowCitacionModal(false);
+                }}
+                type="button"
+              >
+                Entendido — Cerrar
+              </button>
+
+              <button
+                className="btn danger"
+                style={{ flex: 1 }}
+                disabled={bajandoCitacion}
+                onClick={async () => {
+                  setBajandoCitacion(true);
+                  try {
+                    const s = loadSession();
+                    const u: any = s?.user || {};
+                    const operador = u?.nombre || u?.email || `Usuario #${u?.id}` || 'anon';
+
+                    await apiFetch(`/citaciones/${citacion.id}`, {
+                      method: 'PATCH',
+                      body: JSON.stringify({
+                        citacion_activa: 0,
+                        cierre_citacion: new Date().toISOString(),
+                      }),
+                    });
+
+                    await apiFetch('/citaciones_vistas', {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        citacion_id: citacion.id,
+                        visto_por: operador,
+                        usuario_id: u?.id ?? null,
+                        accion: 'dado_de_baja',
+                      }),
+                    }).catch(() => {});
+
+                    setCitacion(null);
+                    setShowCitacionModal(false);
+                    toast.ok('Citación dada de baja');
+                  } catch (e: any) {
+                    toast.error('Error al dar de baja', e?.message || 'Error');
+                  } finally {
+                    setBajandoCitacion(false);
+                  }
+                }}
+                type="button"
+              >
+                {bajandoCitacion ? '⏳…' : '🔒 Dar de baja'}
+              </button>
+            </div>
           </div>
         </div>
       )}

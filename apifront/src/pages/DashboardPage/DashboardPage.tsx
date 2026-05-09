@@ -285,6 +285,7 @@ export function DashboardPage() {
           Herramientas
         </div>
         <div className="grid">
+          <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación. Prorrateo, agotamiento prematuro, ANSES, servicios externos, cargo deudor y exportación a Excel." accent="#7c3aed" />
           <Tile to="/app/buscador" title="🔍 Buscador Global" desc="Buscá por DNI o apellido en todas las secciones con historial de búsquedas." accent="#06b6d4" />
           <Tile to="/app/comparador" title="⚖️ Comparador" desc="Comparar dos agentes lado a lado. Las diferencias se marcan automáticamente." accent="#8b5cf6" />
           <Tile to="/app/legajo" title="📋 Legajo Completo" desc="Vista unificada e imprimible de todos los datos de un agente: personal, laboral, servicios y documentos." accent="#a3e635" />

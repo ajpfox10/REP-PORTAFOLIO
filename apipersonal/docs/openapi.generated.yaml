@@ -5538,6 +5538,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/jubilacion_calculos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List jubilacion_calculos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_jubilacion_calculos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create jubilacion_calculos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jubilacion_calculos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/jubilacion_calculos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get jubilacion_calculos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update jubilacion_calculos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jubilacion_calculos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch jubilacion_calculos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jubilacion_calculos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete jubilacion_calculos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/legajo_concepto_menciones:
     get:
       tags:
@@ -17411,6 +17543,211 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_jubilacion_calculos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_ingreso_ips:
+          type: string
+          format: date-time
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        situacion_revista:
+          type: string
+        es_insalubre_ips:
+          type: number
+        anses_anios:
+          type: number
+        anses_meses:
+          type: number
+        anses_dias:
+          type: number
+        anses_insalubre:
+          type: number
+        servicios_externos:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        creado_por_nombre:
+          type: string
+          nullable: true
+        modificado_por:
+          type: number
+          nullable: true
+        modificado_por_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+        - apellido
+        - nombre
+    Table_jubilacion_calculos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_ingreso_ips:
+          type: string
+          format: date-time
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        situacion_revista:
+          type: string
+        es_insalubre_ips:
+          type: number
+        anses_anios:
+          type: number
+        anses_meses:
+          type: number
+        anses_dias:
+          type: number
+        anses_insalubre:
+          type: number
+        servicios_externos:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        creado_por_nombre:
+          type: string
+          nullable: true
+        modificado_por:
+          type: number
+          nullable: true
+        modificado_por_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_jubilacion_calculos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_ingreso_ips:
+          type: string
+          format: date-time
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        situacion_revista:
+          type: string
+        es_insalubre_ips:
+          type: number
+        anses_anios:
+          type: number
+        anses_meses:
+          type: number
+        anses_dias:
+          type: number
+        anses_insalubre:
+          type: number
+        servicios_externos:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        creado_por_nombre:
+          type: string
+          nullable: true
+        modificado_por:
+          type: number
+          nullable: true
+        modificado_por_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_legajo_concepto_menciones:
       type: object
       additionalProperties: false
@@ -20497,6 +20834,8 @@ components:
         observaciones:
           type: string
           nullable: true
+        procesado:
+          type: number
         created_at:
           type: string
           format: date-time
@@ -20572,6 +20911,8 @@ components:
         observaciones:
           type: string
           nullable: true
+        procesado:
+          type: number
         created_at:
           type: string
           format: date-time
@@ -20648,6 +20989,8 @@ components:
         observaciones:
           type: string
           nullable: true
+        procesado:
+          type: number
         created_at:
           type: string
           format: date-time
@@ -20997,6 +21340,15 @@ components:
         deleted_by_nombre:
           type: string
           nullable: true
+        nrodegestion:
+          type: number
+          nullable: true
+        horarios:
+          type: string
+          nullable: true
+        dias:
+          type: string
+          nullable: true
       required:
         - id
         - dni
@@ -21057,6 +21409,15 @@ components:
           type: string
           nullable: true
         deleted_by_nombre:
+          type: string
+          nullable: true
+        nrodegestion:
+          type: number
+          nullable: true
+        horarios:
+          type: string
+          nullable: true
+        dias:
           type: string
           nullable: true
       required:
@@ -21120,6 +21481,15 @@ components:
           type: string
           nullable: true
         deleted_by_nombre:
+          type: string
+          nullable: true
+        nrodegestion:
+          type: number
+          nullable: true
+        horarios:
+          type: string
+          nullable: true
+        dias:
           type: string
           nullable: true
     Table_resoluciones:

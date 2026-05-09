@@ -238,6 +238,184 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
   );
 }
 
+// ─── Modal asignar servicio en masa ──────────────────────────────────────────
+interface AsignarMasivoModalProps {
+  agentes: any[];
+  servicios: any[];
+  dependencias: any[];
+  sectores: any[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+function AsignarMasivoModal({ agentes, servicios, dependencias, sectores, onClose, onSaved }: AsignarMasivoModalProps) {
+  const toast = useToast();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    dependencia_id: '',
+    servicio_id:    '',
+    sector_id:      '',
+    fecha_desde:    hoy,
+    motivo:         '',
+    jefe_nombre:    '',
+    observaciones:  '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [resultado, setResultado] = useState<{ created: number; skipped: any[] } | null>(null);
+
+  useEffect(() => {
+    const s = loadSession();
+    const u: any = s?.user || {};
+    setForm(f => ({ ...f, jefe_nombre: u?.nombre || '' }));
+  }, []);
+
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const serviciosFiltrados = form.dependencia_id
+    ? servicios.filter((s: any) => String(s.reparticion_id) === form.dependencia_id)
+    : servicios;
+
+  const sectoresFiltrados = form.servicio_id
+    ? sectores.filter((s: any) => String(s.servicio_id) === form.servicio_id)
+    : [];
+
+  const guardar = async () => {
+    if (!form.servicio_id) { toast.error('Seleccioná un servicio'); return; }
+    if (!form.fecha_desde) { toast.error('Ingresá la fecha de inicio'); return; }
+    setSaving(true);
+    try {
+      const records = agentes.map((a: any) => ({
+        dni:            a.dni,
+        servicio_id:    Number(form.servicio_id),
+        sector_id:      form.sector_id      ? Number(form.sector_id)      : null,
+        dependencia_id: form.dependencia_id ? Number(form.dependencia_id) : null,
+        fecha_desde:    form.fecha_desde,
+        motivo:         form.motivo         || null,
+        jefe_nombre:    form.jefe_nombre    || null,
+        observaciones:  form.observaciones  || null,
+      }));
+      const res = await apiFetch<any>('/agentes_servicios/batch', {
+        method: 'POST',
+        body: JSON.stringify({ records }),
+      });
+      setResultado(res?.data || { created: 0, skipped: [] });
+      onSaved();
+    } catch (e: any) {
+      toast.error('Error al asignar', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const labelStyle = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fieldStyle = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div>
+            <div className="js-modal-title">⚡ Asignación Masiva de Servicio</div>
+            <div className="js-modal-sub">{agentes.length} agentes seleccionados</div>
+          </div>
+          <button className="btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <div className="js-modal-body">
+          {resultado ? (
+            <div>
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: '1.6rem', marginBottom: 8 }}>✅</div>
+                <div style={{ fontWeight: 700, color: '#4ade80', fontSize: '1rem' }}>
+                  {resultado.created} {resultado.created === 1 ? 'agente asignado' : 'agentes asignados'}
+                </div>
+                {resultado.skipped.length > 0 && (
+                  <div style={{ marginTop: 10, fontSize: '0.82rem', color: '#fbbf24' }}>
+                    {resultado.skipped.length} omitidos (ya tenían servicio activo):
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>
+                      {resultado.skipped.join(', ')}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="js-modal-actions">
+                <button className="btn js-btn-save" onClick={onClose}>Cerrar</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                background: 'rgba(99,102,241,0.12)', borderRadius: 8,
+                padding: '8px 12px', marginBottom: 14, fontSize: '0.82rem', color: '#a5b4fc',
+              }}>
+                📋 Se asignará el mismo servicio a los <b>{agentes.length} agentes</b> seleccionados.
+                Los que ya tengan un servicio activo serán omitidos automáticamente.
+              </div>
+              <div className="js-form-grid">
+                <div className="js-field">
+                  <div style={labelStyle}>Dependencia / Repartición</div>
+                  <select className="input" style={fieldStyle} value={form.dependencia_id}
+                    onChange={e => setForm(f => ({ ...f, dependencia_id: e.target.value, servicio_id: '', sector_id: '' }))}>
+                    <option value="">— Todas —</option>
+                    {dependencias.map((d: any) => (
+                      <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="js-field">
+                  <div style={labelStyle}>Servicio *</div>
+                  <select className="input" style={fieldStyle} value={form.servicio_id}
+                    onChange={e => setForm(f => ({ ...f, servicio_id: e.target.value, sector_id: '' }))}>
+                    <option value="">— Seleccioná —</option>
+                    {serviciosFiltrados.map((s: any) => (
+                      <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="js-field">
+                  <div style={labelStyle}>Sector</div>
+                  <select className="input" style={{ ...fieldStyle, opacity: !form.servicio_id ? 0.5 : 1 }}
+                    value={form.sector_id} onChange={e => set('sector_id', e.target.value)}
+                    disabled={!form.servicio_id}>
+                    <option value="">— Ninguno —</option>
+                    {sectoresFiltrados.map((s: any) => (
+                      <option key={s.id} value={s.id}>{s.nombre || `Sector #${s.id}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="js-field">
+                  <div style={labelStyle}>Fecha desde *</div>
+                  <input type="date" className="input" style={fieldStyle} value={form.fecha_desde}
+                    onChange={e => set('fecha_desde', e.target.value)} />
+                </div>
+                <div className="js-field js-field-full">
+                  <div style={labelStyle}>Jefe / Responsable</div>
+                  <input type="text" className="input" style={fieldStyle} value={form.jefe_nombre}
+                    onChange={e => set('jefe_nombre', e.target.value)} />
+                </div>
+                <div className="js-field js-field-full">
+                  <div style={labelStyle}>Motivo del pase</div>
+                  <input type="text" className="input" style={fieldStyle} value={form.motivo}
+                    onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
+                </div>
+                <div className="js-field js-field-full">
+                  <div style={labelStyle}>Observaciones</div>
+                  <textarea className="input" rows={2} style={{ ...fieldStyle, resize: 'vertical' }}
+                    value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+                </div>
+              </div>
+              <div className="js-modal-actions">
+                <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+                <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
+                  {saving ? `⏳ Asignando ${agentes.length} agentes…` : `⚡ Asignar ${agentes.length} agentes`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal cerrar servicio ────────────────────────────────────────────────────
 interface CerrarServicioModalProps {
   pase: any;
@@ -1620,6 +1798,29 @@ export function JefeServicioPage() {
   const [pases,       setPases]       = useState<any[]>([]);
   const [loadingPases, setLoadingPases] = useState(false);
 
+  // Multi-selección para asignación masiva
+  const [modoSeleccion,      setModoSeleccion]      = useState(false);
+  const [seleccionados,      setSeleccionados]      = useState<Set<string>>(new Set());
+  const [modalAsignarMasivo, setModalAsignarMasivo] = useState(false);
+
+  const toggleSeleccion = (dni: string) => {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      if (next.has(dni)) next.delete(dni); else next.add(dni);
+      return next;
+    });
+  };
+
+  const activarModoSeleccion = () => {
+    setModoSeleccion(true);
+    setAgenteActivo(null);
+  };
+
+  const cancelarSeleccion = () => {
+    setModoSeleccion(false);
+    setSeleccionados(new Set());
+  };
+
   // Modales
   const [modalAsignar,       setModalAsignar]       = useState(false);
   const [modalCerrar,        setModalCerrar]        = useState<any>(null);
@@ -2028,12 +2229,102 @@ export function JefeServicioPage() {
 
           {/* Lista agentes */}
           <div className="card js-card js-agentes-list-card">
-            <div className="js-section-title">
-              👥 Agentes
-              {agentesFiltrados.length !== agentes.length && (
-                <span className="js-filter-badge">{agentesFiltrados.length} filtrados</span>
+            <div className="js-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+              <span>
+                👥 Agentes
+                {agentesFiltrados.length !== agentes.length && (
+                  <span className="js-filter-badge">{agentesFiltrados.length} filtrados</span>
+                )}
+              </span>
+              {canAsignarServicio && !modoSeleccion && agentesFiltrados.length > 0 && (
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ fontSize: '0.72rem', padding: '3px 9px', whiteSpace: 'nowrap' }}
+                  onClick={activarModoSeleccion}
+                >☑ Selección múltiple</button>
+              )}
+              {modoSeleccion && (
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ fontSize: '0.72rem', padding: '3px 9px', color: '#f87171' }}
+                  onClick={cancelarSeleccion}
+                >✕ Cancelar</button>
               )}
             </div>
+
+            {/* Barra de acciones en modo selección */}
+            {modoSeleccion && (
+              <div style={{
+                background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)',
+                borderRadius: 8, padding: '8px 10px', marginBottom: 8,
+                display: 'flex', flexDirection: 'column', gap: 8,
+              }}>
+                {/* Buscador rápido dentro del modo selección */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    className="input"
+                    value={busquedaNombre}
+                    onChange={e => { setBusquedaNombre(e.target.value); setBusquedaDni(''); setPaginaAgentes(1); }}
+                    placeholder="Buscar por apellido o nombre..."
+                    style={{ flex: 1, fontSize: '0.82rem', padding: '5px 10px' }}
+                    autoFocus
+                  />
+                  {busquedaNombre && (
+                    <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px', flexShrink: 0 }}
+                      onClick={() => { setBusquedaNombre(''); setBusquedaDni(''); setPaginaAgentes(1); }}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Chips de seleccionados actuales */}
+                {seleccionados.size > 0 && (
+                  <div style={{ fontSize: '0.72rem', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ background: 'rgba(99,102,241,0.3)', borderRadius: 99, padding: '2px 9px', fontWeight: 700 }}>
+                      ✔ {seleccionados.size} seleccionado{seleccionados.size !== 1 ? 's' : ''}
+                    </span>
+                    {busquedaNombre && (
+                      <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                        (mostrando {agentesFiltrados.length} resultados para "{busquedaNombre}")
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {busquedaNombre && (
+                      <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                        onClick={() => setSeleccionados(prev => new Set([...prev, ...agentesFiltrados.map((a: any) => String(a.dni))]))}>
+                        + Agregar "{busquedaNombre}" ({agentesFiltrados.length})
+                      </button>
+                    )}
+                    <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                      onClick={() => setSeleccionados(prev => new Set([...prev, ...agentes.map((a: any) => String(a.dni))]))}>
+                      Seleccionar todos ({agentes.length})
+                    </button>
+                    {seleccionados.size > 0 && (
+                      <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                        onClick={() => setSeleccionados(new Set())}>
+                        Desmarcar todos
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn js-btn-save"
+                    style={{ fontSize: '0.75rem', padding: '4px 12px', opacity: seleccionados.size === 0 ? 0.5 : 1 }}
+                    disabled={seleccionados.size === 0}
+                    onClick={() => setModalAsignarMasivo(true)}
+                  >
+                    ⚡ Asignar {seleccionados.size > 0 ? seleccionados.size : ''} seleccionados
+                  </button>
+                </div>
+              </div>
+            )}
+
             {loadingAg ? (
               <div className="js-loading">🔄 Cargando agentes…</div>
             ) : agentesFiltrados.length === 0 ? (
@@ -2046,39 +2337,51 @@ export function JefeServicioPage() {
               return (
                 <>
                   <div className="js-agentes-list">
-                    {paginados.map((a: any) => (
-                      <button
-                        key={a.dni}
-                        type="button"
-                        className={`js-agente-item${agenteActivo?.dni === a.dni ? ' active' : ''}`}
-                        onClick={() => seleccionarAgente(a)}
-                      >
-                        <div className="js-agente-nombre" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          {a.apellido}, {a.nombre}
-                          {licenciasSet.has(String(a.dni)) && (
-                            <span title="De licencia médica" style={{
-                              fontSize: '0.65rem', background: 'rgba(220,38,38,0.2)',
-                              color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
-                            }}>🏥 LICENCIA</span>
-                          )}
-                          {dniConArt26.has(String(a.dni)) && (
-                            <span title="Tiene Artículo 26" style={{
-                              fontSize: '0.65rem', background: 'rgba(99,102,241,0.2)',
-                              color: '#a5b4fc', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
-                            }}>📋 Art. 26</span>
-                          )}
-                        </div>
-                        <div className="js-agente-meta">
-                          DNI {a.dni}
-                          {a.ley_nombre && ` · ${a.ley_nombre}`}
-                          {a.categoria_nombre && ` · ${a.categoria_nombre}`}
-                          {dniSectorActivo[String(a.dni)] != null
-                            ? ` · 📍 ${sectores.find((s: any) => String(s.id) === String(dniSectorActivo[String(a.dni)]))?.nombre || `Sector #${dniSectorActivo[String(a.dni)]}`}`
-                            : ' · 📍 Sin sector'
-                          }
-                        </div>
-                      </button>
-                    ))}
+                    {paginados.map((a: any) => {
+                      const dniStr = String(a.dni);
+                      const estaSeleccionado = seleccionados.has(dniStr);
+                      return (
+                        <button
+                          key={a.dni}
+                          type="button"
+                          className={`js-agente-item${!modoSeleccion && agenteActivo?.dni === a.dni ? ' active' : ''}${modoSeleccion && estaSeleccionado ? ' active' : ''}`}
+                          onClick={() => modoSeleccion ? toggleSeleccion(dniStr) : seleccionarAgente(a)}
+                        >
+                          <div className="js-agente-nombre" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            {modoSeleccion && (
+                              <input
+                                type="checkbox"
+                                readOnly
+                                checked={estaSeleccionado}
+                                style={{ marginRight: 2, accentColor: '#7c3aed', cursor: 'pointer' }}
+                              />
+                            )}
+                            {a.apellido}, {a.nombre}
+                            {licenciasSet.has(dniStr) && (
+                              <span title="De licencia médica" style={{
+                                fontSize: '0.65rem', background: 'rgba(220,38,38,0.2)',
+                                color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                              }}>🏥 LICENCIA</span>
+                            )}
+                            {dniConArt26.has(dniStr) && (
+                              <span title="Tiene Artículo 26" style={{
+                                fontSize: '0.65rem', background: 'rgba(99,102,241,0.2)',
+                                color: '#a5b4fc', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                              }}>📋 Art. 26</span>
+                            )}
+                          </div>
+                          <div className="js-agente-meta">
+                            DNI {a.dni}
+                            {a.ley_nombre && ` · ${a.ley_nombre}`}
+                            {a.categoria_nombre && ` · ${a.categoria_nombre}`}
+                            {dniSectorActivo[dniStr] != null
+                              ? ` · 📍 ${sectores.find((s: any) => String(s.id) === String(dniSectorActivo[dniStr]))?.nombre || `Sector #${dniSectorActivo[dniStr]}`}`
+                              : ' · 📍 Sin sector'
+                            }
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                   {totalPags > 1 && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -2886,6 +3189,16 @@ export function JefeServicioPage() {
           jefeNombre={u?.nombre || ''}
           onClose={() => setModalNuevoFrancoSector(false)}
           onSaved={cargarFrancos}
+        />
+      )}
+      {modalAsignarMasivo && (
+        <AsignarMasivoModal
+          agentes={agentes.filter((a: any) => seleccionados.has(String(a.dni)))}
+          servicios={servicios}
+          dependencias={dependencias}
+          sectores={sectores}
+          onClose={() => setModalAsignarMasivo(false)}
+          onSaved={() => { cargarAgentes(); cancelarSeleccion(); }}
         />
       )}
     </Layout>
