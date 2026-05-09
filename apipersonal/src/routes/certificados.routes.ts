@@ -97,6 +97,28 @@ async function queryPersonaldetalle(sequelize: Sequelize, dni: number) {
   return (rows as any[])[0] ?? null;
 }
 
+async function queryPersonalConDomicilio(sequelize: Sequelize, dni: number) {
+  const rows = await sequelize.query(
+    `SELECT pd.dni, pd.apellido, pd.nombre, pd.dependencia, pd.ley,
+            pd.estado_empleo, pd.fecha_ingreso, pd.decreto_designacion,
+            pd.localidad,
+            COALESCE(pd.legajo, a.legajo) AS legajo,
+            p.domicilio, p.numerodomicilio, p.piso, p.depto, p.cp
+     FROM personaldetalle pd
+     LEFT JOIN agentes a   ON a.dni = pd.dni AND a.deleted_at IS NULL
+     LEFT JOIN personal p  ON p.dni = pd.dni AND p.deleted_at IS NULL
+     WHERE pd.dni = :dni LIMIT 1`,
+    { replacements: { dni }, type: QueryTypes.SELECT }
+  );
+  return (rows as any[])[0] ?? null;
+}
+
+function resolveTemplatePath(filename: string): string {
+  const prodPath = path.join(process.cwd(), "templates", filename);
+  const devPath  = path.join(process.cwd(), "src", "templates", filename);
+  return fs.existsSync(prodPath) ? prodPath : devPath;
+}
+
 export function buildCertificadosRouter(sequelize: Sequelize) {
   const router = Router();
 
@@ -261,5 +283,110 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     return res.status(200).send(out);
   });
 
+  // ─── Cédula de Notificación ───────────────────────────────────────────────
+
+  // GET /api/v1/certificados/cedula/datos?dni=X
+  router.get("/cedula/datos", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const p = await queryPersonalConDomicilio(sequelize, dni);
+    if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+    return res.json({
+      ok: true,
+      data: {
+        apellidoNombre,
+        dni: String(p.dni ?? dni),
+        domicilio:      String(p.domicilio ?? ""),
+        numeroDom:      String(p.numerodomicilio ?? ""),
+        piso:           String(p.piso ?? ""),
+        depto:          String(p.depto ?? ""),
+        localidad:      String(p.localidad ?? ""),
+        cp:             String(p.cp ?? ""),
+        lugarFecha:     `González Catán, ${formatDateDMY(new Date())}`,
+      },
+    });
+  });
+
+  // GET /api/v1/certificados/cedula/preview?dni=X&tipoNotif=X&vistoText=X&considerandoText=X&art1=X&art2=X&art3=X
+  router.get("/cedula/preview", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const p = await queryPersonalConDomicilio(sequelize, dni);
+    if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+
+    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+    const replacements   = buildCedulaReplacements(p, apellidoNombre, req.query as Record<string, string>);
+
+    const templatePath = resolveTemplatePath("cedula.docx");
+    if (!fs.existsSync(templatePath)) return res.status(500).send("<p>Plantilla cedula.docx no encontrada</p>");
+
+    const tpl = fs.readFileSync(templatePath);
+    const docxBuffer = await fillDocxTemplate(tpl, replacements);
+    const mammoth = await import("mammoth");
+    const result  = await mammoth.convertToHtml({ buffer: docxBuffer });
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{font-family:Georgia,serif;padding:40px 56px;color:#111;font-size:13px;line-height:1.8;max-width:800px;margin:0 auto}
+p{margin:0 0 10px 0}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px 10px}</style>
+</head><body>${result.value}</body></html>`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
+  });
+
+  // POST /api/v1/certificados/cedula
+  router.post("/cedula", async (req: Request, res: Response) => {
+    const dni = Number(req.body?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const p = await queryPersonalConDomicilio(sequelize, dni);
+    if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+
+    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+    const replacements   = buildCedulaReplacements(p, apellidoNombre, req.body);
+
+    const templatePath = resolveTemplatePath("cedula.docx");
+    if (!fs.existsSync(templatePath)) return res.status(500).json({ ok: false, error: "Plantilla cedula.docx no encontrada" });
+
+    const tpl = fs.readFileSync(templatePath);
+    const out = await fillDocxTemplate(tpl, replacements);
+
+    (res.locals as any).audit = {
+      action: "cedula_notificacion_generate",
+      table_name: "personaldetalle",
+      record_pk: dni,
+      request_json: { dni },
+      response_json: { status: 200, bytes: out.length },
+    };
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="cedula_${dni}.docx"`);
+    res.setHeader("Content-Length", String(out.length));
+    return res.status(200).send(out);
+  });
+
   return router;
+}
+
+function buildCedulaReplacements(
+  p: any,
+  apellidoNombre: string,
+  fields: Record<string, string>
+): Record<string, string> {
+  return {
+    "LUGARYFECHA":        `González Catán, ${formatDateDMY(new Date())}`,
+    "APELLIDOYNOMBRE":    apellidoNombre,
+    "DOMICILIOAGENTE":    String(p.domicilio ?? ""),
+    "NUMERODOM":          String(p.numerodomicilio ?? ""),
+    "PISOAGENTE":         String(p.piso ?? ""),
+    "DEPTOAGENTE":        String(p.depto ?? ""),
+    "LOCALIDADAGENTE":    String(p.localidad ?? ""),
+    "CPAGENTE":           String(p.cp ?? ""),
+    "TIPONOTIF":          String(fields?.tipoNotif ?? fields?.tiponotif ?? "la Resolución"),
+    "VISTOTEXT":          String(fields?.vistoText ?? fields?.vistotext ?? ""),
+    "CONSIDERANDOTEXT":   String(fields?.considerandoText ?? fields?.considerandotext ?? ""),
+    "ART1TEXT":           String(fields?.art1 ?? ""),
+    "ART2TEXT":           String(fields?.art2 ?? ""),
+    "ART3TEXT":           String(fields?.art3 ?? ""),
+  };
 }

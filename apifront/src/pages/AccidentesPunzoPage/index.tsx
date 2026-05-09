@@ -93,7 +93,15 @@ function FormAccidente({ initial, onSave, onClose }: {
   onClose: () => void;
 }) {
   const toast = useToast();
-  const [form,    setForm]    = useState({ ...FORM_EMPTY, ...initial, fecha: initial?.fecha?.slice(0,10) ?? '' });
+  const [form, setForm] = useState({
+    ...FORM_EMPTY,
+    agente_dni:    initial?.agente_dni    ?? '',
+    agente_nombre: initial?.agente_nombre ?? '',
+    servicio:      initial?.servicio      ?? '',
+    caso:          initial?.caso          ?? '',
+    observaciones: initial?.observaciones ?? '',
+    fecha:         initial?.fecha?.slice(0, 10) ?? '',
+  });
   const [saving,  setSaving]  = useState(false);
   const [buscando,setBuscando]= useState(false);
   const [matches, setMatches] = useState<any[]>([]);
@@ -101,7 +109,7 @@ function FormAccidente({ initial, onSave, onClose }: {
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   const buscarAgente = async () => {
-    const q = (form.agente_nombre || form.agente_dni).trim();
+    const q = (form.agente_nombre || form.agente_dni || '').trim();
     if (!q) return;
     setBuscando(true); setMatches([]);
     try {

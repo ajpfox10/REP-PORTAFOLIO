@@ -20,6 +20,7 @@ export function usePedidos(cleanDni: string, moduleState: ModuleState) {
       "Copia de resoluciones": false,
       "Copia de recibos": false,
       "Constancia de servicios": false,
+      "Certificación de rotación": false,
     } as Record<string, boolean>,
     custom: "",
     caracteristicas: "",

@@ -4,34 +4,32 @@ import { Layout } from '../../components/Layout';
 import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { useToast } from '../../ui/toast';
-import { exportToPdf } from '../../utils/export';
 
-// ─── Documentos ───────────────────────────────────────────────────────────────
-// implementado: true = tiene generación real de DOCX/PDF
 const DOCS = [
-  { id: 1, label: 'Certificado de Trabajo',     implementado: false,
-    frase: 'Se certifica que el/la agente presta servicios en esta repartición con el cargo y antigüedad que se detalla a continuación.' },
-  { id: 2, label: 'IOMA',                        implementado: true,
+  { id: 1,  label: 'Certificado de Trabajo',   implementado: false,
+    frase: 'Se certifica que el/la agente presta servicios en esta reparticion con el cargo y antiguedad que se detalla a continuacion.' },
+  { id: 2,  label: 'IOMA',                      implementado: true,
     frase: 'Se certifica para presentar ante IOMA que el/la agente se encuentra en actividad en la fecha indicada.' },
-  { id: 3, label: 'Constancia de Empleo',        implementado: false,
-    frase: 'La presente constancia acredita la relación de empleo público vigente entre el agente y esta repartición.' },
-  { id: 4, label: 'Certificado de Haberes',      implementado: false,
-    frase: 'Se certifica la remuneración mensual percibida por el/la agente de acuerdo a su categoría y adicionales correspondientes.' },
-  { id: 5, label: 'Licencia / Francos',          implementado: false,
-    frase: 'Se informa el estado de licencias y francos compensatorios correspondientes al agente en el período indicado.' },
-  { id: 6, label: 'Alta Médica',                 implementado: false,
+  { id: 3,  label: 'Constancia de Empleo',      implementado: false,
+    frase: 'La presente constancia acredita la relacion de empleo publico vigente entre el agente y esta reparticion.' },
+  { id: 4,  label: 'Certificado de Haberes',    implementado: false,
+    frase: 'Se certifica la remuneracion mensual percibida por el/la agente de acuerdo a su categoria y adicionales correspondientes.' },
+  { id: 5,  label: 'Licencia / Francos',        implementado: false,
+    frase: 'Se informa el estado de licencias y francos compensatorios correspondientes al agente en el periodo indicado.' },
+  { id: 6,  label: 'Alta Medica',               implementado: false,
     frase: 'Se certifica que el/la agente se encuentra en condiciones de retomar sus funciones a partir de la fecha indicada.' },
-  { id: 7, label: 'Préstamo Bancario',           implementado: false,
-    frase: 'Se certifica la situación de revista del agente a los efectos de tramitar créditos ante entidades bancarias.' },
-  { id: 8, label: 'Jubilación / Retiro',         implementado: false,
-    frase: 'Se certifica la antigüedad y condiciones de revista a los efectos previsionales correspondientes.' },
-  { id: 9, label: 'Resolución Interna',          implementado: false,
-    frase: 'Se confecciona la presente resolución interna según los antecedentes obrantes en el legajo del agente.' },
-  { id: 10, label: 'Nota a Dirección',           implementado: false,
-    frase: 'Por medio de la presente nota se eleva a la Dirección el pedido correspondiente según lo actuado en autos.' },
+  { id: 7,  label: 'Prestamo Bancario',         implementado: false,
+    frase: 'Se certifica la situacion de revista del agente a los efectos de tramitar creditos ante entidades bancarias.' },
+  { id: 8,  label: 'Jubilacion / Retiro',       implementado: false,
+    frase: 'Se certifica la antiguedad y condiciones de revista a los efectos previsionales correspondientes.' },
+  { id: 9,  label: 'Resolucion Interna',        implementado: false,
+    frase: 'Se confecciona la presente resolucion interna segun los antecedentes obrantes en el legajo del agente.' },
+  { id: 10, label: 'Nota a Direccion',          implementado: false,
+    frase: 'Por medio de la presente nota se eleva a la Direccion el pedido correspondiente segun lo actuado en autos.' },
+  { id: 11, label: 'Cedula de Notificacion',    implementado: true,
+    frase: 'Se notifica al agente la resolucion o acto administrativo correspondiente en su domicilio declarado.' },
 ];
 
-// ─── Modal de documento ───────────────────────────────────────────────────────
 function DocModal({ agente, doc, onClose }: {
   agente: any;
   doc: typeof DOCS[0];
@@ -44,6 +42,16 @@ function DocModal({ agente, doc, onClose }: {
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  const [cedulaDatos, setCedulaDatos] = useState<any>(null);
+  const [cedulaFields, setCedulaFields] = useState({
+    tipoNotif: 'la Resolucion',
+    vistoText: '',
+    considerandoText: '',
+    art1: '',
+    art2: '',
+    art3: '',
+  });
+
   const nombre = `${agente.apellido ?? ''} ${agente.nombre ?? ''}`.trim();
 
   useEffect(() => {
@@ -55,7 +63,6 @@ function DocModal({ agente, doc, onClose }: {
       .finally(() => setLoadingDatos(false));
   }, [doc.id, agente.dni]);
 
-  // Cuando iomaDatos está listo, carga el preview HTML del doc1 real
   useEffect(() => {
     if (doc.id !== 2 || !iomaDatos) return;
     setLoadingPreview(true);
@@ -65,6 +72,34 @@ function DocModal({ agente, doc, onClose }: {
       .catch(() => setPreviewHtml(''))
       .finally(() => setLoadingPreview(false));
   }, [doc.id, iomaDatos, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 11) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/cedula/datos?dni=${agente.dni}`)
+      .then(r => setCedulaDatos(r?.data ?? null))
+      .catch(() => setCedulaDatos(null))
+      .finally(() => setLoadingDatos(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 11 || !cedulaDatos) return;
+    setLoadingPreview(true);
+    const qs = new URLSearchParams({
+      dni: String(agente.dni),
+      tipoNotif: cedulaFields.tipoNotif,
+      vistoText: cedulaFields.vistoText,
+      considerandoText: cedulaFields.considerandoText,
+      art1: cedulaFields.art1,
+      art2: cedulaFields.art2,
+      art3: cedulaFields.art3,
+    }).toString();
+    apiFetchBlob(`/certificados/cedula/preview?${qs}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, cedulaDatos, cedulaFields, agente.dni]);
 
   const descargarDocxIoma = async () => {
     setDescargando(true);
@@ -82,6 +117,27 @@ function DocModal({ agente, doc, onClose }: {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       toast.error('Error al generar IOMA: ' + (e?.message || 'Error'));
+    } finally {
+      setDescargando(false);
+    }
+  };
+
+  const descargarDocxCedula = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/cedula', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni, ...cedulaFields }),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || `cedula_${agente.dni}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error('Error al generar Cedula: ' + (e?.message || 'Error'));
     } finally {
       setDescargando(false);
     }
@@ -107,11 +163,9 @@ function DocModal({ agente, doc, onClose }: {
     setTimeout(() => { w.print(); }, 400);
   };
 
-  // ── Preview del documento (hoja blanca) ──
   const renderPreview = () => {
-    // Doc 2 IOMA — implementado
     if (doc.id === 2) {
-      if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>⏳ Cargando documento…</p>;
+      if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando documento...</p>;
       if (!iomaDatos)   return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
       if (!previewHtml) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>;
       return (
@@ -123,14 +177,69 @@ function DocModal({ agente, doc, onClose }: {
       );
     }
 
-    // Docs no implementados — "En proceso"
+    if (doc.id === 11) {
+      const inp: React.CSSProperties = {
+        width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
+        fontSize: '0.83rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8,
+      };
+      const lbl: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: 2, display: 'block' };
+      const area: React.CSSProperties = { ...inp, resize: 'vertical', minHeight: 56 };
+
+      if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando datos del agente...</p>;
+      if (!cedulaDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+
+      const setF = (key: keyof typeof cedulaFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setCedulaFields(prev => ({ ...prev, [key]: e.target.value }));
+
+      return (
+        <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
+          <div style={{ width: 260, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Datos del agente
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 4 }}><strong>{cedulaDatos.apellidoNombre}</strong></div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 2 }}>{cedulaDatos.domicilio} {cedulaDatos.numeroDom}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 2 }}>Piso: {cedulaDatos.piso || '-'}  Dpto: {cedulaDatos.depto || '-'}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 12 }}>{cedulaDatos.localidad}  CP {cedulaDatos.cp || '-'}</div>
+
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', marginBottom: 12 }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Completar
+            </div>
+            <label style={lbl}>Se le notifica</label>
+            <input style={inp} value={cedulaFields.tipoNotif} onChange={setF('tipoNotif')} placeholder="la Resolucion N..." />
+            <label style={lbl}>VISTO</label>
+            <textarea style={area} value={cedulaFields.vistoText} onChange={setF('vistoText')} placeholder="Expediente N..." />
+            <label style={lbl}>CONSIDERANDO</label>
+            <textarea style={area} value={cedulaFields.considerandoText} onChange={setF('considerandoText')} placeholder="Que..." />
+            <label style={lbl}>Articulo 1</label>
+            <textarea style={area} value={cedulaFields.art1} onChange={setF('art1')} placeholder="Texto del articulo..." />
+            <label style={lbl}>Articulo 2</label>
+            <textarea style={area} value={cedulaFields.art2} onChange={setF('art2')} placeholder="Texto del articulo..." />
+            <label style={lbl}>Articulo 3</label>
+            <textarea style={area} value={cedulaFields.art3} onChange={setF('art3')} placeholder="Texto del articulo..." />
+          </div>
+
+          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+            {loadingPreview
+              ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
+              : previewHtml
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview Cedula" />
+                : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>
+            }
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-        <div style={{ fontSize: '2.2rem', marginBottom: 10 }}>🔧</div>
+        <div style={{ fontSize: '2.2rem', marginBottom: 10 }}>&#x1F6A7;</div>
         <div style={{ fontWeight: 700, fontSize: '1rem', color: '#92400e', marginBottom: 6 }}>En proceso</div>
         <div style={{ fontSize: '0.82rem', color: '#78350f' }}>
-          El documento <strong>{doc.label}</strong> está en desarrollo.<br />
-          Próximamente disponible con generación automática.
+          El documento <strong>{doc.label}</strong> esta en desarrollo.<br />
+          Proximamente disponible con generacion automatica.
         </div>
       </div>
     );
@@ -144,43 +253,56 @@ function DocModal({ agente, doc, onClose }: {
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 16, padding: 24, maxWidth: 860, width: '100%',
+        borderRadius: 16, padding: 24, maxWidth: doc.id === 11 ? 1100 : 860, width: '100%',
         maxHeight: '95vh', display: 'flex', flexDirection: 'column',
       }}>
-        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: '1rem' }}>{doc.label}</div>
-            <div className="muted" style={{ fontSize: '0.78rem', marginTop: 2 }}>{nombre} — DNI {agente.dni}</div>
+            <div className="muted" style={{ fontSize: '0.78rem', marginTop: 2 }}>{nombre} &mdash; DNI {agente.dni}</div>
           </div>
-          <button className="btn" onClick={onClose} style={{ padding: '2px 10px', flexShrink: 0 }}>✕</button>
+          <button className="btn" onClick={onClose} style={{ padding: '2px 10px', flexShrink: 0 }}>X</button>
         </div>
 
-        {/* Preview */}
         <div style={{
-          borderRadius: 8, overflowY: 'auto', flex: 1,
+          borderRadius: 8, overflow: doc.id === 11 ? 'hidden' : 'auto', flex: 1,
           boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
-          background: doc.implementado ? '#fff' : '#fffbeb',
-          border: doc.implementado ? 'none' : '1px solid #fcd34d',
+          background: doc.implementado ? (doc.id === 11 ? '#f9fafb' : '#fff') : '#fffbeb',
+          border: doc.implementado ? (doc.id === 11 ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
         }}>
           {renderPreview()}
         </div>
 
-        {/* Botones */}
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           {doc.id === 2 && (
             <>
               <button className="btn" onClick={descargarDocxIoma} disabled={descargando || !iomaDatos}
                 style={{ background: '#7c3aed', color: '#fff' }}>
-                {descargando ? '⏳ Generando…' : '☁ Descargar DOCX'}
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
               </button>
               <button className="btn" onClick={imprimirDoc} disabled={!iomaDatos}
                 style={{ background: '#0369a1', color: '#fff' }}>
-                🖨️ Imprimir
+                Imprimir
               </button>
               <button className="btn" onClick={exportarPdf} disabled={!iomaDatos}
                 style={{ background: '#dc2626', color: '#fff' }}>
-                📕 PDF
+                PDF
+              </button>
+            </>
+          )}
+          {doc.id === 11 && (
+            <>
+              <button className="btn" onClick={descargarDocxCedula} disabled={descargando || !cedulaDatos}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>
+                Imprimir
+              </button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>
+                PDF
               </button>
             </>
           )}
@@ -188,7 +310,7 @@ function DocModal({ agente, doc, onClose }: {
         </div>
         {doc.implementado && (
           <div className="muted" style={{ fontSize: '0.72rem', marginTop: 8 }}>
-            Modelo orientativo. Completar según requerimiento antes de imprimir.
+            Modelo orientativo. Completar segun requerimiento antes de imprimir.
           </div>
         )}
       </div>
@@ -196,7 +318,6 @@ function DocModal({ agente, doc, onClose }: {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 export function RedaccionPage() {
   const toast = useToast();
   const [searchType, setSearchType] = useState<'dni' | 'nombre'>('dni');
@@ -207,7 +328,7 @@ export function RedaccionPage() {
   const [activeDoc, setActiveDoc] = useState<typeof DOCS[0] | null>(null);
 
   const buscar = useCallback(async () => {
-    if (!query.trim()) { toast.error('Ingresá un valor'); return; }
+    if (!query.trim()) { toast.error('Ingresa un valor'); return; }
     setLoading(true);
     setMatches([]);
     setSelected(null);
@@ -217,18 +338,15 @@ export function RedaccionPage() {
         const r = await apiFetch<any>(`/personal/${query.trim()}`);
         if (r?.data) data = [r.data];
         if (!data.length) {
-          // fallback agentexdni1
           const r2 = await apiFetch<any>(`/agentexdni1?dni=${query.trim()}&limit=5&page=1`);
           data = r2?.data || [];
         }
       } else {
-        // Usar cache local — /personal/search tiene bug SQL en el backend
         data = await searchPersonal(query.trim());
       }
 
       if (!data.length) { toast.error('Sin resultados'); return; }
 
-      // Enriquecer con datos laborales si es posible
       const enriched = await Promise.all(data.slice(0, 5).map(async (p: any) => {
         try {
           const ra = await apiFetch<any>(`/agentes?dni=${p.dni}&limit=1&page=1`);
@@ -239,7 +357,7 @@ export function RedaccionPage() {
 
       setMatches([...enriched, ...rest]);
       if (data.length === 1) setSelected(enriched[0]);
-      else toast.ok(`${data.length} resultado(s) — seleccioná uno`);
+      else toast.ok(`${data.length} resultado(s) - selecciona uno`);
     } catch (e: any) {
       toast.error('Error', e?.message);
     } finally {
@@ -248,10 +366,9 @@ export function RedaccionPage() {
   }, [query, searchType, toast]);
 
   return (
-    <Layout title="Redacción" showBack>
-      {/* ── Búsqueda ── */}
+    <Layout title="Redaccion" showBack>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ marginBottom: 8 }}><strong>✍️ Redacción de documentos</strong></div>
+        <div style={{ marginBottom: 8 }}><strong>Redaccion de documentos</strong></div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Buscar por</div>
@@ -264,25 +381,24 @@ export function RedaccionPage() {
           </div>
           <div style={{ flex: '1 1 200px' }}>
             <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>
-              {searchType === 'dni' ? 'Número de DNI' : 'Apellido o nombre'}
+              {searchType === 'dni' ? 'Numero de DNI' : 'Apellido o nombre'}
             </div>
             <input className="input" value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && buscar()}
-              placeholder={searchType === 'dni' ? 'Ej: 25123456' : 'Ej: García'}
+              placeholder={searchType === 'dni' ? 'Ej: 25123456' : 'Ej: Garcia'}
             />
           </div>
           <button className="btn" style={{ background: '#2563eb', color: '#fff', height: 38 }}
             disabled={loading} onClick={buscar}>
-            {loading ? '⏳' : '🔍 Buscar'}
+            {loading ? '...' : 'Buscar'}
           </button>
         </div>
       </div>
 
-      {/* ── Lista de coincidencias ── */}
       {matches.length > 1 && !selected && (
         <div className="card" style={{ marginBottom: 12 }}>
-          <div style={{ marginBottom: 8, fontWeight: 600 }}>{matches.length} resultados — seleccioná un agente</div>
+          <div style={{ marginBottom: 8, fontWeight: 600 }}>{matches.length} resultados &mdash; selecciona un agente</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {matches.map((a, i) => (
               <div key={i} onClick={() => setSelected(a)}
@@ -303,7 +419,6 @@ export function RedaccionPage() {
         </div>
       )}
 
-      {/* ── Agente seleccionado ── */}
       {selected && (
         <>
           <div className="card" style={{ marginBottom: 12 }}>
@@ -312,25 +427,24 @@ export function RedaccionPage() {
                 <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{selected.apellido}, {selected.nombre}</div>
                 <div className="muted" style={{ fontSize: '0.8rem', marginTop: 3 }}>
                   DNI {selected.dni}
-                  {selected.cuil ? ` · CUIL ${selected.cuil}` : ''}
-                  {selected.email ? ` · ${selected.email}` : ''}
-                  {selected.telefono ? ` · Tel: ${selected.telefono}` : ''}
-                  {selected.fecha_ingreso ? ` · Ingreso: ${new Date(selected.fecha_ingreso).toLocaleDateString('es-AR')}` : ''}
-                  {selected.estado_empleo ? ` · ${selected.estado_empleo}` : ''}
-                  {selected.sector_id ? ` · Sector: ${selected.sector_id}` : ''}
+                  {selected.cuil ? ` - CUIL ${selected.cuil}` : ''}
+                  {selected.email ? ` - ${selected.email}` : ''}
+                  {selected.telefono ? ` - Tel: ${selected.telefono}` : ''}
+                  {selected.fecha_ingreso ? ` - Ingreso: ${new Date(selected.fecha_ingreso).toLocaleDateString('es-AR')}` : ''}
+                  {selected.estado_empleo ? ` - ${selected.estado_empleo}` : ''}
+                  {selected.sector_id ? ` - Sector: ${selected.sector_id}` : ''}
                 </div>
               </div>
               <button className="btn" onClick={() => { setSelected(null); if (matches.length <= 1) setMatches([]); }}
-                style={{ fontSize: '0.78rem' }}>✕ Cambiar</button>
+                style={{ fontSize: '0.78rem' }}>Cambiar</button>
             </div>
           </div>
 
-          {/* ── Grid de documentos ── */}
           <div className="card">
             <div style={{ marginBottom: 14 }}>
-              <strong>Seleccioná el documento</strong>
+              <strong>Selecciona el documento</strong>
               <div className="muted" style={{ fontSize: '0.76rem', marginTop: 2 }}>
-                Hacé clic para abrir el modelo con los datos del agente
+                Haz clic para abrir el modelo con los datos del agente
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
@@ -355,7 +469,7 @@ export function RedaccionPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'rgba(255,255,255,0.4)' }}>#{doc.id}</span>
                     {doc.implementado
-                      ? <span style={{ fontSize: '0.62rem', background: '#7c3aed', color: '#fff', padding: '1px 7px', borderRadius: 99, fontWeight: 600 }}>✓ Listo</span>
+                      ? <span style={{ fontSize: '0.62rem', background: '#7c3aed', color: '#fff', padding: '1px 7px', borderRadius: 99, fontWeight: 600 }}>Listo</span>
                       : <span style={{ fontSize: '0.62rem', background: '#92400e', color: '#fef3c7', padding: '1px 7px', borderRadius: 99 }}>En proceso</span>
                     }
                   </div>
@@ -369,18 +483,16 @@ export function RedaccionPage() {
         </>
       )}
 
-      {/* ── Estado vacío ── */}
       {!selected && matches.length === 0 && (
         <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
-          <div style={{ fontSize: '3rem', marginBottom: 10 }}>✍️</div>
-          <div style={{ fontWeight: 600, fontSize: '1rem' }}>Buscá un agente para comenzar</div>
+          <div style={{ fontSize: '3rem', marginBottom: 10 }}>&#x1F4C4;</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>Busca un agente para comenzar</div>
           <div className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>
-            Buscá por DNI o apellido. Una vez seleccionado el agente, elegís el número de documento para generar el modelo.
+            Busca por DNI o apellido. Una vez seleccionado el agente, elige el documento para generar el modelo.
           </div>
         </div>
       )}
 
-      {/* ── Modal ── */}
       {activeDoc && selected && (
         <DocModal agente={selected} doc={activeDoc} onClose={() => setActiveDoc(null)} />
       )}

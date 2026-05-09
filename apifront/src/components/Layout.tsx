@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
+import { useKiosk } from '../hooks/useKiosk';
 
 export function Layout({ title, children, showBack }: {
   title: string;
@@ -11,6 +12,7 @@ export function Layout({ title, children, showBack }: {
   const nav = useNavigate();
   const loc = useLocation();
   const { session, logout, hasPerm } = useAuth();
+  const { isKiosk } = useKiosk();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -130,7 +132,7 @@ export function Layout({ title, children, showBack }: {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', flexShrink: 0 }}>
-            {isGestionTurnos ? (
+            {isKiosk ? null : isGestionTurnos ? (
               <>
                 {navLink('/app/examen-ingreso', '🩺 Examen de Ingreso')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
@@ -226,6 +228,7 @@ export function Layout({ title, children, showBack }: {
                       <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
                         Herramientas
                       </div>
+                      {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
                       {navLink('/app/buscador', '🔍 Buscador')}
                       {navLink('/app/comparador', '⚖️ Comparador')}
                       {navLink('/app/legajo', '📋 Legajo')}

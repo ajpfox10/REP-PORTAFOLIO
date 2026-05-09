@@ -32,6 +32,7 @@ interface ReconocimientoMedico {
   tipo: string | null;
   resultado: string | null;
   observaciones: string | null;
+  procesado: boolean | number | null;
   created_at: string;
   updated_at: string;
   created_by_nombre: string | null;
@@ -240,6 +241,8 @@ export function SaludLaboralPage() {
   const { canCrud, hasPerm, session } = useAuth();
   const toast = useToast();
   const isAdmin = hasPerm('crud:*:*');
+  // Visible a admin y user (cualquier permiso de tabla comodín), NO a salud_laboral (permisos tabla-específicos)
+  const canSeeProcesado = hasPerm('crud:*:read');
 
   const [tab, setTab] = useState<Tab>('reconocimientos');
 
@@ -257,6 +260,7 @@ export function SaludLaboralPage() {
   const [editingRec, setEditingRec] = useState<ReconocimientoMedico | null>(null);
   const [formRec, setFormRec] = useState({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '', ausentismo: false });
   const [savingRec, setSavingRec] = useState(false);
+  const [procesadoLoading, setProcesadoLoading] = useState<number | null>(null);
 
   // ── Exámenes ──
   const [allExams, setAllExams] = useState<ExamenAnual[]>([]);
@@ -366,6 +370,25 @@ export function SaludLaboralPage() {
       loadAllRecs();
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setSavingRec(false); }
+  };
+
+  const handleToggleProcesado = async (r: ReconocimientoMedico) => {
+    setProcesadoLoading(r.id);
+    try {
+      const nuevoValor = r.procesado ? 0 : 1;
+      await apiFetch(`/reconocimientos_medicos/${r.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          procesado: nuevoValor,
+          updated_by: auditInfo.id,
+          updated_by_email: auditInfo.email,
+          updated_by_nombre: auditInfo.nombre,
+        }),
+      });
+      toast.ok(nuevoValor ? '✓ Marcado como procesado' : 'Desmarcado', '');
+      loadAllRecs();
+    } catch (e: any) { toast.error('Error', e?.message); }
+    finally { setProcesadoLoading(null); }
   };
 
   const startEditRec = (r: ReconocimientoMedico) => {
@@ -670,23 +693,52 @@ export function SaludLaboralPage() {
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={tbl}>
-                  <thead><tr>{['DNI','Apellido y Nombre','Desde','Hasta','Días','Tipo','Resultado','Observaciones','Cargado por','Modificado por',''].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                  <thead>
+                    <tr>
+                      {['DNI','Apellido y Nombre','Desde','Hasta','Días','Tipo','Resultado','Observaciones','Cargado por','Mod. por'].map(h => <th key={h} style={th}>{h}</th>)}
+                      {canSeeProcesado && <th style={{ ...th, textAlign: 'center' }}>Procesado</th>}
+                      <th style={th}></th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {recs.map(r => {
                       const editable = isAdmin || isWithin24h(r.created_at);
                       return (
                         <tr key={r.id}>
-                          <td style={td}><strong>{r.dni}</strong></td>
-                          <td style={td}>{getNombreRec(r.dni)}</td>
-                          <td style={td}>{fmt(r.fecha_desde)}</td>
-                          <td style={td}>{fmt(r.fecha_hasta)}</td>
-                          <td style={td}>{r.cantidad_dias != null ? <span style={{ fontWeight: 700, color: '#10b981' }}>{r.cantidad_dias}d</span> : <span className="muted">—</span>}</td>
-                          <td style={td}>{r.tipo || <span className="muted">—</span>}</td>
-                          <td style={td}>{r.resultado || <span className="muted">—</span>}</td>
-                          <td style={{ ...td, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || <span className="muted">—</span>}</td>
-                          <td style={td}><div style={{ fontSize: '0.75rem' }}><div>{r.created_by_nombre || r.created_by_email || '—'}</div><div className="muted">{fmt(r.created_at)}</div></div></td>
-                          <td style={td}><div style={{ fontSize: '0.75rem' }}>{r.updated_by_nombre || r.updated_by_email ? <><div>{r.updated_by_nombre || r.updated_by_email}</div><div className="muted">{fmt(r.updated_at)}</div></> : <span className="muted">—</span>}</div></td>
-                          <td style={td}>{canCrud('reconocimientos_medicos','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditRec(r)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}><strong>{r.dni}</strong></td>
+                          <td style={{ ...td, minWidth: 160 }}>{getNombreRec(r.dni)}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmt(r.fecha_desde)}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmt(r.fecha_hasta)}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'center' }}>{r.cantidad_dias != null ? <span style={{ fontWeight: 700, color: '#10b981' }}>{r.cantidad_dias}d</span> : <span className="muted">—</span>}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{r.tipo || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{r.resultado || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, minWidth: 110 }}><div style={{ fontSize: '0.72rem' }}><div>{r.created_by_nombre || r.created_by_email || '—'}</div><div className="muted">{fmt(r.created_at)}</div></div></td>
+                          <td style={{ ...td, minWidth: 110 }}><div style={{ fontSize: '0.72rem' }}>{r.updated_by_nombre || r.updated_by_email ? <><div>{r.updated_by_nombre || r.updated_by_email}</div><div className="muted">{fmt(r.updated_at)}</div></> : <span className="muted">—</span>}</div></td>
+                          {canSeeProcesado && (
+                            <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <button
+                                className="btn"
+                                type="button"
+                                title={r.procesado ? 'Marcar como no procesado' : 'Marcar como procesado'}
+                                disabled={procesadoLoading === r.id}
+                                onClick={() => handleToggleProcesado(r)}
+                                style={{
+                                  fontSize: '0.85rem',
+                                  padding: '3px 10px',
+                                  background: r.procesado ? 'rgba(16,185,129,0.2)' : 'transparent',
+                                  border: r.procesado ? '1px solid rgba(16,185,129,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                                  color: r.procesado ? '#10b981' : 'rgba(255,255,255,0.4)',
+                                  borderRadius: 6,
+                                  cursor: 'pointer',
+                                  minWidth: 36,
+                                }}
+                              >
+                                {procesadoLoading === r.id ? '…' : r.procesado ? '✓' : '○'}
+                              </button>
+                            </td>
+                          )}
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{canCrud('reconocimientos_medicos','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditRec(r)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}</td>
                         </tr>
                       );
                     })}
