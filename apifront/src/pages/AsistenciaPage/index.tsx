@@ -168,6 +168,9 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
   XLSX.writeFile(wb, `asistencia_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
+// "2026-04-11" → "26-04-11"
+const fmtFecha = (s: string) => (s && s.length === 10 && s[4] === "-" ? s.slice(2) : s);
+
 // ── Panel editor de mapeo ─────────────────────────────────────────────────────
 function MapeoEditor({
   mapeo,
@@ -1512,11 +1515,11 @@ export function AsistenciaPage() {
                         </td>
 
                         <td style={{ padding: "4px 6px", color: "var(--muted)", fontFamily: "monospace", fontSize: "0.7rem", whiteSpace: "nowrap" as const }}>
-                          {r.fecha_desde_ministerio}
+                          {fmtFecha(r.fecha_desde_ministerio)}
                         </td>
 
                         <td style={{ padding: "4px 6px", color: "var(--muted)", fontFamily: "monospace", fontSize: "0.7rem", whiteSpace: "nowrap" as const }}>
-                          {r.fecha_hasta_ministerio}
+                          {fmtFecha(r.fecha_hasta_ministerio)}
                         </td>
 
                         <td style={{ padding: "4px 6px", color: "#7dd3fc", fontSize: "0.72rem", wordBreak: "break-word" as const, whiteSpace: "normal" as const }}>
@@ -1524,11 +1527,11 @@ export function AsistenciaPage() {
                         </td>
 
                         <td style={{ padding: "4px 6px", color: "var(--muted)", fontFamily: "monospace", fontSize: "0.7rem", whiteSpace: "nowrap" as const }}>
-                          {r.fecha_desde_siap}
+                          {fmtFecha(r.fecha_desde_siap)}
                         </td>
 
                         <td style={{ padding: "4px 6px", color: "var(--muted)", fontFamily: "monospace", fontSize: "0.7rem", whiteSpace: "nowrap" as const }}>
-                          {r.fecha_hasta_siap}
+                          {fmtFecha(r.fecha_hasta_siap)}
                         </td>
 
                         <td style={{ padding: "4px 6px" }}>

@@ -82,6 +82,7 @@ const TIPOS_DOCUMENTO = [
   { value: 'jubilacion',           label: 'Documentación Jubilación',        icon: '🏦' },
   { value: 'ioma',                 label: 'Documentación IOMA',              icon: '🏥' },
   { value: 'foto_carnet',          label: 'Foto Carnet',                     icon: '📷' },
+  { value: 'cert_rotacion',        label: 'Certificación de rotación',       icon: '🔄' },
   { value: 'otro',                 label: 'Otro documento',                  icon: '📦' },
 ];
 

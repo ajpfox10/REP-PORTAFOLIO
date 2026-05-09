@@ -46,6 +46,7 @@ import { buildFicheroRouter } from '../routes/fichero.routes';
 import { buildExamenIngresoRouter } from '../routes/examenIngreso.routes';
 import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
 import { buildBajasRouter } from '../routes/bajas.routes';
+import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
@@ -84,14 +85,25 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.get(`${apiPrefix}/health`, (_req, res) => res.json({ ok: true, status: 'up' }));
 
   // ── My-IP (público — usado por el frontend para detección de kiosco) ───────
-  app.get(`${apiPrefix}/my-ip`, (req, res) => {
+  app.get(`${apiPrefix}/my-ip`, async (req, res) => {
     const forwarded = req.headers['x-forwarded-for'];
     const ip =
       (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0].trim()
       || req.socket.remoteAddress
       || req.ip
       || '';
-    res.json({ ok: true, ip });
+
+    let hostname = '';
+    if (ip) {
+      try {
+        const { reverse } = await import('dns/promises');
+        const names = await reverse(ip);
+        // Tomamos solo la parte antes del primer punto (nombre de PC sin dominio)
+        hostname = (names[0] ?? '').split('.')[0].toLowerCase();
+      } catch { /* sin PTR record — hostname queda vacío */ }
+    }
+
+    res.json({ ok: true, ip, hostname });
   });
 
   app.get(`${apiPrefix}/ready`, async (_req, res) => {
@@ -140,6 +152,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/examen-ingreso`,   ...protect, buildExamenIngresoRouter(sequelize));
   app.use(`${apiPrefix}/accidentes-punzo`, ...protect, buildAccidentesPunzoRouter(sequelize));
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
+  app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)

@@ -80,52 +80,6 @@ function normMapeo(mapeo: Record<string, string[]>): Record<string, string[]> {
   return out;
 }
 
-// Divide novedades compuestas solo cuando la barra está usada como separador con espacios.
-// No rompe textos legales como "Y/O" o "MAMARIO/PROSTATA/COLON".
-function splitNovedadesCompuestas(v: any): string[] {
-  const base = normNovedad(v);
-  if (!base) return [];
-  return Array.from(new Set([
-    base,
-    ...base.split(/\s+\/\s+/).map(normNovedad),
-  ].filter(Boolean)));
-}
-
-function mergeMapeo(
-  base: Record<string, string[]>,
-  extra: Record<string, string[]>,
-): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-
-  const add = (k: string, arr: string[]) => {
-    const kk = normNovedad(k);
-    if (!kk) return;
-    const actuales = out[kk] || [];
-    out[kk] = Array.from(new Set([
-      kk,
-      ...actuales,
-      ...(arr || []).map(normNovedad).filter(Boolean),
-    ]));
-  };
-
-  for (const [k, arr] of Object.entries(base || {})) add(k, arr);
-  for (const [k, arr] of Object.entries(extra || {})) add(k, arr);
-
-  return out;
-}
-
-function equivsMinisterio(mapeoN: Record<string, string[]>, novMinisterioNorm: string): string[] {
-  return Array.from(new Set([
-    novMinisterioNorm,
-    ...(mapeoN[novMinisterioNorm] || []),
-  ].filter(Boolean)));
-}
-
-function novedadesConectan(equivs: string[], novSiap: any): boolean {
-  const siapParts = splitNovedadesCompuestas(novSiap);
-  return equivs.some(e => siapParts.includes(normNovedad(e)));
-}
-
 function getDir(): string {
   const dir = (env as any).EXCEL_ASISTENCIA_DIR;
   if (!dir) throw new Error('Falta EXCEL_ASISTENCIA_DIR en .env');
@@ -280,27 +234,16 @@ function getMapeoFile(dir: string) {
 
 function loadMapeo(dir: string): Record<string, string[]> {
   const fp = getMapeoFile(dir);
-
-  if (!fs.existsSync(fp)) {
-    return DEFAULT_MAPEO;
-  }
-
+  if (!fs.existsSync(fp)) return DEFAULT_MAPEO;
   try {
     const raw = fs.readFileSync(fp, 'utf8');
     const json = JSON.parse(raw);
-
-    if (json && typeof json === 'object' && !Array.isArray(json)) {
-      // El JSON del editor NO debe pisar el mapeo base: se fusiona.
-      // Así no se pierden equivalencias críticas para detectar RANGO_DISTINTO.
-      return mergeMapeo(DEFAULT_MAPEO, json);
-    }
-
+    if (json && typeof json === 'object') return json;
     return DEFAULT_MAPEO;
   } catch {
     return DEFAULT_MAPEO;
   }
 }
-
 
 function saveMapeo(dir: string, mapeo: Record<string, string[]>) {
   const fp = getMapeoFile(dir);
@@ -383,51 +326,6 @@ function clipRowToPeriod(row: any, period: { start: Date; end: Date }): any | nu
   const clippedHasta = e > pe ? pe : e;
 
   return { ...row, desde: clippedDesde, hasta: clippedHasta };
-}
-
-function clipRowToPeriodForCompare(row: any, period: { start: Date; end: Date }): any | null {
-  let desde = parseDate(row?.desde);
-  let hasta = parseDate(row?.hasta) ?? desde;
-
-  if (!desde && hasta) desde = hasta;
-  if (!desde || !hasta) return null;
-
-  const s = toUTCMidnight(desde);
-  const e = toUTCMidnight(hasta);
-  const ps = toUTCMidnight(period.start);
-  const pe = toUTCMidnight(period.end);
-
-  // Si no toca el mes, se descarta.
-  if (e < ps || s > pe) return null;
-
-  // Se compara SOLO la parte del rango que cae dentro del mes solicitado,
-  // pero se conservan las fechas originales para mostrar y exportar.
-  const cmpDesde = s < ps ? ps : s;
-  const cmpHasta = e > pe ? pe : e;
-
-  return {
-    ...row,
-    desdeOriginal: desde,
-    hastaOriginal: hasta,
-    cmpDesde,
-    cmpHasta,
-  };
-}
-
-function getCmpDesde(row: any): Date | null {
-  return parseDate(row?.cmpDesde) ?? parseDate(row?.desde);
-}
-
-function getCmpHasta(row: any): Date | null {
-  return parseDate(row?.cmpHasta) ?? parseDate(row?.hasta) ?? getCmpDesde(row);
-}
-
-function getOriginalDesde(row: any): Date | null {
-  return parseDate(row?.desdeOriginal) ?? parseDate(row?.desde);
-}
-
-function getOriginalHasta(row: any): Date | null {
-  return parseDate(row?.hastaOriginal) ?? parseDate(row?.hasta) ?? getOriginalDesde(row);
 }
 async function parseMinisterio(fp: string): Promise<any[]> {
   const wb = new ExcelJS.Workbook();
@@ -595,64 +493,57 @@ function compareRows(
       };
     }
 
-    const equivs = equivsMinisterio(mapeoN, novN);
+    const equivs = mapeoN[novN] || [];
 
-    const minDesde = getCmpDesde(min);
-    const minHasta = getCmpHasta(min);
+    const minDesde = parseDate((min as any).desde);
+    const minHasta = parseDate((min as any).hasta) ?? minDesde;
 
-    let vioSiapConNovedadMapeada = false;
-    let vioRangoDistinto = false;
-    let vioSolape = false;
-    let bestCandidate: any = null;
-
+     let vioSiapConNovedadMapeada = false;
+     let vioRangoDistinto = false;
+     let vioSolape = false;
     const match = (siapByDni[dniMin] || []).find((s: any) => {
-      if (!novedadesConectan(equivs, s.novedad)) return false;
-      vioSiapConNovedadMapeada = true;
+      if (!equivs.includes(normNovedad(s.novedad))) return false;
+       vioSiapConNovedadMapeada = true;
 
-      const sDesde = getCmpDesde(s);
-      const sHasta = getCmpHasta(s);
+      const sDesde = parseDate(s.desde);
+      const sHasta = parseDate(s.hasta) ?? sDesde;
 
       // Si faltan fechas, NO matcheamos (evita falsos coincidentes)
       if (!minDesde || !minHasta || !sDesde || !sHasta) return false;
 
-      // Igualdad exacta de rangos (desde y hasta). Si conecta por novedad pero no por fecha,
-      // debe quedar como inconsistencia RANGO_DISTINTO, no desaparecer.
+      // Igualdad exacta de rangos (desde y hasta)
       const ok =
-        toUTCMidnight(minDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
-        toUTCMidnight(minHasta).getTime() === toUTCMidnight(sHasta).getTime();
+  toUTCMidnight(minDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
+  toUTCMidnight(minHasta).getTime() === toUTCMidnight(sHasta).getTime();
 
-      if (!ok) {
-        if (!bestCandidate) bestCandidate = s;
-        vioRangoDistinto = true;
-        if (overlap(minDesde, minHasta, sDesde, sHasta)) vioSolape = true;
-      }
+	if (!ok) {
+	  vioRangoDistinto = true;
+	  if (overlap(minDesde, minHasta, sDesde, sHasta)) vioSolape = true;
+	}
 
-      return ok;
+	return ok;
     });
-
-    const motivo =
+     const siapRowsForDni = siapByDni[dniMin] || [];
+      const motivo =
       match ? '' :
-      vioRangoDistinto ? 'RANGO_DISTINTO' :
-      vioSolape ? 'SOLAPA_PERO_NO_IGUAL' :
-      vioSiapConNovedadMapeada ? 'MAPEO_OK_PERO_SIN_MATCH' :
-      'SIAP_SIN_NOVEDAD_EQUIVALENTE';
-
-    const displaySiap = match ?? bestCandidate;
-
+      equivs.length === 0 ? 'SIN_MAPEO_PARA_NOVEDAD_MINISTERIO' :
+        vioSolape ? 'SOLAPA_PERO_NO_IGUAL' :
+     vioRangoDistinto ? 'RANGO_DISTINTO' :
+     vioSiapConNovedadMapeada ? 'MAPEO_OK_PERO_SIN_MATCH' :
+    'SIAP_SIN_NOVEDAD_EQUIVALENTE';  
     return {
       dni: (min as any).dni, nombre: (min as any).nombre,
       novedad_ministerio: nov,
-      fecha_desde_ministerio: dateToStr(getOriginalDesde(min)),
-      fecha_hasta_ministerio: dateToStr(getOriginalHasta(min)),
-      novedad_siap: displaySiap ? displaySiap.novedad : '—',
-      fecha_desde_siap: displaySiap ? dateToStr(getOriginalDesde(displaySiap)) : '—',
-      fecha_hasta_siap: displaySiap ? dateToStr(getOriginalHasta(displaySiap)) : '—',
+      fecha_desde_ministerio: dateToStr(minDesde),
+      fecha_hasta_ministerio: dateToStr(minHasta),
+      novedad_siap: match ? match.novedad : (equivs.length === 0 ? '(sin mapeo)' : '—'),
+      fecha_desde_siap: match ? dateToStr(parseDate(match.desde)) : '—',
+      fecha_hasta_siap: match ? dateToStr(parseDate(match.hasta) ?? parseDate(match.desde)) : '—',
       estado: match ? 'COINCIDENTE' : 'NO COINCIDENTE',
       motivo,
     };
   });
 }
-
 
 
 /**
@@ -688,15 +579,15 @@ function compareRowsSiapVsMinisterio(
     const novS  = String((s as any).novedad || '').trim();
     const novSN = normNovedad(novS);
     const justS = String((s as any).justificado || '').trim().toUpperCase(); // "SI" | "NO" | ""
-    const sDesde = getCmpDesde(s);
-    const sHasta = getCmpHasta(s);
+    const sDesde = parseDate((s as any).desde);
+    const sHasta = parseDate((s as any).hasta) ?? sDesde;
 
     const baseRow = {
       dni:              (s as any).dni,
       nombre:           (s as any).nombre,
       novedad_siap:     novS,
-      fecha_desde_siap: dateToStr(getOriginalDesde(s)),
-      fecha_hasta_siap: dateToStr(getOriginalHasta(s)),
+      fecha_desde_siap: dateToStr(sDesde),
+      fecha_hasta_siap: dateToStr(sHasta),
       upa,
       justificado:      justS,
     };
@@ -704,11 +595,10 @@ function compareRowsSiapVsMinisterio(
     if (skipNovedades.some(sk => novSN.includes(normNovedad(sk)))) {
       return { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—', estado: 'OMITIDO' };
     }
-
-    let vioMismoMapeo = false;    // el mapeo conecta, pero no se logró match exacto de fecha
+    let vioMinSinMapeo = false;   // el DNI existe, pero hay novedades ministerio sin mapeo
+    let vioMismoMapeo = false;    // el mapeo conecta, pero no se logró match
     let vioRangoDistinto = false; // mapeo conecta, pero rango no idéntico
     let vioSolape = false;
-
     if (!upa || !minByUpaAndDni[upa]) {
       return { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—',
         estado: 'NO COINCIDENTE', motivo: upa ? `Sin archivo ministerio para ${upa}` : 'Sin UPA en SIAP' };
@@ -722,11 +612,18 @@ function compareRowsSiapVsMinisterio(
     const match = mins.find((m: any) => {
       const novM  = String(m.novedad || '').trim();
       const novMN = normNovedad(novM);
-      const equivs = equivsMinisterio(mapeoN, novMN);
+      const equivs = Array.from(new Set([
+      novMN,
+      ...(mapeoN[novMN] || []),
+      ]));
+      const siapParts = [
+      novSN,
+      ...novSN.split(/\s+\/\s+/),
+      ].map(n => normNovedad(n));
 
-      if (!novedadesConectan(equivs, novSN)) return false;
+      if (!equivs.some(e => siapParts.includes(e))) return false;
+
       vioMismoMapeo = true;
-
       // Regla ANUAL COMPLEMENTARIA: usar JUSTIFICADO para distinguir aprobada/denegada
       if (novSN.includes('ANUAL COMPLEMENTARIA')) {
         const minEsDenegada = novMN.includes('DENEGADA');
@@ -734,20 +631,19 @@ function compareRowsSiapVsMinisterio(
         if (justS === 'SI' && minEsDenegada)  return false;
       }
 
-      const mDesde = getCmpDesde(m);
-      const mHasta = getCmpHasta(m);
+      const mDesde = parseDate(m.desde);
+      const mHasta = parseDate(m.hasta) ?? mDesde;
       if (!mDesde || !mHasta || !sDesde || !sHasta) return false;
+
+      if (overlap(mDesde, mHasta, sDesde, sHasta)) vioSolape = true;
 
       const ok =
         toUTCMidnight(mDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
         toUTCMidnight(mHasta).getTime() === toUTCMidnight(sHasta).getTime();
 
-      if (!ok) {
-        if (!bestCandidate) bestCandidate = m;
-        vioRangoDistinto = true;
-        if (overlap(mDesde, mHasta, sDesde, sHasta)) vioSolape = true;
-      }
-
+      // Guardar como mejor candidato: novedad conecta pero fechas difieren
+      if (!ok && !bestCandidate) bestCandidate = m;
+      if (!ok) vioRangoDistinto = true;
       return ok;
     });
 
@@ -757,27 +653,25 @@ function compareRowsSiapVsMinisterio(
       vioRangoDistinto   ? 'RANGO_DISTINTO' :
       vioSolape          ? 'SOLAPA_PERO_NO_IGUAL' :
       vioMismoMapeo      ? 'MAPEO_OK_PERO_SIN_MATCH' :
+      vioMinSinMapeo     ? 'MIN_TIENE_NOVEDAD_SIN_MAPEO' :
                            'MAPEO_NO_ENCUENTRA_EQUIVALENTE';
 
     // Si no hay match exacto pero el DNI existe en Ministerio → mostrar lo que tiene
     const displayMin = match ?? bestCandidate;
-    const novedadesMinTexto = displayMin
-      ? String(displayMin.novedad || '').trim()
-      : mins.length > 0
-        ? [...new Set(mins.map((m: any) => String(m.novedad || '').trim()).filter(Boolean))].join(' / ')
-        : '—';
+    const novedadesMinTexto = mins.length > 0
+      ? [...new Set(mins.map((m: any) => String(m.novedad || '').trim()).filter(Boolean))].join(' / ')
+      : '—';
 
     return {
       ...baseRow,
-      novedad_ministerio:     novedadesMinTexto,
-      fecha_desde_ministerio: displayMin ? dateToStr(getOriginalDesde(displayMin)) : '—',
-      fecha_hasta_ministerio: displayMin ? dateToStr(getOriginalHasta(displayMin)) : '—',
+      novedad_ministerio:     match ? match.novedad : novedadesMinTexto,
+      fecha_desde_ministerio: displayMin ? dateToStr(parseDate(displayMin.desde)) : '—',
+      fecha_hasta_ministerio: displayMin ? dateToStr(parseDate(displayMin.hasta) ?? parseDate(displayMin.desde)) : '—',
       estado: match ? 'COINCIDENTE' : 'NO COINCIDENTE',
       motivo,
     };
   });
 }
-
 export function buildAsistenciaRouter() {
   const router = Router();
 
@@ -951,13 +845,15 @@ export function buildAsistenciaRouter() {
       }
 
       // ── Filtro por período (mes) ──────────────────────────────────────────
-      // Se conservan las fechas originales para mostrar/exportar, pero se agregan
-      // cmpDesde/cmpHasta recortadas al mes para comparar solo el período elegido.
+      // Recorta AMBOS lados (SIAP y Ministerio) al mes seleccionado.
+      // Registros que no pertenecen al mes se descartan; los que cruzan el límite
+      // del mes se recortan a las fechas del período. Así la comparación trabaja
+      // únicamente con datos del mes solicitado.
       const period = parsePeriodoMes(req.body?.periodoMes);
       if (period) {
-        siapRows = siapRows.map(r => clipRowToPeriodForCompare(r, period)).filter(Boolean) as any[];
+        siapRows = siapRows.map(r => clipRowToPeriod(r, period)).filter(Boolean) as any[];
         for (const upa of Object.keys(ministerioMap)) {
-          ministerioMap[upa] = ministerioMap[upa].map(r => clipRowToPeriodForCompare(r, period)).filter(Boolean) as any[];
+          ministerioMap[upa] = ministerioMap[upa].map(r => clipRowToPeriod(r, period)).filter(Boolean) as any[];
         }
         totalMinisterioRows = Object.values(ministerioMap).reduce((acc, rows) => acc + rows.length, 0);
       }
@@ -992,14 +888,6 @@ export function buildAsistenciaRouter() {
         comparado = compareRowsSiapVsMinisterio(siapRows, ministerioMap, mapeo, skipFinal);
       }
 
-      const comparadoCompleto = comparado;
-      // Por defecto esta pantalla devuelve solo errores/inconsistencias.
-      // Si alguna vez necesitás ver todo, mandá { soloErrores: false } desde el front.
-      const soloErrores = req.body?.soloErrores !== false;
-      if (soloErrores) {
-        comparado = comparado.filter((r: any) => r.estado === 'NO COINCIDENTE');
-      }
-
       const siapF = path.parse(siapFile);
 
       return res.json({
@@ -1009,9 +897,9 @@ export function buildAsistenciaRouter() {
           totals: {
             ministerio: totalMinisterioRows,
             siap: siapRows.length,
-            coincidencias: comparadoCompleto.filter(r => r.estado === 'COINCIDENTE').length,
-            no_coinciden:  comparadoCompleto.filter(r => r.estado === 'NO COINCIDENTE').length,
-            omitidos:      comparadoCompleto.filter(r => r.estado === 'OMITIDO').length,
+            coincidencias: comparado.filter(r => r.estado === 'COINCIDENTE').length,
+            no_coinciden:  comparado.filter(r => r.estado === 'NO COINCIDENTE').length,
+            omitidos:      comparado.filter(r => r.estado === 'OMITIDO').length,
           },
           files: {
             ministerioFiles: ministerioFiles.map(m => m.file),
@@ -1793,50 +1681,12 @@ export function buildAsistenciaRouter() {
         dbErr = 'Sin conexión biométrica';
       }
 
-      // ── Horarios del agente ─────────────────────────────────────────────────
-      const DOW_HOR_KEYS = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
-      const horarioPorDow: (string | null)[] = [null, null, null, null, null, null, null];
-      const horariosFilePath2 = req.query.horariosFile
-        ? path.join(dir, String(req.query.horariosFile))
-        : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
-      if (horariosFilePath2 && fs.existsSync(horariosFilePath2)) {
-        const wbH = new ExcelJS.Workbook();
-        await wbH.xlsx.readFile(horariosFilePath2);
-        const wsH = wbH.worksheets[0];
-        if (wsH) {
-          const hdrH: Record<string, number> = {};
-          wsH.getRow(1).eachCell((c: any, col: number) => {
-            const v = normHeader(c?.value ?? '');
-            if (v) hdrH[v] = col;
-          });
-          const colDniH2 = hdrH['nro_documento'] ?? hdrH['nro documento'] ?? hdrH['documento'] ?? 4;
-          const colEnt  = DOW_HOR_KEYS.map(d => hdrH[`${d}_entrada`]       ?? 0);
-          const colCtrl = DOW_HOR_KEYS.map(d => hdrH[`${d}_controlable`]   ?? 0);
-          const parseHoraH = (v: any): string | null => {
-            const s = String(v ?? '').trim();
-            const m = s.match(/^(\d{1,2}):(\d{2})/);
-            return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
-          };
-          const isSIH = (v: any) => String(v ?? '').toUpperCase().trim() === 'SI';
-          wsH.eachRow((r: any, rn: number) => {
-            if (rn === 1) return;
-            if (normDni(r.getCell(colDniH2)?.value) !== dni) return;
-            for (let dow = 0; dow < 7; dow++) {
-              const hora = colEnt[dow]  ? parseHoraH(r.getCell(colEnt[dow])?.value)  : null;
-              const ctrl = colCtrl[dow] ? isSIH(r.getCell(colCtrl[dow])?.value)      : false;
-              horarioPorDow[dow] = hora ?? (ctrl ? 'Sí' : null);
-            }
-          });
-        }
-      }
-
       // ── Armar respuesta ─────────────────────────────────────────────────────
       const data = dias.map(d => {
         const novsSiap = siapByFecha[d.fecha] ?? [];
         const novsMin  = minByFecha[d.fecha]  ?? [];
         const fich     = fichajesByFecha[d.fecha];
         const esAusente = novsSiap.some(n => normNovedad(n.novedad).includes('AUSENTE'));
-        const dow = new Date(d.fecha + 'T00:00:00Z').getUTCDay();
         return {
           fecha:             d.fecha,
           diaSemana:         d.diaSemana,
@@ -1846,7 +1696,6 @@ export function buildAsistenciaRouter() {
           tieneFichaje:      !!fich,
           entrada:           fich?.entrada ?? null,
           salida:            fich?.salida  ?? null,
-          horarioEntrada:    horarioPorDow[dow],
         };
       });
 

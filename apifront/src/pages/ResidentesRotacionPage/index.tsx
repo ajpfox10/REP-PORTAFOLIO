@@ -16,6 +16,9 @@ interface Rotacion {
   fecha_hasta: string | null;
   servicio: string | null;
   observaciones: string | null;
+  nrodegestion: number | null;
+  horarios: string | null;
+  dias: string | null;
   created_at: string;
   updated_at: string;
   created_by_nombre: string | null;
@@ -118,6 +121,9 @@ export function ResidentesRotacionPage() {
   const [fechaHasta, setFechaHasta] = useState('');
   const [servicio, setServicio] = useState('');
   const [observaciones, setObservaciones] = useState('');
+  const [nrodegestion, setNrodegestion] = useState('');
+  const [horarios, setHorarios] = useState('');
+  const [dias, setDias] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const auditInfo = {
@@ -153,7 +159,7 @@ export function ResidentesRotacionPage() {
 
   // Reset form cuando cambia agente
   useEffect(() => {
-    setFechaDesde(''); setFechaHasta(''); setServicio(''); setObservaciones(''); setEditingId(null);
+    setFechaDesde(''); setFechaHasta(''); setServicio(''); setObservaciones(''); setNrodegestion(''); setHorarios(''); setDias(''); setEditingId(null);
   }, [search.row]);
 
   // ── Guardar ──
@@ -170,6 +176,9 @@ export function ResidentesRotacionPage() {
         fecha_hasta: fechaHasta || null,
         servicio: servicio || null,
         observaciones: observaciones || null,
+        nrodegestion: nrodegestion ? Number(nrodegestion) : null,
+        horarios: horarios || null,
+        dias: dias || null,
         updated_by: auditInfo.id,
         updated_by_email: auditInfo.email,
         updated_by_nombre: auditInfo.nombre,
@@ -200,6 +209,9 @@ export function ResidentesRotacionPage() {
     setFechaHasta(r.fecha_hasta?.slice(0, 10) || '');
     setServicio(r.servicio || '');
     setObservaciones(r.observaciones || '');
+    setNrodegestion(r.nrodegestion != null ? String(r.nrodegestion) : '');
+    setHorarios(r.horarios || '');
+    setDias(r.dias || '');
     setEditingId(r.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -328,7 +340,7 @@ export function ResidentesRotacionPage() {
             </div>
           )}
           <form onSubmit={handleSave}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
               <div style={fg}>
                 <label style={lbl}>Fecha desde *</label>
                 <input className="input" type="date" value={fechaDesde}
@@ -346,6 +358,26 @@ export function ResidentesRotacionPage() {
                 <label style={lbl}>Servicio / Área</label>
                 <input className="input" type="text" placeholder="Ej: Guardia, UTI, Cirugía..."
                   value={servicio} onChange={e => setServicio(e.target.value)}
+                  disabled={!!editingId && !isAdmin} />
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Nro. de gestión</label>
+                <input className="input" type="number" min={0} placeholder="Número"
+                  value={nrodegestion} onChange={e => setNrodegestion(e.target.value)}
+                  disabled={!!editingId && !isAdmin} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+              <div style={fg}>
+                <label style={lbl}>Horarios</label>
+                <input className="input" type="text" placeholder="Ej: 08:00 - 16:00"
+                  value={horarios} onChange={e => setHorarios(e.target.value)}
+                  disabled={!!editingId && !isAdmin} />
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Días</label>
+                <input className="input" type="text" placeholder="Ej: Lunes a Viernes"
+                  value={dias} onChange={e => setDias(e.target.value)}
                   disabled={!!editingId && !isAdmin} />
               </div>
             </div>
@@ -406,7 +438,7 @@ export function ResidentesRotacionPage() {
             <table style={tbl}>
               <thead>
                 <tr>
-                  {['DNI', 'Apellido y Nombre', 'Servicio', 'Desde', 'Hasta', 'Duración', 'Obs.', 'Cargado por', 'Modificado por', isAdmin ? 'Acciones' : ''].map(h => (
+                  {['DNI', 'Apellido y Nombre', 'Servicio', 'Nro. Gestión', 'Horarios', 'Días', 'Desde', 'Hasta', 'Duración', 'Obs.', 'Cargado por', 'Modificado por', isAdmin ? 'Acciones' : ''].map(h => (
                     <th key={h} style={th}>{h}</th>
                   ))}
                 </tr>
@@ -417,6 +449,9 @@ export function ResidentesRotacionPage() {
                     <td style={td}><strong>{r.dni}</strong></td>
                     <td style={td}>{r.apellido ? `${r.apellido}, ${r.nombre}` : '—'}</td>
                     <td style={td}>{r.servicio || <span className="muted">—</span>}</td>
+                    <td style={td}>{r.nrodegestion != null ? r.nrodegestion : <span className="muted">—</span>}</td>
+                    <td style={td}>{r.horarios || <span className="muted">—</span>}</td>
+                    <td style={td}>{r.dias || <span className="muted">—</span>}</td>
                     <td style={td}>{fmt(r.fecha_desde)}</td>
                     <td style={td}>
                       {r.fecha_hasta

@@ -46,7 +46,8 @@ import { SinFichajeSalidaPage }    from '../pages/SinFichajeSalidaPage';
 import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
 import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
 import { BajasPorEstructuraPage } from '../pages/BajasPorEstructuraPage';
-import { useKiosk } from '../hooks/useKiosk';
+import { useKiosk, setKioskManual } from '../hooks/useKiosk';
+import { HerramientasPage } from '../pages/HerramientasPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -54,15 +55,16 @@ function Private({ children }: { children: React.ReactNode }) {
 
   if (!isReady) return null;
   if (!session) return <Navigate to="/gate" state={{ from: loc.pathname }} replace />;
-  return <>{children}</>;
+  return <KioskRedirect>{children}</KioskRedirect>;
 }
 
-// Redirige cualquier ruta al kiosco de atención al público si la IP está configurada
+// Redirige cualquier ruta al kiosco de atención al público si la IP está configurada.
+// Envuelve TODAS las rutas privadas para que no haya forma de escapar por URL directa.
 function KioskRedirect({ children }: { children: React.ReactNode }) {
   const { isKiosk, kioskLoading } = useKiosk();
   const loc = useLocation();
 
-  if (kioskLoading) return null; // espera a resolver la IP antes de renderizar
+  if (kioskLoading) return null;
   if (isKiosk && loc.pathname !== '/app/atencion') {
     return <Navigate to="/app/atencion" replace />;
   }
@@ -88,6 +90,11 @@ function Guard({
   return <>{children}</>;
 }
 
+function SetKioskRoute({ lock }: { lock: boolean }) {
+  setKioskManual(lock);
+  return <Navigate to={lock ? '/gate' : '/gate'} replace />;
+}
+
 export function App() {
   return (
     <ToastProvider>
@@ -104,11 +111,9 @@ export function App() {
               path="/app"
               element={
                 <Private>
-                  <KioskRedirect>
-                    <Guard perm="api:access">
-                      <DashboardPage />
-                    </Guard>
-                  </KioskRedirect>
+                  <Guard perm="api:access">
+                    <DashboardPage />
+                  </Guard>
                 </Private>
               }
             />
@@ -495,9 +500,26 @@ export function App() {
               }
             />
 
+            {/* Herramientas */}
+            <Route
+              path="/app/herramientas"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <HerramientasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
             {/* Misc */}
             <Route path="/app/forbidden" element={<Private><ForbiddenPage /></Private>} />
             <Route path="/" element={<Navigate to="/gate" replace />} />
+
+            {/* Activación/desactivación manual de modo kiosco para PCs con IP dinámica */}
+            <Route path="/set-kiosk" element={<SetKioskRoute lock />} />
+            <Route path="/unset-kiosk" element={<SetKioskRoute lock={false} />} />
+
             <Route path="*" element={<Navigate to="/gate" replace />} />
           </Routes>
         </ErrorBoundary>

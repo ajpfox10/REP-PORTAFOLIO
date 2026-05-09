@@ -316,6 +316,51 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     }
   });
 
+  // ── POST /:table/batch — BULK CREATE (solo agentes_servicios) ────────────────
+  router.post("/:table/batch", requireCrud("create"), guardTable, guardWrite, async (req: Request, res: Response) => {
+    const table = req.params.table;
+    if (table !== 'agentes_servicios') {
+      return res.status(400).json({ ok: false, error: 'Batch solo disponible para agentes_servicios' });
+    }
+    const model = getModel(table);
+    if (!model) return res.status(404).json({ ok: false, error: 'Tabla no encontrada' });
+
+    const { records } = req.body as { records?: any[] };
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ ok: false, error: 'records[] requerido y no vacío' });
+    }
+    if (records.length > 500) {
+      return res.status(400).json({ ok: false, error: 'Máximo 500 registros por batch' });
+    }
+
+    const t = await sequelize.transaction();
+    try {
+      const dnis = [...new Set(records.map((r: any) => r.dni))];
+      const existing = await model.findAll({
+        where: { dni: dnis, fecha_hasta: null } as any,
+        transaction: t,
+      });
+      const dnisOcupados = new Set((existing as any[]).map((e: any) => {
+        const j = (e as any).toJSON ? (e as any).toJSON() : e;
+        return String(j.dni);
+      }));
+
+      const toCreate = records.filter((r: any) => !dnisOcupados.has(String(r.dni)));
+      const skipped  = records
+        .filter((r: any) => dnisOcupados.has(String(r.dni)))
+        .map((r: any) => r.dni);
+
+      const created = await (model as any).bulkCreate(toCreate, { transaction: t });
+      await t.commit();
+      await cacheInvalidateTags([`table:${table}`]);
+
+      res.status(201).json({ ok: true, data: { created: created.length, skipped } });
+    } catch (err: any) {
+      await t.rollback();
+      return res.status(500).json({ ok: false, error: err?.message || 'Error en batch' });
+    }
+  });
+
   // ── PUT /:table/:id — UPDATE COMPLETO (con transacción) ───────────────────────
   router.put("/:table/:id", requireCrud("update"), guardTable, guardWrite, saludLaboralTimeGuard, async (req: Request, res: Response) => {
     const table = req.params.table;
