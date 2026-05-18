@@ -2421,6 +2421,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/citaciones_vistas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List citaciones_vistas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_citaciones_vistas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create citaciones_vistas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_citaciones_vistas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/citaciones_vistas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get citaciones_vistas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update citaciones_vistas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_citaciones_vistas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch citaciones_vistas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_citaciones_vistas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete citaciones_vistas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/codigoa:
     get:
       tags:
@@ -2674,6 +2806,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete consultas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/consultas_whatsapp:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List consultas_whatsapp
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_consultas_whatsapp"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create consultas_whatsapp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultas_whatsapp_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/consultas_whatsapp/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get consultas_whatsapp by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update consultas_whatsapp by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultas_whatsapp"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch consultas_whatsapp by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_consultas_whatsapp_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete consultas_whatsapp by id
       parameters:
         - name: id
           in: path
@@ -4735,6 +4999,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete expedientes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/feriados:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List feriados
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_feriados"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create feriados
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_feriados_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/feriados/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get feriados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update feriados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_feriados"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch feriados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_feriados_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete feriados by id
       parameters:
         - name: id
           in: path
@@ -14951,6 +15347,74 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_citaciones_vistas:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        citacion_id:
+          type: number
+        visto_por:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        accion:
+          type: string
+        visto_at:
+          type: string
+          format: date-time
+        ip:
+          type: string
+          nullable: true
+      required:
+        - id
+        - citacion_id
+        - visto_por
+    Table_citaciones_vistas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        citacion_id:
+          type: number
+        visto_por:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        accion:
+          type: string
+        visto_at:
+          type: string
+          format: date-time
+        ip:
+          type: string
+          nullable: true
+      required:
+        - citacion_id
+        - visto_por
+    Table_citaciones_vistas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        citacion_id:
+          type: number
+        visto_por:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        accion:
+          type: string
+        visto_at:
+          type: string
+          format: date-time
+        ip:
+          type: string
+          nullable: true
     Table_codigoa:
       type: object
       additionalProperties: false
@@ -15146,6 +15610,60 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_consultas_whatsapp:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        cantidad:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - fecha
+    Table_consultas_whatsapp_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        cantidad:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - fecha
+    Table_consultas_whatsapp_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        cantidad:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Table_dependencias:
       type: object
       additionalProperties: false
@@ -16963,6 +17481,68 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_feriados:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        nombre:
+          type: string
+        tipo:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - fecha
+        - nombre
+    Table_feriados_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        nombre:
+          type: string
+        tipo:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - fecha
+        - nombre
+    Table_feriados_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        nombre:
+          type: string
+        tipo:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Table_francos_compensatorios:
       type: object
       additionalProperties: false
@@ -17474,6 +18054,12 @@ components:
       properties:
         id:
           type: number
+        jefatura_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
         jefedepto:
           type: string
           nullable: true
@@ -17483,6 +18069,41 @@ components:
         oficinacentral:
           type: string
           nullable: true
+        tipo_funcion:
+          type: string
+          nullable: true
+        nro_acto_admin:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_avisada:
+          type: number
+        alerta_45_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_usuario_id:
+          type: number
+          nullable: true
+        alerta_45_usuario_email:
+          type: string
+          nullable: true
+        alerta_45_usuario_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
         deleted_at:
           type: string
           format: date-time
@@ -17499,6 +18120,12 @@ components:
       type: object
       additionalProperties: false
       properties:
+        jefatura_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
         jefedepto:
           type: string
           nullable: true
@@ -17508,6 +18135,41 @@ components:
         oficinacentral:
           type: string
           nullable: true
+        tipo_funcion:
+          type: string
+          nullable: true
+        nro_acto_admin:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_avisada:
+          type: number
+        alerta_45_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_usuario_id:
+          type: number
+          nullable: true
+        alerta_45_usuario_email:
+          type: string
+          nullable: true
+        alerta_45_usuario_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
         deleted_at:
           type: string
           format: date-time
@@ -17524,6 +18186,12 @@ components:
       properties:
         id:
           type: number
+        jefatura_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
         jefedepto:
           type: string
           nullable: true
@@ -17533,6 +18201,41 @@ components:
         oficinacentral:
           type: string
           nullable: true
+        tipo_funcion:
+          type: string
+          nullable: true
+        nro_acto_admin:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_avisada:
+          type: number
+        alerta_45_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_usuario_id:
+          type: number
+          nullable: true
+        alerta_45_usuario_email:
+          type: string
+          nullable: true
+        alerta_45_usuario_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
         deleted_at:
           type: string
           format: date-time

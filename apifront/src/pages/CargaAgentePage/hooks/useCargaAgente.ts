@@ -54,7 +54,7 @@ export const EMPTY_FORM: PersonalForm = {
   salario_mensual: '',
 };
 
-export const ESTADO_EMPLEO_OPTS = ['ACTIVO', 'INACTIVO', 'BAJA'];
+export const ESTADO_EMPLEO_OPTS = ['ACTIVO', 'INACTIVO', 'BAJA', 'COMISION', 'TRAMITE'];
 
 export type Step = 1 | 2 | 3 | 4;
 

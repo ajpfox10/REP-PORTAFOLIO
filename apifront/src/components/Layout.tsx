@@ -214,6 +214,7 @@ export function Layout({ title, children, showBack }: {
                       </div>
                       {navLink('/app/estadisticas', '📊 Estadísticas')}
                       {navLink('/app/asistencia', '🗓️ Asistencia')}
+                      {navLink('/app/reporte-servicio', '📊 Reporte por Servicio')}
                       {navLink('/app/ausencias-fichajes', '🕵️ Ausentes vs Fichajes')}
                       {navLink('/app/sin-fichaje-salida', '🚪 Sin fichaje de salida')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
@@ -222,12 +223,14 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
                       {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
                       {navLink('/app/bajas-estructura', '📉 Bajas por Estructura')}
+                      {isAdmin && navLink('/app/bajas-gestion', '📋 Gestión de Bajas')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 
                       <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
                         Herramientas
                       </div>
+                      {navLink('/app/jefedeptos', '🏛️ Historial Jefaturas')}
                       {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
                       {navLink('/app/buscador', '🔍 Buscador')}
                       {navLink('/app/comparador', '⚖️ Comparador')}

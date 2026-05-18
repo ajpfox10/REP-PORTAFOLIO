@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS consultas_whatsapp (
+  id         INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  fecha      DATE         NOT NULL,
+  cantidad   INT          NOT NULL DEFAULT 0,
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_whatsapp_fecha (fecha)
+) ENGINE=InnoDB;

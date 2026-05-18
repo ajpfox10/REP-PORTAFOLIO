@@ -26,6 +26,7 @@ interface SinSalidaRow {
   estado:                "SOSPECHOSO" | "SIN_SALIDA" | "SOLO_SALIDA" | "PRESENTE_SIN_ESTAR" | "SIN_FICHAJE" | "REQUIERE_REVISION" | "JUSTIFICADO" | "CON_SALIDA";
   fichajeInvertido:      boolean;
   salidaFaltante:        boolean;
+  recMedico:             string | null;
 }
 
 interface SinHorarioAgente {
@@ -277,7 +278,7 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                {["Fecha", "Día", "Prog. Entrada", "Prog. Salida", "Real Entrada", "Real Salida", "Estado", "Nov. SIAP"].map(h => (
+                {["Fecha", "Día", "Prog. Entrada", "Prog. Salida", "Real Entrada", "Real Salida", "Estado", "Nov. SIAP", "Rec. Médico"].map(h => (
                   <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--card, #1e293b)" }}>
                     {h}
                   </th>
@@ -286,7 +287,7 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
             </thead>
             <tbody>
               {agentRows.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin registros.</td></tr>
+                <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin registros.</td></tr>
               ) : agentRows.map((r, i) => {
                 const esProblema  = r.estado === "SIN_SALIDA" || r.estado === "SOLO_SALIDA" || r.estado === "PRESENTE_SIN_ESTAR" || r.estado === "SIN_FICHAJE";
                 const esInvertido = highlightInvertido ? r.fichajeInvertido : false;
@@ -320,6 +321,14 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
                       )}
                     </td>
                     <td style={{ padding: "7px 12px", fontSize: "0.75rem", color: r.novedadSiap ? "#a5b4fc" : "#475569" }}>{r.novedadSiap || "—"}</td>
+                    <td style={{ padding: "7px 12px" }}>
+                      {r.recMedico != null
+                        ? <span style={{ ...badge, background: "rgba(168,85,247,0.18)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.35)", fontSize: "0.72rem" }}>
+                            {r.recMedico !== "Sí" ? r.recMedico : "Sí"}
+                          </span>
+                        : <span style={{ color: "#475569" }}>—</span>
+                      }
+                    </td>
                   </tr>
                 );
               })}
@@ -921,6 +930,7 @@ export function SinFichajeSalidaPage() {
       "Nov. Ministerio":   r.novedadMinisterio || "",
       "Nov. SIAP":         r.novedadSiap || "",
       "Invertido":         r.fichajeInvertido ? "SÍ" : "",
+      "Rec. Médico":       r.recMedico ?? "",
     })));
   };
 

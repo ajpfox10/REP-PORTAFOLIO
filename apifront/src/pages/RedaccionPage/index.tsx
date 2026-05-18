@@ -28,6 +28,12 @@ const DOCS = [
     frase: 'Por medio de la presente nota se eleva a la Direccion el pedido correspondiente segun lo actuado en autos.' },
   { id: 11, label: 'Cedula de Notificacion',    implementado: true,
     frase: 'Se notifica al agente la resolucion o acto administrativo correspondiente en su domicilio declarado.' },
+  { id: 12, label: 'Nota a Comisaria',          implementado: true,
+    frase: 'Solicitud de Certificado de Antecedentes Penales emitida al Comisario de la Provincia de Buenos Aires.' },
+  { id: 13, label: 'Cert. Base Vieja',          implementado: true,
+    frase: 'Certificacion de servicios con cargo, carga horaria y servicio para presentar ante quien corresponda.' },
+  { id: 14, label: 'Cert. Laboral Rotacion',    implementado: true,
+    frase: 'Certificado laboral de rotacion para medico residente cubierto por ART Provincia.' },
 ];
 
 function DocModal({ agente, doc, onClose }: {
@@ -47,10 +53,16 @@ function DocModal({ agente, doc, onClose }: {
     tipoNotif: 'la Resolucion',
     vistoText: '',
     considerandoText: '',
-    art1: '',
-    art2: '',
-    art3: '',
   });
+  const [articulos, setArticulos] = useState<string[]>(['', '']);
+
+  const [notaComisariaDatos, setNotaComisariaDatos] = useState<any>(null);
+
+  const [certBaseViejaDatos, setCertBaseViejaDatos] = useState<any>(null);
+  const [certBaseViejaFields, setCertBaseViejaFields] = useState({ cargo: '', hsSemanales: '', servicio: '' });
+
+  const [certRotacionDatos, setCertRotacionDatos] = useState<any>(null);
+  const [certRotacionFields, setCertRotacionFields] = useState({ servicio: '', numArt: '' });
 
   const nombre = `${agente.apellido ?? ''} ${agente.nombre ?? ''}`.trim();
 
@@ -85,21 +97,90 @@ function DocModal({ agente, doc, onClose }: {
   useEffect(() => {
     if (doc.id !== 11 || !cedulaDatos) return;
     setLoadingPreview(true);
-    const qs = new URLSearchParams({
+    const params: Record<string, string> = {
       dni: String(agente.dni),
       tipoNotif: cedulaFields.tipoNotif,
       vistoText: cedulaFields.vistoText,
       considerandoText: cedulaFields.considerandoText,
-      art1: cedulaFields.art1,
-      art2: cedulaFields.art2,
-      art3: cedulaFields.art3,
-    }).toString();
-    apiFetchBlob(`/certificados/cedula/preview?${qs}`)
+    };
+    articulos.forEach((a, i) => { params[`art${i + 1}`] = a; });
+    apiFetchBlob(`/certificados/cedula/preview?${new URLSearchParams(params)}`)
       .then(blob => blob.text())
       .then(html => setPreviewHtml(html))
       .catch(() => setPreviewHtml(''))
       .finally(() => setLoadingPreview(false));
-  }, [doc.id, cedulaDatos, cedulaFields, agente.dni]);
+  }, [doc.id, cedulaDatos, cedulaFields, articulos, agente.dni]);
+
+  // Nota Comisaria — fetch datos + preview
+  useEffect(() => {
+    if (doc.id !== 12) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/nota-comisaria/datos?dni=${agente.dni}`)
+      .then(r => setNotaComisariaDatos(r?.data ?? null))
+      .catch(() => setNotaComisariaDatos(null))
+      .finally(() => setLoadingDatos(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 12 || !notaComisariaDatos) return;
+    setLoadingPreview(true);
+    apiFetchBlob(`/certificados/nota-comisaria/preview?dni=${agente.dni}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, notaComisariaDatos, agente.dni]);
+
+  // Cert Base Vieja — fetch datos + preview
+  useEffect(() => {
+    if (doc.id !== 13) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/cert-base-vieja/datos?dni=${agente.dni}`)
+      .then(r => setCertBaseViejaDatos(r?.data ?? null))
+      .catch(() => setCertBaseViejaDatos(null))
+      .finally(() => setLoadingDatos(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 13 || !certBaseViejaDatos) return;
+    setLoadingPreview(true);
+    const params = new URLSearchParams({
+      dni: String(agente.dni),
+      cargo: certBaseViejaFields.cargo,
+      hsSemanales: certBaseViejaFields.hsSemanales,
+      servicio: certBaseViejaFields.servicio,
+    });
+    apiFetchBlob(`/certificados/cert-base-vieja/preview?${params}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, certBaseViejaDatos, certBaseViejaFields, agente.dni]);
+
+  // Cert Rotacion — fetch datos + preview
+  useEffect(() => {
+    if (doc.id !== 14) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/cert-rotacion/datos?dni=${agente.dni}`)
+      .then(r => setCertRotacionDatos(r?.data ?? null))
+      .catch(() => setCertRotacionDatos(null))
+      .finally(() => setLoadingDatos(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 14 || !certRotacionDatos) return;
+    setLoadingPreview(true);
+    const params = new URLSearchParams({
+      dni: String(agente.dni),
+      servicio: certRotacionFields.servicio,
+      numArt: certRotacionFields.numArt,
+    });
+    apiFetchBlob(`/certificados/cert-rotacion/preview?${params}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, certRotacionDatos, certRotacionFields, agente.dni]);
 
   const descargarDocxIoma = async () => {
     setDescargando(true);
@@ -125,10 +206,12 @@ function DocModal({ agente, doc, onClose }: {
   const descargarDocxCedula = async () => {
     setDescargando(true);
     try {
+      const artObj: Record<string, string> = {};
+      articulos.forEach((a, i) => { artObj[`art${i + 1}`] = a; });
       const { blob, filename } = await apiFetchBlobWithMeta('/certificados/cedula', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dni: agente.dni, ...cedulaFields }),
+        body: JSON.stringify({ dni: agente.dni, ...cedulaFields, ...artObj }),
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -141,6 +224,57 @@ function DocModal({ agente, doc, onClose }: {
     } finally {
       setDescargando(false);
     }
+  };
+
+  const descargarDocxNotaComisaria = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/nota-comisaria', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni }),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename || `nota_comisaria_${agente.dni}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error('Error al generar Nota Comisaria: ' + (e?.message || 'Error'));
+    } finally { setDescargando(false); }
+  };
+
+  const descargarDocxCertBaseVieja = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/cert-base-vieja', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni, ...certBaseViejaFields }),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename || `cert_base_vieja_${agente.dni}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error('Error al generar Cert Base Vieja: ' + (e?.message || 'Error'));
+    } finally { setDescargando(false); }
+  };
+
+  const descargarDocxCertRotacion = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/cert-rotacion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni, ...certRotacionFields }),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename || `cert_rotacion_${agente.dni}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error('Error al generar Cert Rotacion: ' + (e?.message || 'Error'));
+    } finally { setDescargando(false); }
   };
 
   const imprimirDoc = () => {
@@ -191,41 +325,185 @@ function DocModal({ agente, doc, onClose }: {
       const setF = (key: keyof typeof cedulaFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
         setCedulaFields(prev => ({ ...prev, [key]: e.target.value }));
 
+      const addArticulo = () => {
+        if (articulos.length >= 7) return;
+        setArticulos(prev => [...prev, '']);
+      };
+      const removeArticulo = (i: number) =>
+        setArticulos(prev => prev.filter((_, idx) => idx !== i));
+      const setArticulo = (i: number) => (e: React.ChangeEvent<HTMLTextAreaElement>) =>
+        setArticulos(prev => prev.map((v, idx) => idx === i ? e.target.value : v));
+
       return (
         <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
-          <div style={{ width: 260, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
-            borderRight: '1px solid #e5e7eb', background: '#f9fafb' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+
+          {/* Panel izquierdo */}
+          <div style={{ width: 270, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+
+            {/* Datos del agente */}
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 8,
+              textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
               Datos del agente
             </div>
-            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 4 }}><strong>{cedulaDatos.apellidoNombre}</strong></div>
-            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 2 }}>{cedulaDatos.domicilio} {cedulaDatos.numeroDom}</div>
-            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 2 }}>Piso: {cedulaDatos.piso || '-'}  Dpto: {cedulaDatos.depto || '-'}</div>
-            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 12 }}>{cedulaDatos.localidad}  CP {cedulaDatos.cp || '-'}</div>
+            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 2, textAlign: 'center' }}>
+              <strong>{cedulaDatos.apellidoNombre}</strong>
+            </div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>
+              {cedulaDatos.domicilio} {cedulaDatos.numeroDom}
+            </div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>
+              {cedulaDatos.piso ? `Piso ${cedulaDatos.piso}` : ''}{cedulaDatos.depto ? ` Dpto ${cedulaDatos.depto}` : ''}
+            </div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 12, textAlign: 'center' }}>
+              {cedulaDatos.localidad}{cedulaDatos.cp ? `  CP ${cedulaDatos.cp}` : ''}
+            </div>
 
             <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', marginBottom: 12 }} />
-            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+
+            {/* Campos a completar */}
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Completar
             </div>
             <label style={lbl}>Se le notifica</label>
-            <input style={inp} value={cedulaFields.tipoNotif} onChange={setF('tipoNotif')} placeholder="la Resolucion N..." />
+            <input style={inp} value={cedulaFields.tipoNotif}
+              onChange={setF('tipoNotif')} placeholder="la Resolucion N..." />
             <label style={lbl}>VISTO</label>
-            <textarea style={area} value={cedulaFields.vistoText} onChange={setF('vistoText')} placeholder="Expediente N..." />
+            <textarea style={area} value={cedulaFields.vistoText}
+              onChange={setF('vistoText')} placeholder="Expediente N..." />
             <label style={lbl}>CONSIDERANDO</label>
-            <textarea style={area} value={cedulaFields.considerandoText} onChange={setF('considerandoText')} placeholder="Que..." />
-            <label style={lbl}>Articulo 1</label>
-            <textarea style={area} value={cedulaFields.art1} onChange={setF('art1')} placeholder="Texto del articulo..." />
-            <label style={lbl}>Articulo 2</label>
-            <textarea style={area} value={cedulaFields.art2} onChange={setF('art2')} placeholder="Texto del articulo..." />
-            <label style={lbl}>Articulo 3</label>
-            <textarea style={area} value={cedulaFields.art3} onChange={setF('art3')} placeholder="Texto del articulo..." />
+            <textarea style={area} value={cedulaFields.considerandoText}
+              onChange={setF('considerandoText')} placeholder="Que..." />
+
+            {/* Artículos dinámicos */}
+            {articulos.map((art, i) => (
+              <div key={i} style={{ position: 'relative' }}>
+                <label style={lbl}>
+                  Artículo {i + 1}
+                  {articulos.length > 1 && (
+                    <button type="button" onClick={() => removeArticulo(i)}
+                      style={{ marginLeft: 8, fontSize: '0.68rem', color: '#ef4444',
+                        background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      ✕ quitar
+                    </button>
+                  )}
+                </label>
+                <textarea style={area} value={art}
+                  onChange={setArticulo(i)} placeholder="Texto del artículo..." />
+              </div>
+            ))}
+            {articulos.length < 7 && (
+              <button type="button" onClick={addArticulo}
+                style={{ fontSize: '0.75rem', color: '#2563eb', background: 'none',
+                  border: '1px dashed #2563eb', borderRadius: 6, padding: '4px 0',
+                  cursor: 'pointer', marginBottom: 14, width: '100%' }}>
+                + Agregar artículo
+              </button>
+            )}
+
           </div>
 
+          {/* Preview */}
           <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
             {loadingPreview
               ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
               : previewHtml
-                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview Cedula" />
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }}
+                    title="Preview Cedula" />
+                : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>
+                    No se pudo cargar la vista previa.
+                  </p>
+            }
+          </div>
+        </div>
+      );
+    }
+
+    if (doc.id === 12) {
+      if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando documento...</p>;
+      if (!notaComisariaDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+      if (!previewHtml) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>;
+      return <iframe srcDoc={previewHtml} style={{ width: '100%', height: 620, border: 'none', borderRadius: 4 }} title="Preview Nota Comisaria" />;
+    }
+
+    if (doc.id === 13) {
+      const inp: React.CSSProperties = {
+        width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
+        fontSize: '0.83rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8,
+      };
+      const lbl: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: 2, display: 'block' };
+      if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando datos del agente...</p>;
+      if (!certBaseViejaDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+      const setF13 = (key: keyof typeof certBaseViejaFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
+        setCertBaseViejaFields(prev => ({ ...prev, [key]: e.target.value }));
+      return (
+        <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
+          <div style={{ width: 240, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 8,
+              textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Datos del agente</div>
+            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 2, textAlign: 'center' }}>
+              <strong>{certBaseViejaDatos.apellidoNombre}</strong></div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>DNI: {certBaseViejaDatos.dni}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Legajo: {certBaseViejaDatos.legajo}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Ingreso: {certBaseViejaDatos.fechaIngreso}</div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '10px 0' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completar</div>
+            <label style={lbl}>Cargo</label>
+            <input style={inp} value={certBaseViejaFields.cargo} onChange={setF13('cargo')} placeholder="Ej: Enfermero" />
+            <label style={lbl}>Hs. Semanales</label>
+            <input style={inp} value={certBaseViejaFields.hsSemanales} onChange={setF13('hsSemanales')} placeholder="Ej: 30" />
+            <label style={lbl}>Servicio</label>
+            <input style={inp} value={certBaseViejaFields.servicio} onChange={setF13('servicio')} placeholder="Ej: Guardia" />
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+            {loadingPreview
+              ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
+              : previewHtml
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview Cert Base Vieja" />
+                : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>
+            }
+          </div>
+        </div>
+      );
+    }
+
+    if (doc.id === 14) {
+      const inp: React.CSSProperties = {
+        width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
+        fontSize: '0.83rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8,
+      };
+      const lbl: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: 2, display: 'block' };
+      if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando datos del agente...</p>;
+      if (!certRotacionDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+      const setF14 = (key: keyof typeof certRotacionFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
+        setCertRotacionFields(prev => ({ ...prev, [key]: e.target.value }));
+      return (
+        <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
+          <div style={{ width: 240, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 8,
+              textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Datos del agente</div>
+            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 2, textAlign: 'center' }}>
+              <strong>{certRotacionDatos.apellidoNombre}</strong></div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>DNI: {certRotacionDatos.dni}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Legajo: {certRotacionDatos.legajo}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Ingreso: {certRotacionDatos.fechaIngreso}</div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '10px 0' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completar</div>
+            <label style={lbl}>Servicio / Rotacion</label>
+            <input style={inp} value={certRotacionFields.servicio} onChange={setF14('servicio')} placeholder="Ej: Clínica Médica" />
+            <label style={lbl}>N° Registro ART</label>
+            <input style={inp} value={certRotacionFields.numArt} onChange={setF14('numArt')} placeholder="Ej: 12345" />
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+            {loadingPreview
+              ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
+              : previewHtml
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview Cert Rotacion" />
                 : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>
             }
           </div>
@@ -253,7 +531,7 @@ function DocModal({ agente, doc, onClose }: {
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 16, padding: 24, maxWidth: doc.id === 11 ? 1100 : 860, width: '100%',
+        borderRadius: 16, padding: 24, maxWidth: [11, 13, 14].includes(doc.id) ? 1100 : 860, width: '100%',
         maxHeight: '95vh', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -265,10 +543,10 @@ function DocModal({ agente, doc, onClose }: {
         </div>
 
         <div style={{
-          borderRadius: 8, overflow: doc.id === 11 ? 'hidden' : 'auto', flex: 1,
+          borderRadius: 8, overflow: [11, 13, 14].includes(doc.id) ? 'hidden' : 'auto', flex: 1,
           boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
-          background: doc.implementado ? (doc.id === 11 ? '#f9fafb' : '#fff') : '#fffbeb',
-          border: doc.implementado ? (doc.id === 11 ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
+          background: doc.implementado ? ([11, 13, 14].includes(doc.id) ? '#f9fafb' : '#fff') : '#fffbeb',
+          border: doc.implementado ? ([11, 13, 14].includes(doc.id) ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
         }}>
           {renderPreview()}
         </div>
@@ -304,6 +582,42 @@ function DocModal({ agente, doc, onClose }: {
                 style={{ background: '#dc2626', color: '#fff' }}>
                 PDF
               </button>
+            </>
+          )}
+          {doc.id === 12 && (
+            <>
+              <button className="btn" onClick={descargarDocxNotaComisaria} disabled={descargando || !notaComisariaDatos}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
+            </>
+          )}
+          {doc.id === 13 && (
+            <>
+              <button className="btn" onClick={descargarDocxCertBaseVieja} disabled={descargando || !certBaseViejaDatos}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
+            </>
+          )}
+          {doc.id === 14 && (
+            <>
+              <button className="btn" onClick={descargarDocxCertRotacion} disabled={descargando || !certRotacionDatos}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
             </>
           )}
           <button className="btn" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
