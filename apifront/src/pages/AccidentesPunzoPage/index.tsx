@@ -34,6 +34,8 @@ function fmt(d?: string | null) {
 
 // ── BANNER ────────────────────────────────────────────────────────────────────
 
+const PUNZO_DISMISS_KEY = 'punzo_banner_dismissed_until';
+
 export function AccidentesPunzoBanner() {
   const { session, hasPerm } = useAuth();
   const canVer =
@@ -41,7 +43,10 @@ export function AccidentesPunzoBanner() {
     hasPerm('app:infectologia:access') ||
     hasPerm('app:cargainfecto:access');
   const [data, setData]           = useState<{ recientes: number; data: Accidente[] } | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    const until = localStorage.getItem(PUNZO_DISMISS_KEY);
+    return !!until && Date.now() < Number(until);
+  });
 
   useEffect(() => {
     if (!session || !canVer) return;
@@ -49,6 +54,11 @@ export function AccidentesPunzoBanner() {
       .then(r => { if (r?.ok && r.recientes > 0) setData(r); })
       .catch(() => {});
   }, [session]);
+
+  const dismiss = () => {
+    localStorage.setItem(PUNZO_DISMISS_KEY, String(Date.now() + 24 * 60 * 60 * 1000));
+    setDismissed(true);
+  };
 
   if (!data || dismissed || data.recientes === 0) return null;
 
@@ -78,7 +88,7 @@ export function AccidentesPunzoBanner() {
         </div>
       </div>
       <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: '1.1rem', padding: 0 }}
-        onClick={() => setDismissed(true)} title="Cerrar">✕</button>
+        onClick={dismiss} title="Cerrar (no mostrar por 24 hs)">✕</button>
     </div>
   );
 }

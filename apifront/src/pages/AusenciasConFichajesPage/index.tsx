@@ -61,6 +61,7 @@ interface AusenteRow {
   tieneFichaje: boolean;
   entrada: string | null;
   salida: string | null;
+  recMedico: string | null;
 }
 
 interface Meta {
@@ -335,6 +336,7 @@ export function AusenciasConFichajesPage() {
       "Fichó":              r.tieneFichaje ? "Sí" : "No",
       Entrada:              r.entrada ?? "",
       Salida:               r.salida  ?? "",
+      "Rec. Médico":        r.recMedico ?? "—",
     }));
     exportToExcel(`ausentes28_${periodo}`, data);
   };
@@ -545,14 +547,14 @@ export function AusenciasConFichajesPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                  {["DNI", "Nombre", "Fecha", "Día", "Nov. Ministerio", "Nov. SIAP", "¿Debía venir?", "¿Fichó?", "Entrada", "Salida"].map((h) => (
+                  {["DNI", "Nombre", "Fecha", "Día", "Nov. Ministerio", "Nov. SIAP", "¿Debía venir?", "¿Fichó?", "Entrada", "Salida", "Rec. Médico"].map((h) => (
                     <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rowsFiltradas.length === 0 ? (
-                  <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin resultados.</td></tr>
+                  <tr><td colSpan={11} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin resultados.</td></tr>
                 ) : rowsFiltradas.map((r, i) => (
                   <tr key={`${r.dni}-${r.fecha}-${i}`}
                     style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
@@ -582,6 +584,14 @@ export function AusenciasConFichajesPage() {
                     </td>
                     <td style={{ padding: "8px 12px", fontFamily: "monospace", color: r.entrada ? "#22c55e" : "#64748b" }}>{r.entrada ?? "—"}</td>
                     <td style={{ padding: "8px 12px", fontFamily: "monospace", color: r.salida  ? "#60a5fa" : "#64748b" }}>{r.salida  ?? "—"}</td>
+                    <td style={{ padding: "8px 12px" }}>
+                      {r.recMedico != null
+                        ? <span style={{ ...badge, background: "rgba(168,85,247,0.18)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.35)" }} title={r.recMedico !== "Sí" ? r.recMedico : undefined}>
+                            {r.recMedico !== "Sí" ? r.recMedico : "Sí"}
+                          </span>
+                        : <span style={{ color: "#475569" }}>—</span>
+                      }
+                    </td>
                   </tr>
                 ))}
               </tbody>

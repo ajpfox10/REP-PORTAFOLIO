@@ -46,8 +46,11 @@ import { SinFichajeSalidaPage }    from '../pages/SinFichajeSalidaPage';
 import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
 import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
 import { BajasPorEstructuraPage } from '../pages/BajasPorEstructuraPage';
+import { BajasGestionPage } from '../pages/BajasGestionPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
 import { HerramientasPage } from '../pages/HerramientasPage';
+import { JefedeptosPage } from '../pages/JefedeptosPage';
+import { ReporteAsistenciaServicioPage } from '../pages/ReporteAsistenciaServicioPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -500,6 +503,17 @@ export function App() {
               }
             />
 
+            <Route
+              path="/app/bajas-gestion"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <BajasGestionPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
             {/* Herramientas */}
             <Route
               path="/app/herramientas"
@@ -507,6 +521,26 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <HerramientasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/reporte-servicio"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:asistencia:read', 'crud:*:*']}>
+                    <ReporteAsistenciaServicioPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/jefedeptos"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:jefedeptos:read', 'crud:*:*']}>
+                    <JefedeptosPage />
                   </Guard>
                 </Private>
               }

@@ -648,6 +648,8 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
                 <option value="ACTIVO">ACTIVO</option>
                 <option value="INACTIVO">INACTIVO</option>
                 <option value="BAJA">BAJA</option>
+                <option value="COMISION">COMISION</option>
+                <option value="TRAMITE">TRAMITE</option>
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>

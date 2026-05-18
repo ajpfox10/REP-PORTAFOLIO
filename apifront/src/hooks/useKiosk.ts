@@ -64,9 +64,10 @@ export function useKiosk(): { isKiosk: boolean; kioskLoading: boolean } {
       .then(data => {
         const ip       = String(data?.ip       || '').trim().toLowerCase();
         const hostname = String(data?.hostname || '').trim().toLowerCase();
-        const match =
+        const match = !!(
           (kioskIps.length       && kioskIps.some(k => k === ip))            ||
-          (kioskHostnames.length && kioskHostnames.some(k => k === hostname));
+          (kioskHostnames.length && kioskHostnames.some(k => k === hostname))
+        );
         setCache(match);
         setIsKiosk(match);
       })

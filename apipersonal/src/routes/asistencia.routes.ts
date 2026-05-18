@@ -778,7 +778,7 @@ function compareRowsSiapVsMinisterio(
   });
 }
 
-export function buildAsistenciaRouter() {
+export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize) {
   const router = Router();
 
   router.get('/config', requirePermission('api:access'), (_req: Request, res: Response) => {
@@ -1277,9 +1277,45 @@ export function buildAsistenciaRouter() {
         dbError = 'fichero_config.json no encontrado — configura la conexión en el módulo Fichero';
       }
 
-      // ── 5. Construir resultado ───────────────────────────────────────────────
+      // ── 5. Consultar reconocimientos_medicos ─────────────────────────────────
+      // recMedicoMap: "dni|YYYY-MM-DD" → tipo (o "" si no tiene tipo)
+      const recMedicoMap = new Map<string, string>();
+      if (sequelize && expanded.length > 0) {
+        try {
+          const allDnisRec = [...new Set(expanded.map(r => r.dni))];
+          const allDatesRec = expanded.map(r => r.fecha);
+          const minDateRec = allDatesRec.reduce((a, b) => (a < b ? a : b));
+          const maxDateRec = allDatesRec.reduce((a, b) => (a > b ? a : b));
+          const [recRows] = await sequelize.query(
+            `SELECT dni, fecha_desde, fecha_hasta, tipo
+               FROM reconocimientos_medicos
+              WHERE dni IN (${allDnisRec.map(() => '?').join(',')})
+                AND fecha_desde <= ?
+                AND (fecha_hasta >= ? OR fecha_hasta IS NULL)`,
+            { replacements: [...allDnisRec, maxDateRec, minDateRec] },
+          ) as [any[], unknown];
+          for (const rec of recRows) {
+            const dniRec   = normDni(String(rec.dni));
+            const desde    = String(rec.fecha_desde ?? '').slice(0, 10);
+            const hasta    = rec.fecha_hasta ? String(rec.fecha_hasta).slice(0, 10) : maxDateRec;
+            const tipoRec  = String(rec.tipo ?? '').trim();
+            for (const row of expanded) {
+              if (row.dni !== dniRec) continue;
+              if (row.fecha >= desde && row.fecha <= hasta) {
+                const key = `${row.dni}|${row.fecha}`;
+                if (!recMedicoMap.has(key)) recMedicoMap.set(key, tipoRec);
+              }
+            }
+          }
+        } catch (e: any) {
+          logger.warn({ msg: 'ausentes28: error consultando reconocimientos_medicos', error: e?.message });
+        }
+      }
+
+      // ── 6. Construir resultado ───────────────────────────────────────────────
       const data = expanded.map(r => {
         const fich = fichajesMap[r.dni]?.[r.fecha];
+        const recKey = `${r.dni}|${r.fecha}`;
         return {
           dni:               r.dni,
           nombre:            r.nombre,
@@ -1292,6 +1328,7 @@ export function buildAsistenciaRouter() {
           tieneFichaje:      fich !== undefined,
           entrada:           fich?.entrada ?? null,
           salida:            fich?.salida  ?? null,
+          recMedico:         recMedicoMap.has(recKey) ? (recMedicoMap.get(recKey) || 'Sí') : null,
         };
       });
 
@@ -1866,6 +1903,360 @@ export function buildAsistenciaRouter() {
       return res.json({ ok: true, dni, nombre, periodo: req.query.periodo, data, dbError: dbErr });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // ── GET /reporte-servicio ─────────────────────────────────────────────────
+  // Reporte mensual de asistencia por servicio: horas teóricas vs reales,
+  // fichajes diarios, feriados y resúmenes semanales/mensuales.
+  // Query params: servicio_id, periodo (YYYY-MM), siapFile, horariosFile
+  router.get('/reporte-servicio', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!ExcelJS) return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs' });
+    if (!sequelize)  return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
+
+    try {
+      const servicioId = req.query.servicio_id ? Number(req.query.servicio_id) : null;
+      if (!servicioId) return res.status(400).json({ ok: false, error: 'Falta servicio_id' });
+
+      const periodoStr = req.query.periodo ? String(req.query.periodo) : null;
+      if (!periodoStr) return res.status(400).json({ ok: false, error: 'Falta periodo (YYYY-MM)' });
+      const period = parsePeriodoMes(periodoStr);
+      if (!period) return res.status(400).json({ ok: false, error: 'Período inválido, usar formato YYYY-MM' });
+
+      const dir   = getDir();
+      const files = listExcelFiles(dir);
+      const auto  = findAutoFiles(files);
+
+      const horariosFile = req.query.horariosFile
+        ? path.join(dir, String(req.query.horariosFile))
+        : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
+
+      const siapFile = req.query.siapFile
+        ? path.join(dir, String(req.query.siapFile))
+        : auto.siap ?? null;
+
+      // ── 1. Nombre del servicio ─────────────────────────────────────────────
+      const { QueryTypes } = await import('sequelize');
+      const [svcRow] = await sequelize.query<{ id: number; nombre: string }>(
+        'SELECT id, nombre FROM servicios WHERE id = :id AND deleted_at IS NULL LIMIT 1',
+        { type: QueryTypes.SELECT, replacements: { id: servicioId } }
+      );
+      if (!svcRow) return res.status(404).json({ ok: false, error: `Servicio ${servicioId} no encontrado` });
+
+      // ── 2. Agentes del servicio ────────────────────────────────────────────
+      const agentesDb = await sequelize.query<{ dni: string; nombre_agente: string | null }>(
+        `SELECT DISTINCT ags.dni,
+                ags.nombre AS nombre_agente
+         FROM agentes_servicios ags
+         WHERE ags.servicio_id = :sid
+           AND ags.deleted_at IS NULL
+           AND (ags.fecha_hasta IS NULL OR ags.fecha_hasta >= :desde)
+           AND ags.fecha_desde <= :hasta
+         ORDER BY ags.nombre`,
+        { type: QueryTypes.SELECT, replacements: { sid: servicioId, desde: period.start.toISOString().slice(0,10), hasta: period.end.toISOString().slice(0,10) } }
+      );
+      const dniList = [...new Set(agentesDb.map(a => normDni(a.dni)).filter(Boolean))];
+      if (!dniList.length) return res.json({ ok: true, servicio: svcRow, periodo: periodoStr, feriados: [], agentes: [] });
+
+      // ── 3. Feriados del mes ────────────────────────────────────────────────
+      const feriadosDb = await sequelize.query<{ fecha: string; nombre: string; tipo: string }>(
+        `SELECT DATE_FORMAT(fecha,'%Y-%m-%d') AS fecha, nombre, tipo
+         FROM feriados
+         WHERE fecha >= :desde AND fecha <= :hasta
+         ORDER BY fecha`,
+        { type: QueryTypes.SELECT, replacements: { desde: period.start.toISOString().slice(0,10), hasta: period.end.toISOString().slice(0,10) } }
+      );
+      const feriadoSet = new Set(feriadosDb.map(f => f.fecha));
+
+      // ── 4. Horarios ────────────────────────────────────────────────────────
+      const DOW_KEYS_RS = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'] as const;
+      type HoraDia = { entrada: string|null; salida: string|null; controlable: boolean };
+      type AgHorario = { nombre: string; esGuardia: boolean; dias: Record<string, HoraDia> };
+      const horariosMap: Record<string, AgHorario> = {};
+
+      if (horariosFile && fs.existsSync(horariosFile)) {
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.readFile(horariosFile);
+        const ws = wb.worksheets[0];
+        if (ws) {
+          const hdr: Record<string, number> = {};
+          ws.getRow(1).eachCell((c: any, col: number) => {
+            const v = normHeader(c?.value ?? '');
+            if (v) hdr[v] = col;
+          });
+          const colDni2  = hdr['nro_documento'] ?? hdr['nro documento'] ?? hdr['documento'] ?? hdr['dni'] ?? 4;
+          const colNom   = hdr['apellido_nombre'] ?? hdr['apellido y nombres'] ?? hdr['apellido y nombre'] ?? 0;
+          const colPlant = hdr['planta_de_revista'] ?? hdr['planta de revista'] ?? 0;
+          const isSI2    = (v: any) => String(v ?? '').toUpperCase().trim() === 'SI';
+          const pHora2   = (v: any): string | null => {
+            const s = String(v ?? '').trim();
+            const m = s.match(/^(\d{1,2}):(\d{2})/);
+            return m ? `${m[1].padStart(2,'0')}:${m[2]}` : null;
+          };
+          const diasCols = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+          const hasCtrl  = diasCols.some(d => hdr[`${d}_controlable`] > 0);
+
+          ws.eachRow((r: any, rn: number) => {
+            if (rn === 1) return;
+            const dni2 = normDni(r.getCell(colDni2)?.value);
+            if (!dniList.includes(dni2)) return;
+            const nombre2 = colNom ? cellToText(r.getCell(colNom)?.value) : '';
+            const planta2 = colPlant ? cellToText(r.getCell(colPlant)?.value).toUpperCase() : '';
+            const esGuardia2 = planta2.includes('GUARDIA');
+            const dias2: Record<string, HoraDia> = {};
+            for (const d of diasCols) {
+              const colEnt2 = hdr[`${d}_entrada`] ?? 0;
+              const colSal2 = hdr[`${d}_salida`]  ?? 0;
+              const colCtl2 = hdr[`${d}_controlable`] ?? 0;
+              const ent2 = colEnt2 ? pHora2(r.getCell(colEnt2)?.value) : null;
+              const sal2 = colSal2 ? pHora2(r.getCell(colSal2)?.value) : null;
+              const ctrl2 = hasCtrl ? (colCtl2 ? isSI2(r.getCell(colCtl2)?.value) : false) : ent2 !== null;
+              dias2[d] = { entrada: ent2, salida: sal2, controlable: ctrl2 };
+            }
+            horariosMap[dni2] = { nombre: nombre2, esGuardia: esGuardia2, dias: dias2 };
+          });
+        }
+      }
+
+      // ── 5. SIAP del mes ────────────────────────────────────────────────────
+      type NovedadEntry = { novedad: string; desde: string; hasta: string };
+      const siapMap: Record<string, NovedadEntry[]> = {};
+      if (siapFile && fs.existsSync(siapFile)) {
+        const siapRows = await parseSiap(siapFile);
+        for (const s of siapRows) {
+          const d = normDni((s as any).dni);
+          if (!dniList.includes(d)) continue;
+          const desde = parseDate((s as any).desde);
+          const hasta  = parseDate((s as any).hasta);
+          if (!desde || !hasta) continue;
+          (siapMap[d] = siapMap[d] || []).push({
+            novedad: String((s as any).novedad ?? '').trim(),
+            desde: dateToStr(desde),
+            hasta: dateToStr(hasta),
+          });
+        }
+      }
+
+      // ── 5b. Ministerio del mes ─────────────────────────────────────────────
+      const minFile = req.query.ministerioFile
+        ? path.join(dir, String(req.query.ministerioFile))
+        : files.find(f => f.name.toLowerCase().includes('ministerio'))?.fullPath ?? null;
+      const minMap: Record<string, NovedadEntry[]> = {};
+      if (minFile && fs.existsSync(minFile)) {
+        const minRows = await parseMinisterio(minFile);
+        for (const m of minRows) {
+          const d = normDni((m as any).dni);
+          if (!dniList.includes(d)) continue;
+          const desde = parseDate((m as any).desde);
+          const hasta  = parseDate((m as any).hasta);
+          if (!desde || !hasta) continue;
+          (minMap[d] = minMap[d] || []).push({
+            novedad: String((m as any).novedad ?? '').trim(),
+            desde: dateToStr(desde),
+            hasta: dateToStr(hasta),
+          });
+        }
+      }
+
+      // ── 6. Fichajes biométricos ────────────────────────────────────────────
+      // mapa: dni → fecha → { entrada, salida, invertido }
+      const fichajesMap: Record<string, Record<string, { entrada: string|null; salida: string|null; invertido: boolean }>> = {};
+      let dbError: string | null = null;
+      const cfgPathRS = path.resolve(process.cwd(), 'fichero_config.json');
+      if (fs.existsSync(cfgPathRS)) {
+        try {
+          const cfg = JSON.parse(fs.readFileSync(cfgPathRS, 'utf-8'));
+          const bioConn = await mysql.createConnection({
+            host: cfg.mysqlHost || '127.0.0.1', port: cfg.mysqlPort || 3306,
+            user: cfg.mysqlUser || 'root', password: cfg.mysqlPass || '',
+            database: cfg.mysqlDb || 'adms_db', connectTimeout: 10_000, dateStrings: true,
+          });
+          const placeholders = dniList.map(() => '?').join(',');
+          const dateFromRS = period.start.toISOString().slice(0, 10);
+          const dateToRS   = period.end.toISOString().slice(0, 10);
+          const [ficRows] = await bioConn.query<RowDataPacket[]>(
+            `SELECT ui.badgenumber AS dni, ci.checktime, ci.checktype
+             FROM checkinout ci
+             INNER JOIN userinfo ui ON ci.userid = ui.userid
+             WHERE ui.badgenumber IN (${placeholders})
+               AND ci.checktime >= ? AND ci.checktime <= ?
+             ORDER BY ci.checktime ASC`,
+            [...dniList, `${dateFromRS} 00:00:00`, `${dateToRS} 23:59:59`]
+          );
+          await bioConn.end();
+
+          // Primera pasada: agrupar todos los registros por agente y fecha
+          const rawMap: Record<string, Record<string, { hora: string; tipo: string }[]>> = {};
+          for (const row of ficRows) {
+            const d     = normDni(row.dni);
+            const cts   = String(row.checktime);
+            const fecha = cts.slice(0, 10);
+            const hora  = cts.slice(11, 16);
+            if (!rawMap[d]) rawMap[d] = {};
+            if (!rawMap[d][fecha]) rawMap[d][fecha] = [];
+            rawMap[d][fecha].push({ hora, tipo: String(row.checktype) });
+          }
+
+          // Segunda pasada: determinar entrada/salida detectando fichaje invertido
+          for (const [d, dateMap] of Object.entries(rawMap)) {
+            fichajesMap[d] = {};
+            for (const [fecha, records] of Object.entries(dateMap)) {
+              // ya vienen ordenados ASC por checktime
+              const entradas = records.filter(r => r.tipo === '0');
+              const salidas  = records.filter(r => r.tipo !== '0');
+
+              let entrada: string | null = entradas.length ? entradas[0].hora : null;
+              let salida:  string | null = salidas.length  ? salidas[salidas.length - 1].hora : null;
+              let invertido = false;
+
+              // Si hay entrada pero no salida y existe más de un registro,
+              // el agente fichó ambas marcaciones como tipo 0 (error).
+              // Se usa el primer registro como entrada y el último como salida.
+              if (entrada && !salida && records.length > 1) {
+                salida    = records[records.length - 1].hora;
+                invertido = true;
+              }
+
+              fichajesMap[d][fecha] = { entrada, salida, invertido };
+            }
+          }
+        } catch (e: any) { dbError = e.message; }
+      } else { dbError = 'fichero_config.json no encontrado'; }
+
+      // ── 7. Armar días del mes ──────────────────────────────────────────────
+      const minsHoras = (ent: string, sal: string): number => {
+        const [eh, em] = ent.split(':').map(Number);
+        const [sh, sm] = sal.split(':').map(Number);
+        let diff = (sh * 60 + sm) - (eh * 60 + em);
+        if (diff < 0) diff += 1440; // turno nocturno
+        return diff;
+      };
+      const toHs = (mins: number) => Math.round(mins / 60 * 100) / 100;
+
+      const allDias: string[] = [];
+      const cur = new Date(period.start);
+      while (cur <= period.end) {
+        allDias.push(cur.toISOString().slice(0,10));
+        cur.setUTCDate(cur.getUTCDate() + 1);
+      }
+      const DOW_LABELS_RS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+      // ── 8. Construir reporte por agente ────────────────────────────────────
+      const agentes = agentesDb.map(ag => {
+        const dni3 = normDni(ag.dni);
+        const horAg = horariosMap[dni3] ?? null;
+        const ficAg = fichajesMap[dni3] ?? {};
+
+        let hTeoricoMes = 0, hRealMes = 0, diasLab = 0, diasFeriado = 0;
+        let diasConFichaje = 0, diasSinFichaje = 0, diasConNovedad = 0, diasSinSalida = 0, diasCumplio = 0, diasInvertido = 0;
+        const semanas: Record<string, { teorico: number; real: number; laboral: number }> = {};
+
+        const diasDetalle = allDias.map(fecha => {
+          const dow = new Date(fecha + 'T00:00:00Z').getUTCDay();
+          const dowKey = DOW_KEYS_RS[dow] as string;
+          const diaSemana = DOW_LABELS_RS[dow];
+          const esFeriado = feriadoSet.has(fecha);
+          const feriadoNombre = esFeriado ? (feriadosDb.find(f => f.fecha === fecha)?.nombre ?? '') : null;
+
+          const horDia = horAg?.dias[dowKey] ?? null;
+          const debiaTrabajo = !esFeriado && (horDia?.controlable ?? false);
+
+          let horasTeoricas = 0;
+          if (debiaTrabajo && horDia?.entrada && horDia?.salida) {
+            horasTeoricas = toHs(minsHoras(horDia.entrada, horDia.salida));
+          }
+          if (esFeriado) diasFeriado++;
+          else if (debiaTrabajo) { diasLab++; hTeoricoMes += horasTeoricas; }
+
+          // Semana (lunes como inicio)
+          const semKey = (() => {
+            const dt2 = new Date(fecha + 'T00:00:00Z');
+            const d2  = dt2.getUTCDay();
+            const diff = d2 === 0 ? -6 : 1 - d2;
+            dt2.setUTCDate(dt2.getUTCDate() + diff);
+            return dt2.toISOString().slice(0,10);
+          })();
+          if (!semanas[semKey]) semanas[semKey] = { teorico: 0, real: 0, laboral: 0 };
+          if (debiaTrabajo) { semanas[semKey].teorico += horasTeoricas; semanas[semKey].laboral++; }
+
+          // Novedades SIAP + Ministerio que cubren esta fecha
+          const siapAg = siapMap[dni3] ?? [];
+          const minAg  = minMap[dni3]  ?? [];
+          const novedades = [
+            ...siapAg.filter(s => s.desde <= fecha && s.hasta >= fecha).map(s => `SIAP: ${s.novedad}`),
+            ...minAg.filter(s => s.desde <= fecha && s.hasta >= fecha).map(s => `Min: ${s.novedad}`),
+          ];
+          if (novedades.length) diasConNovedad++;
+
+          const fich = ficAg[fecha] ?? null;
+          let horasReales = 0;
+          if (fich?.entrada && fich?.salida) {
+            horasReales = toHs(minsHoras(fich.entrada, fich.salida));
+          }
+          const cumplioHoras = debiaTrabajo && horasTeoricas > 0 && horasReales >= horasTeoricas * 0.9;
+          if (cumplioHoras) diasCumplio++;
+          if (fich) {
+            diasConFichaje++;
+            hRealMes += horasReales;
+            semanas[semKey].real += horasReales;
+            if (fich.entrada && !fich.salida) diasSinSalida++;
+            if (fich.invertido) diasInvertido++;
+          } else if (debiaTrabajo && !novedades.length) diasSinFichaje++;
+
+          return {
+            fecha, diaSemana, esFeriado, feriadoNombre,
+            debiaTrabajo,
+            esLaboralBase: !!(horDia?.controlable),
+            entrada_prog: horDia?.entrada ?? null,
+            salida_prog:  horDia?.salida  ?? null,
+            horasTeoricas,
+            entrada_real: fich?.entrada ?? null,
+            salida_real:  fich?.salida  ?? null,
+            invertido:    fich?.invertido ?? false,
+            horasReales,
+            cumplioHoras,
+            novedades,
+          };
+        });
+
+        const resumenSemanal = Object.entries(semanas)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([semana, v]) => ({ semana, ...v }));
+
+        const nombreAg = horAg?.nombre || String(ag.nombre_agente ?? '') || dni3;
+
+        return {
+          dni: dni3,
+          nombre: nombreAg,
+          enHorario: !!horAg,
+          dias: diasDetalle,
+          resumenMensual: {
+            diasLaborales: diasLab,
+            diasFeriados: diasFeriado,
+            horasTeoricas: Math.round(hTeoricoMes * 100) / 100,
+            horasReales: Math.round(hRealMes * 100) / 100,
+            diasConFichaje,
+            diasSinFichaje,
+            diasSinSalida,
+            diasCumplio,
+            diasConNovedad,
+            diasInvertido,
+          },
+          resumenSemanal,
+        };
+      });
+
+      return res.json({
+        ok: true,
+        servicio: svcRow,
+        periodo: periodoStr,
+        feriados: feriadosDb,
+        agentes,
+        dbError,
+      });
+    } catch (err: any) {
+      logger.error({ msg: 'reporte-servicio error', err: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
     }
   });
 

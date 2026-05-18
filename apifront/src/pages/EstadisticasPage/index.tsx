@@ -362,6 +362,7 @@ export function EstadisticasPage() {
   const activos = agentes.filter(a => a.estado_empleo === 'ACTIVO');
   const inactivos = agentes.filter(a => a.estado_empleo === 'INACTIVO');
   const bajas = agentes.filter(a => a.estado_empleo === 'BAJA');
+  const tramites = agentes.filter(a => a.estado_empleo === 'TRAMITE');
   const conEmail = personal.filter(p => p.email && p.email.trim() !== '');
   const conTelefono = personal.filter(p => p.telefono && p.telefono.trim() !== '');
   const conDomicilio = personal.filter(p => p.domicilio && p.domicilio.trim() !== '');
@@ -526,6 +527,7 @@ export function EstadisticasPage() {
           { Indicador: 'ACTIVOS', Cantidad: activos.length, Porcentaje: pct(activos.length, agentes.length) },
           { Indicador: 'INACTIVOS', Cantidad: inactivos.length, Porcentaje: pct(inactivos.length, agentes.length) },
           { Indicador: 'BAJA', Cantidad: bajas.length, Porcentaje: pct(bajas.length, agentes.length) },
+          { Indicador: 'TRAMITE', Cantidad: tramites.length, Porcentaje: pct(tramites.length, agentes.length) },
           { Indicador: 'Personal (tabla personal)', Cantidad: personal.length },
           { Indicador: 'Con e-mail registrado', Cantidad: conEmail.length, Porcentaje: pct(conEmail.length, personal.length) },
           { Indicador: 'Con teléfono registrado', Cantidad: conTelefono.length, Porcentaje: pct(conTelefono.length, personal.length) },
@@ -543,6 +545,7 @@ export function EstadisticasPage() {
           <StatCard label="ACTIVOS" value={fmt(activos.length)} sub={pct(activos.length, agentes.length)} color="#10b981" />
           <StatCard label="INACTIVOS" value={fmt(inactivos.length)} sub={pct(inactivos.length, agentes.length)} color="#f59e0b" />
           <StatCard label="BAJA" value={fmt(bajas.length)} sub={pct(bajas.length, agentes.length)} color="#ef4444" />
+          <StatCard label="TRAMITE" value={fmt(tramites.length)} sub={pct(tramites.length, agentes.length)} color="#fbbf24" />
           <StatCard label="Personal" value={fmt(personal.length)} color="#2563eb" />
           <StatCard label="Antigüedad +20 años" value={fmt(antig20plus.length)} sub="activos" color="#f97316" />
           <StatCard label="Ingresos este año" value={fmt(ingresosAnioActual.length)} color="#8b5cf6" />
