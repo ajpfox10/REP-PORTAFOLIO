@@ -8,6 +8,7 @@ import { useKiosk } from '../../hooks/useKiosk';
 import { EmbarazadasAlertaBanner } from '../EmbarazadasPage';
 import { ExamenIngresoBanner } from '../ExamenIngresoPage';
 import { AccidentesPunzoBanner } from '../AccidentesPunzoPage';
+import { JefedeptosAlertaBanner } from '../JefedeptosPage';
 import './styles/DashboardPage.css';
 
 function Tile({ to, title, desc, disabled, accent }: {
@@ -244,6 +245,7 @@ export function DashboardPage() {
       {shouldShowEmbarazadasBanner && <EmbarazadasAlertaBanner />}
       {hasPerm('crud:*:*') && <ExamenIngresoBanner />}
       {hasPerm('crud:*:*') && <AccidentesPunzoBanner />}
+      {hasPerm('crud:*:*') && <JefedeptosAlertaBanner />}
 
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -258,6 +260,11 @@ export function DashboardPage() {
           <Tile to="/app/documentos" title="📂 Documentos" desc="Listado y visor de documentos PDF." disabled={!canDocs} accent="#22d3ee" />
           <Tile to="/app/citaciones" title="⚠️ Citaciones" desc="Registro y seguimiento de citaciones por agente." accent="#ef4444" />
           <Tile to="/app/mi-sector" title="🏢 Gestión de Sectores" desc="Gestión de agentes y servicios por sector." accent="#6366f1" />
+          <Tile to="/app/atencion" title="🏛️ Atención al Público" desc="Recepción de agentes, motivo de consulta y emisión de ticket de atención." accent="#0f766e" />
+          <Tile to="/app/carga-agente" title="🧾 Carga de Agente" desc="Alta manual de agentes y carga inicial de datos en el sistema." accent="#84cc16" />
+          {canSeeResidentesRotacion && (
+            <Tile to="/app/residentes-rotacion" title="🔄 Residentes Rotación" desc="Registro de rotaciones de residentes por servicio y período." accent="#a78bfa" />
+          )}
           {(hasPerm('crud:resoluciones:read') || hasPerm('crud:*:*')) && (
             <Tile to="/app/resoluciones" title="📋 Resoluciones" desc="Resoluciones, expedientes y archivos escaneados por agente." accent="#0d9488" />
           )}
@@ -275,8 +282,11 @@ export function DashboardPage() {
           <Tile to="/app/sin-fichaje-salida" title="🚪 Sin fichaje de salida" desc="Agentes que debían trabajar un día o mes completo pero no registraron salida en el fichaje biométrico. Cruza horarios y SIAP por UPA." accent="#dc2626" />
           <Tile to="/app/organigrama" title="🏗️ Organigrama" desc="Distribución visual del personal por jefatura, sector, servicio y dependencia." accent="#f59e0b" />
           <Tile to="/app/alertas" title="🔔 Alertas" desc="Cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos." accent="#ef4444" />
-          <Tile to="/app/atencion" title="🏛️ Atención al Público" desc="Recepción de agentes, motivo de consulta y emisión de ticket de atención." accent="#0f766e" />
           <Tile to="/app/agentes-servicios" title="🏥 Agentes por Servicio" desc="..." accent="#0891b2" />
+          <Tile to="/app/reporte-servicio" title="📊 Reporte por Servicio" desc="Reporte mensual de asistencia por servicio: horas teóricas vs reales, fichajes diarios, feriados y resúmenes semanales/mensuales." accent="#14b8a6" />
+          {hasPerm('crud:*:*') && (
+            <Tile to="/app/bajas-gestion" title="📉 Gestión de Bajas" desc="Estadísticas y completitud de datos del personal de baja. Filtros por ley, sexo, servicio y edad. Edición de datos faltantes." accent="#f87171" />
+          )}
         </div>
       </div>
 
@@ -285,6 +295,7 @@ export function DashboardPage() {
           Herramientas
         </div>
         <div className="grid">
+          <Tile to="/app/jefedeptos" title="🏛️ Historial Jefaturas" desc="Cargar y consultar el historial de quién ocupó cada jefatura. Alertas de vencimiento de cargos por concurso." accent="#6366f1" />
           <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación. Prorrateo, agotamiento prematuro, ANSES, servicios externos, cargo deudor y exportación a Excel." accent="#7c3aed" />
           <Tile to="/app/buscador" title="🔍 Buscador Global" desc="Buscá por DNI o apellido en todas las secciones con historial de búsquedas." accent="#06b6d4" />
           <Tile to="/app/comparador" title="⚖️ Comparador" desc="Comparar dos agentes lado a lado. Las diferencias se marcan automáticamente." accent="#8b5cf6" />
@@ -294,7 +305,6 @@ export function DashboardPage() {
           <Tile to="/app/mi-cuenta" title="👤 Mi cuenta" desc="Perfil, permisos y cambio de contraseña." accent="#0ea5e9" />
           <Tile to="/app/escaneo" title="🖨️ Escaneo" desc="Escaneo de documentos, dispositivos, bandejas y cola de trabajos en tiempo real." accent="#0891b2" />
           <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
-          <Tile to="/app/carga-agente" title="🧾 Carga de Agente" desc="Alta manual de agentes y carga inicial de datos en el sistema." accent="#84cc16" />
           <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP y alerta de red caída." accent="#f59e0b" />
         </div>
       </div>
@@ -313,9 +323,6 @@ export function DashboardPage() {
             )}
             {canSeeEmbarazadas && (
               <Tile to="/app/embarazadas" title="🤰 Embarazadas" desc="Registro de agentes embarazadas, FPP y alertas de licencia." accent="#f472b6" />
-            )}
-            {canSeeResidentesRotacion && (
-              <Tile to="/app/residentes-rotacion" title="🔄 Residentes Rotación" desc="Registro de rotaciones de residentes por servicio y período." accent="#a78bfa" />
             )}
             {canSeeExamenIngreso && (
               <Tile to="/app/examen-ingreso" title="🩺 Examen de Ingreso" desc="Gestión de turnos de examen de ingreso para candidatos activos y nuevos agentes." accent="#6366f1" />

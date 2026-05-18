@@ -403,7 +403,7 @@ async function parseMinisterioFile(fp: string): Promise<Array<{
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────
-export function buildSinSalidaRouter() {
+export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) {
   const router = Router();
 
   // POST /sin-salida
@@ -846,6 +846,40 @@ export function buildSinSalidaRouter() {
 
       const ORDEN: Record<string, number> = { SOSPECHOSO: 0, SIN_SALIDA: 1, SOLO_SALIDA: 2, PRESENTE_SIN_ESTAR: 3, SIN_FICHAJE: 4, REQUIERE_REVISION: 5, JUSTIFICADO: 6, CON_SALIDA: 7 };
 
+      // ── Reconocimientos médicos ───────────────────────────────────────────────
+      const recMedicoMap = new Map<string, string>();
+      if (sequelize && expandedFiltrado.length > 0) {
+        try {
+          const allDnisRec  = [...new Set(expandedFiltrado.map(r => r.dni))];
+          const allDatesRec = expandedFiltrado.map(r => r.fecha);
+          const minDateRec  = allDatesRec.reduce((a, b) => (a < b ? a : b));
+          const maxDateRec  = allDatesRec.reduce((a, b) => (a > b ? a : b));
+          const [recRows] = await sequelize.query(
+            `SELECT dni, fecha_desde, fecha_hasta, tipo
+               FROM reconocimientos_medicos
+              WHERE dni IN (${allDnisRec.map(() => '?').join(',')})
+                AND fecha_desde <= ?
+                AND (fecha_hasta >= ? OR fecha_hasta IS NULL)`,
+            { replacements: [...allDnisRec, maxDateRec, minDateRec] },
+          ) as [any[], unknown];
+          for (const rec of recRows) {
+            const dniRec  = String(rec.dni ?? '').replace(/\D/g, '');
+            const desde   = String(rec.fecha_desde ?? '').slice(0, 10);
+            const hasta   = rec.fecha_hasta ? String(rec.fecha_hasta).slice(0, 10) : maxDateRec;
+            const tipoRec = String(rec.tipo ?? '').trim();
+            for (const row of expandedFiltrado) {
+              if (row.dni !== dniRec) continue;
+              if (row.fecha >= desde && row.fecha <= hasta) {
+                const key = `${row.dni}|${row.fecha}`;
+                if (!recMedicoMap.has(key)) recMedicoMap.set(key, tipoRec);
+              }
+            }
+          }
+        } catch (e: any) {
+          logger.warn({ msg: 'sin-salida: error consultando reconocimientos_medicos', error: e?.message });
+        }
+      }
+
       const data = expandedFiltrado.map(row => {
         const fich      = fichajesMap[row.dni]?.[row.fecha];
         const novSiap   = getSiapNovedad(row.dni, row.fecha);
@@ -913,6 +947,7 @@ export function buildSinSalidaRouter() {
 
         if (fichajeInvertido) estado = 'SOSPECHOSO';
 
+        const recKey = `${row.dni}|${row.fecha}`;
         return {
           dni:                  row.dni,
           nombre:               row.nombre,
@@ -931,6 +966,7 @@ export function buildSinSalidaRouter() {
           estado,
           fichajeInvertido,
           salidaFaltante,
+          recMedico:            recMedicoMap.has(recKey) ? (recMedicoMap.get(recKey) || 'Sí') : null,
         };
       });
 

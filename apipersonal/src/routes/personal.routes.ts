@@ -61,7 +61,7 @@ const patchPersonalSchema = z.object({
   localidad_id:           z.number().int().positive().optional().nullable(),
   nacionalidad:           z.string().max(50).optional().nullable(),
   observaciones:          z.string().optional().nullable(),
-  estado_empleo:          z.enum(['ACTIVO','INACTIVO','BAJA']).optional().nullable(),
+  estado_empleo:          z.enum(['ACTIVO','INACTIVO','BAJA','COMISION','TRAMITE']).optional().nullable(),
   // ── tabla: agentes ───────────────────────────────────────────────────────
   ley_id:                 z.number().int().positive().optional().nullable(),
   planta_id:              z.number().int().positive().optional().nullable(),
@@ -238,6 +238,68 @@ export function buildPersonalRouter(sequelize: Sequelize) {
     }
   );
 
+  // ── GET /personal/bajas — Panel gestión de personal de baja ─────────────
+  router.get(
+    '/bajas',
+    requireCrudFor('personal', 'read'),
+    async (_req: Request, res: Response) => {
+      try {
+        const [rows, statsRows] = await Promise.all([
+          sequelize.query(`
+            SELECT
+              p.dni, p.apellido, p.nombre,
+              p.fecha_nacimiento,
+              p.cuil,
+              p.sexo_id,
+              sx.nombre        AS sexo_nombre,
+              a.fecha_ingreso,
+              a.fecha_egreso,
+              a.legajo,
+              a.ley_id,        l.nombre   AS ley_nombre,
+              a.servicio_id,   srv.nombre AS servicio_nombre,
+              a.sector_id,     sec.nombre AS sector_nombre,
+              a.planta_id,     pl.nombre  AS planta_nombre,
+              a.categoria_id,  cat.nombre AS categoria_nombre,
+              a.funcion_id,    fn.nombre  AS funcion_nombre,
+              TIMESTAMPDIFF(YEAR, p.fecha_nacimiento, CURDATE()) AS edad
+            FROM personal p
+            JOIN    agentes    a   ON a.dni  = p.dni
+            LEFT JOIN sexos    sx  ON sx.id  = p.sexo_id
+            LEFT JOIN ley      l   ON l.id   = a.ley_id
+            LEFT JOIN servicios srv ON srv.id = a.servicio_id
+            LEFT JOIN sectores  sec ON sec.id = a.sector_id
+            LEFT JOIN plantas   pl  ON pl.id  = a.planta_id
+            LEFT JOIN categorias cat ON cat.ID = a.categoria_id
+            LEFT JOIN funciones  fn  ON fn.id  = a.funcion_id
+            WHERE a.estado_empleo IN ('BAJA','TRAMITE')
+              AND p.deleted_at IS NULL
+            ORDER BY a.estado_empleo ASC, p.apellido ASC, p.nombre ASC
+          `, { type: QueryTypes.SELECT }),
+
+          sequelize.query(`
+            SELECT
+              COUNT(*)                                                              AS total,
+              SUM(CASE WHEN p.sexo_id       IS NULL THEN 1 ELSE 0 END)            AS sin_sexo,
+              SUM(CASE WHEN a.ley_id        IS NULL THEN 1 ELSE 0 END)            AS sin_ley,
+              SUM(CASE WHEN a.servicio_id   IS NULL THEN 1 ELSE 0 END)            AS sin_servicio,
+              SUM(CASE WHEN a.fecha_egreso  IS NULL THEN 1 ELSE 0 END)            AS sin_fecha_egreso,
+              SUM(CASE WHEN p.fecha_nacimiento IS NULL THEN 1 ELSE 0 END)         AS sin_fecha_nacimiento,
+              SUM(CASE WHEN p.cuil          IS NULL OR p.cuil = '' THEN 1 ELSE 0 END) AS sin_cuil
+            FROM personal p
+            JOIN agentes a ON a.dni = p.dni
+            WHERE a.estado_empleo IN ('BAJA','TRAMITE') AND p.deleted_at IS NULL
+          `, { type: QueryTypes.SELECT }),
+        ]);
+
+        const stats = (statsRows as any[])[0] ?? {};
+        return res.json({ ok: true, data: rows, stats });
+      } catch (err: any) {
+        logger.error({ msg: '[personal] bajas error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+      }
+    }
+  );
+
   // ── GET /personal/:dni — Perfil completo ──────────────────────────────────
   /**
    * Devuelve el perfil completo de un agente:
@@ -302,9 +364,11 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         // Servicios vigentes
         const servicios = await sequelize.query(`
           SELECT ags.id, ags.servicio_id, srv.nombre AS servicio_nombre,
-                 ags.fecha_desde, ags.fecha_hasta, ags.observaciones
+                 ags.fecha_desde, ags.fecha_hasta, ags.observaciones,
+                 rep.id AS dependencia_id, rep.reparticion_nombre AS dependencia_nombre
           FROM agentes_servicios ags
           JOIN servicios srv ON srv.id = ags.servicio_id
+          LEFT JOIN reparticiones rep ON rep.id = ags.dependencia_id
           WHERE ags.dni = :dni AND ags.deleted_at IS NULL
           ORDER BY ags.fecha_desde DESC
         `, { replacements: { dni }, type: QueryTypes.SELECT });

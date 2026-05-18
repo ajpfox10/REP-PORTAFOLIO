@@ -5,7 +5,7 @@ import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf, printTable } from '../../utils/export';
 
-type TabKey = 'cumpleanos' | 'antiguedad' | 'estadisticas_consultas' | 'consultas_dinamicas';
+type TabKey = 'cumpleanos' | 'antiguedad' | 'estadisticas_consultas' | 'whatsapp' | 'consultas_dinamicas';
 
 const MESES = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -14,8 +14,8 @@ const MESES = [
 const DIAS = Array.from({ length: 31 }, (_, i) => i + 1);
 const YEAR_NOW = new Date().getFullYear();
 const YEARS_ANTIG = Array.from({ length: 15 }, (_, i) => YEAR_NOW - i);
+const YEARS_RANGE = Array.from({ length: 5 }, (_, i) => YEAR_NOW - i);
 
-// Parsea '1970-01-02' SIN conversión UTC → sin off-by-one en Argentina
 const fmtLocalDate = (v: any): string => {
   if (!v) return '—';
   const s = String(v).split('T')[0];
@@ -29,13 +29,15 @@ function hoyStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// Último día del mes
 function lastDayOfMonth(year: number, month: number): string {
-  const d = new Date(year, month, 0); // month 0-indexed trick: day 0 = last day of prev month
+  const d = new Date(year, month, 0);
   return `${year}-${String(month).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// Pagina un endpoint CRUD del backend (max 200/página hardcoded en el API)
+function firstDayOfMonth(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2,'0')}-01`;
+}
+
 async function fetchAllPages(path: string, extraParams: string = ''): Promise<any[]> {
   const SEP = path.includes('?') ? '&' : '?';
   const PAGE = 200;
@@ -53,8 +55,6 @@ async function fetchAllPages(path: string, extraParams: string = ''): Promise<an
   return all;
 }
 
-// Construye mapa dni → {apellido, nombre} descargando tabla personal
-// Se usa como fallback cuando la vista consultaspordni no está disponible
 async function buildDniNameMap(): Promise<Record<string, { apellido: string; nombre: string }>> {
   const rows = await fetchAllPages('/personal', 'fields=dni,apellido,nombre');
   const map: Record<string, { apellido: string; nombre: string }> = {};
@@ -64,24 +64,17 @@ async function buildDniNameMap(): Promise<Record<string, { apellido: string; nom
   return map;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CAMPO DE FECHA ACTIVO: 'hora_atencion'
-// TODO: cambiar CAMPO_FECHA a 'created_at' cuando se unifique el campo en la BD
-// ─────────────────────────────────────────────────────────────────────────────
-const CAMPO_FECHA = 'hora_atencion'; // TODO: cambiar a 'created_at' cuando se migre el campo en la BD
+const CAMPO_FECHA = 'hora_atencion';
 
 function buildParamsFecha(desde: string, hasta: string): string {
-  // ← CAMPO FECHA — ambos sufijos usan el mismo campo
   return `${CAMPO_FECHA}_gte=${desde} 00:00:00&${CAMPO_FECHA}_lte=${hasta} 23:59:59&sort=${CAMPO_FECHA}`;
 }
 
-// Intenta usar consultaspordni (vista con JOIN); si falla usa consultas + personal
 async function fetchConsultasConNombres(params: string): Promise<any[]> {
   try {
     const data = await fetchAllPages('/consultaspordni', params);
     return data;
   } catch {
-    // Fallback: tabla consultas (sin nombres) + lookup en personal
     const [rows, nameMap] = await Promise.all([
       fetchAllPages('/consultas', params),
       buildDniNameMap(),
@@ -208,8 +201,6 @@ function CumpleanosTab() {
 }
 
 // ─── Antigüedad ───────────────────────────────────────────────────────────────
-// Usa tablas reales: /agentes (fecha_ingreso) + /personal (apellido, nombre)
-// La vista agentexdni1 no está en el schema cache — se usa fallback directo
 function AntigüedadTab() {
   const toast = useToast();
   const [mesSelec, setMesSelec] = useState(String(new Date().getMonth() + 1));
@@ -226,7 +217,6 @@ function AntigüedadTab() {
       const fechaDesde = `${anioIngreso}-${String(mesNum).padStart(2,'0')}-01`;
       const fechaHasta = lastDayOfMonth(anioIngreso, mesNum);
 
-      // 1) Traer agentes ACTIVOS filtrados por fecha_ingreso (tabla real, siempre disponible)
       const agentes = await fetchAllPages(
         '/agentes',
         `fecha_ingreso_gte=${fechaDesde}&fecha_ingreso_lte=${fechaHasta}&estado_empleo=ACTIVO&sort=dni`
@@ -234,15 +224,12 @@ function AntigüedadTab() {
 
       if (!agentes.length) { toast.error('Sin resultados'); setLoading(false); return; }
 
-      // 2) Traer nombres desde /personal para los DNIs encontrados
-      //    Descargamos todo personal y cruzamos client-side (más simple y confiable)
       const personal = await fetchAllPages('/personal', 'fields=dni,apellido,nombre,email,telefono');
       const nameMap: Record<string, any> = {};
       for (const p of personal) {
         if (p.dni) nameMap[String(p.dni)] = p;
       }
 
-      // 3) Combinar
       const data = agentes.map((a: any) => ({
         dni:           a.dni,
         apellido:      nameMap[String(a.dni)]?.apellido  ?? '—',
@@ -338,7 +325,6 @@ function AntigüedadTab() {
 function EstadisticasConsultasTab() {
   const toast = useToast();
 
-  // Default: último mes completo (hay datos hasta 2026-02-10, hoy puede no tener)
   const mesAtras = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -347,6 +333,8 @@ function EstadisticasConsultasTab() {
 
   const [desde, setDesde] = useState(mesAtras);
   const [hasta, setHasta] = useState(hoyStr());
+  const [mesRapido, setMesRapido] = useState('');
+  const [anioRapido, setAnioRapido] = useState(String(YEAR_NOW));
   const [loading, setLoading] = useState(false);
   const [totalHoy, setTotalHoy] = useState<number | null>(null);
   const [ultimaFecha, setUltimaFecha] = useState<string | null>(null);
@@ -356,13 +344,13 @@ function EstadisticasConsultasTab() {
   const [porAtendido, setPorAtendido] = useState<any[]>([]);
   const [detalle, setDetalle] = useState<any[]>([]);
   const [vistaDetalle, setVistaDetalle] = useState(false);
+  const [comparativo, setComparativo] = useState<any[]>([]);
+  const [comparativoMes, setComparativoMes] = useState<any[]>([]);
 
-  // Al montar: trae contador de hoy + fecha de la última consulta real
   React.useEffect(() => {
     (async () => {
       try {
         const h = hoyStr();
-        // TODO: cambiar a created_at cuando se migre el campo en la BD
         const [resHoy, resUltima] = await Promise.all([
           apiFetch<any>(`/consultas?limit=1&page=1&${buildParamsFecha(h, h).replace(/&sort=[^&]*/,'')}`),
           apiFetch<any>(`/consultas?limit=1&page=1&sort=-hora_atencion&hora_atencion_gt=2020-01-01`),
@@ -374,19 +362,29 @@ function EstadisticasConsultasTab() {
     })();
   }, []);
 
+  // Selección rápida por mes/año → llena desde/hasta
+  const aplicarMesRapido = useCallback(() => {
+    if (!mesRapido) return;
+    const m = Number(mesRapido);
+    const y = Number(anioRapido);
+    setDesde(firstDayOfMonth(y, m));
+    setHasta(lastDayOfMonth(y, m));
+  }, [mesRapido, anioRapido]);
+
   const buscar = useCallback(async () => {
     if (!desde || !hasta) { toast.error('Seleccioná rango de fechas'); return; }
     setLoading(true);
     setPorDia([]); setPorMes([]); setPorAgente([]); setPorAtendido([]); setDetalle([]);
+    setComparativo([]); setComparativoMes([]);
     try {
-      // Traer todas las consultas del rango
-      // TODO: cambiar buildParamsFecha a usar 'created_at' cuando se migre el campo en la BD
-      const all = await fetchConsultasConNombres(buildParamsFecha(desde, hasta));
+      const [all, waRes] = await Promise.all([
+        fetchConsultasConNombres(buildParamsFecha(desde, hasta)),
+        apiFetch<any>(`/whatsapp?desde=${desde}&hasta=${hasta}`).catch(() => null),
+      ]);
 
       if (!all.length) { toast.error('Sin resultados en ese rango'); return; }
 
-      // ── Por día ──────────────────────────────────────────────────────────
-      // TODO: cambiar CAMPO_FECHA a 'created_at' cuando se migre el campo en la BD
+      // ── Por día ──
       const byDia: Record<string, number> = {};
       for (const c of all) {
         const raw = String(c[CAMPO_FECHA] || c.hora_atencion || c.created_at || '');
@@ -399,8 +397,7 @@ function EstadisticasConsultasTab() {
           .sort((a, b) => a._sort.localeCompare(b._sort))
       );
 
-      // ── Por mes ──────────────────────────────────────────────────────────
-      // TODO: cambiar CAMPO_FECHA a 'created_at' cuando se migre el campo en la BD
+      // ── Por mes ──
       const byMes: Record<string, number> = {};
       for (const c of all) {
         const raw = String(c[CAMPO_FECHA] || c.hora_atencion || c.created_at || '').split('T')[0].split(' ')[0];
@@ -418,23 +415,18 @@ function EstadisticasConsultasTab() {
           .sort((a, b) => a._sort.localeCompare(b._sort))
       );
 
-      // ── Por agente (apellido + nombre vienen de consultaspordni) ─────────
+      // ── Por agente ──
       const byAgente: Record<string, any> = {};
       for (const c of all) {
         const key = String(c.dni ?? '');
         if (!byAgente[key]) {
-          byAgente[key] = {
-            DNI: c.dni,
-            APELLIDO: c.apellido ?? '—',
-            NOMBRE: c.nombre ?? '—',
-            TOTAL: 0,
-          };
+          byAgente[key] = { DNI: c.dni, APELLIDO: c.apellido ?? '—', NOMBRE: c.nombre ?? '—', TOTAL: 0 };
         }
         byAgente[key].TOTAL++;
       }
       setPorAgente(Object.values(byAgente).sort((a: any, b: any) => b.TOTAL - a.TOTAL));
 
-      // ── Por quien atendió ────────────────────────────────────────────────
+      // ── Por quien atendió ──
       const byAtendido: Record<string, number> = {};
       for (const c of all) {
         const at = ((c.atendido_por ?? '') as string).trim() || '(sin registrar)';
@@ -447,6 +439,44 @@ function EstadisticasConsultasTab() {
       );
 
       setDetalle(all);
+
+      // ── Comparativo ventanilla vs WhatsApp ──
+      const waRows: any[] = waRes?.data || [];
+      const waByDia: Record<string, number> = {};
+      const waByMes: Record<string, number> = {};
+      for (const w of waRows) {
+        const f = String(w.fecha).split('T')[0];
+        waByDia[f] = Number(w.cantidad);
+        const parts = f.split('-');
+        const mesKey = parts.length >= 2 ? `${parts[0]}-${parts[1]}` : f;
+        waByMes[mesKey] = (waByMes[mesKey] ?? 0) + Number(w.cantidad);
+      }
+
+      // Comparativo por día
+      const allFechas = new Set([...Object.keys(byDia), ...Object.keys(waByDia)]);
+      const comp = Array.from(allFechas).sort().map(fecha => ({
+        FECHA:      fmtLocalDate(fecha),
+        VENTANILLA: byDia[fecha] ?? 0,
+        WHATSAPP:   waByDia[fecha] ?? 0,
+        TOTAL:      (byDia[fecha] ?? 0) + (waByDia[fecha] ?? 0),
+        _sort:      fecha,
+      }));
+      setComparativo(comp);
+
+      // Comparativo por mes
+      const allMeses = new Set([...Object.keys(byMes), ...Object.keys(waByMes)]);
+      const compMes = Array.from(allMeses).sort().map(m => {
+        const [y, mm] = m.split('-');
+        return {
+          MES:        mm ? `${MESES[Number(mm)-1]} ${y}` : m,
+          VENTANILLA: byMes[m] ?? 0,
+          WHATSAPP:   waByMes[m] ?? 0,
+          TOTAL:      (byMes[m] ?? 0) + (waByMes[m] ?? 0),
+          _sort:      m,
+        };
+      });
+      setComparativoMes(compMes);
+
       toast.ok(`${all.length} consulta(s) procesadas`);
     } catch (e: any) {
       toast.error('Error', e?.message || 'Error al consultar');
@@ -522,9 +552,34 @@ function EstadisticasConsultasTab() {
         </div>
       </div>
 
-      {/* Filtro rango */}
+      {/* Filtro */}
       <div className="card">
-        <div style={{ marginBottom: 8 }}><strong>📊 Estadísticas por rango de fechas</strong></div>
+        <div style={{ marginBottom: 10 }}><strong>📊 Estadísticas por rango de fechas</strong></div>
+
+        {/* Selector rápido por mes */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12,
+          paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div>
+            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Mes rápido</div>
+            <select style={{ ...SELECT_DARK, minWidth: 150 }} value={mesRapido}
+              onChange={e => setMesRapido(e.target.value)}>
+              <option value="">— Elegir mes —</option>
+              {MESES.map((m, i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Año</div>
+            <select style={{ ...SELECT_DARK, minWidth: 100 }} value={anioRapido}
+              onChange={e => setAnioRapido(e.target.value)}>
+              {YEARS_RANGE.map(y => <option key={y} value={String(y)}>{y}</option>)}
+            </select>
+          </div>
+          <button className="btn" style={{ height: 36 }} onClick={aplicarMesRapido} disabled={!mesRapido}>
+            Aplicar mes
+          </button>
+        </div>
+
+        {/* Rango manual */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Desde</div>
@@ -570,11 +625,118 @@ function EstadisticasConsultasTab() {
         </div>
       )}
 
+      {/* Comparativo ventanilla vs WhatsApp */}
+      {comparativo.length > 0 && (
+        <>
+          <div style={{ marginTop: 4, fontWeight: 700, fontSize: '0.88rem', color: '#94a3b8' }}>
+            📊 Comparativo Ventanilla vs WhatsApp
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px,1fr))', gap: 12 }}>
+
+            {/* Por día */}
+            <div className="card">
+              <div style={{ marginBottom: 8, fontWeight: 700, fontSize: '0.88rem' }}>
+                📅 Por día
+                <span style={{ marginLeft: 8, fontSize: '0.76rem', color: '#94a3b8', fontWeight: 400 }}>
+                  ({comparativo.length} días)
+                </span>
+              </div>
+              <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto' }}>
+                <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: '#0f172a' }}>
+                    <tr>
+                      {['FECHA','VENTANILLA','WHATSAPP','TOTAL'].map(h => (
+                        <th key={h} style={{ padding: '5px 8px',
+                          textAlign: h === 'FECHA' ? 'left' : 'right',
+                          color: h === 'VENTANILLA' ? '#38bdf8' : h === 'WHATSAPP' ? '#4ade80' : h === 'TOTAL' ? '#e2e8f0' : '#94a3b8',
+                          fontSize: '0.72rem', borderBottom: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap' }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparativo.map((r, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>{r.FECHA}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#38bdf8', fontWeight: 600 }}>{r.VENTANILLA}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{r.WHATSAPP}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700 }}>{r.TOTAL}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)', fontWeight: 700 }}>
+                      <td style={{ padding: '5px 8px', color: '#94a3b8' }}>TOTAL</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#38bdf8' }}>
+                        {comparativo.reduce((s, r) => s + r.VENTANILLA, 0)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#4ade80' }}>
+                        {comparativo.reduce((s, r) => s + r.WHATSAPP, 0)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                        {comparativo.reduce((s, r) => s + r.TOTAL, 0)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Por mes */}
+            <div className="card">
+              <div style={{ marginBottom: 8, fontWeight: 700, fontSize: '0.88rem' }}>
+                🗓 Por mes
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['MES','VENTANILLA','WHATSAPP','TOTAL'].map(h => (
+                        <th key={h} style={{ padding: '5px 8px',
+                          textAlign: h === 'MES' ? 'left' : 'right',
+                          color: h === 'VENTANILLA' ? '#38bdf8' : h === 'WHATSAPP' ? '#4ade80' : h === 'TOTAL' ? '#e2e8f0' : '#94a3b8',
+                          fontSize: '0.72rem', borderBottom: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap' }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparativoMes.map((r, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '4px 8px' }}>{r.MES}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#38bdf8', fontWeight: 600 }}>{r.VENTANILLA}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{r.WHATSAPP}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700 }}>{r.TOTAL}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)', fontWeight: 700 }}>
+                      <td style={{ padding: '5px 8px', color: '#94a3b8' }}>TOTAL</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#38bdf8' }}>
+                        {comparativoMes.reduce((s, r) => s + r.VENTANILLA, 0)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#4ade80' }}>
+                        {comparativoMes.reduce((s, r) => s + r.WHATSAPP, 0)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                        {comparativoMes.reduce((s, r) => s + r.TOTAL, 0)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {comparativo.filter(r => r.WHATSAPP === 0).length > 0 && (
+                <div style={{ marginTop: 8, fontSize: '0.73rem', color: '#f59e0b' }}>
+                  ⚠️ Algunos días no tienen datos de WhatsApp cargados
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Por agente y por quien atendió */}
       {porAgente.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px,1fr))', gap: 12 }}>
-
-          {/* Por agente — apellido y nombre de consultaspordni */}
           <div className="card">
             <div style={{ marginBottom: 8, fontWeight: 700, fontSize: '0.88rem' }}>
               👤 Por agente
@@ -607,7 +769,6 @@ function EstadisticasConsultasTab() {
             </div>
           </div>
 
-          {/* Por quien atendió */}
           <div className="card">
             <div style={{ marginBottom: 8, fontWeight: 700, fontSize: '0.88rem' }}>
               🧑‍💼 Por quien atendió
@@ -676,7 +837,6 @@ function EstadisticasConsultasTab() {
                   {detalle.map((r, i) => (
                     <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                       <td style={{ padding: '3px 8px', whiteSpace: 'nowrap', color: '#94a3b8' }}>
-                        {/* TODO: cambiar a r.created_at cuando se migre el campo en la BD */}
                         {fmtLocalDate(r[CAMPO_FECHA] || r.hora_atencion || r.created_at)}
                       </td>
                       <td style={{ padding: '3px 8px', color: '#94a3b8' }}>{r.dni}</td>
@@ -698,7 +858,353 @@ function EstadisticasConsultasTab() {
   );
 }
 
-// ─── Consultas dinámicas (sin cambios) ───────────────────────────────────────
+// ─── WhatsApp Tab ─────────────────────────────────────────────────────────────
+function WhatsappTab() {
+  const toast = useToast();
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Formulario nuevo registro
+  const [newFecha, setNewFecha] = useState(hoyStr());
+  const [newCantidad, setNewCantidad] = useState('');
+
+  // Formulario edición inline
+  const [editCantidad, setEditCantidad] = useState('');
+  const [editFecha, setEditFecha] = useState('');
+
+  // Filtro para listar: mes o año completo
+  const [verAnio, setVerAnio] = useState(false);
+  const [filtroMes, setFiltroMes] = useState(String(new Date().getMonth() + 1));
+  const [filtroAnio, setFiltroAnio] = useState(String(YEAR_NOW));
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = verAnio
+        ? `year=${filtroAnio}`
+        : `year=${filtroAnio}&month=${filtroMes}`;
+      const res = await apiFetch<any>(`/whatsapp?${params}`);
+      setRows(res?.data || []);
+    } catch (e: any) {
+      toast.error('Error al cargar', e?.message);
+    } finally { setLoading(false); }
+  }, [filtroMes, filtroAnio, verAnio, toast]);
+
+  React.useEffect(() => { cargar(); }, [cargar]);
+
+  // Bloquea solo si ya existe con cantidad > 0 (cantidad 0 = pre-cargada sin datos reales)
+  const fechaYaExiste = rows.some(r => String(r.fecha).split('T')[0] === newFecha && Number(r.cantidad) > 0);
+
+  const guardar = async () => {
+    if (!newFecha || newCantidad === '') { toast.error('Completá fecha y cantidad'); return; }
+    if (fechaYaExiste) return; // bloqueado, el aviso ya está visible
+    setSaving(true);
+    try {
+      await apiFetch('/whatsapp', {
+        method: 'POST',
+        body: JSON.stringify({ fecha: newFecha, cantidad: Number(newCantidad) }),
+      });
+      toast.ok('Guardado');
+      setNewCantidad('');
+      await cargar();
+    } catch (e: any) {
+      toast.error('Error', e?.message);
+    } finally { setSaving(false); }
+  };
+
+  const actualizarFila = async (id: number) => {
+    if (editCantidad === '') { toast.error('Ingresá la cantidad'); return; }
+    setSaving(true);
+    try {
+      await apiFetch(`/whatsapp/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ fecha: editFecha, cantidad: Number(editCantidad) }),
+      });
+      toast.ok('Actualizado');
+      setEditingId(null);
+      await cargar();
+    } catch (e: any) {
+      toast.error('Error', e?.message);
+    } finally { setSaving(false); }
+  };
+
+  const eliminar = async (id: number, fecha: string) => {
+    if (!confirm(`¿Eliminar registro del ${fmtLocalDate(fecha)}?`)) return;
+    try {
+      await apiFetch(`/whatsapp/${id}`, { method: 'DELETE' });
+      toast.ok('Eliminado');
+      await cargar();
+    } catch (e: any) {
+      toast.error('Error', e?.message);
+    }
+  };
+
+  // Excluye sábados (6) y domingos (0) — fecha en formato YYYY-MM-DD, sin conversión UTC
+  const esFinde = (fecha: string) => {
+    const [y, m, d] = String(fecha).split('T')[0].split('-').map(Number);
+    const dia = new Date(y, m - 1, d).getDay();
+    return dia === 0 || dia === 6;
+  };
+  const rowsHabil = rows.filter(r => !esFinde(r.fecha));
+
+  // Totales: por mes (para vista año) y total general
+  const totalGeneral = rowsHabil.reduce((s, r) => s + Number(r.cantidad), 0);
+
+  // Agrupa por mes para la vista anual
+  const porMesAnio: { mes: string; label: string; filas: any[]; total: number }[] = React.useMemo(() => {
+    if (!verAnio) return [];
+    const grupos: Record<string, any[]> = {};
+    for (const r of rowsHabil) {
+      const key = String(r.fecha).substring(0, 7); // YYYY-MM
+      if (!grupos[key]) grupos[key] = [];
+      grupos[key].push(r);
+    }
+    return Object.entries(grupos).sort(([a], [b]) => a.localeCompare(b)).map(([mes, filas]) => {
+      const [y, mm] = mes.split('-');
+      return { mes, label: `${MESES[Number(mm)-1]} ${y}`, filas, total: filas.reduce((s, r) => s + Number(r.cantidad), 0) };
+    });
+  }, [rowsHabil, verAnio]);
+
+  const exportRows = rowsHabil.map(r => ({ fecha: fmtLocalDate(r.fecha), cantidad: r.cantidad }));
+  const exportFilename = verAnio
+    ? `whatsapp_${filtroAnio}.xlsx`
+    : `whatsapp_${filtroAnio}_${filtroMes.padStart(2,'0')}.xlsx`;
+  const exportTitle = verAnio
+    ? `Consultas WhatsApp — ${filtroAnio}`
+    : `Consultas WhatsApp — ${MESES[Number(filtroMes)-1]} ${filtroAnio}`;
+
+  function FilaTabla({ r }: { r: any }) {
+    return (
+      <tr key={r.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <td style={{ padding: '5px 10px', color: '#64748b', fontSize: '0.76rem' }}>{r.id}</td>
+        <td style={{ padding: '5px 10px' }}>
+          {editingId === r.id
+            ? <input type="date" value={editFecha} onChange={e => setEditFecha(e.target.value)}
+                style={{ ...SELECT_DARK, padding: '2px 6px' }} />
+            : fmtLocalDate(r.fecha)
+          }
+        </td>
+        <td style={{ padding: '5px 10px', textAlign: 'right' }}>
+          {editingId === r.id
+            ? <input type="number" min={0} value={editCantidad}
+                onChange={e => setEditCantidad(e.target.value)}
+                style={{ ...SELECT_DARK, width: 80, padding: '2px 6px', textAlign: 'right' }}
+                onKeyDown={e => e.key === 'Enter' && actualizarFila(r.id)} />
+            : <strong style={{ color: '#4ade80' }}>{r.cantidad}</strong>
+          }
+        </td>
+        <td style={{ padding: '5px 10px', textAlign: 'right' }}>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            {editingId === r.id ? (
+              <>
+                <button className="btn" style={{ fontSize: '0.74rem', padding: '2px 8px',
+                  background: '#16a34a', color: '#fff' }}
+                  disabled={saving} onClick={() => actualizarFila(r.id)}>OK</button>
+                <button className="btn" style={{ fontSize: '0.74rem', padding: '2px 8px' }}
+                  onClick={() => setEditingId(null)}>Cancelar</button>
+              </>
+            ) : (
+              <>
+                <button className="btn" style={{ fontSize: '0.74rem', padding: '2px 8px' }}
+                  onClick={() => {
+                    setEditingId(r.id);
+                    setEditCantidad(String(r.cantidad));
+                    setEditFecha(String(r.fecha).split('T')[0]);
+                  }}>Editar</button>
+                <button className="btn" style={{ fontSize: '0.74rem', padding: '2px 8px', color: '#f87171' }}
+                  onClick={() => eliminar(r.id, r.fecha)}>Eliminar</button>
+              </>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  function TablaFilas({ filas, labelTotal }: { filas: any[]; labelTotal: string }) {
+    const tot = filas.reduce((s, r) => s + Number(r.cantidad), 0);
+    return (
+      <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            {['ID','FECHA','CANTIDAD',''].map(h => (
+              <th key={h} style={{ padding: '5px 10px',
+                textAlign: h === 'CANTIDAD' ? 'right' : 'left',
+                color: '#94a3b8', fontSize: '0.72rem',
+                borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map(r => <FilaTabla key={r.id} r={r} />)}
+          <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)' }}>
+            <td colSpan={2} style={{ padding: '6px 10px', fontWeight: 700, color: '#94a3b8' }}>
+              TOTAL {labelTotal}
+            </td>
+            <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: '#4ade80', fontSize: '1rem' }}>
+              {tot}
+            </td>
+            <td />
+          </tr>
+        </tbody>
+      </table>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+
+      {/* Formulario nuevo */}
+      <div className="card">
+        <div style={{ marginBottom: 10 }}><strong>💬 Cargar consultas de WhatsApp</strong></div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Fecha</div>
+            <input type="date" value={newFecha} onChange={e => setNewFecha(e.target.value)}
+              style={{ ...SELECT_DARK, borderColor: fechaYaExiste ? '#f59e0b' : undefined }} />
+          </div>
+          <div>
+            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Cantidad</div>
+            <input type="number" min={0} value={newCantidad} onChange={e => setNewCantidad(e.target.value)}
+              placeholder="0" style={{ ...SELECT_DARK, width: 100 }}
+              disabled={fechaYaExiste}
+              onKeyDown={e => e.key === 'Enter' && !fechaYaExiste && guardar()} />
+          </div>
+          <button className="btn" style={{ background: '#16a34a', color: '#fff', height: 36,
+            opacity: fechaYaExiste ? 0.5 : 1, cursor: fechaYaExiste ? 'not-allowed' : 'pointer' }}
+            disabled={saving || fechaYaExiste} onClick={guardar}>
+            {saving ? '⏳ Guardando…' : '💾 Guardar'}
+          </button>
+          {fechaYaExiste && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8,
+              background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)',
+              borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#f59e0b' }}>
+              ⚠️ Esta fecha ya tiene datos cargados. Usá <strong style={{ marginLeft: 4 }}>Editar</strong> en la tabla de abajo.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Listado */}
+      <div className="card">
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>
+          {!verAnio && (
+            <div>
+              <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Mes</div>
+              <select style={{ ...SELECT_DARK, minWidth: 150 }} value={filtroMes}
+                onChange={e => setFiltroMes(e.target.value)}>
+                {MESES.map((m, i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Año</div>
+            <select style={{ ...SELECT_DARK, minWidth: 100 }} value={filtroAnio}
+              onChange={e => setFiltroAnio(e.target.value)}>
+              {YEARS_RANGE.map(y => <option key={y} value={String(y)}>{y}</option>)}
+            </select>
+          </div>
+          <div style={{ alignSelf: 'flex-end' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+              fontSize: '0.82rem', userSelect: 'none' }}>
+              <input type="checkbox" checked={verAnio} onChange={e => setVerAnio(e.target.checked)}
+                style={{ width: 14, height: 14 }} />
+              Ver año completo
+            </label>
+          </div>
+          {rowsHabil.length > 0 && (
+            <ExportButtons rows={exportRows} filename={exportFilename} title={exportTitle} />
+          )}
+        </div>
+
+        {loading ? (
+          <div className="muted">Cargando…</div>
+        ) : rowsHabil.length === 0 ? (
+          <div className="muted" style={{ fontSize: '0.85rem' }}>
+            Sin registros para {verAnio ? `el año ${filtroAnio}` : 'este mes'}.
+          </div>
+        ) : verAnio ? (
+          // Vista año completo: una sección por mes + resumen anual
+          <div style={{ display: 'grid', gap: 16 }}>
+            {porMesAnio.map(grupo => (
+              <div key={grupo.mes}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#94a3b8',
+                  marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {grupo.label}
+                  <span style={{ marginLeft: 8, color: '#4ade80', fontWeight: 700 }}>
+                    {grupo.total} consultas
+                  </span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <TablaFilas filas={grupo.filas} labelTotal={grupo.label.toUpperCase()} />
+                </div>
+              </div>
+            ))}
+            {/* Resumen anual */}
+            <div style={{ borderTop: '2px solid rgba(255,255,255,0.15)', paddingTop: 12,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, color: '#94a3b8', fontSize: '0.88rem' }}>
+                TOTAL AÑO {filtroAnio}
+              </span>
+              <span style={{ fontWeight: 700, color: '#4ade80', fontSize: '1.4rem' }}>
+                {totalGeneral}
+              </span>
+            </div>
+            {/* Resumen por mes en tabla compacta */}
+            <div className="card" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <div style={{ marginBottom: 8, fontWeight: 700, fontSize: '0.82rem', color: '#94a3b8' }}>
+                Resumen mensual {filtroAnio}
+              </div>
+              <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '4px 10px', textAlign: 'left', color: '#64748b', fontSize: '0.72rem',
+                      borderBottom: '1px solid rgba(255,255,255,0.08)' }}>MES</th>
+                    <th style={{ padding: '4px 10px', textAlign: 'right', color: '#64748b', fontSize: '0.72rem',
+                      borderBottom: '1px solid rgba(255,255,255,0.08)' }}>DÍAS</th>
+                    <th style={{ padding: '4px 10px', textAlign: 'right', color: '#64748b', fontSize: '0.72rem',
+                      borderBottom: '1px solid rgba(255,255,255,0.08)' }}>TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {porMesAnio.map(g => (
+                    <tr key={g.mes} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '4px 10px' }}>{g.label}</td>
+                      <td style={{ padding: '4px 10px', textAlign: 'right', color: '#94a3b8' }}>{g.filas.length}</td>
+                      <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 700, color: '#4ade80' }}>{g.total}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)' }}>
+                    <td style={{ padding: '5px 10px', fontWeight: 700, color: '#94a3b8' }}>TOTAL</td>
+                    <td style={{ padding: '5px 10px', textAlign: 'right', color: '#94a3b8' }}>{rowsHabil.length}</td>
+                    <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 700, color: '#4ade80', fontSize: '1rem' }}>{totalGeneral}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          // Vista mes
+          <>
+            <div style={{ marginBottom: 8, fontSize: '0.82rem', color: '#94a3b8' }}>
+              {rowsHabil.length} día(s) registrado(s) —
+              <strong style={{ color: '#4ade80', marginLeft: 6 }}>
+                Total mes: {totalGeneral} consultas
+              </strong>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <TablaFilas filas={rowsHabil} labelTotal={MESES[Number(filtroMes)-1].toUpperCase()} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Consultas dinámicas ───────────────────────────────────────────────────────
 const PRESET_TABLES: Array<{ key: string; label: string; cols?: string[] }> = [
   { key: 'personal', label: 'Personal (datos personales)', cols: ['dni','apellido','nombre','fecha_nacimiento','cuil','email','telefono','domicilio','localidad_id','observaciones','created_at'] },
   { key: 'agentes', label: 'Agentes (datos laborales)', cols: ['id','dni','estado_empleo','fecha_ingreso','fecha_baja','ley_id','planta_id','categoria_id','ocupacion_id','regimen_horario_id','jefatura_id','sector_id','salario_mensual'] },
@@ -707,6 +1213,7 @@ const PRESET_TABLES: Array<{ key: string; label: string; cols?: string[] }> = [
   { key: 'consultaspordni', label: 'Consultas con nombre de agente' },
   { key: 'agentehistorial', label: 'Historial de agentes' },
   { key: 'consultas', label: 'Consultas (raw)' },
+  { key: 'consultas_whatsapp', label: 'Consultas WhatsApp' },
   { key: 'pedidos', label: 'Pedidos' },
 ];
 type FilterOp = 'contains' | 'eq' | 'starts' | 'notempty' | 'gte' | 'lte';
@@ -931,12 +1438,15 @@ export function ReportesPage() {
           onClick={() => setTab('antiguedad')}>🏅 Antigüedad</button>
         <button className={`btn${tab === 'estadisticas_consultas' ? ' active' : ''}`}
           onClick={() => setTab('estadisticas_consultas')}>📋 Consultas de Ventanilla</button>
+        <button className={`btn${tab === 'whatsapp' ? ' active' : ''}`}
+          onClick={() => setTab('whatsapp')}>💬 WhatsApp</button>
         <button className={`btn${tab === 'consultas_dinamicas' ? ' active' : ''}`}
           onClick={() => setTab('consultas_dinamicas')}>📊 Consultas dinámicas</button>
       </div>
       {tab === 'cumpleanos'             && <CumpleanosTab />}
       {tab === 'antiguedad'             && <AntigüedadTab />}
       {tab === 'estadisticas_consultas' && <EstadisticasConsultasTab />}
+      {tab === 'whatsapp'               && <WhatsappTab />}
       {tab === 'consultas_dinamicas'    && <ConsultasDinamicasTab />}
     </Layout>
   );

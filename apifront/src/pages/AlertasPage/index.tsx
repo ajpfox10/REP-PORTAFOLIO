@@ -2,7 +2,7 @@
 // estado_empleo ENUM: 'ACTIVO', 'INACTIVO', 'BAJA' (mayúsculas - según test.sql)
 // Paginación completa para obtener los ~1400 registros reales
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
@@ -140,17 +140,27 @@ export function AlertasPage() {
 
   // Antigüedad 20 años — mes/año seleccionado
   const anioIngreso20 = anioVista - 20;
+  const personalMap = useMemo(() => {
+    const m: Record<number, any> = {};
+    personal.forEach(p => { m[p.dni] = p; });
+    return m;
+  }, [personal]);
+
   const antiguedad20 = agentes
     .filter(a => {
       if (!a.fecha_ingreso) return false;
       const fi = new Date(a.fecha_ingreso);
       return fi.getFullYear() === anioIngreso20 && fi.getMonth() + 1 === mesVista;
     })
-    .map(a => ({
-      DNI: a.dni, Estado: a.estado_empleo,
-      'Fecha Ingreso': new Date(a.fecha_ingreso).toLocaleDateString('es-AR'),
-      'Años': 20,
-    }));
+    .map(a => {
+      const p = personalMap[a.dni];
+      return {
+        DNI: a.dni,
+        Apellido: p?.apellido ?? '—', Nombre: p?.nombre ?? '—',
+        'Ingreso': new Date(a.fecha_ingreso).toLocaleDateString('es-AR'),
+        'Años': 20, Estado: a.estado_empleo,
+      };
+    });
 
   // Próximos cumpleaños 7 días
   const en7dias = personal.filter(p => {
@@ -175,33 +185,46 @@ export function AlertasPage() {
   // Aniversarios múltiplos de 5 este año (activos)
   const aniversarios5 = agentes
     .filter(a => {
-      if (!a.fecha_ingreso || a.estado_empleo === 'BAJA') return false;
+      if (!a.fecha_ingreso || a.estado_empleo === 'BAJA' || a.estado_empleo === 'TRAMITE') return false;
       const anios = anioActual - new Date(a.fecha_ingreso).getFullYear();
       return anios > 0 && anios % 5 === 0;
     })
-    .map(a => ({
-      DNI: a.dni, Estado: a.estado_empleo,
-      'Fecha Ingreso': new Date(a.fecha_ingreso).toLocaleDateString('es-AR'),
-      'Años': anioActual - new Date(a.fecha_ingreso).getFullYear(),
-      'Hito': `${anioActual - new Date(a.fecha_ingreso).getFullYear()} años`,
-    })).sort((a, b) => b.Años - a.Años);
+    .map(a => {
+      const p = personalMap[a.dni];
+      const anios = anioActual - new Date(a.fecha_ingreso).getFullYear();
+      return {
+        DNI: a.dni,
+        Apellido: p?.apellido ?? '—', Nombre: p?.nombre ?? '—',
+        'Años': anios, 'Hito': `${anios} años`,
+        'Ingreso': new Date(a.fecha_ingreso).toLocaleDateString('es-AR'),
+        Estado: a.estado_empleo,
+      };
+    }).sort((a, b) => b.Años - a.Años);
 
   // Ingresos último año
   const hace1Anio = new Date(anioActual - 1, hoy.getMonth(), hoy.getDate());
   const ingresosRecientes = agentes
     .filter(a => a.fecha_ingreso && new Date(a.fecha_ingreso) >= hace1Anio)
-    .map(a => ({
-      DNI: a.dni, Estado: a.estado_empleo,
-      'Fecha Ingreso': new Date(a.fecha_ingreso).toLocaleDateString('es-AR'),
-    })).sort((a, b) => b['Fecha Ingreso'].localeCompare(a['Fecha Ingreso']));
+    .map(a => {
+      const p = personalMap[a.dni];
+      return {
+        DNI: a.dni, Apellido: p?.apellido ?? '—', Nombre: p?.nombre ?? '—',
+        'Fecha Ingreso': new Date(a.fecha_ingreso).toLocaleDateString('es-AR'),
+        Estado: a.estado_empleo,
+      };
+    }).sort((a, b) => b['Fecha Ingreso'].localeCompare(a['Fecha Ingreso']));
 
   // Bajas último año
   const bajasRecientes = agentes
     .filter(a => a.fecha_baja && new Date(a.fecha_baja) >= hace1Anio)
-    .map(a => ({
-      DNI: a.dni, Estado: a.estado_empleo,
-      'Fecha Baja': new Date(a.fecha_baja).toLocaleDateString('es-AR'),
-    })).sort((a, b) => b['Fecha Baja'].localeCompare(a['Fecha Baja']));
+    .map(a => {
+      const p = personalMap[a.dni];
+      return {
+        DNI: a.dni, Apellido: p?.apellido ?? '—', Nombre: p?.nombre ?? '—',
+        'Fecha Baja': new Date(a.fecha_baja).toLocaleDateString('es-AR'),
+        Estado: a.estado_empleo,
+      };
+    }).sort((a, b) => b['Fecha Baja'].localeCompare(a['Fecha Baja']));
 
   // Sin email
   const sinEmail = personal.filter(p => !p.email || !p.email.trim())
@@ -213,11 +236,15 @@ export function AlertasPage() {
 
   // INACTIVOS
   const inactivos = agentes.filter(a => a.estado_empleo === 'INACTIVO')
-    .map(a => ({
-      DNI: a.dni, Estado: a.estado_empleo,
-      'Fecha Ingreso': a.fecha_ingreso ? new Date(a.fecha_ingreso).toLocaleDateString('es-AR') : '—',
-      'Fecha Baja': a.fecha_baja ? new Date(a.fecha_baja).toLocaleDateString('es-AR') : '—',
-    }));
+    .map(a => {
+      const p = personalMap[a.dni];
+      return {
+        DNI: a.dni, Apellido: p?.apellido ?? '—', Nombre: p?.nombre ?? '—',
+        Estado: a.estado_empleo,
+        'Fecha Ingreso': a.fecha_ingreso ? new Date(a.fecha_ingreso).toLocaleDateString('es-AR') : '—',
+        'Fecha Baja': a.fecha_baja ? new Date(a.fecha_baja).toLocaleDateString('es-AR') : '—',
+      };
+    });
 
   return (
     <Layout title="Alertas" showBack>
@@ -277,8 +304,8 @@ export function AlertasPage() {
             rows={antiguedad20} filename={`antiguedad_20_${MESES_ES[mesVista-1]}_${anioVista}`}>
             {antiguedad20.length
               ? <MiniTabla rows={antiguedad20} cols={[
-                  { key: 'DNI', label: 'DNI' }, { key: 'Fecha Ingreso', label: 'Ingreso' },
-                  { key: 'Años', label: 'Años' }, { key: 'Estado', label: 'Estado' },
+                  { key: 'DNI', label: 'DNI' }, { key: 'Apellido', label: 'Apellido' }, { key: 'Nombre', label: 'Nombre' },
+                  { key: 'Ingreso', label: 'Ingreso' }, { key: 'Años', label: 'Años' }, { key: 'Estado', label: 'Estado' },
                 ]} />
               : <div className="muted" style={{ fontSize: '0.8rem' }}>Nadie cumple 20 años de antigüedad en {MESES_ES[mesVista-1]} {anioVista}.</div>
             }
@@ -288,9 +315,9 @@ export function AlertasPage() {
             count={aniversarios5.length} color="#f59e0b"
             rows={aniversarios5} filename={`aniversarios_multiplos_5_${anioActual}`}>
             <MiniTabla rows={aniversarios5} cols={[
-              { key: 'DNI', label: 'DNI' }, { key: 'Años', label: 'Años' },
-              { key: 'Hito', label: 'Hito' }, { key: 'Fecha Ingreso', label: 'Ingreso' },
-              { key: 'Estado', label: 'Estado' },
+              { key: 'DNI', label: 'DNI' }, { key: 'Apellido', label: 'Apellido' }, { key: 'Nombre', label: 'Nombre' },
+              { key: 'Años', label: 'Años' }, { key: 'Hito', label: 'Hito' },
+              { key: 'Ingreso', label: 'Ingreso' }, { key: 'Estado', label: 'Estado' },
             ]} />
           </AlertaCard>
 
@@ -298,8 +325,8 @@ export function AlertasPage() {
             count={ingresosRecientes.length} color="#10b981"
             rows={ingresosRecientes} filename="ingresos_ultimo_anio">
             <MiniTabla rows={ingresosRecientes.slice(0, 100)} cols={[
-              { key: 'DNI', label: 'DNI' }, { key: 'Fecha Ingreso', label: 'Ingreso' },
-              { key: 'Estado', label: 'Estado' },
+              { key: 'DNI', label: 'DNI' }, { key: 'Apellido', label: 'Apellido' }, { key: 'Nombre', label: 'Nombre' },
+              { key: 'Fecha Ingreso', label: 'Ingreso' }, { key: 'Estado', label: 'Estado' },
             ]} />
           </AlertaCard>
 
@@ -307,8 +334,8 @@ export function AlertasPage() {
             count={bajasRecientes.length} color="#ef4444"
             rows={bajasRecientes} filename="bajas_ultimo_anio">
             <MiniTabla rows={bajasRecientes.slice(0, 100)} cols={[
-              { key: 'DNI', label: 'DNI' }, { key: 'Fecha Baja', label: 'Baja' },
-              { key: 'Estado', label: 'Estado' },
+              { key: 'DNI', label: 'DNI' }, { key: 'Apellido', label: 'Apellido' }, { key: 'Nombre', label: 'Nombre' },
+              { key: 'Fecha Baja', label: 'Baja' }, { key: 'Estado', label: 'Estado' },
             ]} />
           </AlertaCard>
 
@@ -316,8 +343,8 @@ export function AlertasPage() {
             count={inactivos.length} color="#f59e0b"
             rows={inactivos} filename="agentes_inactivos">
             <MiniTabla rows={inactivos.slice(0, 100)} cols={[
-              { key: 'DNI', label: 'DNI' }, { key: 'Estado', label: 'Estado' },
-              { key: 'Fecha Ingreso', label: 'Ingreso' }, { key: 'Fecha Baja', label: 'Baja' },
+              { key: 'DNI', label: 'DNI' }, { key: 'Apellido', label: 'Apellido' }, { key: 'Nombre', label: 'Nombre' },
+              { key: 'Estado', label: 'Estado' }, { key: 'Fecha Ingreso', label: 'Ingreso' }, { key: 'Fecha Baja', label: 'Baja' },
             ]} />
           </AlertaCard>
 

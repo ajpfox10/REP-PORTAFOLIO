@@ -47,6 +47,7 @@ import { buildExamenIngresoRouter } from '../routes/examenIngreso.routes';
 import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
 import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
+import { buildWhatsappRouter } from '../routes/whatsapp.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
@@ -146,13 +147,14 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/api-keys`,  ...protect, buildApiKeysRouter(sequelize));
   app.use(`${apiPrefix}/usuarios`,  ...protect, buildUsuariosRouter(sequelize));
   app.use(`${apiPrefix}/webhooks`,  ...protect, buildWebhooksRouter(sequelize));
-  app.use(`${apiPrefix}/asistencia`, ...protect, buildAsistenciaRouter());
-  app.use(`${apiPrefix}/sin-salida`, ...protect, buildSinSalidaRouter());
+  app.use(`${apiPrefix}/asistencia`, ...protect, buildAsistenciaRouter(sequelize));
+  app.use(`${apiPrefix}/sin-salida`, ...protect, buildSinSalidaRouter(sequelize));
   app.use(`${apiPrefix}/fichero`,          ...protect, buildFicheroRouter());
   app.use(`${apiPrefix}/examen-ingreso`,   ...protect, buildExamenIngresoRouter(sequelize));
   app.use(`${apiPrefix}/accidentes-punzo`, ...protect, buildAccidentesPunzoRouter(sequelize));
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
+  app.use(`${apiPrefix}/whatsapp`,         ...protect, buildWhatsappRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)
