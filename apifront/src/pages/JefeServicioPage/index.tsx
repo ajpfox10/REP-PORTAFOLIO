@@ -1,4 +1,4 @@
-// src/pages/JefeServicioPage/index.tsx
+﻿// src/pages/JefeServicioPage/index.tsx
 // Página exclusiva para Jefe de Servicio
 // - Ve solo los agentes de SU sector (sector_id del usuario logueado)
 // - Gestiona agentes_servicios (asignar/cerrar servicio)
@@ -69,21 +69,25 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
   const toast = useToast();
   const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
-    dependencia_id: '',   // reparticion seleccionada
-    servicio_id:    '',   // servicio filtrado por reparticion
-    sector_id:      '',   // sector filtrado por servicio
+    dependencia_id: '',
+    servicio_id:    '',
+    sector_id:      '',
     fecha_desde:    hoy,
     motivo:         '',
     jefe_nombre:    '',
     observaciones:  '',
   });
   const [saving, setSaving] = useState(false);
+  const [jefaturas, setJefaturas] = useState<any[]>([]);
 
-  // Pre-cargar jefe con el usuario logueado
+  // Pre-cargar jefe con el usuario logueado y cargar jefaturas
   useEffect(() => {
     const s = loadSession();
     const u: any = s?.user || {};
     setForm(f => ({ ...f, jefe_nombre: u?.nombre || '' }));
+    apiFetch<any>('/jefaturas?limit=500')
+      .then(res => setJefaturas(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []))
+      .catch(() => {});
   }, []);
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -93,9 +97,10 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
     setForm(f => ({ ...f, dependencia_id: v, servicio_id: '', sector_id: '' }));
   };
 
-  // Cascade: al cambiar servicio, resetear sector
+  // Cascade: al cambiar servicio, resetear sector y auto-cargar jefe
   const onChangeServicio = (v: string) => {
-    setForm(f => ({ ...f, servicio_id: v, sector_id: '' }));
+    const jefe = jefaturas.find((j: any) => String(j.servicio_id) === String(v));
+    setForm(f => ({ ...f, servicio_id: v, sector_id: '', jefe_nombre: jefe?.jefe || f.jefe_nombre }));
   };
 
   // Servicios filtrados por reparticion seleccionada
@@ -126,6 +131,15 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
           observaciones:  form.observaciones || null,
         }),
       });
+      // También actualizar los campos directos en agentes
+      await apiFetch<any>(`/personal/${agente.dni}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          servicio_id:    Number(form.servicio_id),
+          reparticion_id: form.dependencia_id ? Number(form.dependencia_id) : null,
+          sector_id:      form.sector_id ? Number(form.sector_id) : null,
+        }),
+      });
       toast.ok('Servicio asignado', `${agente.apellido}, ${agente.nombre}`);
       onSaved();
       onClose();
@@ -154,8 +168,8 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
 
             {/* ── Dependencia (Repartición) ── */}
             <div className="js-field">
-              <div style={labelStyle}>Dependencia / Repartición</div>
-              <select className="input" style={fieldStyle} value={form.dependencia_id} onChange={e => onChangeDependencia(e.target.value)}>
+              <label htmlFor="asm-dep" style={labelStyle}>Dependencia / Repartición</label>
+              <select id="asm-dep" name="dependencia_id" className="input" style={fieldStyle} value={form.dependencia_id} onChange={e => onChangeDependencia(e.target.value)}>
                 <option value="">— Todas —</option>
                 {dependencias.map((d: any) => (
                   <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre}</option>
@@ -165,8 +179,8 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
 
             {/* ── Servicio (filtrado por dependencia) ── */}
             <div className="js-field">
-              <div style={labelStyle}>Servicio *</div>
-              <select className="input" style={fieldStyle} value={form.servicio_id} onChange={e => onChangeServicio(e.target.value)}>
+              <label htmlFor="asm-srv" style={labelStyle}>Servicio *</label>
+              <select id="asm-srv" name="servicio_id" className="input" style={fieldStyle} value={form.servicio_id} onChange={e => onChangeServicio(e.target.value)}>
                 <option value="">— Seleccioná —</option>
                 {serviciosFiltrados.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
@@ -181,8 +195,10 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
 
             {/* ── Sector (filtrado por servicio) ── */}
             <div className="js-field">
-              <div style={labelStyle}>Sector</div>
+              <label htmlFor="asm-sec" style={labelStyle}>Sector</label>
               <select
+                id="asm-sec"
+                name="sector_id"
                 className="input"
                 style={{ ...fieldStyle, opacity: !form.servicio_id ? 0.5 : 1 }}
                 value={form.sector_id}
@@ -203,26 +219,26 @@ function AsignarServicioModal({ agente, servicios, dependencias, sectores, onClo
 
             {/* ── Fecha desde ── */}
             <div className="js-field">
-              <div style={labelStyle}>Fecha desde *</div>
-              <input type="date" className="input" style={fieldStyle} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
+              <label htmlFor="asm-fecha" style={labelStyle}>Fecha desde *</label>
+              <input id="asm-fecha" name="fecha_desde" type="date" className="input" style={fieldStyle} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
             </div>
 
             {/* ── Jefe ── */}
             <div className="js-field js-field-full">
-              <div style={labelStyle}>Jefe / Responsable</div>
-              <input type="text" className="input" style={fieldStyle} value={form.jefe_nombre} onChange={e => set('jefe_nombre', e.target.value)} />
+              <label htmlFor="asm-jefe" style={labelStyle}>Jefe / Responsable</label>
+              <input id="asm-jefe" name="jefe_nombre" type="text" className="input" style={fieldStyle} value={form.jefe_nombre} onChange={e => set('jefe_nombre', e.target.value)} />
             </div>
 
             {/* ── Motivo ── */}
             <div className="js-field js-field-full">
-              <div style={labelStyle}>Motivo del pase</div>
-              <input type="text" className="input" style={fieldStyle} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
+              <label htmlFor="asm-motivo" style={labelStyle}>Motivo del pase</label>
+              <input id="asm-motivo" name="motivo" type="text" className="input" style={fieldStyle} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
             </div>
 
             {/* ── Observaciones ── */}
             <div className="js-field js-field-full">
-              <div style={labelStyle}>Observaciones</div>
-              <textarea className="input" rows={2} style={{ ...fieldStyle, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+              <label htmlFor="asm-obs" style={labelStyle}>Observaciones</label>
+              <textarea id="asm-obs" name="observaciones" className="input" rows={2} style={{ ...fieldStyle, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
             </div>
 
           </div>
@@ -351,8 +367,8 @@ function AsignarMasivoModal({ agentes, servicios, dependencias, sectores, onClos
               </div>
               <div className="js-form-grid">
                 <div className="js-field">
-                  <div style={labelStyle}>Dependencia / Repartición</div>
-                  <select className="input" style={fieldStyle} value={form.dependencia_id}
+                  <label htmlFor="amm-dep" style={labelStyle}>Dependencia / Repartición</label>
+                  <select id="amm-dep" name="dependencia_id" className="input" style={fieldStyle} value={form.dependencia_id}
                     onChange={e => setForm(f => ({ ...f, dependencia_id: e.target.value, servicio_id: '', sector_id: '' }))}>
                     <option value="">— Todas —</option>
                     {dependencias.map((d: any) => (
@@ -361,8 +377,8 @@ function AsignarMasivoModal({ agentes, servicios, dependencias, sectores, onClos
                   </select>
                 </div>
                 <div className="js-field">
-                  <div style={labelStyle}>Servicio *</div>
-                  <select className="input" style={fieldStyle} value={form.servicio_id}
+                  <label htmlFor="amm-srv" style={labelStyle}>Servicio *</label>
+                  <select id="amm-srv" name="servicio_id" className="input" style={fieldStyle} value={form.servicio_id}
                     onChange={e => setForm(f => ({ ...f, servicio_id: e.target.value, sector_id: '' }))}>
                     <option value="">— Seleccioná —</option>
                     {serviciosFiltrados.map((s: any) => (
@@ -371,8 +387,8 @@ function AsignarMasivoModal({ agentes, servicios, dependencias, sectores, onClos
                   </select>
                 </div>
                 <div className="js-field">
-                  <div style={labelStyle}>Sector</div>
-                  <select className="input" style={{ ...fieldStyle, opacity: !form.servicio_id ? 0.5 : 1 }}
+                  <label htmlFor="amm-sec" style={labelStyle}>Sector</label>
+                  <select id="amm-sec" name="sector_id" className="input" style={{ ...fieldStyle, opacity: !form.servicio_id ? 0.5 : 1 }}
                     value={form.sector_id} onChange={e => set('sector_id', e.target.value)}
                     disabled={!form.servicio_id}>
                     <option value="">— Ninguno —</option>
@@ -382,23 +398,23 @@ function AsignarMasivoModal({ agentes, servicios, dependencias, sectores, onClos
                   </select>
                 </div>
                 <div className="js-field">
-                  <div style={labelStyle}>Fecha desde *</div>
-                  <input type="date" className="input" style={fieldStyle} value={form.fecha_desde}
+                  <label htmlFor="amm-fecha" style={labelStyle}>Fecha desde *</label>
+                  <input id="amm-fecha" name="fecha_desde" type="date" className="input" style={fieldStyle} value={form.fecha_desde}
                     onChange={e => set('fecha_desde', e.target.value)} />
                 </div>
                 <div className="js-field js-field-full">
-                  <div style={labelStyle}>Jefe / Responsable</div>
-                  <input type="text" className="input" style={fieldStyle} value={form.jefe_nombre}
+                  <label htmlFor="amm-jefe" style={labelStyle}>Jefe / Responsable</label>
+                  <input id="amm-jefe" name="jefe_nombre" type="text" className="input" style={fieldStyle} value={form.jefe_nombre}
                     onChange={e => set('jefe_nombre', e.target.value)} />
                 </div>
                 <div className="js-field js-field-full">
-                  <div style={labelStyle}>Motivo del pase</div>
-                  <input type="text" className="input" style={fieldStyle} value={form.motivo}
+                  <label htmlFor="amm-motivo" style={labelStyle}>Motivo del pase</label>
+                  <input id="amm-motivo" name="motivo" type="text" className="input" style={fieldStyle} value={form.motivo}
                     onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
                 </div>
                 <div className="js-field js-field-full">
-                  <div style={labelStyle}>Observaciones</div>
-                  <textarea className="input" rows={2} style={{ ...fieldStyle, resize: 'vertical' }}
+                  <label htmlFor="amm-obs" style={labelStyle}>Observaciones</label>
+                  <textarea id="amm-obs" name="observaciones" className="input" rows={2} style={{ ...fieldStyle, resize: 'vertical' }}
                     value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
                 </div>
               </div>
@@ -456,8 +472,8 @@ function CerrarServicioModal({ pase, onClose, onSaved }: CerrarServicioModalProp
           <div style={{ fontSize: '0.84rem', marginBottom: 6 }}><b>Servicio:</b> {pase.servicio_nombre || pase.nombre || `#${pase.servicio_id}`}</div>
           <div style={{ fontSize: '0.84rem', marginBottom: 12 }}><b>Desde:</b> {fmt(pase.fecha_desde)}</div>
           <div>
-            <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 }}>Fecha de cierre *</div>
-            <input type="date" className="input" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} style={{ width: '100%' }} />
+            <label htmlFor="csm-fecha" style={{ fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2, display: 'block' }}>Fecha de cierre *</label>
+            <input id="csm-fecha" name="fecha_hasta" type="date" className="input" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} style={{ width: '100%' }} />
           </div>
           <div className="js-modal-actions" style={{ marginTop: 14 }}>
             <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
@@ -542,8 +558,8 @@ function AsignarSectorModal({ agente, servicioId, sectores: sectoresProp, jefeNo
         <div className="js-modal-body">
           <div className="js-form-grid">
             <div className="js-field js-field-full">
-              <div style={lbl}>Sector *</div>
-              <select className="input" style={fld} value={form.sector_id} onChange={e => set('sector_id', e.target.value)}>
+              <label htmlFor="asm2-sec" style={lbl}>Sector *</label>
+              <select id="asm2-sec" name="sector_id" className="input" style={fld} value={form.sector_id} onChange={e => set('sector_id', e.target.value)}>
                 <option value="">— Seleccioná —</option>
                 {sectoresFiltrados.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre || `Sector #${s.id}`}</option>
@@ -554,12 +570,12 @@ function AsignarSectorModal({ agente, servicioId, sectores: sectoresProp, jefeNo
               )}
             </div>
             <div className="js-field">
-              <div style={lbl}>Fecha desde *</div>
-              <input type="date" className="input" style={fld} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
+              <label htmlFor="asm2-fecha" style={lbl}>Fecha desde *</label>
+              <input id="asm2-fecha" name="fecha_desde" type="date" className="input" style={fld} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Motivo</div>
-              <input type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Motivo del pase de sector…" />
+              <label htmlFor="asm2-motivo" style={lbl}>Motivo</label>
+              <input id="asm2-motivo" name="motivo" type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Motivo del pase de sector…" />
             </div>
           </div>
           <div className="js-modal-actions">
@@ -622,12 +638,12 @@ function CerrarSectorModal({ pase, sectores, onClose, onSaved }: CerrarSectorMod
           </div>
           <div className="js-form-grid">
             <div className="js-field">
-              <div style={lbl}>Fecha hasta *</div>
-              <input type="date" className="input" style={fld} value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+              <label htmlFor="csec-fecha" style={lbl}>Fecha hasta *</label>
+              <input id="csec-fecha" name="fecha_hasta" type="date" className="input" style={fld} value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Motivo</div>
-              <input type="text" className="input" style={fld} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo del cierre…" />
+              <label htmlFor="csec-motivo" style={lbl}>Motivo</label>
+              <input id="csec-motivo" name="motivo" type="text" className="input" style={fld} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo del cierre…" />
             </div>
           </div>
           <div className="js-modal-actions">
@@ -902,8 +918,8 @@ function NuevoFrancoSectorModal({ agentes, sectorId, jefeNombre, onClose, onSave
         <div className="js-modal-body">
           <div className="js-form-grid">
             <div className="js-field js-field-full">
-              <div style={lbl}>Agente *</div>
-              <select className="input" style={fld} value={dniSel} onChange={e => setDniSel(e.target.value)}>
+              <label htmlFor="nfs-agente" style={lbl}>Agente *</label>
+              <select id="nfs-agente" name="dni" className="input" style={fld} value={dniSel} onChange={e => setDniSel(e.target.value)}>
                 <option value="">— Seleccioná un agente —</option>
                 {sorted.map((a: any) => (
                   <option key={a.dni} value={String(a.dni)}>
@@ -913,30 +929,30 @@ function NuevoFrancoSectorModal({ agentes, sectorId, jefeNombre, onClose, onSave
               </select>
             </div>
             <div className="js-field">
-              <div style={lbl}>Fecha del franco *</div>
-              <input type="date" className="input" style={fld}
+              <label htmlFor="nfs-fecha-franco" style={lbl}>Fecha del franco *</label>
+              <input id="nfs-fecha-franco" name="fecha_franco" type="date" className="input" style={fld}
                 value={form.fecha_franco} onChange={e => set('fecha_franco', e.target.value)} />
             </div>
             <div className="js-field">
-              <div style={lbl}>Día trabajado que lo origina</div>
-              <input type="date" className="input" style={fld}
+              <label htmlFor="nfs-fecha-trabajo" style={lbl}>Día trabajado que lo origina</label>
+              <input id="nfs-fecha-trabajo" name="fecha_trabajo" type="date" className="input" style={fld}
                 value={form.fecha_trabajo} onChange={e => set('fecha_trabajo', e.target.value)} />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Motivo</div>
-              <input type="text" className="input" style={fld}
+              <label htmlFor="nfs-motivo" style={lbl}>Motivo</label>
+              <input id="nfs-motivo" name="motivo" type="text" className="input" style={fld}
                 value={form.motivo} onChange={e => set('motivo', e.target.value)}
                 placeholder="Ej: Guardia 24hs, feriado trabajado…" />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Observaciones</div>
-              <textarea className="input" rows={2}
+              <label htmlFor="nfs-obs" style={lbl}>Observaciones</label>
+              <textarea id="nfs-obs" name="observaciones" className="input" rows={2}
                 style={{ ...fld, resize: 'vertical' }}
                 value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Jefe / Responsable</div>
-              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }}
+              <label htmlFor="nfs-jefe" style={lbl}>Jefe / Responsable</label>
+              <input id="nfs-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }}
                 value={jefeNombre} disabled />
             </div>
           </div>
@@ -1018,30 +1034,30 @@ function NuevoFrancoModal({ agente, sectorId, jefeNombre, onClose, onSaved }: Nu
         <div className="js-modal-body">
           <div className="js-form-grid">
             <div className="js-field">
-              <div style={lbl}>Fecha del franco *</div>
-              <input type="date" className="input" style={fld}
+              <label htmlFor="nfm-fecha-franco" style={lbl}>Fecha del franco *</label>
+              <input id="nfm-fecha-franco" name="fecha_franco" type="date" className="input" style={fld}
                 value={form.fecha_franco} onChange={e => set('fecha_franco', e.target.value)} />
             </div>
             <div className="js-field">
-              <div style={lbl}>Día trabajado que lo origina</div>
-              <input type="date" className="input" style={fld}
+              <label htmlFor="nfm-fecha-trabajo" style={lbl}>Día trabajado que lo origina</label>
+              <input id="nfm-fecha-trabajo" name="fecha_trabajo" type="date" className="input" style={fld}
                 value={form.fecha_trabajo} onChange={e => set('fecha_trabajo', e.target.value)} />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Motivo</div>
-              <input type="text" className="input" style={fld}
+              <label htmlFor="nfm-motivo" style={lbl}>Motivo</label>
+              <input id="nfm-motivo" name="motivo" type="text" className="input" style={fld}
                 value={form.motivo} onChange={e => set('motivo', e.target.value)}
                 placeholder="Ej: Guardia 24hs, feriado trabajado…" />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Observaciones</div>
-              <textarea className="input" rows={2}
+              <label htmlFor="nfm-obs" style={lbl}>Observaciones</label>
+              <textarea id="nfm-obs" name="observaciones" className="input" rows={2}
                 style={{ ...fld, resize: 'vertical' }}
                 value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Jefe / Responsable</div>
-              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }}
+              <label htmlFor="nfm-jefe" style={lbl}>Jefe / Responsable</label>
+              <input id="nfm-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }}
                 value={jefeNombre} disabled />
             </div>
           </div>
@@ -1240,16 +1256,16 @@ function Art26Modal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: 
         <div className="js-modal-body">
           <div className="js-form-grid">
             <div className="js-field">
-              <div style={lbl}>Fecha *</div>
-              <input type="date" className="input" style={fld} value={form.fecha} min={!record ? hoy : undefined} onChange={e => set('fecha', e.target.value)} />
+              <label htmlFor="a26-fecha" style={lbl}>Fecha *</label>
+              <input id="a26-fecha" name="fecha" type="date" className="input" style={fld} value={form.fecha} min={!record ? hoy : undefined} onChange={e => set('fecha', e.target.value)} />
             </div>
             <div className="js-field">
-              <div style={lbl}>Días</div>
-              <input type="number" className="input" style={fld} value={form.dias} onChange={e => set('dias', e.target.value)} min="1" placeholder="Ej: 3" />
+              <label htmlFor="a26-dias" style={lbl}>Días</label>
+              <input id="a26-dias" name="dias" type="number" className="input" style={fld} value={form.dias} onChange={e => set('dias', e.target.value)} min="1" placeholder="Ej: 3" />
             </div>
             <div className="js-field">
-              <div style={lbl}>Estado</div>
-              <select className="input" style={fld} value={form.estado} onChange={e => set('estado', e.target.value)}>
+              <label htmlFor="a26-estado" style={lbl}>Estado</label>
+              <select id="a26-estado" name="estado" className="input" style={fld} value={form.estado} onChange={e => set('estado', e.target.value)}>
                 <option value="PENDIENTE">PENDIENTE</option>
                 <option value="APROBADO">APROBADO</option>
                 <option value="RECHAZADO">RECHAZADO</option>
@@ -1257,16 +1273,16 @@ function Art26Modal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: 
               </select>
             </div>
             <div className="js-field">
-              <div style={lbl}>Jefe</div>
-              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
+              <label htmlFor="a26-jefe" style={lbl}>Jefe</label>
+              <input id="a26-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Motivo *</div>
-              <input type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Motivo del Artículo 26…" />
+              <label htmlFor="a26-motivo" style={lbl}>Motivo *</label>
+              <input id="a26-motivo" name="motivo" type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Motivo del Artículo 26…" />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Observaciones</div>
-              <textarea className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+              <label htmlFor="a26-obs" style={lbl}>Observaciones</label>
+              <textarea id="a26-obs" name="observaciones" className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
             </div>
           </div>
           <div className="js-modal-actions">
@@ -1491,30 +1507,30 @@ function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones,
         <div className="js-modal-body">
           <div className="js-form-grid">
             <div className="js-field">
-              <div style={lbl}>Fecha *</div>
-              <input type="date" className="input" style={fld} value={form.fecha} onChange={e => set('fecha', e.target.value)} />
+              <label htmlFor="med-fecha" style={lbl}>Fecha *</label>
+              <input id="med-fecha" name="fecha" type="date" className="input" style={fld} value={form.fecha} onChange={e => set('fecha', e.target.value)} />
             </div>
             <div className="js-field">
-              <div style={lbl}>Tipo</div>
+              <label htmlFor="med-tipo" style={lbl}>Tipo</label>
               {tipoOpciones ? (
-                <select className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+                <select id="med-tipo" name="tipo" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
                   {tipoOpciones.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               ) : (
-                <input type="text" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)} placeholder="Tipo de examen…" />
+                <input id="med-tipo" name="tipo" type="text" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)} placeholder="Tipo de examen…" />
               )}
             </div>
             <div className="js-field">
-              <div style={lbl}>Jefe</div>
-              <input type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
+              <label htmlFor="med-jefe" style={lbl}>Jefe</label>
+              <input id="med-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Resultado</div>
-              <input type="text" className="input" style={fld} value={form.resultado} onChange={e => set('resultado', e.target.value)} placeholder="Resultado…" />
+              <label htmlFor="med-resultado" style={lbl}>Resultado</label>
+              <input id="med-resultado" name="resultado" type="text" className="input" style={fld} value={form.resultado} onChange={e => set('resultado', e.target.value)} placeholder="Resultado…" />
             </div>
             <div className="js-field js-field-full">
-              <div style={lbl}>Observaciones</div>
-              <textarea className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+              <label htmlFor="med-obs" style={lbl}>Observaciones</label>
+              <textarea id="med-obs" name="observaciones" className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
             </div>
           </div>
           <div className="js-modal-actions">
@@ -2188,8 +2204,10 @@ export function JefeServicioPage() {
           <div className="card js-card">
             <div className="js-search-grid">
               <div>
-                <div className="js-label">DNI</div>
+                <label htmlFor="js-busq-dni" className="js-label">DNI</label>
                 <input
+                  id="js-busq-dni"
+                  name="busquedaDni"
                   className="input"
                   value={busquedaDni}
                   onChange={e => { setBusquedaDni(e.target.value); setBusquedaNombre(''); setPaginaAgentes(1); }}
@@ -2198,8 +2216,10 @@ export function JefeServicioPage() {
                 />
               </div>
               <div>
-                <div className="js-label">Apellido / Nombre</div>
+                <label htmlFor="js-busq-nombre" className="js-label">Apellido / Nombre</label>
                 <input
+                  id="js-busq-nombre"
+                  name="busquedaNombre"
                   className="input"
                   value={busquedaNombre}
                   onChange={e => { setBusquedaNombre(e.target.value); setBusquedaDni(''); setPaginaAgentes(1); }}
@@ -2264,6 +2284,7 @@ export function JefeServicioPage() {
                 {/* Buscador rápido dentro del modo selección */}
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <input
+                    aria-label="Buscar por apellido o nombre"
                     className="input"
                     value={busquedaNombre}
                     onChange={e => { setBusquedaNombre(e.target.value); setBusquedaDni(''); setPaginaAgentes(1); }}
@@ -2945,8 +2966,10 @@ export function JefeServicioPage() {
               {/* Filtro propio del tab */}
               <div className="js-search-grid" style={{ marginBottom: 8 }}>
                 <div>
-                  <div className="js-label">DNI</div>
+                  <label htmlFor="js-asig-dni" className="js-label">DNI</label>
                   <input
+                    id="js-asig-dni"
+                    name="busquedaAsigDni"
                     className="input"
                     value={busquedaAsigDni}
                     onChange={e => { setBusquedaAsigDni(e.target.value); setBusquedaAsigNombre(''); setPaginaAsignados(1); }}
@@ -2955,8 +2978,10 @@ export function JefeServicioPage() {
                   />
                 </div>
                 <div>
-                  <div className="js-label">Apellido / Nombre</div>
+                  <label htmlFor="js-asig-nombre" className="js-label">Apellido / Nombre</label>
                   <input
+                    id="js-asig-nombre"
+                    name="busquedaAsigNombre"
                     className="input"
                     value={busquedaAsigNombre}
                     onChange={e => { setBusquedaAsigNombre(e.target.value); setBusquedaAsigDni(''); setPaginaAsignados(1); }}

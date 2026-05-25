@@ -577,6 +577,49 @@ export function buildFicheroRouter(): Router {
     res.json({ ok: true, red: hayRed ? 'activa' : 'caida' });
   });
 
+  // GET /fichero/dispositivos
+  // Consulta la tabla iclock del ADMS y calcula estado online/offline de cada reloj.
+  // Estado: 'online' si LastActivity en los últimos 300s, 'offline' si pasó más, 'pausado' si State=0.
+  router.get('/dispositivos', admin, async (_req: Request, res: Response) => {
+    const cfg = cargarConfig();
+    let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
+    try {
+      conn = await conectarMySQL(cfg);
+      const [rows] = await conn.query<RowDataPacket[]>(
+        `SELECT SN, Alias, LastActivity, State, IPAddress
+           FROM iclock
+           WHERE DelTag IS NULL OR DelTag = 0
+           ORDER BY Alias, SN`
+      );
+      await conn.end();
+
+      const now = Date.now();
+      const data = rows.map(r => {
+        // LastActivity llega como string "YYYY-MM-DD HH:mm:ss" por dateStrings:true
+        const la = r.LastActivity ? parsearDateLocal(r.LastActivity as string).getTime() : null;
+        const segundos = la ? Math.floor((now - la) / 1000) : null;
+        let estado: 'online' | 'offline' | 'pausado';
+        if (r.State === 0)                       estado = 'pausado';
+        else if (!la || segundos! > 300)          estado = 'offline';
+        else                                      estado = 'online';
+        return {
+          sn:                r.SN,
+          alias:             r.Alias || r.SN,
+          lastActivity:      r.LastActivity || null,
+          segundosSinActividad: segundos,
+          estado,
+          ip:                r.IPAddress || null,
+        };
+      });
+
+      return res.json({ ok: true, data });
+    } catch (err: any) {
+      if (conn) { try { await conn.end(); } catch { /* noop */ } }
+      // Si la tabla iclock no existe aún, devolver lista vacía en lugar de error 500
+      return res.json({ ok: true, data: [], warning: err?.message ?? String(err) });
+    }
+  });
+
   // GET /fichero/db-preview
   // Conecta a la DB del reloj y devuelve: tipo columna, min/max fecha, 10 registros de muestra.
   // Permite al usuario confirmar el formato real de las fechas antes de filtrar.

@@ -1,7 +1,7 @@
 // src/pages/AtencionPublicoPage/index.tsx
 // Página de Atención al Público — Ventanilla / Mostrador
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
@@ -179,6 +179,11 @@ export function AtencionPublicoPage() {
   const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
   const [fotoExpandida, setFotoExpandida] = useState(false);
+
+  // Liberar blob URL de foto al cambiar de agente (evita memory leak)
+  useEffect(() => {
+    return () => { if (fotoUrl) URL.revokeObjectURL(fotoUrl); };
+  }, [fotoUrl]);
   const TABLA_PAGE_SIZE = 10;
 
   const cargarDatosAgente = useCallback(async (cleanDni: string) => {
@@ -464,8 +469,10 @@ export function AtencionPublicoPage() {
               <h3 className="ap-section-title">🔍 Buscar Agente</h3>
               <div className="ap-search-grid">
                 <div>
-                  <div className="muted ap-label">DNI</div>
+                  <label htmlFor="ap-dni" className="muted ap-label">DNI</label>
                   <input
+                    id="ap-dni"
+                    name="dni"
                     className="input"
                     value={dni}
                     onChange={e => setDni(e.target.value)}
@@ -476,8 +483,10 @@ export function AtencionPublicoPage() {
                   />
                 </div>
                 <div>
-                  <div className="muted ap-label">Apellido / Nombre</div>
+                  <label htmlFor="ap-nombre" className="muted ap-label">Apellido / Nombre</label>
                   <input
+                    id="ap-nombre"
+                    name="fullName"
                     className="input"
                     value={fullName}
                     onChange={e => setFullName(e.target.value)}
@@ -581,18 +590,22 @@ export function AtencionPublicoPage() {
                     </button>
                   ))}
                 </div>
-                <div className="muted ap-label ap-mt-12">
+                <label htmlFor="ap-explicacion" className="muted ap-label ap-mt-12">
                   {motivoSeleccionado === 'otro' ? 'Descripción del motivo *' : 'Explicación adicional (opcional)'}
-                </div>
+                </label>
                 <textarea
+                  id="ap-explicacion"
+                  name="explicacion"
                   className="input ap-textarea"
                   value={explicacion}
                   onChange={e => setExplicacion(e.target.value)}
                   placeholder={motivoSeleccionado === 'otro' ? 'Describí el motivo de la consulta…' : 'Detalles adicionales, aclaraciones, etc.'}
                   rows={3}
                 />
-                <div className="muted ap-label ap-mt-12">Leyenda del ticket (opcional)</div>
+                <label htmlFor="ap-leyenda" className="muted ap-label ap-mt-12">Leyenda del ticket (opcional)</label>
                 <input
+                  id="ap-leyenda"
+                  name="leyenda"
                   className="input"
                   value={leyenda}
                   onChange={e => setLeyenda(e.target.value)}

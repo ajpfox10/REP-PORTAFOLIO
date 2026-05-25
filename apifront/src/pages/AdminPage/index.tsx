@@ -33,19 +33,19 @@ function CreateUserModal({ roles, form, saving, onChange, onClose, onSubmit }: {
         <p className="modal-title">👤 Nuevo usuario del sistema</p>
         <div className="form-grid">
           <div className="form-field">
-            <label>Nombre completo *</label>
-            <input value={form.nombre} placeholder="Ej: Juan Pérez"
+            <label htmlFor="cu-nombre">Nombre completo *</label>
+            <input id="cu-nombre" name="nombre" value={form.nombre} placeholder="Ej: Juan Pérez"
               onChange={e => onChange({ ...form, nombre: e.target.value })} />
           </div>
           <div className="form-field">
-            <label>Email *</label>
-            <input type="email" value={form.email} placeholder="usuario@dominio.com"
+            <label htmlFor="cu-email">Email *</label>
+            <input id="cu-email" name="email" type="email" value={form.email} placeholder="usuario@dominio.com"
               onChange={e => onChange({ ...form, email: e.target.value })} />
           </div>
           <div className="form-field">
-            <label>Contraseña * (mín. 8 chars)</label>
+            <label htmlFor="cu-password">Contraseña * (mín. 8 chars)</label>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <input type={showPass ? 'text' : 'password'} value={form.password}
+              <input id="cu-password" name="password" type={showPass ? 'text' : 'password'} value={form.password}
                 placeholder="••••••••" style={{ flex: 1 }}
                 onChange={e => onChange({ ...form, password: e.target.value })} />
               <button type="button" className="btn-icon" onClick={() => setShowPass(v => !v)}>
@@ -54,15 +54,15 @@ function CreateUserModal({ roles, form, saving, onChange, onClose, onSubmit }: {
             </div>
           </div>
           <div className="form-field">
-            <label>Estado</label>
-            <select value={form.estado} onChange={e => onChange({ ...form, estado: e.target.value })}>
+            <label htmlFor="cu-estado">Estado</label>
+            <select id="cu-estado" name="estado" value={form.estado} onChange={e => onChange({ ...form, estado: e.target.value })}>
               <option value="activo">Activo</option>
               <option value="inactivo">Inactivo</option>
             </select>
           </div>
           <div className="form-field full">
-            <label>Rol inicial</label>
-            <select value={form.roleId ?? ''} onChange={e => onChange({ ...form, roleId: e.target.value ? Number(e.target.value) : null })}>
+            <label htmlFor="cu-rol">Rol inicial</label>
+            <select id="cu-rol" name="roleId" value={form.roleId ?? ''} onChange={e => onChange({ ...form, roleId: e.target.value ? Number(e.target.value) : null })}>
               <option value="">— Sin rol —</option>
               {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}{r.descripcion ? ` · ${r.descripcion}` : ''}</option>)}
             </select>
@@ -93,9 +93,9 @@ function ResetPasswordModal({ user, saving, onClose, onSubmit }: {
           Usuario: <strong>{user.email}</strong>
         </p>
         <div className="form-field">
-          <label>Nueva contraseña (mín. 8 caracteres)</label>
+          <label htmlFor="rp-password">Nueva contraseña (mín. 8 caracteres)</label>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
-            <input type={show ? 'text' : 'password'} value={pwd} placeholder="••••••••"
+            <input id="rp-password" name="password" type={show ? 'text' : 'password'} value={pwd} placeholder="••••••••"
               style={{ flex: 1 }} onChange={e => setPwd(e.target.value)} />
             <button type="button" className="btn-icon" onClick={() => setShow(v => !v)}>
               {show ? '🙈' : '👁️'}
@@ -133,8 +133,8 @@ function AssignServicioModal({ user, saving, onClose, onSubmit }: {
           <strong>{user.nombre || user.email}</strong> — sólo visible si tiene rol <em>jefe_servicio</em>
         </p>
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Servicio</label>
-          <select className="input" style={{ width: '100%', marginTop: 4 }}
+          <label htmlFor="as-servicio" style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8' }}>Servicio</label>
+          <select id="as-servicio" name="servicioId" className="input" style={{ width: '100%', marginTop: 4 }}
             value={sel ?? ''} onChange={e => setSel(e.target.value ? Number(e.target.value) : null)}>
             <option value="">— Sin servicio —</option>
             {servicios.map((s: any) => (
@@ -167,8 +167,8 @@ function AssignRoleModal({ user, roles, saving, onClose, onSubmit }: {
           Usuario: <strong>{user.email}</strong>
         </p>
         <div className="form-field">
-          <label>Rol</label>
-          <select value={sel ?? ''} onChange={e => setSel(e.target.value ? Number(e.target.value) : null)}>
+          <label htmlFor="ar-rol">Rol</label>
+          <select id="ar-rol" name="roleId" value={sel ?? ''} onChange={e => setSel(e.target.value ? Number(e.target.value) : null)}>
             <option value="">— Sin rol —</option>
             {roles.map(r => (
               <option key={r.id} value={r.id}>
@@ -227,6 +227,7 @@ function RolePermissionsModal({ role, allPerms, rolePerms, saving, onToggle, onC
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <input className="admin-search" style={{ flex: 1, minWidth: 200 }}
+            aria-label="Filtrar permisos del rol"
             placeholder="Filtrar permisos…" value={filter} onChange={e => setFilter(e.target.value)} />
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             <input type="checkbox" checked={onlyActive} onChange={e => setOnlyActive(e.target.checked)} />
@@ -330,6 +331,7 @@ function UserPermissionsModal({ user, allPerms, userPerms, saving, onToggle, onC
           Los permisos directos se suman a los que otorga el rol asignado.
         </p>
         <input className="admin-search" style={{ width: '100%', marginBottom: 12 }}
+          aria-label="Filtrar permisos del usuario"
           placeholder="Filtrar…" value={filter} onChange={e => setFilter(e.target.value)} />
 
         <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -432,10 +434,10 @@ function RolesTab({ roles, permissions, onRefresh }: {
       }}>
         <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 10 }}>➕ Nuevo rol</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input className="admin-search" placeholder="Nombre del rol *" style={{ flex: 1, minWidth: 150 }}
+          <input aria-label="Nombre del nuevo rol" className="admin-search" placeholder="Nombre del rol *" style={{ flex: 1, minWidth: 150 }}
             value={newName} onChange={e => setNewName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && createRole()} />
-          <input className="admin-search" placeholder="Descripción (opcional)" style={{ flex: 2, minWidth: 180 }}
+          <input aria-label="Descripción del nuevo rol" className="admin-search" placeholder="Descripción (opcional)" style={{ flex: 2, minWidth: 180 }}
             value={newDesc} onChange={e => setNewDesc(e.target.value)} />
           <button className="btn btn-primary" disabled={creating || !newName.trim()} onClick={createRole}>
             {creating ? '⏳…' : 'Crear'}
@@ -571,6 +573,7 @@ export function AdminPage() {
           <>
             <div className="admin-toolbar">
               <input className="admin-search" style={{ flex: 1 }}
+                aria-label="Buscar usuarios por nombre, email o rol"
                 placeholder="Buscar por nombre, email o rol…"
                 value={search} onChange={e => setSearch(e.target.value)} />
               <button className="btn btn-primary" onClick={() => admin.setCreateModal(true)}>

@@ -165,6 +165,7 @@ function FormField({ label, name, value, onChange, type = 'text', options }: {
   label: string; name: string; value: any; onChange: (k: string, v: any) => void;
   type?: string; options?: { value: string; label: string }[];
 }) {
+  const fieldId = `legajo-field-${name}`;
   const style: React.CSSProperties = {
     width: '100%', padding: '6px 10px', background: 'rgba(255,255,255,0.07)',
     border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#fff',
@@ -172,24 +173,24 @@ function FormField({ label, name, value, onChange, type = 'text', options }: {
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <label style={{ fontSize: '0.7rem', textTransform: 'uppercase',
+      <label htmlFor={fieldId} style={{ fontSize: '0.7rem', textTransform: 'uppercase',
         color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{label}</label>
       {type === 'textarea' ? (
-        <textarea name={name} value={value ?? ''} rows={3}
+        <textarea id={fieldId} name={name} value={value ?? ''} rows={3}
           onChange={e => onChange(name, e.target.value)} style={{ ...style, resize: 'vertical' }} />
       ) : type === 'select' && options ? (
-        <select name={name} value={value ?? ''} onChange={e => onChange(name, e.target.value)} style={style}>
+        <select id={fieldId} name={name} value={value ?? ''} onChange={e => onChange(name, e.target.value)} style={style}>
           <option value="">— Sin dato —</option>
           {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       ) : type === 'checkbox' ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
-          <input type="checkbox" checked={!!value} onChange={e => onChange(name, e.target.checked)}
+          <input id={fieldId} type="checkbox" checked={!!value} onChange={e => onChange(name, e.target.checked)}
             style={{ width: 16, height: 16, cursor: 'pointer' }} />
           <span style={{ fontSize: '0.82rem' }}>{label}</span>
         </div>
       ) : (
-        <input type={type} name={name} value={value ?? ''}
+        <input id={fieldId} type={type} name={name} value={value ?? ''}
           onChange={e => onChange(name, e.target.value)} style={style} />
       )}
     </div>
@@ -1019,8 +1020,8 @@ export function LegajoPage() {
       <div className="card" style={{ marginBottom: 12, display: 'flex', gap: 10,
         alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 140px' }}>
-          <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>DNI</div>
-          <input className="input" value={dni} onChange={e => setDni(e.target.value)}
+          <label htmlFor="legajo-dni" className="muted" style={{ display: 'block', fontSize: '0.75rem', marginBottom: 4 }}>DNI</label>
+          <input id="legajo-dni" name="dni" className="input" value={dni} onChange={e => setDni(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && buscarPorDni()} placeholder="25123456" />
         </div>
         <button className="btn" onClick={() => buscarPorDni()} disabled={loading}
@@ -1028,8 +1029,8 @@ export function LegajoPage() {
           {loading ? '⏳' : 'Buscar DNI'}
         </button>
         <div style={{ flex: '2 1 200px' }}>
-          <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>APELLIDO</div>
-          <input className="input" value={apellido} onChange={e => setApellido(e.target.value)}
+          <label htmlFor="legajo-apellido" className="muted" style={{ display: 'block', fontSize: '0.75rem', marginBottom: 4 }}>APELLIDO</label>
+          <input id="legajo-apellido" name="apellido" className="input" value={apellido} onChange={e => setApellido(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && buscarPorApellido()} placeholder="García" />
         </div>
         <button className="btn" onClick={buscarPorApellido} disabled={loading}

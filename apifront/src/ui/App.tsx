@@ -48,7 +48,8 @@ import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
 import { BajasPorEstructuraPage } from '../pages/BajasPorEstructuraPage';
 import { BajasGestionPage } from '../pages/BajasGestionPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
-import { HerramientasPage } from '../pages/HerramientasPage';
+import { HerramientasPage }    from '../pages/HerramientasPage';
+import { StressAlertasPage }  from '../pages/StressAlertasPage';
 import { JefedeptosPage } from '../pages/JefedeptosPage';
 import { ReporteAsistenciaServicioPage } from '../pages/ReporteAsistenciaServicioPage';
 
@@ -521,6 +522,16 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <HerramientasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/stress-alertas"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <StressAlertasPage />
                   </Guard>
                 </Private>
               }

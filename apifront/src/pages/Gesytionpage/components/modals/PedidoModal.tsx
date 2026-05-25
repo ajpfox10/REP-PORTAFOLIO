@@ -44,6 +44,7 @@ export function PedidoModal({
             <label className="gp-pedido-field">
               <div className="muted">Lugar</div>
               <input
+                name="lugar"
                 className="input"
                 value={data.lugar}
                 onChange={(e) => onChange({ ...data, lugar: e.target.value })}
@@ -54,6 +55,7 @@ export function PedidoModal({
             <label className="gp-pedido-field">
               <div className="muted">Estado inicial</div>
               <select
+                name="estado"
                 className="input"
                 value={data.estado}
                 onChange={(e) => onChange({ ...data, estado: e.target.value })}
@@ -77,6 +79,7 @@ export function PedidoModal({
                 <label key={k} className="gp-check">
                   <input
                     type="checkbox"
+                    name={`tipo_${k}`}
                     checked={!!data.tipos[k]}
                     onChange={(e) =>
                       onChange({
@@ -93,6 +96,7 @@ export function PedidoModal({
             <label className="gp-pedido-custom">
               <div className="muted">Características (opcional)</div>
               <input
+                name="caracteristicas"
                 className="input"
                 value={data.caracteristicas}
                 onChange={(e) => onChange({ ...data, caracteristicas: e.target.value })}
@@ -103,6 +107,7 @@ export function PedidoModal({
             <label className="gp-pedido-custom">
               <div className="muted">Otro (opcional)</div>
               <input
+                name="custom"
                 className="input"
                 value={data.custom}
                 onChange={(e) => onChange({ ...data, custom: e.target.value })}

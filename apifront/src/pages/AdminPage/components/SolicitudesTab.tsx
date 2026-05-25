@@ -39,24 +39,26 @@ function ApproveModal({
 
         <div className="form-grid">
           <div className="form-field full">
-            <label>Nombre</label>
-            <input value={request.nombre} disabled style={{ background: '#f1f5f9' }} />
+            <label htmlFor="approve-nombre">Nombre</label>
+            <input id="approve-nombre" name="nombre" value={request.nombre} disabled style={{ background: '#f1f5f9' }} />
           </div>
           <div className="form-field full">
-            <label>Email</label>
-            <input value={request.email} disabled style={{ background: '#f1f5f9' }} />
+            <label htmlFor="approve-email">Email</label>
+            <input id="approve-email" name="email" value={request.email} disabled style={{ background: '#f1f5f9' }} />
           </div>
           {request.motivo && (
             <div className="form-field full">
-              <label>Motivo</label>
-              <textarea value={request.motivo} disabled rows={2}
+              <label htmlFor="approve-motivo">Motivo</label>
+              <textarea id="approve-motivo" name="motivo" value={request.motivo} disabled rows={2}
                 style={{ background: '#f1f5f9', resize: 'none' }} />
             </div>
           )}
           <div className="form-field full">
-            <label>Contraseña inicial * (mín. 8 caracteres)</label>
+            <label htmlFor="approve-password">Contraseña inicial * (mín. 8 caracteres)</label>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
               <input
+                id="approve-password"
+                name="password"
                 type={showPass ? 'text' : 'password'}
                 value={password}
                 placeholder="••••••••"
@@ -69,8 +71,8 @@ function ApproveModal({
             </div>
           </div>
           <div className="form-field full">
-            <label>Rol inicial *</label>
-            <select value={rolId ?? ''} onChange={e => setRolId(e.target.value ? Number(e.target.value) : null)}>
+            <label htmlFor="approve-rol">Rol inicial *</label>
+            <select id="approve-rol" name="rolId" value={rolId ?? ''} onChange={e => setRolId(e.target.value ? Number(e.target.value) : null)}>
               <option value="" disabled>— Seleccioná un rol —</option>
               {roles.map(r => (
                 <option key={r.id} value={r.id}>

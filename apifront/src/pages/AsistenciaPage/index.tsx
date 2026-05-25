@@ -312,8 +312,9 @@ function MapeoEditor({
             }}
           >
             <div>
-              <div style={lbl}>NOVEDAD MINISTERIO</div>
+              <label htmlFor={`as-mapeo-min-${k}`} style={lbl}>NOVEDAD MINISTERIO</label>
               <input
+                id={`as-mapeo-min-${k}`}
                 className="input"
                 value={k}
                 readOnly
@@ -322,10 +323,11 @@ function MapeoEditor({
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={lbl}>EQUIVALENTE(S) SIAP</div>
+              <label htmlFor={`as-mapeo-siap-${k}`} style={lbl}>EQUIVALENTE(S) SIAP</label>
 
               {novedadesSiap.length > 0 && (
                 <select
+                  aria-label={`Agregar equivalente SIAP para ${k}`}
                   className="input"
                   style={{
                     ...fs,
@@ -347,6 +349,7 @@ function MapeoEditor({
               )}
 
               <input
+                id={`as-mapeo-siap-${k}`}
                 className="input"
                 value={v.join(", ")}
                 style={fs}
@@ -395,10 +398,11 @@ function MapeoEditor({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {/* Ministerio */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={lbl}>NOVEDAD MINISTERIO</div>
+            <label htmlFor="as-new-min" style={lbl}>NOVEDAD MINISTERIO</label>
 
             {novedadesMin.length > 0 && (
               <select
+                aria-label="Seleccionar novedad ministerio del Excel"
                 className="input"
                 style={{
                   ...fs,
@@ -433,6 +437,8 @@ function MapeoEditor({
             )}
 
             <input
+              id="as-new-min"
+              name="newMin"
               className="input"
               placeholder="o escribir manualmente…"
               value={newMin}
@@ -443,10 +449,11 @@ function MapeoEditor({
 
           {/* SIAP */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={lbl}>EQUIVALENTE(S) SIAP</div>
+            <label htmlFor="as-new-siap" style={lbl}>EQUIVALENTE(S) SIAP</label>
 
             {novedadesSiap.length > 0 && (
               <select
+                aria-label="Seleccionar equivalente SIAP del Excel"
                 className="input"
                 style={{
                   ...fs,
@@ -486,6 +493,8 @@ function MapeoEditor({
             )}
 
             <input
+              id="as-new-siap"
+              name="siapInput"
               className="input"
               placeholder="o escribir y Enter / coma"
               value={siapInput}
@@ -967,6 +976,7 @@ export function AsistenciaPage() {
                     >
                       {/* Etiqueta UPA editable */}
                       <input
+                        aria-label={`UPA ${idx + 1}`}
                         className="input"
                         value={entry.upa}
                         placeholder="UPA 18"
@@ -980,6 +990,7 @@ export function AsistenciaPage() {
 
                       {/* Selector de archivo */}
                       <select
+                        aria-label={`Archivo ministerio UPA ${idx + 1}`}
                         className="input"
                         value={entry.file}
                         style={{ ...fs, fontSize: "0.78rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
@@ -1029,8 +1040,10 @@ export function AsistenciaPage() {
 
               {/* ── Archivo SIAP ── */}
               <div>
-                <div style={lbl}>ARCHIVO SIAP (listado unificado)</div>
+                <label htmlFor="as-siap-file" style={lbl}>ARCHIVO SIAP (listado unificado)</label>
                 <select
+                  id="as-siap-file"
+                  name="selectedSiap"
                   className="input"
                   value={selectedSiap}
                   style={{ ...fs, color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
@@ -1047,8 +1060,10 @@ export function AsistenciaPage() {
 
               {/* ── Período ── */}
               <div>
-                <div style={lbl}>MES A COMPARAR</div>
+                <label htmlFor="as-periodo" style={lbl}>MES A COMPARAR</label>
                 <input
+                  id="as-periodo"
+                  name="periodoMes"
                   className="input"
                   type="month"
                   value={periodoMes}
@@ -1162,6 +1177,7 @@ export function AsistenciaPage() {
 
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <input
+                aria-label="Agregar novedad a omitir"
                 className="input"
                 placeholder="Agregar novedad a omitir..."
                 value={customSkip}
@@ -1319,8 +1335,10 @@ export function AsistenciaPage() {
           <div className="card gp-card-14" style={{ padding: 16 }}>
             <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8, marginBottom: 12, alignItems: "flex-end" }}>
               <div>
-                <div style={lbl}>DEPENDENCIA</div>
+                <label htmlFor="as-filtro-dep" style={lbl}>DEPENDENCIA</label>
                 <select
+                  id="as-filtro-dep"
+                  name="filtroDep"
                   className="input"
                   value={filtroDep}
                   style={{ ...fs, width: "auto", minWidth: 180, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
@@ -1336,8 +1354,10 @@ export function AsistenciaPage() {
               </div>
 
               <div>
-                <div style={lbl}>ESTADO</div>
+                <label htmlFor="as-filtro-estado" style={lbl}>ESTADO</label>
                 <select
+                  id="as-filtro-estado"
+                  name="filtroEstado"
                   className="input"
                   value={filtroEstado}
                   style={{ ...fs, width: "auto", minWidth: 130, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
@@ -1351,8 +1371,10 @@ export function AsistenciaPage() {
               </div>
 
               <div>
-                <div style={lbl}>MOTIVO</div>
+                <label htmlFor="as-filtro-motivo" style={lbl}>MOTIVO</label>
                 <select
+                  id="as-filtro-motivo"
+                  name="filtroMotivo"
                   className="input"
                   value={filtroMotivo}
                   style={{ ...fs, width: "auto", minWidth: 190, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
@@ -1368,8 +1390,10 @@ export function AsistenciaPage() {
               </div>
 
               <div style={{ flex: "1 1 140px", maxWidth: 240 }}>
-                <div style={lbl}>LICENCIA / NOVEDAD</div>
+                <label htmlFor="as-filtro-licencia" style={lbl}>LICENCIA / NOVEDAD</label>
                 <select
+                  id="as-filtro-licencia"
+                  name="filtroLicencia"
                   className="input"
                   value={filtroLicencia}
                   style={{ ...fs, width: "100%", fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
@@ -1385,8 +1409,10 @@ export function AsistenciaPage() {
               </div>
 
               <div>
-                <div style={lbl}>JUST.</div>
+                <label htmlFor="as-filtro-just" style={lbl}>JUST.</label>
                 <select
+                  id="as-filtro-just"
+                  name="filtroJust"
                   className="input"
                   value={filtroJust}
                   style={{ ...fs, width: "auto", minWidth: 80, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
@@ -1399,8 +1425,10 @@ export function AsistenciaPage() {
               </div>
 
               <div style={{ flex: "0 0 80px" }}>
-                <div style={lbl}>DNI</div>
+                <label htmlFor="as-filtro-dni" style={lbl}>DNI</label>
                 <input
+                  id="as-filtro-dni"
+                  name="filtroDni"
                   className="input"
                   placeholder="DNI..."
                   value={filtroDni}
@@ -1410,8 +1438,10 @@ export function AsistenciaPage() {
               </div>
 
               <div style={{ flex: "1 1 100px", maxWidth: 180 }}>
-                <div style={lbl}>NOMBRE</div>
+                <label htmlFor="as-filtro-nombre" style={lbl}>NOMBRE</label>
                 <input
+                  id="as-filtro-nombre"
+                  name="filtroNombre"
                   className="input"
                   placeholder="Nombre..."
                   value={filtroNombre}

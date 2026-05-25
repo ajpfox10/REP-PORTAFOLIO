@@ -9,6 +9,7 @@ import { EmbarazadasAlertaBanner } from '../EmbarazadasPage';
 import { ExamenIngresoBanner } from '../ExamenIngresoPage';
 import { AccidentesPunzoBanner } from '../AccidentesPunzoPage';
 import { JefedeptosAlertaBanner } from '../JefedeptosPage';
+import { FicheroBanner } from '../FicheroPage';
 import './styles/DashboardPage.css';
 
 function Tile({ to, title, desc, disabled, accent }: {
@@ -243,6 +244,7 @@ export function DashboardPage() {
   return (
     <Layout title="Panel">
       {shouldShowEmbarazadasBanner && <EmbarazadasAlertaBanner />}
+      {hasPerm('crud:*:*') && <FicheroBanner />}
       {hasPerm('crud:*:*') && <ExamenIngresoBanner />}
       {hasPerm('crud:*:*') && <AccidentesPunzoBanner />}
       {hasPerm('crud:*:*') && <JefedeptosAlertaBanner />}
@@ -297,6 +299,7 @@ export function DashboardPage() {
         <div className="grid">
           <Tile to="/app/jefedeptos" title="🏛️ Historial Jefaturas" desc="Cargar y consultar el historial de quién ocupó cada jefatura. Alertas de vencimiento de cargos por concurso." accent="#6366f1" />
           <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación. Prorrateo, agotamiento prematuro, ANSES, servicios externos, cargo deudor y exportación a Excel." accent="#7c3aed" />
+          <Tile to="/app/stress-alertas" title="🏖️ Stress Post-Vacacional" desc="Agentes que completaron su licencia anual y llevan más de 40 días sin carga de ANUAL COMPLEMENTARIA. Muestra días de stress a cargar por ley y antigüedad." accent="#0891b2" />
           <Tile to="/app/buscador" title="🔍 Buscador Global" desc="Buscá por DNI o apellido en todas las secciones con historial de búsquedas." accent="#06b6d4" />
           <Tile to="/app/comparador" title="⚖️ Comparador" desc="Comparar dos agentes lado a lado. Las diferencias se marcan automáticamente." accent="#8b5cf6" />
           <Tile to="/app/legajo" title="📋 Legajo Completo" desc="Vista unificada e imprimible de todos los datos de un agente: personal, laboral, servicios y documentos." accent="#a3e635" />

@@ -232,22 +232,22 @@ export function PedidosPage() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
 
             <div style={{ flex: 1, minWidth: 130 }}>
-              <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>DNI</div>
-              <input className="input" placeholder="Número de DNI" value={filtroDni}
+              <label htmlFor="ped-dni" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>DNI</label>
+              <input id="ped-dni" name="filtroDni" className="input" placeholder="Número de DNI" value={filtroDni}
                 onChange={e => setFiltroDni(e.target.value.replace(/\D/g, ''))}
                 style={{ width: '100%', boxSizing: 'border-box' }} />
             </div>
 
             <div style={{ flex: 2, minWidth: 180 }}>
-              <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>APELLIDO</div>
-              <input className="input" placeholder="Buscar por apellido" value={filtroNombre}
+              <label htmlFor="ped-apellido" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>APELLIDO</label>
+              <input id="ped-apellido" name="filtroNombre" className="input" placeholder="Buscar por apellido" value={filtroNombre}
                 onChange={e => setFiltroNombre(e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box' }} />
             </div>
 
             <div style={{ minWidth: 140 }}>
-              <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>ESTADO</div>
-              <select className="input" value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
+              <label htmlFor="ped-estado" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>ESTADO</label>
+              <select id="ped-estado" name="filtroEstado" className="input" value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box' }}>
                 <option value="">Todos</option>
                 {ESTADOS.map(e => <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>)}

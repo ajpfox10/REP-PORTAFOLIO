@@ -81,11 +81,13 @@ export function SolicitudAltaPage() {
 
   const field = (key: string, label: string, opts?: { type?: string; placeholder?: string; required?: boolean }) => (
     <div>
-      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b',
+      <label htmlFor={`alta-${key}`} style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b',
         textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
         {label}{opts?.required && <span style={{ color: '#ef4444' }}> *</span>}
-      </div>
+      </label>
       <input
+        id={`alta-${key}`}
+        name={key}
         className={`input${errors[key] ? ' error' : ''}`}
         type={opts?.type || 'text'}
         placeholder={opts?.placeholder || ''}
@@ -117,11 +119,11 @@ export function SolicitudAltaPage() {
             </div>
             {field('fecha_nacimiento', 'Fecha de nacimiento', { type: 'date' })}
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b',
+              <label htmlFor="alta-estado_empleo" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b',
                 textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
                 Estado laboral
-              </div>
-              <select className="input" value={form.estado_empleo}
+              </label>
+              <select id="alta-estado_empleo" name="estado_empleo" className="input" value={form.estado_empleo}
                 onChange={e => set('estado_empleo', e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box' }}>
                 {['activo','inactivo','licencia','jubilado','becario','contratado','pasante','baja']
@@ -131,11 +133,11 @@ export function SolicitudAltaPage() {
             {field('email', 'Email institucional', { type: 'email', placeholder: 'usuario@organismo.gov.ar' })}
             {field('telefono', 'Teléfono', { placeholder: 'Con código de área' })}
             <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b',
+              <label htmlFor="alta-observaciones" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b',
                 textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
                 Observaciones / Motivo de la solicitud
-              </div>
-              <textarea className="textarea" rows={3}
+              </label>
+              <textarea id="alta-observaciones" name="observaciones" className="textarea" rows={3}
                 placeholder="Información adicional para el administrador…"
                 value={form.observaciones}
                 onChange={e => set('observaciones', e.target.value)}

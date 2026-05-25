@@ -18,7 +18,7 @@ interface DiaDet {
   entrada_prog: string | null; salida_prog: string | null;
   horasTeoricas: number;
   entrada_real: string | null; salida_real: string | null;
-  invertido: boolean;
+  invertido: boolean; llegadaTarde: boolean; minutosRetraso: number;
   horasReales: number;
   cumplioHoras: boolean;
   novedades: string[];
@@ -268,37 +268,37 @@ export function ReporteAsistenciaServicioPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
 
           <div style={fg}>
-            <label style={lbl}>Servicio *</label>
-            <select className="input" value={servicioId} onChange={e => setServicioId(e.target.value)}>
+            <label htmlFor="ras-servicio" style={lbl}>Servicio *</label>
+            <select id="ras-servicio" name="servicioId" className="input" value={servicioId} onChange={e => setServicioId(e.target.value)}>
               <option value="">— Seleccionar —</option>
               {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
             </select>
           </div>
 
           <div style={fg}>
-            <label style={lbl}>Período *</label>
-            <input className="input" type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} />
+            <label htmlFor="ras-periodo" style={lbl}>Período *</label>
+            <input id="ras-periodo" name="periodo" className="input" type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} />
           </div>
 
           <div style={fg}>
-            <label style={lbl}>Archivo SIAP</label>
-            <select className="input" value={siapFile} onChange={e => setSiapFile(e.target.value)}>
+            <label htmlFor="ras-siap" style={lbl}>Archivo SIAP</label>
+            <select id="ras-siap" name="siapFile" className="input" value={siapFile} onChange={e => setSiapFile(e.target.value)}>
               <option value="">— sin SIAP —</option>
               {archivos.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
             </select>
           </div>
 
           <div style={fg}>
-            <label style={lbl}>Archivo Ministerio</label>
-            <select className="input" value={ministerioFile} onChange={e => setMinisterioFile(e.target.value)}>
+            <label htmlFor="ras-ministerio" style={lbl}>Archivo Ministerio</label>
+            <select id="ras-ministerio" name="ministerioFile" className="input" value={ministerioFile} onChange={e => setMinisterioFile(e.target.value)}>
               <option value="">— sin Ministerio —</option>
               {archivos.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
             </select>
           </div>
 
           <div style={fg}>
-            <label style={lbl}>Archivo Horarios</label>
-            <select className="input" value={horariosFile} onChange={e => setHorariosFile(e.target.value)}>
+            <label htmlFor="ras-horarios" style={lbl}>Archivo Horarios</label>
+            <select id="ras-horarios" name="horariosFile" className="input" value={horariosFile} onChange={e => setHorariosFile(e.target.value)}>
               <option value="">— sin horarios —</option>
               {archivos.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
             </select>
@@ -554,7 +554,10 @@ export function ReporteAsistenciaServicioPage() {
                                               <td>{d.entrada_prog ?? '—'}</td>
                                               <td>{d.salida_prog  ?? '—'}</td>
                                               <td>{d.horasTeoricas ? fmtHs(d.horasTeoricas) : '—'}</td>
-                                              <td style={{ color: d.entrada_real ? '#10b981' : undefined }}>{d.entrada_real ?? '—'}</td>
+                                              <td style={{ color: d.llegadaTarde ? '#f97316' : d.entrada_real ? '#10b981' : undefined }}>
+                                                {d.entrada_real ?? '—'}
+                                                {d.llegadaTarde && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(+{d.minutosRetraso}m)</span>}
+                                              </td>
                                               <td style={{ color: d.invertido ? '#eab308' : sinSalida ? '#eab308' : d.salida_real ? '#10b981' : undefined }}>
                                                 {d.salida_real ?? '—'}
                                               </td>

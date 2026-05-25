@@ -7,6 +7,7 @@ import { useCamera } from './hooks/useCamera';
 import { useScanner } from './hooks/useScanner';
 import type { ScanResult } from './hooks/useScanner';
 import './styles/CargaAgente.css';
+import { SearchableSelect } from './components/SearchableSelect';
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 const STEPS = [
@@ -39,81 +40,101 @@ function StepIndicator({ current, done, onGo }: { current: number; done: Set<num
 }
 
 // ─── Step 1: Datos Personales ─────────────────────────────────────────────────
-function StepPersonal({ form, setField, errors, cats }: any) {
+function StepPersonal({ form, setField, errors, cats, editMode, editLoading, onDniBlur }: any) {
   return (
     <div className="ca-card">
-      <div className="ca-section-title">👤 Datos Personales</div>
+      <div className="ca-section-title">
+        👤 Datos Personales
+        {editMode && (
+          <span style={{
+            marginLeft: '0.75rem', fontSize: '0.75rem', fontWeight: 600,
+            background: 'rgba(234,179,8,0.15)', color: '#facc15',
+            border: '1px solid rgba(234,179,8,0.35)',
+            borderRadius: 20, padding: '2px 10px', letterSpacing: '0.03em',
+          }}>
+            ✏️ MODO EDICIÓN
+          </span>
+        )}
+      </div>
       <div className="ca-form-grid">
         <div className="ca-field">
-          <label className="ca-label required">DNI</label>
-          <input className={`ca-input${errors.dni ? ' error' : ''}`}
-            value={form.dni} onChange={e => setField('dni', e.target.value.replace(/\D/g, ''))}
-            placeholder="12345678" maxLength={8} />
+          <label htmlFor="ca-dni" className="ca-label required">DNI</label>
+          <div style={{ position: 'relative' }}>
+            <input id="ca-dni" name="dni" className={`ca-input${errors.dni ? ' error' : ''}`}
+              value={form.dni} onChange={e => setField('dni', e.target.value.replace(/\D/g, ''))}
+              onBlur={() => onDniBlur(form.dni)}
+              placeholder="12345678" maxLength={8}
+              style={{ paddingRight: editLoading ? '2.2rem' : undefined }} />
+            {editLoading && (
+              <span style={{
+                position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)',
+                fontSize: '0.8rem', color: 'var(--ca-text2)',
+              }}>⏳</span>
+            )}
+          </div>
           {errors.dni && <span className="ca-field-error">⚠ {errors.dni}</span>}
+          {editMode && !editLoading && (
+            <span style={{ fontSize: '0.72rem', color: '#facc15', marginTop: 2 }}>
+              Agente encontrado — editá los campos y guardá
+            </span>
+          )}
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">CUIL</label>
-          <input className="ca-input" value={form.cuil}
+          <label htmlFor="ca-cuil" className="ca-label">CUIL</label>
+          <input id="ca-cuil" name="cuil" className="ca-input" value={form.cuil}
             onChange={e => setField('cuil', e.target.value)} placeholder="20-12345678-9" maxLength={14} />
           {errors.cuil && <span className="ca-field-error">⚠ {errors.cuil}</span>}
         </div>
 
         <div className="ca-field">
-          <label className="ca-label required">Apellido</label>
-          <input className={`ca-input${errors.apellido ? ' error' : ''}`}
+          <label htmlFor="ca-apellido" className="ca-label required">Apellido</label>
+          <input id="ca-apellido" name="apellido" className={`ca-input${errors.apellido ? ' error' : ''}`}
             value={form.apellido} onChange={e => setField('apellido', e.target.value.toUpperCase())}
             placeholder="APELLIDO" />
           {errors.apellido && <span className="ca-field-error">⚠ {errors.apellido}</span>}
         </div>
 
         <div className="ca-field">
-          <label className="ca-label required">Nombre</label>
-          <input className={`ca-input${errors.nombre ? ' error' : ''}`}
+          <label htmlFor="ca-nombre" className="ca-label required">Nombre</label>
+          <input id="ca-nombre" name="nombre" className={`ca-input${errors.nombre ? ' error' : ''}`}
             value={form.nombre} onChange={e => setField('nombre', e.target.value.toUpperCase())}
             placeholder="NOMBRE" />
           {errors.nombre && <span className="ca-field-error">⚠ {errors.nombre}</span>}
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Fecha de Nacimiento</label>
-          <input className="ca-input" type="date" value={form.fecha_nacimiento}
+          <label htmlFor="ca-fnac" className="ca-label">Fecha de Nacimiento</label>
+          <input id="ca-fnac" name="fecha_nacimiento" className="ca-input" type="date" value={form.fecha_nacimiento}
             onChange={e => setField('fecha_nacimiento', e.target.value)} />
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Sexo</label>
-          <select className="ca-select" value={form.sexo_id} onChange={e => setField('sexo_id', e.target.value)}>
-            <option value="">— Seleccionar —</option>
-            {cats.sexo.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
+          <label htmlFor="ca-sexo" className="ca-label">Sexo</label>
+          <SearchableSelect id="ca-sexo" value={form.sexo_id} onChange={v => setField('sexo_id', v)} options={cats.sexo} />
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Email</label>
-          <input className="ca-input" type="email" value={form.email}
+          <label htmlFor="ca-email" className="ca-label">Email</label>
+          <input id="ca-email" name="email" className="ca-input" type="email" value={form.email}
             onChange={e => setField('email', e.target.value)} placeholder="agente@dominio.com" />
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Teléfono</label>
-          <input className="ca-input" value={form.telefono}
+          <label htmlFor="ca-tel" className="ca-label">Teléfono</label>
+          <input id="ca-tel" name="telefono" className="ca-input" value={form.telefono}
             onChange={e => setField('telefono', e.target.value)} placeholder="221-1234567" />
         </div>
 
         <div className="ca-field full">
-          <label className="ca-label">Domicilio</label>
-          <input className="ca-input" value={form.domicilio}
+          <label htmlFor="ca-dom" className="ca-label">Domicilio</label>
+          <input id="ca-dom" name="domicilio" className="ca-input" value={form.domicilio}
             onChange={e => setField('domicilio', e.target.value)} placeholder="Calle 123, Piso 2" />
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Localidad</label>
-          <select className="ca-select" value={form.localidad_id}
-            onChange={e => setField('localidad_id', e.target.value)}>
-            <option value="">— Seleccionar —</option>
-            {cats.localidad.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
+          <label htmlFor="ca-localidad" className="ca-label">Localidad</label>
+          <SearchableSelect id="ca-localidad" value={form.localidad_id} onChange={v => setField('localidad_id', v)} options={cats.localidad} />
         </div>
       </div>
     </div>
@@ -161,18 +182,19 @@ function StepLaboral({ form, setField, errors, cats }: any) {
 
   const sel = (label: string, field: string, items: any[], disabled = false) => (
     <div className="ca-field">
-      <label className="ca-label">{label}</label>
-      <select className="ca-select" value={form[field] ?? ''} disabled={disabled}
-        onChange={e => {
-          setField(field, e.target.value);
-          // limpiar hijos al cambiar padre
+      <label htmlFor={`ca-${field}`} className="ca-label">{label}</label>
+      <SearchableSelect
+        id={`ca-${field}`}
+        value={form[field] ?? ''}
+        disabled={disabled}
+        options={items}
+        onChange={v => {
+          setField(field, v);
           if (field === 'dependencia_id') { setField('reparticion_id', ''); setField('servicio_id', ''); setField('sector_id', ''); }
           if (field === 'reparticion_id') { setField('servicio_id', ''); setField('sector_id', ''); }
           if (field === 'servicio_id')    { setField('sector_id', ''); }
-        }}>
-        <option value="">— Seleccionar —</option>
-        {items.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-      </select>
+        }}
+      />
     </div>
   );
 
@@ -182,20 +204,20 @@ function StepLaboral({ form, setField, errors, cats }: any) {
       <div className="ca-form-grid">
 
         <div className="ca-field">
-          <label className="ca-label">Fecha de Ingreso</label>
-          <input className="ca-input" type="date" value={form.fecha_ingreso}
+          <label htmlFor="ca-fing" className="ca-label">Fecha de Ingreso</label>
+          <input id="ca-fing" name="fecha_ingreso" className="ca-input" type="date" value={form.fecha_ingreso}
             onChange={e => setField('fecha_ingreso', e.target.value)} />
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Fecha de Egreso <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>(temporarios)</span></label>
-          <input className="ca-input" type="date" value={form.fecha_egreso}
+          <label htmlFor="ca-feg" className="ca-label">Fecha de Egreso <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>(temporarios)</span></label>
+          <input id="ca-feg" name="fecha_egreso" className="ca-input" type="date" value={form.fecha_egreso}
             onChange={e => setField('fecha_egreso', e.target.value)} />
         </div>
 
         <div className="ca-field">
-          <label className="ca-label required">Estado Empleo</label>
-          <select className="ca-select" value={form.estado_empleo}
+          <label htmlFor="ca-estado" className="ca-label required">Estado Empleo</label>
+          <select id="ca-estado" name="estado_empleo" className="ca-select" value={form.estado_empleo}
             onChange={e => setField('estado_empleo', e.target.value)}>
             {ESTADO_EMPLEO_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
@@ -203,14 +225,14 @@ function StepLaboral({ form, setField, errors, cats }: any) {
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Legajo</label>
-          <input className="ca-input" value={form.legajo}
+          <label htmlFor="ca-legajo" className="ca-label">Legajo</label>
+          <input id="ca-legajo" name="legajo" className="ca-input" value={form.legajo}
             onChange={e => setField('legajo', e.target.value)} placeholder="Nº de legajo" />
         </div>
 
         <div className="ca-field">
-          <label className="ca-label">Decreto de Designación</label>
-          <input className="ca-input" value={form.decreto_designacion}
+          <label htmlFor="ca-decreto" className="ca-label">Decreto de Designación</label>
+          <input id="ca-decreto" name="decreto_designacion" className="ca-input" value={form.decreto_designacion}
             onChange={e => setField('decreto_designacion', e.target.value)} placeholder="Ej: 1234/2024" />
         </div>
 
@@ -232,8 +254,8 @@ function StepLaboral({ form, setField, errors, cats }: any) {
         {sel('Sector',      'sector_id',      sectores,      !form.servicio_id)}
 
         <div className="ca-field full">
-          <label className="ca-label">Observaciones</label>
-          <textarea className="ca-textarea" value={form.observaciones}
+          <label htmlFor="ca-obs" className="ca-label">Observaciones</label>
+          <textarea id="ca-obs" name="observaciones" className="ca-textarea" value={form.observaciones}
             onChange={e => setField('observaciones', e.target.value)} placeholder="Notas adicionales…" />
         </div>
       </div>
@@ -266,7 +288,7 @@ function StepFoto({ cam, photo, setPhoto }: any) {
         {/* Left: video + controls */}
         <div>
           <div className="ca-device-select">
-            <select className="ca-select" style={{ flex: 1, fontSize: '0.82rem' }}
+            <select aria-label="Seleccionar cámara USB" className="ca-select" style={{ flex: 1, fontSize: '0.82rem' }}
               value={cam.selectedDevice}
               onChange={e => { cam.setSelectedDevice(e.target.value); cam.startCamera(e.target.value); }}>
               <option value="">— Seleccionar cámara USB —</option>
@@ -376,7 +398,7 @@ function ScanItem({ doc, index, onRemove, onRename }: {
       }
       <div className="ca-scan-info">
         {editing ? (
-          <input className="ca-input" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+          <input aria-label="Renombrar documento" className="ca-input" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
             value={val} onChange={e => setVal(e.target.value)} autoFocus
             onBlur={() => { onRename(val); setEditing(false); }}
             onKeyDown={e => { if (e.key === 'Enter') { onRename(val); setEditing(false); } }} />
@@ -457,7 +479,7 @@ function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScann
           <div>
             <div className="ca-opt-label" style={{ marginBottom: 4 }}>URL DEL AGENTE LOCAL</div>
             <div className="ca-agent-url">
-              <input value={agentInput} onChange={e => setAgentInput(e.target.value)}
+              <input aria-label="URL del agente local" value={agentInput} onChange={e => setAgentInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && scanner.connect(agentInput)}
                 placeholder="http://127.0.0.1:9100" />
               <button className="ca-btn ca-btn-secondary ca-btn-sm"
@@ -471,7 +493,7 @@ function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScann
           {scanner.scanners.length > 0 && (
             <div>
               <div className="ca-opt-label" style={{ marginBottom: 4 }}>ESCÁNER DETECTADO</div>
-              <select className="ca-select" style={{ fontSize: '0.82rem' }}
+              <select aria-label="Escáner detectado" className="ca-select" style={{ fontSize: '0.82rem' }}
                 value={scanner.selectedScanner}
                 onChange={e => scanner.setSelectedScanner(e.target.value)}>
                 {scanner.scanners.map((s: any) => (
@@ -489,7 +511,7 @@ function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScann
             <div className="ca-scan-opts">
               <div className="ca-opt-group">
                 <div className="ca-opt-label">DPI</div>
-                <select className="ca-select" style={{ fontSize: '0.8rem' }}
+                <select aria-label="DPI de escaneo" className="ca-select" style={{ fontSize: '0.8rem' }}
                   value={scanner.opts.dpi}
                   onChange={e => scanner.setOpts((o: any) => ({ ...o, dpi: Number(e.target.value) }))}>
                   {[75, 100, 150, 200, 300, 600].map(d => <option key={d} value={d}>{d}</option>)}
@@ -497,7 +519,7 @@ function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScann
               </div>
               <div className="ca-opt-group">
                 <div className="ca-opt-label">COLOR</div>
-                <select className="ca-select" style={{ fontSize: '0.8rem' }}
+                <select aria-label="Modo de color" className="ca-select" style={{ fontSize: '0.8rem' }}
                   value={scanner.opts.color}
                   onChange={e => scanner.setOpts((o: any) => ({ ...o, color: e.target.value }))}>
                   <option value="gray">Grises</option>
@@ -507,7 +529,7 @@ function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScann
               </div>
               <div className="ca-opt-group">
                 <div className="ca-opt-label">FORMATO</div>
-                <select className="ca-select" style={{ fontSize: '0.8rem' }}
+                <select aria-label="Formato de escaneo" className="ca-select" style={{ fontSize: '0.8rem' }}
                   value={scanner.opts.format}
                   onChange={e => scanner.setOpts((o: any) => ({ ...o, format: e.target.value }))}>
                   <option value="pdf">PDF</option>
@@ -516,7 +538,7 @@ function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScann
               </div>
               <div className="ca-opt-group">
                 <div className="ca-opt-label">CALIDAD</div>
-                <select className="ca-select" style={{ fontSize: '0.8rem' }}
+                <select aria-label="Calidad de escaneo" className="ca-select" style={{ fontSize: '0.8rem' }}
                   value={scanner.opts.quality}
                   onChange={e => scanner.setOpts((o: any) => ({ ...o, quality: Number(e.target.value) }))}>
                   <option value={60}>60% — pequeño</option>
@@ -530,7 +552,7 @@ function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScann
 
           <div>
             <div className="ca-opt-label" style={{ marginBottom: 4 }}>ETIQUETA DEL DOCUMENTO</div>
-            <input className="ca-input" style={{ fontSize: '0.85rem' }}
+            <input aria-label="Etiqueta del documento" className="ca-input" style={{ fontSize: '0.85rem' }}
               value={scanLabel} onChange={e => setScanLabel(e.target.value)}
               placeholder={`Doc ${docs.length + 1} — DNI ${form.dni || '...'}`} />
           </div>
@@ -683,13 +705,16 @@ export function CargaAgentePage() {
 
   // ── Pantalla de éxito ──
   if (carga.saved) {
+    const isEdit = carga.savedMode === 'edit';
     return (
       <div className="ca-root">
         <div className="ca-wrap">
           <div className="ca-card">
             <div className="ca-success">
-              <div className="ca-success-icon">🎉</div>
-              <div className="ca-success-title">Agente registrado</div>
+              <div className="ca-success-icon">{isEdit ? '✅' : '🎉'}</div>
+              <div className="ca-success-title">
+                {isEdit ? 'Agente actualizado' : 'Agente registrado'}
+              </div>
               <div className="ca-success-dni">DNI {carga.savedDni}</div>
               <div style={{ color: 'var(--ca-text2)', fontSize: '0.95rem', textAlign: 'center', lineHeight: 1.6 }}>
                 <strong style={{ color: 'var(--ca-text)' }}>{carga.form.apellido}, {carga.form.nombre}</strong>
@@ -701,6 +726,17 @@ export function CargaAgentePage() {
                 <button className="ca-btn ca-btn-primary ca-btn-lg" onClick={() => { carga.reset(); scanner.clearAll(); }}>
                   ➕ Cargar otro agente
                 </button>
+                {isEdit && (
+                  <button className="ca-btn ca-btn-secondary ca-btn-lg"
+                    onClick={() => {
+                      const dni = String(carga.savedDni ?? '');
+                      carga.reset();
+                      carga.setField('dni', dni);
+                      carga.checkDni(dni);
+                    }}>
+                    ✏️ Editar de nuevo
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -716,10 +752,14 @@ export function CargaAgentePage() {
         {/* Header */}
         <div className="ca-header">
           <div className="ca-header-left">
-            <div className="ca-logo">🏛</div>
+            <div className="ca-logo">{carga.editMode ? '✏️' : '🏛'}</div>
             <div>
-              <div className="ca-title">ALTA DE AGENTE</div>
-              <div className="ca-subtitle">PersonalV5 · Módulo de registro con escáner</div>
+              <div className="ca-title">{carga.editMode ? 'EDICIÓN DE AGENTE' : 'ALTA DE AGENTE'}</div>
+              <div className="ca-subtitle">
+                PersonalV5 · {carga.editMode
+                  ? `DNI ${carga.form.dni} — ${carga.form.apellido} ${carga.form.nombre}`
+                  : 'Módulo de registro con escáner'}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -743,7 +783,13 @@ export function CargaAgentePage() {
         <StepIndicator current={carga.step} done={doneSteps} onGo={carga.goToStep} />
 
         {/* Contenido del paso activo */}
-        {carga.step === 1 && <StepPersonal form={carga.form} setField={carga.setField} errors={carga.errors} cats={carga.cats} />}
+        {carga.step === 1 && (
+          <StepPersonal
+            form={carga.form} setField={carga.setField} errors={carga.errors} cats={carga.cats}
+            editMode={carga.editMode} editLoading={carga.editLoading}
+            onDniBlur={carga.checkDni}
+          />
+        )}
         {carga.step === 2 && <StepLaboral  form={carga.form} setField={carga.setField} errors={carga.errors} cats={carga.cats} />}
         {carga.step === 3 && <StepFoto cam={cam} photo={carga.photo} setPhoto={carga.setPhoto} />}
         {carga.step === 4 && <StepDocumentos scanner={scanner} form={carga.form} />}
@@ -772,8 +818,13 @@ export function CargaAgentePage() {
                 className="ca-btn ca-btn-primary ca-btn-lg"
                 onClick={carga.save}
                 disabled={carga.saving || !carga.form.dni || !carga.form.apellido}
+                style={carga.editMode ? { background: 'rgba(234,179,8,0.85)', color: '#1e1b10' } : undefined}
               >
-                {carga.saving ? '⏳ Guardando…' : '💾 Guardar Agente'}
+                {carga.saving
+                  ? '⏳ Guardando…'
+                  : carga.editMode
+                    ? '💾 Actualizar Agente'
+                    : '💾 Guardar Agente'}
               </button>
             )}
           </div>

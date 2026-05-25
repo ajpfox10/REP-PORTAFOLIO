@@ -411,8 +411,8 @@ export function EscaneoAgentePage() {
                   ✅ {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.icon} {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label}
                 </div>
               )}
-              <div className="muted scan-label" style={{ marginTop: 12 }}>Descripción adicional (opcional)</div>
-              <input className="input" value={descripcion} onChange={e => setDescripcion(e.target.value)}
+              <label htmlFor="esca-desc" className="muted scan-label" style={{ marginTop: 12, display: 'block' }}>Descripción adicional (opcional)</label>
+              <input id="esca-desc" name="descripcion" className="input" value={descripcion} onChange={e => setDescripcion(e.target.value)}
                 placeholder="Ej: Renovación 2024, frente y dorso…" style={{ width: '100%', boxSizing: 'border-box' }} />
             </div>
 

@@ -54,7 +54,7 @@ export function TableViewControls({
       </div>
       <div className="row">
         <span className="muted">Límite</span>
-        <select value={limit} onChange={(e) => onLimitChange(Number(e.target.value))}>
+        <select aria-label="Filas por página" value={limit} onChange={(e) => onLimitChange(Number(e.target.value))}>
           {[25, 50, 100, 200].map((n) => (
             <option key={n} value={n}>{n}</option>
           ))}

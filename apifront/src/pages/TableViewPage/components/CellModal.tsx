@@ -37,7 +37,7 @@ export function CellModal({ modalState, onClose }: CellModalProps) {
 
         <div className="sep" />
 
-        <textarea className="textarea" readOnly value={modalState.value} />
+        <textarea className="textarea" aria-label={`Valor de la columna ${modalState.col}`} readOnly value={modalState.value} />
 
         <div className="row tv-modal-actions">
           <button className="btn" type="button" onClick={handleCopy}>

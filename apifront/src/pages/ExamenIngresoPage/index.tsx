@@ -139,20 +139,20 @@ function ModalCandidato({ initial, onSave, onClose }: {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Nombre y Apellido *</div>
-            <input className="input" style={{ width: '100%' }} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Apellido, Nombre" />
+            <label htmlFor="ei-nombre" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Nombre y Apellido *</label>
+            <input id="ei-nombre" name="nombre" className="input" style={{ width: '100%' }} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Apellido, Nombre" />
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>DNI</div>
-            <input className="input" style={{ width: '100%' }} value={dni} onChange={e => setDni(e.target.value)} placeholder="opcional" />
+            <label htmlFor="ei-dni" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>DNI</label>
+            <input id="ei-dni" name="dni" className="input" style={{ width: '100%' }} value={dni} onChange={e => setDni(e.target.value)} placeholder="opcional" />
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem' }}>
             <input type="checkbox" checked={esAgente} onChange={e => setEsAgente(e.target.checked)} />
             Ya es agente activo
           </label>
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Observaciones</div>
-            <textarea className="input" style={{ width: '100%', height: 70, resize: 'vertical' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
+            <label htmlFor="ei-obs" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Observaciones</label>
+            <textarea id="ei-obs" name="observaciones" className="input" style={{ width: '100%', height: 70, resize: 'vertical' }} value={observaciones} onChange={e => setObservaciones(e.target.value)} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
@@ -296,7 +296,7 @@ function FilaCandidato({ c, isAdmin, onUpdate, onDelete, onAvisar }: {
                         : <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Sin fecha</span>
                       }
                     </div>
-                    <input type="date" className="input" style={{ width: '100%' }}
+                    <input type="date" aria-label={t.label} className="input" style={{ width: '100%' }}
                       value={turnos[t.key as string] ?? ''}
                       onChange={e => setTurnos(prev => ({ ...prev, [t.key as string]: e.target.value }))} />
                   </div>
@@ -441,7 +441,7 @@ export function ExamenIngresoPage() {
 
       {/* Barra de herramientas */}
       <div className="card" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-        <input className="input" placeholder="Buscar nombre o DNI…" value={busqueda}
+        <input aria-label="Buscar candidato por nombre o DNI" className="input" placeholder="Buscar nombre o DNI…" value={busqueda}
           onChange={e => setBusqueda(e.target.value)} style={{ width: 220 }} />
         {(['todos','pendientes','completos','avisados'] as const).map(v => (
           <button key={v} type="button"

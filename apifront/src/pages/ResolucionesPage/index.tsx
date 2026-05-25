@@ -261,9 +261,11 @@ export function ResolucionesPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {/* Por DNI */}
             <div>
-              <div style={lbl}>Buscar por DNI</div>
+              <label htmlFor="res-busq-dni" style={lbl}>Buscar por DNI</label>
               <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                 <input
+                  id="res-busq-dni"
+                  name="dniInput"
                   className="input"
                   style={{ fontSize: '0.85rem' }}
                   placeholder="Ej: 28305607"
@@ -279,9 +281,11 @@ export function ResolucionesPage() {
 
             {/* Por nombre */}
             <div>
-              <div style={lbl}>Buscar por apellido / nombre</div>
+              <label htmlFor="res-busq-nombre" style={lbl}>Buscar por apellido / nombre</label>
               <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                 <input
+                  id="res-busq-nombre"
+                  name="nameInput"
                   className="input"
                   style={{ fontSize: '0.85rem' }}
                   placeholder="Ej: García"
@@ -406,8 +410,10 @@ export function ResolucionesPage() {
                       </div>
                       <form onSubmit={guardarRes} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={fg}>
-                          <label style={lbl}>Tipo de resolución *</label>
+                          <label htmlFor="res-tipo" style={lbl}>Tipo de resolución *</label>
                           <select
+                            id="res-tipo"
+                            name="resMotivo"
                             className="input"
                             style={{ fontSize: '0.83rem' }}
                             value={formRes.motivo}
@@ -421,8 +427,10 @@ export function ResolucionesPage() {
                           </select>
                         </div>
                         <div style={fg}>
-                          <label style={lbl}>Número</label>
+                          <label htmlFor="res-numero" style={lbl}>Número</label>
                           <input
+                            id="res-numero"
+                            name="resNumero"
                             className="input" style={{ fontSize: '0.83rem' }}
                             placeholder="Ej: 1234/2026"
                             value={formRes.numero}
@@ -430,16 +438,20 @@ export function ResolucionesPage() {
                           />
                         </div>
                         <div style={fg}>
-                          <label style={lbl}>Fecha</label>
+                          <label htmlFor="res-fecha" style={lbl}>Fecha</label>
                           <input
+                            id="res-fecha"
+                            name="resFecha"
                             className="input" type="date" style={{ fontSize: '0.83rem' }}
                             value={formRes.fecha}
                             onChange={e => setFormRes(f => ({ ...f, fecha: e.target.value }))}
                           />
                         </div>
                         <div style={fg}>
-                          <label style={lbl}>Observaciones</label>
+                          <label htmlFor="res-obs" style={lbl}>Observaciones</label>
                           <input
+                            id="res-obs"
+                            name="resObservaciones"
                             className="input" style={{ fontSize: '0.83rem' }}
                             placeholder="Texto corto…"
                             maxLength={50}
@@ -514,8 +526,10 @@ export function ResolucionesPage() {
                       </div>
                       <form onSubmit={guardarExp} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={fg}>
-                          <label style={lbl}>Número de expediente *</label>
+                          <label htmlFor="exp-numero" style={lbl}>Número de expediente *</label>
                           <input
+                            id="exp-numero"
+                            name="expNumero"
                             className="input" style={{ fontSize: '0.83rem', fontFamily: 'monospace' }}
                             placeholder="EX-23756257-GDEBA-2026"
                             value={formExp.numero}
@@ -525,8 +539,10 @@ export function ResolucionesPage() {
                           <span style={{ fontSize: '0.68rem', color: '#64748b' }}>Formato: EX-NNNNN-GDEBA-AAAA</span>
                         </div>
                         <div style={fg}>
-                          <label style={lbl}>Carátula</label>
+                          <label htmlFor="exp-caratula" style={lbl}>Carátula</label>
                           <input
+                            id="exp-caratula"
+                            name="expCaratula"
                             className="input" style={{ fontSize: '0.83rem' }}
                             placeholder="Descripción del expediente"
                             value={formExp.caratula}
@@ -534,16 +550,20 @@ export function ResolucionesPage() {
                           />
                         </div>
                         <div style={fg}>
-                          <label style={lbl}>Fecha</label>
+                          <label htmlFor="exp-fecha" style={lbl}>Fecha</label>
                           <input
+                            id="exp-fecha"
+                            name="expFecha"
                             className="input" type="date" style={{ fontSize: '0.83rem' }}
                             value={formExp.fecha}
                             onChange={e => setFormExp(f => ({ ...f, fecha: e.target.value }))}
                           />
                         </div>
                         <div style={fg}>
-                          <label style={lbl}>Estado</label>
+                          <label htmlFor="exp-estado" style={lbl}>Estado</label>
                           <select
+                            id="exp-estado"
+                            name="expEstado"
                             className="input" style={{ fontSize: '0.83rem' }}
                             value={formExp.estado}
                             onChange={e => setFormExp(f => ({ ...f, estado: e.target.value }))}
@@ -586,20 +606,20 @@ export function ResolucionesPage() {
                       <form onSubmit={cargarArchivo} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                           <div style={{ flex: 2, minWidth: 160 }}>
-                            <div style={lbl}>NOMBRE DEL ARCHIVO</div>
-                            <input className="input" placeholder="Ej: Resolución ascenso 2026" value={uploadForm.nombre}
+                            <label htmlFor="res-up-nombre" style={lbl}>NOMBRE DEL ARCHIVO</label>
+                            <input id="res-up-nombre" name="nombre" className="input" placeholder="Ej: Resolución ascenso 2026" value={uploadForm.nombre}
                               onChange={e => setUploadForm(f => ({ ...f, nombre: e.target.value }))}
                               style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
                           </div>
                           <div style={{ flex: 1, minWidth: 120 }}>
-                            <div style={lbl}>NÚMERO</div>
-                            <input className="input" placeholder="Ej: 1234/2026" value={uploadForm.numero}
+                            <label htmlFor="res-up-numero" style={lbl}>NÚMERO</label>
+                            <input id="res-up-numero" name="numero" className="input" placeholder="Ej: 1234/2026" value={uploadForm.numero}
                               onChange={e => setUploadForm(f => ({ ...f, numero: e.target.value }))}
                               style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
                           </div>
                           <div style={{ minWidth: 140 }}>
-                            <div style={lbl}>TIPO</div>
-                            <select className="input" value={uploadForm.tipo}
+                            <label htmlFor="res-up-tipo" style={lbl}>TIPO</label>
+                            <select id="res-up-tipo" name="tipo" className="input" value={uploadForm.tipo}
                               onChange={e => setUploadForm(f => ({ ...f, tipo: e.target.value }))}
                               style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }}>
                               <option value="resolución">resolución</option>
@@ -612,15 +632,15 @@ export function ResolucionesPage() {
                             </select>
                           </div>
                           <div style={{ minWidth: 130 }}>
-                            <div style={lbl}>FECHA</div>
-                            <input type="date" className="input" value={uploadForm.fecha}
+                            <label htmlFor="res-up-fecha" style={lbl}>FECHA</label>
+                            <input id="res-up-fecha" name="fecha" type="date" className="input" value={uploadForm.fecha}
                               onChange={e => setUploadForm(f => ({ ...f, fecha: e.target.value }))}
                               style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
                           </div>
                         </div>
                         <div>
-                          <div style={lbl}>DESCRIPCIÓN</div>
-                          <input className="input" placeholder="Descripción del archivo" value={uploadForm.descripcion}
+                          <label htmlFor="res-up-desc" style={lbl}>DESCRIPCIÓN</label>
+                          <input id="res-up-desc" name="descripcion" className="input" placeholder="Descripción del archivo" value={uploadForm.descripcion}
                             onChange={e => setUploadForm(f => ({ ...f, descripcion: e.target.value }))}
                             style={{ width: '100%', boxSizing: 'border-box', marginTop: 3 }} />
                         </div>

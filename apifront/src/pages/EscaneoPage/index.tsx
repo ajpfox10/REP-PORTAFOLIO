@@ -501,15 +501,15 @@ export function EscaneoPage() {
                 </div>
                 <div className="scan-search-grid">
                   <div>
-                    <div className="muted scan-label">DNI</div>
-                    <input className="input" value={dni} placeholder="DNI (Enter)"
+                    <label htmlFor="esc-dni" className="muted scan-label">DNI</label>
+                    <input id="esc-dni" name="dni" className="input" value={dni} placeholder="DNI (Enter)"
                       onChange={e => setDni(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && buscarPorDni()}
                       disabled={loadingAgente} style={{ width: '100%', boxSizing: 'border-box' }} />
                   </div>
                   <div>
-                    <div className="muted scan-label">Apellido</div>
-                    <input className="input" value={fullName} placeholder="Apellido (Enter)"
+                    <label htmlFor="esc-nombre" className="muted scan-label">Apellido</label>
+                    <input id="esc-nombre" name="fullName" className="input" value={fullName} placeholder="Apellido (Enter)"
                       onChange={e => setFullName(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && buscarPorNombre()}
                       disabled={loadingAgente} style={{ width: '100%', boxSizing: 'border-box' }} />
@@ -589,8 +589,10 @@ export function EscaneoPage() {
                 )}
 
                 {/* Descripción adicional */}
-                <div className="muted scan-label" style={{ marginTop: 12 }}>Descripción adicional (opcional)</div>
+                <label htmlFor="esc-desc" className="muted scan-label" style={{ marginTop: 12, display: 'block' }}>Descripción adicional (opcional)</label>
                 <input
+                  id="esc-desc"
+                  name="descripcion"
                   className="input"
                   value={descripcion}
                   onChange={e => setDescripcion(e.target.value)}
@@ -1105,15 +1107,15 @@ export function EscaneoPage() {
               <div className="scan-section-title">🔍 Buscar documentos escaneados</div>
               <div className="scan-search-grid">
                 <div>
-                  <div className="muted scan-label">DNI del agente</div>
-                  <input className="input" value={dni} placeholder="DNI (Enter)"
+                  <label htmlFor="esc-docs-dni" className="muted scan-label">DNI del agente</label>
+                  <input id="esc-docs-dni" name="dni" className="input" value={dni} placeholder="DNI (Enter)"
                     onChange={e => setDni(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && buscarPorDni()}
                     style={{ width: '100%', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <div className="muted scan-label">Apellido</div>
-                  <input className="input" value={fullName} placeholder="Apellido (Enter)"
+                  <label htmlFor="esc-docs-nombre" className="muted scan-label">Apellido</label>
+                  <input id="esc-docs-nombre" name="fullName" className="input" value={fullName} placeholder="Apellido (Enter)"
                     onChange={e => setFullName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && buscarPorNombre()}
                     style={{ width: '100%', boxSizing: 'border-box' }} />

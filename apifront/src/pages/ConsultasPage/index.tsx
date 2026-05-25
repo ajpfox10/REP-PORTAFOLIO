@@ -66,15 +66,15 @@ export function ConsultasPage() {
           <h3 style={{ marginBottom: 12, fontSize: '0.95rem' }}>🔍 Buscar consultas</h3>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 160 }}>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 3 }}>DNI</div>
-              <input className="input" placeholder="Número de DNI"
+              <label htmlFor="cons-dni" className="muted" style={{ display: 'block', fontSize: '0.72rem', marginBottom: 3 }}>DNI</label>
+              <input id="cons-dni" name="dni" className="input" placeholder="Número de DNI"
                 value={dni} onChange={e => setDni(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search()}
                 style={{ width: '100%', boxSizing: 'border-box' }} />
             </div>
             <div style={{ flex: 2, minWidth: 200 }}>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 3 }}>APELLIDO</div>
-              <input className="input" placeholder="Buscar por apellido (Enter)"
+              <label htmlFor="cons-apellido" className="muted" style={{ display: 'block', fontSize: '0.72rem', marginBottom: 3 }}>APELLIDO</label>
+              <input id="cons-apellido" name="apellido" className="input" placeholder="Buscar por apellido (Enter)"
                 value={apellido} onChange={e => setApellido(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search()}
                 style={{ width: '100%', boxSizing: 'border-box' }} />

@@ -277,7 +277,7 @@ export function EstadisticasPage() {
         regimen:      buildMap(rRegimen,      'id',  'nombre'),
         ocupacion:    buildMap(rOcupacion,    'id',  'nombre'),
         ley:          buildMap(rLey,          'id',  'nombre'),   // campo es 'nombre' no 'ley_nombre'
-        jefaturas:    buildMap(rJefaturas,    'id',  'sector'),
+        jefaturas:    buildMap(rJefaturas,    'id',  'servicio_nombre'),
         reparticiones:buildMap(rReparticiones,'id',  'reparticion_nombre'),
       };
 

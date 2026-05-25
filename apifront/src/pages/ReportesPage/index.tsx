@@ -140,24 +140,24 @@ function CumpleanosTab() {
         <div style={{ marginBottom: 8 }}><strong>🎂 Cumpleaños</strong></div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Modo</div>
-            <select style={{ ...SELECT_DARK, minWidth: 150 }} value={mode}
+            <label htmlFor="rp-modo" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Modo</label>
+            <select id="rp-modo" name="mode" style={{ ...SELECT_DARK, minWidth: 150 }} value={mode}
               onChange={e => { setMode(e.target.value as any); setDia(''); setRows([]); }}>
               <option value="dia">Día exacto</option>
               <option value="mes">Mes completo</option>
             </select>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Mes</div>
-            <select style={{ ...SELECT_DARK, minWidth: 160 }} value={mes} onChange={e => setMes(e.target.value)}>
+            <label htmlFor="rp-mes" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Mes</label>
+            <select id="rp-mes" name="mes" style={{ ...SELECT_DARK, minWidth: 160 }} value={mes} onChange={e => setMes(e.target.value)}>
               <option value="">— Seleccionar —</option>
               {MESES.map((m, i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
             </select>
           </div>
           {mode === 'dia' && (
             <div>
-              <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Día</div>
-              <select style={{ ...SELECT_DARK, minWidth: 80 }} value={dia} onChange={e => setDia(e.target.value)}>
+              <label htmlFor="rp-dia" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Día</label>
+              <select id="rp-dia" name="dia" style={{ ...SELECT_DARK, minWidth: 80 }} value={dia} onChange={e => setDia(e.target.value)}>
                 <option value="">—</option>
                 {DIAS.map(d => <option key={d} value={String(d)}>{d}</option>)}
               </select>
@@ -254,15 +254,15 @@ function AntigüedadTab() {
         <div style={{ marginBottom: 8 }}><strong>🏅 Antigüedad — agentes que cumplen 20 años</strong></div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Mes</div>
-            <select style={{ ...SELECT_DARK, minWidth: 150 }} value={mesSelec}
+            <label htmlFor="rp-ant-mes" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Mes</label>
+            <select id="rp-ant-mes" name="mesSelec" style={{ ...SELECT_DARK, minWidth: 150 }} value={mesSelec}
               onChange={e => setMesSelec(e.target.value)}>
               {MESES.map((m, i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
             </select>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Año (en que se cumplen los 20)</div>
-            <select style={{ ...SELECT_DARK, minWidth: 130 }} value={anioSelec}
+            <label htmlFor="rp-ant-anio" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Año (en que se cumplen los 20)</label>
+            <select id="rp-ant-anio" name="anioSelec" style={{ ...SELECT_DARK, minWidth: 130 }} value={anioSelec}
               onChange={e => setAnioSelec(e.target.value)}>
               {YEARS_ANTIG.map(y => <option key={y} value={String(y)}>{y}</option>)}
             </select>
@@ -560,16 +560,16 @@ function EstadisticasConsultasTab() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12,
           paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Mes rápido</div>
-            <select style={{ ...SELECT_DARK, minWidth: 150 }} value={mesRapido}
+            <label htmlFor="rp-mes-rapido" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Mes rápido</label>
+            <select id="rp-mes-rapido" name="mesRapido" style={{ ...SELECT_DARK, minWidth: 150 }} value={mesRapido}
               onChange={e => setMesRapido(e.target.value)}>
               <option value="">— Elegir mes —</option>
               {MESES.map((m, i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
             </select>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Año</div>
-            <select style={{ ...SELECT_DARK, minWidth: 100 }} value={anioRapido}
+            <label htmlFor="rp-anio-rapido" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Año</label>
+            <select id="rp-anio-rapido" name="anioRapido" style={{ ...SELECT_DARK, minWidth: 100 }} value={anioRapido}
               onChange={e => setAnioRapido(e.target.value)}>
               {YEARS_RANGE.map(y => <option key={y} value={String(y)}>{y}</option>)}
             </select>
@@ -582,12 +582,12 @@ function EstadisticasConsultasTab() {
         {/* Rango manual */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Desde</div>
-            <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ ...SELECT_DARK }} />
+            <label htmlFor="rp-desde" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Desde</label>
+            <input id="rp-desde" name="desde" type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ ...SELECT_DARK }} />
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Hasta</div>
-            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ ...SELECT_DARK }} />
+            <label htmlFor="rp-hasta" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Hasta</label>
+            <input id="rp-hasta" name="hasta" type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ ...SELECT_DARK }} />
           </div>
           <button className="btn" style={{ background: '#2563eb', color: '#fff', height: 36 }}
             disabled={loading} onClick={buscar}>
@@ -1092,16 +1092,16 @@ function WhatsappTab() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>
           {!verAnio && (
             <div>
-              <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Mes</div>
-              <select style={{ ...SELECT_DARK, minWidth: 150 }} value={filtroMes}
+              <label htmlFor="rp-filtro-mes" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Mes</label>
+              <select id="rp-filtro-mes" name="filtroMes" style={{ ...SELECT_DARK, minWidth: 150 }} value={filtroMes}
                 onChange={e => setFiltroMes(e.target.value)}>
                 {MESES.map((m, i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
               </select>
             </div>
           )}
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Año</div>
-            <select style={{ ...SELECT_DARK, minWidth: 100 }} value={filtroAnio}
+            <label htmlFor="rp-filtro-anio" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Año</label>
+            <select id="rp-filtro-anio" name="filtroAnio" style={{ ...SELECT_DARK, minWidth: 100 }} value={filtroAnio}
               onChange={e => setFiltroAnio(e.target.value)}>
               {YEARS_RANGE.map(y => <option key={y} value={String(y)}>{y}</option>)}
             </select>
@@ -1312,16 +1312,16 @@ function ConsultasDinamicasTab() {
       <div className="card">
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 250px' }}>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Tabla / Vista</div>
-            <select className="input" value={tableKey}
+            <label htmlFor="rp-tabla" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Tabla / Vista</label>
+            <select id="rp-tabla" name="tableKey" className="input" value={tableKey}
               onChange={e => { setTableKey(e.target.value); setSelectedCols([]); setFilters([]); setRows([]); }}>
               {loadingTables && <option value="">Cargando...</option>}
               {!loadingTables && tableDefs.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Límite</div>
-            <select className="input" value={limit} onChange={e => setLimit(Number(e.target.value))}>
+            <label htmlFor="rp-limite" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Límite</label>
+            <select id="rp-limite" name="limit" className="input" value={limit} onChange={e => setLimit(Number(e.target.value))}>
               {[50,100,200].map(n => <option key={n} value={n}>{n} filas</option>)}
             </select>
           </div>
@@ -1353,12 +1353,12 @@ function ConsultasDinamicasTab() {
         {filters.map((f, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {allCols.length
-              ? <select className="input" value={f.col} onChange={e => updateFilter(i,'col',e.target.value)} style={{ minWidth: 140, fontSize: '0.82rem' }}>
+              ? <select aria-label={`Columna del filtro ${i + 1}`} className="input" value={f.col} onChange={e => updateFilter(i,'col',e.target.value)} style={{ minWidth: 140, fontSize: '0.82rem' }}>
                   {allCols.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-              : <input className="input" value={f.col} onChange={e => updateFilter(i,'col',e.target.value)} placeholder="columna" style={{ minWidth: 140, fontSize: '0.82rem' }} />
+              : <input aria-label={`Columna del filtro ${i + 1}`} className="input" value={f.col} onChange={e => updateFilter(i,'col',e.target.value)} placeholder="columna" style={{ minWidth: 140, fontSize: '0.82rem' }} />
             }
-            <select className="input" value={f.op} onChange={e => updateFilter(i,'op',e.target.value)} style={{ minWidth: 130, fontSize: '0.82rem' }}>
+            <select aria-label={`Operador del filtro ${i + 1}`} className="input" value={f.op} onChange={e => updateFilter(i,'op',e.target.value)} style={{ minWidth: 130, fontSize: '0.82rem' }}>
               <option value="contains">contiene</option>
               <option value="eq">igual a</option>
               <option value="starts">empieza con</option>
@@ -1367,7 +1367,7 @@ function ConsultasDinamicasTab() {
               <option value="notempty">no vacío</option>
             </select>
             {f.op !== 'notempty' && (
-              <input className="input" value={f.val} onChange={e => updateFilter(i,'val',e.target.value)}
+              <input aria-label={`Valor del filtro ${i + 1}`} className="input" value={f.val} onChange={e => updateFilter(i,'val',e.target.value)}
                 placeholder="valor…" style={{ minWidth: 140, fontSize: '0.82rem' }} />
             )}
             <button className="btn" onClick={() => removeFilter(i)} style={{ color: '#f87171', fontSize: '0.8rem', padding: '2px 8px' }}>✕</button>
