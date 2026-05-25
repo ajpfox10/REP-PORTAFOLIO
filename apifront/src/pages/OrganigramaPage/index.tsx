@@ -579,7 +579,7 @@ export function OrganigramaPage() {
       ]);
       setCatalogos({
         ley:          rLey.status    === 'fulfilled' ? buildMap(rLey.value?.data    || [], 'id', 'nombre') : {},
-        jefaturas:    rJef.status    === 'fulfilled' ? buildMap(rJef.value?.data    || [], 'id', 'sector') : {},
+        jefaturas:    rJef.status    === 'fulfilled' ? buildMap(rJef.value?.data    || [], 'id', 'servicio_nombre') : {},
         reparticiones:rRep.status    === 'fulfilled' ? buildMap(rRep.value?.data    || [], 'id', 'reparticion_nombre') : {},
         planta:       rPlanta.status === 'fulfilled' ? buildMap(rPlanta.value?.data || [], 'id', 'nombre') : {},
         regimen:      rReg.status    === 'fulfilled' ? buildMap(rReg.value?.data    || [], 'id', 'nombre') : {},

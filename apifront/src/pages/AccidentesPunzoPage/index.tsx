@@ -2,7 +2,7 @@
 // Registro de accidentes punzo-cortantes
 // app:infectologia:access = solo lectura | app:cargainfecto:access = carga/edita | crud:*:* = admin
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout } from '../../components/Layout';
 import { useAuth } from '../../auth/AuthProvider';
 import { useToast } from '../../ui/toast';
@@ -34,7 +34,20 @@ function fmt(d?: string | null) {
 
 // ── BANNER ────────────────────────────────────────────────────────────────────
 
-const PUNZO_DISMISS_KEY = 'punzo_banner_dismissed_until';
+const PUNZO_SEEN_KEY = 'punzo_banner_seen_ids';
+
+function getSeenIds(): Set<number> {
+  try {
+    const s = localStorage.getItem(PUNZO_SEEN_KEY);
+    return s ? new Set(JSON.parse(s) as number[]) : new Set();
+  } catch { return new Set(); }
+}
+
+function markSeenIds(ids: number[]) {
+  const seen = getSeenIds();
+  ids.forEach(id => seen.add(id));
+  localStorage.setItem(PUNZO_SEEN_KEY, JSON.stringify([...seen]));
+}
 
 export function AccidentesPunzoBanner() {
   const { session, hasPerm } = useAuth();
@@ -42,25 +55,55 @@ export function AccidentesPunzoBanner() {
     hasPerm('crud:*:*') ||
     hasPerm('app:infectologia:access') ||
     hasPerm('app:cargainfecto:access');
-  const [data, setData]           = useState<{ recientes: number; data: Accidente[] } | null>(null);
-  const [dismissed, setDismissed] = useState(() => {
-    const until = localStorage.getItem(PUNZO_DISMISS_KEY);
-    return !!until && Date.now() < Number(until);
-  });
+  const [data, setData]       = useState<{ recientes: number; data: Accidente[] } | null>(null);
+  const [visible, setVisible] = useState(false);
+  const logged = useRef(false);
 
   useEffect(() => {
     if (!session || !canVer) return;
     apiFetch<any>('/accidentes-punzo/alertas')
-      .then(r => { if (r?.ok && r.recientes > 0) setData(r); })
+      .then(async r => {
+        if (!r?.ok || r.recientes === 0) return;
+
+        // Solo mostrar incidentes que el usuario no vio todavía en este navegador
+        const seenIds = getSeenIds();
+        const noVistos: Accidente[] = (r.data ?? []).filter((a: Accidente) => !seenIds.has(a.id));
+        if (!noVistos.length) return;
+
+        setData({ recientes: noVistos.length, data: noVistos });
+        setVisible(true);
+
+        // Registrar en alerta_vistas quién vio la alerta (una vez por sesión)
+        if (!logged.current && session) {
+          logged.current = true;
+          const u = session.user as any;
+          await apiFetch('/alerta_vistas', {
+            method: 'POST',
+            body: JSON.stringify({
+              tipo: 'infecto_30d',
+              usuario_id:     u?.id     ?? null,
+              usuario_email:  u?.email  ?? null,
+              usuario_nombre: u?.nombre ?? null,
+              detalle_json:   JSON.stringify(
+                noVistos.slice(0, 10).map((a: Accidente) => ({
+                  id: a.id, fecha: a.fecha, agente: a.agente_nombre, servicio: a.servicio,
+                }))
+              ),
+            }),
+          }).catch(() => {});
+          // Marcar estos IDs como vistos → el banner no vuelve a aparecer hasta que haya nuevos
+          markSeenIds(noVistos.map(a => a.id));
+        }
+      })
       .catch(() => {});
   }, [session]);
 
   const dismiss = () => {
-    localStorage.setItem(PUNZO_DISMISS_KEY, String(Date.now() + 24 * 60 * 60 * 1000));
-    setDismissed(true);
+    if (data) markSeenIds(data.data.map(a => a.id));
+    setVisible(false);
   };
 
-  if (!data || dismissed || data.recientes === 0) return null;
+  if (!visible || !data || data.recientes === 0) return null;
 
   return (
     <div style={{
@@ -165,9 +208,9 @@ function FormAccidente({ initial, onSave, onClose }: {
 
           {/* Buscar agente */}
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Buscar agente (DNI o apellido)</div>
+            <label htmlFor="ap-search" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Buscar agente (DNI o apellido)</label>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input className="input" style={{ flex: 1 }}
+              <input id="ap-search" name="buscarAgente" className="input" style={{ flex: 1 }}
                 placeholder="DNI o apellido…"
                 value={form.agente_dni || form.agente_nombre}
                 onChange={e => {
@@ -201,39 +244,39 @@ function FormAccidente({ initial, onSave, onClose }: {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Nombre completo</div>
-              <input className="input" style={{ width: '100%' }} value={form.agente_nombre}
+              <label htmlFor="ap-nombre" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Nombre completo</label>
+              <input id="ap-nombre" name="agente_nombre" className="input" style={{ width: '100%' }} value={form.agente_nombre}
                 onChange={e => set('agente_nombre', e.target.value)} placeholder="Apellido, Nombre" />
             </div>
             <div>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>DNI</div>
-              <input className="input" style={{ width: '100%' }} value={form.agente_dni}
+              <label htmlFor="ap-dni" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>DNI</label>
+              <input id="ap-dni" name="agente_dni" className="input" style={{ width: '100%' }} value={form.agente_dni}
                 onChange={e => set('agente_dni', e.target.value)} placeholder="opcional" />
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Servicio *</div>
-              <input className="input" style={{ width: '100%' }} value={form.servicio}
+              <label htmlFor="ap-servicio" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Servicio *</label>
+              <input id="ap-servicio" name="servicio" className="input" style={{ width: '100%' }} value={form.servicio}
                 onChange={e => set('servicio', e.target.value)} placeholder="Ej: Guardia, Emergencias…" />
             </div>
             <div>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Fecha del accidente *</div>
-              <input type="date" className="input" style={{ width: '100%' }} value={form.fecha}
+              <label htmlFor="ap-fecha" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Fecha del accidente *</label>
+              <input id="ap-fecha" name="fecha" type="date" className="input" style={{ width: '100%' }} value={form.fecha}
                 onChange={e => set('fecha', e.target.value)} />
             </div>
           </div>
 
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Descripción del caso</div>
-            <textarea className="input" style={{ width: '100%', height: 80, resize: 'vertical' }}
+            <label htmlFor="ap-caso" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Descripción del caso</label>
+            <textarea id="ap-caso" name="caso" className="input" style={{ width: '100%', height: 80, resize: 'vertical' }}
               value={form.caso} onChange={e => set('caso', e.target.value)}
               placeholder="Tipo de objeto, circunstancias, zona afectada…" />
           </div>
           <div>
-            <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 4 }}>Observaciones / Seguimiento</div>
-            <textarea className="input" style={{ width: '100%', height: 60, resize: 'vertical' }}
+            <label htmlFor="ap-obs" className="muted" style={{ fontSize: '0.72rem', marginBottom: 4, display: 'block' }}>Observaciones / Seguimiento</label>
+            <textarea id="ap-obs" name="observaciones" className="input" style={{ width: '100%', height: 60, resize: 'vertical' }}
               value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
           </div>
         </div>
@@ -341,7 +384,7 @@ export function AccidentesPunzoPage() {
 
       {/* Barra */}
       <div className="card" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-        <input className="input" placeholder="Buscar agente, servicio, caso…"
+        <input aria-label="Buscar agente, servicio o caso" className="input" placeholder="Buscar agente, servicio, caso…"
           value={busqueda} onChange={e => setBusqueda(e.target.value)} style={{ width: 230 }} />
         {esCargainfecto ? (
           <span style={{ fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245,158,11,0.1)',
@@ -351,9 +394,9 @@ export function AccidentesPunzoPage() {
         ) : (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <span className="muted" style={{ fontSize: '0.72rem' }}>Desde:</span>
-            <input type="date" className="input" value={desdeFiltro} onChange={e => setDesdeFiltro(e.target.value)} style={{ width: 140 }} />
+            <input aria-label="Fecha desde" type="date" className="input" value={desdeFiltro} onChange={e => setDesdeFiltro(e.target.value)} style={{ width: 140 }} />
             <span className="muted" style={{ fontSize: '0.72rem' }}>Hasta:</span>
-            <input type="date" className="input" value={hastaFiltro} onChange={e => setHastaFiltro(e.target.value)} style={{ width: 140 }} />
+            <input aria-label="Fecha hasta" type="date" className="input" value={hastaFiltro} onChange={e => setHastaFiltro(e.target.value)} style={{ width: 140 }} />
           </div>
         )}
         <span className="muted" style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>{filtrados.length} registro{filtrados.length !== 1 ? 's' : ''}</span>

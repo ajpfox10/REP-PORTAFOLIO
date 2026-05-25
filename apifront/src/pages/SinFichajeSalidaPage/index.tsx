@@ -984,7 +984,7 @@ export function SinFichajeSalidaPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {[0, 1, 2].map(i => (
               <div key={i} style={{ flex: "1 1 200px" }}>
-                <select style={selectStyle} value={horariosFiles[i]} onChange={e => setHorFile(i, e.target.value)}>{fileOpt("— sin archivo —")}</select>
+                <select aria-label={`Archivo de horarios ${i + 1}`} style={selectStyle} value={horariosFiles[i]} onChange={e => setHorFile(i, e.target.value)}>{fileOpt("— sin archivo —")}</select>
               </div>
             ))}
           </div>
@@ -994,7 +994,7 @@ export function SinFichajeSalidaPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {[0, 1, 2].map(i => (
               <div key={i} style={{ flex: "1 1 200px" }}>
-                <select style={selectStyle} value={siapFiles[i]} onChange={e => setSiapFile(i, e.target.value)}>{fileOpt("— sin archivo —")}</select>
+                <select aria-label={`Archivo SIAP ${i + 1}`} style={selectStyle} value={siapFiles[i]} onChange={e => setSiapFile(i, e.target.value)}>{fileOpt("— sin archivo —")}</select>
               </div>
             ))}
           </div>
@@ -1002,8 +1002,8 @@ export function SinFichajeSalidaPage() {
         <div style={{ marginBottom: 12 }}>
           <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Ministerio</div>
           <div style={{ maxWidth: 420 }}>
-            <select style={selectStyle} value={ministerioFile} onChange={e => setMinisterioFile(e.target.value)}>
-              {fileOpt("â€” sin archivo â€”")}
+            <select aria-label="Archivo del Ministerio" style={selectStyle} value={ministerioFile} onChange={e => setMinisterioFile(e.target.value)}>
+              {fileOpt("— sin archivo —")}
             </select>
           </div>
         </div>
@@ -1032,26 +1032,26 @@ export function SinFichajeSalidaPage() {
           </div>
           {modo === "fecha" ? (
             <div>
-              <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Fecha</div>
-              <input type="date" className="input" value={fecha} onChange={e => setFecha(e.target.value)} style={{ width: 160 }} />
+              <label htmlFor="sfs-fecha" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Fecha</label>
+              <input id="sfs-fecha" name="fecha" type="date" className="input" value={fecha} onChange={e => setFecha(e.target.value)} style={{ width: 160 }} />
             </div>
           ) : modo === "periodo" ? (
             <div>
-              <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Período</div>
-              <input type="month" className="input" value={periodo} onChange={e => setPeriodo(e.target.value)} style={{ width: 160 }} />
+              <label htmlFor="sfs-periodo" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Período</label>
+              <input id="sfs-periodo" name="periodo" type="month" className="input" value={periodo} onChange={e => setPeriodo(e.target.value)} style={{ width: 160 }} />
             </div>
           ) : (
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
               <div>
-                <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Desde</div>
-                <input type="date" className="input" value={desde}
+                <label htmlFor="sfs-desde" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Desde</label>
+                <input id="sfs-desde" name="desde" type="date" className="input" value={desde}
                   max={hasta || undefined}
                   onChange={e => { setDesde(e.target.value); if (hasta && e.target.value > hasta) setHasta(e.target.value); }}
                   style={{ width: 150 }} />
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Hasta</div>
-                <input type="date" className="input" value={hasta}
+                <label htmlFor="sfs-hasta" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Hasta</label>
+                <input id="sfs-hasta" name="hasta" type="date" className="input" value={hasta}
                   min={desde || undefined}
                   onChange={e => { setHasta(e.target.value); if (desde && e.target.value < desde) setDesde(e.target.value); }}
                   style={{ width: 150 }} />
@@ -1131,7 +1131,7 @@ export function SinFichajeSalidaPage() {
             </div>
             <div>
               <span className="muted" style={{ fontSize: "0.72rem", marginRight: 6 }}>Dependencia:</span>
-              <select value={filtroUpa} onChange={e => setFiltroUpa(e.target.value)}
+              <select aria-label="Filtrar por dependencia" value={filtroUpa} onChange={e => setFiltroUpa(e.target.value)}
                 style={{ ...selectStyle, width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}>
                 <option value="">Todas</option>
                 {upasUnicas.map(u => <option key={u} value={u}>{u}</option>)}
@@ -1140,7 +1140,7 @@ export function SinFichajeSalidaPage() {
             {ocupacionesUnicas.length > 0 && (
               <div>
                 <span className="muted" style={{ fontSize: "0.72rem", marginRight: 6 }}>Ocupación:</span>
-                <select value={filtroOcupacion} onChange={e => setFiltroOcupacion(e.target.value)}
+                <select aria-label="Filtrar por ocupación" value={filtroOcupacion} onChange={e => setFiltroOcupacion(e.target.value)}
                   style={{ ...selectStyle, width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}>
                   <option value="">Todas</option>
                   {ocupacionesUnicas.map(o => <option key={o} value={o}>{o}</option>)}
@@ -1150,14 +1150,14 @@ export function SinFichajeSalidaPage() {
             {serviciosUnicos.length > 0 && (
               <div>
                 <span className="muted" style={{ fontSize: "0.72rem", marginRight: 6 }}>Servicio:</span>
-                <select value={filtroServicio} onChange={e => setFiltroServicio(e.target.value)}
+                <select aria-label="Filtrar por servicio" value={filtroServicio} onChange={e => setFiltroServicio(e.target.value)}
                   style={{ ...selectStyle, width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}>
                   <option value="">Todos</option>
                   {serviciosUnicos.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             )}
-            <input className="input" placeholder="Buscar nombre / DNI…" value={busqueda}
+            <input aria-label="Buscar nombre o DNI" className="input" placeholder="Buscar nombre / DNI…" value={busqueda}
               onChange={e => setBusqueda(e.target.value)} style={{ width: 200 }} />
             <button className="btn" type="button" disabled={rowsFiltradas.length === 0} onClick={exportar}
               style={{ fontSize: "0.75rem", padding: "4px 12px", whiteSpace: "nowrap", marginLeft: "auto" }}>
@@ -1251,9 +1251,9 @@ export function SinFichajeSalidaPage() {
       {loaded && tab === "agentes" && (
         <>
           <div className="card" style={{ marginBottom: 12, marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <input className="input" placeholder="Buscar nombre / DNI…" value={busquedaA}
+            <input aria-label="Buscar nombre o DNI" className="input" placeholder="Buscar nombre / DNI…" value={busquedaA}
               onChange={e => setBusquedaA(e.target.value)} style={{ width: 200 }} />
-            <select value={filtroUpaA} onChange={e => { setFiltroUpaA(e.target.value); setPaginaA(1); }}
+            <select aria-label="Filtrar por dependencia" value={filtroUpaA} onChange={e => { setFiltroUpaA(e.target.value); setPaginaA(1); }}
               style={{ ...selectStyle, width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}>
               <option value="">Todas las dependencias</option>
               {upasUnicas.map(u => <option key={u} value={u}>{u}</option>)}
@@ -1339,9 +1339,9 @@ export function SinFichajeSalidaPage() {
       {loaded && tab === "invertidos" && (
         <>
           <div className="card" style={{ marginBottom: 12, marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <input className="input" placeholder="Buscar nombre / DNI…" value={busquedaI}
+            <input aria-label="Buscar nombre o DNI" className="input" placeholder="Buscar nombre / DNI…" value={busquedaI}
               onChange={e => setBusquedaI(e.target.value)} style={{ width: 200 }} />
-            <select value={filtroUpaI} onChange={e => { setFiltroUpaI(e.target.value); setPaginaI(1); }}
+            <select aria-label="Filtrar por dependencia" value={filtroUpaI} onChange={e => { setFiltroUpaI(e.target.value); setPaginaI(1); }}
               style={{ ...selectStyle, width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}>
               <option value="">Todas las dependencias</option>
               {upasUnicas.map(u => <option key={u} value={u}>{u}</option>)}
@@ -1412,9 +1412,9 @@ export function SinFichajeSalidaPage() {
             </div>
           )}
           <div className="card" style={{ marginBottom: 12, marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <input className="input" placeholder="Buscar nombre / DNI…" value={busquedaF}
+            <input aria-label="Buscar nombre o DNI" className="input" placeholder="Buscar nombre / DNI…" value={busquedaF}
               onChange={e => setBusquedaF(e.target.value)} style={{ width: 200 }} />
-            <select value={filtroUpaF} onChange={e => { setFiltroUpaF(e.target.value); setPaginaF(1); }}
+            <select aria-label="Filtrar por dependencia" value={filtroUpaF} onChange={e => { setFiltroUpaF(e.target.value); setPaginaF(1); }}
               style={{ ...selectStyle, width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}>
               <option value="">Todas las dependencias</option>
               {upasUnicasFicho.map(u => <option key={u} value={u}>{u}</option>)}
@@ -1512,9 +1512,9 @@ export function SinFichajeSalidaPage() {
         return (
           <>
             <div className="card" style={{ marginBottom: 12, marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <input className="input" placeholder="Buscar nombre / DNI…" value={busquedaSH}
+              <input aria-label="Buscar nombre o DNI" className="input" placeholder="Buscar nombre / DNI…" value={busquedaSH}
                 onChange={e => { setBusquedaSH(e.target.value); setPaginaSH(1); }} style={{ width: 200 }} />
-              <select value={filtroUpaSH} onChange={e => { setFiltroUpaSH(e.target.value); setPaginaSH(1); }}
+              <select aria-label="Filtrar por dependencia" value={filtroUpaSH} onChange={e => { setFiltroUpaSH(e.target.value); setPaginaSH(1); }}
                 style={{ ...selectStyle, width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}>
                 <option value="">Todas las dependencias</option>
                 {upasUnicas.map(u => <option key={u} value={u}>{u}</option>)}

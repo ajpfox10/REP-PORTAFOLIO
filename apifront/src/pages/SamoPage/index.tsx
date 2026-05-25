@@ -108,7 +108,7 @@ function MiniTabla({ rows, cols }: {
 function Busqueda({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-      <input className="input" style={{ flex: 1, maxWidth: 340, fontSize: '0.83rem' }}
+      <input aria-label="Buscar por DNI o apellido" className="input" style={{ flex: 1, maxWidth: 340, fontSize: '0.83rem' }}
         placeholder="Buscar por DNI / apellido…" value={value}
         onChange={e => onChange(e.target.value)} />
       {value && <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => onChange('')}>✕</button>}
@@ -581,6 +581,7 @@ export function SamoPage() {
                     Filtrando por mes de inicio:
                   </div>
                   <select
+                    aria-label="Filtrar por mes de inicio"
                     className="input"
                     style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
                     value={mesFiltro}
@@ -609,6 +610,7 @@ export function SamoPage() {
                     Filtrando por mes de egreso:
                   </div>
                   <select
+                    aria-label="Filtrar por mes de egreso"
                     className="input"
                     style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
                     value={mesFiltro}
@@ -635,6 +637,7 @@ export function SamoPage() {
                     Filtrando por mes de ingreso:
                   </div>
                   <select
+                    aria-label="Filtrar por mes de ingreso"
                     className="input"
                     style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
                     value={mesFiltro}
@@ -707,7 +710,7 @@ export function SamoPage() {
               <>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
                   <div className="muted" style={{ fontSize: '0.72rem' }}>Filtrando por mes:</div>
-                  <select className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                  <select aria-label="Filtrar por mes" className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
                     value={mesFiltro} onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}>
                     {mesesDisponibles.map(m => (
                       <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>
@@ -733,7 +736,7 @@ export function SamoPage() {
                 <>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
                     <div className="muted" style={{ fontSize: '0.72rem' }}>Filtrando por mes:</div>
-                    <select className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                    <select aria-label="Filtrar por mes" className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
                       value={mesFiltro} onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}>
                       {mesesDisponibles.map(m => (
                         <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>

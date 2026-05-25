@@ -134,15 +134,15 @@ export function DocumentosPage() {
           <h3 style={{ marginBottom: 12, fontSize: '0.95rem' }}>🔍 Buscar documentos</h3>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 140 }}>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 3 }}>DNI</div>
-              <input className="input" placeholder="Número de DNI" value={dni}
+              <label htmlFor="doc-busq-dni" className="muted" style={{ display: 'block', fontSize: '0.72rem', marginBottom: 3 }}>DNI</label>
+              <input id="doc-busq-dni" name="dni" className="input" placeholder="Número de DNI" value={dni}
                 onChange={e => setDni(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search()}
                 style={{ width: '100%', boxSizing: 'border-box' }} />
             </div>
             <div style={{ flex: 2, minWidth: 180 }}>
-              <div className="muted" style={{ fontSize: '0.72rem', marginBottom: 3 }}>APELLIDO</div>
-              <input className="input" placeholder="Buscar por apellido" value={apellido}
+              <label htmlFor="doc-busq-apellido" className="muted" style={{ display: 'block', fontSize: '0.72rem', marginBottom: 3 }}>APELLIDO</label>
+              <input id="doc-busq-apellido" name="apellido" className="input" placeholder="Buscar por apellido" value={apellido}
                 onChange={e => setApellido(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search()}
                 style={{ width: '100%', boxSizing: 'border-box' }} />
@@ -194,35 +194,35 @@ export function DocumentosPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
                   <div style={{ flex: 2, minWidth: 160 }}>
-                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>NOMBRE DEL DOCUMENTO</div>
-                    <input className="input" placeholder="Ej: Resolución de ascenso" value={form.nombre}
+                    <label htmlFor="doc-form-nombre" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>NOMBRE DEL DOCUMENTO</label>
+                    <input id="doc-form-nombre" name="nombre" className="input" placeholder="Ej: Resolución de ascenso" value={form.nombre}
                       onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
                       style={{ width: '100%', boxSizing: 'border-box' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 120 }}>
-                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>NÚMERO</div>
-                    <input className="input" placeholder="Ej: 1234/2026" value={form.numero}
+                    <label htmlFor="doc-form-numero" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>NÚMERO</label>
+                    <input id="doc-form-numero" name="numero" className="input" placeholder="Ej: 1234/2026" value={form.numero}
                       onChange={e => setForm(f => ({ ...f, numero: e.target.value }))}
                       style={{ width: '100%', boxSizing: 'border-box' }} />
                   </div>
                   <div style={{ minWidth: 140 }}>
-                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>TIPO</div>
-                    <select className="input" value={form.tipo}
+                    <label htmlFor="doc-form-tipo" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>TIPO</label>
+                    <select id="doc-form-tipo" name="tipo" className="input" value={form.tipo}
                       onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
                       style={{ width: '100%', boxSizing: 'border-box' }}>
                       {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div style={{ minWidth: 140 }}>
-                    <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>FECHA</div>
-                    <input type="date" className="input" value={form.fecha}
+                    <label htmlFor="doc-form-fecha" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>FECHA</label>
+                    <input id="doc-form-fecha" name="fecha" type="date" className="input" value={form.fecha}
                       onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))}
                       style={{ width: '100%', boxSizing: 'border-box' }} />
                   </div>
                 </div>
                 <div style={{ marginBottom: 12 }}>
-                  <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 3 }}>DESCRIPCIÓN</div>
-                  <input className="input" placeholder="Descripción del documento" value={form.descripcion_archivo}
+                  <label htmlFor="doc-form-descripcion" className="muted" style={{ display: 'block', fontSize: '0.7rem', marginBottom: 3 }}>DESCRIPCIÓN</label>
+                  <input id="doc-form-descripcion" name="descripcion_archivo" className="input" placeholder="Descripción del documento" value={form.descripcion_archivo}
                     onChange={e => setForm(f => ({ ...f, descripcion_archivo: e.target.value }))}
                     style={{ width: '100%', boxSizing: 'border-box' }} />
                 </div>

@@ -148,6 +148,9 @@ export function BuscadorPage() {
             <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: '1.1rem', pointerEvents: 'none' }}>🔍</span>
             <input
               ref={inputRef}
+              id="buscador-query"
+              name="query"
+              aria-label="Buscar por DNI, apellido o nombre"
               className="input"
               value={query}
               onChange={e => setQuery(e.target.value)}

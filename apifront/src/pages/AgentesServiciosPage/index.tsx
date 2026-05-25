@@ -159,8 +159,8 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
         <div className="asv-modal-body">
           <div className="asv-form-grid">
             <div className="asv-field">
-              <label className="asv-label">Servicio *</label>
-              <select className="input" value={form.servicio_id} onChange={e => set('servicio_id', e.target.value)}>
+              <label htmlFor="asv-srv" className="asv-label">Servicio *</label>
+              <select id="asv-srv" name="servicio_id" className="input" value={form.servicio_id} onChange={e => set('servicio_id', e.target.value)}>
                 <option value="">— Seleccioná —</option>
                 {servicios.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
@@ -168,8 +168,8 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
               </select>
             </div>
             <div className="asv-field">
-              <label className="asv-label">Dependencia</label>
-              <select className="input" value={form.dependencia_id} onChange={e => set('dependencia_id', e.target.value)}>
+              <label htmlFor="asv-dep" className="asv-label">Dependencia</label>
+              <select id="asv-dep" name="dependencia_id" className="input" value={form.dependencia_id} onChange={e => set('dependencia_id', e.target.value)}>
                 <option value="">— Ninguna —</option>
                 {dependencias.map((d: any) => (
                   <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
@@ -177,20 +177,20 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
               </select>
             </div>
             <div className="asv-field">
-              <label className="asv-label">Fecha desde *</label>
-              <input type="date" className="input" value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
+              <label htmlFor="asv-fecha" className="asv-label">Fecha desde *</label>
+              <input id="asv-fecha" name="fecha_desde" type="date" className="input" value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
             </div>
             <div className="asv-field">
-              <label className="asv-label">Jefe / Responsable</label>
-              <input type="text" className="input" value={form.jefe_nombre} onChange={e => set('jefe_nombre', e.target.value)} placeholder="Nombre del jefe" />
+              <label htmlFor="asv-jefe" className="asv-label">Jefe / Responsable</label>
+              <input id="asv-jefe" name="jefe_nombre" type="text" className="input" value={form.jefe_nombre} onChange={e => set('jefe_nombre', e.target.value)} placeholder="Nombre del jefe" />
             </div>
             <div className="asv-field asv-field-full">
-              <label className="asv-label">Motivo del pase</label>
-              <input type="text" className="input" value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
+              <label htmlFor="asv-motivo" className="asv-label">Motivo del pase</label>
+              <input id="asv-motivo" name="motivo" type="text" className="input" value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
             </div>
             <div className="asv-field asv-field-full">
-              <label className="asv-label">Observaciones</label>
-              <textarea className="input" rows={2} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} placeholder="Observaciones adicionales…" />
+              <label htmlFor="asv-obs" className="asv-label">Observaciones</label>
+              <textarea id="asv-obs" name="observaciones" className="input" rows={2} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} placeholder="Observaciones adicionales…" />
             </div>
           </div>
           <div className="asv-modal-actions">
@@ -246,8 +246,8 @@ function CerrarPaseModal({ pase, onClose, onSaved }: CerrarPaseModalProps) {
           <div className="asv-info-row"><b>Servicio:</b> {pase.nombre || pase.servicio_nombre}</div>
           <div className="asv-info-row"><b>Desde:</b> {fmtDate(pase.fecha_desde)}</div>
           <div className="asv-field asv-mt-12">
-            <label className="asv-label">Fecha de cierre *</label>
-            <input type="date" className="input" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+            <label htmlFor="asv-cierre" className="asv-label">Fecha de cierre *</label>
+            <input id="asv-cierre" name="fecha_hasta" type="date" className="input" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
           </div>
           <div className="asv-modal-actions asv-mt-12">
             <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
@@ -418,8 +418,10 @@ export function AgentesServiciosPage() {
 
             {/* DNI */}
             <div className="asv-field">
-              <label className="asv-label">DNI</label>
+              <label htmlFor="asv-f-dni" className="asv-label">DNI</label>
               <input
+                id="asv-f-dni"
+                name="filtroDni"
                 className="input"
                 value={filtroDni}
                 onChange={e => setFiltroDni(e.target.value.replace(/\D/g, ''))}
@@ -430,9 +432,11 @@ export function AgentesServiciosPage() {
 
             {/* Buscar por nombre */}
             <div className="asv-field">
-              <label className="asv-label">Apellido / Nombre</label>
+              <label htmlFor="asv-f-nombre" className="asv-label">Apellido / Nombre</label>
               <div className="row" style={{ gap: 6 }}>
                 <input
+                  id="asv-f-nombre"
+                  name="filtroNombre"
                   className="input"
                   value={filtroNombre}
                   onChange={e => setFiltroNombre(e.target.value)}
@@ -448,8 +452,8 @@ export function AgentesServiciosPage() {
 
             {/* Servicio */}
             <div className="asv-field">
-              <label className="asv-label">Servicio</label>
-              <select className="input" value={filtroServicio} onChange={e => setFiltroServicio(e.target.value)} disabled={loadingMaestros}>
+              <label htmlFor="asv-f-srv" className="asv-label">Servicio</label>
+              <select id="asv-f-srv" name="filtroServicio" className="input" value={filtroServicio} onChange={e => setFiltroServicio(e.target.value)} disabled={loadingMaestros}>
                 <option value="">Todos los servicios</option>
                 {servicios.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
@@ -459,8 +463,8 @@ export function AgentesServiciosPage() {
 
             {/* Dependencia / Sector */}
             <div className="asv-field">
-              <label className="asv-label">Dependencia / Sector</label>
-              <select className="input" value={filtroDependencia} onChange={e => setFiltroDependencia(e.target.value)} disabled={loadingMaestros}>
+              <label htmlFor="asv-f-dep" className="asv-label">Dependencia / Sector</label>
+              <select id="asv-f-dep" name="filtroDependencia" className="input" value={filtroDependencia} onChange={e => setFiltroDependencia(e.target.value)} disabled={loadingMaestros}>
                 <option value="">Todas</option>
                 {dependencias.map((d: any) => (
                   <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
@@ -470,7 +474,7 @@ export function AgentesServiciosPage() {
 
             {/* Estado */}
             <div className="asv-field">
-              <label className="asv-label">Estado</label>
+              <div className="asv-label">Estado</div>
               <div className="asv-estado-btns">
                 {(['todos', 'activo', 'cerrado'] as const).map(e => (
                   <button

@@ -261,14 +261,14 @@ export function AlertasPage() {
       {/* Selector de mes/año */}
       <div className="card" style={{ marginBottom: 14, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div>
-          <div className="muted" style={{ fontSize: '0.74rem', marginBottom: 4 }}>Mes para cumpleaños y antigüedad</div>
-          <select className="input" value={mesVista} onChange={e => setMesVista(Number(e.target.value))} style={{ minWidth: 160 }}>
+          <label htmlFor="al-mes" className="muted" style={{ fontSize: '0.74rem', marginBottom: 4, display: 'block' }}>Mes para cumpleaños y antigüedad</label>
+          <select id="al-mes" name="mesVista" className="input" value={mesVista} onChange={e => setMesVista(Number(e.target.value))} style={{ minWidth: 160 }}>
             {MESES_ES.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
           </select>
         </div>
         <div>
-          <div className="muted" style={{ fontSize: '0.74rem', marginBottom: 4 }}>Año (para calcular 20 años de antigüedad)</div>
-          <select className="input" value={anioVista} onChange={e => setAnioVista(Number(e.target.value))}>
+          <label htmlFor="al-anio" className="muted" style={{ fontSize: '0.74rem', marginBottom: 4, display: 'block' }}>Año (para calcular 20 años de antigüedad)</label>
+          <select id="al-anio" name="anioVista" className="input" value={anioVista} onChange={e => setAnioVista(Number(e.target.value))}>
             {Array.from({ length: 6 }, (_, i) => anioActual + i).map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>

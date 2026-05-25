@@ -49,6 +49,8 @@ import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildWhatsappRouter } from '../routes/whatsapp.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
+import { buildStressRouter }   from '../routes/stress.routes';
+import { buildJefaturasRouter } from '../routes/jefaturas.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
 import { idempotencyMiddleware } from '../middlewares/idempotency';
@@ -155,6 +157,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
   app.use(`${apiPrefix}/whatsapp`,         ...protect, buildWhatsappRouter(sequelize));
+  app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)
@@ -162,6 +165,9 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
 
   // ── Audit reads (registra lecturas sensibles) ─────────────────────────────
   app.use(apiPrefix, authContext(sequelize), auditReadMiddleware(sequelize));
+
+  // ── Jefaturas (custom: enriquece con nombre real desde personal) ─────────
+  app.use(`${apiPrefix}/jefaturas`, ...protect, buildJefaturasRouter(sequelize));
 
   // ── CRUD dinamico (genera rutas para TODAS las tablas de la BD) ───────────
   app.use(apiPrefix, ...protect, buildCrudRouter(sequelize, schema));

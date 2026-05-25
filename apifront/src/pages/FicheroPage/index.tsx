@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { useAuth } from '../../auth/AuthProvider';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,15 @@ interface DbPreview {
   muestras: { badgenumber: string; checktime: string; checktype: number; name: string }[];
 }
 
+interface Dispositivo {
+  sn:                   string;
+  alias:                string;
+  lastActivity:         string | null;
+  segundosSinActividad: number | null;
+  estado:               'online' | 'offline' | 'pausado';
+  ip:                   string | null;
+}
+
 const REFRESH_MS = 30_000;
 
 // ─── Página ───────────────────────────────────────────────────────────────────
@@ -56,6 +66,8 @@ export function FicheroPage() {
   const [redActiva,  setRedActiva]  = useState<boolean | null>(null);
   const [dbPreview,  setDbPreview]  = useState<DbPreview | null>(null);
   const [dbError,    setDbError]    = useState<string | null>(null);
+  const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
+  const [dispError,    setDispError]    = useState<string | null>(null);
 
   const [cargando,   setCargando]   = useState(false);
   const [guardando,  setGuardando]  = useState(false);
@@ -82,6 +94,15 @@ export function FicheroPage() {
 
   // ── Carga de datos ──────────────────────────────────────────────────────────
 
+  const cargarDispositivos = useCallback(async () => {
+    setDispError(null);
+    try {
+      const res = await apiFetch<{ ok: boolean; data: Dispositivo[]; warning?: string }>('/fichero/dispositivos');
+      if (res?.ok) setDispositivos(res.data ?? []);
+      if (res?.warning) setDispError(res.warning);
+    } catch { /* silencioso, no bloquea la UI */ }
+  }, []);
+
   const cargarEstado = useCallback(async () => {
     setCargando(true);
     try {
@@ -97,7 +118,8 @@ export function FicheroPage() {
     } finally {
       setCargando(false);
     }
-  }, [toast]);
+    cargarDispositivos();
+  }, [toast, cargarDispositivos]);
 
   const cargarConfig = useCallback(async () => {
     const res = await apiFetch<{ ok: boolean; data: FicheroConfig }>('/fichero/config');
@@ -303,6 +325,48 @@ export function FicheroPage() {
             </>
           )}
 
+          {/* ── Relojes biométricos ── */}
+          {(dispositivos.length > 0 || dispError) && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: 10 }}>
+                Relojes biométricos
+              </div>
+              {dispError && dispositivos.length === 0 && (
+                <div style={{ fontSize: '0.8rem', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 12px', marginBottom: 8 }}>
+                  ⚠ No se pudo leer la tabla de relojes: {dispError}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {dispositivos.map(d => {
+                  const isOnline  = d.estado === 'online';
+                  const isPausado = d.estado === 'pausado';
+                  const bg     = isOnline ? '#f0fdf4' : isPausado ? '#f9fafb' : '#fef2f2';
+                  const border = isOnline ? '#86efac' : isPausado ? '#e2e8f0' : '#fca5a5';
+                  const color  = isOnline ? '#16a34a' : isPausado ? '#6b7280' : '#b91c1c';
+                  const label  = isOnline ? '● Online' : isPausado ? '⏸ Pausado' : '● Offline';
+                  const mins   = d.segundosSinActividad != null ? Math.floor(d.segundosSinActividad / 60) : null;
+                  return (
+                    <div key={d.sn} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: '10px 16px', minWidth: 150, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#374151' }}>{d.alias}</span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color }}>{label}</span>
+                      {d.ip && <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{d.ip}</span>}
+                      {mins != null && !isOnline && !isPausado && (
+                        <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
+                          Sin actividad: {mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}min`}
+                        </span>
+                      )}
+                      {d.lastActivity && (
+                        <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
+                          {d.lastActivity.slice(0, 16)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div style={S.controles}>
             <button className="btn" onClick={() => accion('iniciar', 'Timer iniciado')}
               disabled={accionando || !!estado?.corriendo}
@@ -430,24 +494,24 @@ export function FicheroPage() {
             <div style={S.sectionTitle as React.CSSProperties}>📅 Seleccionar rango a exportar</div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
-              <Field label="Fecha desde">
-                <input type="date" style={S.input} value={fechaDesde}
+              <Field label="Fecha desde" id="fich-exp-fecha-desde">
+                <input id="fich-exp-fecha-desde" name="fechaDesde" type="date" style={S.input} value={fechaDesde}
                   min={dbPreview?.minFecha?.slice(0, 10)}
                   max={dbPreview?.maxFecha?.slice(0, 10)}
                   onChange={e => setFechaDesde(e.target.value)} />
               </Field>
-              <Field label="Fecha hasta">
-                <input type="date" style={S.input} value={fechaHasta}
+              <Field label="Fecha hasta" id="fich-exp-fecha-hasta">
+                <input id="fich-exp-fecha-hasta" name="fechaHasta" type="date" style={S.input} value={fechaHasta}
                   min={dbPreview?.minFecha?.slice(0, 10)}
                   max={dbPreview?.maxFecha?.slice(0, 10)}
                   onChange={e => setFechaHasta(e.target.value)} />
               </Field>
-              <Field label="Hora desde">
-                <input type="time" style={S.input} value={horaDesde}
+              <Field label="Hora desde" id="fich-exp-hora-desde">
+                <input id="fich-exp-hora-desde" name="horaDesde" type="time" style={S.input} value={horaDesde}
                   onChange={e => setHoraDesde(e.target.value)} />
               </Field>
-              <Field label="Hora hasta">
-                <input type="time" style={S.input} value={horaHasta}
+              <Field label="Hora hasta" id="fich-exp-hora-hasta">
+                <input id="fich-exp-hora-hasta" name="horaHasta" type="time" style={S.input} value={horaHasta}
                   onChange={e => setHoraHasta(e.target.value)} />
               </Field>
             </div>
@@ -521,12 +585,12 @@ export function FicheroPage() {
           <div style={S.section}>
             <div style={S.sectionTitle as React.CSSProperties}>📅 Fecha y hora de inicio del continuo</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
-              <Field label="Fecha desde (inclusive)">
-                <input type="date" style={S.input} value={continuDesde}
+              <Field label="Fecha desde (inclusive)" id="fich-cont-fecha-desde">
+                <input id="fich-cont-fecha-desde" name="continuDesde" type="date" style={S.input} value={continuDesde}
                   onChange={e => setContinuDesde(e.target.value)} />
               </Field>
-              <Field label="Hora desde">
-                <input type="time" style={S.input} value={continuHoraDesde}
+              <Field label="Hora desde" id="fich-cont-hora-desde">
+                <input id="fich-cont-hora-desde" name="continuHoraDesde" type="time" style={S.input} value={continuHoraDesde}
                   onChange={e => setContinuHoraDesde(e.target.value)} />
               </Field>
             </div>
@@ -572,33 +636,33 @@ export function FicheroPage() {
           <section style={S.section}>
             <div style={S.sectionTitle as React.CSSProperties}>🗄️ MySQL — reloj biométrico</div>
             <div style={S.grid2}>
-              <Field label="Host / IP"><input style={S.input} value={editConfig.mysqlHost} onChange={e => setEditConfig({ ...editConfig, mysqlHost: e.target.value })} /></Field>
-              <Field label="Puerto"><input style={S.input} type="number" value={editConfig.mysqlPort} onChange={e => setEditConfig({ ...editConfig, mysqlPort: +e.target.value })} /></Field>
-              <Field label="Usuario"><input style={S.input} value={editConfig.mysqlUser} onChange={e => setEditConfig({ ...editConfig, mysqlUser: e.target.value })} /></Field>
-              <Field label="Contraseña"><input style={S.input} type="password" value={editConfig.mysqlPass} placeholder="(sin cambios)" onChange={e => setEditConfig({ ...editConfig, mysqlPass: e.target.value })} /></Field>
-              <Field label="Base de datos"><input style={S.input} value={editConfig.mysqlDb} onChange={e => setEditConfig({ ...editConfig, mysqlDb: e.target.value })} /></Field>
+              <Field label="Host / IP" id="fich-mysql-host"><input id="fich-mysql-host" name="mysqlHost" style={S.input} value={editConfig.mysqlHost} onChange={e => setEditConfig({ ...editConfig, mysqlHost: e.target.value })} /></Field>
+              <Field label="Puerto" id="fich-mysql-puerto"><input id="fich-mysql-puerto" name="mysqlPort" style={S.input} type="number" value={editConfig.mysqlPort} onChange={e => setEditConfig({ ...editConfig, mysqlPort: +e.target.value })} /></Field>
+              <Field label="Usuario" id="fich-mysql-user"><input id="fich-mysql-user" name="mysqlUser" style={S.input} value={editConfig.mysqlUser} onChange={e => setEditConfig({ ...editConfig, mysqlUser: e.target.value })} /></Field>
+              <Field label="Contraseña" id="fich-mysql-pass"><input id="fich-mysql-pass" name="mysqlPass" style={S.input} type="password" value={editConfig.mysqlPass} placeholder="(sin cambios)" onChange={e => setEditConfig({ ...editConfig, mysqlPass: e.target.value })} /></Field>
+              <Field label="Base de datos" id="fich-mysql-db"><input id="fich-mysql-db" name="mysqlDb" style={S.input} value={editConfig.mysqlDb} onChange={e => setEditConfig({ ...editConfig, mysqlDb: e.target.value })} /></Field>
             </div>
           </section>
 
           <section style={S.section}>
             <div style={S.sectionTitle as React.CSSProperties}>📡 SFTP — servidor destino</div>
             <div style={S.grid2}>
-              <Field label="Host / IP"><input style={S.input} value={editConfig.sftpHost} onChange={e => setEditConfig({ ...editConfig, sftpHost: e.target.value })} /></Field>
-              <Field label="Puerto"><input style={S.input} type="number" value={editConfig.sftpPort} onChange={e => setEditConfig({ ...editConfig, sftpPort: +e.target.value })} /></Field>
-              <Field label="Usuario"><input style={S.input} value={editConfig.sftpUser} onChange={e => setEditConfig({ ...editConfig, sftpUser: e.target.value })} /></Field>
-              <Field label="Contraseña"><input style={S.input} type="password" value={editConfig.sftpPass} placeholder="(sin cambios)" onChange={e => setEditConfig({ ...editConfig, sftpPass: e.target.value })} /></Field>
-              <Field label="Carpeta remota"><input style={S.input} value={editConfig.sftpDir} onChange={e => setEditConfig({ ...editConfig, sftpDir: e.target.value })} /></Field>
+              <Field label="Host / IP" id="fich-sftp-host"><input id="fich-sftp-host" name="sftpHost" style={S.input} value={editConfig.sftpHost} onChange={e => setEditConfig({ ...editConfig, sftpHost: e.target.value })} /></Field>
+              <Field label="Puerto" id="fich-sftp-puerto"><input id="fich-sftp-puerto" name="sftpPort" style={S.input} type="number" value={editConfig.sftpPort} onChange={e => setEditConfig({ ...editConfig, sftpPort: +e.target.value })} /></Field>
+              <Field label="Usuario" id="fich-sftp-user"><input id="fich-sftp-user" name="sftpUser" style={S.input} value={editConfig.sftpUser} onChange={e => setEditConfig({ ...editConfig, sftpUser: e.target.value })} /></Field>
+              <Field label="Contraseña" id="fich-sftp-pass"><input id="fich-sftp-pass" name="sftpPass" style={S.input} type="password" value={editConfig.sftpPass} placeholder="(sin cambios)" onChange={e => setEditConfig({ ...editConfig, sftpPass: e.target.value })} /></Field>
+              <Field label="Carpeta remota" id="fich-sftp-dir"><input id="fich-sftp-dir" name="sftpDir" style={S.input} value={editConfig.sftpDir} onChange={e => setEditConfig({ ...editConfig, sftpDir: e.target.value })} /></Field>
             </div>
           </section>
 
           <section style={S.section}>
             <div style={S.sectionTitle as React.CSSProperties}>📁 Generación de archivos</div>
             <div style={S.grid2}>
-              <Field label="Carpeta local de salida"><input style={S.input} value={editConfig.outputDir} onChange={e => setEditConfig({ ...editConfig, outputDir: e.target.value })} /></Field>
-              <Field label="Prefijo"><input style={S.input} value={editConfig.prefijo} onChange={e => setEditConfig({ ...editConfig, prefijo: e.target.value })} /></Field>
-              <Field label="Sufijo"><input style={S.input} value={editConfig.sufijo} onChange={e => setEditConfig({ ...editConfig, sufijo: e.target.value })} /></Field>
-              <Field label="Límite de registros"><input style={S.input} type="number" value={editConfig.limite} onChange={e => setEditConfig({ ...editConfig, limite: +e.target.value })} /></Field>
-              <Field label="Intervalo automático (min)"><input style={S.input} type="number" min={1} value={editConfig.intervaloMin} onChange={e => setEditConfig({ ...editConfig, intervaloMin: +e.target.value })} /></Field>
+              <Field label="Carpeta local de salida" id="fich-out-dir"><input id="fich-out-dir" name="outputDir" style={S.input} value={editConfig.outputDir} onChange={e => setEditConfig({ ...editConfig, outputDir: e.target.value })} /></Field>
+              <Field label="Prefijo" id="fich-prefijo"><input id="fich-prefijo" name="prefijo" style={S.input} value={editConfig.prefijo} onChange={e => setEditConfig({ ...editConfig, prefijo: e.target.value })} /></Field>
+              <Field label="Sufijo" id="fich-sufijo"><input id="fich-sufijo" name="sufijo" style={S.input} value={editConfig.sufijo} onChange={e => setEditConfig({ ...editConfig, sufijo: e.target.value })} /></Field>
+              <Field label="Límite de registros" id="fich-limite"><input id="fich-limite" name="limite" style={S.input} type="number" value={editConfig.limite} onChange={e => setEditConfig({ ...editConfig, limite: +e.target.value })} /></Field>
+              <Field label="Intervalo automático (min)" id="fich-intervalo"><input id="fich-intervalo" name="intervaloMin" style={S.input} type="number" min={1} value={editConfig.intervaloMin} onChange={e => setEditConfig({ ...editConfig, intervaloMin: +e.target.value })} /></Field>
             </div>
             <p className="muted" style={{ fontSize: '0.78rem', marginTop: 8 }}>
               Nombre: <code>{editConfig.prefijo}_Fichadas_YYMMDD_HHmm_{editConfig.sufijo}.txt</code>
@@ -617,6 +681,90 @@ export function FicheroPage() {
         </div>
       )}
     </Layout>
+  );
+}
+
+// ─── FicheroBanner (exportado para Dashboard) ─────────────────────────────────
+// Muestra alerta cuando algún reloj biométrico está offline.
+// Registra en alerta_vistas quién vio la alerta (una vez por sesión).
+
+export function FicheroBanner() {
+  const { session, hasPerm } = useAuth();
+  const canVer = hasPerm('crud:*:*');
+  const [offline, setOffline] = useState<Dispositivo[]>([]);
+  const [dismissed, setDismissed] = useState(() => {
+    const until = localStorage.getItem('fichero_banner_dismissed_until');
+    return !!until && Date.now() < Number(until);
+  });
+  const logged = useRef(false);
+
+  useEffect(() => {
+    if (!session || !canVer) return;
+    apiFetch<{ ok: boolean; data: Dispositivo[] }>('/fichero/dispositivos')
+      .then(async r => {
+        if (!r?.ok) return;
+        const caidos = (r.data ?? []).filter(d => d.estado === 'offline');
+        if (!caidos.length) return;
+        setOffline(caidos);
+        if (!logged.current && session) {
+          logged.current = true;
+          const u = session.user as any;
+          await apiFetch('/alerta_vistas', {
+            method: 'POST',
+            body: JSON.stringify({
+              tipo: 'fichero_offline',
+              usuario_id:     u?.id     ?? null,
+              usuario_email:  u?.email  ?? null,
+              usuario_nombre: u?.nombre ?? null,
+              detalle_json:   JSON.stringify(caidos.map(d => ({ sn: d.sn, alias: d.alias, lastActivity: d.lastActivity }))),
+            }),
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [session, canVer]);
+
+  const dismiss = () => {
+    localStorage.setItem('fichero_banner_dismissed_until', String(Date.now() + 4 * 60 * 60 * 1000));
+    setDismissed(true);
+  };
+
+  if (!offline.length || dismissed) return null;
+
+  return (
+    <div style={{
+      margin: '0 0 16px 0', padding: '14px 16px',
+      background: 'rgba(249,115,22,0.1)', border: '2px solid rgba(249,115,22,0.5)',
+      borderRadius: 12, display: 'flex', gap: 12, alignItems: 'flex-start',
+    }}>
+      <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>⏱️</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 700, color: '#f97316', marginBottom: 4 }}>
+          Reloj{offline.length > 1 ? 'es' : ''} biométrico{offline.length > 1 ? 's' : ''} offline: {offline.length}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {offline.map(d => {
+            const mins = d.segundosSinActividad != null ? Math.floor(d.segundosSinActividad / 60) : null;
+            return (
+              <div key={d.sn} style={{ fontSize: '0.83rem', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 600 }}>{d.alias}</span>
+                {d.ip && <span style={{ color: '#94a3b8' }}>{d.ip}</span>}
+                {mins != null && (
+                  <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                    sin actividad: {mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}min`}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#94a3b8' }}>
+          Ir a <a href="/app/fichero" style={{ color: '#f97316', textDecoration: 'underline' }}>Módulo Fichero</a> para ver el estado completo.
+        </div>
+      </div>
+      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: '1.1rem', padding: 0 }}
+        onClick={dismiss} title="Cerrar (no mostrar por 4 hs)">✕</button>
+    </div>
   );
 }
 
@@ -677,10 +825,10 @@ function InfoCard({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, id, children }: { label: string; id?: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>{label}</label>
+      <label htmlFor={id} style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>{label}</label>
       {children}
     </div>
   );

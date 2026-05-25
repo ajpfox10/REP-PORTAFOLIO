@@ -64,6 +64,9 @@
   top: clamp(8px, 2vh, 16px);
   align-self: start;
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 /* ===== BUSCADORES: 2 COLUMNAS EN DESKTOP, 1 EN MOBILE ===== */

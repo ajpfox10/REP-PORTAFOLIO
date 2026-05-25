@@ -5,7 +5,7 @@ const noCacheHtml = {
   name: 'no-cache-html',
   configurePreviewServer(server: any) {
     server.middlewares.use((req: any, res: any, next: any) => {
-      if (req.url === '/' || /\.html(\?|$)/.test(req.url)) {
+      if (!req.url?.startsWith('/assets/')) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
       }

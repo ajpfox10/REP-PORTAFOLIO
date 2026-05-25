@@ -1,5 +1,17 @@
 // src/pages/RedaccionPage/index.tsx
 import React, { useState, useCallback, useEffect } from 'react';
+
+/** Descarga un blob como archivo. Usa appendChild para compatibilidad con Firefox. */
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 import { Layout } from '../../components/Layout';
 import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
@@ -18,8 +30,8 @@ const DOCS = [
     frase: 'Se informa el estado de licencias y francos compensatorios correspondientes al agente en el periodo indicado.' },
   { id: 6,  label: 'Alta Medica',               implementado: false,
     frase: 'Se certifica que el/la agente se encuentra en condiciones de retomar sus funciones a partir de la fecha indicada.' },
-  { id: 7,  label: 'Prestamo Bancario',         implementado: false,
-    frase: 'Se certifica la situacion de revista del agente a los efectos de tramitar creditos ante entidades bancarias.' },
+  { id: 7,  label: 'Dispo Rectificacion',        implementado: true,
+    frase: 'Disposicion de rectificacion para subsanar errores en expedientes administrativos.' },
   { id: 8,  label: 'Jubilacion / Retiro',       implementado: false,
     frase: 'Se certifica la antiguedad y condiciones de revista a los efectos previsionales correspondientes.' },
   { id: 9,  label: 'Resolucion Interna',        implementado: false,
@@ -34,6 +46,8 @@ const DOCS = [
     frase: 'Certificacion de servicios con cargo, carga horaria y servicio para presentar ante quien corresponda.' },
   { id: 14, label: 'Cert. Laboral Rotacion',    implementado: true,
     frase: 'Certificado laboral de rotacion para medico residente cubierto por ART Provincia.' },
+  { id: 15, label: 'Nota Certificacion',         implementado: true,
+    frase: 'Certificacion de servicios para becarios de contingencia del Programa de Becas para Contingencias Institucionales Criticas.' },
 ];
 
 function DocModal({ agente, doc, onClose }: {
@@ -63,6 +77,14 @@ function DocModal({ agente, doc, onClose }: {
 
   const [certRotacionDatos, setCertRotacionDatos] = useState<any>(null);
   const [certRotacionFields, setCertRotacionFields] = useState({ servicio: '', numArt: '' });
+
+  const [certServiciosDatos, setCertServiciosDatos] = useState<any>(null);
+  const [certServiciosOcupacion, setCertServiciosOcupacion] = useState('');
+
+  const [dispRectFields, setDispRectFields] = useState({
+    expNro: '', tramite: '', agentes: '', ifgra1: '', orden1: '', motivo1: '',
+    ifgra2: '', orden2: '', motivo2: '',
+  });
 
   const nombre = `${agente.apellido ?? ''} ${agente.nombre ?? ''}`.trim();
 
@@ -136,8 +158,20 @@ function DocModal({ agente, doc, onClose }: {
     if (doc.id !== 13) return;
     setLoadingDatos(true);
     apiFetch<any>(`/certificados/cert-base-vieja/datos?dni=${agente.dni}`)
-      .then(r => setCertBaseViejaDatos(r?.data ?? null))
-      .catch(() => setCertBaseViejaDatos(null))
+      .then(r => {
+        const data = r?.data ?? null;
+        setCertBaseViejaDatos(data);
+        setCertBaseViejaFields(prev => ({
+          ...prev,
+          servicio:    data?.servicio    ?? '',
+          cargo:       data?.cargo       ?? '',
+          hsSemanales: data?.hsSemanales ?? '',
+        }));
+      })
+      .catch(() => {
+        setCertBaseViejaDatos(null);
+        setCertBaseViejaFields({ cargo: '', hsSemanales: '', servicio: '' });
+      })
       .finally(() => setLoadingDatos(false));
   }, [doc.id, agente.dni]);
 
@@ -182,6 +216,40 @@ function DocModal({ agente, doc, onClose }: {
       .finally(() => setLoadingPreview(false));
   }, [doc.id, certRotacionDatos, certRotacionFields, agente.dni]);
 
+  useEffect(() => {
+    if (doc.id !== 7) return;
+    setLoadingPreview(true);
+    const params = new URLSearchParams({ ...dispRectFields });
+    apiFetchBlob(`/certificados/disp-rectificacion/preview?${params}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, dispRectFields]);
+
+  useEffect(() => {
+    if (doc.id !== 15) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/cert-servicios/datos?dni=${agente.dni}`)
+      .then(r => {
+        setCertServiciosDatos(r?.data ?? null);
+        if (r?.data?.ocupacion) setCertServiciosOcupacion(r.data.ocupacion);
+      })
+      .catch(() => setCertServiciosDatos(null))
+      .finally(() => setLoadingDatos(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 15 || !certServiciosDatos) return;
+    setLoadingPreview(true);
+    const params = new URLSearchParams({ dni: String(agente.dni), ocupacion: certServiciosOcupacion });
+    apiFetchBlob(`/certificados/cert-servicios/preview?${params}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, certServiciosDatos, certServiciosOcupacion, agente.dni]);
+
   const descargarDocxIoma = async () => {
     setDescargando(true);
     try {
@@ -190,12 +258,7 @@ function DocModal({ agente, doc, onClose }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dni: agente.dni }),
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || `ioma_${agente.dni}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, filename || `ioma_${agente.dni}.docx`);
     } catch (e: any) {
       toast.error('Error al generar IOMA: ' + (e?.message || 'Error'));
     } finally {
@@ -213,12 +276,7 @@ function DocModal({ agente, doc, onClose }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dni: agente.dni, ...cedulaFields, ...artObj }),
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || `cedula_${agente.dni}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, filename || `cedula_${agente.dni}.docx`);
     } catch (e: any) {
       toast.error('Error al generar Cedula: ' + (e?.message || 'Error'));
     } finally {
@@ -234,10 +292,7 @@ function DocModal({ agente, doc, onClose }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dni: agente.dni }),
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename || `nota_comisaria_${agente.dni}.docx`; a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, filename || `nota_comisaria_${agente.dni}.docx`);
     } catch (e: any) {
       toast.error('Error al generar Nota Comisaria: ' + (e?.message || 'Error'));
     } finally { setDescargando(false); }
@@ -251,12 +306,37 @@ function DocModal({ agente, doc, onClose }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dni: agente.dni, ...certBaseViejaFields }),
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename || `cert_base_vieja_${agente.dni}.docx`; a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, filename || `cert_base_vieja_${agente.dni}.docx`);
     } catch (e: any) {
       toast.error('Error al generar Cert Base Vieja: ' + (e?.message || 'Error'));
+    } finally { setDescargando(false); }
+  };
+
+  const descargarDocxCertServicios = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/cert-servicios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni, ocupacion: certServiciosOcupacion }),
+      });
+      triggerDownload(blob, filename || `nota_certificacion_${agente.dni}.docx`);
+    } catch (e: any) {
+      toast.error('Error al generar Nota Certificacion: ' + (e?.message || 'Error'));
+    } finally { setDescargando(false); }
+  };
+
+  const descargarDocxDispRect = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/disp-rectificacion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...dispRectFields }),
+      });
+      triggerDownload(blob, filename || 'disp_rectificacion.docx');
+    } catch (e: any) {
+      toast.error('Error al generar Dispo Rectificacion: ' + (e?.message || 'Error'));
     } finally { setDescargando(false); }
   };
 
@@ -268,10 +348,7 @@ function DocModal({ agente, doc, onClose }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dni: agente.dni, ...certRotacionFields }),
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename || `cert_rotacion_${agente.dni}.docx`; a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, filename || `cert_rotacion_${agente.dni}.docx`);
     } catch (e: any) {
       toast.error('Error al generar Cert Rotacion: ' + (e?.message || 'Error'));
     } finally { setDescargando(false); }
@@ -366,20 +443,20 @@ function DocModal({ agente, doc, onClose }: {
               textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Completar
             </div>
-            <label style={lbl}>Se le notifica</label>
-            <input style={inp} value={cedulaFields.tipoNotif}
+            <label htmlFor="rd-cedula-notif" style={lbl}>Se le notifica</label>
+            <input id="rd-cedula-notif" name="tipoNotif" style={inp} value={cedulaFields.tipoNotif}
               onChange={setF('tipoNotif')} placeholder="la Resolucion N..." />
-            <label style={lbl}>VISTO</label>
-            <textarea style={area} value={cedulaFields.vistoText}
+            <label htmlFor="rd-cedula-visto" style={lbl}>VISTO</label>
+            <textarea id="rd-cedula-visto" name="vistoText" style={area} value={cedulaFields.vistoText}
               onChange={setF('vistoText')} placeholder="Expediente N..." />
-            <label style={lbl}>CONSIDERANDO</label>
-            <textarea style={area} value={cedulaFields.considerandoText}
+            <label htmlFor="rd-cedula-consid" style={lbl}>CONSIDERANDO</label>
+            <textarea id="rd-cedula-consid" name="considerandoText" style={area} value={cedulaFields.considerandoText}
               onChange={setF('considerandoText')} placeholder="Que..." />
 
             {/* Artículos dinámicos */}
             {articulos.map((art, i) => (
               <div key={i} style={{ position: 'relative' }}>
-                <label style={lbl}>
+                <label htmlFor={`rd-cedula-art-${i}`} style={lbl}>
                   Artículo {i + 1}
                   {articulos.length > 1 && (
                     <button type="button" onClick={() => removeArticulo(i)}
@@ -389,7 +466,7 @@ function DocModal({ agente, doc, onClose }: {
                     </button>
                   )}
                 </label>
-                <textarea style={area} value={art}
+                <textarea id={`rd-cedula-art-${i}`} name={`articulo_${i}`} style={area} value={art}
                   onChange={setArticulo(i)} placeholder="Texto del artículo..." />
               </div>
             ))}
@@ -448,15 +525,14 @@ function DocModal({ agente, doc, onClose }: {
             <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>DNI: {certBaseViejaDatos.dni}</div>
             <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Legajo: {certBaseViejaDatos.legajo}</div>
             <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Ingreso: {certBaseViejaDatos.fechaIngreso}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Servicio: {certBaseViejaDatos.servicio || '—'}</div>
             <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '10px 0' }} />
             <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
               textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completar</div>
-            <label style={lbl}>Cargo</label>
-            <input style={inp} value={certBaseViejaFields.cargo} onChange={setF13('cargo')} placeholder="Ej: Enfermero" />
-            <label style={lbl}>Hs. Semanales</label>
-            <input style={inp} value={certBaseViejaFields.hsSemanales} onChange={setF13('hsSemanales')} placeholder="Ej: 30" />
-            <label style={lbl}>Servicio</label>
-            <input style={inp} value={certBaseViejaFields.servicio} onChange={setF13('servicio')} placeholder="Ej: Guardia" />
+            <label htmlFor="rd-13-cargo" style={lbl}>Cargo</label>
+            <input id="rd-13-cargo" name="cargo" style={inp} value={certBaseViejaFields.cargo} onChange={setF13('cargo')} placeholder="Ej: Enfermero" />
+            <label htmlFor="rd-13-hs" style={lbl}>Hs. Semanales</label>
+            <input id="rd-13-hs" name="hsSemanales" style={inp} value={certBaseViejaFields.hsSemanales} onChange={setF13('hsSemanales')} placeholder="Ej: 30" />
           </div>
           <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
             {loadingPreview
@@ -494,10 +570,10 @@ function DocModal({ agente, doc, onClose }: {
             <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '10px 0' }} />
             <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
               textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completar</div>
-            <label style={lbl}>Servicio / Rotacion</label>
-            <input style={inp} value={certRotacionFields.servicio} onChange={setF14('servicio')} placeholder="Ej: Clínica Médica" />
-            <label style={lbl}>N° Registro ART</label>
-            <input style={inp} value={certRotacionFields.numArt} onChange={setF14('numArt')} placeholder="Ej: 12345" />
+            <label htmlFor="rd-14-srv" style={lbl}>Servicio / Rotacion</label>
+            <input id="rd-14-srv" name="servicio" style={inp} value={certRotacionFields.servicio} onChange={setF14('servicio')} placeholder="Ej: Clínica Médica" />
+            <label htmlFor="rd-14-art" style={lbl}>N° Registro ART</label>
+            <input id="rd-14-art" name="numArt" style={inp} value={certRotacionFields.numArt} onChange={setF14('numArt')} placeholder="Ej: 12345" />
           </div>
           <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
             {loadingPreview
@@ -505,6 +581,104 @@ function DocModal({ agente, doc, onClose }: {
               : previewHtml
                 ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview Cert Rotacion" />
                 : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>
+            }
+          </div>
+        </div>
+      );
+    }
+
+    if (doc.id === 15) {
+      const inp: React.CSSProperties = {
+        width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
+        fontSize: '0.83rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8,
+      };
+      const lbl: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: 2, display: 'block' };
+      if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando datos del agente...</p>;
+      if (!certServiciosDatos) return (
+        <div style={{ textAlign: 'center', padding: '32px 16px' }}>
+          <div style={{ fontWeight: 700, fontSize: '1rem', color: '#b45309', marginBottom: 6 }}>Solo para becarios de contingencia</div>
+          <div style={{ fontSize: '0.83rem', color: '#78350f' }}>
+            Este documento esta disponible unicamente para becarios del Programa de Becas para Contingencias Institucionales Criticas.
+          </div>
+        </div>
+      );
+      return (
+        <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
+          <div style={{ width: 240, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 8,
+              textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Datos del agente</div>
+            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 2, textAlign: 'center' }}>
+              <strong>{certServiciosDatos.apellidoNombre}</strong></div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>DNI: {certServiciosDatos.dni}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Clase: {certServiciosDatos.clase}</div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '10px 0' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completar</div>
+            <label htmlFor="rd-15-occ" style={lbl}>Profesion / Funcion</label>
+            <input id="rd-15-occ" name="ocupacion" style={inp} value={certServiciosOcupacion}
+              onChange={e => setCertServiciosOcupacion(e.target.value)}
+              placeholder="Ej: Enfermero vacunador" />
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+            {loadingPreview
+              ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
+              : previewHtml
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview Nota Certificacion" />
+                : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>
+            }
+          </div>
+        </div>
+      );
+    }
+
+    if (doc.id === 7) {
+      const inp: React.CSSProperties = {
+        width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
+        fontSize: '0.83rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8,
+      };
+      const lbl: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: 2, display: 'block' };
+      const setF7 = (key: keyof typeof dispRectFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setDispRectFields(prev => ({ ...prev, [key]: e.target.value }));
+      return (
+        <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
+          <div style={{ width: 260, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Expediente</div>
+            <label htmlFor="rd-7-exp" style={lbl}>Nro. Expediente</label>
+            <input id="rd-7-exp" name="expNro" style={inp} value={dispRectFields.expNro} onChange={setF7('expNro')} placeholder="EX-2025-..." />
+            <label htmlFor="rd-7-tram" style={lbl}>Tipo de Trámite</label>
+            <input id="rd-7-tram" name="tramite" style={inp} value={dispRectFields.tramite} onChange={setF7('tramite')} placeholder="Ej: JUBILACION" />
+            <label htmlFor="rd-7-ag" style={lbl}>Agente(s)</label>
+            <input id="rd-7-ag" name="agentes" style={inp} value={dispRectFields.agentes} onChange={setF7('agentes')} placeholder="APELLIDO NOMBRE" />
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Artículo 1°</div>
+            <label htmlFor="rd-7-ifgra1" style={lbl}>Nro. IFGRA</label>
+            <input id="rd-7-ifgra1" name="ifgra1" style={inp} value={dispRectFields.ifgra1} onChange={setF7('ifgra1')} placeholder="IF-2025-..." />
+            <label htmlFor="rd-7-ord1" style={lbl}>Orden en Expediente</label>
+            <input id="rd-7-ord1" name="orden1" style={inp} value={dispRectFields.orden1} onChange={setF7('orden1')} placeholder="Ej: 3" />
+            <label htmlFor="rd-7-mot1" style={lbl}>Motivo del Error</label>
+            <textarea id="rd-7-mot1" name="motivo1" style={{ ...inp, resize: 'vertical', minHeight: 48 }} value={dispRectFields.motivo1}
+              onChange={setF7('motivo1')} placeholder="error involuntario de tipeo..." />
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Artículo 2°</div>
+            <label htmlFor="rd-7-ifgra2" style={lbl}>Nro. IFGRA</label>
+            <input id="rd-7-ifgra2" name="ifgra2" style={inp} value={dispRectFields.ifgra2} onChange={setF7('ifgra2')} placeholder="IF-2025-..." />
+            <label htmlFor="rd-7-ord2" style={lbl}>Orden en Expediente</label>
+            <input id="rd-7-ord2" name="orden2" style={inp} value={dispRectFields.orden2} onChange={setF7('orden2')} placeholder="Ej: 4" />
+            <label htmlFor="rd-7-mot2" style={lbl}>Motivo del Error</label>
+            <textarea id="rd-7-mot2" name="motivo2" style={{ ...inp, resize: 'vertical', minHeight: 48 }} value={dispRectFields.motivo2}
+              onChange={setF7('motivo2')} placeholder="error involuntario de tipeo..." />
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+            {loadingPreview
+              ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
+              : previewHtml
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview Dispo Rectificacion" />
+                : <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Completá los campos para ver la vista previa.</p>
             }
           </div>
         </div>
@@ -545,13 +719,37 @@ function DocModal({ agente, doc, onClose }: {
         <div style={{
           borderRadius: 8, overflow: [11, 13, 14].includes(doc.id) ? 'hidden' : 'auto', flex: 1,
           boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
-          background: doc.implementado ? ([11, 13, 14].includes(doc.id) ? '#f9fafb' : '#fff') : '#fffbeb',
-          border: doc.implementado ? ([11, 13, 14].includes(doc.id) ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
+          background: doc.implementado ? ([7, 11, 13, 14, 15].includes(doc.id) ? '#f9fafb' : '#fff') : '#fffbeb',
+          border: doc.implementado ? ([7, 11, 13, 14, 15].includes(doc.id) ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
         }}>
           {renderPreview()}
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          {doc.id === 15 && (
+            <>
+              <button className="btn" onClick={descargarDocxCertServicios} disabled={descargando || !certServiciosDatos}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
+            </>
+          )}
+          {doc.id === 7 && (
+            <>
+              <button className="btn" onClick={descargarDocxDispRect} disabled={descargando}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
+            </>
+          )}
           {doc.id === 2 && (
             <>
               <button className="btn" onClick={descargarDocxIoma} disabled={descargando || !iomaDatos}
@@ -685,8 +883,8 @@ export function RedaccionPage() {
         <div style={{ marginBottom: 8 }}><strong>Redaccion de documentos</strong></div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>Buscar por</div>
-            <select className="input" value={searchType}
+            <label htmlFor="rd-search-type" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Buscar por</label>
+            <select id="rd-search-type" name="searchType" className="input" value={searchType}
               onChange={e => { setSearchType(e.target.value as any); setQuery(''); setMatches([]); setSelected(null); }}
               style={{ minWidth: 160 }}>
               <option value="dni">DNI</option>
@@ -694,10 +892,10 @@ export function RedaccionPage() {
             </select>
           </div>
           <div style={{ flex: '1 1 200px' }}>
-            <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>
+            <label htmlFor="rd-query" className="muted" style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>
               {searchType === 'dni' ? 'Numero de DNI' : 'Apellido o nombre'}
-            </div>
-            <input className="input" value={query}
+            </label>
+            <input id="rd-query" name="query" className="input" value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && buscar()}
               placeholder={searchType === 'dni' ? 'Ej: 25123456' : 'Ej: Garcia'}

@@ -1,7 +1,8 @@
-// src/pages/TableViewPage/components/TableViewExport.tsx - VERSIÓN SIMPLIFICADA (con RBAC)
+// src/pages/TableViewPage/components/TableViewExport.tsx
 import React from 'react';
 import { useAuth } from '../../../auth/AuthProvider';
 import { useToast } from '../../../ui/toast';
+import { exportToExcel } from '../utils/export';
 
 interface TableViewExportProps {
   tableName: string;
@@ -22,17 +23,17 @@ export function TableViewExport({ tableName, rows, title }: TableViewExportProps
 
   const handleExportExcel = () => {
     if (!canRead) return toast.warning('Sin permiso', 'No tenés permiso de lectura para exportar.');
-    alert(`Exportando ${rows.length} filas a Excel...`);
+    if (!rows.length) return;
+    exportToExcel(`${title || tableName}.csv`, rows);
   };
 
+  // PDF y Word sin implementación aún — botones deshabilitados
   const handleExportPdf = () => {
-    if (!canRead) return toast.warning('Sin permiso', 'No tenés permiso de lectura para exportar.');
-    alert(`Exportando a PDF...`);
+    toast.warning('No disponible', 'Exportación a PDF no implementada aún.');
   };
 
   const handleExportWord = () => {
-    if (!canRead) return toast.warning('Sin permiso', 'No tenés permiso de lectura para exportar.');
-    alert(`Exportando a Word...`);
+    toast.warning('No disponible', 'Exportación a Word no implementada aún.');
   };
 
   if (!canRead) {

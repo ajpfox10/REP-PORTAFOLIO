@@ -26,7 +26,7 @@ export function CellModal({ open, data, onClose, onCopy }: Props) {
 
         <div className="sep" />
 
-        <textarea className="textarea" readOnly value={data.value} />
+        <textarea className="textarea" aria-label={`Valor de la columna ${data.col}`} readOnly value={data.value} />
 
         <div className="row gp-modal-actions">
           <button className="btn" type="button" onClick={onCopy}>

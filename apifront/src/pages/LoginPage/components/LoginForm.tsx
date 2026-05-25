@@ -23,8 +23,10 @@ export function LoginForm({
   return (
     <form onSubmit={onSubmit}>
       <div className="field">
-        <label>Email</label>
+        <label htmlFor="login-email">Email</label>
         <input
+          id="login-email"
+          name="email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
           placeholder="admin@local.com"
@@ -33,8 +35,10 @@ export function LoginForm({
       </div>
 
       <div className="field">
-        <label>Contraseña</label>
+        <label htmlFor="login-password">Contraseña</label>
         <input
+          id="login-password"
+          name="password"
           type="password"
           value={password}
           onChange={(e) => onPasswordChange(e.target.value)}
