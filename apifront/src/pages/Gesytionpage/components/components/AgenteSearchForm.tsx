@@ -24,8 +24,10 @@ export function AgenteSearchForm({
     <div className="card gp-card-14">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="search-field">
-          <label className="label">DNI</label>
+          <label className="label" htmlFor="agente-search-dni">DNI</label>
           <input
+            id="agente-search-dni"
+            name="dni"
             className="input"
             value={dni}
             onChange={onDniChange}
@@ -37,8 +39,10 @@ export function AgenteSearchForm({
         </div>
 
         <div className="search-field">
-          <label className="label">Apellido y Nombre</label>
+          <label className="label" htmlFor="agente-search-nombre">Apellido y Nombre</label>
           <input
+            id="agente-search-nombre"
+            name="fullName"
             className="input"
             value={fullName}
             onChange={onFullNameChange}

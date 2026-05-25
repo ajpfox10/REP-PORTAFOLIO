@@ -6,8 +6,12 @@ import { apiFetch } from '../../../api/http';
 interface FieldDef {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'checkbox';
+  type: 'text' | 'number' | 'checkbox' | 'select';
   required?: boolean;
+  // solo para type === 'select'
+  sourceTable?: string;
+  sourceLabel?: string;
+  sourcePk?: string;
 }
 
 interface CatalogDef {
@@ -20,15 +24,15 @@ interface CatalogDef {
 
 const CATALOGOS: CatalogDef[] = [
   { table: 'dependencias',        label: 'Dependencias',            pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }] },
-  { table: 'reparticiones',       label: 'Reparticiones',           pk: 'id',  displayKey: 'reparticion_nombre', fields: [{ key: 'reparticion_nombre', label: 'Nombre',          type: 'text',   required: true }, { key: 'dependencia_id', label: 'Dependencia ID', type: 'number' }] },
-  { table: 'servicios',           label: 'Servicios',               pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }, { key: 'reparticion_id', label: 'Repartición ID', type: 'number' }] },
-  { table: 'sectores',            label: 'Sectores',                pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }, { key: 'servicio_id',    label: 'Servicio ID',    type: 'number' }] },
+  { table: 'reparticiones',       label: 'Reparticiones',           pk: 'id',  displayKey: 'reparticion_nombre', fields: [{ key: 'reparticion_nombre', label: 'Nombre',          type: 'text',   required: true }, { key: 'dependencia_id', label: 'Dependencia', type: 'select', sourceTable: 'dependencias', sourceLabel: 'nombre', sourcePk: 'id' }] },
+  { table: 'servicios',           label: 'Servicios',               pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }, { key: 'reparticion_id', label: 'Repartición', type: 'select', sourceTable: 'reparticiones', sourceLabel: 'reparticion_nombre', sourcePk: 'id' }] },
+  { table: 'sectores',            label: 'Sectores',                pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }, { key: 'servicio_id',    label: 'Servicio',    type: 'select', sourceTable: 'servicios', sourceLabel: 'nombre', sourcePk: 'id' }] },
   { table: 'plantas',             label: 'Plantas',                 pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }] },
   { table: 'categorias',          label: 'Categorías',              pk: 'ID',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Número/Nombre',   type: 'number', required: true }] },
   { table: 'regimenes_horarios',  label: 'Regímenes Horarios',      pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'number', required: true }, { key: 'estado_planta', label: 'Estado Planta', type: 'text' }] },
   { table: 'ley',                 label: 'Leyes',                   pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }, { key: 'codigoexp', label: 'Código Exp', type: 'number' }, { key: 'leyactiva', label: 'Activa', type: 'checkbox' }, { key: 'descuentosprevisionales', label: 'Desc. Prev.', type: 'number' }] },
   { table: 'funciones',           label: 'Funciones',               pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }, { key: 'descripcion', label: 'Descripción', type: 'text' }] },
-  { table: 'jefaturas',           label: 'Jefaturas',               pk: 'id',  displayKey: 'sector',           fields: [{ key: 'sector',            label: 'Sector',          type: 'text',   required: true }, { key: 'jefe', label: 'Jefe', type: 'text' }] },
+  { table: 'jefaturas',           label: 'Jefaturas',               pk: 'id',  displayKey: 'servicio_nombre',  fields: [{ key: 'jefe', label: 'Jefe actual', type: 'text' }, { key: 'servicio_id', label: 'Servicio vinculado', type: 'select', sourceTable: 'servicios', sourceLabel: 'nombre', sourcePk: 'id', required: true }] },
   { table: 'sexos',               label: 'Sexos',                   pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }] },
   { table: 'ocupaciones',         label: 'Ocupaciones',             pk: 'id',  displayKey: 'nombre',           fields: [{ key: 'nombre',            label: 'Nombre',          type: 'text',   required: true }, { key: 'codigo', label: 'Código', type: 'number' }, { key: 'agrupamiento', label: 'Agrupamiento', type: 'text' }, { key: 'grado', label: 'Grado', type: 'text' }, { key: 'asignacion', label: 'Asignación', type: 'text' }] },
   { table: 'especialidaddesmedicas', label: 'Especialidades Médicas', pk: 'id', displayKey: 'especialidad',    fields: [{ key: 'especialidad',      label: 'Especialidad',    type: 'text',   required: true }] },
@@ -49,9 +53,10 @@ export function CatalogosTab() {
   const [loading,   setLoading]   = useState(false);
   const [editRow,   setEditRow]   = useState<any | null>(null);   // null = cerrado, {} = nuevo, {id:...} = editar
   const [form,      setForm]      = useState<Record<string, any>>({});
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState('');
-  const [busqueda,  setBusqueda]  = useState('');
+  const [saving,        setSaving]        = useState(false);
+  const [error,         setError]         = useState('');
+  const [busqueda,      setBusqueda]      = useState('');
+  const [selectOpts,    setSelectOpts]    = useState<Record<string, any[]>>({});
 
   const cargar = useCallback(async (cat: CatalogDef) => {
     setLoading(true);
@@ -74,11 +79,26 @@ export function CatalogosTab() {
     cargar(selected);
   }, [selected, cargar]);
 
+  const cargarSelectOpts = useCallback(async (fields: FieldDef[]) => {
+    const selects = fields.filter(f => f.type === 'select' && f.sourceTable);
+    for (const f of selects) {
+      if (selectOpts[f.sourceTable!]) continue;
+      try {
+        const res = await apiFetch<any>(`/${f.sourceTable}?limit=500&page=1`);
+        const items = res?.data || res || [];
+        setSelectOpts(prev => ({ ...prev, [f.sourceTable!]: items }));
+      } catch {
+        // silencioso: el select quedará vacío
+      }
+    }
+  }, [selectOpts]);
+
   const abrirNuevo = () => {
     const empty: Record<string, any> = {};
     for (const f of selected.fields) empty[f.key] = f.type === 'checkbox' ? false : '';
     setForm(empty);
     setEditRow({});
+    cargarSelectOpts(selected.fields);
   };
 
   const abrirEditar = (row: any) => {
@@ -86,6 +106,7 @@ export function CatalogosTab() {
     for (const field of selected.fields) f[field.key] = row[field.key] ?? '';
     setForm(f);
     setEditRow(row);
+    cargarSelectOpts(selected.fields);
   };
 
   const guardar = async () => {
@@ -161,6 +182,9 @@ export function CatalogosTab() {
 
         {/* Buscador */}
         <input
+          id="catalogo-busqueda"
+          name="busqueda"
+          aria-label={`Buscar en ${selected.label}`}
           className="input"
           style={{ width: '100%', marginBottom: 10, fontSize: '0.82rem' }}
           placeholder={`Buscar en ${selected.label}…`}
@@ -179,15 +203,33 @@ export function CatalogosTab() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 12 }}>
               {selected.fields.map(f => (
                 <div key={f.key}>
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginBottom: 3 }}>{f.label}{f.required ? ' *' : ''}</div>
+                  <label htmlFor={`cat-field-${f.key}`} style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8', marginBottom: 3 }}>{f.label}{f.required ? ' *' : ''}</label>
                   {f.type === 'checkbox' ? (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={!!form[f.key]}
+                    <label htmlFor={`cat-field-${f.key}`} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input id={`cat-field-${f.key}`} type="checkbox" name={f.key} checked={!!form[f.key]}
                         onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.checked }))} />
                       <span style={{ fontSize: '0.8rem' }}>{form[f.key] ? 'Sí' : 'No'}</span>
                     </label>
+                  ) : f.type === 'select' ? (
+                    <select
+                      id={`cat-field-${f.key}`}
+                      name={f.key}
+                      className="input"
+                      style={{ width: '100%', fontSize: '0.82rem' }}
+                      value={form[f.key] ?? ''}
+                      onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                    >
+                      <option value="">— Seleccionar {f.label} —</option>
+                      {(selectOpts[f.sourceTable!] || []).map(opt => (
+                        <option key={opt[f.sourcePk!]} value={opt[f.sourcePk!]}>
+                          {opt[f.sourceLabel!]}
+                        </option>
+                      ))}
+                    </select>
                   ) : (
                     <input
+                      id={`cat-field-${f.key}`}
+                      name={f.key}
                       className="input"
                       style={{ width: '100%', fontSize: '0.82rem' }}
                       type={f.type === 'number' ? 'number' : 'text'}

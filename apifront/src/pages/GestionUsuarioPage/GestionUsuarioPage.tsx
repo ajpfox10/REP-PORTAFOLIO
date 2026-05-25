@@ -215,8 +215,10 @@ function SeguridadPanel({
         }}
       >
         <div>
-          <div className="muted" style={{ marginBottom: 6 }}>Contraseña actual</div>
+          <label htmlFor="gu-pwd-actual" className="muted" style={{ display: 'block', marginBottom: 6 }}>Contraseña actual</label>
           <input
+            id="gu-pwd-actual"
+            name="passwordActual"
             className="input"
             type="password"
             value={passwordActual}
@@ -227,8 +229,10 @@ function SeguridadPanel({
         </div>
 
         <div>
-          <div className="muted" style={{ marginBottom: 6 }}>Nueva contraseña</div>
+          <label htmlFor="gu-pwd-nuevo" className="muted" style={{ display: 'block', marginBottom: 6 }}>Nueva contraseña</label>
           <input
+            id="gu-pwd-nuevo"
+            name="passwordNuevo"
             className="input"
             type="password"
             value={passwordNuevo}
@@ -239,8 +243,10 @@ function SeguridadPanel({
         </div>
 
         <div>
-          <div className="muted" style={{ marginBottom: 6, whiteSpace: 'nowrap' }}>Repetir nueva contraseña</div>
+          <label htmlFor="gu-pwd-nuevo2" className="muted" style={{ display: 'block', marginBottom: 6, whiteSpace: 'nowrap' }}>Repetir nueva contraseña</label>
           <input
+            id="gu-pwd-nuevo2"
+            name="passwordNuevo2"
             className="input"
             type="password"
             value={passwordNuevo2}
@@ -299,9 +305,12 @@ function PermisosPanel({ permissions }: { permissions: string[] }) {
         </div>
 
         <input
+          id="gu-filtro-permisos"
+          name="filtroPermisos"
           className="input"
           style={{ maxWidth: 320 }}
           placeholder="Filtrar permisos…"
+          aria-label="Filtrar permisos"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />

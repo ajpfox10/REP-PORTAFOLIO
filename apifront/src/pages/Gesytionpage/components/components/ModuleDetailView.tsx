@@ -181,7 +181,7 @@ export default function ModuleDetailView({
         </div>
         <div className="row gp-row-wrap">
           <label className="muted gp-pager-label">Filas
-            <select value={pageSize} onChange={e => onSetTablePageSize(Number(e.target.value))} className="gp-select">
+            <select name="pageSize" value={pageSize} onChange={e => onSetTablePageSize(Number(e.target.value))} className="gp-select">
               {[25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>

@@ -92,11 +92,11 @@ function PanelBusqueda({ label, agente, onLoad }: {
       <div className="card" style={{ marginBottom: 10 }}>
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: '0.9rem' }}>{label}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-          <select className="input" value={tipo} onChange={e => setTipo(e.target.value as any)} style={{ minWidth: 120, fontSize: '0.82rem' }}>
+          <select id={`comp-tipo-${label}`} name="tipo" aria-label="Tipo de búsqueda" className="input" value={tipo} onChange={e => setTipo(e.target.value as any)} style={{ minWidth: 120, fontSize: '0.82rem' }}>
             <option value="dni">Por DNI</option>
             <option value="nombre">Por Nombre</option>
           </select>
-          <input className="input" value={query} onChange={e => setQuery(e.target.value)}
+          <input id={`comp-query-${label}`} name="query" aria-label={tipo === 'dni' ? 'Buscar por DNI' : 'Buscar por apellido'} className="input" value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && buscar()}
             placeholder={tipo === 'dni' ? 'DNI...' : 'Apellido...'}
             style={{ flex: 1, fontSize: '0.82rem' }} />

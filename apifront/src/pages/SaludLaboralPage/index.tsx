@@ -514,9 +514,9 @@ export function SaludLaboralPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={lbl}>DNI</label>
+              <label htmlFor="sl-rec-dni" style={lbl}>DNI</label>
               <div className="row" style={{ gap: 6 }}>
-                <input className="input" style={{ flex: 1 }}
+                <input id="sl-rec-dni" name="recDni" className="input" style={{ flex: 1 }}
                   value={recSearch.dni}
                   onChange={e => recSearch.setDni(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && recSearch.onSearchDni()}
@@ -528,9 +528,9 @@ export function SaludLaboralPage() {
               </div>
             </div>
             <div>
-              <label style={lbl}>Apellido / Nombre</label>
+              <label htmlFor="sl-rec-nombre" style={lbl}>Apellido / Nombre</label>
               <div className="row" style={{ gap: 6 }}>
-                <input className="input" style={{ flex: 1 }}
+                <input id="sl-rec-nombre" name="recFullName" className="input" style={{ flex: 1 }}
                   value={recSearch.fullName}
                   onChange={e => recSearch.setFullName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && recSearch.onSearchName()}
@@ -617,22 +617,22 @@ export function SaludLaboralPage() {
                                   {!formRec.ausentismo && (
                                       <>
                                           <div style={fg}>
-                                              <label style={lbl}>Fecha desde</label>
-                                              <input className="input" type="date" value={formRec.fecha_desde}
+                                              <label htmlFor="sl-rec-fecha-desde" style={lbl}>Fecha desde</label>
+                                              <input id="sl-rec-fecha-desde" name="fecha_desde" className="input" type="date" value={formRec.fecha_desde}
                                                   onChange={e => setFormRec(f => ({ ...f, fecha_desde: e.target.value, fecha: e.target.value }))} />
                                           </div>
                                           <div style={fg}>
-                                              <label style={lbl}>Fecha hasta</label>
-                                              <input className="input" type="date" value={formRec.fecha_hasta}
+                                              <label htmlFor="sl-rec-fecha-hasta" style={lbl}>Fecha hasta</label>
+                                              <input id="sl-rec-fecha-hasta" name="fecha_hasta" className="input" type="date" value={formRec.fecha_hasta}
                                                   min={formRec.fecha_desde || undefined}
                                                   onChange={e => setFormRec(f => ({ ...f, fecha_hasta: e.target.value }))} />
                                           </div>
                                           <div style={fg}>
-                                              <label style={lbl}>
+                                              <label htmlFor="sl-rec-cant-dias" style={lbl}>
                                                   Cantidad de días
                                                   {formRec.cantidad_dias && <span style={{ marginLeft: 6, color: '#10b981', fontWeight: 700 }}>{formRec.cantidad_dias}d</span>}
                                               </label>
-                                              <input className="input" type="number" min={1} value={formRec.cantidad_dias}
+                                              <input id="sl-rec-cant-dias" name="cantidad_dias" className="input" type="number" min={1} value={formRec.cantidad_dias}
                                                   onChange={e => setFormRec(f => ({ ...f, cantidad_dias: e.target.value }))}
                                                   placeholder="Se calcula automático" />
                                           </div>
@@ -640,18 +640,18 @@ export function SaludLaboralPage() {
                                   )}
 
                                   <div style={fg}>
-                                      <label style={lbl}>Tipo</label>
-                                      <input className="input" type="text" placeholder="Ej: Preocupacional" value={formRec.tipo}
+                                      <label htmlFor="sl-rec-tipo" style={lbl}>Tipo</label>
+                                      <input id="sl-rec-tipo" name="tipo" className="input" type="text" placeholder="Ej: Preocupacional" value={formRec.tipo}
                                           onChange={e => setFormRec(f => ({ ...f, tipo: e.target.value }))} />
                                   </div>
                                   <div style={fg}>
-                                      <label style={lbl}>Resultado</label>
-                                      <input className="input" type="text" placeholder="Ej: Apto" value={formRec.resultado}
+                                      <label htmlFor="sl-rec-resultado" style={lbl}>Resultado</label>
+                                      <input id="sl-rec-resultado" name="resultado" className="input" type="text" placeholder="Ej: Apto" value={formRec.resultado}
                                           onChange={e => setFormRec(f => ({ ...f, resultado: e.target.value }))} />
                                   </div>
                                   <div style={fg}>
-                                      <label style={lbl}>Observaciones</label>
-                                      <input className="input" type="text" placeholder="Observaciones" value={formRec.observaciones}
+                                      <label htmlFor="sl-rec-obs" style={lbl}>Observaciones</label>
+                                      <input id="sl-rec-obs" name="observaciones" className="input" type="text" placeholder="Observaciones" value={formRec.observaciones}
                                           onChange={e => setFormRec(f => ({ ...f, observaciones: e.target.value }))} />
                                   </div>
                               </div>
@@ -759,9 +759,9 @@ export function SaludLaboralPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={lbl}>DNI</label>
+              <label htmlFor="sl-exam-dni" style={lbl}>DNI</label>
               <div className="row" style={{ gap: 6 }}>
-                <input className="input" style={{ flex: 1 }}
+                <input id="sl-exam-dni" name="examDni" className="input" style={{ flex: 1 }}
                   value={examSearch.dni}
                   onChange={e => examSearch.setDni(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && examSearch.onSearchDni()}
@@ -772,9 +772,9 @@ export function SaludLaboralPage() {
               </div>
             </div>
             <div>
-              <label style={lbl}>Apellido / Nombre</label>
+              <label htmlFor="sl-exam-nombre" style={lbl}>Apellido / Nombre</label>
               <div className="row" style={{ gap: 6 }}>
-                <input className="input" style={{ flex: 1 }}
+                <input id="sl-exam-nombre" name="examFullName" className="input" style={{ flex: 1 }}
                   value={examSearch.fullName}
                   onChange={e => examSearch.setFullName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && examSearch.onSearchName()}
@@ -835,10 +835,10 @@ export function SaludLaboralPage() {
               {!examSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un agente antes de cargar.</div>}
               <form onSubmit={handleSaveExam}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
-                  <div style={fg}><label style={lbl}>Año *</label><input className="input" type="number" min={2000} max={2100} value={formExam.anio} onChange={e => setFormExam(f => ({ ...f, anio: e.target.value }))} required /></div>
-                  <div style={fg}><label style={lbl}>Fecha del examen *</label><input className="input" type="date" value={formExam.fecha_examen} onChange={e => setFormExam(f => ({ ...f, fecha_examen: e.target.value }))} required /></div>
-                  <div style={fg}><label style={lbl}>Resultado</label><input className="input" type="text" placeholder="Ej: Aprobado" value={formExam.resultado} onChange={e => setFormExam(f => ({ ...f, resultado: e.target.value }))} /></div>
-                  <div style={fg}><label style={lbl}>Observaciones</label><input className="input" type="text" placeholder="Observaciones" value={formExam.observaciones} onChange={e => setFormExam(f => ({ ...f, observaciones: e.target.value }))} /></div>
+                  <div style={fg}><label htmlFor="sl-exam-anio" style={lbl}>Año *</label><input id="sl-exam-anio" name="anio" className="input" type="number" min={2000} max={2100} value={formExam.anio} onChange={e => setFormExam(f => ({ ...f, anio: e.target.value }))} required /></div>
+                  <div style={fg}><label htmlFor="sl-exam-fecha" style={lbl}>Fecha del examen *</label><input id="sl-exam-fecha" name="fecha_examen" className="input" type="date" value={formExam.fecha_examen} onChange={e => setFormExam(f => ({ ...f, fecha_examen: e.target.value }))} required /></div>
+                  <div style={fg}><label htmlFor="sl-exam-resultado" style={lbl}>Resultado</label><input id="sl-exam-resultado" name="resultado" className="input" type="text" placeholder="Ej: Aprobado" value={formExam.resultado} onChange={e => setFormExam(f => ({ ...f, resultado: e.target.value }))} /></div>
+                  <div style={fg}><label htmlFor="sl-exam-obs" style={lbl}>Observaciones</label><input id="sl-exam-obs" name="observaciones" className="input" type="text" placeholder="Observaciones" value={formExam.observaciones} onChange={e => setFormExam(f => ({ ...f, observaciones: e.target.value }))} /></div>
                 </div>
                 <div className="row" style={{ gap: 8, marginTop: 12 }}>
                   <button className="btn ok" type="submit" disabled={savingExam || !examSearch.selected}>

@@ -13,6 +13,7 @@ import { usePedidos } from './hooks/usePedidos';
 import { useDocumentos } from './hooks/useDocumentos';
 import { useCellModal } from './hooks/useCellModal';
 import { useDebounce } from './hooks/useDebounce';
+import { SearchableSelect } from '../CargaAgentePage/components/SearchableSelect';
 
 import { AgenteSearchForm } from './components/components/AgenteSearchForm';
 import { AgenteInfoCard } from './components/components/AgenteInfoCard';
@@ -306,23 +307,23 @@ function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) 
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                <div style={labelStyle}>Motivo *</div>
-                <textarea className="input" rows={3} style={fieldStyle}
+                <label htmlFor="gp-cit-motivo" style={labelStyle}>Motivo *</label>
+                <textarea id="gp-cit-motivo" name="motivo" className="input" rows={3} style={fieldStyle}
                   value={formNueva.motivo}
                   onChange={e => setFormNueva(f => ({ ...f, motivo: e.target.value }))}
                   placeholder="Describí el motivo de la citación…"
                 />
               </div>
               <div>
-                <div style={labelStyle}>Fecha de citación *</div>
-                <input type="datetime-local" className="input" style={fieldStyle}
+                <label htmlFor="gp-cit-fecha" style={labelStyle}>Fecha de citación *</label>
+                <input id="gp-cit-fecha" name="fecha_citacion" type="datetime-local" className="input" style={fieldStyle}
                   value={formNueva.fecha_citacion}
                   onChange={e => setFormNueva(f => ({ ...f, fecha_citacion: e.target.value }))}
                 />
               </div>
               <div>
-                <div style={labelStyle}>Citado por</div>
-                <input type="text" className="input" style={fieldStyle}
+                <label htmlFor="gp-cit-citado-por" style={labelStyle}>Citado por</label>
+                <input id="gp-cit-citado-por" name="citado_por" type="text" className="input" style={fieldStyle}
                   value={formNueva.citado_por}
                   onChange={e => setFormNueva(f => ({ ...f, citado_por: e.target.value }))}
                   placeholder="Nombre / área"
@@ -398,7 +399,7 @@ const PATCH_PERSONAL_COLS = [
 ];
 const PATCH_AGENTE_COLS = [
   'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
-  'regimen_horario_id','dependencia_id','reparticion_id','servicio_id','sector_id','fecha_ingreso','fecha_egreso',
+  'regimen_horario_id','dependencia_id','reparticion_id','fecha_ingreso','fecha_egreso',
   'legajo','salario_mensual','estado_empleo',
 ];
 const ALL_PATCH_COLS = [...PATCH_PERSONAL_COLS, ...PATCH_AGENTE_COLS];
@@ -408,16 +409,16 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [catalogs, setCatalogs] = useState<Record<string, { id: number | string; label: string }[]>>({});
+  const [catalogs, setCatalogs] = useState<Record<string, { id: number | string; label: string; raw?: any }[]>>({});
   const [loadingCatalogs, setLoadingCatalogs] = useState(false);
 
-  // Catálogos sin cascada (se cargan una sola vez)
+  // Catálogos estáticos — se cargan una sola vez al expandir.
+  // reparticion y servicio se cargan completos; el filtrado visual se hace en renderCatalogSelect.
+  // sector sigue siendo cascade (depende del servicio elegido).
   useEffect(() => {
     if (!expanded || Object.keys(catalogs).length > 0) return;
     setLoadingCatalogs(true);
-    const STATIC_DEFS = CATALOG_DEFS.filter(cf =>
-      !['reparticion_id','servicio_id','sector_id'].includes(cf.key)
-    );
+    const STATIC_DEFS = CATALOG_DEFS.filter(cf => cf.key !== 'sector_id');
     Promise.all(
       STATIC_DEFS.map(cf =>
         apiFetch<any>(`${cf.endpoint}?limit=2000`)
@@ -443,36 +444,16 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
       const map: Record<string, { id: number | string; label: string; raw?: any }[]> = {};
       results.forEach(r => { map[r.key] = r.items; });
       setCatalogs(prev => ({ ...prev, ...map }));
+      // Al cargar datos: si el agente tiene servicio pero no reparticion, derivarla del servicio
+      setForm((f: any) => {
+        if (f.servicio_id && !f.reparticion_id) {
+          const svc = (map.servicio_id || []).find((s: any) => String(s.id) === String(f.servicio_id));
+          if (svc?.raw?.reparticion_id) return { ...f, reparticion_id: String(svc.raw.reparticion_id) };
+        }
+        return f;
+      });
     }).finally(() => setLoadingCatalogs(false));
-  }, [expanded]);
-
-  // Cascada: cargar reparticiones cuando cambia dependencia_id
-  useEffect(() => {
-    if (!expanded) return;
-    const depId = form.dependencia_id;
-    if (!depId) { setCatalogs(prev => ({ ...prev, reparticion_id: [], servicio_id: [], sector_id: [] })); return; }
-    apiFetch<any>(`/reparticiones?dependencia_id=${depId}&limit=500`)
-      .then(res => {
-        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        const items = raw.map((o: any) => ({ id: o.id, label: o.reparticion_nombre || o.nombre || String(o.id), raw: o }));
-        setCatalogs(prev => ({ ...prev, reparticion_id: items, servicio_id: [], sector_id: [] }));
-      })
-      .catch(() => {});
-  }, [form.dependencia_id, expanded]); // eslint-disable-line
-
-  // Cascada: cargar servicios cuando cambia reparticion_id
-  useEffect(() => {
-    if (!expanded) return;
-    const repId = form.reparticion_id;
-    if (!repId) { setCatalogs(prev => ({ ...prev, servicio_id: [], sector_id: [] })); return; }
-    apiFetch<any>(`/servicios?reparticion_id=${repId}&limit=500`)
-      .then(res => {
-        const raw: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        const items = raw.map((o: any) => ({ id: o.id, label: o.nombre || String(o.id), raw: o }));
-        setCatalogs(prev => ({ ...prev, servicio_id: items, sector_id: [] }));
-      })
-      .catch(() => {});
-  }, [form.reparticion_id, expanded]); // eslint-disable-line
+  }, [expanded]); // eslint-disable-line
 
   // Cascada: cargar sectores cuando cambia servicio_id
   useEffect(() => {
@@ -499,10 +480,14 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
 
   const set = (k: string, v: any) => setForm((f: any) => {
     const next: any = { ...f, [k]: v };
-    // cascada: limpiar hijos al cambiar padre
     if (k === 'dependencia_id') { next.reparticion_id = ''; next.servicio_id = ''; next.sector_id = ''; }
     if (k === 'reparticion_id') { next.servicio_id = ''; next.sector_id = ''; }
-    if (k === 'servicio_id')    { next.sector_id = ''; }
+    if (k === 'servicio_id') {
+      next.sector_id = '';
+      // auto-setear reparticion desde el servicio seleccionado
+      const svc = (catalogs.servicio_id || []).find((s: any) => String(s.id) === String(v));
+      if (svc?.raw?.reparticion_id) next.reparticion_id = String(svc.raw.reparticion_id);
+    }
     return next;
   });
 
@@ -525,8 +510,12 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
           payload[k] = v === '' ? null : v;
         }
       });
-      await apiFetch<any>(`/personal/${row.dni}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      toast.ok('Agente actualizado correctamente');
+      const res = await apiFetch<any>(`/personal/${row.dni}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      if (!res?.ok) throw new Error(res?.error || 'Error al guardar');
+      toast.ok(
+        res.reactivado ? '✅ Agente reactivado' : '✅ Agente actualizado',
+        res.message || `DNI ${row.dni}`
+      );
       onSaved();
     } catch (e: any) {
       const details = e?.details;
@@ -553,29 +542,39 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
   const sectionStyle = { fontSize: '0.72rem', color: '#64748b', fontWeight: 600 as const, margin: '10px 0 4px' };
 
   const renderCatalogSelect = (key: string, label: string) => {
-    const options = catalogs[key] || [];
-    const currentVal = form[key] ?? '';
+    let rawOptions = catalogs[key] || [];
+    // Filtrado visual por padre (no bloquea, solo acota la lista)
+    if (key === 'reparticion_id' && form.dependencia_id) {
+      rawOptions = rawOptions.filter((o: any) => String(o.raw?.dependencia_id) === String(form.dependencia_id));
+    }
+    if (key === 'servicio_id' && form.reparticion_id) {
+      rawOptions = rawOptions.filter((o: any) => String(o.raw?.reparticion_id) === String(form.reparticion_id));
+    }
+    const options = rawOptions.map(o => ({ id: o.id, nombre: o.label }));
+    const currentVal = String(form[key] ?? '');
+    const found = options.find(o => String(o.id) === currentVal);
     return (
-      <div key={key}>
-        <div style={labelStyle}>{label}</div>
-        <select className="input" value={String(currentVal)} style={fieldStyle}
-          onChange={e => set(key, e.target.value)}>
-          <option value="">— sin asignar —</option>
-          {options.map(o => (
-            <option key={o.id} value={String(o.id)}>{o.label}</option>
-          ))}
-          {currentVal !== '' && !options.find(o => String(o.id) === String(currentVal)) && (
-            <option value={String(currentVal)}>ID: {currentVal} (no encontrado)</option>
-          )}
-        </select>
+      <div key={key} style={{ minWidth: 0 }}>
+        <label style={labelStyle}>{label}</label>
+        <SearchableSelect
+          value={currentVal}
+          onChange={v => set(key, v)}
+          options={options}
+          placeholder="— sin asignar —"
+        />
+        {currentVal !== '' && !found && (
+          <div style={{ fontSize: '0.7rem', color: '#f59e0b', marginTop: 2 }}>
+            ID: {currentVal} (no encontrado en lista)
+          </div>
+        )}
       </div>
     );
   };
 
   const renderText = (key: string, label: string, type = 'text') => (
-    <div key={key}>
-      <div style={labelStyle}>{label}</div>
-      <input className="input" type={type} value={form[key] ?? ''} style={fieldStyle}
+    <div key={key} style={{ minWidth: 0 }}>
+      <label htmlFor={`gp-edit-${key}`} style={labelStyle}>{label}</label>
+      <input id={`gp-edit-${key}`} name={key} className="input" type={type} value={form[key] ?? ''} style={fieldStyle}
         onChange={e => set(key, e.target.value)} />
     </div>
   );
@@ -591,25 +590,25 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-        <div>
-          <div style={labelStyle}>APELLIDO</div>
-          <input className="input" value={form.apellido || ''} style={fieldStyle}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, minWidth: 0 }}>
+        <div style={{ minWidth: 0 }}>
+          <label htmlFor="gp-edit-apellido" style={labelStyle}>APELLIDO</label>
+          <input id="gp-edit-apellido" name="apellido" className="input" value={form.apellido || ''} style={fieldStyle}
             onChange={e => set('apellido', e.target.value.toUpperCase())} />
         </div>
-        <div>
-          <div style={labelStyle}>NOMBRE</div>
-          <input className="input" value={form.nombre || ''} style={fieldStyle}
+        <div style={{ minWidth: 0 }}>
+          <label htmlFor="gp-edit-nombre" style={labelStyle}>NOMBRE</label>
+          <input id="gp-edit-nombre" name="nombre" className="input" value={form.nombre || ''} style={fieldStyle}
             onChange={e => set('nombre', e.target.value.toUpperCase())} />
         </div>
-        <div>
-          <div style={labelStyle}>CUIL</div>
-          <input className="input" value={form.cuil || ''} style={fieldStyle}
+        <div style={{ minWidth: 0 }}>
+          <label htmlFor="gp-edit-cuil" style={labelStyle}>CUIL</label>
+          <input id="gp-edit-cuil" name="cuil" className="input" value={form.cuil || ''} style={fieldStyle}
             onChange={e => set('cuil', e.target.value)} />
         </div>
-        <div>
-          <div style={labelStyle}>EMAIL</div>
-          <input className="input" type="email" value={form.email || ''} style={fieldStyle}
+        <div style={{ minWidth: 0 }}>
+          <label htmlFor="gp-edit-email" style={labelStyle}>EMAIL</label>
+          <input id="gp-edit-email" name="email" className="input" type="email" value={form.email || ''} style={fieldStyle}
             onChange={e => set('email', e.target.value)} />
         </div>
       </div>
@@ -620,14 +619,14 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
             <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: 6 }}>⏳ Cargando catálogos…</div>
           )}
           <div style={sectionStyle}>— DATOS PERSONALES —</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, minWidth: 0 }}>
             {renderText('telefono', 'TELÉFONO')}
             {renderText('fecha_nacimiento', 'F. NACIMIENTO', 'date')}
             {renderCatalogSelect('sexo_id', 'SEXO')}
             {renderText('nacionalidad', 'NACIONALIDAD')}
             <div style={{ gridColumn: '1 / -1' }}>
-              <div style={labelStyle}>CALLE (DOMICILIO)</div>
-              <input className="input" value={form.domicilio || ''} style={fieldStyle}
+              <label htmlFor="gp-edit-domicilio" style={labelStyle}>CALLE (DOMICILIO)</label>
+              <input id="gp-edit-domicilio" name="domicilio" className="input" value={form.domicilio || ''} style={fieldStyle}
                 onChange={e => set('domicilio', e.target.value)} />
             </div>
             {renderText('numerodomicilio', 'NRO. DOMICILIO')}
@@ -635,14 +634,14 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
             {renderText('depto', 'DEPTO')}
             {renderText('cp', 'CÓDIGO POSTAL')}
             <div style={{ gridColumn: '1 / -1' }}>
-              <div style={labelStyle}>OBS. DIRECCIÓN</div>
-              <input className="input" value={form.observacionesdireccion || ''} style={fieldStyle}
+              <label htmlFor="gp-edit-obsdir" style={labelStyle}>OBS. DIRECCIÓN</label>
+              <input id="gp-edit-obsdir" name="observacionesdireccion" className="input" value={form.observacionesdireccion || ''} style={fieldStyle}
                 onChange={e => set('observacionesdireccion', e.target.value)} />
             </div>
             {renderCatalogSelect('localidad_id', 'LOCALIDAD')}
             <div>
-              <div style={labelStyle}>ESTADO EMPLEO</div>
-              <select className="input" value={form.estado_empleo || ''} style={fieldStyle}
+              <label htmlFor="gp-edit-estado-empleo" style={labelStyle}>ESTADO EMPLEO</label>
+              <select id="gp-edit-estado-empleo" name="estado_empleo" className="input" value={form.estado_empleo || ''} style={fieldStyle}
                 onChange={e => set('estado_empleo', e.target.value)}>
                 <option value="">— sin asignar —</option>
                 <option value="ACTIVO">ACTIVO</option>
@@ -653,14 +652,14 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <div style={labelStyle}>OBSERVACIONES</div>
-              <textarea className="input" value={form.observaciones || ''} rows={2}
+              <label htmlFor="gp-edit-obs" style={labelStyle}>OBSERVACIONES</label>
+              <textarea id="gp-edit-obs" name="observaciones" className="input" value={form.observaciones || ''} rows={2}
                 style={{ ...fieldStyle, resize: 'vertical' }}
                 onChange={e => set('observaciones', e.target.value)} />
             </div>
           </div>
           <div style={sectionStyle}>— DATOS LABORALES —</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, minWidth: 0 }}>
             {renderCatalogSelect('ley_id', 'LEY')}
             {renderCatalogSelect('planta_id', 'PLANTA')}
             {renderCatalogSelect('categoria_id', 'CATEGORÍA')}

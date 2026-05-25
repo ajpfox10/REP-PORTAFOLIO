@@ -381,32 +381,32 @@ export function AusenciasConFichajesPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
 
           <div style={{ flex: "1 1 220px" }}>
-            <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Archivo Ministerio (cod. 28)</div>
-            <select style={selectStyle} value={ministerioFile} onChange={(e) => setMinisterioFile(e.target.value)}>
+            <label htmlFor="acf-ministerio" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Archivo Ministerio (cod. 28)</label>
+            <select id="acf-ministerio" name="ministerioFile" style={selectStyle} value={ministerioFile} onChange={(e) => setMinisterioFile(e.target.value)}>
               <option value="">— elegir archivo —</option>
               {archivos.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}
             </select>
           </div>
 
           <div style={{ flex: "1 1 220px" }}>
-            <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Archivo SIAP</div>
-            <select style={selectStyle} value={siapFile} onChange={(e) => setSiapFile(e.target.value)}>
+            <label htmlFor="acf-siap" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Archivo SIAP</label>
+            <select id="acf-siap" name="siapFile" style={selectStyle} value={siapFile} onChange={(e) => setSiapFile(e.target.value)}>
               <option value="">— sin SIAP —</option>
               {archivos.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}
             </select>
           </div>
 
           <div style={{ flex: "1 1 220px" }}>
-            <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Archivo Horarios</div>
-            <select style={selectStyle} value={horariosFile} onChange={(e) => setHorariosFile(e.target.value)}>
+            <label htmlFor="acf-horarios" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Archivo Horarios</label>
+            <select id="acf-horarios" name="horariosFile" style={selectStyle} value={horariosFile} onChange={(e) => setHorariosFile(e.target.value)}>
               <option value="">— sin horarios —</option>
               {archivos.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}
             </select>
           </div>
 
           <div style={{ flex: "0 0 160px" }}>
-            <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Período</div>
-            <input type="month" className="input" value={periodo} onChange={(e) => setPeriodo(e.target.value)} style={{ width: "100%" }} />
+            <label htmlFor="acf-periodo" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Período</label>
+            <input id="acf-periodo" name="periodo" type="month" className="input" value={periodo} onChange={(e) => setPeriodo(e.target.value)} style={{ width: "100%" }} />
           </div>
 
           {tabActiva === "ausentes28"

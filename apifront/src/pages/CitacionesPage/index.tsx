@@ -101,19 +101,19 @@ function NuevaCitacionModal({ agente, onClose, onSaved }: NuevaCitacionModalProp
         <div className="cit-modal-body">
           <div className="cit-form-grid">
             <div className="cit-field cit-field-full">
-              <label className="cit-label">Motivo *</label>
-              <textarea className="input" rows={3} value={form.motivo}
+              <label className="cit-label" htmlFor="cit-motivo">Motivo *</label>
+              <textarea id="cit-motivo" name="motivo" className="input" rows={3} value={form.motivo}
                 onChange={e => set('motivo', e.target.value)}
                 placeholder="Describí el motivo…" />
             </div>
             <div className="cit-field">
-              <label className="cit-label">Fecha de citación *</label>
-              <input type="datetime-local" className="input" value={form.fecha_citacion}
+              <label className="cit-label" htmlFor="cit-fecha">Fecha de citación *</label>
+              <input id="cit-fecha" name="fecha_citacion" type="datetime-local" className="input" value={form.fecha_citacion}
                 onChange={e => set('fecha_citacion', e.target.value)} />
             </div>
             <div className="cit-field">
-              <label className="cit-label">Citado por</label>
-              <input type="text" className="input" value={form.citado_por}
+              <label className="cit-label" htmlFor="cit-citado-por">Citado por</label>
+              <input id="cit-citado-por" name="citado_por" type="text" className="input" value={form.citado_por}
                 onChange={e => set('citado_por', e.target.value)}
                 placeholder="Nombre / área que cita" />
             </div>
@@ -351,6 +351,7 @@ export function CitacionesPage() {
             {/* Buscador rápido */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
               <input className="input" style={{ flex: 1, maxWidth: 360, fontSize: '0.83rem' }}
+                aria-label="Filtrar por DNI, apellido o motivo"
                 placeholder="Filtrar por DNI, apellido o motivo…"
                 value={busqPend} onChange={e => setBusqPend(e.target.value)} />
               {busqPend && (

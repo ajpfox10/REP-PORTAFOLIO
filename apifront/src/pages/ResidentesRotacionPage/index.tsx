@@ -268,9 +268,9 @@ export function ResidentesRotacionPage() {
         <div className="h2" style={{ marginBottom: 10 }}>Buscar residente</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <label style={lbl}>DNI</label>
+            <label htmlFor="rr-search-dni" style={lbl}>DNI</label>
             <div className="row" style={{ gap: 6 }}>
-              <input className="input" style={{ flex: 1 }} value={search.dni}
+              <input id="rr-search-dni" name="dni" className="input" style={{ flex: 1 }} value={search.dni}
                 onChange={e => search.setDni(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search.onSearch()}
                 placeholder="Enter para buscar" disabled={search.loading} />
@@ -280,9 +280,9 @@ export function ResidentesRotacionPage() {
             </div>
           </div>
           <div>
-            <label style={lbl}>Apellido / Nombre</label>
+            <label htmlFor="rr-search-nombre" style={lbl}>Apellido / Nombre</label>
             <div className="row" style={{ gap: 6 }}>
-              <input className="input" style={{ flex: 1 }} value={search.fullName}
+              <input id="rr-search-nombre" name="fullName" className="input" style={{ flex: 1 }} value={search.fullName}
                 onChange={e => search.setFullName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search.onSearchByName()}
                 placeholder="Apellido Nombre (Enter)" disabled={search.loading} />
@@ -342,48 +342,48 @@ export function ResidentesRotacionPage() {
           <form onSubmit={handleSave}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
               <div style={fg}>
-                <label style={lbl}>Fecha desde *</label>
-                <input className="input" type="date" value={fechaDesde}
+                <label htmlFor="rr-fecha-desde" style={lbl}>Fecha desde *</label>
+                <input id="rr-fecha-desde" name="fechaDesde" className="input" type="date" value={fechaDesde}
                   onChange={e => setFechaDesde(e.target.value)}
                   disabled={!!editingId && !isAdmin} required />
               </div>
               <div style={fg}>
-                <label style={lbl}>Fecha hasta <span className="muted">(opcional)</span></label>
-                <input className="input" type="date" value={fechaHasta}
+                <label htmlFor="rr-fecha-hasta" style={lbl}>Fecha hasta <span className="muted">(opcional)</span></label>
+                <input id="rr-fecha-hasta" name="fechaHasta" className="input" type="date" value={fechaHasta}
                   min={fechaDesde || undefined}
                   onChange={e => setFechaHasta(e.target.value)}
                   disabled={!!editingId && !isAdmin} />
               </div>
               <div style={fg}>
-                <label style={lbl}>Servicio / Área</label>
-                <input className="input" type="text" placeholder="Ej: Guardia, UTI, Cirugía..."
+                <label htmlFor="rr-servicio" style={lbl}>Servicio / Área</label>
+                <input id="rr-servicio" name="servicio" className="input" type="text" placeholder="Ej: Guardia, UTI, Cirugía..."
                   value={servicio} onChange={e => setServicio(e.target.value)}
                   disabled={!!editingId && !isAdmin} />
               </div>
               <div style={fg}>
-                <label style={lbl}>Nro. de gestión</label>
-                <input className="input" type="number" min={0} placeholder="Número"
+                <label htmlFor="rr-nrogestion" style={lbl}>Nro. de gestión</label>
+                <input id="rr-nrogestion" name="nrodegestion" className="input" type="number" min={0} placeholder="Número"
                   value={nrodegestion} onChange={e => setNrodegestion(e.target.value)}
                   disabled={!!editingId && !isAdmin} />
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
               <div style={fg}>
-                <label style={lbl}>Horarios</label>
-                <input className="input" type="text" placeholder="Ej: 08:00 - 16:00"
+                <label htmlFor="rr-horarios" style={lbl}>Horarios</label>
+                <input id="rr-horarios" name="horarios" className="input" type="text" placeholder="Ej: 08:00 - 16:00"
                   value={horarios} onChange={e => setHorarios(e.target.value)}
                   disabled={!!editingId && !isAdmin} />
               </div>
               <div style={fg}>
-                <label style={lbl}>Días</label>
-                <input className="input" type="text" placeholder="Ej: Lunes a Viernes"
+                <label htmlFor="rr-dias" style={lbl}>Días</label>
+                <input id="rr-dias" name="dias" className="input" type="text" placeholder="Ej: Lunes a Viernes"
                   value={dias} onChange={e => setDias(e.target.value)}
                   disabled={!!editingId && !isAdmin} />
               </div>
             </div>
             <div style={{ marginTop: 12 }}>
-              <label style={lbl}>Observaciones</label>
-              <input className="input" type="text" placeholder="Observaciones opcionales" style={{ width: '100%', boxSizing: 'border-box' }}
+              <label htmlFor="rr-obs" style={lbl}>Observaciones</label>
+              <input id="rr-obs" name="observaciones" className="input" type="text" placeholder="Observaciones opcionales" style={{ width: '100%', boxSizing: 'border-box' }}
                 value={observaciones} onChange={e => setObservaciones(e.target.value)}
                 disabled={!!editingId && !isAdmin} />
             </div>

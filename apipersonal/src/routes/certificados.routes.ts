@@ -101,7 +101,11 @@ export async function fillDocxTemplate(templateBuffer: Buffer, replacements: Rec
 
     for (const [k, v] of Object.entries(replacements)) {
       // Reemplazo directo (placeholder en un solo run)
-      xml = xml.split(k).join(v ?? "");
+      if (k === "SERVICIO") {
+        xml = xml.replace(/(^|[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9_])SERVICIO(?![A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9_])/g, (_m, prefix) => `${prefix}${v ?? ""}`);
+      } else {
+        xml = xml.split(k).join(v ?? "");
+      }
       // Reemplazo de placeholder fragmentado entre dos runs (solo para {{...}})
       if (k.startsWith("{{") && xml.includes(k.substring(0, k.indexOf("}")))) {
         xml = reemplazarFragmentados(xml, k, v ?? "");
@@ -134,17 +138,97 @@ function calcHasta(leyTxt: string): string {
   return esBecaOResidente ? `31/12/${new Date().getFullYear()}` : "y continúa";
 }
 
+function firstText(...values: any[]): string {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 async function queryPersonaldetalle(sequelize: Sequelize, dni: number) {
   const rows = await sequelize.query(
     `SELECT pd.dni, pd.apellido, pd.nombre, pd.dependencia, pd.ley,
             pd.estado_empleo, pd.fecha_ingreso, pd.decreto_designacion,
-            COALESCE(pd.legajo, a.legajo) AS legajo
+            COALESCE(pd.legajo, a.legajo) AS legajo,
+            COALESCE(
+              (
+                SELECT ags.nombre
+                FROM agentes_servicios ags
+                WHERE ags.dni = pd.dni
+                  AND ags.deleted_at IS NULL
+                  AND (ags.fecha_hasta IS NULL OR ags.fecha_hasta >= CURDATE())
+                  AND ags.nombre IS NOT NULL
+                  AND ags.nombre <> ''
+                ORDER BY CASE WHEN ags.fecha_hasta IS NULL THEN 0 ELSE 1 END,
+                         ags.fecha_desde DESC,
+                         ags.id DESC
+                LIMIT 1
+              ),
+              s.nombre
+            ) AS servicio
      FROM personaldetalle pd
      LEFT JOIN agentes a ON a.dni = pd.dni AND a.deleted_at IS NULL
+     LEFT JOIN agentes_servicios ags_c1 ON ags_c1.id = (SELECT id FROM agentes_servicios WHERE dni = pd.dni AND deleted_at IS NULL AND fecha_hasta IS NULL ORDER BY id DESC LIMIT 1)
+     LEFT JOIN servicios s ON s.id = ags_c1.servicio_id AND s.deleted_at IS NULL
      WHERE pd.dni = :dni LIMIT 1`,
     { replacements: { dni }, type: QueryTypes.SELECT }
   );
   return (rows as any[])[0] ?? null;
+}
+
+async function queryPersonalCertBaseVieja(sequelize: Sequelize, dni: number) {
+  const rows = await sequelize.query(
+    `SELECT pd.dni, pd.apellido, pd.nombre, pd.dependencia, pd.ley,
+            pd.estado_empleo, pd.fecha_ingreso,
+            COALESCE(pd.legajo, a.legajo) AS legajo,
+            COALESCE(
+              (
+                SELECT ags.nombre
+                FROM agentes_servicios ags
+                WHERE ags.dni = pd.dni
+                  AND ags.deleted_at IS NULL
+                  AND (ags.fecha_hasta IS NULL OR ags.fecha_hasta >= CURDATE())
+                  AND ags.nombre IS NOT NULL
+                  AND ags.nombre <> ''
+                ORDER BY CASE WHEN ags.fecha_hasta IS NULL THEN 0 ELSE 1 END,
+                         ags.fecha_desde DESC,
+                         ags.id DESC
+                LIMIT 1
+              ),
+              s.nombre
+            ) AS servicio,
+            o.nombre AS cargo,
+            rh.nombre AS hs_semanales
+     FROM personaldetalle pd
+     LEFT JOIN agentes a ON a.dni = pd.dni AND a.deleted_at IS NULL
+     LEFT JOIN agentes_servicios ags_c2 ON ags_c2.id = (SELECT id FROM agentes_servicios WHERE dni = pd.dni AND deleted_at IS NULL AND fecha_hasta IS NULL ORDER BY id DESC LIMIT 1)
+     LEFT JOIN servicios s ON s.id = ags_c2.servicio_id AND s.deleted_at IS NULL
+     LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id AND o.deleted_at IS NULL
+     LEFT JOIN regimenes_horarios rh ON rh.id = a.regimen_horario_id AND rh.deleted_at IS NULL
+     WHERE pd.dni = :dni LIMIT 1`,
+    { replacements: { dni }, type: QueryTypes.SELECT }
+  );
+  return (rows as any[])[0] ?? null;
+}
+
+async function queryPersonalCertServicios(sequelize: Sequelize, dni: number) {
+  const rows = await sequelize.query(
+    `SELECT pd.dni, pd.apellido, pd.nombre, pd.ley,
+            p.fecha_nacimiento,
+            o.nombre AS ocupacion
+     FROM personaldetalle pd
+     LEFT JOIN personal p ON p.dni = pd.dni
+     LEFT JOIN agentes a ON a.dni = pd.dni AND a.deleted_at IS NULL
+     LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id
+     WHERE pd.dni = :dni LIMIT 1`,
+    { replacements: { dni }, type: QueryTypes.SELECT }
+  );
+  return (rows as any[])[0] ?? null;
+}
+
+function esBecarioContingencia(ley: string): boolean {
+  return String(ley ?? "").toLowerCase().includes("contingencia");
 }
 
 async function queryPersonalConDomicilio(sequelize: Sequelize, dni: number) {
@@ -489,7 +573,7 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
   router.get("/cert-base-vieja/datos", async (req: Request, res: Response) => {
     const dni = Number(req.query?.dni);
     if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
-    const p = await queryPersonaldetalle(sequelize, dni);
+    const p = await queryPersonalCertBaseVieja(sequelize, dni);
     if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
     const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
     return res.json({
@@ -500,6 +584,9 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
         legajo:      String(p.legajo ?? ""),
         fechaIngreso: formatDateDMY(p.fecha_ingreso),
         dependencia: String(p.dependencia ?? ""),
+        servicio:    String(p.servicio ?? ""),
+        cargo:       String(p.cargo ?? ""),
+        hsSemanales: p.hs_semanales != null ? String(p.hs_semanales) : "",
       },
     });
   });
@@ -517,7 +604,7 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
       "FECHAINGRESO":   formatDateDMY(p.fecha_ingreso),
       "CARGO":          String(req.query?.cargo ?? ""),
       "HSSEMANALES":    String(req.query?.hsSemanales ?? ""),
-      "SERVICIO":       String(req.query?.servicio ?? ""),
+      "SERVICIO":       firstText(req.query?.servicio, p.servicio),
     };
     const templatePath = resolveTemplatePath("certBaseVieja.docx");
     if (!fs.existsSync(templatePath)) return res.status(500).send("<p>Plantilla certBaseVieja.docx no encontrada</p>");
@@ -545,7 +632,7 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
       "FECHAINGRESO":   formatDateDMY(p.fecha_ingreso),
       "CARGO":          String(req.body?.cargo ?? ""),
       "HSSEMANALES":    String(req.body?.hsSemanales ?? ""),
-      "SERVICIO":       String(req.body?.servicio ?? ""),
+      "SERVICIO":       firstText(req.body?.servicio, p.servicio),
     };
     const templatePath = resolveTemplatePath("certBaseVieja.docx");
     if (!fs.existsSync(templatePath)) return res.status(500).json({ ok: false, error: "Plantilla certBaseVieja.docx no encontrada" });
@@ -626,6 +713,133 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
     const out = await fillDocxTemplate(tpl, replacements);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="cert_rotacion_${dni}.docx"`);
+    res.setHeader("Content-Length", String(out.length));
+    return res.status(200).send(out);
+  });
+
+  // ─── Certificación de Servicios (Becarios Vacunación) ────────────────────
+
+  router.get("/cert-servicios/datos", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const p = await queryPersonalCertServicios(sequelize, dni);
+    if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    if (!esBecarioContingencia(p.ley))
+      return res.status(403).json({ ok: false, error: "solo_becarios" });
+    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+    const clase = p.fecha_nacimiento ? String(new Date(p.fecha_nacimiento).getFullYear()) : "";
+    return res.json({
+      ok: true,
+      data: {
+        apellidoNombre,
+        dni: String(p.dni ?? dni),
+        clase,
+        ocupacion: String(p.ocupacion ?? ""),
+      },
+    });
+  });
+
+  router.get("/cert-servicios/preview", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const p = await queryPersonalCertServicios(sequelize, dni);
+    if (!p) return res.status(404).send("<p>Persona no encontrada</p>");
+    if (!esBecarioContingencia(p.ley)) return res.status(403).send("<p>Solo para becarios de vacunación</p>");
+    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+    const clase = p.fecha_nacimiento ? String(new Date(p.fecha_nacimiento).getFullYear()) : "";
+    const ocupacion = String(req.query?.ocupacion ?? p.ocupacion ?? "");
+    const replacements: Record<string, string> = {
+      "APELLIDOYNOMBRE": apellidoNombre,
+      "DNIAGENTE":       String(p.dni ?? dni),
+      "CLASEAGENTE":     clase,
+      "PROFESIONAGENTE": ocupacion,
+    };
+    const templatePath = resolveTemplatePath("certServicios.docx");
+    if (!fs.existsSync(templatePath)) return res.status(500).send("<p>Plantilla certServicios.docx no encontrada</p>");
+    const tpl = fs.readFileSync(templatePath);
+    const docxBuffer = await fillDocxTemplate(tpl, replacements);
+    const mammoth = await import("mammoth");
+    const result  = await mammoth.convertToHtml({ buffer: docxBuffer });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{font-family:Arial,sans-serif;padding:40px 56px;color:#111;font-size:13px;line-height:1.8;max-width:800px;margin:0 auto}
+p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
+  });
+
+  router.post("/cert-servicios", async (req: Request, res: Response) => {
+    const dni = Number(req.body?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const p = await queryPersonalCertServicios(sequelize, dni);
+    if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    if (!esBecarioContingencia(p.ley)) return res.status(403).json({ ok: false, error: "solo_becarios" });
+    const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
+    const clase = p.fecha_nacimiento ? String(new Date(p.fecha_nacimiento).getFullYear()) : "";
+    const ocupacion = String(req.body?.ocupacion ?? p.ocupacion ?? "");
+    const replacements: Record<string, string> = {
+      "APELLIDOYNOMBRE": apellidoNombre,
+      "DNIAGENTE":       String(p.dni ?? dni),
+      "CLASEAGENTE":     clase,
+      "PROFESIONAGENTE": ocupacion,
+    };
+    const templatePath = resolveTemplatePath("certServicios.docx");
+    if (!fs.existsSync(templatePath)) return res.status(500).json({ ok: false, error: "Plantilla certServicios.docx no encontrada" });
+    const tpl = fs.readFileSync(templatePath);
+    const out = await fillDocxTemplate(tpl, replacements);
+    const safeApellido = String(p.apellido ?? "").replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="nota_certificacion_${safeApellido}_${p.dni}.docx"`);
+    res.setHeader("Content-Length", String(out.length));
+    return res.status(200).send(out);
+  });
+
+  // ─── Disposición de Rectificación ────────────────────────────────────────
+
+  router.get("/disp-rectificacion/preview", async (req: Request, res: Response) => {
+    const { expNro = "", tramite = "", agentes = "", ifgra1 = "", orden1 = "", motivo1 = "", ifgra2 = "", orden2 = "", motivo2 = "" } = req.query as Record<string, string>;
+    const replacements: Record<string, string> = {
+      "EXPNRO":  expNro,
+      "TRAMITE": tramite,
+      "AGENTES": agentes,
+      "IFGRA1":  ifgra1,
+      "ORDEN1":  orden1,
+      "MOTIVO1": motivo1,
+      "IFGRA2":  ifgra2,
+      "ORDEN2":  orden2,
+      "MOTIVO2": motivo2,
+    };
+    const templatePath = resolveTemplatePath("dispRectificacion.docx");
+    if (!fs.existsSync(templatePath)) return res.status(500).send("<p>Plantilla dispRectificacion.docx no encontrada</p>");
+    const tpl = fs.readFileSync(templatePath);
+    const docxBuffer = await fillDocxTemplate(tpl, replacements);
+    const mammoth = await import("mammoth");
+    const result  = await mammoth.convertToHtml({ buffer: docxBuffer });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{font-family:Georgia,serif;padding:40px 56px;color:#111;font-size:13px;line-height:1.8;max-width:800px;margin:0 auto}
+p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
+  });
+
+  router.post("/disp-rectificacion", async (req: Request, res: Response) => {
+    const { expNro = "", tramite = "", agentes = "", ifgra1 = "", orden1 = "", motivo1 = "", ifgra2 = "", orden2 = "", motivo2 = "" } = req.body ?? {};
+    const replacements: Record<string, string> = {
+      "EXPNRO":  expNro,
+      "TRAMITE": tramite,
+      "AGENTES": agentes,
+      "IFGRA1":  ifgra1,
+      "ORDEN1":  orden1,
+      "MOTIVO1": motivo1,
+      "IFGRA2":  ifgra2,
+      "ORDEN2":  orden2,
+      "MOTIVO2": motivo2,
+    };
+    const templatePath = resolveTemplatePath("dispRectificacion.docx");
+    if (!fs.existsSync(templatePath)) return res.status(500).json({ ok: false, error: "Plantilla dispRectificacion.docx no encontrada" });
+    const tpl = fs.readFileSync(templatePath);
+    const out = await fillDocxTemplate(tpl, replacements);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="disp_rectificacion.docx"`);
     res.setHeader("Content-Length", String(out.length));
     return res.status(200).send(out);
   });

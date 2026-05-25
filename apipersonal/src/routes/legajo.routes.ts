@@ -83,7 +83,8 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
                   rep.reparticion_nombre AS reparticion_nombre
            FROM agentes a
            LEFT JOIN funciones        f   ON f.id    = a.funcion_id
-           LEFT JOIN servicios        se  ON se.id   = a.servicio_id
+           LEFT JOIN agentes_servicios ags_leg ON ags_leg.id = (SELECT id FROM agentes_servicios WHERE dni = a.dni AND deleted_at IS NULL AND fecha_hasta IS NULL ORDER BY id DESC LIMIT 1)
+           LEFT JOIN servicios        se  ON se.id   = ags_leg.servicio_id
            LEFT JOIN categorias       cat ON cat.ID  = a.categoria_id
            LEFT JOIN plantas          pla ON pla.id  = a.planta_id
            LEFT JOIN regimenes_horarios rh ON rh.id  = a.regimen_horario_id

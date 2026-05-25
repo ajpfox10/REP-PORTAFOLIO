@@ -79,8 +79,10 @@ function StepFormulario({
   return (
     <form className="sa-form" onSubmit={submit} noValidate>
       <div className="sa-field">
-        <label className="sa-label required">Nombre y apellido</label>
+        <label className="sa-label required" htmlFor="sa-nombre">Nombre y apellido</label>
         <input
+          id="sa-nombre"
+          name="nombre"
           className="sa-input"
           value={form.nombre}
           onChange={e => set('nombre', e.target.value)}
@@ -91,8 +93,10 @@ function StepFormulario({
       </div>
 
       <div className="sa-field">
-        <label className="sa-label required">Email institucional</label>
+        <label className="sa-label required" htmlFor="sa-email">Email institucional</label>
         <input
+          id="sa-email"
+          name="email"
           className="sa-input"
           type="email"
           value={form.email}
@@ -106,8 +110,10 @@ function StepFormulario({
       </div>
 
       <div className="sa-field">
-        <label className="sa-label">Cargo / Dependencia</label>
+        <label className="sa-label" htmlFor="sa-cargo">Cargo / Dependencia</label>
         <input
+          id="sa-cargo"
+          name="cargo"
           className="sa-input"
           value={form.cargo}
           onChange={e => set('cargo', e.target.value)}
@@ -117,8 +123,10 @@ function StepFormulario({
       </div>
 
       <div className="sa-field">
-        <label className="sa-label">Motivo de la solicitud</label>
+        <label className="sa-label" htmlFor="sa-motivo">Motivo de la solicitud</label>
         <textarea
+          id="sa-motivo"
+          name="motivo"
           className="sa-textarea"
           value={form.motivo}
           onChange={e => set('motivo', e.target.value)}
@@ -209,8 +217,10 @@ function StepConfirmarCodigo({
       </div>
 
       <div className="sa-field">
-        <label className="sa-label required">Código de confirmación (6 dígitos)</label>
+        <label className="sa-label required" htmlFor="sa-codigo">Código de confirmación (6 dígitos)</label>
         <input
+          id="sa-codigo"
+          name="codigo"
           className="sa-input sa-input-code"
           value={codigo}
           onChange={e => setCodigo(e.target.value.replace(/\D/g, '').substring(0, 6))}

@@ -15,6 +15,9 @@ export function DocumentSearchBar({ q, loading, totalResults, onSearchChange, on
       <div className="row docs-search-row">
         <div className="row docs-search-controls">
           <input
+            id="docs-search-input"
+            name="q"
+            aria-label="Buscar documentos por nombre, número, tipo o descripción"
             className="input docs-search-input"
             value={q}
             onChange={onSearchChange}

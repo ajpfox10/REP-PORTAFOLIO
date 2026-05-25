@@ -42,7 +42,10 @@ function diasHastaFPP(fpp: string): number {
 
 function fmt(d?: string | null): string {
   if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('es-AR'); } catch { return String(d); }
+  try {
+    const [y, m, day] = d.slice(0, 10).split('-').map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString('es-AR');
+  } catch { return String(d); }
 }
 
 // amarillo si quedan ≤50 días y no fue avisada
@@ -415,9 +418,9 @@ export function EmbarazadasPage() {
         <div className="h2" style={{ marginBottom: 10 }}>Buscar agente</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <label style={lbl}>DNI</label>
+            <label htmlFor="emb-search-dni" style={lbl}>DNI</label>
             <div className="row" style={{ gap: 6 }}>
-              <input className="input" style={{ flex: 1 }} value={search.dni}
+              <input id="emb-search-dni" name="dni" className="input" style={{ flex: 1 }} value={search.dni}
                 onChange={e => search.setDni(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search.onSearch()}
                 placeholder="Enter para buscar" disabled={search.loading} />
@@ -427,9 +430,9 @@ export function EmbarazadasPage() {
             </div>
           </div>
           <div>
-            <label style={lbl}>Apellido / Nombre</label>
+            <label htmlFor="emb-search-nombre" style={lbl}>Apellido / Nombre</label>
             <div className="row" style={{ gap: 6 }}>
-              <input className="input" style={{ flex: 1 }} value={search.fullName}
+              <input id="emb-search-nombre" name="fullName" className="input" style={{ flex: 1 }} value={search.fullName}
                 onChange={e => search.setFullName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search.onSearchByName()}
                 placeholder="Apellido Nombre (Enter)" disabled={search.loading} />
@@ -489,26 +492,26 @@ export function EmbarazadasPage() {
           <form onSubmit={handleSave}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div style={fg}>
-                <label style={lbl}>Fecha probable de parto</label>
-                <input className="input" type="date" value={fpp}
+                <label htmlFor="emb-fpp" style={lbl}>Fecha probable de parto</label>
+                <input id="emb-fpp" name="fpp" className="input" type="date" value={fpp}
                   onChange={e => setFpp(e.target.value)} />
               </div>
               <div style={fg}>
-                <label style={lbl}>Estado</label>
+                <div style={lbl}>Estado</div>
                 <div className="row" style={{ gap: 10, marginTop: 4 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.88rem' }}>
-                    <input type="radio" checked={esEmbarazada} onChange={() => setEsEmbarazada(true)} />
+                    <input type="radio" name="estadoEmbarazo" checked={esEmbarazada} onChange={() => setEsEmbarazada(true)} />
                     🤰 Embarazada
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.88rem' }}>
-                    <input type="radio" checked={!esEmbarazada} onChange={() => setEsEmbarazada(false)} />
+                    <input type="radio" name="estadoEmbarazo" checked={!esEmbarazada} onChange={() => setEsEmbarazada(false)} />
                     No embarazada
                   </label>
                 </div>
               </div>
               <div style={fg}>
-                <label style={lbl}>Observaciones</label>
-                <input className="input" type="text" placeholder="Observaciones opcionales"
+                <label htmlFor="emb-obs" style={lbl}>Observaciones</label>
+                <input id="emb-obs" name="observaciones" className="input" type="text" placeholder="Observaciones opcionales"
                   value={observaciones} onChange={e => setObservaciones(e.target.value)} />
               </div>
             </div>

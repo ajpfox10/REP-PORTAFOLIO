@@ -362,6 +362,7 @@ export function HerramientasPage() {
           <div style={S.h3}>1. Buscar Agente</div>
           <div style={{ position: 'relative' }}>
             <input
+              aria-label="Buscar agente por apellido, nombre o DNI"
               style={S.input}
               placeholder="Apellido, nombre o DNI..."
               value={busqueda}
@@ -429,8 +430,8 @@ export function HerramientasPage() {
                 {/* Col izquierda */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div>
-                    <label style={S.label}>Situación de revista actual</label>
-                    <select style={S.select} value={situacion} onChange={e => setSituacion(e.target.value)}>
+                    <label htmlFor="ht-situacion" style={S.label}>Situación de revista actual</label>
+                    <select id="ht-situacion" name="situacion" style={S.select} value={situacion} onChange={e => setSituacion(e.target.value)}>
                       {SITUACIONES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                   </div>
@@ -466,7 +467,7 @@ export function HerramientasPage() {
                 {/* Col derecha: insalubre */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div>
-                    <label style={S.label}>Tareas insalubres / agotamiento prematuro</label>
+                    <div style={S.label}>Tareas insalubres / agotamiento prematuro</div>
                     {agente.ocupacion_nombre && (
                       <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: 6 }}>
                         Ocupación registrada: <strong style={{ color: '#e2e8f0' }}>{agente.ocupacion_nombre}</strong>
@@ -524,22 +525,22 @@ export function HerramientasPage() {
               <div style={S.h3}>3. Servicios en ANSES (Nación)</div>
               <div style={S.grid4}>
                 <div>
-                  <label style={S.label}>Años</label>
-                  <input type="number" min={0} max={60} style={S.input} value={ansesAnios}
+                  <label htmlFor="ht-anses-anios" style={S.label}>Años</label>
+                  <input id="ht-anses-anios" name="ansesAnios" type="number" min={0} max={60} style={S.input} value={ansesAnios}
                     onChange={e => setAnsesAnios(Math.max(0, parseInt(e.target.value) || 0))} />
                 </div>
                 <div>
-                  <label style={S.label}>Meses</label>
-                  <input type="number" min={0} max={11} style={S.input} value={ansesMeses}
+                  <label htmlFor="ht-anses-meses" style={S.label}>Meses</label>
+                  <input id="ht-anses-meses" name="ansesMeses" type="number" min={0} max={11} style={S.input} value={ansesMeses}
                     onChange={e => setAnsesMeses(Math.min(11, Math.max(0, parseInt(e.target.value) || 0)))} />
                 </div>
                 <div>
-                  <label style={S.label}>Días</label>
-                  <input type="number" min={0} max={30} style={S.input} value={ansesDias}
+                  <label htmlFor="ht-anses-dias" style={S.label}>Días</label>
+                  <input id="ht-anses-dias" name="ansesDias" type="number" min={0} max={30} style={S.input} value={ansesDias}
                     onChange={e => setAnsesDias(Math.min(30, Math.max(0, parseInt(e.target.value) || 0)))} />
                 </div>
                 <div>
-                  <label style={S.label}>¿Insalubre?</label>
+                  <div style={S.label}>¿Insalubre?</div>
                   <label style={{ ...S.chkRow, marginTop: 10 }}>
                     <input type="checkbox" checked={ansesInsalubre} onChange={e => setAnsesInsalubre(e.target.checked)} style={S.chk} />
                     <span style={{ fontSize: '0.82rem' }}>Sí</span>
@@ -571,27 +572,27 @@ export function HerramientasPage() {
               {externos.map((ext, i) => (
                 <div key={i} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 12, marginBottom: 8, display: 'grid', gridTemplateColumns: '2fr 80px 80px 80px 100px 40px', gap: 8, alignItems: 'end' }}>
                   <div>
-                    <label style={S.label}>Organismo / Ministerio</label>
-                    <input style={S.input} placeholder="Nombre del organismo" value={ext.organismo}
+                    <label htmlFor={`ht-ext-${i}-org`} style={S.label}>Organismo / Ministerio</label>
+                    <input id={`ht-ext-${i}-org`} name={`ext_${i}_organismo`} style={S.input} placeholder="Nombre del organismo" value={ext.organismo}
                       onChange={e => updateExterno(i, 'organismo', e.target.value)} />
                   </div>
                   <div>
-                    <label style={S.label}>Años</label>
-                    <input type="number" min={0} max={60} style={S.input} value={ext.anios}
+                    <label htmlFor={`ht-ext-${i}-anios`} style={S.label}>Años</label>
+                    <input id={`ht-ext-${i}-anios`} name={`ext_${i}_anios`} type="number" min={0} max={60} style={S.input} value={ext.anios}
                       onChange={e => updateExterno(i, 'anios', Math.max(0, parseInt(e.target.value) || 0))} />
                   </div>
                   <div>
-                    <label style={S.label}>Meses</label>
-                    <input type="number" min={0} max={11} style={S.input} value={ext.meses}
+                    <label htmlFor={`ht-ext-${i}-meses`} style={S.label}>Meses</label>
+                    <input id={`ht-ext-${i}-meses`} name={`ext_${i}_meses`} type="number" min={0} max={11} style={S.input} value={ext.meses}
                       onChange={e => updateExterno(i, 'meses', Math.min(11, Math.max(0, parseInt(e.target.value) || 0)))} />
                   </div>
                   <div>
-                    <label style={S.label}>Días</label>
-                    <input type="number" min={0} max={30} style={S.input} value={ext.dias}
+                    <label htmlFor={`ht-ext-${i}-dias`} style={S.label}>Días</label>
+                    <input id={`ht-ext-${i}-dias`} name={`ext_${i}_dias`} type="number" min={0} max={30} style={S.input} value={ext.dias}
                       onChange={e => updateExterno(i, 'dias', Math.min(30, Math.max(0, parseInt(e.target.value) || 0)))} />
                   </div>
                   <div>
-                    <label style={S.label}>¿Insalubre?</label>
+                    <div style={S.label}>¿Insalubre?</div>
                     <label style={{ ...S.chkRow, marginTop: 8 }}>
                       <input type="checkbox" checked={ext.es_insalubre}
                         onChange={e => updateExterno(i, 'es_insalubre', e.target.checked)} style={S.chk} />
@@ -814,8 +815,10 @@ export function HerramientasPage() {
 
                   {/* Observaciones + acciones */}
                   <div style={S.card}>
-                    <div style={S.h3}>Observaciones</div>
+                    <label htmlFor="ht-obs" style={S.h3}>Observaciones</label>
                     <textarea
+                      id="ht-obs"
+                      name="observaciones"
                       style={{ ...S.input, minHeight: 80, resize: 'vertical' as const }}
                       placeholder="Notas adicionales (opcional)..."
                       value={observaciones}

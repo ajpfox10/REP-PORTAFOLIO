@@ -125,47 +125,47 @@ function EditModal({ row, leyes, sexos, servicios, onClose, onSaved }: EditModal
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <div style={lbl}>Sexo</div>
-            <select className="input" style={fld} value={form.sexo_id} onChange={e => set('sexo_id', e.target.value)}>
+            <label htmlFor="bg-sexo" style={lbl}>Sexo</label>
+            <select id="bg-sexo" name="sexo_id" className="input" style={fld} value={form.sexo_id} onChange={e => set('sexo_id', e.target.value)}>
               <option value="">— sin dato —</option>
               {sexos.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
             </select>
           </div>
 
           <div>
-            <div style={lbl}>Ley</div>
-            <select className="input" style={fld} value={form.ley_id} onChange={e => set('ley_id', e.target.value)}>
+            <label htmlFor="bg-ley" style={lbl}>Ley</label>
+            <select id="bg-ley" name="ley_id" className="input" style={fld} value={form.ley_id} onChange={e => set('ley_id', e.target.value)}>
               <option value="">— sin dato —</option>
               {leyes.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
             </select>
           </div>
 
           <div style={{ gridColumn: '1 / -1' }}>
-            <div style={lbl}>Servicio</div>
-            <select className="input" style={fld} value={form.servicio_id} onChange={e => set('servicio_id', e.target.value)}>
+            <label htmlFor="bg-servicio" style={lbl}>Servicio</label>
+            <select id="bg-servicio" name="servicio_id" className="input" style={fld} value={form.servicio_id} onChange={e => set('servicio_id', e.target.value)}>
               <option value="">— sin dato —</option>
               {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
             </select>
           </div>
 
           <div>
-            <div style={lbl}>Fecha de Egreso</div>
-            <input type="date" className="input" style={fld} value={form.fecha_egreso} onChange={e => set('fecha_egreso', e.target.value)} />
+            <label htmlFor="bg-fecha-egreso" style={lbl}>Fecha de Egreso</label>
+            <input id="bg-fecha-egreso" name="fecha_egreso" type="date" className="input" style={fld} value={form.fecha_egreso} onChange={e => set('fecha_egreso', e.target.value)} />
           </div>
 
           <div>
-            <div style={lbl}>Fecha de Nacimiento</div>
-            <input type="date" className="input" style={fld} value={form.fecha_nacimiento} onChange={e => set('fecha_nacimiento', e.target.value)} />
+            <label htmlFor="bg-fecha-nac" style={lbl}>Fecha de Nacimiento</label>
+            <input id="bg-fecha-nac" name="fecha_nacimiento" type="date" className="input" style={fld} value={form.fecha_nacimiento} onChange={e => set('fecha_nacimiento', e.target.value)} />
           </div>
 
           <div style={{ gridColumn: '1 / -1' }}>
-            <div style={lbl}>CUIL</div>
-            <input type="text" className="input" style={fld} value={form.cuil} placeholder="20-12345678-9" onChange={e => set('cuil', e.target.value)} />
+            <label htmlFor="bg-cuil" style={lbl}>CUIL</label>
+            <input id="bg-cuil" name="cuil" type="text" className="input" style={fld} value={form.cuil} placeholder="20-12345678-9" onChange={e => set('cuil', e.target.value)} />
           </div>
 
           <div style={{ gridColumn: '1 / -1' }}>
-            <div style={lbl}>Estado de Empleo</div>
-            <select className="input" style={fld} value={form.estado_empleo} onChange={e => set('estado_empleo', e.target.value)}>
+            <label htmlFor="bg-estado" style={lbl}>Estado de Empleo</label>
+            <select id="bg-estado" name="estado_empleo" className="input" style={fld} value={form.estado_empleo} onChange={e => set('estado_empleo', e.target.value)}>
               <option value="">— sin cambiar —</option>
               <option value="BAJA">BAJA</option>
               <option value="TRAMITE">TRAMITE</option>
@@ -437,25 +437,26 @@ export function BajasGestionPage() {
               {/* filtros */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                 <input
+                  aria-label="Buscar por apellido, nombre o DNI"
                   className="input"
                   style={{ fontSize: '0.82rem', padding: '6px 10px', minWidth: 200, flex: 1 }}
                   placeholder="Buscar por apellido / nombre / DNI…"
                   value={q}
                   onChange={e => setQ(e.target.value)}
                 />
-                <select style={sel} value={filterSexo} onChange={e => setFilterSexo(e.target.value)}>
+                <select aria-label="Filtrar por sexo" style={sel} value={filterSexo} onChange={e => setFilterSexo(e.target.value)}>
                   <option value="">Sexo: todos</option>
                   {sexos.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
                 </select>
-                <select style={sel} value={filterLey} onChange={e => setFilterLey(e.target.value)}>
+                <select aria-label="Filtrar por ley" style={sel} value={filterLey} onChange={e => setFilterLey(e.target.value)}>
                   <option value="">Ley: todas</option>
                   {leyes.map(l => <option key={l.nombre} value={l.nombre}>{l.nombre}</option>)}
                 </select>
-                <select style={sel} value={filterServicio} onChange={e => setFilterServicio(e.target.value)}>
+                <select aria-label="Filtrar por servicio" style={sel} value={filterServicio} onChange={e => setFilterServicio(e.target.value)}>
                   <option value="">Servicio: todos</option>
                   {servicios.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>)}
                 </select>
-                <select style={sel} value={filterMissing} onChange={e => setFilterMissing(e.target.value)}>
+                <select aria-label="Filtrar por datos incompletos" style={sel} value={filterMissing} onChange={e => setFilterMissing(e.target.value)}>
                   <option value="">Datos incompletos: todos</option>
                   {['Sexo','Ley','Servicio','F.Egreso','F.Nacimiento','CUIL'].map(f => (
                     <option key={f} value={f}>Sin {f}</option>

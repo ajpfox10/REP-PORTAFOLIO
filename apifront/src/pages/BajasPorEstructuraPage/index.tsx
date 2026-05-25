@@ -95,15 +95,15 @@ export function BajasPorEstructuraPage() {
 
       {/* Filtros */}
       <div className="card" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-        <input className="input" placeholder="Buscar apellido, nombre o DNI…"
+        <input aria-label="Buscar apellido, nombre o DNI" className="input" placeholder="Buscar apellido, nombre o DNI…"
           value={busqueda} onChange={e => setBusqueda(e.target.value)} style={{ width: 240 }} />
 
-        <select className="input" value={filtroAnio} onChange={e => setFiltroAnio(e.target.value)} style={{ width: 110 }}>
+        <select aria-label="Filtrar por año" className="input" value={filtroAnio} onChange={e => setFiltroAnio(e.target.value)} style={{ width: 110 }}>
           <option value="">Todos los años</option>
           {anios.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
 
-        <select className="input" value={filtroServ} onChange={e => setFiltroServ(e.target.value)} style={{ width: 220 }}>
+        <select aria-label="Filtrar por servicio" className="input" value={filtroServ} onChange={e => setFiltroServ(e.target.value)} style={{ width: 220 }}>
           <option value="">Todos los servicios</option>
           {serviciosUnicos.map(s => <option key={s} value={s}>{s}</option>)}
         </select>

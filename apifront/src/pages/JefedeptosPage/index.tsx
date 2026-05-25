@@ -11,6 +11,7 @@ import { searchPersonal } from '../../api/searchPersonal';
 interface Jefatura {
   id: number;
   sector: string;
+  servicio_nombre: string | null;
   jefe: string | null;
 }
 
@@ -142,7 +143,7 @@ export function JefedeptosAlertaBanner() {
         ]);
 
         const jefMap = new Map<number, string>();
-        (jefaturasRes?.data || jefaturasRes || []).forEach((j: Jefatura) => jefMap.set(j.id, j.sector));
+        (jefaturasRes?.data || jefaturasRes || []).forEach((j: Jefatura) => jefMap.set(j.id, j.servicio_nombre || j.sector));
 
         const enriched = enAl.map((r, i) => {
           const p = personalRes[i];
@@ -269,7 +270,7 @@ export function JefedeptosPage() {
 
       const jefs: Jefatura[] = rJef?.data || rJef || [];
       setJefaturas(jefs);
-      const jefMap = new Map(jefs.map(j => [j.id, j.sector]));
+      const jefMap = new Map(jefs.map(j => [j.id, j.servicio_nombre || j.sector]));
 
       const hist: Jefedepto[] = rHist?.data || rHist || [];
 
@@ -326,6 +327,12 @@ export function JefedeptosPage() {
         updated_by: auditInfo.id,
       };
       await apiFetch('/jefedeptos', { method: 'POST', body: JSON.stringify(body) });
+      // Actualizar jefaturas.jefe con el nombre del agente asignado
+      const nombreJefe = `${search.row.apellido || ''}, ${search.row.nombre || ''}`.trim().replace(/^,\s*/, '');
+      await apiFetch(`/jefaturas/${jefaturaId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ jefe: nombreJefe }),
+      }).catch(() => {});
       toast.ok('Guardado', 'Registro de jefatura guardado.');
       search.clear();
       setJefaturaId(''); setNroActo(''); setFechaDesde(''); setFechaHasta('');
@@ -428,9 +435,9 @@ export function JefedeptosPage() {
         <div className="h2" style={{ marginBottom: 10 }}>Buscar agente</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <label style={lbl}>DNI</label>
+            <label htmlFor="jd-search-dni" style={lbl}>DNI</label>
             <div className="row" style={{ gap: 6 }}>
-              <input className="input" style={{ flex: 1 }} value={search.dni}
+              <input id="jd-search-dni" name="dni" className="input" style={{ flex: 1 }} value={search.dni}
                 onChange={e => search.setDni(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search.onSearch()}
                 placeholder="Enter para buscar" disabled={search.loading} />
@@ -440,9 +447,9 @@ export function JefedeptosPage() {
             </div>
           </div>
           <div>
-            <label style={lbl}>Apellido / Nombre</label>
+            <label htmlFor="jd-search-nombre" style={lbl}>Apellido / Nombre</label>
             <div className="row" style={{ gap: 6 }}>
-              <input className="input" style={{ flex: 1 }} value={search.fullName}
+              <input id="jd-search-nombre" name="fullName" className="input" style={{ flex: 1 }} value={search.fullName}
                 onChange={e => search.setFullName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search.onSearchByName()}
                 placeholder="Apellido Nombre (Enter)" disabled={search.loading} />
@@ -487,33 +494,33 @@ export function JefedeptosPage() {
           <form onSubmit={handleSave}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
               <div style={fg}>
-                <label style={lbl}>Jefatura *</label>
-                <select className="input" value={jefaturaId} onChange={e => setJefaturaId(e.target.value)} required>
+                <label htmlFor="jd-jefatura" style={lbl}>Jefatura *</label>
+                <select id="jd-jefatura" name="jefaturaId" className="input" value={jefaturaId} onChange={e => setJefaturaId(e.target.value)} required>
                   <option value="">— Seleccionar —</option>
                   {jefaturas.map(j => (
-                    <option key={j.id} value={j.id}>{j.sector}</option>
+                    <option key={j.id} value={j.id}>{j.servicio_nombre || j.sector}</option>
                   ))}
                 </select>
               </div>
               <div style={fg}>
-                <label style={lbl}>Tipo de función *</label>
+                <div style={lbl}>Tipo de función *</div>
                 <div className="row" style={{ gap: 16, marginTop: 4 }}>
                   {(['INTERINO', 'POR CONCURSO'] as const).map(t => (
                     <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.88rem' }}>
-                      <input type="radio" checked={tipoFuncion === t} onChange={() => setTipoFuncion(t)} />
+                      <input type="radio" name="tipoFuncion" checked={tipoFuncion === t} onChange={() => setTipoFuncion(t)} />
                       {t}
                     </label>
                   ))}
                 </div>
               </div>
               <div style={fg}>
-                <label style={lbl}>Nro. Acto Administrativo *</label>
-                <input className="input" type="text" placeholder="Ej: RESO-2025-1234-GDEBA-MSALGP"
+                <label htmlFor="jd-nro-acto" style={lbl}>Nro. Acto Administrativo *</label>
+                <input id="jd-nro-acto" name="nroActo" className="input" type="text" placeholder="Ej: RESO-2025-1234-GDEBA-MSALGP"
                   value={nroActo} onChange={e => setNroActo(e.target.value)} />
               </div>
               <div style={fg}>
-                <label style={lbl}>Fecha desde *</label>
-                <input className="input" type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+                <label htmlFor="jd-fecha-desde" style={lbl}>Fecha desde *</label>
+                <input id="jd-fecha-desde" name="fechaDesde" className="input" type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
               </div>
             </div>
 
@@ -529,7 +536,7 @@ export function JefedeptosPage() {
 
             {jefaturaSeleccionada && (
               <div style={{ marginBottom: 12, padding: '6px 10px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, fontSize: '0.82rem', color: '#818cf8' }}>
-                Jefatura seleccionada: <strong>{jefaturaSeleccionada.sector}</strong>
+                Jefatura seleccionada: <strong>{jefaturaSeleccionada.servicio_nombre || jefaturaSeleccionada.sector}</strong>
               </div>
             )}
 

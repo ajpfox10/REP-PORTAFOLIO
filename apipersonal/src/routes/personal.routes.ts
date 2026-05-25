@@ -50,7 +50,7 @@ const patchPersonalSchema = z.object({
   cuil:                   z.string().max(15).optional().nullable(),
   fecha_nacimiento:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   sexo_id:                z.number().int().positive().optional().nullable(),
-  email:                  z.string().email().optional().nullable().or(z.literal('')),
+  email:                  z.string().max(200).trim().optional().nullable().or(z.literal('')),
   telefono:               z.string().max(50).optional().nullable(),
   domicilio:              z.string().max(200).optional().nullable(),
   numerodomicilio:        z.number().int().optional().nullable(),
@@ -69,12 +69,14 @@ const patchPersonalSchema = z.object({
   funcion_id:             z.number().int().positive().optional().nullable(),
   ocupacion_id:           z.number().int().positive().optional().nullable(),
   regimen_horario_id:     z.number().int().positive().optional().nullable(),
-  sector_id:              z.number().int().positive().optional().nullable(),
   dependencia_id:         z.number().int().positive().optional().nullable(),
+  reparticion_id:         z.number().int().positive().optional().nullable(),
   fecha_ingreso:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   fecha_egreso:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  fecha_baja:             z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   legajo:                 z.number().int().optional().nullable(),
   salario_mensual:        z.number().optional().nullable(),
+  decreto_designacion:    z.string().max(100).optional().nullable(),
 }).strict();
 
 export function buildPersonalRouter(sequelize: Sequelize) {
@@ -127,7 +129,13 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       }
 
       if (sectorId) {
-        whereParts.push('a.sector_id = :sectorId');
+        whereParts.push(`EXISTS (
+          SELECT 1 FROM agentes_sectores asec_flt
+          WHERE asec_flt.dni = p.dni
+            AND asec_flt.sector_id = :sectorId
+            AND asec_flt.fecha_hasta IS NULL
+            AND asec_flt.deleted_at IS NULL
+        )`);
         repl.sectorId = sectorId;
       }
 
@@ -256,8 +264,8 @@ export function buildPersonalRouter(sequelize: Sequelize) {
               a.fecha_egreso,
               a.legajo,
               a.ley_id,        l.nombre   AS ley_nombre,
-              a.servicio_id,   srv.nombre AS servicio_nombre,
-              a.sector_id,     sec.nombre AS sector_nombre,
+              (SELECT srv.nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_nombre,
+              (SELECT sec.nombre FROM agentes_sectores asec JOIN sectores sec ON sec.id = asec.sector_id WHERE asec.dni = p.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL ORDER BY asec.id DESC LIMIT 1) AS sector_nombre,
               a.planta_id,     pl.nombre  AS planta_nombre,
               a.categoria_id,  cat.nombre AS categoria_nombre,
               a.funcion_id,    fn.nombre  AS funcion_nombre,
@@ -266,8 +274,6 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             JOIN    agentes    a   ON a.dni  = p.dni
             LEFT JOIN sexos    sx  ON sx.id  = p.sexo_id
             LEFT JOIN ley      l   ON l.id   = a.ley_id
-            LEFT JOIN servicios srv ON srv.id = a.servicio_id
-            LEFT JOIN sectores  sec ON sec.id = a.sector_id
             LEFT JOIN plantas   pl  ON pl.id  = a.planta_id
             LEFT JOIN categorias cat ON cat.ID = a.categoria_id
             LEFT JOIN funciones  fn  ON fn.id  = a.funcion_id
@@ -281,7 +287,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
               COUNT(*)                                                              AS total,
               SUM(CASE WHEN p.sexo_id       IS NULL THEN 1 ELSE 0 END)            AS sin_sexo,
               SUM(CASE WHEN a.ley_id        IS NULL THEN 1 ELSE 0 END)            AS sin_ley,
-              SUM(CASE WHEN a.servicio_id   IS NULL THEN 1 ELSE 0 END)            AS sin_servicio,
+              SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM agentes_servicios ags WHERE ags.dni = a.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL) THEN 1 ELSE 0 END) AS sin_servicio,
               SUM(CASE WHEN a.fecha_egreso  IS NULL THEN 1 ELSE 0 END)            AS sin_fecha_egreso,
               SUM(CASE WHEN p.fecha_nacimiento IS NULL THEN 1 ELSE 0 END)         AS sin_fecha_nacimiento,
               SUM(CASE WHEN p.cuil          IS NULL OR p.cuil = '' THEN 1 ELSE 0 END) AS sin_cuil
@@ -335,22 +341,30 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             oc.id  AS ocupacion_id, oc.nombre AS ocupacion_nombre,
             rh.id  AS regimen_horario_id, rh.nombre AS regimen_horario_nombre,
             dep.id AS dependencia_id, dep.nombre AS dependencia_nombre,
+            rep.id AS reparticion_id,  rep.reparticion_nombre,
 
-            a.id           AS agente_id,
-            a.fecha_ingreso AS fecha_ingreso_laboral,
+            (SELECT ags.servicio_id FROM agentes_servicios ags WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_id,
+            (SELECT srv.nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_nombre,
+            (SELECT asec.sector_id FROM agentes_sectores asec WHERE asec.dni = p.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL ORDER BY asec.id DESC LIMIT 1) AS sector_id,
+            (SELECT sec.nombre FROM agentes_sectores asec JOIN sectores sec ON sec.id = asec.sector_id WHERE asec.dni = p.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL ORDER BY asec.id DESC LIMIT 1) AS sector_nombre,
+
+            a.id             AS agente_id,
+            a.fecha_ingreso  AS fecha_ingreso_laboral,
             a.fecha_egreso,
-            a.estado       AS estado_laboral
+            a.salario_mensual,
+            a.estado         AS estado_laboral
 
           FROM personal p
-          LEFT JOIN agentes a         ON a.dni = p.dni       AND a.deleted_at IS NULL
-          LEFT JOIN sexos s           ON s.id  = p.sexo_id
-          LEFT JOIN ley l             ON l.id  = a.ley_id
-          LEFT JOIN plantas pl        ON pl.id = a.planta_id
-          LEFT JOIN categorias cat    ON cat.ID = a.categoria_id
-          LEFT JOIN funciones fn      ON fn.id = a.funcion_id AND fn.deleted_at IS NULL
-          LEFT JOIN ocupaciones oc    ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
-          LEFT JOIN regimenes_horarios rh ON rh.id = a.regimen_horario_id AND rh.deleted_at IS NULL
-          LEFT JOIN dependencias dep  ON dep.id = a.dependencia_id
+          LEFT JOIN agentes a               ON a.dni  = p.dni            AND a.deleted_at IS NULL
+          LEFT JOIN sexos s                 ON s.id   = p.sexo_id
+          LEFT JOIN ley l                   ON l.id   = a.ley_id
+          LEFT JOIN plantas pl              ON pl.id  = a.planta_id
+          LEFT JOIN categorias cat          ON cat.ID = a.categoria_id
+          LEFT JOIN funciones fn            ON fn.id  = a.funcion_id     AND fn.deleted_at IS NULL
+          LEFT JOIN ocupaciones oc          ON oc.id  = a.ocupacion_id   AND oc.deleted_at IS NULL
+          LEFT JOIN regimenes_horarios rh   ON rh.id  = a.regimen_horario_id AND rh.deleted_at IS NULL
+          LEFT JOIN dependencias dep        ON dep.id = a.dependencia_id
+          LEFT JOIN reparticiones rep       ON rep.id = a.reparticion_id
           WHERE p.dni = :dni AND p.deleted_at IS NULL
           LIMIT 1
         `, { replacements: { dni }, type: QueryTypes.SELECT });
@@ -431,16 +445,20 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       ];
       const AGENTE_COLS = [
         'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
-        'regimen_horario_id','sector_id','dependencia_id',
-        'fecha_ingreso','fecha_egreso','legajo','salario_mensual',
-        'estado_empleo',
+        'regimen_horario_id','dependencia_id','reparticion_id',
+        'fecha_ingreso','fecha_egreso',
+        'legajo','salario_mensual','estado_empleo',
+        'decreto_designacion',
       ];
 
       for (const [k, v] of Object.entries(data)) {
         if (PERSONAL_COLS.includes(k)) personalFields[k] = v;
         else if (AGENTE_COLS.includes(k)) agenteFields[k] = v;
+        // fecha_baja del form es la fecha_egreso en agentes (no existe columna fecha_baja)
+        else if (k === 'fecha_baja') agenteFields['fecha_egreso'] = v;
       }
 
+      let reactivando = false;
       const t = await sequelize.transaction();
       try {
         // Verificar que el agente existe en personal
@@ -462,11 +480,46 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         }
 
         if (Object.keys(agenteFields).length > 0) {
-          const setCols = Object.keys(agenteFields).map(k => `${k} = :${k}`).join(', ');
-          await sequelize.query(
-            `UPDATE agentes SET ${setCols} WHERE dni = :dni AND deleted_at IS NULL`,
-            { replacements: { ...agenteFields, dni }, transaction: t }
-          );
+          // Verificar estado actual del registro de agente activo
+          const agenteActual = await sequelize.query(
+            `SELECT id, estado_empleo FROM agentes
+             WHERE dni = :dni AND deleted_at IS NULL
+             ORDER BY id DESC LIMIT 1`,
+            { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
+          ) as any[];
+
+          const estadoActual = agenteActual[0]?.estado_empleo ?? null;
+          const esBaja = estadoActual === 'BAJA' || estadoActual === 'TRAMITE';
+          const nuevoEstado = agenteFields.estado_empleo;
+          reactivando = !!(esBaja && nuevoEstado && !['BAJA','TRAMITE'].includes(nuevoEstado));
+
+          if (reactivando) {
+            // Soft-delete el registro de baja — queda como historial
+            if (agenteActual[0]?.id) {
+              await sequelize.query(
+                `UPDATE agentes SET deleted_at = NOW() WHERE id = :id`,
+                { replacements: { id: agenteActual[0].id }, transaction: t }
+              );
+            }
+            // Nueva vinculación: excluir fecha_egreso (era la fecha de baja anterior)
+            const insertFields = { ...agenteFields };
+            delete insertFields['fecha_egreso'];
+            const newCols = Object.keys(insertFields).join(', ');
+            const newVals = Object.keys(insertFields).map(k => `:${k}`).join(', ');
+            await sequelize.query(
+              `INSERT INTO agentes (dni, ${newCols}, created_at, updated_at)
+               VALUES (:dni, ${newVals}, NOW(), NOW())`,
+              { replacements: { ...insertFields, dni }, transaction: t }
+            );
+          } else {
+            // Agente activo o edición sin cambio de estado: actualizar registro existente
+            const setCols = Object.keys(agenteFields).map(k => `${k} = :${k}`).join(', ');
+            await sequelize.query(
+              `UPDATE agentes SET ${setCols}, updated_at = NOW()
+               WHERE dni = :dni AND deleted_at IS NULL`,
+              { replacements: { ...agenteFields, dni }, transaction: t }
+            );
+          }
         }
 
         await t.commit();
@@ -476,18 +529,42 @@ export function buildPersonalRouter(sequelize: Sequelize) {
 
         // Audit
         (res.locals as any).audit = {
-          action: 'personal_update',
+          action: reactivando ? 'personal_reactivacion' : 'personal_update',
           table_name: 'personal',
           record_pk: dni,
           request_json: data,
         };
 
-        trackAction('personal_update', { dni, fields: Object.keys(data) }, { id: (req as any).auth?.principalId ?? undefined });
+        trackAction('personal_update', { dni, fields: Object.keys(data), reactivado: reactivando }, { id: (req as any).auth?.principalId ?? undefined });
 
-        return res.json({ ok: true, message: `Agente DNI ${dni} actualizado` });
+        return res.json({
+          ok: true,
+          reactivado: reactivando ?? false,
+          message: reactivando
+            ? `Agente DNI ${dni} reactivado — nueva vinculación laboral creada`
+            : `Agente DNI ${dni} actualizado`,
+        });
       } catch (err: any) {
         await t.rollback().catch(() => {});
-        logger.error({ msg: '[personal] patch error', dni, err: err?.message });
+        const dbError = {
+          name: err?.name,
+          message: err?.message,
+          code: err?.parent?.code ?? err?.original?.code,
+          errno: err?.parent?.errno ?? err?.original?.errno,
+          sqlState: err?.parent?.sqlState ?? err?.original?.sqlState,
+          sqlMessage: err?.parent?.sqlMessage ?? err?.original?.sqlMessage,
+          fields: err?.fields,
+          errors: Array.isArray(err?.errors)
+            ? err.errors.map((e: any) => ({ message: e?.message, path: e?.path, value: e?.value }))
+            : undefined,
+        };
+        logger.error({ msg: '[personal] patch error', dni, error: dbError });
+        if (dbError.code === 'ER_DUP_ENTRY' || err?.name === 'SequelizeUniqueConstraintError') {
+          return res.status(409).json({
+            ok: false,
+            error: 'Conflicto de datos: ya existe un registro con esos valores',
+          });
+        }
         return res.status(500).json({ ok: false, error: err?.message || 'Error al actualizar' });
       }
     }
@@ -538,6 +615,57 @@ export function buildPersonalRouter(sequelize: Sequelize) {
 
         const total = Number((countRows as any[])[0]?.total ?? 0);
         return res.json({ ok: true, data: rows, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+      } catch (err: any) {
+        return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+      }
+    }
+  );
+
+  // ── GET /personal/:dni/laboral — Historial de cargos, servicios y sectores ─
+  router.get(
+    '/:dni/laboral',
+    requireCrudFor('personal', 'read'),
+    async (req: Request, res: Response) => {
+      const dni = parseInt(req.params.dni, 10);
+      if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      try {
+        const [cargos, servicios, sectores] = await Promise.all([
+          sequelize.query(`
+            SELECT a.id, a.ocupacion_id, oc.nombre AS ocupacion_nombre,
+                   a.fecha_ingreso, a.fecha_egreso, a.estado_empleo,
+                   a.created_at, a.deleted_at
+            FROM agentes a
+            LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id
+            WHERE a.dni = :dni
+            ORDER BY a.id ASC
+          `, { replacements: { dni }, type: QueryTypes.SELECT }),
+
+          sequelize.query(`
+            SELECT ags.id, ags.fecha_desde, ags.fecha_hasta,
+                   ags.jefe_nombre, ags.motivo, ags.observaciones,
+                   srv.nombre AS servicio_nombre,
+                   sec.nombre AS sector_nombre
+            FROM agentes_servicios ags
+            LEFT JOIN servicios srv ON srv.id = ags.servicio_id
+            LEFT JOIN sectores  sec ON sec.id = ags.sector_id
+            WHERE ags.dni = :dni AND ags.deleted_at IS NULL
+            ORDER BY ags.fecha_desde ASC
+          `, { replacements: { dni }, type: QueryTypes.SELECT }),
+
+          sequelize.query(`
+            SELECT ags.id, ags.fecha_desde, ags.fecha_hasta,
+                   ags.jefe_nombre, ags.motivo, ags.observaciones,
+                   sec.nombre AS sector_nombre,
+                   srv.nombre AS servicio_nombre
+            FROM agentes_sectores ags
+            LEFT JOIN sectores  sec ON sec.id = ags.sector_id
+            LEFT JOIN servicios srv ON srv.id = ags.servicio_id
+            WHERE ags.dni = :dni AND ags.deleted_at IS NULL
+            ORDER BY ags.fecha_desde ASC
+          `, { replacements: { dni }, type: QueryTypes.SELECT }),
+        ]);
+
+        return res.json({ ok: true, data: { cargos, servicios, sectores } });
       } catch (err: any) {
         return res.status(500).json({ ok: false, error: err?.message || 'Error' });
       }

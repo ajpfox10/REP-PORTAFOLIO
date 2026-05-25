@@ -127,17 +127,17 @@ export async function altaAgente(
     let agenteId: number | null = null;
 
     const hasAgenteData = dto.ley_id || dto.planta_id || dto.categoria_id
-      || dto.sector_id || dto.dependencia_id;
+      || dto.dependencia_id;
 
     if (hasAgenteData) {
       const [aResult] = await sequelize.query(
         `INSERT INTO agentes
            (dni, ley_id, planta_id, categoria_id, funcion_id, ocupacion_id,
-            regimen_horario_id, jefatura_id, sector_id, dependencia_id,
+            regimen_horario_id, jefatura_id, dependencia_id,
             fecha_ingreso, fecha_egreso, estado, created_at, updated_at)
          VALUES
            (:dni, :ley_id, :planta_id, :categoria_id, :funcion_id, :ocupacion_id,
-            :regimen_horario_id, :jefatura_id, :sector_id, :dependencia_id,
+            :regimen_horario_id, :jefatura_id, :dependencia_id,
             :fecha_ingreso, :fecha_egreso, :estado, NOW(), NOW())`,
         {
           replacements: {
@@ -149,7 +149,6 @@ export async function altaAgente(
             ocupacion_id:      dto.ocupacion_id       ?? null,
             regimen_horario_id: dto.regimen_horario_id ?? null,
             jefatura_id:       dto.jefatura_id        ?? null,
-            sector_id:         dto.sector_id          ?? null,
             dependencia_id:    dto.dependencia_id     ?? null,
             fecha_ingreso:     dto.fecha_ingreso      ?? null,
             fecha_egreso:      dto.fecha_egreso       ?? null,
@@ -247,7 +246,7 @@ export async function editarAgente(
     // Campos de agentes
     const agenteFields: Record<string, any> = {};
     const aKeys = ['ley_id', 'planta_id', 'categoria_id', 'funcion_id', 'ocupacion_id',
-                   'regimen_horario_id', 'jefatura_id', 'sector_id', 'dependencia_id',
+                   'regimen_horario_id', 'jefatura_id', 'dependencia_id',
                    'fecha_ingreso', 'fecha_egreso', 'estado'] as const;
 
     for (const k of aKeys) {
