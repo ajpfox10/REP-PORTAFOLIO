@@ -2,12 +2,15 @@ import { z } from "zod";
 export declare const paginationSchema: z.ZodObject<{
     limit: z.ZodDefault<z.ZodNumber>;
     cursor: z.ZodDefault<z.ZodNumber>;
+    fast: z.ZodEffects<z.ZodOptional<z.ZodBoolean>, boolean | undefined, unknown>;
 }, "strip", z.ZodTypeAny, {
     limit: number;
     cursor: number;
+    fast?: boolean | undefined;
 }, {
     limit?: number | undefined;
     cursor?: number | undefined;
+    fast?: unknown;
 }>;
 export declare const createDeviceSchema: z.ZodObject<{
     name: z.ZodString;
@@ -56,22 +59,43 @@ export declare const createScanJobSchema: z.ZodObject<{
     priority: z.ZodDefault<z.ZodNumber>;
     source: z.ZodDefault<z.ZodEnum<["flatbed", "adf", "adf_duplex"]>>;
     duplex: z.ZodDefault<z.ZodBoolean>;
+    dpi: z.ZodOptional<z.ZodNumber>;
+    color: z.ZodOptional<z.ZodBoolean>;
+    auto_rotate: z.ZodDefault<z.ZodBoolean>;
+    blank_page_detection: z.ZodDefault<z.ZodBoolean>;
+    compression: z.ZodDefault<z.ZodEnum<["low", "medium", "high"]>>;
+    output_format: z.ZodDefault<z.ZodEnum<["pdf", "pdf_a", "tiff"]>>;
+    doc_class: z.ZodOptional<z.ZodString>;
     personal_dni: z.ZodOptional<z.ZodNumber>;
     personal_ref: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
+    auto_rotate: boolean;
+    blank_page_detection: boolean;
+    compression: "low" | "medium" | "high";
+    output_format: "pdf" | "pdf_a" | "tiff";
     device_id: number;
     priority: number;
     source: "flatbed" | "adf" | "adf_duplex";
     duplex: boolean;
+    dpi?: number | undefined;
+    color?: boolean | undefined;
     profile_id?: number | undefined;
+    doc_class?: string | undefined;
     personal_dni?: number | undefined;
     personal_ref?: string | undefined;
 }, {
     device_id: number;
+    dpi?: number | undefined;
+    color?: boolean | undefined;
+    auto_rotate?: boolean | undefined;
+    blank_page_detection?: boolean | undefined;
+    compression?: "low" | "medium" | "high" | undefined;
+    output_format?: "pdf" | "pdf_a" | "tiff" | undefined;
     profile_id?: number | undefined;
     priority?: number | undefined;
     source?: "flatbed" | "adf" | "adf_duplex" | undefined;
     duplex?: boolean | undefined;
+    doc_class?: string | undefined;
     personal_dni?: number | undefined;
     personal_ref?: string | undefined;
 }>;
@@ -115,11 +139,11 @@ export declare const searchSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     limit: number;
     q: string;
-    personal_dni?: number | undefined;
     doc_class?: string | undefined;
+    personal_dni?: number | undefined;
 }, {
     q: string;
     limit?: number | undefined;
-    personal_dni?: number | undefined;
     doc_class?: string | undefined;
+    personal_dni?: number | undefined;
 }>;

@@ -4,21 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev":   "npx tsx watch src/agent.ts",
+    "dev": "npx tsx watch src/agent.ts",
     "build": "tsc",
     "start": "node dist/agent.js"
   },
   "dependencies": {
-    "axios":      "^1.7.2",
-    "dotenv":     "^16.4.5",
-    "form-data":  "^4.0.0"
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "form-data": "^4.0.0",
+    "jimp": "^1.6.1"
   },
   "optionalDependencies": {
     "canvas": "^2.11.2"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",
-    "tsx":         "^4.16.0",
-    "typescript":  "^5.5.3"
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.3"
   }
 }

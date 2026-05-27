@@ -4,11 +4,12 @@ import bcrypt from "bcryptjs"
 import { pool } from "../../db/mysql.js"
 import { signToken } from "../auth.js"
 import { ApiError } from "../errorHandler.js"
+import { asyncRoute } from "../asyncRoute.js"
 
 const r = Router()
 
 // ── POST /v1/auth/login ───────────────────────────────────────────────────────
-r.post("/login", async (req, res) => {
+r.post("/login", asyncRoute(async (req, res) => {
   const { email, password, tenant_id } = req.body || {}
   if (!email || !password || !tenant_id) throw new ApiError(400, "missing_fields")
 
@@ -30,10 +31,10 @@ r.post("/login", async (req, res) => {
   })
 
   res.json({ access_token: token, role: user.role, tenant_id: Number(tenant_id) })
-})
+}))
 
 // ── POST /v1/auth/logout — invalida todos los tokens del usuario ──────────────
-r.post("/logout", async (req, res) => {
+r.post("/logout", asyncRoute(async (req, res) => {
   const tenant_id = (req as any).tenant_id as number
   const auth = (req as any).auth
   if (auth?.user_id) {
@@ -43,10 +44,10 @@ r.post("/logout", async (req, res) => {
     )
   }
   res.json({ ok: true })
-})
+}))
 
 // ── POST /v1/auth/change-password ─────────────────────────────────────────────
-r.post("/change-password", async (req, res) => {
+r.post("/change-password", asyncRoute(async (req, res) => {
   const auth = (req as any).auth
   if (!auth) throw new ApiError(401, "unauthenticated")
   const { old_password, new_password } = req.body || {}
@@ -69,6 +70,6 @@ r.post("/change-password", async (req, res) => {
     [hash, user.id]
   )
   res.json({ ok: true })
-})
+}))
 
 export default r

@@ -5,18 +5,25 @@ import { requireTenant } from "../tenant.js"
 import { pool } from "../../db/mysql.js"
 import { ApiError } from "../errorHandler.js"
 import { deliverWebhookToSubscribers } from "../../services/webhook.js"
+import { asyncRoute } from "../asyncRoute.js"
 
 const r = Router()
 r.use(requireTenant(), requireDeviceAuth())
 
 // ── GET /v1/agent/poll ────────────────────────────────────────────────────────
-r.get("/poll", async (req, res) => {
+r.get("/poll", asyncRoute(async (req, res) => {
   const tenant_id = (req as any).tenant_id as number
   const device_id = (req as any).device_id as number
 
   const [rows] = await pool.query(
     `SELECT j.id, j.priority, j.profile_id, j.upload_nonce, j.personal_dni, j.personal_ref,
-            p.dpi, p.color, p.auto_rotate, p.blank_page_detection, p.compression, p.output_format
+            j.source, j.duplex,
+            COALESCE(j.dpi, p.dpi) AS dpi,
+            COALESCE(j.color, p.color) AS color,
+            COALESCE(j.auto_rotate, p.auto_rotate) AS auto_rotate,
+            COALESCE(j.blank_page_detection, p.blank_page_detection) AS blank_page_detection,
+            COALESCE(j.compression, p.compression) AS compression,
+            COALESCE(j.output_format, p.output_format) AS output_format
      FROM scan_jobs j
      LEFT JOIN scan_profiles p ON p.id=j.profile_id AND p.tenant_id=j.tenant_id
      WHERE j.tenant_id=? AND j.device_id=? AND j.status='queued'
@@ -37,21 +44,24 @@ r.get("/poll", async (req, res) => {
     upload_nonce: job.upload_nonce,
     personal_ref: job.personal_ref,
     personal_dni: job.personal_dni,
-    profile: job.dpi ? {
-      dpi:                  job.dpi,
-      color:                !!job.color,
-      auto_rotate:          !!job.auto_rotate,
-      blank_page_detection: !!job.blank_page_detection,
-      compression:          job.compression,
-      output_format:        job.output_format,
-    } : null,
+    source:       job.source || "flatbed",
+    duplex:       !!job.duplex,
+    profile: {
+      dpi:                  job.dpi || 300,
+      color:                job.color == null ? true : !!job.color,
+      auto_rotate:          job.auto_rotate == null ? true : !!job.auto_rotate,
+      blank_page_detection: job.blank_page_detection == null ? true : !!job.blank_page_detection,
+      compression:          job.compression || "medium",
+      output_format:        job.output_format || "pdf",
+    },
   })
-})
+}))
 
 // ── POST /v1/agent/heartbeat — también guarda capabilities ───────────────────
-r.post("/heartbeat", async (req, res) => {
+r.post("/heartbeat", asyncRoute(async (req, res) => {
   const device_id = (req as any).device_id as number
   const { capabilities } = req.body || {}
+  const online = capabilities?.online !== false
 
   if (capabilities && typeof capabilities === "object") {
     // Upsert en device_capabilities
@@ -63,11 +73,15 @@ r.post("/heartbeat", async (req, res) => {
     ).catch(() => {})
   }
 
+  if (online) {
+    await pool.query("UPDATE devices SET last_seen_at=now() WHERE id=?", [device_id]).catch(() => {})
+  }
+
   res.json({ ok: true, server_ts: Date.now() })
-})
+}))
 
 // ── POST /v1/agent/fail ───────────────────────────────────────────────────────
-r.post("/fail", async (req, res) => {
+r.post("/fail", asyncRoute(async (req, res) => {
   const tenant_id = (req as any).tenant_id as number
   const { job_id, error_message } = req.body || {}
   if (!job_id) throw new ApiError(400, "missing_job_id")
@@ -78,6 +92,6 @@ r.post("/fail", async (req, res) => {
   )
   await deliverWebhookToSubscribers(tenant_id, "scan.failed", { scan_job_id: job_id, error: error_message })
   res.json({ ok: true })
-})
+}))
 
 export default r

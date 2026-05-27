@@ -44,16 +44,26 @@ export const TIPOS_DOCUMENTO_ESCANER = [
   { value: 'jubilacion',             label: 'Documentación Jubilación' },
   { value: 'ioma',                   label: 'Documentación IOMA' },
   { value: 'foto_carnet',            label: 'Foto Carnet' },
+  { value: 'cert_rotacion',          label: 'Certificacion de rotacion' },
   { value: 'otro',                   label: 'Otro documento' },
 ] as const;
 
+function getScannerDocumentsBaseDir(): string {
+  return (
+    env.DOCUMENTS_SCAN_DIR?.trim() ||
+    env.PHOTOS_BASE_DIR?.trim() ||
+    env.DOCUMENTS_BASE_DIR?.trim() ||
+    ''
+  );
+}
+
 /**
  * Crea la carpeta de destino para un DNI si no existe.
- * Retorna la ruta absoluta: PHOTOS_BASE_DIR/{DNI}/
+ * Retorna la ruta absoluta: DOCUMENTS_SCAN_DIR/{DNI}/
  */
 function resolveDestDir(dni: number): string {
-  const base = env.PHOTOS_BASE_DIR;
-  if (!base?.trim()) throw new Error('PHOTOS_BASE_DIR no configurado en .env');
+  const base = getScannerDocumentsBaseDir();
+  if (!base) throw new Error('DOCUMENTS_SCAN_DIR/PHOTOS_BASE_DIR no configurado en .env');
   const destDir = path.join(base, String(dni));
   if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
@@ -66,6 +76,19 @@ function inferExtensionFromStorageKey(storageKey?: string | null): string {
   const ext = path.extname(String(storageKey || '')).toLowerCase();
   if (ext) return ext;
   return '.pdf';
+}
+
+function getTipoDocumentoLabel(tipo?: string | null): string {
+  const found = TIPOS_DOCUMENTO_ESCANER.find(t => t.value === tipo);
+  return found?.label || String(tipo || 'Documento escaneado');
+}
+
+function safeDocumentFileBase(name: string): string {
+  return name
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'Documento escaneado';
 }
 
 function getScannerBaseUrl(): string {
@@ -124,6 +147,7 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       const {
         scanner_document_id,
         scanner_job_id,
+        scan_job_id,
         personal_dni,
         personal_ref,
         doc_class,
@@ -154,13 +178,17 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
 
       const auth = (req as any).auth;
       const operadorId = escaneado_por || auth?.principalId || null;
+      const tipoFromRef = TIPOS_DOCUMENTO_ESCANER.find(t => t.value === personal_ref)?.value;
+      const tipoFromClass = TIPOS_DOCUMENTO_ESCANER.find(t => t.value === doc_class)?.value;
+      const tipoArchivo = tipoFromRef || tipoFromClass || doc_class || 'documento_escaneado';
+      const nombreDocumento = getTipoDocumentoLabel(tipoArchivo);
 
       // 1. Resolver carpeta destino
       const destDir = resolveDestDir(dniNum);
 
       // 2. Conservar extensión real del archivo del scanner
       const ext = inferExtensionFromStorageKey(storage_key);
-      const fileName = `Scanner-${scanner_document_id}${ext}`;
+      const fileName = `${safeDocumentFileBase(nombreDocumento)}-${scanner_document_id}${ext}`;
 
       // 3. Ruta relativa y absoluta
       const rutaRelativa = path.join(String(dniNum), fileName);
@@ -200,20 +228,63 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
         ocr_summary ? `Extracto: ${String(ocr_summary).slice(0, 200)}` : null,
       ].filter(Boolean).join(' | ');
 
+      const existingRows = await sequelize.query(
+        `SELECT id FROM tblarchivos
+         WHERE dni = :dni AND ruta = :ruta AND deleted_at IS NULL
+         LIMIT 1`,
+        {
+          replacements: { dni: dniNum, ruta: rutaRelativa },
+          type: QueryTypes.SELECT,
+        }
+      ).catch(() => [] as any[]);
+
+      const existingId = (existingRows as any[])[0]?.id;
+      if (existingId) {
+        await sequelize.query(
+          `UPDATE tblarchivos
+              SET nombre = :nombre,
+                  tipo = :tipo,
+                  descripcion_archivo = :descripcion,
+                  updated_at = NOW()
+            WHERE id = :id`,
+          {
+            replacements: {
+              id: existingId,
+              nombre: nombreDocumento,
+              tipo: tipoArchivo,
+              descripcion: descripcion || 'Documento escaneado',
+            },
+          }
+        );
+
+        logger.info({
+          msg: '[scanner] document-ready actualizado',
+          personal_dni,
+          scanner_document_id,
+          scanner_job_id: scanner_job_id || scan_job_id,
+          tipoArchivo,
+          rutaRelativa,
+          rutaAbsoluta,
+        });
+
+        return res.json({ ok: true, id: existingId, updated: true });
+      }
+
       await sequelize.query(
         `INSERT INTO tblarchivos
            (dni, nombre, tipo, descripcion_archivo, ruta, escaneado_por, created_by, created_at)
          VALUES
            (:dni, :nombre, :tipo, :descripcion, :ruta, :escaneadoPor, :createdBy, NOW())
          ON DUPLICATE KEY UPDATE
+           nombre = VALUES(nombre),
            descripcion_archivo = VALUES(descripcion_archivo),
            ruta = VALUES(ruta),
            updated_at = NOW()`,
         {
           replacements: {
             dni:          dniNum,
-            nombre:       fileName,
-            tipo:         doc_class || 'documento_escaneado',
+            nombre:       nombreDocumento,
+            tipo:         tipoArchivo,
             descripcion:  descripcion || 'Documento escaneado',
             ruta:         rutaRelativa,
             escaneadoPor: operadorId,
@@ -226,14 +297,15 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
           `INSERT INTO tblarchivos (dni, nombre, tipo, descripcion_archivo, ruta, created_at)
            VALUES (:dni, :nombre, :tipo, :descripcion, :ruta, NOW())
            ON DUPLICATE KEY UPDATE
+             nombre = VALUES(nombre),
              descripcion_archivo = VALUES(descripcion_archivo),
              ruta = VALUES(ruta),
              updated_at = NOW()`,
           {
             replacements: {
               dni:         dniNum,
-              nombre:      fileName,
-              tipo:        doc_class || 'documento_escaneado',
+              nombre:      nombreDocumento,
+              tipo:        tipoArchivo,
               descripcion: descripcion || 'Documento escaneado',
               ruta:        rutaRelativa,
             },
@@ -245,7 +317,8 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
         msg: '[scanner] document-ready registrado',
         personal_dni,
         scanner_document_id,
-        doc_class,
+        scanner_job_id: scanner_job_id || scan_job_id,
+        tipoArchivo,
         operadorId,
         rutaRelativa,
         rutaAbsoluta,
@@ -401,24 +474,43 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       const dni = Number(req.params.dni);
       if (!dni) return res.status(400).json({ error: 'invalid_dni' });
 
+      const tipoParams = TIPOS_DOCUMENTO_ESCANER.map((_, i) => `:tipo${i}`).join(',');
+      const replacements: Record<string, any> = {
+        dni,
+        rutaDniSlash: `${dni}/%`,
+        rutaDniBackslash: `${dni}\\%`,
+        rutaAnyDniSlash: `%/${dni}/%`,
+        rutaAnyDniBackslash: `%\\${dni}\\%`,
+      };
+      TIPOS_DOCUMENTO_ESCANER.forEach((tipo, i) => {
+        replacements[`tipo${i}`] = tipo.value;
+      });
+
       const rows = await sequelize.query(
         `SELECT id, nombre, tipo, descripcion_archivo, ruta, escaneado_por, created_by, created_at
          FROM tblarchivos
          WHERE dni = :dni
            AND (tipo LIKE '%dni%' OR tipo LIKE '%titulo%' OR tipo LIKE '%licencia%'
                 OR tipo LIKE '%scanner%' OR tipo LIKE '%documento_escaneado%'
-                OR tipo IN (${TIPOS_DOCUMENTO_ESCANER.map(() => '?').join(',')})
-                OR ruta LIKE 'scanner://%')
+                OR tipo IN ('identificacion', 'general', 'certificado', 'titulo', 'solicitud')
+                OR tipo IN (${tipoParams})
+                OR ruta LIKE 'scanner://%'
+                OR ruta LIKE :rutaDniSlash
+                OR ruta LIKE :rutaDniBackslash
+                OR ruta LIKE :rutaAnyDniSlash
+                OR ruta LIKE :rutaAnyDniBackslash)
            AND deleted_at IS NULL
          ORDER BY created_at DESC
          LIMIT 200`,
         {
-          replacements: [dni, ...TIPOS_DOCUMENTO_ESCANER.map(t => t.value)],
+          replacements,
+          type: QueryTypes.SELECT,
         }
-      ).catch(() => [[]] as any);
+      );
 
-      return res.json({ ok: true, data: (rows as any[])[0] || rows });
+      return res.json({ ok: true, data: rows });
     } catch (e: any) {
+      logger.error({ msg: '[scanner] documents list error', error: e?.message, dni: req.params.dni });
       return res.status(500).json({ error: 'internal_error' });
     }
   });

@@ -15,7 +15,8 @@ function triggerDownload(blob: Blob, filename: string) {
 import { Layout } from '../../components/Layout';
 import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
-import { useToast } from '../../ui/toast';
+import { useToast }                     from '../../ui/toast';
+import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 const DOCS = [
   { id: 1,  label: 'Certificado de Trabajo',   implementado: false,
@@ -951,6 +952,8 @@ export function RedaccionPage() {
                 style={{ fontSize: '0.78rem' }}>Cambiar</button>
             </div>
           </div>
+
+          <AlertaBannerAgenteConMensaje dni={selected?.dni ?? null} />
 
           <div className="card">
             <div style={{ marginBottom: 14 }}>

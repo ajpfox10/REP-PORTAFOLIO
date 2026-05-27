@@ -6,7 +6,8 @@ import { Layout }         from '../../components/Layout';
 import { apiFetch }       from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { exportToExcel }  from '../../utils/export';
-import { useToast }       from '../../ui/toast';
+import { useToast }                     from '../../ui/toast';
+import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface ServicioExterno {
@@ -419,6 +420,8 @@ export function HerramientasPage() {
             </div>
           )}
         </div>
+
+        <AlertaBannerAgenteConMensaje dni={agente?.dni ?? null} />
 
         {agente && (
           <>

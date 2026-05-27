@@ -50,7 +50,8 @@ import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildWhatsappRouter } from '../routes/whatsapp.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildStressRouter }   from '../routes/stress.routes';
-import { buildJefaturasRouter } from '../routes/jefaturas.routes';
+import { buildJefaturasRouter }      from '../routes/jefaturas.routes';
+import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
 import { idempotencyMiddleware } from '../middlewares/idempotency';
@@ -165,6 +166,9 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
 
   // ── Audit reads (registra lecturas sensibles) ─────────────────────────────
   app.use(apiPrefix, authContext(sequelize), auditReadMiddleware(sequelize));
+
+  // ── Alertas por agente (RRHH interno) ────────────────────────────────────
+  app.use(`${apiPrefix}/alertas-agente`, ...protect, buildAlertasAgenteRouter(sequelize));
 
   // ── Jefaturas (custom: enriquece con nombre real desde personal) ─────────
   app.use(`${apiPrefix}/jefaturas`, ...protect, buildJefaturasRouter(sequelize));

@@ -53,7 +53,7 @@ export function requireDeviceAuth() {
                 throw new ApiError(401, "invalid_device_key");
             const hostname = req.header("x-agent-hostname") || null;
             const version = req.header("x-agent-version") || null;
-            await pool.query("UPDATE devices SET last_seen_at=now(), hostname=COALESCE(?,hostname), agent_version=COALESCE(?,agent_version) WHERE id=?", [hostname, version, device.id]);
+            await pool.query("UPDATE devices SET hostname=COALESCE(?,hostname), agent_version=COALESCE(?,agent_version) WHERE id=?", [hostname, version, device.id]);
             req.device_id = device.id;
             next();
         }

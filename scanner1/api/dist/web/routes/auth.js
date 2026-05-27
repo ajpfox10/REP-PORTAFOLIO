@@ -4,9 +4,10 @@ import bcrypt from "bcryptjs";
 import { pool } from "../../db/mysql.js";
 import { signToken } from "../auth.js";
 import { ApiError } from "../errorHandler.js";
+import { asyncRoute } from "../asyncRoute.js";
 const r = Router();
 // ── POST /v1/auth/login ───────────────────────────────────────────────────────
-r.post("/login", async (req, res) => {
+r.post("/login", asyncRoute(async (req, res) => {
     const { email, password, tenant_id } = req.body || {};
     if (!email || !password || !tenant_id)
         throw new ApiError(400, "missing_fields");
@@ -24,18 +25,18 @@ r.post("/login", async (req, res) => {
         token_version: user.token_version,
     });
     res.json({ access_token: token, role: user.role, tenant_id: Number(tenant_id) });
-});
+}));
 // ── POST /v1/auth/logout — invalida todos los tokens del usuario ──────────────
-r.post("/logout", async (req, res) => {
+r.post("/logout", asyncRoute(async (req, res) => {
     const tenant_id = req.tenant_id;
     const auth = req.auth;
     if (auth?.user_id) {
         await pool.query("UPDATE users SET token_version=token_version+1 WHERE tenant_id=? AND id=?", [tenant_id, auth.user_id]);
     }
     res.json({ ok: true });
-});
+}));
 // ── POST /v1/auth/change-password ─────────────────────────────────────────────
-r.post("/change-password", async (req, res) => {
+r.post("/change-password", asyncRoute(async (req, res) => {
     const auth = req.auth;
     if (!auth)
         throw new ApiError(401, "unauthenticated");
@@ -54,5 +55,5 @@ r.post("/change-password", async (req, res) => {
     const hash = await bcrypt.hash(String(new_password), 12);
     await pool.query("UPDATE users SET password_hash=?, token_version=token_version+1, updated_at=now() WHERE id=?", [hash, user.id]);
     res.json({ ok: true });
-});
+}));
 export default r;

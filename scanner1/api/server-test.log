@@ -1,0 +1,26 @@
+[mysql env] {
+  MYSQL_HOST: '127.0.0.1',
+  MYSQL_PORT: '3306',
+  MYSQL_DB: 'scanner_saas',
+  MYSQL_USER: 'root',
+  MYSQL_PASSWORD_SET: true
+}
+[api] running migrations...
+[api] migrations done
+[api] scanner-api v3 listening on :3003
+[api] health: http://localhost:3003/health
+[queue] ✅ job 80 → doc 43 (identificacion, 2p)
+[personal-integration] notify start {
+  tenant_id: 1,
+  url: 'http://localhost:3001/api/v1/scanner/document-ready',
+  payload: {
+    personal_dni: 1,
+    personal_ref: 'dni_uno_prueba_codex',
+    scanner_document_id: 43,
+    scan_job_id: 80,
+    doc_class: 'identificacion',
+    page_count: 2,
+    storage_key: 't1/j80/a659642d-78f7-48ca-be85-8516693816a7.pdf',
+    ocr_text: undefined
+  }
+}

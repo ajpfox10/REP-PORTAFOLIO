@@ -12,12 +12,13 @@ import { ApiError } from "../errorHandler.js";
 import { requireDeviceAuth } from "../auth.js";
 import { requireTenant } from "../tenant.js";
 import { deliverWebhookToSubscribers } from "../../services/webhook.js";
-import { fetchPersonalPendingTramites } from "../../services/personalIntegration.js";
+import { fetchPersonalPendingTramites, notifyPersonalApi } from "../../services/personalIntegration.js";
 import { scanBufferWithClamAV } from "../../services/clamav.js";
+import { asyncRoute } from "../asyncRoute.js";
 const r = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150 * 1024 * 1024 } });
 // ── GET /v1/scan-jobs — listar ────────────────────────────────────────────────
-r.get("/", validate(paginationSchema, "query"), async (req, res) => {
+r.get("/", validate(paginationSchema, "query"), asyncRoute(async (req, res) => {
     const tenant_id = req.tenant_id;
     const { limit, cursor } = req.query;
     const status = req.query.status;
@@ -37,9 +38,9 @@ r.get("/", validate(paginationSchema, "query"), async (req, res) => {
     const [rows] = await pool.query(sql, params);
     const items = rows;
     res.json({ items, next_cursor: items.at(-1)?.id || cursor });
-});
+}));
 // ── GET /v1/scan-jobs/:id ─────────────────────────────────────────────────────
-r.get("/:id", async (req, res) => {
+r.get("/:id", asyncRoute(async (req, res) => {
     const tenant_id = req.tenant_id;
     const id = Number(req.params.id);
     const [rows] = await pool.query("SELECT j.*, d.id as document_id, d.doc_class, d.page_count as doc_pages FROM scan_jobs j LEFT JOIN documents d ON d.scan_job_id=j.id AND d.tenant_id=j.tenant_id WHERE j.tenant_id=? AND j.id=?", [tenant_id, id]);
@@ -47,19 +48,38 @@ r.get("/:id", async (req, res) => {
     if (!job)
         throw new ApiError(404, "scan_job_not_found");
     res.json(job);
-});
+}));
 // ── POST /v1/scan-jobs — crear job ───────────────────────────────────────────
-r.post("/", validate(createScanJobSchema, "body"), async (req, res) => {
+r.post("/", validate(createScanJobSchema, "body"), asyncRoute(async (req, res) => {
     const tenant_id = req.tenant_id;
     const body = req.body;
     const [devRows] = await pool.query("SELECT id FROM devices WHERE tenant_id=? AND id=? AND is_active=1", [tenant_id, body.device_id]);
     if (!devRows.length)
         throw new ApiError(404, "device_not_found");
     const nonce = crypto.randomBytes(32).toString("hex");
-    const [result] = await pool.query(`INSERT INTO scan_jobs (tenant_id,device_id,profile_id,priority,status,source,duplex,personal_dni,personal_ref,upload_nonce,created_at)
-     VALUES (?,?,?,?,'queued',?,?,?,?,?,now())`, [tenant_id, body.device_id, body.profile_id || null, body.priority,
-        body.source || "flatbed", body.duplex ? 1 : 0,
-        body.personal_dni || null, body.personal_ref || null, nonce]);
+    const manualDpi = body.profile_id ? null : (body.dpi || 300);
+    const manualColor = body.profile_id ? null : (body.color === false ? 0 : 1);
+    const [result] = await pool.query(`INSERT INTO scan_jobs
+       (tenant_id,device_id,profile_id,priority,status,source,duplex,
+        dpi,color,auto_rotate,blank_page_detection,compression,output_format,
+        personal_dni,personal_ref,upload_nonce,created_at)
+     VALUES (?,?,?,?,'queued',?,?,?,?,?,?,?,?,?,?,?,now())`, [
+        tenant_id,
+        body.device_id,
+        body.profile_id || null,
+        body.priority,
+        body.source || "flatbed",
+        body.duplex || body.source === "adf_duplex" ? 1 : 0,
+        manualDpi,
+        manualColor,
+        body.profile_id ? null : (body.auto_rotate ? 1 : 0),
+        body.profile_id ? null : (body.blank_page_detection ? 1 : 0),
+        body.profile_id ? null : body.compression,
+        body.profile_id ? null : body.output_format,
+        body.personal_dni || null,
+        body.doc_class || body.personal_ref || null,
+        nonce,
+    ]);
     const id = Number(result.insertId);
     // Encolar para que el agent lo levante
     await scanQueue.add("scan_job", { tenant_id, scan_job_id: id }, {
@@ -75,9 +95,9 @@ r.post("/", validate(createScanJobSchema, "body"), async (req, res) => {
         pending_tramites = await fetchPersonalPendingTramites(tenant_id, body.personal_dni);
     }
     res.status(201).json({ id, upload_nonce: nonce, pending_tramites });
-});
+}));
 // ── GET /v1/scan-jobs/:id/pages — páginas escaneadas de un job ────────────────
-r.get("/:id/pages", async (req, res) => {
+r.get("/:id/pages", asyncRoute(async (req, res) => {
     const tenant_id = req.tenant_id;
     const job_id = Number(req.params.id);
     // Buscar el documento asociado al job
@@ -103,9 +123,40 @@ r.get("/:id/pages", async (req, res) => {
         pages.unshift({ page_number: 1, storage_key: doc.storage_key, is_blank: 0 });
     }
     res.json({ doc_id: doc.id, pages });
-});
+}));
+// POST /v1/scan-jobs/:id/sync-personal
+// Fuerza la importacion en api_personal para que el boton Guardar tenga efecto real.
+r.post("/:id/sync-personal", asyncRoute(async (req, res) => {
+    const tenant_id = req.tenant_id;
+    const job_id = Number(req.params.id);
+    const [rows] = await pool.query(`SELECT j.id AS scan_job_id, j.personal_dni, j.personal_ref,
+            d.id AS document_id, d.doc_class, d.page_count, d.storage_key
+       FROM scan_jobs j
+       LEFT JOIN documents d ON d.scan_job_id=j.id AND d.tenant_id=j.tenant_id AND d.deleted_at IS NULL
+      WHERE j.tenant_id=? AND j.id=?
+      LIMIT 1`, [tenant_id, job_id]);
+    const row = rows[0];
+    if (!row)
+        throw new ApiError(404, "scan_job_not_found");
+    if (!row.document_id || !row.storage_key)
+        throw new ApiError(409, "document_not_ready");
+    if (!row.personal_dni)
+        throw new ApiError(400, "missing_personal_dni");
+    const ok = await notifyPersonalApi(tenant_id, {
+        personal_dni: row.personal_dni,
+        personal_ref: row.personal_ref || undefined,
+        document_id: row.document_id,
+        scan_job_id: row.scan_job_id,
+        doc_class: row.doc_class || row.personal_ref || "documento_escaneado",
+        page_count: row.page_count,
+        storage_key: row.storage_key,
+    });
+    if (!ok)
+        throw new ApiError(502, "personal_sync_failed");
+    res.json({ ok: true, document_id: row.document_id });
+}));
 // ── POST /v1/scan-jobs/:id/cancel ────────────────────────────────────────────
-r.post("/:id/cancel", async (req, res) => {
+r.post("/:id/cancel", asyncRoute(async (req, res) => {
     const tenant_id = req.tenant_id;
     const id = Number(req.params.id);
     const [rows] = await pool.query("SELECT status FROM scan_jobs WHERE tenant_id=? AND id=?", [tenant_id, id]);
@@ -117,15 +168,19 @@ r.post("/:id/cancel", async (req, res) => {
     await pool.query("UPDATE scan_jobs SET status='canceled', updated_at=now() WHERE tenant_id=? AND id=?", [tenant_id, id]);
     await deliverWebhookToSubscribers(tenant_id, "scan.canceled", { scan_job_id: id });
     res.json({ ok: true });
-});
+}));
 // ── POST /v1/scan-jobs/:id/upload — el agent sube las páginas escaneadas ──────
 // Esta ruta usa device auth (x-device-key), no JWT
-r.post("/:id/upload", requireTenant(), requireDeviceAuth(), upload.array("pages", 500), async (req, res) => {
+r.post("/:id/upload", requireTenant(), requireDeviceAuth(), upload.array("pages", 500), asyncRoute(async (req, res) => {
     const tenant_id = req.tenant_id;
     const device_id = req.device_id;
     const job_id = Number(req.params.id);
     const nonce = req.body.nonce;
-    const [rows] = await pool.query("SELECT status, upload_nonce, personal_dni, personal_ref FROM scan_jobs WHERE tenant_id=? AND id=? AND device_id=?", [tenant_id, job_id, device_id]);
+    const [rows] = await pool.query(`SELECT j.status, j.upload_nonce, j.personal_dni, j.personal_ref,
+              COALESCE(j.output_format, p.output_format) AS output_format
+       FROM scan_jobs j
+       LEFT JOIN scan_profiles p ON p.id=j.profile_id AND p.tenant_id=j.tenant_id
+       WHERE j.tenant_id=? AND j.id=? AND j.device_id=?`, [tenant_id, job_id, device_id]);
     const job = rows[0];
     if (!job)
         throw new ApiError(404, "scan_job_not_found");
@@ -160,8 +215,9 @@ r.post("/:id/upload", requireTenant(), requireDeviceAuth(), upload.array("pages"
         page_count: files.length,
         personal_dni: job.personal_dni,
         personal_ref: job.personal_ref,
+        output_format: job.output_format || "pdf",
     }, { priority: 10, jobId: `finalize-${job_id}` });
     scanJobsTotal.inc({ tenant_id: String(tenant_id), status: "uploaded" }, 1);
     res.json({ ok: true, pages: files.length, storage_keys });
-});
+}));
 export default r;

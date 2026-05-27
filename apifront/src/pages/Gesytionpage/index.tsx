@@ -24,7 +24,8 @@ import { FotoCredencialCard } from './components/components/FotoCredencialCard';
 import { PedidoModal } from './components/modals/PedidoModal';
 import { CellModal } from './components/modals/CellModal';
 import { DocViewerModal } from './components/modals/DocViewerModal';
-import { GestionDocumentPreview } from './components/components/GestionDocumentPreview';
+import { GestionDocumentPreview }        from './components/components/GestionDocumentPreview';
+import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 import './styles/GestionPage.css';
 
@@ -399,7 +400,8 @@ const PATCH_PERSONAL_COLS = [
 ];
 const PATCH_AGENTE_COLS = [
   'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
-  'regimen_horario_id','dependencia_id','reparticion_id','fecha_ingreso','fecha_egreso',
+  'regimen_horario_id','dependencia_id','reparticion_id','servicio_id','sector_id',
+  'fecha_ingreso','fecha_egreso',
   'legajo','salario_mensual','estado_empleo',
 ];
 const ALL_PATCH_COLS = [...PATCH_PERSONAL_COLS, ...PATCH_AGENTE_COLS];
@@ -839,6 +841,8 @@ export function GestionPage() {
             )}
 
             <AgenteInfoCard row={row} />
+
+            <AlertaBannerAgenteConMensaje dni={row?.dni} />
 
             {row?.dni && (
               <ModuleGrid

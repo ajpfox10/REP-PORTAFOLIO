@@ -2,18 +2,41 @@
 import axios from "axios";
 import { pool } from "../db/mysql.js";
 export async function getPersonalIntegrationConfig(tenant_id) {
-    const [rows] = await pool.query(`SELECT base_url, api_key
-       FROM personal_integration
-      WHERE tenant_id=? AND is_enabled=1
-      ORDER BY id DESC
-      LIMIT 1`, [tenant_id]);
-    const row = rows?.[0];
-    if (!row?.base_url || !row?.api_key)
+    try {
+        const [rows] = await pool.query(`SELECT base_url, api_key
+         FROM personal_integration
+        WHERE tenant_id=? AND is_enabled=1
+        ORDER BY id DESC
+        LIMIT 1`, [tenant_id]);
+        const row = rows?.[0];
+        if (row?.base_url && row?.api_key) {
+            return {
+                base_url: String(row.base_url).replace(/\/+$/, ""),
+                api_key: String(row.api_key),
+            };
+        }
+    }
+    catch (e) {
+        console.warn("[personal-integration] DB config lookup failed; trying env fallback", {
+            tenant_id,
+            message: e?.message,
+        });
+    }
+    const envBaseUrl = process.env.PERSONAL_API_URL || process.env.PERSONAL_BASE_URL || "";
+    const envApiKey = process.env.PERSONAL_API_KEY || "";
+    if (!envBaseUrl || !envApiKey)
         return null;
     return {
-        base_url: String(row.base_url).replace(/\/+$/, ""),
-        api_key: String(row.api_key),
+        base_url: String(envBaseUrl).replace(/\/+$/, ""),
+        api_key: String(envApiKey),
     };
+}
+function personalUrl(baseUrl, path) {
+    const base = baseUrl.replace(/\/+$/, "");
+    if (base.endsWith("/api/v1") && path.startsWith("/api/v1/")) {
+        return `${base}${path.slice("/api/v1".length)}`;
+    }
+    return `${base}${path}`;
 }
 export async function fetchPersonalPendingTramites(tenant_id, dni) {
     const cfg = await getPersonalIntegrationConfig(tenant_id);
@@ -24,7 +47,7 @@ export async function fetchPersonalPendingTramites(tenant_id, dni) {
         });
         return [];
     }
-    const url = `${cfg.base_url}/api/v1/pedidos?dni=${encodeURIComponent(String(dni))}&limit=20&page=1`;
+    const url = personalUrl(cfg.base_url, `/api/v1/pedidos?dni=${encodeURIComponent(String(dni))}&limit=20&page=1`);
     try {
         const res = await axios.get(url, {
             headers: {
@@ -60,7 +83,7 @@ export async function notifyPersonalApi(tenant_id, opts) {
         });
         return false;
     }
-    const url = `${cfg.base_url}/api/v1/scanner/document-ready`;
+    const url = personalUrl(cfg.base_url, "/api/v1/scanner/document-ready");
     const payload = {
         personal_dni: opts.personal_dni,
         personal_ref: opts.personal_ref || null,

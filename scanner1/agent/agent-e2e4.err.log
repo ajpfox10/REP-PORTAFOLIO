@@ -1,0 +1,3 @@
+[agent] getDevices error: Request failed with status code 500
+[agent] ⚠️  Sin devices — reintentando en 30s…
+[agent] getDevices error: Request failed with status code 500

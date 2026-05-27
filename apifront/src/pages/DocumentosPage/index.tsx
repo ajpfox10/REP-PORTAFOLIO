@@ -4,7 +4,8 @@ import { Layout } from '../../components/Layout';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, printTable } from '../../utils/export';
-import { GestionDocumentPreview } from '../Gesytionpage/components/components/GestionDocumentPreview';
+import { GestionDocumentPreview }        from '../Gesytionpage/components/components/GestionDocumentPreview';
+import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 const COLS = ['id','nombre','tipo','numero','fecha','descripcion_archivo','nombre_archivo_original'];
 const TIPOS = ['documento','resolución','expediente','nota','certificado','foto','recibo','otro'];
@@ -157,6 +158,9 @@ export function DocumentosPage() {
 
         {/* Resultados */}
         {rows.length > 0 && (
+          <>
+          <AlertaBannerAgenteConMensaje dni={activeDni ? Number(activeDni) : null} />
+
           <div className="card" style={{ padding: '1.2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
               <div>
@@ -254,6 +258,7 @@ export function DocumentosPage() {
               </div>
             )}
           </div>
+          </>
         )}
 
         {/* Detalle */}
