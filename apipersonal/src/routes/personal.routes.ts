@@ -71,6 +71,8 @@ const patchPersonalSchema = z.object({
   regimen_horario_id:     z.number().int().positive().optional().nullable(),
   dependencia_id:         z.number().int().positive().optional().nullable(),
   reparticion_id:         z.number().int().positive().optional().nullable(),
+  servicio_id:            z.number().int().positive().optional().nullable(),
+  sector_id:              z.number().int().positive().optional().nullable(),
   fecha_ingreso:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   fecha_egreso:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   fecha_baja:             z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
@@ -345,8 +347,8 @@ export function buildPersonalRouter(sequelize: Sequelize) {
 
             (SELECT ags.servicio_id FROM agentes_servicios ags WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_id,
             (SELECT srv.nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_nombre,
-            (SELECT asec.sector_id FROM agentes_sectores asec WHERE asec.dni = p.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL ORDER BY asec.id DESC LIMIT 1) AS sector_id,
-            (SELECT sec.nombre FROM agentes_sectores asec JOIN sectores sec ON sec.id = asec.sector_id WHERE asec.dni = p.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL ORDER BY asec.id DESC LIMIT 1) AS sector_nombre,
+            (SELECT ags.sector_id FROM agentes_servicios ags WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS sector_id,
+            (SELECT sec.nombre FROM agentes_servicios ags JOIN sectores sec ON sec.id = ags.sector_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS sector_nombre,
 
             a.id             AS agente_id,
             a.fecha_ingreso  AS fecha_ingreso_laboral,
@@ -450,6 +452,9 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         'legajo','salario_mensual','estado_empleo',
         'decreto_designacion',
       ];
+      // servicio_id y sector_id viven en agentes_servicios, NO en agentes
+      const newServicioId = (data as any).servicio_id;
+      const newSectorId   = (data as any).sector_id;
 
       for (const [k, v] of Object.entries(data)) {
         if (PERSONAL_COLS.includes(k)) personalFields[k] = v;
@@ -518,6 +523,38 @@ export function buildPersonalRouter(sequelize: Sequelize) {
               `UPDATE agentes SET ${setCols}, updated_at = NOW()
                WHERE dni = :dni AND deleted_at IS NULL`,
               { replacements: { ...agenteFields, dni }, transaction: t }
+            );
+          }
+        }
+
+        // ── servicio_id / sector_id → agentes_servicios (NO van en agentes) ──
+        if (newServicioId !== undefined || newSectorId !== undefined) {
+          // Buscar el pase abierto actual
+          const openPase = (await sequelize.query(
+            `SELECT id, servicio_id, sector_id FROM agentes_servicios
+             WHERE dni = :dni AND fecha_hasta IS NULL AND deleted_at IS NULL
+             ORDER BY id DESC LIMIT 1`,
+            { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
+          )) as any[];
+
+          if (openPase.length > 0) {
+            // Actualizar los campos que cambiaron en el pase abierto
+            const updates: string[] = [];
+            const repl: Record<string, any> = { id: openPase[0].id };
+            if (newServicioId !== undefined) { updates.push('servicio_id = :servicio_id'); repl.servicio_id = newServicioId; }
+            if (newSectorId   !== undefined) { updates.push('sector_id = :sector_id');   repl.sector_id   = newSectorId; }
+            if (updates.length > 0) {
+              await sequelize.query(
+                `UPDATE agentes_servicios SET ${updates.join(', ')}, updated_at = NOW() WHERE id = :id`,
+                { replacements: repl, transaction: t }
+              );
+            }
+          } else if (newServicioId) {
+            // Sin pase abierto: crear uno nuevo con el servicio indicado
+            await sequelize.query(
+              `INSERT INTO agentes_servicios (dni, servicio_id, sector_id, fecha_desde, created_at, updated_at)
+               VALUES (:dni, :servicio_id, :sector_id, CURDATE(), NOW(), NOW())`,
+              { replacements: { dni, servicio_id: newServicioId, sector_id: newSectorId ?? null }, transaction: t }
             );
           }
         }

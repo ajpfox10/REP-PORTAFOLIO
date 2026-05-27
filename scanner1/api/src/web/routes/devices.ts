@@ -14,6 +14,7 @@ import { ApiError } from "../errorHandler.js"
 
 const r = Router()
 const execAsync = promisify(exec)
+const ONLINE_HEARTBEAT_MS = 10 * 60_000
 
 type DiscoveredDevice = {
   ip: string
@@ -30,38 +31,49 @@ type DiscoveredDevice = {
 }
 
 type DiscoverMethod = "wsd" | "mdns" | "snmp" | "wia" | "twain" | "probe"
+type PaperState = "loaded" | "empty" | "unknown"
+type PaperStatusPayload = {
+  engine: "escl" | "wia" | "mixed" | "none"
+  adf: PaperState
+  flatbed: PaperState
+  flatbed_detectable: boolean
+  adf_raw?: string | null
+  flatbed_raw?: string | null
+  status_url?: string
+  message?: string
+}
+type HttpTextResponse = { url: string; statusCode: number; text: string }
 
 // ── GET /v1/devices ───────────────────────────────────────────────────────────
 r.get("/", validate(paginationSchema, "query"), async (req, res) => {
   const tenant_id = (req as any).tenant_id as number
-  const { limit, cursor } = req.query as any
+  const { limit, cursor, fast } = req.query as any
   const [rows] = await pool.query(
     `SELECT d.id, d.name, d.driver, d.device_key, d.is_active, d.hostname,
             d.agent_version, d.last_seen_at, d.created_at,
             dc.capabilities_json
      FROM devices d
      LEFT JOIN device_capabilities dc ON dc.device_id = d.id
-     WHERE d.tenant_id=? AND d.id>? ORDER BY d.id ASC LIMIT ?`,
+     WHERE d.tenant_id=? AND d.id>? AND d.is_active=1 ORDER BY d.id ASC LIMIT ?`,
     [tenant_id, cursor, limit]
   )
   const rows_ = rows as any[]
   const items = await Promise.all(rows_.map(async (dev: any) => {
-    // Extraer escl_port de capabilities si existe
+    const caps = parseCapabilitiesJson(dev.capabilities_json)
+    const capsOnline = caps?.online === true
+    const heartbeatOnline = isOnlineByHeartbeat(dev.last_seen_at, ONLINE_HEARTBEAT_MS)
     let escl_port: number | null = null
-    if (dev.capabilities_json) {
-      try {
-        const caps = typeof dev.capabilities_json === "string"
-          ? JSON.parse(dev.capabilities_json) : dev.capabilities_json
-        escl_port = caps.escl_port || null
-      } catch {}
-    }
+    if (caps) escl_port = caps.escl_port || null
+    const online = fast
+      ? heartbeatOnline || capsOnline
+      : heartbeatOnline || capsOnline || await isOnlineByNetwork(dev.hostname)
     return {
       id: dev.id, name: dev.name, driver: dev.driver,
       device_key: dev.device_key, is_active: dev.is_active,
       hostname: dev.hostname, agent_version: dev.agent_version,
       last_seen_at: dev.last_seen_at, created_at: dev.created_at,
       escl_port,
-      online: await isOnline(dev.last_seen_at, dev.hostname),
+      online,
     }
   }))
   res.json({ items, next_cursor: items.at(-1)?.id || cursor })
@@ -92,16 +104,42 @@ r.get("/:id/capabilities", async (req, res) => {
     "SELECT capabilities_json FROM device_capabilities WHERE device_id=?", [id]
   ).catch(() => [[]] as any)
   const stored = (capRows as any[])[0]
-  const online = await isOnline(dev.last_seen_at, dev.hostname)
+  const storedCaps = parseCapabilitiesJson(stored?.capabilities_json)
+  const online = isOnlineByHeartbeat(dev.last_seen_at, ONLINE_HEARTBEAT_MS)
+    || storedCaps?.online === true
+    || await isOnline(dev.last_seen_at, dev.hostname)
   if (stored?.capabilities_json) {
-    try {
-      const caps = typeof stored.capabilities_json === "string"
-        ? JSON.parse(stored.capabilities_json)
-        : stored.capabilities_json
-      return res.json({ ...caps, online })
-    } catch {}
+    if (storedCaps) return res.json(normalizeCapabilitiesPayload({ ...storedCaps, online }))
   }
-  res.json(defaultCapabilities(dev.driver, online))
+  res.json(normalizeCapabilitiesPayload(defaultCapabilities(dev.driver, online)))
+})
+
+// GET /v1/devices/:id/paper-status
+r.get("/:id/paper-status", async (req, res) => {
+  const tenant_id = (req as any).tenant_id as number
+  const id = Number(req.params.id)
+  const [rows] = await pool.query(
+    `SELECT d.id, d.name, d.hostname, d.driver, d.last_seen_at,
+            dc.capabilities_json
+       FROM devices d
+       LEFT JOIN device_capabilities dc ON dc.device_id = d.id
+      WHERE d.tenant_id=? AND d.id=?`,
+    [tenant_id, id]
+  )
+  const dev = (rows as any[])[0]
+  if (!dev) throw new ApiError(404, "device_not_found")
+
+  const caps = parseCapabilitiesJson(dev.capabilities_json)
+  const status = await probePaperStatus(dev, caps)
+  res.json({
+    device_id: dev.id,
+    name: dev.name,
+    hostname: dev.hostname,
+    manufacturer: caps?.manufacturer ?? null,
+    model: caps?.model ?? null,
+    checked_at: new Date().toISOString(),
+    ...status,
+  })
 })
 
 // ── POST /v1/devices ──────────────────────────────────────────────────────────
@@ -232,9 +270,286 @@ r.post("/discover-local", async (_req, res) => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isOnlineByHeartbeat(lastSeen: string | null): boolean {
+async function probePaperStatus(dev: any, caps: any): Promise<PaperStatusPayload> {
+  const empty: PaperStatusPayload = {
+    engine: "none",
+    adf: "unknown",
+    flatbed: "unknown",
+    flatbed_detectable: false,
+    message: "El equipo no publico estado de papel detectable.",
+  }
+
+  const [escl, wia] = await Promise.allSettled([
+    probeEsclPaperStatus(dev, caps),
+    probeWiaPaperStatus(dev, caps),
+  ])
+
+  const esclStatus = escl.status === "fulfilled" ? escl.value : null
+  const wiaStatus = wia.status === "fulfilled" ? wia.value : null
+
+  if (!esclStatus && !wiaStatus) return empty
+  if (esclStatus && !wiaStatus) return esclStatus
+  if (!esclStatus && wiaStatus) return wiaStatus
+
+  const mixed: PaperStatusPayload = {
+    engine: esclStatus!.engine === wiaStatus!.engine ? esclStatus!.engine : "mixed",
+    adf: chooseKnown(esclStatus!.adf, wiaStatus!.adf),
+    flatbed: chooseKnown(wiaStatus!.flatbed, esclStatus!.flatbed),
+    flatbed_detectable: Boolean(wiaStatus!.flatbed_detectable || esclStatus!.flatbed_detectable),
+    adf_raw: esclStatus!.adf_raw ?? wiaStatus!.adf_raw ?? null,
+    flatbed_raw: wiaStatus!.flatbed_raw ?? esclStatus!.flatbed_raw ?? null,
+    status_url: esclStatus!.status_url,
+    message: wiaStatus!.message || esclStatus!.message,
+  }
+  if (mixed.adf === "unknown" && mixed.flatbed === "unknown") {
+    mixed.message = "El equipo respondio, pero no publico sensores de papel."
+  }
+  return mixed
+}
+
+function chooseKnown(first: PaperState, second: PaperState): PaperState {
+  return first !== "unknown" ? first : second
+}
+
+async function probeEsclPaperStatus(dev: any, caps: any): Promise<PaperStatusPayload | null> {
+  if (!dev.hostname || dev.hostname === "127.0.0.1") return null
+
+  const bases = buildEsclBases(dev.hostname, caps)
+  for (const base of bases) {
+    try {
+      const status = await httpGetText(`${base}/eSCL/ScannerStatus`, 2500, 2)
+      const parsed = parseEsclPaperStatus(status.text, dev, caps)
+      return {
+        engine: "escl",
+        status_url: status.url,
+        ...parsed,
+        message: parsed.adf === "unknown" && parsed.flatbed === "unknown"
+          ? "eSCL respondio, pero este modelo no publico sensores legibles."
+          : undefined,
+      }
+    } catch {}
+  }
+  return null
+}
+
+function buildEsclBases(hostname: string, caps: any): string[] {
+  const out: string[] = []
+  const add = (proto: "http" | "https", port: number) => {
+    const value = `${proto}://${hostname}:${port}`
+    if (!out.includes(value)) out.push(value)
+  }
+  const knownPort = Number(caps?.escl_port || 0)
+  if (knownPort > 0) add(knownPort === 443 || knownPort === 9096 || knownPort === 5358 ? "https" : "http", knownPort)
+  add("http", 80)
+  add("https", 443)
+  add("https", 9096)
+  add("http", 8080)
+  add("http", 9090)
+  add("https", 5358)
+  add("http", 9280)
+  add("http", 9095)
+  return out
+}
+
+function parseEsclPaperStatus(xml: string, dev: any, caps: any): Omit<PaperStatusPayload, "engine" | "status_url" | "message"> {
+  const adfRaw = firstXmlValueLoose(xml, [
+    "AdfState",
+    "ADFState",
+    "DocumentFeederState",
+    "FeederState",
+    "InputSourceState",
+  ])
+  const flatbedRaw = firstXmlValueLoose(xml, [
+    "PlatenState",
+    "FlatbedState",
+    "FlatbedStatus",
+    "GlassState",
+    "ScannerGlassState",
+  ])
+  const flatbed = normalizeFlatbedState(flatbedRaw)
+  return {
+    adf: normalizeAdfState(adfRaw, dev, caps),
+    flatbed,
+    flatbed_detectable: flatbed !== "unknown",
+    adf_raw: adfRaw || null,
+    flatbed_raw: flatbedRaw || null,
+  }
+}
+
+function normalizeAdfState(value: string, dev: any, caps: any): PaperState {
+  const raw = String(value || "").trim()
+  const token = normalizeStatusToken(raw)
+  if (!token) return "unknown"
+  if (/empty|nopaper|nomedia|nodocument|notloaded|absent|missing|outofpaper/.test(token)) return "empty"
+  if (/scanneradfprocessing|adfprocessing/.test(token)) {
+    return isKyoceraFamily(dev, caps) ? "empty" : "unknown"
+  }
+  if (/loaded|paperpresent|mediapresent|documentpresent|feedready|scanneradfloaded/.test(token)) return "loaded"
+  if (/ready/.test(token) && !/notready|unready/.test(token)) return "loaded"
+  return "unknown"
+}
+
+function normalizeFlatbedState(value: string): PaperState {
+  const token = normalizeStatusToken(value)
+  if (!token) return "unknown"
+  if (/empty|nopaper|nomedia|nodocument|notloaded|absent|missing/.test(token)) return "empty"
+  if (/loaded|paperpresent|mediapresent|documentpresent|platenready|flatbedready|glassready/.test(token)) return "loaded"
+  if (/ready/.test(token) && !/notready|unready/.test(token)) return "loaded"
+  return "unknown"
+}
+
+function normalizeStatusToken(value: string): string {
+  return String(value || "").replace(/<[^>]+>/g, " ").replace(/[^a-z0-9]+/gi, "").toLowerCase()
+}
+
+function isKyoceraFamily(dev: any, caps: any): boolean {
+  const text = [dev?.name, dev?.hostname, caps?.manufacturer, caps?.model].join(" ").toLowerCase()
+  return /kyocera|olivetti|d-copia|dcopia|taskalfa/.test(text)
+}
+
+function firstXmlValueLoose(xml: string, tags: string[]): string {
+  for (const tag of tags) {
+    const re = new RegExp(`<[^>]*:?${escapeRegExp(tag)}[^>]*>([\\s\\S]*?)<\\/[^>]+>`, "i")
+    const match = xml.match(re)
+    const value = match?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+    if (value) return value
+  }
+  return ""
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function httpGetText(url: string, timeoutMs = 2500, redirects = 1): Promise<HttpTextResponse> {
+  return new Promise((resolve, reject) => {
+    try {
+      const parsed = new URL(url)
+      const mod = parsed.protocol === "https:" ? https : http
+      const req = (mod as any).request({
+        hostname: parsed.hostname,
+        port: Number(parsed.port) || (parsed.protocol === "https:" ? 443 : 80),
+        path: `${parsed.pathname}${parsed.search}`,
+        method: "GET",
+        headers: { Accept: "text/xml, application/xml, */*" },
+        timeout: timeoutMs,
+        rejectUnauthorized: false,
+      }, (res: any) => {
+        const statusCode = Number(res.statusCode || 0)
+        const location = typeof res.headers?.location === "string" ? res.headers.location : ""
+        if ([301, 302, 303, 307, 308].includes(statusCode) && location && redirects > 0) {
+          res.resume()
+          httpGetText(new URL(location, url).toString(), timeoutMs, redirects - 1).then(resolve, reject)
+          return
+        }
+        let text = ""
+        res.setEncoding("utf8")
+        res.on("data", (chunk: string) => {
+          text += chunk
+          if (text.length > 128 * 1024) req.destroy(new Error("response_too_large"))
+        })
+        res.on("end", () => {
+          if (statusCode >= 400 || statusCode === 0) reject(new Error(`HTTP ${statusCode}`))
+          else resolve({ url, statusCode, text })
+        })
+      })
+      req.on("error", reject)
+      req.on("timeout", () => req.destroy(new Error("timeout")))
+      req.end()
+    } catch (e) {
+      reject(e)
+    }
+  })
+}
+
+async function probeWiaPaperStatus(dev: any, caps: any): Promise<PaperStatusPayload | null> {
+  if (process.platform !== "win32") return null
+  const criteria = Buffer.from(JSON.stringify({
+    hostname: String(dev?.hostname || ""),
+    name: String(dev?.name || ""),
+  }), "utf8").toString("base64")
+  const script = `
+$ErrorActionPreference = 'SilentlyContinue'
+$json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${criteria}'))
+$criteria = $json | ConvertFrom-Json
+$wia = New-Object -ComObject WIA.DeviceManager
+$out = $null
+foreach ($dev in $wia.DeviceInfos) {
+  if ($dev.Type -ne 1) { continue }
+  $name = try { [string]$dev.Properties.Item('Name').Value } catch { '' }
+  $net = try { [string]$dev.Properties.Item('Network Address').Value } catch { '' }
+  $id = try { [string]$dev.DeviceID } catch { '' }
+  $hay = ($name + ' ' + $net + ' ' + $id).ToLowerInvariant()
+  $want = $false
+  if ($criteria.hostname -and ($net -eq $criteria.hostname -or $hay.Contains([string]$criteria.hostname.ToLowerInvariant()))) { $want = $true }
+  if (-not $want -and $criteria.name -and $hay.Contains([string]$criteria.name.ToLowerInvariant())) { $want = $true }
+  if (-not $want) { continue }
+  $connected = $dev.Connect()
+  $status = $null
+  $handlingCaps = $null
+  try { $status = [int]$connected.Properties.Item(3087).Value } catch {}
+  try { $handlingCaps = [int]$connected.Properties.Item(3086).Value } catch {}
+  $out = [PSCustomObject]@{ found=$true; name=$name; network=$net; status=$status; handling_caps=$handlingCaps }
+  break
+}
+if ($null -eq $out) { $out = [PSCustomObject]@{ found=$false } }
+$out | ConvertTo-Json -Compress
+`.trim()
+  try {
+    const encoded = Buffer.from(script, "utf16le").toString("base64")
+    const { stdout } = await execAsync(
+      `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`,
+      { timeout: 4500, maxBuffer: 256 * 1024 }
+    )
+    const parsed = parseJsonObject(stdout)
+    if (!parsed?.found) return null
+    return mapWiaPaperStatus(parsed, caps)
+  } catch {
+    return null
+  }
+}
+
+function mapWiaPaperStatus(raw: any, caps: any): PaperStatusPayload {
+  const status = Number(raw?.status)
+  const handlingCaps = Number(raw?.handling_caps)
+  const sources = Array.isArray(caps?.sources) ? caps.sources.map((s: any) => String(s).toLowerCase()) : []
+  const hasAdf = sources.includes("adf") || sources.includes("adf_duplex") || ((handlingCaps || 0) & 0x01) !== 0
+  const canDetectFlatbed = ((handlingCaps || 0) & 0x08) !== 0
+  const hasStatus = Number.isFinite(status)
+  return {
+    engine: "wia",
+    adf: hasStatus && hasAdf ? ((status & 0x01) !== 0 ? "loaded" : "empty") : "unknown",
+    flatbed: hasStatus && canDetectFlatbed ? ((status & 0x02) !== 0 ? "loaded" : "empty") : "unknown",
+    flatbed_detectable: Boolean(hasStatus && canDetectFlatbed),
+    adf_raw: hasStatus ? String(status) : null,
+    flatbed_raw: hasStatus && canDetectFlatbed ? String(status) : null,
+    message: canDetectFlatbed ? undefined : "Windows/WIA no declara sensor de papel en cristal para este equipo.",
+  }
+}
+
+function parseJsonObject(text: string): any | null {
+  const raw = String(text || "").trim()
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed[0] : parsed
+  } catch {
+    return null
+  }
+}
+
+function parseCapabilitiesJson(raw: any): any | null {
+  if (!raw) return null
+  try {
+    return typeof raw === "string" ? JSON.parse(raw) : raw
+  } catch {
+    return null
+  }
+}
+
+function isOnlineByHeartbeat(lastSeen: string | null, maxAgeMs = 90_000): boolean {
   if (!lastSeen) return false
-  return (Date.now() - new Date(lastSeen).getTime()) < 90_000
+  return (Date.now() - new Date(lastSeen).getTime()) < maxAgeMs
 }
 
 function checkTcpPort(ip: string, port: number, timeout = 500): Promise<boolean> {
@@ -338,11 +653,77 @@ function defaultCapabilities(driver: string, online: boolean) {
     model: null,
     manufacturer: null,
     sources: driver === "virtual" ? ["flatbed"] : ["flatbed", "adf"],
-    resolutions: [150, 300, 600],
-    paper_sizes: ["A4", "Carta", "Oficio"],
-    color_modes: ["color", "gris"],
-    duplex: driver !== "virtual",
-    max_pages_adf: driver === "virtual" ? null : 50,
+    resolutions: null,
+    paper_sizes: null,
+    color_modes: null,
+    duplex: driver === "virtual" ? false : null,
+    max_pages_adf: null,
+    processing: {
+      auto_rotate: true,
+      blank_page_detection: true,
+      compression: ["low", "medium", "high"],
+      output_format: {
+        pdf: true,
+        pdf_a: true,
+        tiff: null,
+        jpg: true,
+      },
+    },
+  }
+}
+
+function normalizeCapabilitiesPayload(caps: any) {
+  const sources = Array.isArray(caps?.sources) && caps.sources.length ? caps.sources : ["flatbed"]
+  const resolutions = Array.isArray(caps?.resolutions) && caps.resolutions.length ? caps.resolutions : [150, 300, 600]
+  const paperSizes = Array.isArray(caps?.paper_sizes) && caps.paper_sizes.length ? caps.paper_sizes : ["A4"]
+  const colorModes = Array.isArray(caps?.color_modes) && caps.color_modes.length ? caps.color_modes : ["color", "grayscale"]
+  const duplex = typeof caps?.duplex === "boolean" ? caps.duplex : false
+  const processing = caps?.processing && typeof caps.processing === "object"
+    ? caps.processing
+    : {
+        auto_rotate: true,
+        blank_page_detection: true,
+        compression: ["low", "medium", "high"],
+        output_format: {
+          pdf: true,
+          pdf_a: true,
+          tiff: null,
+          jpg: true,
+        },
+      }
+
+  return {
+    ...caps,
+    sources,
+    resolutions,
+    paper_sizes: paperSizes,
+    color_modes: colorModes,
+    duplex,
+    support: {
+      hardware: {
+        dpi: resolutions,
+        color: colorModes,
+        source: sources,
+        duplex,
+      },
+      software: {
+        auto_rotate: processing.auto_rotate ?? null,
+        blank_page_detection: processing.blank_page_detection ?? null,
+        compression: processing.compression ?? null,
+        output_format: processing.output_format ?? null,
+      },
+    },
+    settings: {
+      dpi: resolutions,
+      color: colorModes,
+      source: sources,
+      duplex,
+      auto_rotate: processing.auto_rotate ?? null,
+      blank_page_detection: processing.blank_page_detection ?? null,
+      compression: processing.compression ?? null,
+      output_format: processing.output_format ?? null,
+    },
+    processing,
   }
 }
 
@@ -625,6 +1006,11 @@ async function discoverWSD(targetIps?: string[]): Promise<DiscoveredDevice[]> {
       }
     }
 
+    if (!isPrintOrScanWsdResponse(resp.xml, resp.xaddrs, name, model, manufacturer)) {
+      console.warn(`[WSD] skipping non-scanner WSD device ${resp.ip} (${resp.xaddrs.join(", ") || "no XAddrs"})`)
+      return
+    }
+
     if (!name) name = model || `WSD Device (${resp.ip})`
 
     found.push({
@@ -674,6 +1060,18 @@ function extractXmlField(xml: string, tags: string[]): string {
     if (m?.[1]?.trim()) return m[1].trim()
   }
   return ""
+}
+
+function isPrintOrScanWsdResponse(
+  xml: string,
+  xaddrs: string[],
+  name?: string | null,
+  model?: string | null,
+  manufacturer?: string | null
+): boolean {
+  const haystack = [xml, ...xaddrs, name || "", model || "", manufacturer || ""].join(" ").toLowerCase()
+  if (/(^|\/|\b)onvif\b|networkvideotransmitter|videoencoder|ipcamera|camera/.test(haystack)) return false
+  return /scan|scanner|print|printer|wprt|pwg|escl|airprint|ipp|mfp|kyocera|olivetti|ricoh|brother|canon|epson|xerox|lexmark|hewlett|(^|\s)hp(\s|$)/.test(haystack)
 }
 
 async function fetchWsdMetadata(url: string): Promise<{ name: string; model: string; manufacturer: string }> {
@@ -726,7 +1124,7 @@ async function fetchWsdMetadata(url: string): Promise<{ name: string; model: str
 
 // ── mDNS Discovery ────────────────────────────────────────────────────────────
 async function discoverMDNS(): Promise<DiscoveredDevice[]> {
-  const serviceNames = ["_scanner._tcp.local", "_uscan._tcp.local", "_ipp._tcp.local", "_printer._tcp.local"]
+  const serviceNames = ["_scanner._tcp.local", "_uscan._tcp.local", "_uscans._tcp.local"]
   const localAddrs = getLocalIPv4Addresses()
   const found: DiscoveredDevice[] = []
   const ifaceTargets = localAddrs.length ? localAddrs : ["0.0.0.0"]

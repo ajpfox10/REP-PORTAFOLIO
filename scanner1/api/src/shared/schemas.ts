@@ -3,6 +3,10 @@ import { z } from "zod"
 export const paginationSchema = z.object({
   limit:  z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.coerce.number().int().min(0).default(0),
+  fast: z.preprocess(
+    (v) => v === "1" || v === "true" ? true : v === "0" || v === "false" ? false : v,
+    z.boolean().optional()
+  ),
 })
 
 export const createDeviceSchema = z.object({
@@ -19,13 +23,22 @@ export const createProfileSchema = z.object({
   auto_rotate:           z.boolean().default(true),
   blank_page_detection:  z.boolean().default(true),
   compression:           z.enum(["low","medium","high"]).default("medium"),
-  output_format:         z.enum(["pdf","pdf_a","tiff"]).default("pdf"),
+  output_format:         z.enum(["pdf","pdf_a","tiff","jpg"]).default("pdf"),
 })
 
 export const createScanJobSchema = z.object({
   device_id:    z.number().int().positive(),
   profile_id:   z.number().int().positive().optional(),
   priority:     z.number().int().min(0).max(10).default(0),
+  source:       z.enum(["flatbed", "adf", "adf_duplex"]).default("flatbed"),
+  duplex:       z.boolean().default(false),
+  dpi:          z.number().int().min(72).max(1200).optional(),
+  color:        z.boolean().optional(),
+  auto_rotate:  z.boolean().default(true),
+  blank_page_detection: z.boolean().default(true),
+  compression:  z.enum(["low", "medium", "high"]).default("medium"),
+  output_format: z.enum(["pdf", "pdf_a", "tiff", "jpg"]).default("pdf"),
+  doc_class:    z.string().max(100).optional(),
   // Integration: vincular el scan a un agente del backend personal
   personal_dni: z.number().int().positive().optional(),
   personal_ref: z.string().max(200).optional(),

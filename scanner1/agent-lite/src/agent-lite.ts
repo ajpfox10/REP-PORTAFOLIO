@@ -20,7 +20,7 @@ import axios, { type AxiosInstance } from "axios"
 
 const execAsync = promisify(exec)
 
-const API      = (process.env.BASE_URL         || "http://192.168.0.21:3003").replace(/\/$/, "")
+const API      = (process.env.BASE_URL         || "http://192.168.0.21:3002").replace(/\/$/, "")
 const TENANT   = process.env.AGENT_TENANT_ID   || "1"
 const EMAIL    = process.env.AGENT_EMAIL       || "admin@scanner.local"
 const PASSWORD = process.env.AGENT_PASSWORD    || "Admin1234"

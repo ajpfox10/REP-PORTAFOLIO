@@ -10,6 +10,7 @@ import { ExamenIngresoBanner } from '../ExamenIngresoPage';
 import { AccidentesPunzoBanner } from '../AccidentesPunzoPage';
 import { JefedeptosAlertaBanner } from '../JefedeptosPage';
 import { FicheroBanner } from '../FicheroPage';
+import { AlertasAgenteDashboardBanner } from '../AlertasAgentePage';
 import './styles/DashboardPage.css';
 
 function Tile({ to, title, desc, disabled, accent }: {
@@ -54,6 +55,7 @@ export function DashboardPage() {
   const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
   const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
   const canSeeSamo = hasPerm('app:samo:access') || hasPerm('crud:*:*');
+  const canSeeAlertasAgente = hasPerm('api:access');
 
   const isSaludLaboral =
     canSeeSaludLaboral &&
@@ -248,6 +250,7 @@ export function DashboardPage() {
       {hasPerm('crud:*:*') && <ExamenIngresoBanner />}
       {hasPerm('crud:*:*') && <AccidentesPunzoBanner />}
       {hasPerm('crud:*:*') && <JefedeptosAlertaBanner />}
+      {canSeeAlertasAgente && <AlertasAgenteDashboardBanner />}
 
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -284,6 +287,9 @@ export function DashboardPage() {
           <Tile to="/app/sin-fichaje-salida" title="🚪 Sin fichaje de salida" desc="Agentes que debían trabajar un día o mes completo pero no registraron salida en el fichaje biométrico. Cruza horarios y SIAP por UPA." accent="#dc2626" />
           <Tile to="/app/organigrama" title="🏗️ Organigrama" desc="Distribución visual del personal por jefatura, sector, servicio y dependencia." accent="#f59e0b" />
           <Tile to="/app/alertas" title="🔔 Alertas" desc="Cumpleaños próximos, antigüedad 20 años, ingresos y bajas recientes, datos incompletos." accent="#ef4444" />
+          {canSeeAlertasAgente && (
+            <Tile to="/app/alertas-agente" title="🚨 Alertas por Agente" desc="Gestión de alertas manuales por agente: creación, seguimiento y estado de lectura por usuario." accent="#dc2626" />
+          )}
           <Tile to="/app/agentes-servicios" title="🏥 Agentes por Servicio" desc="..." accent="#0891b2" />
           <Tile to="/app/reporte-servicio" title="📊 Reporte por Servicio" desc="Reporte mensual de asistencia por servicio: horas teóricas vs reales, fichajes diarios, feriados y resúmenes semanales/mensuales." accent="#14b8a6" />
           {hasPerm('crud:*:*') && (

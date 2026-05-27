@@ -19,7 +19,7 @@ export type EventName =
 export interface ScanProfile {
   id: number; tenant_id: TenantId; name: string; dpi: number
   color: boolean; auto_rotate: boolean; blank_page_detection: boolean
-  compression: "low"|"medium"|"high"; output_format: "pdf"|"pdf_a"|"tiff"
+  compression: "low"|"medium"|"high"; output_format: "pdf"|"pdf_a"|"tiff"|"jpg"
   created_at: string
 }
 
@@ -33,5 +33,9 @@ export interface ScanJob {
 
 export interface AgentJobPoll {
   job_id: ScanJobId|null; profile: ScanProfile|null
-  personal_ref: string|null; nonce: string
+  personal_ref: string|null
+  personal_dni?: number|null
+  source?: "flatbed" | "adf" | "adf_duplex"
+  duplex?: boolean
+  upload_nonce?: string
 }

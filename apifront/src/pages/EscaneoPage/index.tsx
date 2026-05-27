@@ -3,14 +3,14 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import './styles/EscaneoPage.css';
 
 // ─── Scanner API client ───────────────────────────────────────────────────────
 function getScannerBase() {
   const cfg = (window as any).__RUNTIME_CONFIG__ || {};
-  return (cfg.scannerApiUrl || (import.meta as any)?.env?.VITE_SCANNER_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+  return (cfg.scannerApiUrl || (import.meta as any)?.env?.VITE_SCANNER_API_URL || 'http://localhost:3002').replace(/\/$/, '');
 }
 function getScannerHeaders(): Record<string, string> {
   const cfg = (window as any).__RUNTIME_CONFIG__ || {};
@@ -104,6 +104,18 @@ interface DeviceCapabilities {
   manufacturer: string | null;
   online: boolean;
 }
+type PaperState = 'loaded' | 'empty' | 'unknown';
+interface PaperStatus {
+  device_id: number;
+  adf: PaperState;
+  flatbed: PaperState;
+  flatbed_detectable?: boolean;
+  engine?: 'escl' | 'wia' | 'mixed' | 'none';
+  adf_raw?: string | null;
+  flatbed_raw?: string | null;
+  message?: string;
+  checked_at?: string;
+}
 interface ScanJob {
   id: number; status: string; page_count: number | null;
   error_message: string | null; personal_dni: number | null;
@@ -133,18 +145,64 @@ const SOURCE_LABEL: Record<string, string> = {
   flatbed: '🪟 Vidrio plano', adf: '📄 ADF (alimentador)', adf_duplex: '📄 ADF Dúplex',
 };
 
+const PAPER_LABEL: Record<PaperState, string> = {
+  loaded: 'Con hojas',
+  empty: 'Sin hojas',
+  unknown: 'No detectable',
+};
+
+function paperClass(state?: PaperState | null) {
+  if (state === 'loaded') return ' ok';
+  if (state === 'empty') return ' danger';
+  return ' unknown';
+}
+
 function fmtDT(s?: string | null) {
   if (!s) return '—';
   try { return new Date(s).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); }
   catch { return s; }
 }
 function deviceOnline(d: Device) {
+  if (d.capabilities?.online === true) return true;
   if (typeof d.online === 'boolean') return d.online;
   if (!d.last_seen_at) return false;
-  return (Date.now() - new Date(d.last_seen_at).getTime()) < 90_000;
+  return (Date.now() - new Date(d.last_seen_at).getTime()) < 10 * 60_000;
+}
+
+function normSearch(value: any) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function normalizeCaps(caps?: Partial<DeviceCapabilities> | null): DeviceCapabilities {
+  return {
+    sources: (Array.isArray(caps?.sources) && caps!.sources!.length ? caps!.sources! : ['flatbed']) as DeviceCapabilities['sources'],
+    resolutions: Array.isArray(caps?.resolutions) && caps!.resolutions!.length ? caps!.resolutions! : [150, 300, 600],
+    paper_sizes: Array.isArray(caps?.paper_sizes) && caps!.paper_sizes!.length ? caps!.paper_sizes! : ['A4'],
+    color_modes: Array.isArray(caps?.color_modes) && caps!.color_modes!.length ? caps!.color_modes! : ['color', 'grayscale'],
+    max_pages_adf: caps?.max_pages_adf ?? null,
+    duplex: caps?.duplex === true,
+    model: caps?.model ?? null,
+    manufacturer: caps?.manufacturer ?? null,
+    online: caps?.online ?? true,
+  };
 }
 
 type Tab = 'escanear' | 'dispositivos' | 'cola' | 'documentos';
+const DEVICE_PAGE_SIZE = 4;
+type OutputFormat = 'pdf' | 'pdf_a' | 'tiff' | 'jpg';
+
+type ViewerState = {
+  title: string;
+  url: string;
+  contentType?: string;
+  filename?: string | null;
+  kind: 'scan' | 'document';
+  revokeOnClose: boolean;
+} | null;
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function EscaneoPage() {
@@ -170,6 +228,9 @@ export function EscaneoPage() {
   const [selectedDevice, setSelectedDevice] = useState<number | null>(null);
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [discovering, setDiscovering]       = useState(false);
+  const [paperStatus, setPaperStatus]       = useState<PaperStatus | null>(null);
+  const [loadingPaperStatus, setLoadingPaperStatus] = useState(false);
+  const [flatbedPromptDismissed, setFlatbedPromptDismissed] = useState(false);
 
   // Perfiles
   const [profiles, setProfiles]             = useState<ScanProfile[]>([]);
@@ -180,6 +241,7 @@ export function EscaneoPage() {
   const [dpi, setDpi]         = useState<number>(300);
   const [color, setColor]     = useState(true);
   const [duplex, setDuplex]   = useState(false);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>('pdf');
 
   // Sesión multi-página
   const [session, setSession]     = useState<ScannedPage[]>([]);
@@ -195,35 +257,43 @@ export function EscaneoPage() {
 
   // Historial documentos del agente (desde api_personal)
   const [docHistory, setDocHistory] = useState<any[]>([]);
+  const [docSearch, setDocSearch] = useState('');
+  const [deviceSearch, setDeviceSearch] = useState('');
+  const [devicePage, setDevicePage] = useState(1);
+  const [viewer, setViewer] = useState<ViewerState>(null);
+  const viewerUrlRef = useRef<string | null>(null);
 
   // Lanzar scan (legacy — se mantiene para compatibilidad de estado)
   const [launching, setLaunching] = useState(false);
 
   // Limpiar blob URLs al desmontar
   useEffect(() => {
-    return () => { blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u)); };
+    return () => {
+      blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
+      if (viewerUrlRef.current) URL.revokeObjectURL(viewerUrlRef.current);
+    };
   }, []);
 
   // ── Cargar dispositivos ───────────────────────────────────────────────────
   const cargarDevices = useCallback(async () => {
     setLoadingDevices(true);
     try {
-      const r = await scannerFetch<{ items: Device[] }>('/v1/devices?limit=50');
+      const r = await scannerFetch<{ items: Device[] }>('/v1/devices?limit=200&fast=1');
       const devs = r.items || [];
       const withCaps = await Promise.all(devs.map(async (d) => {
         if (!deviceOnline(d)) return d;
         try {
           const caps = await scannerFetch<DeviceCapabilities>(`/v1/devices/${d.id}/capabilities`);
-          return { ...d, capabilities: caps };
+          return { ...d, capabilities: normalizeCaps(caps) };
         } catch { return d; }
       }));
       setDevices(withCaps);
       setSelectedDevice(prev => {
-        if (prev && withCaps.find(d => d.id === prev)) return prev;
+        if (prev && withCaps.find(d => d.id === prev && deviceOnline(d))) return prev;
         const favOnline = withCaps.find(d => favorites.includes(d.id) && deviceOnline(d));
         if (favOnline) return favOnline.id;
         const anyOnline = withCaps.find(d => deviceOnline(d));
-        return anyOnline?.id ?? (withCaps[0]?.id ?? null);
+        return anyOnline?.id ?? null;
       });
     } catch (e: any) {
       toast.error('Scanner no disponible', e?.message);
@@ -236,6 +306,34 @@ export function EscaneoPage() {
       setProfiles(r.items || []);
     } catch { /* silencioso */ }
   }, []);
+
+  const cargarPaperStatus = useCallback(async () => {
+    if (!selectedDevice) {
+      setPaperStatus(null);
+      return;
+    }
+    const current = devices.find(d => d.id === selectedDevice);
+    if (current && !deviceOnline(current)) {
+      setPaperStatus(null);
+      return;
+    }
+    setPaperStatus(null);
+    setLoadingPaperStatus(true);
+    try {
+      const status = await scannerFetch<PaperStatus>(`/v1/devices/${selectedDevice}/paper-status`);
+      setPaperStatus(status);
+    } catch {
+      setPaperStatus({
+        device_id: selectedDevice,
+        adf: 'unknown',
+        flatbed: 'unknown',
+        flatbed_detectable: false,
+        engine: 'none',
+      });
+    } finally {
+      setLoadingPaperStatus(false);
+    }
+  }, [selectedDevice, devices]);
 
   const descubrirDispositivos = useCallback(async () => {
     setDiscovering(true);
@@ -274,6 +372,47 @@ export function EscaneoPage() {
     cargarDevices();
     cargarProfiles();
   }, []);
+
+  useEffect(() => {
+    setFlatbedPromptDismissed(false);
+    cargarPaperStatus();
+  }, [selectedDevice, cargarPaperStatus]);
+
+  useEffect(() => {
+    setFlatbedPromptDismissed(false);
+  }, [source, selectedDevice]);
+
+  useEffect(() => {
+    const selected = devices.find(d => d.id === selectedDevice);
+    const caps = selected?.capabilities;
+    if (!caps) return;
+    if (!caps.sources.includes(source as any)) {
+      setSource(caps.sources[0] || 'flatbed');
+    }
+    if (!caps.resolutions.includes(dpi)) {
+      setDpi(caps.resolutions.includes(300) ? 300 : caps.resolutions[0] || 300);
+    }
+    const colorKey = color ? 'color' : 'grayscale';
+    if (!caps.color_modes.includes(colorKey) && !caps.color_modes.includes(color ? 'color' : 'gris')) {
+      setColor(caps.color_modes.includes('color'));
+    }
+    if (!caps.duplex) setDuplex(false);
+  }, [devices, selectedDevice]);
+
+  useEffect(() => {
+    const usesAdf = source === 'adf' || source === 'adf_duplex';
+    if (usesAdf && paperStatus?.adf === 'empty') {
+      toast.error('ADF sin hojas', 'Carga hojas en el alimentador o cambia a cristal');
+      return;
+    }
+    if (usesAdf && paperStatus?.flatbed === 'loaded' && !flatbedPromptDismissed) {
+      toast.error('Hoja en cristal', 'Confirma si queres usar cristal o seguir por ADF');
+      return;
+    }
+    if (outputFormat === 'jpg' && (source !== 'flatbed' || duplex)) {
+      setOutputFormat('pdf');
+    }
+  }, [outputFormat, source, duplex]);
 
   // ── Buscar agente ─────────────────────────────────────────────────────────
   const cargarDocHistory = useCallback(async (cleanDni: string) => {
@@ -321,12 +460,12 @@ export function EscaneoPage() {
   }, []);
 
   // ── Poll job ────────────────────────────────────────────────────────────────
-  async function pollJob(jobId: number, maxMs = 120_000): Promise<string> {
+  async function pollJob(jobId: number, maxMs = 120_000): Promise<ScanJob> {
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       await new Promise(r => setTimeout(r, 2500));
-      const job = await scannerFetch<any>(`/v1/scan-jobs/${jobId}`);
-      if (['completed', 'failed', 'canceled'].includes(job.status)) return job.status;
+      const job = await scannerFetch<ScanJob>(`/v1/scan-jobs/${jobId}`);
+      if (['completed', 'failed', 'canceled'].includes(job.status)) return job;
     }
     throw new Error('Tiempo de espera agotado (120s)');
   }
@@ -336,6 +475,10 @@ export function EscaneoPage() {
     if (!agente) { toast.error('Agente requerido', 'Buscá y seleccioná el agente antes de escanear'); return; }
     if (!tipoDoc) { toast.error('Tipo de documento requerido', 'Seleccioná qué documento vas a escanear'); return; }
     if (!selectedDevice) { toast.error('Seleccioná un dispositivo'); return; }
+    if (outputFormat === 'jpg' && (source !== 'flatbed' || duplex)) {
+      toast.error('JPG solo con cristal', 'Para ADF o dúplex usá PDF o TIFF');
+      return;
+    }
 
     const tipoLabel = TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label || tipoDoc;
     setScanPhase('creating');
@@ -347,26 +490,31 @@ export function EscaneoPage() {
       const r = await scannerFetch<{ id: number; pending_tramites?: any[] }>('/v1/scan-jobs', {
         method: 'POST',
         body: JSON.stringify({
-          device_id: selectedDevice, profile_id: selectedProfile || undefined,
-          priority: 5, personal_dni: agente.dni, personal_ref: tipoDoc, doc_class: tipoDoc,
+          device_id: selectedDevice,
+          profile_id: selectedProfile || undefined,
+          priority: 5,
+          source,
+          duplex: duplex || source === 'adf_duplex',
+          dpi,
+          color,
+          auto_rotate: true,
+          blank_page_detection: true,
+          compression: 'medium',
+          output_format: outputFormat,
+          personal_dni: agente.dni,
+          personal_ref: tipoDoc,
+          doc_class: tipoDoc,
         }),
       });
 
       if (r.pending_tramites?.length) toast.error(`⚠️ ${r.pending_tramites.length} trámite(s) pendiente(s)`, '');
 
-      // Pre-registro en personal API (non-blocking)
-      apiFetch('/scanner/registrar-escaneo', {
-        method: 'POST',
-        body: JSON.stringify({
-          dni: agente.dni, tipo_documento: tipoDoc,
-          descripcion: descripcion.trim() || tipoLabel, nombre_archivo: `scan-job-${r.id}.pdf`,
-        }),
-      }).catch(() => {});
-
       // 2. Esperar al agente
       setScanPhase('waiting');
-      const status = await pollJob(r.id);
-      if (status !== 'completed') throw new Error(`Escaneo terminó con estado: ${status}`);
+      const finalJob = await pollJob(r.id);
+      if (finalJob.status !== 'completed') {
+        throw new Error(finalJob.error_message || `Escaneo termino con estado: ${finalJob.status}`);
+      }
 
       // 3. Obtener páginas
       setScanPhase('loading_pages');
@@ -400,25 +548,32 @@ export function EscaneoPage() {
       setScanError(e?.message || 'Error desconocido');
       toast.error('Error al escanear', e?.message);
     } finally { setLaunching(false); }
-  }, [agente, tipoDoc, selectedDevice, selectedProfile, descripcion]);
+  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, outputFormat, paperStatus, flatbedPromptDismissed]);
 
   // ── Guardar sesión ──────────────────────────────────────────────────────────
   const guardarSesion = useCallback(async () => {
     if (!session.length || !agente) return;
     setSaving(true);
     try {
+      const jobIds = Array.from(new Set(session.map(p => p.jobId)));
+      await Promise.all(jobIds.map(jobId =>
+        scannerFetch(`/v1/scan-jobs/${jobId}/sync-personal`, { method: 'POST' })
+      ));
       toast.ok('✅ Guardado', `${session.length} página(s) registradas`);
       apiFetch<any>(`/scanner/documents/${agente.dni}`)
         .then(r => setDocHistory(r?.data || [])).catch(() => {});
       blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
       blobUrlsRef.current = [];
       setSession([]); setScanPhase('idle'); setScanError(null);
+    } catch (e: any) {
+      toast.error('No se pudo guardar', e?.message || 'Error sincronizando con legajo');
     } finally { setSaving(false); }
   }, [session, agente]);
 
   const descartarSesion = useCallback(() => {
     blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
     blobUrlsRef.current = [];
+    setViewer(prev => prev?.kind === 'scan' ? null : prev);
     setSession([]); setScanPhase('idle'); setScanError(null);
   }, []);
 
@@ -429,6 +584,50 @@ export function EscaneoPage() {
       return prev.filter(p => p.storageKey !== storageKey);
     });
   }, []);
+
+  const cerrarViewer = useCallback(() => {
+    setViewer(prev => {
+      if (prev?.revokeOnClose && viewerUrlRef.current === prev.url) {
+        URL.revokeObjectURL(prev.url);
+        viewerUrlRef.current = null;
+      }
+      return null;
+    });
+  }, []);
+
+  const abrirPaginaEscaneada = useCallback((page: ScannedPage, index: number) => {
+    if (!page.blobUrl) return;
+    setViewer({
+      title: `Pagina escaneada ${index + 1}`,
+      url: page.blobUrl,
+      contentType: 'image/*',
+      filename: null,
+      kind: 'scan',
+      revokeOnClose: false,
+    });
+  }, []);
+
+  const abrirDocumentoPrevio = useCallback(async (doc: any) => {
+    try {
+      if (viewerUrlRef.current) {
+        URL.revokeObjectURL(viewerUrlRef.current);
+        viewerUrlRef.current = null;
+      }
+      const { blob, contentType, filename } = await apiFetchBlobWithMeta(`/documents/${doc.id}/file`);
+      const url = URL.createObjectURL(blob);
+      viewerUrlRef.current = url;
+      setViewer({
+        title: doc.nombre || filename || `Documento #${doc.id}`,
+        url,
+        contentType,
+        filename,
+        kind: 'document',
+        revokeOnClose: true,
+      });
+    } catch (e: any) {
+      toast.error('No se pudo abrir el documento', e?.message);
+    }
+  }, [toast]);
 
   const cancelarJob = useCallback(async (jobId: number) => {
     try {
@@ -441,6 +640,9 @@ export function EscaneoPage() {
   const device   = devices.find(d => d.id === selectedDevice) || null;
   const caps     = device?.capabilities;
   const isOnline = device ? deviceOnline(device) : false;
+  const sourceUsesAdf = source === 'adf' || source === 'adf_duplex';
+  const adfPaperEmpty = sourceUsesAdf && paperStatus?.adf === 'empty';
+  const flatbedPaperQuestion = sourceUsesAdf && paperStatus?.flatbed === 'loaded' && !flatbedPromptDismissed;
 
   const isScanning = ['creating', 'waiting', 'loading_pages'].includes(scanPhase);
   const hasPages   = session.length > 0;
@@ -448,7 +650,7 @@ export function EscaneoPage() {
   const activeJobs = jobs.filter(j => ['queued','in_progress'].includes(j.status));
   const doneJobs   = jobs.filter(j => !['queued','in_progress'].includes(j.status));
 
-  const puedeEscanear = !!agente && !!tipoDoc && !!selectedDevice && !isScanning;
+  const puedeEscanear = !!agente && !!tipoDoc && !!selectedDevice && isOnline && !isScanning && !adfPaperEmpty && !flatbedPaperQuestion;
 
   const sortedDevices = [...devices].sort((a, b) => {
     const af = favorites.includes(a.id) ? 0 : 1;
@@ -456,6 +658,30 @@ export function EscaneoPage() {
     if (af !== bf) return af - bf;
     return (deviceOnline(a) ? 0 : 1) - (deviceOnline(b) ? 0 : 1);
   });
+  const onlineDevices = sortedDevices.filter(deviceOnline);
+  const deviceNeedle = normSearch(deviceSearch);
+  const filteredOnlineDevices = onlineDevices.filter(d => {
+    if (!deviceNeedle) return true;
+    return normSearch([d.name, d.hostname, d.driver, d.capabilities?.model, d.capabilities?.manufacturer].join(' ')).includes(deviceNeedle);
+  });
+  const devicePageCount = Math.max(1, Math.ceil(filteredOnlineDevices.length / DEVICE_PAGE_SIZE));
+  const safeDevicePage = Math.min(devicePage, devicePageCount);
+  const pagedOnlineDevices = filteredOnlineDevices.slice(
+    (safeDevicePage - 1) * DEVICE_PAGE_SIZE,
+    safeDevicePage * DEVICE_PAGE_SIZE
+  );
+
+  const docNeedle = normSearch(docSearch);
+  const filteredDocHistory = docHistory.filter((d: any) => {
+    if (!docNeedle) return true;
+    const tipoLabel = TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.label || d.tipo;
+    return normSearch([d.nombre, tipoLabel, d.descripcion_archivo, d.ruta, fmtDT(d.created_at)].join(' ')).includes(docNeedle);
+  });
+
+  useEffect(() => { setDevicePage(1); }, [deviceSearch, onlineDevices.length]);
+  useEffect(() => {
+    if (devicePage > devicePageCount) setDevicePage(devicePageCount);
+  }, [devicePage, devicePageCount]);
 
   const scanPhaseLabel: Record<ScanPhase, string> = {
     idle: '', creating: '📡 Creando trabajo…',
@@ -463,6 +689,93 @@ export function EscaneoPage() {
     loading_pages: '🖼️ Cargando páginas…',
     done: '', error: '',
   };
+
+  const paginasEscaneadasCard = hasPages ? (
+    <div className="card scan-card scan-preview-card">
+      <div className="scan-section-title">
+        🖼️ Páginas escaneadas
+        <span className="badge" style={{ marginLeft: 6, background: 'rgba(16,185,129,0.2)', color: '#6ee7b7' }}>
+          {session.length} pág.
+        </span>
+      </div>
+      <div className="scan-preview-grid">
+        {session.map((page, idx) => (
+          <div
+            key={page.storageKey}
+            className="scan-preview-thumb scan-preview-thumb-live"
+            role="button"
+            tabIndex={0}
+            title="Doble click para ampliar"
+            onDoubleClick={() => abrirPaginaEscaneada(page, idx)}
+            onKeyDown={e => e.key === 'Enter' && abrirPaginaEscaneada(page, idx)}
+          >
+            <div className="scan-preview-frame">
+              {page.blobUrl ? (
+                <img src={page.blobUrl} alt={`Página ${idx + 1}`} className="scan-preview-img" />
+              ) : page.loadError ? (
+                <div className="scan-preview-state scan-preview-error">❌<br />Error</div>
+              ) : (
+                <div className="scan-preview-state">
+                  <div className="scan-pulse-dot" style={{ margin: '0 auto 4px' }} />
+                  Cargando...
+                </div>
+              )}
+              <div className="scan-preview-num">Pág. {idx + 1}</div>
+              <button
+                type="button"
+                className="scan-preview-remove"
+                onClick={e => { e.stopPropagation(); quitarPagina(page.storageKey); }}
+                title="Quitar"
+              >×</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
+  const documentosPreviosCard = agente ? (
+    <div className="card scan-card">
+      <div className="scan-section-title">🗂️ Documentos previos del agente</div>
+      {docHistory.length > 0 && (
+        <input
+          className="input scan-doc-search"
+          value={docSearch}
+          onChange={e => setDocSearch(e.target.value)}
+          placeholder="Buscar por nombre, tipo o fecha"
+        />
+      )}
+      {docHistory.length > 0 ? (
+        filteredDocHistory.length > 0 ? (
+          <div className="scan-doc-list scan-doc-list-compact">
+            {filteredDocHistory.slice(0, 12).map((d: any) => (
+              <button
+                key={d.id}
+                type="button"
+                className="scan-doc-item scan-doc-button"
+                onClick={() => abrirDocumentoPrevio(d)}
+                title="Abrir documento"
+              >
+                <div className="scan-doc-class">
+                  {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.icon || '📄'}
+                </div>
+                <div className="scan-doc-body">
+                  <div className="scan-doc-name">{d.nombre || `Documento #${d.id}`}</div>
+                  <div className="muted" style={{ fontSize: '0.72rem' }}>
+                    {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.label || d.tipo} · {fmtDT(d.created_at)}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="scan-empty-inline">Sin resultados para esa búsqueda</div>
+        )
+      ) : (
+        <div className="scan-empty-inline">Sin documentos escaneados para este agente</div>
+      )}
+    </div>
+  ) : null;
 
   return (
     <Layout title="Escaneo" showBack>
@@ -601,6 +914,9 @@ export function EscaneoPage() {
                 />
               </div>
 
+              {paginasEscaneadasCard}
+              {documentosPreviosCard}
+
             </div>
 
             {/* DERECHA */}
@@ -616,17 +932,32 @@ export function EscaneoPage() {
                 </div>
                 {loadingDevices ? (
                   <div className="muted">Cargando dispositivos…</div>
-                ) : devices.length === 0 ? (
+                ) : onlineDevices.length === 0 ? (
                   <div className="scan-no-devices">
                     <div style={{ fontSize: '2rem' }}>🔍</div>
-                    <div>No hay dispositivos registrados</div>
+                    <div>No hay escáneres en línea</div>
+                    {devices.length > 0 && (
+                      <div className="muted" style={{ fontSize: '0.76rem' }}>
+                        Hay {devices.length} registrado(s), pero sin conexión activa.
+                      </div>
+                    )}
                     <button className="btn" onClick={descubrirDispositivos} disabled={discovering}>
                       {discovering ? '🔄 Buscando…' : '📡 Buscar en red'}
                     </button>
                   </div>
                 ) : (
-                  <div className="scan-device-list">
-                    {sortedDevices.map(d => {
+                  <div className="scan-device-picker">
+                    <input
+                      className="input scan-device-search"
+                      value={deviceSearch}
+                      onChange={e => setDeviceSearch(e.target.value)}
+                      placeholder="Buscar escáner"
+                    />
+                    {filteredOnlineDevices.length === 0 ? (
+                      <div className="scan-empty-inline">Sin escáneres para esa búsqueda</div>
+                    ) : (
+                      <div className="scan-device-list scan-device-list-scroll">
+                    {pagedOnlineDevices.map(d => {
                       const online = deviceOnline(d);
                       const isFav  = favorites.includes(d.id);
                       return (
@@ -662,6 +993,15 @@ export function EscaneoPage() {
                         </button>
                       );
                     })}
+                      </div>
+                    )}
+                    {filteredOnlineDevices.length > DEVICE_PAGE_SIZE && (
+                      <div className="scan-pager">
+                        <button className="btn" onClick={() => setDevicePage(p => Math.max(1, p - 1))} disabled={safeDevicePage <= 1}>‹</button>
+                        <span className="muted">Página {safeDevicePage} de {devicePageCount}</span>
+                        <button className="btn" onClick={() => setDevicePage(p => Math.min(devicePageCount, p + 1))} disabled={safeDevicePage >= devicePageCount}>›</button>
+                      </div>
+                    )}
                     <button className="btn" style={{ marginTop: 6 }} onClick={descubrirDispositivos} disabled={discovering}>
                       {discovering ? '🔄 Buscando…' : '📡 Buscar en red'}
                     </button>
@@ -688,6 +1028,59 @@ export function EscaneoPage() {
                     ))}
                   </div>
 
+                  <div className="scan-paper-panel">
+                    <div className="scan-paper-row">
+                      <span className={`scan-paper-pill${paperClass(paperStatus?.adf)}`}>
+                        ADF: {loadingPaperStatus ? 'Consultando...' : PAPER_LABEL[paperStatus?.adf || 'unknown']}
+                      </span>
+                      <span className={`scan-paper-pill${paperClass(paperStatus?.flatbed)}`}>
+                        Cristal: {loadingPaperStatus ? 'Consultando...' : PAPER_LABEL[paperStatus?.flatbed || 'unknown']}
+                      </span>
+                      <button
+                        type="button"
+                        className="scan-paper-refresh"
+                        onClick={cargarPaperStatus}
+                        disabled={loadingPaperStatus || !selectedDevice}
+                      >
+                        Actualizar
+                      </button>
+                    </div>
+
+                    {adfPaperEmpty && (
+                      <div className="scan-paper-warning">
+                        ADF sin hojas. Carga hojas en el alimentador o cambia a cristal.
+                      </div>
+                    )}
+
+                    {flatbedPaperQuestion && (
+                      <div className="scan-source-question">
+                        <span>Hay hoja en cristal. Queres escanear por cristal?</span>
+                        <div className="scan-source-question-actions">
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => { setSource('flatbed'); setDuplex(false); setFlatbedPromptDismissed(true); }}
+                          >
+                            Usar cristal
+                          </button>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => setFlatbedPromptDismissed(true)}
+                          >
+                            Seguir ADF
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {paperStatus && paperStatus.flatbed === 'unknown' && (
+                      <div className="muted scan-paper-note">
+                        Cristal: este equipo no informa si hay hoja antes de escanear.
+                      </div>
+                    )}
+                  </div>
+
                   <div className="muted scan-label" style={{ marginTop: 12 }}>Resolución (DPI)</div>
                   <div className="scan-caps-grid">
                     {(caps.resolutions.length ? caps.resolutions : [150, 300, 600]).map(r => (
@@ -709,6 +1102,34 @@ export function EscaneoPage() {
                       >{m === 'color' ? '🎨 Color' : '⬜ Escala de grises'}</button>
                     ))}
                   </div>
+
+                  <div className="muted scan-label" style={{ marginTop: 12 }}>Formato de salida</div>
+                  <div className="scan-caps-grid">
+                    {([
+                      ['pdf', 'PDF'],
+                      ['pdf_a', 'PDF/A'],
+                      ['tiff', 'TIFF'],
+                      ['jpg', 'JPG'],
+                    ] as [OutputFormat, string][]).map(([fmt, label]) => {
+                      const disabled = fmt === 'jpg' && (source !== 'flatbed' || duplex);
+                      return (
+                        <button
+                          key={fmt}
+                          className={`scan-cap-btn${outputFormat === fmt ? ' selected' : ''}`}
+                          onClick={() => { if (!disabled) { setOutputFormat(fmt); setSelectedProfile(null); } }}
+                          disabled={disabled}
+                          title={disabled ? 'JPG solo se usa con cristal / vidrio plano' : undefined}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {outputFormat === 'jpg' && (
+                    <div className="muted" style={{ fontSize: '0.72rem', marginTop: 6 }}>
+                      JPG se guarda como imagen de una sola pÃ¡gina.
+                    </div>
+                  )}
 
                   {(source === 'adf' || source === 'adf_duplex') && caps.duplex && (
                     <label className="scan-checkbox-row" style={{ marginTop: 12 }}>
@@ -741,6 +1162,7 @@ export function EscaneoPage() {
                         onClick={() => {
                           setSelectedProfile(p.id);
                           setDpi(p.dpi); setColor(p.color);
+                          setOutputFormat((p.output_format as OutputFormat) || 'pdf');
                         }}
                       >
                         {p.name}
@@ -769,10 +1191,18 @@ export function EscaneoPage() {
                       {TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label}
                     </span>}
                   </div>
-                  <div className={`scan-check-item${selectedDevice ? ' ok' : ' pending'}`}>
-                    {selectedDevice ? '✅' : '⭕'} Dispositivo seleccionado
+                  <div className={`scan-check-item${isOnline ? ' ok' : ' pending'}`}>
+                    {isOnline ? '✅' : '⭕'} Dispositivo en línea
                     {device && <span className="muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>{device.name}</span>}
                   </div>
+                  {sourceUsesAdf && (
+                    <div className={`scan-check-item${adfPaperEmpty ? ' pending' : ' ok'}`}>
+                      {adfPaperEmpty ? '⭕' : paperStatus?.adf === 'loaded' ? '✅' : '◌'} ADF
+                      <span className="muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>
+                        {loadingPaperStatus ? 'consultando...' : PAPER_LABEL[paperStatus?.adf || 'unknown']}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {device && agente && tipoDoc && (
@@ -796,12 +1226,28 @@ export function EscaneoPage() {
                       <span className="muted">Resolución</span>
                       <span>{dpi} dpi · {color ? 'Color' : 'Grises'}</span>
                     </div>
+                    <div className="scan-summary-row">
+                      <span className="muted">Formato</span>
+                      <span>{outputFormat.toUpperCase()}</span>
+                    </div>
                   </div>
                 )}
 
                 {!isOnline && device && (
                   <div className="scan-warn">
                     ⚠️ El dispositivo <b>{device.name}</b> no está en línea. Verificá la conexión.
+                  </div>
+                )}
+
+                {adfPaperEmpty && (
+                  <div className="scan-warn">
+                    ⚠️ ADF sin hojas. Cargá hojas en el alimentador o cambiá la fuente a cristal.
+                  </div>
+                )}
+
+                {flatbedPaperQuestion && (
+                  <div className="scan-warn">
+                    ⚠️ Hay hoja en cristal. Confirmá la fuente en Configuración de Escaneo.
                   </div>
                 )}
 
@@ -824,9 +1270,12 @@ export function EscaneoPage() {
                   disabled={!puedeEscanear}
                 >
                   {isScanning ? (scanPhaseLabel[scanPhase] || '⏳ Escaneando…')
-                    : hasPages ? '📄 Escanear otra página'
                     : !agente ? '👤 Falta el agente'
                     : !tipoDoc ? '🗂️ Falta el tipo de documento'
+                    : adfPaperEmpty ? '📄 ADF sin hojas'
+                    : flatbedPaperQuestion ? '🪟 Confirmar fuente'
+                    : !isOnline ? '🔌 Scanner sin conexión'
+                    : hasPages ? '📄 Escanear otra página'
                     : '▶ Iniciar Escaneo'}
                 </button>
 
@@ -847,7 +1296,7 @@ export function EscaneoPage() {
               </div>
 
               {/* ── Vista previa de páginas escaneadas ── */}
-              {hasPages && (
+              {false && hasPages && (
                 <div className="card scan-card">
                   <div className="scan-section-title">
                     🖼️ Páginas escaneadas
@@ -893,7 +1342,7 @@ export function EscaneoPage() {
               )}
 
               {/* Docs previos del agente */}
-              {agente && docHistory.length > 0 && (
+              {false && agente && docHistory.length > 0 && (
                 <div className="card scan-card">
                   <div className="scan-section-title">🗂️ Documentos previos del agente</div>
                   <div className="scan-doc-list">
@@ -1149,9 +1598,18 @@ export function EscaneoPage() {
             )}
 
             {docHistory.length > 0 && (
+              <input
+                className="input scan-doc-search"
+                value={docSearch}
+                onChange={e => setDocSearch(e.target.value)}
+                placeholder="Buscar por nombre, tipo o fecha"
+              />
+            )}
+
+            {docHistory.length > 0 && filteredDocHistory.length > 0 && (
               <div className="scan-docs-grid">
-                {docHistory.map((d: any) => (
-                  <div key={d.id} className="card scan-doc-card">
+                {filteredDocHistory.map((d: any) => (
+                  <button key={d.id} type="button" className="card scan-doc-card scan-doc-card-button" onClick={() => abrirDocumentoPrevio(d)}>
                     <div className="scan-doc-class-badge">
                       {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.icon || '📄'} {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.label || d.tipo || 'doc'}
                     </div>
@@ -1162,8 +1620,15 @@ export function EscaneoPage() {
                     <div className="muted" style={{ fontSize: '0.72rem', marginTop: 4 }}>
                       {fmtDT(d.created_at)}
                     </div>
-                  </div>
+                  </button>
                 ))}
+              </div>
+            )}
+
+            {agente && docHistory.length > 0 && filteredDocHistory.length === 0 && (
+              <div className="scan-empty-state" style={{ marginTop: 16 }}>
+                <div style={{ fontSize: '2.5rem' }}>🔍</div>
+                <div>Sin resultados para esa búsqueda</div>
               </div>
             )}
 
@@ -1180,6 +1645,34 @@ export function EscaneoPage() {
                 <div className="muted">Buscá un agente por DNI o apellido</div>
               </div>
             )}
+          </div>
+        )}
+
+        {viewer && (
+          <div className="scan-viewer-backdrop" role="dialog" aria-modal="true" onClick={cerrarViewer}>
+            <div className="scan-viewer-modal" onClick={e => e.stopPropagation()}>
+              <div className="scan-viewer-header">
+                <div className="scan-viewer-title">{viewer.title}</div>
+                <div className="scan-viewer-actions">
+                  {viewer.kind === 'document' && (
+                    <a className="btn" href={viewer.url} download={viewer.filename || undefined}>Descargar</a>
+                  )}
+                  <button className="btn" type="button" onClick={cerrarViewer}>Cerrar</button>
+                </div>
+              </div>
+              <div className="scan-viewer-body">
+                {(viewer.contentType || '').includes('pdf') ? (
+                  <iframe title={viewer.title} src={viewer.url} className="scan-viewer-frame" />
+                ) : (viewer.contentType || '').startsWith('image/') || viewer.kind === 'scan' ? (
+                  <img src={viewer.url} alt={viewer.title} className="scan-viewer-image" />
+                ) : (
+                  <div className="scan-empty-state">
+                    <div>Vista previa no disponible</div>
+                    <a className="btn" href={viewer.url} download={viewer.filename || undefined}>Descargar archivo</a>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -69,7 +69,7 @@ export function requireDeviceAuth() {
       const hostname = req.header("x-agent-hostname") || null
       const version  = req.header("x-agent-version")  || null
       await pool.query(
-        "UPDATE devices SET last_seen_at=now(), hostname=COALESCE(?,hostname), agent_version=COALESCE(?,agent_version) WHERE id=?",
+        "UPDATE devices SET hostname=COALESCE(?,hostname), agent_version=COALESCE(?,agent_version) WHERE id=?",
         [hostname, version, device.id]
       )
 
