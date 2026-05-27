@@ -49,6 +49,7 @@ import { BajasPorEstructuraPage } from '../pages/BajasPorEstructuraPage';
 import { BajasGestionPage } from '../pages/BajasGestionPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
 import { HerramientasPage }    from '../pages/HerramientasPage';
+import { AlertasAgentePage }   from '../pages/AlertasAgentePage';
 import { StressAlertasPage }  from '../pages/StressAlertasPage';
 import { JefedeptosPage } from '../pages/JefedeptosPage';
 import { ReporteAsistenciaServicioPage } from '../pages/ReporteAsistenciaServicioPage';
@@ -510,6 +511,18 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <BajasGestionPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            {/* Alertas por agente (RRHH) */}
+            <Route
+              path="/app/alertas-agente"
+              element={
+                <Private>
+                  <Guard perm="api:access">
+                    <AlertasAgentePage />
                   </Guard>
                 </Private>
               }

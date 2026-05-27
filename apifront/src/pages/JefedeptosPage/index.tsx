@@ -245,6 +245,13 @@ export function JefedeptosPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [markingId, setMarkingId] = useState<number | null>(null);
+  const [editingRow, setEditingRow] = useState<Jefedepto | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editJefaturaId, setEditJefaturaId] = useState('');
+  const [editTipo, setEditTipo] = useState<'INTERINO' | 'POR CONCURSO'>('INTERINO');
+  const [editNroActo, setEditNroActo] = useState('');
+  const [editFechaDesde, setEditFechaDesde] = useState('');
+  const [editFechaHasta, setEditFechaHasta] = useState('');
 
   // formulario
   const [jefaturaId, setJefaturaId] = useState('');
@@ -373,6 +380,43 @@ export function JefedeptosPage() {
       await loadAll();
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setMarkingId(null); }
+  };
+
+  // ── Abrir edición ──
+  const openEdit = (row: Jefedepto) => {
+    setEditingRow(row);
+    setEditJefaturaId(row.jefatura_id ? String(row.jefatura_id) : '');
+    setEditTipo(row.tipo_funcion === 'POR CONCURSO' ? 'POR CONCURSO' : 'INTERINO');
+    setEditNroActo(row.nro_acto_admin ?? '');
+    setEditFechaDesde(row.fecha_desde?.slice(0, 10) ?? '');
+    setEditFechaHasta(row.fecha_hasta?.slice(0, 10) ?? '');
+  };
+
+  // ── Guardar edición ──
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRow) return;
+    if (!editJefaturaId) { toast.error('Sin jefatura', 'Seleccioná una jefatura.'); return; }
+    if (!editFechaDesde) { toast.error('Sin fecha', 'Ingresá la fecha desde.'); return; }
+    if (!editNroActo.trim() && editTipo === 'POR CONCURSO') { toast.error('Sin acto', 'Ingresá el Nro. de Acto Administrativo.'); return; }
+    setEditSaving(true);
+    try {
+      await apiFetch(`/jefedeptos/${editingRow.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          jefatura_id: Number(editJefaturaId),
+          tipo_funcion: editTipo,
+          nro_acto_admin: editNroActo.trim() || null,
+          fecha_desde: editFechaDesde,
+          fecha_hasta: editTipo === 'POR CONCURSO' ? (editFechaHasta || null) : null,
+          updated_by: auditInfo.id,
+        }),
+      });
+      toast.ok('Actualizado', 'Registro actualizado correctamente.');
+      setEditingRow(null);
+      await loadAll();
+    } catch (e: any) { toast.error('Error al guardar', e?.message); }
+    finally { setEditSaving(false); }
   };
 
   // ── Stats ──
@@ -604,7 +648,7 @@ export function JefedeptosPage() {
                           : <span className="muted" style={{ fontSize: '0.78rem' }}>—</span>
                       }
                     </td>
-                    <td>
+                    <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                       {!r.alerta_45_avisada && enAlerta(r) && (
                         <button className="btn" type="button"
                           style={{ fontSize: '0.72rem', padding: '2px 8px', background: 'rgba(234,179,8,0.18)', color: '#eab308' }}
@@ -613,6 +657,11 @@ export function JefedeptosPage() {
                           {markingId === r.id ? '...' : '✓ Marcar avisada'}
                         </button>
                       )}
+                      <button className="btn" type="button"
+                        style={{ fontSize: '0.72rem', padding: '2px 8px', background: 'rgba(99,102,241,0.18)', color: '#818cf8' }}
+                        onClick={() => openEdit(r)}>
+                        ✏️ Editar
+                      </button>
                     </td>
                   </tr>
                 );
@@ -624,6 +673,72 @@ export function JefedeptosPage() {
           </table>
         </div>
       </div>
+
+      {/* ── MODAL EDICIÓN ── */}
+      {editingRow && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }}>
+          <div style={{
+            background: '#1e1e2e', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520,
+            border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <span style={{ fontWeight: 700, fontSize: '1rem' }}>
+                Editar — {editingRow.apellido ? `${editingRow.apellido}, ${editingRow.nombre}` : `DNI ${editingRow.dni}`}
+              </span>
+              <button onClick={() => setEditingRow(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '1.2rem', padding: 0 }}>✕</button>
+            </div>
+            <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={fg}>
+                <label style={lbl}>Jefatura</label>
+                <select className="input" value={editJefaturaId} onChange={e => setEditJefaturaId(e.target.value)} required>
+                  <option value="">— Seleccioná —</option>
+                  {jefaturas.map(j => (
+                    <option key={j.id} value={j.id}>{j.servicio_nombre || j.sector}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Tipo</label>
+                <select className="input" value={editTipo} onChange={e => {
+                  const v = e.target.value as 'INTERINO' | 'POR CONCURSO';
+                  setEditTipo(v);
+                  if (v === 'INTERINO') setEditFechaHasta('');
+                  else if (editFechaDesde) setEditFechaHasta(addYears(editFechaDesde, 4));
+                }}>
+                  <option value="INTERINO">INTERINO</option>
+                  <option value="POR CONCURSO">POR CONCURSO</option>
+                </select>
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Nro. Acto Administrativo</label>
+                <input className="input" value={editNroActo} onChange={e => setEditNroActo(e.target.value)} placeholder="RESO-2025-..." />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ ...fg, flex: 1 }}>
+                  <label style={lbl}>Fecha desde</label>
+                  <input className="input" type="date" value={editFechaDesde} onChange={e => {
+                    setEditFechaDesde(e.target.value);
+                    if (editTipo === 'POR CONCURSO' && e.target.value) setEditFechaHasta(addYears(e.target.value, 4));
+                  }} required />
+                </div>
+                {editTipo === 'POR CONCURSO' && (
+                  <div style={{ ...fg, flex: 1 }}>
+                    <label style={lbl}>Fecha hasta</label>
+                    <input className="input" type="date" value={editFechaHasta} onChange={e => setEditFechaHasta(e.target.value)} />
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                <button type="button" className="btn" onClick={() => setEditingRow(null)} style={{ opacity: 0.7 }}>Cancelar</button>
+                <button type="submit" className="btn" disabled={editSaving}>{editSaving ? 'Guardando...' : 'Guardar cambios'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </Layout>
   );

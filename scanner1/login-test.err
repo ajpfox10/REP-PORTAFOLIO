@@ -1,0 +1,14 @@
+file:///C:/apps/personaldev/scanner1/api/dist/web/routes/auth.js:19
+        throw new ApiError(401, "invalid_credentials");
+              ^
+
+ApiError: invalid_credentials
+    at file:///C:/apps/personaldev/scanner1/api/dist/web/routes/auth.js:19:15
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at process.processImmediate (node:internal/timers:454:9) {
+  status: 401,
+  code: 'invalid_credentials',
+  details: undefined
+}
+
+Node.js v20.18.0

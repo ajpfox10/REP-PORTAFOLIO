@@ -4,8 +4,9 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
-import { searchPersonal } from '../../api/searchPersonal';
-import { useToast } from '../../ui/toast';
+import { searchPersonal }                from '../../api/searchPersonal';
+import { useToast }                     from '../../ui/toast';
+import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -1113,6 +1114,8 @@ export function LegajoPage() {
               </span>
             )}
           </div>
+
+          <AlertaBannerAgenteConMensaje dni={activeDni || null} />
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginBottom: 8 }}>

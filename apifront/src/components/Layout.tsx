@@ -231,6 +231,7 @@ export function Layout({ title, children, showBack }: {
                         Herramientas
                       </div>
                       {navLink('/app/jefedeptos', '🏛️ Historial Jefaturas')}
+                      {navLink('/app/alertas-agente', '🚨 Alertas por Agente')}
                       {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
                       {navLink('/app/buscador', '🔍 Buscador')}
                       {navLink('/app/comparador', '⚖️ Comparador')}

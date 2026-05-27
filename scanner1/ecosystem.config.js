@@ -37,9 +37,10 @@ module.exports = {
         BASE_URL: 'http://localhost:3002',
         AGENT_TENANT_ID: '1',
         AGENT_EMAIL: 'admin@scanner.local',
-        AGENT_PASSWORD: 'Admin1234',
+        AGENT_PASSWORD: 'Admin12345@',
         HEARTBEAT_MS: '30000',
-        DISCOVER_INTERVAL_MS: '300000'
+        DISCOVER_INTERVAL_MS: '300000',
+        AUTO_DISCOVERY_ENABLED: 'false'
       }
     },
     // ── DEV ──────────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ module.exports = {
         BASE_URL: 'http://localhost:3003',
         AGENT_TENANT_ID: '1',
         AGENT_EMAIL: 'admin@scanner.local',
-        AGENT_PASSWORD: 'Admin1234',
+        AGENT_PASSWORD: 'Admin12345@',
         HEARTBEAT_MS: '30000',
         DISCOVER_INTERVAL_MS: '300000'
       }
@@ -101,7 +102,7 @@ module.exports = {
         BASE_URL: 'http://localhost:3003',
         AGENT_TENANT_ID: '1',
         AGENT_EMAIL: 'admin@scanner.local',
-        AGENT_PASSWORD: 'Admin1234',
+        AGENT_PASSWORD: 'Admin12345@',
         AGENT_NAME: 'Servidor-Local-Dev',
         HEARTBEAT_MS: '30000'
       }

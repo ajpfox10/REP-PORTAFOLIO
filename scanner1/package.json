@@ -17,5 +17,8 @@
     "start": "npm -w api run start",
     "docker:up": "docker compose -f docker/docker-compose.yml up --build",
     "docker:down": "docker compose -f docker/docker-compose.yml down -v"
+  },
+  "dependencies": {
+    "image-q": "^4.0.0"
   }
 }

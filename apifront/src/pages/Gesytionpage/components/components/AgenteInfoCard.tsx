@@ -39,6 +39,9 @@ interface Props { row: any; }
 
 function fmt(fecha?: string | null) {
   if (!fecha) return null;
+  // Parse YYYY-MM-DD as local date to avoid UTC midnight → day-before bug
+  const m = String(fecha).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(fecha);
   if (isNaN(d.getTime())) return fecha;
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
