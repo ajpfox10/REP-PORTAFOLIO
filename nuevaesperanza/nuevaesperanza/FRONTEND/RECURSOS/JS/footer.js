@@ -1,8 +1,8 @@
 document.addEventListener("DOMContentLoaded", function () {
     // Define la ruta al archivo footer.html
-    var footerPath = './RECURSOS/PLANTILLAS/footer.html';
+    var footerPath = '/PLANTILLAS/footer.html';
 
-    // Selecciona el contenedor donde se cargará el footer
+    // Selecciona el contenedor donde se cargarï¿½ el footer
     var footerContainer = document.getElementById("footer-container");
 
     // Usa fetch para cargar el contenido del footer

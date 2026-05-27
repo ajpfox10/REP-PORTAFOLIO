@@ -1,53 +1,50 @@
-﻿// Archivo: Data/RepositorioPersonal.cs
-using System;
-using System.Collections.Generic;
+// Archivo: Data/RepositorioPersonal.cs
+using System.Collections.ObjectModel;
 using PersonalContableApp.Models;
 
 namespace PersonalContableApp.Data
 {
-    /// <summary>
-    /// Clase que actúa como repositorio para gestionar la colección de personal.
-    /// </summary>
     public class RepositorioPersonal
     {
-        // Lista privada para almacenar los objetos Personal.
-        private List<Personal> personalList = new List<Personal>();
+        private ObservableCollection<Personal> personalList;
+        public bool HuboErrorAlCargar { get; private set; }
 
-        /// <summary>
-        /// Constructor de la clase RepositorioPersonal.
-        /// </summary>
         public RepositorioPersonal()
         {
-            // Inicialización de la lista de personal.
+            try
+            {
+                personalList = PersistenciaServicio.Cargar();
+            }
+            catch
+            {
+                personalList = new ObservableCollection<Personal>();
+                HuboErrorAlCargar = true;
+            }
         }
 
-        /// <summary>
-        /// Método para agregar un nuevo personal al repositorio.
-        /// </summary>
-        /// <param name="personal">Objeto Personal a agregar.</param>
+        public ObservableCollection<Personal> ObtenerTodo() => personalList;
+
         public void AgregarPersonal(Personal personal)
         {
             personalList.Add(personal);
+            PersistenciaServicio.Guardar(personalList);
         }
 
-        /// <summary>
-        /// Método para obtener toda la lista de personal.
-        /// </summary>
-        /// <returns>Lista de Personal.</returns>
-        public List<Personal> ObtenerTodo()
-        {
-            return personalList;
-        }
-
-        /// <summary>
-        /// Método para eliminar un personal del repositorio.
-        /// </summary>
-        /// <param name="personal">Objeto Personal a eliminar.</param>
-        /// <returns>True si se eliminó, False en caso contrario.</returns>
         public bool EliminarPersonal(Personal personal)
         {
-            return personalList.Remove(personal);
+            bool eliminado = personalList.Remove(personal);
+            if (eliminado) PersistenciaServicio.Guardar(personalList);
+            return eliminado;
+        }
+
+        public void ActualizarPersonal(Personal original, Personal actualizado)
+        {
+            int index = personalList.IndexOf(original);
+            if (index >= 0)
+            {
+                personalList[index] = actualizado;
+                PersistenciaServicio.Guardar(personalList);
+            }
         }
     }
 }
-
