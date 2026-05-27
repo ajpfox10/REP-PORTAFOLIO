@@ -15,9 +15,9 @@ const validateRegistro = (req, res, next) => {
         });
     }
 
-    // Validar nombre (solo texto)
-    if (!/^[a-zA-Z\s]+$/.test(nombre)) {
-        console.error('[LOG Middleware] Nombre inválido:', nombre);
+    // Validar nombre (letras Unicode + espacios, admite tildes y caracteres latinos)
+    if (!/^[\p{L}\s]+$/u.test(nombre)) {
+        console.error('[LOG Middleware] Nombre invï¿½lido:', nombre);
         return res.status(400).json({
             success: false,
             message: 'El nombre debe contener solo letras y espacios'
@@ -26,42 +26,42 @@ const validateRegistro = (req, res, next) => {
 
     // Validar email
     if (!validator.isEmail(email)) {
-        console.error('[LOG Middleware] Email inválido:', email);
+        console.error('[LOG Middleware] Email invï¿½lido:', email);
         return res.status(400).json({
             success: false,
-            message: 'El email no es válido'
+            message: 'El email no es vï¿½lido'
         });
     }
 
-    // Validar contraseña (mínimo 6 caracteres)
+    // Validar contraseï¿½a (mï¿½nimo 6 caracteres)
     if (password.length < 6) {
-        console.error('[LOG Middleware] Contraseña demasiado corta');
+        console.error('[LOG Middleware] Contraseï¿½a demasiado corta');
         return res.status(400).json({
             success: false,
-            message: 'La contraseña debe tener al menos 6 caracteres'
+            message: 'La contraseï¿½a debe tener al menos 6 caracteres'
         });
     }
 
-    // Validar dirección (sin caracteres especiales peligrosos)
+    // Validar direcciï¿½n (sin caracteres especiales peligrosos)
     if (!/^[a-zA-Z0-9\s,.-]+$/.test(direccion)) {
-        console.error('[LOG Middleware] Dirección inválida:', direccion);
+        console.error('[LOG Middleware] Direcciï¿½n invï¿½lida:', direccion);
         return res.status(400).json({
             success: false,
-            message: 'La dirección contiene caracteres no válidos'
+            message: 'La direcciï¿½n contiene caracteres no vï¿½lidos'
         });
     }
 
-    // Validar teléfono (solo números y longitud aceptable)
+    // Validar telï¿½fono (solo nï¿½meros y longitud aceptable)
     if (!validator.isMobilePhone(telefono, 'any')) {
-        console.error('[LOG Middleware] Teléfono inválido:', telefono);
+        console.error('[LOG Middleware] Telï¿½fono invï¿½lido:', telefono);
         return res.status(400).json({
             success: false,
-            message: 'El teléfono no es válido'
+            message: 'El telï¿½fono no es vï¿½lido'
         });
     }
 
-    console.log('[LOG Middleware] Validación exitosa');
-    // Si todo está bien, continuar al siguiente middleware
+    console.log('[LOG Middleware] Validaciï¿½n exitosa');
+    // Si todo estï¿½ bien, continuar al siguiente middleware
     next();
 };
 

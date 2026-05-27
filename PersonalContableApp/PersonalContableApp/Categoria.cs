@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace PersonalContableApp.Models
+﻿namespace PersonalContableApp.Models
 {
     /// <summary>
     /// Enumeración para representar las diferentes categorías de personal.

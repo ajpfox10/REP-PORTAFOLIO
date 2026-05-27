@@ -1,44 +1,37 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-// Función para ejecutar scripts PHP
-const executePHP = (scriptName, args = []) => {
+// Ejecuta un script PHP pasando datos como JSON por stdin
+const executePHP = (scriptName, data = {}) => {
     return new Promise((resolve, reject) => {
-        console.log('[LOG Servicio] Ejecutando script PHP:', scriptName, 'con argumentos:', args);
+        console.log('[LOG Servicio] Ejecutando script PHP:', scriptName);
 
-        // Construir la ruta completa al script PHP
-        const scriptPath = path.join(__dirname, '../BACKEND/API', scriptName);
-
-        // Iniciar el proceso PHP
-        const php = spawn('php', [scriptPath, ...args]);
+        const scriptPath = path.join(__dirname, '../API', scriptName);
+        const php = spawn('php', [scriptPath]);
 
         let output = '';
         let errorOutput = '';
 
-        // Capturar salida estándar
-        php.stdout.on('data', (data) => {
-            console.log('[LOG Servicio] Salida estándar PHP:', data.toString());
-            output += data.toString();
+        php.stdin.write(JSON.stringify(data));
+        php.stdin.end();
+
+        php.stdout.on('data', (chunk) => {
+            output += chunk.toString();
         });
 
-        // Capturar salida de error
-        php.stderr.on('data', (data) => {
-            console.error('[LOG Servicio] Error PHP:', data.toString());
-            errorOutput += data.toString();
+        php.stderr.on('data', (chunk) => {
+            console.error('[LOG Servicio] Error PHP:', chunk.toString());
+            errorOutput += chunk.toString();
         });
 
-        // Manejar el cierre del proceso
         php.on('close', (code) => {
             if (code === 0) {
-                console.log('[LOG Servicio] Script PHP finalizado correctamente');
-                resolve(output.trim()); // Devolver salida sin espacios extras
+                resolve(output.trim());
             } else {
-                console.error(`[LOG Servicio] Script PHP finalizado con errores. Código: ${code}`);
-                reject(new Error(`PHP cerró con código ${code}: ${errorOutput.trim()}`));
+                reject(new Error(`PHP cerro con codigo ${code}: ${errorOutput.trim()}`));
             }
         });
 
-        // Manejar errores en la ejecución
         php.on('error', (err) => {
             console.error('[LOG Servicio] Error al ejecutar PHP:', err.message);
             reject(err);
@@ -47,4 +40,3 @@ const executePHP = (scriptName, args = []) => {
 };
 
 module.exports = { executePHP };
-

@@ -9,17 +9,19 @@ namespace PersonalContableApp.Models
     public class Personal
     {
         // Propiedades públicas con getters y setters.
-        public string ApellidoNombre { get; set; }
-        public string Domicilio { get; set; }
-        public string Localidad { get; set; }
-        public string Provincia { get; set; }
-        public string CodigoPostal { get; set; }
+        public string ApellidoNombre { get; set; } = string.Empty;
+        public string Domicilio { get; set; } = string.Empty;
+        public string Localidad { get; set; } = string.Empty;
+        public string Provincia { get; set; } = string.Empty;
+        public string CodigoPostal { get; set; } = string.Empty;
         public Puesto Puesto { get; set; }
         public Categoria Categoria { get; set; }
         public int AñoIngreso { get; set; }
-        public string SectorAsignado { get; set; }
-        public string Actividad { get; set; }
+        public string SectorAsignado { get; set; } = string.Empty;
+        public string Actividad { get; set; } = string.Empty;
         public decimal SueldoNominal { get; set; }
+
+        public Personal() { }
 
         /// <summary>
         /// Constructor para inicializar un objeto Personal.

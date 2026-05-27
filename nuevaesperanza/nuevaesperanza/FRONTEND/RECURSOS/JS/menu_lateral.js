@@ -1,60 +1,60 @@
 document.addEventListener("DOMContentLoaded", function () {
-    const menuPath = "./RECURSOS/PLANTILLAS/menu_lateral.html";
+    const menuPath = "/PLANTILLAS/menu_lateral.html";
     const menuContainer = document.getElementById("menu-lateral-container-menu-lateral");
     const tab = document.getElementById("menu-tab-menu-lateral");
     let hideMenuTimeout;
     let hideTabTimeout;
 
-    // Verificar que el contenedor del menú lateral y la pestaña existan
+    // Verificar que el contenedor del menï¿½ lateral y la pestaï¿½a existan
     if (menuContainer && tab) {
-        // Asegurar que la pestaña esté visible al cargar la página
+        // Asegurar que la pestaï¿½a estï¿½ visible al cargar la pï¿½gina
         tab.style.display = 'block';
 
-        // Cargar el menú lateral desde un archivo HTML
+        // Cargar el menï¿½ lateral desde un archivo HTML
         fetch(menuPath)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`Error al cargar el menú lateral: ${response.statusText}`);
+                    throw new Error(`Error al cargar el menï¿½ lateral: ${response.statusText}`);
                 }
                 return response.text();
             })
             .then(data => {
                 menuContainer.innerHTML = data;
-                agregarEventosPestana(); // Llamar a la función para agregar eventos después de cargar el menú
-                inicializarTemporizadores(); // Iniciar los temporizadores para ocultar el menú y la pestaña
+                agregarEventosPestana(); // Llamar a la funciï¿½n para agregar eventos despuï¿½s de cargar el menï¿½
+                inicializarTemporizadores(); // Iniciar los temporizadores para ocultar el menï¿½ y la pestaï¿½a
             })
             .catch(error => {
-                console.error('Hubo un problema con la carga del menú lateral:', error);
+                console.error('Hubo un problema con la carga del menï¿½ lateral:', error);
             });
     } else {
-        console.error('El contenedor del menú lateral o la pestaña no se encontraron en el DOM.');
+        console.error('El contenedor del menï¿½ lateral o la pestaï¿½a no se encontraron en el DOM.');
     }
 
     function agregarEventosPestana() {
-        // Mostrar el menú lateral al pasar el ratón por la pestaña
+        // Mostrar el menï¿½ lateral al pasar el ratï¿½n por la pestaï¿½a
         tab.addEventListener("mouseenter", function () {
-            console.log("Ratón sobre la pestaña. Mostrando menú y pestaña.");
+            console.log("Ratï¿½n sobre la pestaï¿½a. Mostrando menï¿½ y pestaï¿½a.");
             clearTimeout(hideMenuTimeout);
             clearTimeout(hideTabTimeout);
             mostrarMenuYTab();
         });
 
-        // Ocultar el menú y la pestaña después de que el ratón salga de la pestaña
+        // Ocultar el menï¿½ y la pestaï¿½a despuï¿½s de que el ratï¿½n salga de la pestaï¿½a
         tab.addEventListener("mouseleave", function () {
-            console.log("Ratón salió de la pestaña. Iniciando temporizadores para ocultar.");
+            console.log("Ratï¿½n saliï¿½ de la pestaï¿½a. Iniciando temporizadores para ocultar.");
             iniciarTemporizadoresParaOcultar();
         });
 
-        // Mantener el menú visible si el ratón está sobre el menú lateral
+        // Mantener el menï¿½ visible si el ratï¿½n estï¿½ sobre el menï¿½ lateral
         menuContainer.addEventListener("mouseenter", function () {
-            console.log("Ratón sobre el menú lateral. Cancelando ocultamiento.");
+            console.log("Ratï¿½n sobre el menï¿½ lateral. Cancelando ocultamiento.");
             clearTimeout(hideMenuTimeout);
             clearTimeout(hideTabTimeout);
         });
 
-        // Iniciar temporizadores para ocultar al salir del menú lateral
+        // Iniciar temporizadores para ocultar al salir del menï¿½ lateral
         menuContainer.addEventListener("mouseleave", function () {
-            console.log("Ratón salió del menú lateral. Iniciando temporizadores para ocultar.");
+            console.log("Ratï¿½n saliï¿½ del menï¿½ lateral. Iniciando temporizadores para ocultar.");
             iniciarTemporizadoresParaOcultar();
         });
     }
@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
     function mostrarMenuYTab() {
         const menuLateral = document.getElementById("menu-lateral-menu-lateral");
         if (menuLateral) {
-            console.log("Mostrando el menú lateral y pestaña.");
+            console.log("Mostrando el menï¿½ lateral y pestaï¿½a.");
             menuLateral.classList.remove("oculto-menu-lateral");
             tab.classList.remove("reducido-menu-lateral");
         }
@@ -71,30 +71,30 @@ document.addEventListener("DOMContentLoaded", function () {
     function ocultarMenu() {
         const menuLateral = document.getElementById("menu-lateral-menu-lateral");
         if (menuLateral) {
-            console.log("Ocultando el menú lateral.");
+            console.log("Ocultando el menï¿½ lateral.");
             menuLateral.classList.add("oculto-menu-lateral");
         }
     }
 
     function reducirPestana() {
-        console.log("Reduciendo la pestaña.");
+        console.log("Reduciendo la pestaï¿½a.");
         tab.classList.add("reducido-menu-lateral");
     }
 
     function inicializarTemporizadores() {
         // Iniciar los temporizadores para la primera carga
-        console.log("Configurando temporizadores iniciales para ocultar el menú y la pestaña.");
-        hideMenuTimeout = setTimeout(ocultarMenu, 10000); // 10 segundos para ocultar el menú inicialmente
-        hideTabTimeout = setTimeout(reducirPestana, 12000); // 12 segundos para reducir la pestaña (2 segundos después de ocultar el menú)
+        console.log("Configurando temporizadores iniciales para ocultar el menï¿½ y la pestaï¿½a.");
+        hideMenuTimeout = setTimeout(ocultarMenu, 10000); // 10 segundos para ocultar el menï¿½ inicialmente
+        hideTabTimeout = setTimeout(reducirPestana, 12000); // 12 segundos para reducir la pestaï¿½a (2 segundos despuï¿½s de ocultar el menï¿½)
     }
 
     function iniciarTemporizadoresParaOcultar() {
-        // Reiniciar los temporizadores para ocultar el menú y reducir la pestaña
-        console.log("Iniciando temporizadores para ocultar el menú y reducir la pestaña después de la interacción.");
+        // Reiniciar los temporizadores para ocultar el menï¿½ y reducir la pestaï¿½a
+        console.log("Iniciando temporizadores para ocultar el menï¿½ y reducir la pestaï¿½a despuï¿½s de la interacciï¿½n.");
         clearTimeout(hideMenuTimeout);
         clearTimeout(hideTabTimeout);
-        hideMenuTimeout = setTimeout(ocultarMenu, 8000); // 8 segundos para ocultar el menú después de la interacción
-        hideTabTimeout = setTimeout(reducirPestana, 10000); // 10 segundos para reducir la pestaña (2 segundos después de ocultar el menú)
+        hideMenuTimeout = setTimeout(ocultarMenu, 8000); // 8 segundos para ocultar el menï¿½ despuï¿½s de la interacciï¿½n
+        hideTabTimeout = setTimeout(reducirPestana, 10000); // 10 segundos para reducir la pestaï¿½a (2 segundos despuï¿½s de ocultar el menï¿½)
     }
 });
 
