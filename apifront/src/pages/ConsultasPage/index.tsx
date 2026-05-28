@@ -5,6 +5,7 @@ import { apiFetch } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf, printTable } from '../../utils/export';
+import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 const COLS = ['id','dni','motivo_consulta','explicacion','estado','created_at'];
 
@@ -128,6 +129,8 @@ export function ConsultasPage() {
             )}
           </div>
         )}
+
+        {selected && <AlertaBannerAgenteConMensaje dni={selected.dni} />}
 
         {/* Detalle card */}
         {selected && (

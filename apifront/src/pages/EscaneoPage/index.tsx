@@ -242,6 +242,7 @@ export function EscaneoPage() {
   const [color, setColor]     = useState(true);
   const [duplex, setDuplex]   = useState(false);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('pdf');
+  const [paperSize, setPaperSize] = useState<string>('A4');
 
   // Sesión multi-página
   const [session, setSession]     = useState<ScannedPage[]>([]);
@@ -397,7 +398,10 @@ export function EscaneoPage() {
       setColor(caps.color_modes.includes('color'));
     }
     if (!caps.duplex) setDuplex(false);
-  }, [devices, selectedDevice]);
+    if (Array.isArray(caps.paper_sizes) && caps.paper_sizes.length && !caps.paper_sizes.includes(paperSize)) {
+          setPaperSize(caps.paper_sizes.includes('A4') ? 'A4' : caps.paper_sizes[0]);
+      }
+  }, [devices, selectedDevice, source, dpi, color, paperSize]);
 
   useEffect(() => {
     const usesAdf = source === 'adf' || source === 'adf_duplex';
@@ -497,6 +501,7 @@ export function EscaneoPage() {
           duplex: duplex || source === 'adf_duplex',
           dpi,
           color,
+          paper_size: paperSize,
           auto_rotate: true,
           blank_page_detection: true,
           compression: 'medium',
@@ -548,7 +553,7 @@ export function EscaneoPage() {
       setScanError(e?.message || 'Error desconocido');
       toast.error('Error al escanear', e?.message);
     } finally { setLaunching(false); }
-  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, outputFormat, paperStatus, flatbedPromptDismissed]);
+  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, paperSize, outputFormat, paperStatus, flatbedPromptDismissed]);
 
   // ── Guardar sesión ──────────────────────────────────────────────────────────
   const guardarSesion = useCallback(async () => {
@@ -1103,6 +1108,23 @@ export function EscaneoPage() {
                     ))}
                   </div>
 
+                  <div className="muted scan-label" style={{ marginTop: 12 }}>Tamaño de página</div>
+                  <div className="scan-caps-grid">
+                    {(caps.paper_sizes.length ? caps.paper_sizes : ['A4']).map(p => (
+                      <button
+                        key={p}
+                        className={`scan-cap-btn${paperSize === p ? ' selected' : ''}`}
+                        onClick={() => setPaperSize(p)}
+                        type="button"
+                      >
+                        {p === 'A4' ? 'A4' :
+                         p === 'Letter' || p === 'Carta' ? 'Carta / Letter' :
+                         p === 'Legal' || p === 'Oficio' ? 'Oficio / Legal' :
+                         p}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="muted scan-label" style={{ marginTop: 12 }}>Formato de salida</div>
                   <div className="scan-caps-grid">
                     {([
@@ -1225,6 +1247,10 @@ export function EscaneoPage() {
                     <div className="scan-summary-row">
                       <span className="muted">Resolución</span>
                       <span>{dpi} dpi · {color ? 'Color' : 'Grises'}</span>
+                    </div>
+                    <div className="scan-summary-row">
+                      <span className="muted">Tamaño</span>
+                      <span>{paperSize}</span>
                     </div>
                     <div className="scan-summary-row">
                       <span className="muted">Formato</span>

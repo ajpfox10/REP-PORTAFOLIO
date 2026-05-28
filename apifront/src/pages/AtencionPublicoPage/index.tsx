@@ -9,6 +9,7 @@ import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { loadSession } from '../../auth/session';
 import './styles/AtencionPublicoPage.css';
+import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 const MOTIVOS_PREDEFINIDOS = [
   { value: 'firma_jubilacion',              label: '🖊️ Firma Jubilación' },
@@ -520,6 +521,8 @@ export function AtencionPublicoPage() {
                 </div>
               </div>
             )}
+
+            {row && <AlertaBannerAgenteConMensaje dni={row.dni} />}
 
             {row && (
               <div className="card ap-card ap-agente-card">
