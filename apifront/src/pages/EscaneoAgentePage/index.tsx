@@ -226,6 +226,7 @@ export function EscaneoAgentePage() {
   const [color, setColor]     = useState(true);
   const [duplex, setDuplex]   = useState(false);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('pdf');
+  const [paperSize, setPaperSize] = useState<string>('A4');
 
   // Sesión multi-página
   const [session, setSession]     = useState<ScannedPage[]>([]);
@@ -377,7 +378,10 @@ export function EscaneoAgentePage() {
       setColor(caps.color_modes.includes('color'));
     }
     if (!caps.duplex) setDuplex(false);
-  }, [devices, selectedDevice]);
+    if (Array.isArray(caps.paper_sizes) && caps.paper_sizes.length && !caps.paper_sizes.includes(paperSize)) {
+      setPaperSize(caps.paper_sizes.includes('A4') ? 'A4' : caps.paper_sizes[0]);
+    }
+  }, [devices, selectedDevice, source, dpi, color, paperSize]);
 
   useEffect(() => {
     const usesAdf = source === 'adf' || source === 'adf_duplex';
@@ -429,7 +433,7 @@ export function EscaneoAgentePage() {
         body: JSON.stringify({
           device_id: selectedDevice, profile_id: selectedProfile || undefined,
           priority: 5, source, duplex: duplex || source === 'adf_duplex',
-          dpi, color, auto_rotate: true, blank_page_detection: true,
+          dpi, color, paper_size: paperSize, auto_rotate: true, blank_page_detection: true,
           compression: 'medium', output_format: outputFormat,
           personal_dni: agente.dni, personal_ref: tipoDoc, doc_class: tipoDoc,
         }),
@@ -460,7 +464,7 @@ export function EscaneoAgentePage() {
       setScanPhase('error'); setScanError(e?.message || 'Error desconocido');
       toast.error('Error al escanear', e?.message);
     }
-  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, outputFormat]);
+  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, paperSize, outputFormat]);
 
   // ── Guardar sesión ───────────────────────────────────────────────────────
   const guardarSesion = useCallback(async () => {
@@ -882,6 +886,23 @@ export function EscaneoAgentePage() {
                     ))}
                   </div>
 
+                  <div className="muted scan-label" style={{ marginTop: 12 }}>Tamaño de página</div>
+                  <div className="scan-caps-grid">
+                    {(caps.paper_sizes.length ? caps.paper_sizes : ['A4']).map(p => (
+                      <button
+                        key={p}
+                        className={`scan-cap-btn${paperSize === p ? ' selected' : ''}`}
+                        onClick={() => setPaperSize(p)}
+                        type="button"
+                      >
+                        {p === 'A4' ? 'A4' :
+                         p === 'Letter' || p === 'Carta' ? 'Carta / Letter' :
+                         p === 'Legal' || p === 'Oficio' ? 'Oficio / Legal' :
+                         p}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="muted scan-label" style={{ marginTop: 12 }}>Formato de salida</div>
                   <div className="scan-caps-grid">
                     {([['pdf','PDF'],['pdf_a','PDF/A'],['tiff','TIFF'],['jpg','JPG']] as [OutputFormat, string][]).map(([fmt, label]) => {
@@ -978,6 +999,10 @@ export function EscaneoAgentePage() {
                     <div className="scan-summary-row">
                       <span className="muted">Resolución</span>
                       <span>{dpi} dpi · {color ? 'Color' : 'Grises'}</span>
+                    </div>
+                    <div className="scan-summary-row">
+                      <span className="muted">Tamaño</span>
+                      <span>{paperSize}</span>
                     </div>
                     <div className="scan-summary-row">
                       <span className="muted">Formato</span>
