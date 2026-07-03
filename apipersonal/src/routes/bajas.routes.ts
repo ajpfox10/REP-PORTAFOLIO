@@ -42,8 +42,9 @@ export function buildBajasRouter(sequelize: Sequelize) {
            a.fecha_egreso,
            YEAR(a.fecha_egreso) AS anio,
            COALESCE(
-             (SELECT ags.servicio_nombre
+             (SELECT COALESCE(ags.nombre, srv.nombre)
               FROM agentes_servicios ags
+              LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
               WHERE ags.dni = p.dni
                 AND ags.deleted_at IS NULL
               ORDER BY ags.fecha_desde DESC

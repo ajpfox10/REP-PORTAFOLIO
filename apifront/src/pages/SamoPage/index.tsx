@@ -131,7 +131,7 @@ function enMesAño(fechaStr: string | null | undefined, mes: number, año: numbe
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio' | 'articulo26' | 'art48' | 'papcolpo' | 'examen' | 'prexamen';
+type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio' | 'articulo26' | 'art48' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen';
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function SamoPage() {
@@ -147,6 +147,7 @@ export function SamoPage() {
   const [servicioTotales, setServicioTotales]  = useState<Record<string, number>>({});   // nombre servicio → count agentes
   const [art26,           setArt26]            = useState<any[]>([]);
   const [art48,           setArt48]            = useState<any[]>([]);
+  const [practicas,       setPracticas]        = useState<any[]>([]);
   const [papcolpo,        setPapcolpo]         = useState<any[]>([]);
   const [examen,          setExamen]           = useState<any[]>([]);
   const [prexamen,        setPrexamen]         = useState<any[]>([]);
@@ -163,7 +164,7 @@ export function SamoPage() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [rLic, rAg, rPers, rSect, rServ, rRep, rArt26, rArt48, rPapcolpo, rExamen, rPrexamen] = await Promise.allSettled([
+      const [rLic, rAg, rPers, rSect, rServ, rRep, rArt26, rArt48, rPracticas, rPapcolpo, rExamen, rPrexamen] = await Promise.allSettled([
         fetchAll('/reconocimientos_medicos', '-fecha_desde'),
         fetchAll('/agentes'),
         fetchAll('/personal/search'),
@@ -172,6 +173,7 @@ export function SamoPage() {
         fetchAll('/reparticiones'),
         fetchAll('/articulo_26', '-fecha'),
         fetchAll('/agentes?ley_id=14'),
+        fetchAll('/practicas_profesionales', '-fecha_desde'),
         fetchAll('/papcolpo', '-fecha'),
         fetchAll('/examen', '-fecha'),
         fetchAll('/prexamen', '-fecha'),
@@ -226,6 +228,8 @@ export function SamoPage() {
 
       // Artículo 48
       if (rArt48.status === 'fulfilled') setArt48(rArt48.value);
+
+      if (rPracticas.status === 'fulfilled') setPracticas(rPracticas.value);
 
       // Pap/Colpo, Examen, Pre-examen
       if (rPapcolpo.status  === 'fulfilled') setPapcolpo(rPapcolpo.value);
@@ -407,6 +411,36 @@ export function SamoPage() {
   ];
 
   // ── Pap/Colpo, Examen, Pre-examen ──────────────────────────────────────────
+  const practicasFiltradas = useMemo(() =>
+    practicas.filter(r => enMesAño(r.fecha_desde, mesFiltro, AÑO_ACTUAL)),
+    [practicas, mesFiltro]
+  );
+
+  const practicasRows = practicasFiltradas.map(r => ({
+    ...r,
+    apellido:   personalMap[String(r.dni)]?.apellido || 'â€”',
+    nombre:     personalMap[String(r.dni)]?.nombre   || 'â€”',
+    sector:     sectoresMap[Number(r.sector_id)]     || 'â€”',
+    fecha:      fmt(r.fecha_desde),
+  }));
+
+  const colsPracticas = [
+    { key: 'dni',           label: 'DNI',      mono: true },
+    { key: 'apellido',      label: 'Apellido' },
+    { key: 'nombre',        label: 'Nombre' },
+    { key: 'fecha',         label: 'Desde',    mono: true },
+    { key: 'dias',          label: 'DÃ­as',     mono: true },
+    { key: 'motivo',        label: 'Motivo' },
+    { key: 'jefe_nombre',   label: 'Jefe' },
+    { key: 'sector',        label: 'Sector' },
+    { key: 'estado',        label: 'Estado',
+      badge: (v: string) => {
+        const MAP: Record<string, string> = { PENDIENTE: '#fbbf24', APROBADO: '#22c55e', RECHAZADO: '#ef4444', ANULADO: '#64748b' };
+        return { text: v || 'â€”', color: MAP[v] || '#94a3b8' };
+      }
+    },
+  ];
+
   const papcolpoFiltradas = useMemo(() =>
     papcolpo.filter(r => enMesAño(r.fecha, mesFiltro, AÑO_ACTUAL)),
     [papcolpo, mesFiltro]
@@ -486,6 +520,7 @@ export function SamoPage() {
     if (tab === 'servicio')   { rows = servicioRows;         file = 'samo_por_servicio'; }
     if (tab === 'articulo26') { rows = filtrar(art26Rows);         file = 'samo_articulo26'; }
     if (tab === 'art48')      { rows = filtrar(art48Rows);         file = 'samo_articulo48'; }
+    if (tab === 'practicas')  { rows = filtrar(practicasRows);     file = 'samo_practicas_profesionales'; }
     if (tab === 'papcolpo')   { rows = filtrar(papcolpoRows);      file = 'samo_papcolpo'; }
     if (tab === 'examen')     { rows = filtrar(examenRows);        file = 'samo_examen'; }
     if (tab === 'prexamen')   { rows = filtrar(prexamenRows);      file = 'samo_prexamen'; }
@@ -555,6 +590,9 @@ export function SamoPage() {
         </Tab>
         <Tab active={tab === 'art48'} onClick={() => { setTab('art48'); setBusqueda(''); }}>
           🏅 Art. 48 ({art48Rows.length})
+        </Tab>
+        <Tab active={tab === 'practicas'} onClick={() => { setTab('practicas'); setBusqueda(''); }}>
+          🎒 Prácticas ({practicasFiltradas.length})
         </Tab>
         <Tab active={tab === 'papcolpo'} onClick={() => { setTab('papcolpo'); setBusqueda(''); }}>
           🔬 Pap/Colpo ({papcolpoFiltradas.length})
@@ -722,6 +760,25 @@ export function SamoPage() {
                 </div>
                 <Busqueda value={busqueda} onChange={setBusqueda} />
                 <MiniTabla rows={filtrar(art26Rows)} cols={colsArt26} />
+              </>
+            )}
+
+            {tab === 'practicas' && (
+              <>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div className="muted" style={{ fontSize: '0.72rem' }}>Filtrando por mes:</div>
+                  <select aria-label="Filtrar por mes" className="input" style={{ fontSize: '0.78rem', padding: '4px 8px', width: 'auto' }}
+                    value={mesFiltro} onChange={e => { setMesFiltro(Number(e.target.value)); setBusqueda(''); }}>
+                    {mesesDisponibles.map(m => (
+                      <option key={m} value={m}>{MESES[m - 1]} {AÑO_ACTUAL}</option>
+                    ))}
+                  </select>
+                  <span className="muted" style={{ fontSize: '0.72rem' }}>
+                    {practicasFiltradas.length} registro{practicasFiltradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]} â€” Prácticas profesionales
+                  </span>
+                </div>
+                <Busqueda value={busqueda} onChange={setBusqueda} />
+                <MiniTabla rows={filtrar(practicasRows)} cols={colsPracticas} />
               </>
             )}
 

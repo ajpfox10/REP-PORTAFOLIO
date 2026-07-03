@@ -1,6 +1,6 @@
 // src/routes/crud.routes.ts
 import { Router, Request, Response, NextFunction } from "express";
-import { Model, Sequelize, ModelStatic, Op } from "sequelize";
+import { Model, Sequelize, ModelStatic, Op, QueryTypes } from "sequelize";
 import { SchemaSnapshot } from "../db/schema/types";
 import { env } from "../config/env";
 import { requireCrud, requireMetaRead } from "../middlewares/rbacCrud";
@@ -119,6 +119,38 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
   const getPk = (table: string): string | null => {
     const t = schema.tables?.[table];
     return t?.primaryKey?.[0] || null;
+  };
+
+  const validatePracticasProfesionales = async (table: string, data: any): Promise<string | null> => {
+    if (table !== 'practicas_profesionales') return null;
+
+    const dias = Number(data?.dias);
+    if (!Number.isInteger(dias) || dias < 1 || dias > 10) {
+      return 'Prácticas profesionales permite de 1 a 10 días.';
+    }
+
+    const dni = Number(data?.dni);
+    if (!Number.isFinite(dni) || dni <= 0) return 'DNI requerido.';
+
+    const rows = await sequelize.query<any>(
+      `SELECT l.nombre AS ley_nombre, pl.nombre AS planta_nombre
+         FROM personal p
+         LEFT JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+         LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
+         LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
+        WHERE p.dni = :dni AND p.deleted_at IS NULL
+        LIMIT 1`,
+      { replacements: { dni }, type: QueryTypes.SELECT }
+    );
+    const row = rows[0] || {};
+    const ley = String(row.ley_nombre || '').toLowerCase();
+    const planta = String(row.planta_nombre || '').toUpperCase();
+    const titularSiape = ley.includes('10430') || (ley.includes('10471') && planta === 'PERMANENTE');
+    if (titularSiape) {
+      return 'Prácticas profesionales se cargan acá solo para no titulares.';
+    }
+
+    return null;
   };
 
   // ── GET /tables ──────────────────────────────────────────────────────────────
@@ -292,6 +324,9 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
 
     try {
+      const validationError = await validatePracticasProfesionales(table, req.body);
+      if (validationError) return res.status(400).json({ ok: false, error: validationError });
+
       const created = await model.create(req.body);
       const createdJson = (created as any).toJSON ? (created as any).toJSON() : created;
 
@@ -377,6 +412,12 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
         await t.rollback();
         return res.status(404).json({ ok: false, error: "No encontrado" });
       }
+      const beforeJsonForValidation = (before as any).toJSON ? (before as any).toJSON() : before;
+      const validationError = await validatePracticasProfesionales(table, { ...beforeJsonForValidation, ...req.body });
+      if (validationError) {
+        await t.rollback();
+        return res.status(400).json({ ok: false, error: validationError });
+      }
 
       await model.update(req.body, { where: { [pk]: req.params.id } as any, transaction: t });
       const after = await model.findOne({ where: { [pk]: req.params.id } as any, transaction: t });
@@ -422,6 +463,12 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
       if (!before) {
         await t.rollback();
         return res.status(404).json({ ok: false, error: "No encontrado" });
+      }
+      const beforeJsonForValidation = (before as any).toJSON ? (before as any).toJSON() : before;
+      const validationError = await validatePracticasProfesionales(table, { ...beforeJsonForValidation, ...req.body });
+      if (validationError) {
+        await t.rollback();
+        return res.status(400).json({ ok: false, error: validationError });
       }
 
       await model.update(req.body, { where: { [pk]: req.params.id } as any, transaction: t });

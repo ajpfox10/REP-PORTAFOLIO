@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./ui/App";
 import "./styles/index.css";
 import { logEvent } from "./logging/clientLogger";
+import { rewriteHostToCurrent } from "./api/env";
 declare global {
   interface Window {
     __RUNTIME_CONFIG__?: any;
@@ -23,6 +24,19 @@ async function bootstrap() {
     }
   } catch {
     window.__RUNTIME_CONFIG__ = {};
+  }
+
+  // Servidor con múltiples redes (p.ej. 192.168.0.x y 10.115.31.x): reescribimos
+  // el host de las URLs del runtime-config para que apunten a la MISMA IP por la
+  // que el cliente abrió el front. Así cada red habla con la API por su propia IP,
+  // sin depender de ruteo entre redes. (Puerto/protocolo/path se mantienen.)
+  try {
+    const rc = window.__RUNTIME_CONFIG__ || {};
+    for (const k of ["apiBaseUrl", "VITE_API_BASE_URL", "scannerApiUrl"]) {
+      if (typeof rc[k] === "string" && rc[k]) rc[k] = rewriteHostToCurrent(rc[k]);
+    }
+  } catch {
+    /* noop */
   }
 
   ReactDOM.createRoot(document.getElementById("root")!).render(

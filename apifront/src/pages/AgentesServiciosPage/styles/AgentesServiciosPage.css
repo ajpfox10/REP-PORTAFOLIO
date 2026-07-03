@@ -504,3 +504,38 @@
   color: #475569;
   margin-top: 5px;
 }
+
+/* ─── Exportar antigüedad ─── */
+.asv-btn-export-xl {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #6ee7b7 !important;
+  font-weight: 600;
+}
+
+.asv-btn-export-xl:hover {
+  background: rgba(16, 185, 129, 0.28) !important;
+}
+
+.asv-btn-export {
+  background: rgba(16, 185, 129, 0.22) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  color: #6ee7b7 !important;
+  font-weight: 700;
+  min-width: 170px;
+}
+
+.asv-btn-export:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.38) !important;
+}
+
+.asv-export-info {
+  margin-top: 4px;
+}
+
+.asv-export-hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-style: italic;
+  line-height: 1.5;
+}

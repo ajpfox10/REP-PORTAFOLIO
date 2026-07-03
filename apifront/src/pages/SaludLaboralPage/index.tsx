@@ -6,6 +6,7 @@ import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { exportToExcel, exportToPdf } from '../../utils/export';
+import { ReclamosLicenciasMedicasTab } from './ReclamosLicenciasMedicasTab';
 
 // ─── Leyes becados/residentes ─────────────────────────────────────────────────
 const LEYES_BECADOS = [6, 7, 8, 9, 10, 11, 12, 13];
@@ -57,7 +58,7 @@ interface ExamenAnual {
   updated_by_email: string | null;
 }
 
-type Tab = 'reconocimientos' | 'examenes';
+type Tab = 'reconocimientos' | 'examenes' | 'reclamos';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -497,6 +498,11 @@ export function SaludLaboralPage() {
             📋 Examen Anual
             <span className="badge" style={{ marginLeft: 6, fontSize: '0.7rem' }}>{tab === 'examenes' ? exams.length : allExams.length}</span>
           </button>
+          {isAdmin && (
+            <button className={`btn${tab === 'reclamos' ? ' active' : ''}`} type="button" onClick={() => setTab('reclamos')}>
+              Reclamos de licencias médicas
+            </button>
+          )}
         </div>
       </div>
 
@@ -897,6 +903,8 @@ export function SaludLaboralPage() {
           </div>
         </>
       )}
+
+      {isAdmin && tab === 'reclamos' && <ReclamosLicenciasMedicasTab />}
 
       <div className="muted" style={{ fontSize: '0.72rem', marginTop: 12 }}>
         🩺 Reconocimientos: solo becados activos · 📋 Examen anual: todos los agentes ·

@@ -1,11 +1,10 @@
 // src/pages/CargaAgentePage/index.tsx
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { useNavigate } from 'react-router-dom';
 import { useCargaAgente, ESTADO_EMPLEO_OPTS } from './hooks/useCargaAgente';
 import { useCamera } from './hooks/useCamera';
-import { useScanner } from './hooks/useScanner';
-import type { ScanResult } from './hooks/useScanner';
+import { EscaneoAgentePage } from '../EscaneoAgentePage';
 import './styles/CargaAgente.css';
 import { SearchableSelect } from './components/SearchableSelect';
 
@@ -40,7 +39,7 @@ function StepIndicator({ current, done, onGo }: { current: number; done: Set<num
 }
 
 // ─── Step 1: Datos Personales ─────────────────────────────────────────────────
-function StepPersonal({ form, setField, errors, cats, editMode, editLoading, onDniBlur }: any) {
+function StepPersonal({ form, setField, errors, cats, editMode, reentryMode, editLoading, onDniBlur }: any) {
   return (
     <div className="ca-card">
       <div className="ca-section-title">
@@ -53,6 +52,16 @@ function StepPersonal({ form, setField, errors, cats, editMode, editLoading, onD
             borderRadius: 20, padding: '2px 10px', letterSpacing: '0.03em',
           }}>
             ✏️ MODO EDICIÓN
+          </span>
+        )}
+        {reentryMode && (
+          <span style={{
+            marginLeft: '0.75rem', fontSize: '0.75rem', fontWeight: 600,
+            background: 'rgba(34,197,94,0.15)', color: '#86efac',
+            border: '1px solid rgba(34,197,94,0.35)',
+            borderRadius: 20, padding: '2px 10px', letterSpacing: '0.03em',
+          }}>
+            REINGRESO - EL HISTORIAL NO SE MODIFICA
           </span>
         )}
       </div>
@@ -383,246 +392,22 @@ function StepFoto({ cam, photo, setPhoto }: any) {
 }
 
 // ─── Step 4: Documentos / Scanner ─────────────────────────────────────────────
-function ScanItem({ doc, index, onRemove, onRename }: {
-  doc: ScanResult; index: number; onRemove: () => void; onRename: (l: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(doc.label || '');
-  const thumb = doc.mime !== 'application/pdf' ? `data:${doc.mime};base64,${doc.data}` : null;
-
-  return (
-    <div className="ca-scan-item">
-      {thumb
-        ? <img className="ca-scan-thumb" src={thumb} alt="" />
-        : <div className="ca-scan-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem' }}>📄</div>
-      }
-      <div className="ca-scan-info">
-        {editing ? (
-          <input aria-label="Renombrar documento" className="ca-input" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
-            value={val} onChange={e => setVal(e.target.value)} autoFocus
-            onBlur={() => { onRename(val); setEditing(false); }}
-            onKeyDown={e => { if (e.key === 'Enter') { onRename(val); setEditing(false); } }} />
-        ) : (
-          <div className="ca-scan-name" onClick={() => setEditing(true)}
-            style={{ cursor: 'pointer' }} title="Click para renombrar">
-            {doc.label || `Doc ${index + 1}`}
-          </div>
-        )}
-        <div className="ca-scan-meta">
-          {doc.dpi} DPI · {(doc.format || 'doc').toUpperCase()}{doc.demo ? ' · DEMO' : ''}
-        </div>
-      </div>
-      <span className={`ca-scan-badge${doc.format === 'pdf' ? ' pdf' : ''}${doc.demo ? ' demo' : ''}`}>
-        {(doc.format || 'doc').toUpperCase()}
-      </span>
-      <button className="ca-btn ca-btn-ghost ca-btn-sm" onClick={onRemove} title="Eliminar">✕</button>
-    </div>
-  );
-}
-
-function StepDocumentos({ scanner, form }: { scanner: ReturnType<typeof useScanner>; form: any }) {
-  const [scanLabel, setScanLabel] = useState('');
-  const [isDrag, setIsDrag] = useState(false);
-  const [agentInput, setAgentInput] = useState(scanner.agentUrl);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault(); setIsDrag(false);
-    for (const f of Array.from(e.dataTransfer.files)) {
-      if (f.type.startsWith('image/') || f.type === 'application/pdf') {
-        await scanner.processFile(f, 'pdf', f.name);
-      }
-    }
-  }, [scanner]);
-
-  const handleFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    for (const f of Array.from(e.target.files || [])) {
-      await scanner.processFile(f, 'pdf', f.name);
-    }
-    e.target.value = '';
-  }, [scanner]);
-
-  const handleScan = useCallback(async () => {
-    const label = scanLabel.trim() || `Doc ${scanner.scanResults.length + 1} — DNI ${form.dni || '?'}`;
-    await scanner.scan(label);
-    setScanLabel('');
-  }, [scanner, scanLabel, form.dni]);
-
-  const statusColor = { connected: 'green', disconnected: 'red', connecting: 'amber', scanning: 'amber', error: 'red' }[scanner.status] || 'red';
-  const statusLabel = {
-    connected: 'Agente conectado',
-    disconnected: 'Agente desconectado',
-    connecting: 'Conectando…',
-    scanning: 'Escaneando…',
-    error: 'Error de conexión',
-  }[scanner.status] || '?';
-
-  const docs = scanner.scanResults;
-
+function StepScannerReady({ dni }: { dni: string }) {
   return (
     <div className="ca-card">
-      <div className="ca-section-title">🖨 Documentos y Escáner</div>
-      <div className="ca-scanner-layout">
-
-        {/* Panel escáner */}
-        <div className="ca-scanner-panel">
-
-          <div className={`ca-scanner-status ${scanner.status}`}>
-            <div className={`ca-dot ${statusColor}`} />
-            <span style={{ fontWeight: 600 }}>{statusLabel}</span>
-          </div>
-
-          {scanner.status === 'scanning' && (
-            <div className="ca-scan-progress"><div className="ca-scan-progress-bar" /></div>
-          )}
-
-          <div>
-            <div className="ca-opt-label" style={{ marginBottom: 4 }}>URL DEL AGENTE LOCAL</div>
-            <div className="ca-agent-url">
-              <input aria-label="URL del agente local" value={agentInput} onChange={e => setAgentInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && scanner.connect(agentInput)}
-                placeholder="http://127.0.0.1:9100" />
-              <button className="ca-btn ca-btn-secondary ca-btn-sm"
-                onClick={() => scanner.connect(agentInput)} title="Conectar">↻</button>
-            </div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--ca-text2)', marginTop: 4, fontFamily: 'IBM Plex Mono, monospace' }}>
-              Iniciá: <span style={{ color: 'var(--ca-amber)' }}>cd scanner-agent &amp;&amp; npm start</span>
-            </div>
-          </div>
-
-          {scanner.scanners.length > 0 && (
-            <div>
-              <div className="ca-opt-label" style={{ marginBottom: 4 }}>ESCÁNER DETECTADO</div>
-              <select aria-label="Escáner detectado" className="ca-select" style={{ fontSize: '0.82rem' }}
-                value={scanner.selectedScanner}
-                onChange={e => scanner.setSelectedScanner(e.target.value)}>
-                {scanner.scanners.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.name}{s.demo ? ' (DEMO)' : ''}</option>
-                ))}
-              </select>
-              <button className="ca-btn ca-btn-ghost ca-btn-sm" style={{ marginTop: 4, width: '100%' }}
-                onClick={scanner.refreshScanners}>🔄 Actualizar lista</button>
-            </div>
-          )}
-
-          {/* Opciones */}
-          <div>
-            <div className="ca-opt-label" style={{ marginBottom: 6 }}>OPCIONES DE ESCANEO</div>
-            <div className="ca-scan-opts">
-              <div className="ca-opt-group">
-                <div className="ca-opt-label">DPI</div>
-                <select aria-label="DPI de escaneo" className="ca-select" style={{ fontSize: '0.8rem' }}
-                  value={scanner.opts.dpi}
-                  onChange={e => scanner.setOpts((o: any) => ({ ...o, dpi: Number(e.target.value) }))}>
-                  {[75, 100, 150, 200, 300, 600].map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="ca-opt-group">
-                <div className="ca-opt-label">COLOR</div>
-                <select aria-label="Modo de color" className="ca-select" style={{ fontSize: '0.8rem' }}
-                  value={scanner.opts.color}
-                  onChange={e => scanner.setOpts((o: any) => ({ ...o, color: e.target.value }))}>
-                  <option value="gray">Grises</option>
-                  <option value="color">Color</option>
-                  <option value="bw">B/N</option>
-                </select>
-              </div>
-              <div className="ca-opt-group">
-                <div className="ca-opt-label">FORMATO</div>
-                <select aria-label="Formato de escaneo" className="ca-select" style={{ fontSize: '0.8rem' }}
-                  value={scanner.opts.format}
-                  onChange={e => scanner.setOpts((o: any) => ({ ...o, format: e.target.value }))}>
-                  <option value="pdf">PDF</option>
-                  <option value="jpeg">JPG</option>
-                </select>
-              </div>
-              <div className="ca-opt-group">
-                <div className="ca-opt-label">CALIDAD</div>
-                <select aria-label="Calidad de escaneo" className="ca-select" style={{ fontSize: '0.8rem' }}
-                  value={scanner.opts.quality}
-                  onChange={e => scanner.setOpts((o: any) => ({ ...o, quality: Number(e.target.value) }))}>
-                  <option value={60}>60% — pequeño</option>
-                  <option value={75}>75% — normal</option>
-                  <option value={85}>85% — buena</option>
-                  <option value={95}>95% — alta</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="ca-opt-label" style={{ marginBottom: 4 }}>ETIQUETA DEL DOCUMENTO</div>
-            <input aria-label="Etiqueta del documento" className="ca-input" style={{ fontSize: '0.85rem' }}
-              value={scanLabel} onChange={e => setScanLabel(e.target.value)}
-              placeholder={`Doc ${docs.length + 1} — DNI ${form.dni || '...'}`} />
-          </div>
-
-          <button className="ca-scan-big-btn" onClick={handleScan}
-            disabled={scanner.status !== 'connected' || !scanner.selectedScanner}>
-            {scanner.status === 'scanning' ? '⏳ Escaneando…' : '🖨 ESCANEAR AHORA'}
-          </button>
-
-          {scanner.error && (
-            <div style={{ fontSize: '0.78rem', color: 'var(--ca-red)', lineHeight: 1.4, padding: '0.6rem', background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>
-              {scanner.error}
-            </div>
-          )}
-        </div>
-
-        {/* Panel documentos */}
-        <div>
-          <div
-            className={`ca-drop-zone${isDrag ? ' drag-over' : ''}`}
-            style={{ marginBottom: '1rem' }}
-            onDragOver={e => { e.preventDefault(); setIsDrag(true); }}
-            onDragLeave={() => setIsDrag(false)}
-            onDrop={handleDrop}
-            onClick={() => fileRef.current?.click()}
-          >
-            <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>📄</div>
-            <strong>Arrastrar archivos aquí o hacer click</strong>
-            <div style={{ fontSize: '0.78rem', marginTop: 4 }}>PDF · JPG · PNG — se convierten automáticamente</div>
-            <input ref={fileRef} type="file" multiple accept="image/*,application/pdf"
-              style={{ display: 'none' }} onChange={handleFileInput} />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <div className="ca-opt-label">DOCUMENTOS CARGADOS ({docs.length})</div>
-            {docs.length > 0 && (
-              <button className="ca-btn ca-btn-danger ca-btn-sm" onClick={scanner.clearAll}>
-                🗑 Limpiar todo
-              </button>
-            )}
-          </div>
-
-          {docs.length === 0 ? (
-            <div className="ca-scan-empty">
-              <div className="ca-scan-empty-icon">🗂</div>
-              Ningún documento.<br />
-              <span style={{ fontSize: '0.78rem' }}>Escaneá o arrastrá archivos.</span>
-            </div>
-          ) : (
-            <div className="ca-scan-queue">
-              {docs.map((doc, i) => (
-                <ScanItem
-                  key={doc.id} doc={doc} index={i}
-                  onRemove={() => scanner.removeScanResult(doc.id)}
-                  onRename={label => {
-                    // Mutar el label localmente (los scanResults son objetos)
-                    doc.label = label;
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="ca-section-title">Documentacion y scanner1</div>
+      <div style={{ padding: '1.25rem', border: '1px solid var(--ca-border)', borderRadius: 10, lineHeight: 1.7 }}>
+        <strong>Primero se guardara el agente.</strong>
+        <p style={{ color: 'var(--ca-text2)', margin: '0.5rem 0 0' }}>
+          Luego podras abrir el scanner instalado. Los documentos se vinculan al DNI {dni || 'indicado'},
+          se registran en el legajo y se guardan en la carpeta documental configurada.
+        </p>
       </div>
     </div>
   );
 }
 
-// ─── Resumen ──────────────────────────────────────────────────────────────────
-function Resumen({ form, photo, docs, cats }: any) {
+function Resumen({ form, photo, cats }: any) {
   const fn = (list: any[], id: string) => list.find((x: any) => String(x.id) === String(id))?.nombre || id || '—';
   const rows = [
     ['DNI', form.dni || '—'],           ['CUIL', form.cuil || '—'],
@@ -663,17 +448,6 @@ function Resumen({ form, photo, docs, cats }: any) {
               : <span style={{ color: 'var(--ca-text2)', fontSize: '0.82rem' }}>Sin foto</span>
             }
           </div>
-          <div>
-            <div className="ca-opt-label" style={{ marginBottom: 6 }}>DOCS ({docs.length})</div>
-            {docs.length === 0
-              ? <span style={{ color: 'var(--ca-text2)', fontSize: '0.82rem' }}>Ninguno</span>
-              : docs.map((d: ScanResult, i: number) => (
-                <div key={d.id} style={{ fontSize: '0.78rem', color: 'var(--ca-text2)', marginBottom: 3 }}>
-                  {i + 1}. {d.label || `Doc ${i + 1}`} ({(d.format || '').toUpperCase()})
-                </div>
-              ))
-            }
-          </div>
         </div>
       </div>
     </div>
@@ -685,12 +459,7 @@ export function CargaAgentePage() {
   const navigate = useNavigate();
   const carga = useCargaAgente();
   const cam   = useCamera();
-  const scanner = useScanner();
-
-  // Sincronizar docs del scanner hacia el hook de carga
-  useEffect(() => {
-    carga.setDocuments(scanner.scanResults);
-  }, [scanner.scanResults]);
+  const [showScanner, setShowScanner] = useState(false);
 
   // Apagar cámara al salir del paso 3
   useEffect(() => {
@@ -706,6 +475,19 @@ export function CargaAgentePage() {
   // ── Pantalla de éxito ──
   if (carga.saved) {
     const isEdit = carga.savedMode === 'edit';
+    if (showScanner && carga.savedDni) {
+      return (
+        <div className="ca-root">
+          <div className="ca-wrap">
+            <EscaneoAgentePage
+              dni={String(carga.savedDni)}
+              embedded
+              onExit={() => setShowScanner(false)}
+            />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="ca-root">
         <div className="ca-wrap">
@@ -720,10 +502,14 @@ export function CargaAgentePage() {
                 <strong style={{ color: 'var(--ca-text)' }}>{carga.form.apellido}, {carga.form.nombre}</strong>
                 <br />
                 {carga.photo && '📷 Foto cargada · '}
-                {scanner.scanResults.length > 0 && `📄 ${scanner.scanResults.length} documento(s) subidos`}
+                La documentacion puede escanearse ahora con scanner1.
               </div>
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button className="ca-btn ca-btn-primary ca-btn-lg" onClick={() => { carga.reset(); scanner.clearAll(); }}>
+                <button className="ca-btn ca-btn-primary ca-btn-lg"
+                  onClick={() => setShowScanner(true)}>
+                  Escanear documentacion
+                </button>
+                <button className="ca-btn ca-btn-secondary ca-btn-lg" onClick={() => carga.reset()}>
                   ➕ Cargar otro agente
                 </button>
                 {isEdit && (
@@ -754,7 +540,7 @@ export function CargaAgentePage() {
           <div className="ca-header-left">
             <div className="ca-logo">{carga.editMode ? '✏️' : '🏛'}</div>
             <div>
-              <div className="ca-title">{carga.editMode ? 'EDICIÓN DE AGENTE' : 'ALTA DE AGENTE'}</div>
+              <div className="ca-title">{carga.editMode ? 'EDICIÓN DE AGENTE' : carga.reentryMode ? 'REINGRESO DE AGENTE' : 'ALTA DE AGENTE'}</div>
               <div className="ca-subtitle">
                 PersonalV5 · {carga.editMode
                   ? `DNI ${carga.form.dni} — ${carga.form.apellido} ${carga.form.nombre}`
@@ -771,9 +557,7 @@ export function CargaAgentePage() {
             >
               ← Salir
             </button>
-            <span className={`ca-status-pill ${scanner.status === 'connected' ? 'ok' : 'err'}`}>
-              {scanner.status === 'connected' ? '🖨 Scanner OK' : '🖨 Sin scanner'}
-            </span>
+            <span className="ca-status-pill ok">scanner1 vinculado</span>
             <span className={`ca-status-pill ${cam.active ? 'ok' : 'err'}`}>
               {cam.active ? '📷 Cámara activa' : '📷 Sin cámara'}
             </span>
@@ -786,17 +570,17 @@ export function CargaAgentePage() {
         {carga.step === 1 && (
           <StepPersonal
             form={carga.form} setField={carga.setField} errors={carga.errors} cats={carga.cats}
-            editMode={carga.editMode} editLoading={carga.editLoading}
+            editMode={carga.editMode} reentryMode={carga.reentryMode} editLoading={carga.editLoading}
             onDniBlur={carga.checkDni}
           />
         )}
         {carga.step === 2 && <StepLaboral  form={carga.form} setField={carga.setField} errors={carga.errors} cats={carga.cats} />}
         {carga.step === 3 && <StepFoto cam={cam} photo={carga.photo} setPhoto={carga.setPhoto} />}
-        {carga.step === 4 && <StepDocumentos scanner={scanner} form={carga.form} />}
+        {carga.step === 4 && <StepScannerReady dni={carga.form.dni} />}
 
         {/* Resumen visible desde paso 2 en adelante */}
         {carga.step >= 2 && (
-          <Resumen form={carga.form} photo={carga.photo} docs={scanner.scanResults} cats={carga.cats} />
+          <Resumen form={carga.form} photo={carga.photo} cats={carga.cats} />
         )}
 
         {/* Navegación inferior */}

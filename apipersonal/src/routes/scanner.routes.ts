@@ -45,7 +45,31 @@ export const TIPOS_DOCUMENTO_ESCANER = [
   { value: 'ioma',                   label: 'Documentación IOMA' },
   { value: 'foto_carnet',            label: 'Foto Carnet' },
   { value: 'cert_rotacion',          label: 'Certificacion de rotacion' },
+  { value: 'dictamen_junta',         label: 'Dictamen Junta Médica' },
   { value: 'otro',                   label: 'Otro documento' },
+  { value: 'legajo',                 label: 'Legajo' },
+  { value: 'certificado_escolar',    label: 'Certificado Escolar' },
+  { value: 'segunda_foto',           label: 'Segunda Foto' },
+  // ── Nombramiento ──
+  { value: 'pronunciamiento_etico',     label: 'Pronunciamiento Ético' },
+  { value: 'cert_tareas',               label: 'Certificación de Tareas' },
+  { value: 'planilla_compatibilidad',   label: 'Planilla de Compatibilidad' },
+  { value: 'cert_ips_beneficio',        label: 'Certificado IPS Beneficio' },
+  { value: 'cert_ips_aportes',          label: 'Certificado IPS Aportes' },
+  { value: 'antecedentes_nacionales',   label: 'Antecedentes Nacionales' },
+  { value: 'antecedentes_provinciales', label: 'Antecedentes Provinciales' },
+  { value: 'matricula',                 label: 'Matrícula' },
+  { value: 'dj_condiciones_salud',      label: 'Decl. Jurada de Condiciones de Salud' },
+  { value: 'preocupacional',            label: 'Preocupacional' },
+  { value: 'planilla_datos_personales', label: 'Planilla de Datos Personales y de Contacto' },
+  { value: 'partida_nacimiento',        label: 'Partida de Nacimiento' },
+  { value: 'carta_ciudadania',          label: 'Carta de Ciudadanía' },
+  { value: 'dni_hijos',                 label: 'DNI Hijos' },
+  { value: 'dni_conyuge',               label: 'DNI Cónyuge' },
+  { value: 'cert_discapacidad',         label: 'Certificado de Discapacidad' },
+  { value: 'dj_asignacion',             label: 'Decl. Jurada de Asignación' },
+  { value: 'guarderia',                 label: 'Guardería' },
+  { value: 'cedula_notificacion',       label: 'Cédula de Notificación' },
 ] as const;
 
 function getScannerDocumentsBaseDir(): string {
@@ -59,15 +83,28 @@ function getScannerDocumentsBaseDir(): string {
 
 /**
  * Crea la carpeta de destino para un DNI si no existe.
- * Retorna la ruta absoluta: DOCUMENTS_SCAN_DIR/{DNI}/
+ * useBaseDir=true → DOCUMENTS_BASE_DIR (ej: resoluciones page)
+ * useBaseDir=false → DOCUMENTS_SCAN_DIR (flujo general)
  */
-function resolveDestDir(dni: number): string {
-  const base = getScannerDocumentsBaseDir();
-  if (!base) throw new Error('DOCUMENTS_SCAN_DIR/PHOTOS_BASE_DIR no configurado en .env');
+function resolveDestDir(dni: number, useBaseDir = false): string {
+  const base = useBaseDir
+    ? (env.DOCUMENTS_BASE_DIR?.trim() || getScannerDocumentsBaseDir())
+    : getScannerDocumentsBaseDir();
+  if (!base) throw new Error('DOCUMENTS_SCAN_DIR/DOCUMENTS_BASE_DIR no configurado en .env');
   const destDir = path.join(base, String(dni));
   if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
     logger.info({ msg: '[scanner] carpeta creada', destDir });
+  }
+  return destDir;
+}
+
+function resolveResolucionesYVariosDestDir(): string {
+  const destDir = env.DOCUMENTS_BASE_DIR?.trim();
+  if (!destDir) throw new Error('DOCUMENTS_BASE_DIR no configurado en .env');
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+    logger.info({ msg: '[scanner] carpeta de resoluciones y varios creada', destDir });
   }
   return destDir;
 }
@@ -89,6 +126,10 @@ function safeDocumentFileBase(name: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80) || 'Documento escaneado';
+}
+
+function buildResolucionFileBase(tipo: string, numero: string, year: number): string {
+  return [tipo || 'RESO', String(year), numero].filter(Boolean).join('-');
 }
 
 function getScannerBaseUrl(): string {
@@ -155,6 +196,8 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
         storage_key,
         ocr_summary,
         escaneado_por,
+        page_index,
+        page_total,
       } = req.body || {};
 
       if (!personal_dni || !scanner_document_id) {
@@ -167,6 +210,13 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
 
       const dniNum = Number(personal_dni);
 
+      // ── Responder de inmediato para que el scanner API no agote su timeout de 30s.
+      // El procesamiento (descarga, guardado en disco, INSERT en DB) se hace en async.
+      res.json({ ok: true, queued: true });
+
+      // ── Procesamiento async ──────────────────────────────────────────────────
+      ;(async () => { try {
+
       const agentes = await sequelize.query(
         'SELECT dni FROM personal WHERE dni = :dni AND deleted_at IS NULL LIMIT 1',
         { replacements: { dni: dniNum }, type: QueryTypes.SELECT }
@@ -177,21 +227,70 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       }
 
       const auth = (req as any).auth;
-      const operadorId = escaneado_por || auth?.principalId || null;
-      const tipoFromRef = TIPOS_DOCUMENTO_ESCANER.find(t => t.value === personal_ref)?.value;
-      const tipoFromClass = TIPOS_DOCUMENTO_ESCANER.find(t => t.value === doc_class)?.value;
-      const tipoArchivo = tipoFromRef || tipoFromClass || doc_class || 'documento_escaneado';
-      const nombreDocumento = getTipoDocumentoLabel(tipoArchivo);
+      const operadorId = Number(escaneado_por || auth?.principalId) || null;
 
-      // 1. Resolver carpeta destino
-      const destDir = resolveDestDir(dniNum);
+      // Detectar si viene de la página de resoluciones: personal_ref empieza con 'respage|'
+      // personal_ref = 'respage|motivo|numero|fecha'
+      const refParts  = (personal_ref || '').split('|');
+      const isResolucionesYVariosPage = refParts[0] === 'respage';
+      const refMotivo = isResolucionesYVariosPage ? (refParts[1] || '') : '';
+      const refNumero = isResolucionesYVariosPage ? (refParts[2] || '') : '';
+      const refFecha = isResolucionesYVariosPage ? (refParts[3] || '') : '';
+
+      // Si es scan de la página de resoluciones pero el formulario todavía no fue guardado
+      // (motivo y numero vacíos), saltar la creación del archivo. El frontend llama a
+      // sync-personal después de que el usuario completa el form y guarda, momento en que
+      // personal_ref tiene motivo/numero reales y el archivo puede nombrarse correctamente.
+      if (isResolucionesYVariosPage && !refMotivo && !refNumero) {
+        logger.info({
+          msg: '[scanner] document-ready omitido: respage con form vacío (esperando sync-personal)',
+          personal_dni,
+          scanner_document_id,
+        });
+        return; // ya respondimos arriba
+      }
+
+      const tipoArchivo = isResolucionesYVariosPage
+        ? (refMotivo || 'resolucion')
+        : (TIPOS_DOCUMENTO_ESCANER.find(t => t.value === personal_ref)?.value ||
+           TIPOS_DOCUMENTO_ESCANER.find(t => t.value === doc_class)?.value ||
+           doc_class || 'documento_escaneado');
+
+      // 1 JPG por página: sufijo para que cada página tenga nombre y ruta distintos
+      // (el escaneo JPG con ADF/dúplex llega como N notificaciones, una por página).
+      const pageIdx = Number(page_index) || 0;
+      const pageTot = Number(page_total) || 0;
+      const hasPageSuffix = !isResolucionesYVariosPage && pageTot > 1 && pageIdx > 0;
+      const pageSuffix = hasPageSuffix ? ` (${pageIdx}-${pageTot})` : '';
+
+      const nombreDocumento = (isResolucionesYVariosPage
+        ? [refMotivo, refNumero].filter(Boolean).join(' — ') || getTipoDocumentoLabel('resolucion')
+        : getTipoDocumentoLabel(tipoArchivo)) + pageSuffix;
+
+      const now = new Date();
+      const fechaDocumento = refFecha || now.toISOString().slice(0, 10);
+      const anioDocumento = Number(String(fechaDocumento).slice(0, 4)) || now.getFullYear();
+
+      // 1. Resolver carpeta destino (resoluciones → DOCUMENTS_BASE_DIR, resto → DOCUMENTS_SCAN_DIR)
+      const destDir = isResolucionesYVariosPage ? resolveResolucionesYVariosDestDir() : resolveDestDir(dniNum);
 
       // 2. Conservar extensión real del archivo del scanner
       const ext = inferExtensionFromStorageKey(storage_key);
-      const fileName = `${safeDocumentFileBase(nombreDocumento)}-${scanner_document_id}${ext}`;
+      const fileBase = isResolucionesYVariosPage && (refMotivo || refNumero)
+        ? buildResolucionFileBase(refMotivo, refNumero, anioDocumento)
+        : nombreDocumento;
+      const preferredFileName = `${safeDocumentFileBase(fileBase)}${ext}`;
+      // Para resoluciones: siempre usar el nombre preferido (sobreescribir si ya existe).
+      // Evita que la segunda llamada (sync-personal tras el auto-worker) genere un duplicado
+      // con el scanner_document_id appended. El archivo queda con el nombre limpio.
+      const fileName = isResolucionesYVariosPage
+        ? preferredFileName
+        : !fs.existsSync(path.join(destDir, preferredFileName))
+          ? preferredFileName
+          : `${safeDocumentFileBase(fileBase)}-${scanner_document_id}${ext}`;
 
       // 3. Ruta relativa y absoluta
-      const rutaRelativa = path.join(String(dniNum), fileName);
+      const rutaRelativa = isResolucionesYVariosPage ? fileName : path.join(String(dniNum), fileName);
       const rutaAbsoluta = path.join(destDir, fileName);
 
       // 4. Descargar físicamente el archivo desde scanner API y escribirlo en disco
@@ -215,15 +314,12 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
           rutaAbsoluta,
           error: e?.message,
         });
-        return res.status(500).json({
-          ok: false,
-          error: `scanner_file_download_failed: ${e?.message || 'unknown_error'}`,
-        });
+        return; // ya respondimos, solo logueamos el error
       }
 
       const descripcion = [
         doc_class ? `Tipo: ${doc_class}` : null,
-        page_count ? `Páginas: ${page_count}` : null,
+        hasPageSuffix ? `Página ${pageIdx} de ${pageTot}` : (page_count ? `Páginas: ${page_count}` : null),
         personal_ref ? `Ref: ${personal_ref}` : null,
         ocr_summary ? `Extracto: ${String(ocr_summary).slice(0, 200)}` : null,
       ].filter(Boolean).join(' | ');
@@ -244,7 +340,9 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
           `UPDATE tblarchivos
               SET nombre = :nombre,
                   tipo = :tipo,
+                  numero = :numero,
                   descripcion_archivo = :descripcion,
+                  updated_by = COALESCE(:updatedBy, updated_by),
                   updated_at = NOW()
             WHERE id = :id`,
           {
@@ -252,10 +350,39 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
               id: existingId,
               nombre: nombreDocumento,
               tipo: tipoArchivo,
+              numero: refNumero || null,
               descripcion: descripcion || 'Documento escaneado',
+              updatedBy: operadorId,
             },
           }
         );
+
+        await sequelize.query(
+          `INSERT INTO audit_log
+             (usuario_id, action, table_name, record_pk, route, actor_type, actor_id, method, entity_table, entity_pk, request_json, response_json, created_at)
+           VALUES
+             (:usuarioId, 'scanner_document_saved', 'tblarchivos', :recordPk, '/api/v1/scanner/document-ready',
+              :actorType, :actorId, 'POST', 'tblarchivos', :recordPk, :requestJson, :responseJson, NOW())`,
+          {
+            replacements: {
+              usuarioId: operadorId,
+              actorType: operadorId ? 'user' : 'api_key',
+              actorId: operadorId,
+              recordPk: String(existingId),
+              requestJson: JSON.stringify({
+                dni: dniNum,
+                ruta: rutaRelativa,
+                tipo: tipoArchivo,
+                scanner_document_id,
+                scanner_job_id: scanner_job_id || scan_job_id,
+                storage_key,
+                operadorId,
+                mode: 'update',
+              }),
+              responseJson: JSON.stringify({ status: 200, id: existingId }),
+            },
+          }
+        ).catch((e: any) => logger.warn({ msg: '[scanner] audit document-ready update falló', error: e?.message }));
 
         logger.info({
           msg: '[scanner] document-ready actualizado',
@@ -267,25 +394,36 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
           rutaAbsoluta,
         });
 
-        return res.json({ ok: true, id: existingId, updated: true });
+        return; // ya respondimos
       }
 
       await sequelize.query(
         `INSERT INTO tblarchivos
-           (dni, nombre, tipo, descripcion_archivo, ruta, escaneado_por, created_by, created_at)
+           (dni, nombre, tipo, numero, fecha, anio, descripcion_archivo, nombre_archivo_original, ruta, escaneado_por, created_by, created_at)
          VALUES
-           (:dni, :nombre, :tipo, :descripcion, :ruta, :escaneadoPor, :createdBy, NOW())
+           (:dni, :nombre, :tipo, :numero, :fecha, :anio, :descripcion, :originalName, :ruta, :escaneadoPor, :createdBy, NOW())
          ON DUPLICATE KEY UPDATE
            nombre = VALUES(nombre),
+           tipo = VALUES(tipo),
+           numero = VALUES(numero),
+           fecha = VALUES(fecha),
+           anio = VALUES(anio),
            descripcion_archivo = VALUES(descripcion_archivo),
+           nombre_archivo_original = VALUES(nombre_archivo_original),
            ruta = VALUES(ruta),
+           escaneado_por = COALESCE(VALUES(escaneado_por), escaneado_por),
+           updated_by = COALESCE(VALUES(created_by), updated_by),
            updated_at = NOW()`,
         {
           replacements: {
             dni:          dniNum,
             nombre:       nombreDocumento,
             tipo:         tipoArchivo,
+            numero:       refNumero || null,
+            fecha:        fechaDocumento,
+            anio:         anioDocumento,
             descripcion:  descripcion || 'Documento escaneado',
+            originalName: fileName,
             ruta:         rutaRelativa,
             escaneadoPor: operadorId,
             createdBy:    operadorId,
@@ -294,11 +432,16 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       ).catch((e: any) => {
         logger.warn({ msg: '[scanner] insert con escaneado_por falló, retry sin ella', error: e?.message });
         return sequelize.query(
-          `INSERT INTO tblarchivos (dni, nombre, tipo, descripcion_archivo, ruta, created_at)
-           VALUES (:dni, :nombre, :tipo, :descripcion, :ruta, NOW())
+          `INSERT INTO tblarchivos (dni, nombre, tipo, numero, fecha, anio, descripcion_archivo, nombre_archivo_original, ruta, created_at)
+           VALUES (:dni, :nombre, :tipo, :numero, :fecha, :anio, :descripcion, :originalName, :ruta, NOW())
            ON DUPLICATE KEY UPDATE
              nombre = VALUES(nombre),
+             tipo = VALUES(tipo),
+             numero = VALUES(numero),
+             fecha = VALUES(fecha),
+             anio = VALUES(anio),
              descripcion_archivo = VALUES(descripcion_archivo),
+             nombre_archivo_original = VALUES(nombre_archivo_original),
              ruta = VALUES(ruta),
              updated_at = NOW()`,
           {
@@ -306,12 +449,55 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
               dni:         dniNum,
               nombre:      nombreDocumento,
               tipo:        tipoArchivo,
+              numero:      refNumero || null,
+              fecha:       fechaDocumento,
+              anio:        anioDocumento,
               descripcion: descripcion || 'Documento escaneado',
+              originalName: fileName,
               ruta:        rutaRelativa,
             },
           }
         );
       });
+
+      const savedRows = await sequelize.query(
+        `SELECT id FROM tblarchivos
+         WHERE dni = :dni AND ruta = :ruta AND deleted_at IS NULL
+         ORDER BY id DESC
+         LIMIT 1`,
+        {
+          replacements: { dni: dniNum, ruta: rutaRelativa },
+          type: QueryTypes.SELECT,
+        }
+      ).catch(() => [] as any[]);
+      const savedId = (savedRows as any[])[0]?.id ?? null;
+
+      await sequelize.query(
+        `INSERT INTO audit_log
+           (usuario_id, action, table_name, record_pk, route, actor_type, actor_id, method, entity_table, entity_pk, request_json, response_json, created_at)
+         VALUES
+           (:usuarioId, 'scanner_document_saved', 'tblarchivos', :recordPk, '/api/v1/scanner/document-ready',
+            :actorType, :actorId, 'POST', 'tblarchivos', :recordPk, :requestJson, :responseJson, NOW())`,
+        {
+          replacements: {
+            usuarioId: operadorId,
+            actorType: operadorId ? 'user' : 'api_key',
+            actorId: operadorId,
+            recordPk: savedId != null ? String(savedId) : null,
+            requestJson: JSON.stringify({
+              dni: dniNum,
+              ruta: rutaRelativa,
+              tipo: tipoArchivo,
+              scanner_document_id,
+              scanner_job_id: scanner_job_id || scan_job_id,
+              storage_key,
+              operadorId,
+              mode: 'insert',
+            }),
+            responseJson: JSON.stringify({ status: 201, id: savedId }),
+          },
+        }
+      ).catch((e: any) => logger.warn({ msg: '[scanner] audit document-ready insert falló', error: e?.message }));
 
       logger.info({
         msg: '[scanner] document-ready registrado',
@@ -324,13 +510,19 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
         rutaAbsoluta,
       });
 
-      return res.json({ ok: true });
-
+      // procesamiento terminado OK
     } catch (e: any) {
-      logger.error({ msg: '[scanner] document-ready error', error: e?.message });
-      return res.status(500).json({ ok: false, error: 'internal_error' });
-    }
-  });
+      logger.error({ msg: '[scanner] document-ready async error', error: e?.message });
+    } })().catch((e: any) =>
+      logger.error({ msg: '[scanner] document-ready unhandled async error', error: e?.message })
+    );
+
+  } catch (e: any) {
+    // Solo llega aquí si la validación tiró una excepción no controlada antes del res.json
+    logger.error({ msg: '[scanner] document-ready error pre-respuesta', error: e?.message });
+    if (!res.headersSent) res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
 
   router.post('/registrar-escaneo', async (req: Request, res: Response) => {
     try {
@@ -487,20 +679,23 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       });
 
       const rows = await sequelize.query(
-        `SELECT id, nombre, tipo, descripcion_archivo, ruta, escaneado_por, created_by, created_at
-         FROM tblarchivos
-         WHERE dni = :dni
-           AND (tipo LIKE '%dni%' OR tipo LIKE '%titulo%' OR tipo LIKE '%licencia%'
-                OR tipo LIKE '%scanner%' OR tipo LIKE '%documento_escaneado%'
-                OR tipo IN ('identificacion', 'general', 'certificado', 'titulo', 'solicitud')
-                OR tipo IN (${tipoParams})
-                OR ruta LIKE 'scanner://%'
-                OR ruta LIKE :rutaDniSlash
-                OR ruta LIKE :rutaDniBackslash
-                OR ruta LIKE :rutaAnyDniSlash
-                OR ruta LIKE :rutaAnyDniBackslash)
-           AND deleted_at IS NULL
-         ORDER BY created_at DESC
+        `SELECT a.id, a.nombre, a.tipo, a.descripcion_archivo, a.ruta, a.escaneado_por, a.created_by, a.created_at,
+                COALESCE(u.nombre, u.email) AS escaneado_por_nombre,
+                u.email AS escaneado_por_email
+         FROM tblarchivos a
+         LEFT JOIN usuarios u ON u.id = COALESCE(a.escaneado_por, a.created_by)
+         WHERE a.dni = :dni
+           AND (a.tipo LIKE '%dni%' OR a.tipo LIKE '%titulo%' OR a.tipo LIKE '%licencia%'
+                OR a.tipo LIKE '%scanner%' OR a.tipo LIKE '%documento_escaneado%'
+                OR a.tipo IN ('identificacion', 'general', 'certificado', 'titulo', 'solicitud')
+                OR a.tipo IN (${tipoParams})
+                OR a.ruta LIKE 'scanner://%'
+                OR a.ruta LIKE :rutaDniSlash
+                OR a.ruta LIKE :rutaDniBackslash
+                OR a.ruta LIKE :rutaAnyDniSlash
+                OR a.ruta LIKE :rutaAnyDniBackslash)
+           AND a.deleted_at IS NULL
+         ORDER BY a.created_at DESC
          LIMIT 200`,
         {
           replacements,

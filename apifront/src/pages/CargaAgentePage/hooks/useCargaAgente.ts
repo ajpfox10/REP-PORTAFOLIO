@@ -3,7 +3,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { apiFetch } from '../../../api/http';
 import { useToast } from '../../../ui/toast';
 import type { CapturedPhoto } from './useCamera';
-import type { ScanResult } from './useScanner';
 
 export type CatalogItem = { id: number | string; nombre: string };
 
@@ -82,7 +81,7 @@ function extractNombre(row: any): string {
   return String(row.id ?? '');
 }
 
-export type SavedMode = 'create' | 'edit';
+export type SavedMode = 'create' | 'edit' | 'reentry';
 
 export function useCargaAgente() {
   const toast = useToast();
@@ -90,7 +89,6 @@ export function useCargaAgente() {
   const [step, setStep] = useState<Step>(1);
   const [form, setForm] = useState<PersonalForm>(EMPTY_FORM);
   const [photo, setPhoto] = useState<CapturedPhoto | null>(null);
-  const [documents, setDocuments] = useState<ScanResult[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [savedDni, setSavedDni] = useState<number | null>(null);
@@ -99,6 +97,7 @@ export function useCargaAgente() {
 
   // ── Modo edición ──────────────────────────────────────────────────────────────
   const [editMode,    setEditMode]    = useState(false);
+  const [reentryMode, setReentryMode] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
   const [cats, setCats] = useState<CatalogSet>({
@@ -108,10 +107,15 @@ export function useCargaAgente() {
 
   const loadCatalog = useCallback(async (table: string): Promise<CatalogItem[]> => {
     try {
-      const res = await apiFetch<any>(`/${table}?limit=500&page=1`);
+      // localidades: son ~4142 y su nombre está en localidad_nombre (no en un genérico *_nombre,
+      // que agarraría provincia_nombre). Traemos todas y etiquetamos "LOCALIDAD — Municipio".
+      const limit = table === 'localidades' ? 5000 : 500;
+      const res = await apiFetch<any>(`/${table}?limit=${limit}&page=1`);
       return (res?.data || []).map((r: any) => ({
         id: r.id ?? r.ID,   // categorias usa PK "ID" en mayúscula
-        nombre: extractNombre(r),
+        nombre: table === 'localidades'
+          ? [r.localidad_nombre, r.municipio_nombre].filter(Boolean).join(' — ')
+          : extractNombre(r),
       }));
     } catch {
       return [];
@@ -141,7 +145,7 @@ export function useCargaAgente() {
    */
   const checkDni = useCallback(async (dniValue?: string) => {
     const clean = (dniValue ?? form.dni).replace(/\D/g, '');
-    if (!/^\d{6,8}$/.test(clean)) { setEditMode(false); return; }
+    if (!/^\d{6,8}$/.test(clean)) { setEditMode(false); setReentryMode(false); return; }
 
     setEditLoading(true);
     try {
@@ -150,6 +154,7 @@ export function useCargaAgente() {
         const d = res.data;
         const toStr = (v: any) => (v != null ? String(v) : '');
         const toDate = (v: any) => (v ? String(v).substring(0, 10) : '');
+        const hasActive = d.has_active_agente === true;
 
         setForm(f => ({
           ...f,
@@ -163,27 +168,36 @@ export function useCargaAgente() {
           telefono:           d.telefono  || '',
           domicilio:          d.domicilio || '',
           observaciones:      d.observaciones || '',
-          estado_empleo:      d.estado_empleo || 'ACTIVO',
-          legajo:             toStr(d.legajo),
-          ley_id:             toStr(d.ley_id),
-          planta_id:          toStr(d.planta_id),
-          categoria_id:       toStr(d.categoria_id),
-          ocupacion_id:       toStr(d.ocupacion_id),
-          regimen_horario_id: toStr(d.regimen_horario_id),
-          dependencia_id:     toStr(d.dependencia_id),
-          funcion_id:         toStr(d.funcion_id),
-          fecha_ingreso:      toDate(d.fecha_ingreso_laboral ?? d.fecha_ingreso),
-          fecha_egreso:       toDate(d.fecha_egreso),
-          fecha_baja:         toDate(d.fecha_baja),
-          salario_mensual:    d.salario_mensual != null ? String(d.salario_mensual) : '',
+          estado_empleo:      hasActive ? (d.estado_empleo || 'ACTIVO') : 'ACTIVO',
+          legajo:             hasActive ? toStr(d.legajo) : '',
+          ley_id:             hasActive ? toStr(d.ley_id) : '',
+          planta_id:          hasActive ? toStr(d.planta_id) : '',
+          categoria_id:       hasActive ? toStr(d.categoria_id) : '',
+          ocupacion_id:       hasActive ? toStr(d.ocupacion_id) : '',
+          regimen_horario_id: hasActive ? toStr(d.regimen_horario_id) : '',
+          dependencia_id:     hasActive ? toStr(d.dependencia_id) : '',
+          reparticion_id:     hasActive ? toStr(d.reparticion_id) : '',
+          servicio_id:        hasActive ? toStr(d.servicio_id) : '',
+          sector_id:          hasActive ? toStr(d.sector_id) : '',
+          funcion_id:         hasActive ? toStr(d.funcion_id) : '',
+          fecha_ingreso:      hasActive ? toDate(d.fecha_ingreso_laboral ?? d.fecha_ingreso) : '',
+          fecha_egreso:       hasActive ? toDate(d.fecha_egreso) : '',
+          fecha_baja:         '',
+          salario_mensual:    hasActive && d.salario_mensual != null ? String(d.salario_mensual) : '',
         }));
-        setEditMode(true);
-        toast.ok('Agente encontrado', `${d.apellido ?? ''}, ${d.nombre ?? ''} — modo edición`);
+        setEditMode(hasActive);
+        setReentryMode(!hasActive);
+        toast.ok(
+          hasActive ? 'Agente activo encontrado' : 'Persona encontrada sin vinculo activo',
+          hasActive ? 'Modo edicion' : 'Se creara un reingreso sin modificar el historial'
+        );
       } else {
         setEditMode(false);
+        setReentryMode(false);
       }
     } catch {
       setEditMode(false);
+      setReentryMode(false);
     } finally {
       setEditLoading(false);
     }
@@ -204,6 +218,9 @@ export function useCargaAgente() {
     }
     if (s === 2) {
       if (!form.estado_empleo) errs.estado_empleo = 'Estado requerido';
+      if (form.fecha_egreso && form.estado_empleo === 'ACTIVO') {
+        errs.estado_empleo = 'Con fecha de egreso debe seleccionar INACTIVO, BAJA, COMISION o TRAMITE';
+      }
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -243,13 +260,16 @@ export function useCargaAgente() {
           ...(form.observaciones     ? { observaciones:      form.observaciones }                 : {}),
           // campos agente
           estado_empleo: form.estado_empleo || 'ACTIVO',
-          ...(form.legajo            ? { legajo:             form.legajo }                        : {}),
+          ...(form.legajo            ? { legajo:             Number(form.legajo) }                : {}),
           ...(form.ley_id            ? { ley_id:             Number(form.ley_id) }                : {}),
           ...(form.planta_id         ? { planta_id:          Number(form.planta_id) }             : {}),
           ...(form.categoria_id      ? { categoria_id:       Number(form.categoria_id) }          : {}),
           ...(form.ocupacion_id      ? { ocupacion_id:       Number(form.ocupacion_id) }          : {}),
           ...(form.regimen_horario_id? { regimen_horario_id: Number(form.regimen_horario_id) }    : {}),
           ...(form.dependencia_id    ? { dependencia_id:     Number(form.dependencia_id) }        : {}),
+          ...(form.reparticion_id    ? { reparticion_id:     Number(form.reparticion_id) }        : {}),
+          ...(form.servicio_id       ? { servicio_id:        Number(form.servicio_id) }           : {}),
+          ...(form.sector_id         ? { sector_id:           Number(form.sector_id) }             : {}),
           ...(form.funcion_id        ? { funcion_id:         Number(form.funcion_id) }            : {}),
           ...(form.fecha_ingreso     ? { fecha_ingreso:      form.fecha_ingreso }                 : {}),
           ...(form.fecha_egreso      ? { fecha_egreso:       form.fecha_egreso }                  : {}),
@@ -268,11 +288,56 @@ export function useCargaAgente() {
         setSavedMode('edit');
 
       } else {
+        if (reentryMode) {
+          const altaPayload: Record<string, any> = {
+            dni: dniNum,
+            apellido: form.apellido.trim().toUpperCase(),
+            nombre: form.nombre.trim().toUpperCase(),
+            estado_empleo: form.estado_empleo || 'ACTIVO',
+            ...(form.cuil ? { cuil: form.cuil } : {}),
+            ...(form.fecha_nacimiento ? { fecha_nacimiento: form.fecha_nacimiento } : {}),
+            ...(form.sexo_id ? { sexo_id: Number(form.sexo_id) } : {}),
+            ...(form.email ? { email: form.email } : {}),
+            ...(form.telefono ? { telefono: form.telefono } : {}),
+            ...(form.domicilio ? { domicilio: form.domicilio } : {}),
+            ...(form.localidad_id ? { localidad_id: Number(form.localidad_id) } : {}),
+            ...(form.nacionalidad ? { nacionalidad: form.nacionalidad } : {}),
+            ...(form.observaciones ? { observaciones: form.observaciones } : {}),
+            ...(form.fecha_ingreso ? { fecha_ingreso: form.fecha_ingreso } : {}),
+            ...(form.fecha_egreso ? { fecha_egreso: form.fecha_egreso } : {}),
+            ...(form.legajo ? { legajo: Number(form.legajo) } : {}),
+            ...(form.ley_id ? { ley_id: Number(form.ley_id) } : {}),
+            ...(form.planta_id ? { planta_id: Number(form.planta_id) } : {}),
+            ...(form.categoria_id ? { categoria_id: Number(form.categoria_id) } : {}),
+            ...(form.funcion_id ? { funcion_id: Number(form.funcion_id) } : {}),
+            ...(form.ocupacion_id ? { ocupacion_id: Number(form.ocupacion_id) } : {}),
+            ...(form.regimen_horario_id ? { regimen_horario_id: Number(form.regimen_horario_id) } : {}),
+            ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
+            ...(form.reparticion_id ? { reparticion_id: Number(form.reparticion_id) } : {}),
+            ...(form.decreto_designacion ? { decreto_designacion: form.decreto_designacion } : {}),
+            ...(form.salario_mensual ? { salario_mensual: Number(form.salario_mensual) } : {}),
+            ...(form.servicio_id ? {
+              servicios: [{
+                servicio_id: Number(form.servicio_id),
+                ...(form.sector_id ? { sector_id: Number(form.sector_id) } : {}),
+                ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
+                ...(form.fecha_ingreso ? { fecha_desde: form.fecha_ingreso } : {}),
+              }],
+            } : {}),
+          };
+          const altaRes = await apiFetch<any>('/agentes-v2/alta', {
+            method: 'POST',
+            body: JSON.stringify(altaPayload),
+          });
+          if (!altaRes?.ok) throw new Error(altaRes?.error || 'Error al registrar reingreso');
+          setSavedDni(dniNum);
+          setSavedMode('reentry');
+        } else {
         // ── MODO ALTA: POST /personal + POST /agentes ──────────────────────────
-        // Verificar duplicado antes de crear
+        // Consulta opcional: la validacion real de activo/reingreso la hace /agentes-v2/alta.
         try {
           const existing = await apiFetch<any>(`/personal?dni=${dniNum}&limit=1&page=1`);
-          if ((existing?.data?.length ?? 0) > 0) {
+          if (false && (existing?.data?.length ?? 0) > 0) {
             toast.error('Ya existe un agente con ese DNI', `DNI ${dniNum} — buscalo para editarlo`);
             setSaving(false); setStep(1); return;
           }
@@ -292,33 +357,37 @@ export function useCargaAgente() {
           ...(form.localidad_id     ? { localidad_id:     Number(form.localidad_id) }  : {}),
           ...(form.nacionalidad     ? { nacionalidad:     form.nacionalidad }          : {}),
           ...(form.observaciones    ? { observaciones:    form.observaciones }         : {}),
-        };
-        const pRes = await apiFetch<any>('/personal', { method: 'POST', body: JSON.stringify(personalPayload) });
-        if (!pRes?.ok) throw new Error(pRes?.error || 'Error al crear en personal');
-
-        // 2) Crear registro en agentes
-        const agentePayload: Record<string, any> = {
-          dni: dniNum,
           estado_empleo: form.estado_empleo || 'ACTIVO',
           ...(form.fecha_ingreso      ? { fecha_ingreso:      form.fecha_ingreso }                : {}),
           ...(form.fecha_egreso       ? { fecha_egreso:       form.fecha_egreso }                 : {}),
           ...(form.fecha_baja         ? { fecha_baja:         form.fecha_baja }                   : {}),
+          ...(form.legajo             ? { legajo:             Number(form.legajo) }               : {}),
           ...(form.ley_id             ? { ley_id:             Number(form.ley_id) }               : {}),
           ...(form.planta_id          ? { planta_id:          Number(form.planta_id) }            : {}),
           ...(form.categoria_id       ? { categoria_id:       Number(form.categoria_id) }         : {}),
+          ...(form.funcion_id         ? { funcion_id:         Number(form.funcion_id) }           : {}),
           ...(form.ocupacion_id       ? { ocupacion_id:       Number(form.ocupacion_id) }         : {}),
           ...(form.regimen_horario_id ? { regimen_horario_id: Number(form.regimen_horario_id) }   : {}),
           ...(form.dependencia_id     ? { dependencia_id:     Number(form.dependencia_id) }       : {}),
           ...(form.reparticion_id     ? { reparticion_id:     Number(form.reparticion_id) }       : {}),
-          ...(form.servicio_id        ? { servicio_id:        Number(form.servicio_id) }          : {}),
-          ...(form.sector_id          ? { sector_id:          Number(form.sector_id) }            : {}),
           ...(form.decreto_designacion? { decreto_designacion: form.decreto_designacion }         : {}),
           ...(form.salario_mensual    ? { salario_mensual:    parseFloat(form.salario_mensual) }  : {}),
+          ...(form.servicio_id ? {
+            servicios: [{
+              servicio_id: Number(form.servicio_id),
+              ...(form.sector_id ? { sector_id: Number(form.sector_id) } : {}),
+              ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
+              ...(form.fecha_ingreso ? { fecha_desde: form.fecha_ingreso } : {}),
+            }],
+          } : {}),
         };
-        await apiFetch<any>('/agentes', { method: 'POST', body: JSON.stringify(agentePayload) });
+        const pRes = await apiFetch<any>('/agentes-v2/alta', { method: 'POST', body: JSON.stringify(personalPayload) });
+        if (!pRes?.ok) throw new Error(pRes?.error || 'Error al crear agente');
 
+        // 2) Crear registro en agentes
         setSavedDni(dniNum);
         setSavedMode('create');
+        }
       }
 
       // Upload foto (aplica en ambos modos)
@@ -344,7 +413,7 @@ export function useCargaAgente() {
 
       setSaved(true);
       toast.ok(
-        editMode ? 'Agente actualizado correctamente' : 'Agente creado correctamente',
+        editMode ? 'Agente actualizado correctamente' : reentryMode ? 'Reingreso registrado correctamente' : 'Agente creado correctamente',
         `DNI ${dniNum}`
       );
     } catch (e: any) {
@@ -352,25 +421,23 @@ export function useCargaAgente() {
     } finally {
       setSaving(false);
     }
-  }, [form, photo, documents, toast, validateStep, editMode]);
+  }, [form, photo, toast, validateStep, editMode, reentryMode]);
 
   const reset = useCallback(() => {
     setForm(EMPTY_FORM);
     setPhoto(null);
-    setDocuments([]);
     setSaved(false);
     setSavedDni(null);
     setSavedMode('create');
     setEditMode(false);
+    setReentryMode(false);
     setStep(1);
     setErrors({});
   }, []);
 
   return {
-    step, form, photo, documents, saving, saved, savedDni, savedMode, errors, cats,
-    editMode, editLoading, checkDni,
+    step, form, photo, saving, saved, savedDni, savedMode, errors, cats,
+    editMode, reentryMode, editLoading, checkDni,
     setField, setPhoto, nextStep, prevStep, goToStep, save, reset,
-    setDocuments,
   };
 }
-

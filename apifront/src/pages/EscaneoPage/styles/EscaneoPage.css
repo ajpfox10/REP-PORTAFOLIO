@@ -42,6 +42,66 @@
   letter-spacing: 0.07em; margin-bottom: 4px;
 }
 
+.scan-tipos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 6px;
+}
+
+.scan-tipo-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.scan-tipo-btn:hover {
+  background: rgba(99,102,241,0.12);
+  border-color: rgba(99,102,241,0.45);
+}
+
+.scan-tipo-btn.selected {
+  background: rgba(99,102,241,0.25);
+  border-color: #818cf8;
+}
+
+.scan-tipo-icon {
+  flex: 0 0 22px;
+  width: 22px;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 1rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.scan-tipo-label {
+  font-size: 0.76rem;
+  line-height: 1.15;
+}
+
+/* ── Grupos de tipos de documento ── */
+.scan-group-section {
+  margin-top: 14px;
+}
+
+.scan-group-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #818cf8;
+  padding: 4px 2px 6px;
+  border-bottom: 1px solid rgba(129,140,248,0.25);
+  margin-bottom: 8px;
+}
+
 /* ── Dispositivos lista ── */
 .scan-no-devices {
   display: flex; flex-direction: column; align-items: center;
@@ -150,6 +210,17 @@
   display: flex; align-items: center; justify-content: center;
 }
 .scan-preview-remove:hover { background: #ef4444; }
+.scan-preview-rotate {
+  position: absolute; top: 4px; left: 4px; min-width: 28px; height: 24px;
+  padding: 0 6px; border-radius: 12px; border: 0; cursor: pointer;
+  background: rgba(79,70,229,0.92); color: white; font-size: 1rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.scan-preview-rotate:hover { background: #6366f1; }
+.scan-preview-rotate:disabled { opacity: 0.55; cursor: wait; }
+.scan-preview-rotate-180 {
+  top: 34px; min-width: 38px; font-size: 0.68rem; font-weight: 700;
+}
 .scan-device-picker { display: flex; flex-direction: column; gap: 8px; }
 .scan-device-search, .scan-doc-search {
   width: 100%; box-sizing: border-box; margin-bottom: 8px;

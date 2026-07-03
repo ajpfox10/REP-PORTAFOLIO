@@ -8,7 +8,7 @@ import { GestionDocumentPreview }        from '../Gesytionpage/components/compon
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
 const COLS = ['id','nombre','tipo','numero','fecha','descripcion_archivo','nombre_archivo_original'];
-const TIPOS = ['documento','resolución','expediente','nota','certificado','foto','recibo','otro'];
+const TIPOS = ['documento','resoluciÃ³n','expediente','nota','certificado','foto','recibo','otro'];
 
 const emptyForm = { nombre: '', numero: '', tipo: 'documento', fecha: '', descripcion_archivo: '' };
 

@@ -22,6 +22,8 @@ const altaAgenteSchema = z.object({
   telefono:        z.string().max(30).optional(),
   domicilio:       z.string().max(200).optional(),
   localidad_id:    z.number().int().positive().optional(),
+  nacionalidad:    z.string().max(50).optional(),
+  observaciones:   z.string().optional(),
   // Datos laborales (opcionales)
   ley_id:           z.number().int().positive().optional(),
   planta_id:        z.number().int().positive().optional(),
@@ -32,11 +34,18 @@ const altaAgenteSchema = z.object({
   jefatura_id:      z.number().int().positive().optional(),
   sector_id:        z.number().int().positive().optional(),
   dependencia_id:   z.number().int().positive().optional(),
+  reparticion_id:    z.number().int().positive().optional(),
   fecha_ingreso:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  fecha_alta:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  fecha_egreso:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  estado_empleo:    z.enum(['ACTIVO','INACTIVO','BAJA','COMISION','TRAMITE']).optional(),
+  legajo:           z.number().int().optional(),
+  salario_mensual:  z.number().optional(),
+  decreto_designacion: z.string().max(50).optional(),
   // Servicios
   servicios: z.array(z.object({
     servicio_id: z.number().int().positive(),
+    sector_id: z.number().int().positive().optional(),
+    dependencia_id: z.number().int().positive().optional(),
     fecha_desde: z.string().optional(),
     fecha_hasta: z.string().optional(),
   })).optional(),

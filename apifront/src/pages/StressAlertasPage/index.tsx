@@ -8,6 +8,7 @@ import { Layout }        from '../../components/Layout';
 import { apiFetch }      from '../../api/http';
 import { exportToExcel } from '../../utils/export';
 import { useToast }      from '../../ui/toast';
+import { LicenciasPendientesContent } from '../LicenciasPendientesPage';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface StressAlerta {
@@ -51,7 +52,7 @@ function stressTag(dias: number | null) {
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
-export function StressAlertasPage() {
+export function StressAlertasContent() {
   const toast = useToast();
 
   const [datos,     setDatos]     = useState<StressAlerta[]>([]);
@@ -121,7 +122,7 @@ export function StressAlertasPage() {
   const criticos    = filtrados.filter(r => r.dias_transcurridos >= 90).length;
 
   return (
-    <Layout title="Herramientas">
+    <>
       <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 40 }}>
 
         {/* ─ Encabezado ─ */}
@@ -283,6 +284,57 @@ export function StressAlertasPage() {
         )}
 
       </div>
+    </>
+  );
+}
+
+type StressSection = 'stress' | 'licencias';
+
+export function StressAlertasPage({ initialSection = 'stress' }: { initialSection?: StressSection } = {}) {
+  const [pageTab, setPageTab] = useState<StressSection>(initialSection);
+
+  return (
+    <Layout title="Herramientas">
+      <div className="card" style={{ padding: 0, marginBottom: 16, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <button
+            className={`btn${pageTab === 'stress' ? ' active' : ''}`}
+            onClick={() => setPageTab('stress')}
+            type="button"
+            style={{
+              borderRadius: 0,
+              border: 0,
+              borderRight: '1px solid rgba(255,255,255,0.08)',
+              padding: '12px 18px',
+              fontWeight: 700,
+              background: pageTab === 'stress' ? 'rgba(14,165,233,0.22)' : 'transparent',
+            }}
+          >
+            Stress post-vacacional
+          </button>
+          <button
+            className={`btn${pageTab === 'licencias' ? ' active' : ''}`}
+            onClick={() => setPageTab('licencias')}
+            type="button"
+            style={{
+              borderRadius: 0,
+              border: 0,
+              padding: '12px 18px',
+              fontWeight: 700,
+              background: pageTab === 'licencias' ? 'rgba(14,165,233,0.22)' : 'transparent',
+            }}
+          >
+            Licencias pendientes
+          </button>
+        </div>
+        <div style={{ padding: '10px 16px', color: '#94a3b8', fontSize: '0.82rem' }}>
+          {pageTab === 'stress'
+            ? 'Alertas de anual complementaria pendiente y dias de stress a cargar.'
+            : 'Dias pendientes de licencia por agente y servicio.'}
+        </div>
+      </div>
+
+      {pageTab === 'licencias' ? <LicenciasPendientesContent /> : <StressAlertasContent />}
     </Layout>
   );
 }

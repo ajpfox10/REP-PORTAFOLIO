@@ -1,0 +1,1538 @@
+import fs from 'fs';
+import type { Dirent } from 'fs';
+import os from 'os';
+import path from 'path';
+import { pathToFileURL } from 'url';
+import { Router, Request, Response } from 'express';
+import { PDFDocument } from 'pdf-lib';
+import { QueryTypes, Sequelize } from 'sequelize';
+import { env } from '../config/env';
+import { logger } from '../logging/logger';
+import { cacheInvalidateTags } from '../infra/cache';
+import { extractTextFromImage } from '../services/ocr.service';
+
+const dynamicImport: (s: string) => Promise<any> = new Function('s', 'return import(s)') as any;
+
+const TRAMITES = [
+  { value: 'RENOVACION', label: 'Renovacion' },
+  { value: 'DESIGNACION', label: 'Designacion' },
+  { value: 'NOMBRAMIENTO', label: 'Nombramiento' },
+] as const;
+
+const POBLACIONES = [
+  { value: 'BECARIOS', label: 'Becarios' },
+  { value: 'INTERINOS_10430', label: 'Interinos Ley 10430' },
+] as const;
+
+type AgentHit = {
+  dni: number;
+  apellido: string;
+  nombre: string;
+  cuil: string | null;
+};
+
+type PdfAnalysisRow = {
+  fileName: string;
+  fileUrl: string;
+  bytes: number;
+  pages: number;
+  detectedDni: number | null;
+  agente: AgentHit | null;
+  candidates: number[];
+  status: 'detectado' | 'sin_agente' | 'ambiguedad' | 'sin_texto' | 'error';
+  reason: string | null;
+  lectura: 'texto' | 'ocr' | 'sin_texto';
+};
+
+type SaveFileInput = {
+  fileName: string;
+  dni: number | string;
+  include?: boolean;
+  expediente?: string | null;
+  pageOrder?: string | null;
+};
+
+type DocumentOrderInput = {
+  kind: 'caratula' | 'file' | 'rupa';
+  fileName: string | null;
+  pageOrder: string | null;
+};
+
+type MergeFileInput = {
+  fileName: string;
+  dni: number;
+  expediente: string | null;
+  pageOrder: string | null;
+};
+
+type ExtraDocsOptions = {
+  includeCaratula: boolean;
+  includeRupa: boolean;
+  rupaSourceMode: 'docu' | 'descargas' | 'custom';
+  rupaDir: string | null;
+};
+
+type PreloadAgentRow = {
+  dni: number;
+  apellidoNombre: string;
+  fechaIngresoExcel: string | null;
+  expediente: string;
+  incluido: boolean;
+  leyNombre: string | null;
+  plantaNombre: string | null;
+  ocupacionNombre: string | null;
+  ocupacionLey: string | null;
+  tipoBeca: string | null;
+  dependenciaNombre: string | null;
+};
+
+type SavedListadoRow = {
+  id: string;
+  name: string;
+  createdAt: string;
+  poblacion: string;
+  tramite: string;
+  anioBeca: string;
+  programaBeca: string;
+  dependenciaId: string;
+  expedienteModo: 'unico' | 'individual';
+  expedienteUnico: string;
+  rows: Array<Record<string, unknown>>;
+  savedBy?: number | null;
+};
+
+type BecaTipo = {
+  value: string;
+  label: string;
+  total: number;
+};
+
+type DependenciaOption = {
+  value: string;
+  label: string;
+  total: number;
+};
+
+function dependenciaWhereSql(alias = 'd.id') {
+  return `(
+    a.dependencia_id = ${alias}
+    OR EXISTS (
+      SELECT 1
+      FROM agentes_servicios ags_dep
+      LEFT JOIN servicios s_dep ON s_dep.id = ags_dep.servicio_id AND s_dep.deleted_at IS NULL
+      LEFT JOIN reparticiones r_dep ON r_dep.id = s_dep.reparticion_id AND r_dep.deleted_at IS NULL
+      WHERE ags_dep.dni = p.dni
+        AND ags_dep.deleted_at IS NULL
+        AND (ags_dep.fecha_hasta IS NULL OR ags_dep.fecha_hasta >= CURDATE())
+        AND COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id) = ${alias}
+    )
+  )`;
+}
+
+function getInputDir() {
+  return String(env.TRAMITES_PDF_INPUT_DIR || '').trim();
+}
+
+function getDocuBaseDir() {
+  return String(env.TRAMITES_DOCU_BASE_DIR || '').trim();
+}
+
+function getListadosStorePath() {
+  const base = getDocuBaseDir() || String(env.DOCUMENTS_BASE_DIR || '').trim() || process.cwd();
+  return path.join(base, '.personalv5', 'tramites-documentales-listados.json');
+}
+
+function readSavedListados(): SavedListadoRow[] {
+  const filePath = getListadosStorePath();
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === 'object') : [];
+  } catch (err: any) {
+    logger.warn({ msg: '[tramites] no se pudieron leer listados seteados', filePath, error: err?.message });
+    return [];
+  }
+}
+
+function writeSavedListados(rows: SavedListadoRow[]) {
+  const filePath = getListadosStorePath();
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(rows, null, 2), 'utf8');
+}
+
+function cleanSavedListado(raw: any, actor: number | null): SavedListadoRow {
+  const rows = Array.isArray(raw?.rows) ? raw.rows.slice(0, 500) : [];
+  return {
+    id: String(raw?.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    name: String(raw?.name || 'Listado seteado').trim().slice(0, 220) || 'Listado seteado',
+    createdAt: raw?.createdAt && !Number.isNaN(Date.parse(String(raw.createdAt)))
+      ? String(raw.createdAt)
+      : new Date().toISOString(),
+    poblacion: String(raw?.poblacion || 'BECARIOS'),
+    tramite: String(raw?.tramite || 'DESIGNACION'),
+    anioBeca: String(raw?.anioBeca || ''),
+    programaBeca: String(raw?.programaBeca || 'TODAS'),
+    dependenciaId: String(raw?.dependenciaId || 'TODAS'),
+    expedienteModo: raw?.expedienteModo === 'individual' ? 'individual' : 'unico',
+    expedienteUnico: String(raw?.expedienteUnico || ''),
+    rows,
+    savedBy: actor,
+  };
+}
+
+function listPdfFiles(inputDir: string): string[] {
+  if (!inputDir || !fs.existsSync(inputDir)) return [];
+
+  const base = path.resolve(inputDir);
+  const found: string[] = [];
+  const stack = [base];
+
+  while (stack.length && found.length < 1000) {
+    const current = stack.pop();
+    if (!current) continue;
+
+    let entries: Dirent[] = [];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.pdf')) {
+        found.push(path.relative(base, fullPath).replace(/\\/g, '/'));
+      }
+    }
+  }
+
+  return found.sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+function resolveInputPdf(fileName: string): string {
+  const inputDir = getInputDir();
+  const relativeName = String(fileName || '').replace(/\\/g, '/').trim();
+  if (!relativeName || path.isAbsolute(relativeName) || relativeName.includes('\0') || !relativeName.toLowerCase().endsWith('.pdf')) {
+    throw Object.assign(new Error('Archivo invalido'), { status: 400 });
+  }
+
+  const base = path.resolve(inputDir);
+  const fullPath = path.resolve(base, relativeName);
+  const rel = path.relative(base, fullPath);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw Object.assign(new Error('Archivo fuera de carpeta permitida'), { status: 400 });
+  }
+  if (!fs.existsSync(fullPath)) {
+    throw Object.assign(new Error('Archivo no encontrado'), { status: 404 });
+  }
+  return fullPath;
+}
+
+function sanitizeTramite(value: string): string {
+  const raw = String(value || '').trim().toUpperCase();
+  if (!TRAMITES.some((t) => t.value === raw)) {
+    throw Object.assign(new Error('Tramite invalido'), { status: 400 });
+  }
+  return raw;
+}
+
+function parseDni(value: number | string): number | null {
+  const dni = Number(String(value || '').replace(/\D/g, ''));
+  return Number.isInteger(dni) && dni > 0 ? dni : null;
+}
+
+function safeFilename(name: string): string {
+  return path.basename(String(name || 'archivo.pdf'))
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .trim() || 'archivo.pdf';
+}
+
+function uniquePath(dir: string, filename: string): string {
+  const clean = safeFilename(filename);
+  const ext = path.extname(clean);
+  const base = path.basename(clean, ext);
+  let candidate = path.join(dir, clean);
+  let i = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(dir, `${base}_${i}${ext}`);
+    i += 1;
+  }
+  return candidate;
+}
+
+function normalizeSearch(value: string): string {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function listPdfPathsRecursive(rootDir: string, maxFiles = 600): string[] {
+  const base = path.resolve(rootDir);
+  if (!base || !fs.existsSync(base)) return [];
+
+  const found: string[] = [];
+  const stack = [base];
+  while (stack.length && found.length < maxFiles) {
+    const current = stack.pop();
+    if (!current) continue;
+    let entries: Dirent[] = [];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.pdf')) {
+        found.push(fullPath);
+        if (found.length >= maxFiles) break;
+      }
+    }
+  }
+
+  return found.sort((a, b) => path.basename(a).localeCompare(path.basename(b), 'es'));
+}
+
+function findNamedPdf(rootDir: string, namePart: string, dni?: number, exactName = false): string | null {
+  const normalizedName = normalizeSearch(namePart);
+  const dniText = dni ? String(dni) : '';
+  const pdfs = listPdfPathsRecursive(rootDir);
+  const exactMatches = pdfs.filter((fullPath) => {
+    const normalizedStem = normalizeSearch(path.basename(fullPath, path.extname(fullPath)));
+    return normalizedStem === normalizedName;
+  });
+  if (exactMatches.length) return exactMatches[0];
+  if (exactName) return null;
+
+  const matches = pdfs.filter((fullPath) => {
+    const normalizedBase = normalizeSearch(path.basename(fullPath));
+    return normalizedBase.includes(normalizedName);
+  });
+  if (!matches.length) return null;
+
+  if (dniText) {
+    const byDni = matches.find((fullPath) => normalizeSearch(path.basename(fullPath)).includes(dniText));
+    if (byDni) return byDni;
+  }
+
+  return matches[0];
+}
+
+function findCaratulaPdf(): string | null {
+  const inputDir = getInputDir();
+  if (!inputDir || !fs.existsSync(inputDir)) return null;
+  return findNamedPdf(inputDir, 'caratula');
+}
+
+function findRupaPdf(dni: number, opts: ExtraDocsOptions): string | null {
+  const mode = opts.rupaSourceMode || 'docu';
+  let searchDir = '';
+  if (mode === 'custom') {
+    const customDir = String(opts.rupaDir || '').trim();
+    if (!customDir) return null;
+    if (fs.existsSync(customDir) && fs.statSync(customDir).isFile() && customDir.toLowerCase().endsWith('.pdf')) {
+      return customDir;
+    }
+    const byDniDir = path.join(customDir, String(dni));
+    searchDir = fs.existsSync(byDniDir) ? byDniDir : customDir;
+  } else if (mode === 'descargas') {
+    searchDir = getInputDir();
+  } else {
+    searchDir = path.join(getDocuBaseDir(), String(dni));
+  }
+
+  if (!searchDir || !fs.existsSync(searchDir)) return null;
+  return findNamedPdf(searchDir, 'rupa', dni);
+}
+
+type AgenteIdentidad = { dni: number; apellido: string; nombre: string };
+
+async function agenteIdentidad(sequelize: Sequelize, dni: number): Promise<AgenteIdentidad | null> {
+  try {
+    const rows = await sequelize.query<AgenteIdentidad>(
+      `SELECT dni, apellido, nombre FROM personal WHERE dni = :dni AND deleted_at IS NULL LIMIT 1`,
+      { replacements: { dni }, type: QueryTypes.SELECT }
+    );
+    return rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+// ¿El texto del PDF corresponde a este agente? Por CUIL/DNI o por apellido + nombre.
+function contenidoMatcheaAgente(text: string, ident: AgenteIdentidad): boolean {
+  if (collectDniCandidates(text).includes(ident.dni)) return true;
+  const norm = normalizeSearch(text);
+  const ap = normalizeSearch(ident.apellido);
+  const no = normalizeSearch(ident.nombre);
+  return Boolean(ap && no && norm.includes(ap) && norm.includes(no));
+}
+
+// path = archivo RUPA; verificado = si el contenido (CUIL o apellido+nombre) confirmó que es del agente.
+type RupaHit = { path: string; verificado: boolean };
+
+// Busca el RUPA en la carpeta del agente (modo docu). Convención: el RUPA dice "rupa" en el nombre.
+// Lee el contenido (texto y, si hace falta, OCR) para confirmar que es del agente por CUIL o
+// apellido+nombre. Si no se puede leer/confirmar, devuelve el archivo "rupa" pero marcado
+// verificado=false (para que el front lo muestre como "a revisar", no como confirmado).
+async function findRupaPdfByContent(sequelize: Sequelize, dni: number, opts: ExtraDocsOptions): Promise<RupaHit | null> {
+  const mode = opts.rupaSourceMode || 'docu';
+  if (mode !== 'docu') {
+    const p = findRupaPdf(dni, opts);
+    return p ? { path: p, verificado: true } : null;
+  }
+
+  const searchDir = path.join(getDocuBaseDir(), String(dni));
+  if (!searchDir || !fs.existsSync(searchDir)) return null;
+
+  const candidatos = listPdfPathsRecursive(searchDir).filter((fp) => /rupa/i.test(path.basename(fp)));
+  if (!candidatos.length) return null;
+
+  const ident = await agenteIdentidad(sequelize, dni);
+
+  for (const fp of candidatos) {
+    let text = '';
+    try {
+      text = (await extractPdfText(fp)).text || '';
+      if (!text.trim() && env.TRAMITES_PDF_OCR_ENABLE) {
+        text = (await extractPdfTextWithOcr(fp)).text || '';
+      }
+    } catch {
+      text = '';
+    }
+    if (ident && text.trim() && contenidoMatcheaAgente(text, ident)) {
+      return { path: fp, verificado: true };
+    }
+  }
+
+  // No se pudo confirmar por contenido: hay un archivo "rupa" pero queda a revisar.
+  return { path: candidatos[0], verificado: false };
+}
+
+async function pdfMeta(fullPath: string) {
+  const stat = fs.statSync(fullPath);
+  const pdf = await PDFDocument.load(fs.readFileSync(fullPath));
+  return {
+    fileName: path.basename(fullPath),
+    bytes: stat.size,
+    pages: pdf.getPageCount(),
+  };
+}
+
+function pageIndexesFromOrder(rawOrder: string | null | undefined, totalPages: number): number[] {
+  const raw = String(rawOrder || '').trim();
+  if (!raw) return Array.from({ length: totalPages }, (_, index) => index);
+
+  const indexes: number[] = [];
+  for (const part of raw.split(',').map((item) => item.trim()).filter(Boolean)) {
+    const range = part.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (range) {
+      const from = Number(range[1]);
+      const to = Number(range[2]);
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < 1 || from > totalPages || to > totalPages) {
+        throw Object.assign(new Error(`Orden de paginas invalido: ${part}`), { status: 400 });
+      }
+      const step = from <= to ? 1 : -1;
+      for (let page = from; step > 0 ? page <= to : page >= to; page += step) {
+        indexes.push(page - 1);
+      }
+      continue;
+    }
+
+    const page = Number(part);
+    if (!Number.isInteger(page) || page < 1 || page > totalPages) {
+      throw Object.assign(new Error(`Pagina fuera de rango: ${part}`), { status: 400 });
+    }
+    indexes.push(page - 1);
+  }
+
+  return indexes.length ? indexes : Array.from({ length: totalPages }, (_, index) => index);
+}
+
+async function appendPdfToMerged(merged: PDFDocument, sourcePath: string, pageOrder?: string | null) {
+  const sourcePdf = await PDFDocument.load(fs.readFileSync(sourcePath));
+  const pageIndexes = pageIndexesFromOrder(pageOrder, sourcePdf.getPageCount());
+  const pages = await merged.copyPages(sourcePdf, pageIndexes);
+  pages.forEach((page) => merged.addPage(page));
+}
+
+function parseDocumentOrder(raw: unknown): DocumentOrderInput[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => ({
+      kind: String(item?.kind || '') as DocumentOrderInput['kind'],
+      fileName: String(item?.fileName || '').trim() || null,
+      pageOrder: String(item?.pageOrder || '').trim() || null,
+    }))
+    .filter((item): item is DocumentOrderInput => (
+      item.kind === 'caratula' || item.kind === 'file' || item.kind === 'rupa'
+    ));
+}
+
+function orderedMergeItems(
+  filesForDni: MergeFileInput[],
+  extraDocs: ExtraDocsOptions,
+  documentOrder: DocumentOrderInput[]
+) {
+  const byFileName = new Map(filesForDni.map((file) => [file.fileName, file]));
+  const usedFiles = new Set<string>();
+  const items: Array<{ kind: 'caratula' | 'file' | 'rupa'; file?: MergeFileInput; pageOrder?: string | null }> = [];
+
+  const pushOrderItem = (orderItem: DocumentOrderInput) => {
+    if (orderItem.kind === 'caratula' && extraDocs.includeCaratula) {
+      items.push({ kind: 'caratula', pageOrder: orderItem.pageOrder });
+    } else if (orderItem.kind === 'rupa' && extraDocs.includeRupa) {
+      items.push({ kind: 'rupa', pageOrder: orderItem.pageOrder });
+    } else if (orderItem.kind === 'file' && orderItem.fileName) {
+      const file = byFileName.get(orderItem.fileName);
+      if (file) {
+        usedFiles.add(file.fileName);
+        items.push({ kind: 'file', file, pageOrder: orderItem.pageOrder || file.pageOrder || null });
+      }
+    }
+  };
+
+  if (documentOrder.length) {
+    documentOrder.forEach(pushOrderItem);
+    for (const file of filesForDni) {
+      if (!usedFiles.has(file.fileName)) {
+        items.push({ kind: 'file', file, pageOrder: file.pageOrder || null });
+      }
+    }
+    return items;
+  }
+
+  if (extraDocs.includeCaratula) items.push({ kind: 'caratula' });
+  filesForDni.forEach((file) => items.push({ kind: 'file', file, pageOrder: file.pageOrder || null }));
+  if (extraDocs.includeRupa) items.push({ kind: 'rupa' });
+  return items;
+}
+
+function targetFolderFor(dni: number, tramite: string): string {
+  const base = path.resolve(getDocuBaseDir());
+  const target = path.resolve(base, String(dni), tramite);
+  const rel = path.relative(base, target);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw Object.assign(new Error('Carpeta destino insegura'), { status: 400 });
+  }
+  return target;
+}
+
+function routeForDocumentStorage(fullPath: string): string {
+  const bases = [env.DOCUMENTS_SCAN_DIR, getDocuBaseDir(), env.DOCUMENTS_BASE_DIR]
+    .map((base) => String(base || '').trim())
+    .filter(Boolean);
+
+  for (const base of bases) {
+    const rel = path.relative(path.resolve(base), path.resolve(fullPath));
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+      return rel.replace(/\\/g, '/');
+    }
+  }
+
+  return fullPath;
+}
+
+async function registerCombinedDocument(
+  sequelize: Sequelize,
+  opts: {
+    dni: number;
+    tramite: string;
+    combinedPath: string;
+    expediente: string | null;
+    actor: number | null;
+  }
+): Promise<{ id: number | null; fileUrl: string | null }> {
+  const stat = fs.statSync(opts.combinedPath);
+  const filename = path.basename(opts.combinedPath);
+  const now = new Date();
+  const year = now.getFullYear();
+  const fecha = now.toISOString().slice(0, 10);
+  const nombre = `${opts.tramite} - PDF combinado`;
+  const descripcion = `Tramite documental ${opts.tramite}. PDF combinado generado desde carpeta de descargas.`;
+  const ruta = routeForDocumentStorage(opts.combinedPath);
+
+  const [result] = await sequelize.query(
+    `INSERT INTO tblarchivos
+       (dni, ruta, nombre, numero, tipo, tamanio, anio, fecha, descripcion_archivo, nombre_archivo_original, created_by, created_at)
+     VALUES
+       (:dni, :ruta, :nombre, :numero, :tipo, :tamanio, :anio, :fecha, :descripcion, :originalName, :createdBy, :createdAt)`,
+    {
+      replacements: {
+        dni: opts.dni,
+        ruta,
+        nombre,
+        numero: opts.expediente || null,
+        tipo: 'tramite_documental',
+        tamanio: String(stat.size),
+        anio: year,
+        fecha,
+        descripcion,
+        originalName: filename,
+        createdBy: opts.actor,
+        createdAt: now,
+      },
+    }
+  );
+
+  const id = Number((result as any)?.insertId || 0) || null;
+  await cacheInvalidateTags(['documents:list', `documents:dni:${opts.dni}`]).catch(() => {});
+
+  return {
+    id,
+    fileUrl: id ? `/api/v1/documents/${id}/file` : null,
+  };
+}
+
+async function registerAgentExpediente(
+  sequelize: Sequelize,
+  opts: {
+    dni: number;
+    numero: string | null;
+    tramite: string;
+    actor: number | null;
+  }
+): Promise<{ id: number | null; created: boolean } | null> {
+  const numero = String(opts.numero || '').trim();
+  if (!numero) return null;
+
+  const existing = await sequelize.query<{ id: number }>(
+    `SELECT id
+       FROM expedientes
+      WHERE dni = :dni
+        AND numero = :numero
+        AND deleted_at IS NULL
+      LIMIT 1`,
+    {
+      replacements: { dni: opts.dni, numero },
+      type: QueryTypes.SELECT,
+    }
+  );
+
+  if (existing[0]?.id) {
+    return { id: Number(existing[0].id), created: false };
+  }
+
+  const now = new Date();
+  const fecha = now.toISOString().slice(0, 10);
+  const caratula = `Tramite documental ${opts.tramite}`;
+  const [result] = await sequelize.query(
+    `INSERT INTO expedientes
+       (dni, numero, caratula, fecha, estado, created_by, created_at)
+     VALUES
+       (:dni, :numero, :caratula, :fecha, :estado, :createdBy, :createdAt)`,
+    {
+      replacements: {
+        dni: opts.dni,
+        numero,
+        caratula,
+        fecha,
+        estado: 'En trámite',
+        createdBy: opts.actor,
+        createdAt: now,
+      },
+    }
+  );
+
+  await cacheInvalidateTags(['table:expedientes']).catch(() => {});
+
+  return {
+    id: Number((result as any)?.insertId || 0) || null,
+    created: true,
+  };
+}
+
+async function loadPdfJs() {
+  const pdfjsFile = path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.mjs');
+  return dynamicImport(pathToFileURL(pdfjsFile).href);
+}
+
+async function extractPdfText(pdfPath: string): Promise<{ text: string; pages: number }> {
+  const pdfjs = await loadPdfJs();
+  const data = new Uint8Array(fs.readFileSync(pdfPath));
+  const pdf = await pdfjs.getDocument({ data, disableWorker: true }).promise;
+  const parts: string[] = [];
+
+  try {
+    for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+      const page = await pdf.getPage(pageNo);
+      const content = await page.getTextContent();
+      const pageText = (content.items || [])
+        .map((item: any) => String(item?.str || ''))
+        .filter(Boolean)
+        .join(' ');
+      if (pageText) parts.push(pageText);
+    }
+    return { text: parts.join('\n'), pages: pdf.numPages };
+  } finally {
+    await pdf.destroy?.();
+  }
+}
+
+async function renderPdfPageToJpg(pdfjs: any, pdf: any, pageNo: number, tempDir: string): Promise<string> {
+  const { createCanvas, DOMMatrix, Path2D, ImageData } = require('@napi-rs/canvas');
+  (globalThis as any).DOMMatrix = (globalThis as any).DOMMatrix ?? DOMMatrix;
+  (globalThis as any).Path2D = (globalThis as any).Path2D ?? Path2D;
+  (globalThis as any).ImageData = (globalThis as any).ImageData ?? ImageData;
+
+  const scale = Math.max(1, Number(env.TRAMITES_PDF_OCR_SCALE || 2) || 2);
+  const page = await pdf.getPage(pageNo);
+  const viewport = page.getViewport({ scale });
+  const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  const out = path.join(tempDir, `page_${String(pageNo).padStart(3, '0')}.jpg`);
+  const jpg = await canvas.encode('jpeg', 90);
+  fs.writeFileSync(out, jpg);
+  return out;
+}
+
+async function extractPdfTextWithOcr(pdfPath: string): Promise<{ text: string; pages: number; processedPages: number }> {
+  const pdfjs = await loadPdfJs();
+  const data = new Uint8Array(fs.readFileSync(pdfPath));
+  const pdf = await pdfjs.getDocument({ data, disableWorker: true }).promise;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tramites-ocr-'));
+  const parts: string[] = [];
+
+  try {
+    const maxPages = Math.max(1, Number(env.TRAMITES_PDF_OCR_MAX_PAGES || 20) || 20);
+    const pagesToRead = Math.min(pdf.numPages, maxPages);
+    for (let pageNo = 1; pageNo <= pagesToRead; pageNo += 1) {
+      const imgPath = await renderPdfPageToJpg(pdfjs, pdf, pageNo, tempDir);
+      const text = await extractTextFromImage(imgPath);
+      if (text?.trim()) parts.push(text);
+    }
+    return { text: parts.join('\n'), pages: pdf.numPages, processedPages: pagesToRead };
+  } finally {
+    await pdf.destroy?.();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function collectDniCandidates(text: string): number[] {
+  const found = new Set<number>();
+  const normalized = text.replace(/\s+/g, ' ');
+
+  const cuilRegex = /\b(?:20|23|24|27|30|33|34)[-\s]?(\d{7,8})[-\s]?\d\b/g;
+  for (const match of normalized.matchAll(cuilRegex)) {
+    const dni = Number(match[1]);
+    if (Number.isInteger(dni) && dni >= 1_000_000 && dni <= 99_999_999) found.add(dni);
+  }
+
+  const contextualRegex = /\b(?:DNI|D\.N\.I\.|DOCUMENTO|DOC\.?|DU|CUIL)\D{0,24}(\d{7,8})\b/gi;
+  for (const match of normalized.matchAll(contextualRegex)) {
+    const dni = Number(match[1]);
+    if (Number.isInteger(dni) && dni >= 1_000_000 && dni <= 99_999_999) found.add(dni);
+  }
+
+  return [...found];
+}
+
+async function findAgents(sequelize: Sequelize, dniCandidates: number[]): Promise<AgentHit[]> {
+  if (!dniCandidates.length) return [];
+  const rows = await sequelize.query<AgentHit>(
+    `
+      SELECT dni, apellido, nombre, cuil
+      FROM personal
+      WHERE dni IN (:dnis)
+        AND deleted_at IS NULL
+      ORDER BY apellido ASC, nombre ASC
+    `,
+    { replacements: { dnis: dniCandidates }, type: QueryTypes.SELECT }
+  );
+  return rows;
+}
+
+function parseYear(value: unknown): number | null {
+  const year = Number(value);
+  const current = new Date().getFullYear() + 1;
+  return Number.isInteger(year) && year >= 1900 && year <= current ? year : null;
+}
+
+function queryString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+async function preloadAgents(
+  sequelize: Sequelize,
+  opts: { poblacion: string; anioDesde: number | null; anioHasta: number | null; tipoBeca?: string | null; dependenciaId?: number | null }
+): Promise<PreloadAgentRow[]> {
+  const poblacion = String(opts.poblacion || '').trim().toUpperCase();
+  const tipoBeca = String(opts.tipoBeca || '').trim();
+  const dependenciaId = opts.dependenciaId && Number.isInteger(opts.dependenciaId) ? opts.dependenciaId : null;
+  const baseSelect = `
+    SELECT DISTINCT
+      p.dni,
+      TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS apellidoNombre,
+      DATE_FORMAT(a.fecha_ingreso, '%Y-%m-%d') AS fechaIngresoExcel,
+      '' AS expediente,
+      1 AS incluido,
+      l.nombre AS leyNombre,
+      pl.nombre AS plantaNombre,
+      oc.nombre AS ocupacionNombre,
+      CASE
+        WHEN ocl.nombre LIKE '%10471%' THEN '10471'
+        WHEN ocl.nombre LIKE '%10430%' THEN '10430'
+        ELSE NULL
+      END AS ocupacionLey,
+      CASE WHEN LOWER(COALESCE(l.nombre, '')) LIKE '%beca%' THEN l.nombre ELSE NULL END AS tipoBeca,
+      COALESCE(
+        dep_directa.nombre,
+        (
+          SELECT dep_serv.nombre
+          FROM agentes_servicios ags_serv
+          LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
+          LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
+          LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+          WHERE ags_serv.dni = p.dni
+            AND ags_serv.deleted_at IS NULL
+            AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
+          ORDER BY ags_serv.fecha_desde DESC, ags_serv.id DESC
+          LIMIT 1
+        )
+      ) AS dependenciaNombre
+    FROM personal p
+    JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+    LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
+    LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
+    LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+    LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
+    LEFT JOIN dependencias dep_directa ON dep_directa.id = a.dependencia_id AND dep_directa.deleted_at IS NULL
+  `;
+
+  const commonWhere = `
+    p.deleted_at IS NULL
+    AND a.estado_empleo = 'ACTIVO'
+  `;
+
+  if (poblacion === 'BECARIOS') {
+    if (!opts.anioDesde || !opts.anioHasta) {
+      throw Object.assign(new Error('Para becarios indicá rango de años'), { status: 400 });
+    }
+    const anioDesde = Math.min(opts.anioDesde, opts.anioHasta);
+    const anioHasta = Math.max(opts.anioDesde, opts.anioHasta);
+    const tipoBecaWhere = tipoBeca ? 'AND l.nombre = :tipoBeca' : '';
+    const dependenciaWhere = dependenciaId ? `AND ${dependenciaWhereSql(':dependenciaId')}` : '';
+    return sequelize.query<PreloadAgentRow>(
+      `
+        ${baseSelect}
+        WHERE ${commonWhere}
+          AND a.fecha_ingreso IS NOT NULL
+          AND LOWER(COALESCE(l.nombre, '')) LIKE '%beca%'
+          AND YEAR(a.fecha_ingreso) BETWEEN :anioDesde AND :anioHasta
+          ${tipoBecaWhere}
+          ${dependenciaWhere}
+        ORDER BY apellidoNombre ASC, fechaIngresoExcel ASC
+        LIMIT 1000
+      `,
+      { replacements: { anioDesde, anioHasta, tipoBeca, dependenciaId }, type: QueryTypes.SELECT }
+    );
+  }
+
+  if (poblacion === 'INTERINOS_10430') {
+    return sequelize.query<PreloadAgentRow>(
+      `
+        ${baseSelect}
+        WHERE ${commonWhere}
+          AND (
+            a.ley_id IN (1, 3)
+            OR REPLACE(COALESCE(l.nombre, ''), '.', '') LIKE '%10430%'
+          )
+          AND UPPER(COALESCE(pl.nombre, '')) <> 'PERMANENTE'
+        ORDER BY apellidoNombre ASC
+        LIMIT 1000
+      `,
+      { type: QueryTypes.SELECT }
+    );
+  }
+
+  throw Object.assign(new Error('Poblacion invalida'), { status: 400 });
+}
+
+async function listBecaTipos(
+  sequelize: Sequelize,
+  opts: { anioDesde?: number | null; anioHasta?: number | null; dependenciaId?: number | null } = {}
+): Promise<BecaTipo[]> {
+  const hasRange = !!opts.anioDesde && !!opts.anioHasta;
+  const anioDesde = hasRange ? Math.min(opts.anioDesde!, opts.anioHasta!) : null;
+  const anioHasta = hasRange ? Math.max(opts.anioDesde!, opts.anioHasta!) : null;
+  const dependenciaId = opts.dependenciaId && Number.isInteger(opts.dependenciaId) ? opts.dependenciaId : null;
+  const rangeWhere = hasRange ? 'AND a.fecha_ingreso IS NOT NULL AND YEAR(a.fecha_ingreso) BETWEEN :anioDesde AND :anioHasta' : '';
+  const dependenciaWhere = dependenciaId ? `AND ${dependenciaWhereSql(':dependenciaId')}` : '';
+  return sequelize.query<BecaTipo>(
+    `
+      SELECT DISTINCT
+        l.nombre AS value,
+        l.nombre AS label,
+        COUNT(DISTINCT p.dni) AS total
+      FROM agentes a
+      JOIN personal p ON p.dni = a.dni AND p.deleted_at IS NULL
+      JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
+      WHERE a.deleted_at IS NULL
+        AND a.estado_empleo = 'ACTIVO'
+        AND LOWER(COALESCE(l.nombre, '')) LIKE '%beca%'
+        ${rangeWhere}
+        ${dependenciaWhere}
+      GROUP BY l.nombre
+      ORDER BY l.nombre ASC
+    `,
+    { replacements: { anioDesde, anioHasta, dependenciaId }, type: QueryTypes.SELECT }
+  );
+}
+
+async function listDependenciasFiltro(
+  sequelize: Sequelize,
+  opts: { anioDesde?: number | null; anioHasta?: number | null; tipoBeca?: string | null } = {}
+): Promise<DependenciaOption[]> {
+  const hasRange = !!opts.anioDesde && !!opts.anioHasta;
+  const anioDesde = hasRange ? Math.min(opts.anioDesde!, opts.anioHasta!) : null;
+  const anioHasta = hasRange ? Math.max(opts.anioDesde!, opts.anioHasta!) : null;
+  const tipoBeca = String(opts.tipoBeca || '').trim();
+  const rangeWhere = hasRange ? 'AND a.fecha_ingreso IS NOT NULL AND YEAR(a.fecha_ingreso) BETWEEN :anioDesde AND :anioHasta' : '';
+  const tipoBecaWhere = tipoBeca ? 'AND l.nombre = :tipoBeca' : '';
+  return sequelize.query<DependenciaOption>(
+    `
+      SELECT
+        CAST(d.id AS CHAR) AS value,
+        d.nombre AS label,
+        COUNT(DISTINCT p.dni) AS total
+      FROM dependencias d
+      JOIN personal p ON p.deleted_at IS NULL
+      JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+      JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
+      WHERE d.deleted_at IS NULL
+        AND a.estado_empleo = 'ACTIVO'
+        AND LOWER(COALESCE(l.nombre, '')) LIKE '%beca%'
+        ${rangeWhere}
+        ${tipoBecaWhere}
+        AND ${dependenciaWhereSql('d.id')}
+      GROUP BY d.id, d.nombre
+      ORDER BY d.nombre ASC
+    `,
+    { replacements: { anioDesde, anioHasta, tipoBeca }, type: QueryTypes.SELECT }
+  );
+}
+
+async function analyzeOnePdf(sequelize: Sequelize, fileName: string): Promise<PdfAnalysisRow> {
+  const fullPath = resolveInputPdf(fileName);
+  const stat = fs.statSync(fullPath);
+
+  try {
+    const textResult = await extractPdfText(fullPath);
+    let pages = textResult.pages;
+    let lectura: PdfAnalysisRow['lectura'] = 'texto';
+    let trimmed = textResult.text.trim();
+
+    if (!trimmed && env.TRAMITES_PDF_OCR_ENABLE) {
+      const ocrResult = await extractPdfTextWithOcr(fullPath);
+      pages = ocrResult.pages || pages;
+      trimmed = ocrResult.text.trim();
+      lectura = trimmed ? 'ocr' : 'sin_texto';
+    }
+
+    if (!trimmed) {
+      return {
+        fileName,
+        fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
+        bytes: stat.size,
+        pages,
+        detectedDni: null,
+        agente: null,
+        candidates: [],
+        status: 'sin_texto',
+        reason: env.TRAMITES_PDF_OCR_ENABLE
+          ? 'No se pudo extraer texto ni con OCR.'
+          : 'El PDF no tiene texto extraible; OCR desactivado.',
+        lectura: 'sin_texto',
+      };
+    }
+
+    const candidates = collectDniCandidates(trimmed);
+    const agents = await findAgents(sequelize, candidates);
+
+    if (agents.length === 1) {
+      return {
+        fileName,
+        fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
+        bytes: stat.size,
+        pages,
+        detectedDni: agents[0].dni,
+        agente: agents[0],
+        candidates,
+        status: 'detectado',
+        reason: lectura === 'ocr' ? 'Detectado con OCR.' : null,
+        lectura,
+      };
+    }
+
+    return {
+      fileName,
+      fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
+      bytes: stat.size,
+      pages,
+      detectedDni: null,
+      agente: null,
+      candidates,
+      status: agents.length > 1 ? 'ambiguedad' : 'sin_agente',
+      reason: agents.length > 1
+        ? `Se encontraron ${agents.length} agentes posibles.`
+        : 'No se encontro un DNI/CUIL coincidente con personal.',
+      lectura,
+    };
+  } catch (err: any) {
+    logger.warn({ msg: '[tramites] error analizando PDF', fileName, error: err?.message });
+    return {
+      fileName,
+      fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
+      bytes: stat.size,
+      pages: 0,
+      detectedDni: null,
+      agente: null,
+      candidates: [],
+      status: 'error',
+      reason: err?.message || 'Error al leer PDF',
+      lectura: 'sin_texto',
+    };
+  }
+}
+
+export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
+  const router = Router();
+
+  router.get('/listados', (_req: Request, res: Response) => {
+    const rows = readSavedListados()
+      .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
+      .slice(0, 25);
+    return res.json({ ok: true, data: { rows, storePath: getListadosStorePath() } });
+  });
+
+  router.post('/listados', (req: Request, res: Response) => {
+    try {
+      const actor = Number((req as any).auth?.principalId || 0) || null;
+      const listado = cleanSavedListado(req.body?.listado || req.body, actor);
+      const current = readSavedListados().filter((item) => item.id !== listado.id);
+      const rows = [listado, ...current]
+        .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
+        .slice(0, 25);
+      writeSavedListados(rows);
+      return res.json({ ok: true, data: { row: listado, rows, storePath: getListadosStorePath() } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] guardar listado error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al guardar listado seteado' });
+    }
+  });
+
+  router.delete('/listados/:id', (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const rows = readSavedListados().filter((item) => item.id !== id);
+      writeSavedListados(rows);
+      return res.json({ ok: true, data: { rows, storePath: getListadosStorePath() } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] borrar listado error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al borrar listado seteado' });
+    }
+  });
+
+  router.get('/config', async (_req: Request, res: Response) => {
+    const inputDir = getInputDir();
+    const docuBaseDir = getDocuBaseDir();
+    const pdfs = listPdfFiles(inputDir);
+    try {
+      return res.json({
+        ok: true,
+        data: {
+          inputDir,
+          docuBaseDir,
+          inputDirExists: !!inputDir && fs.existsSync(inputDir),
+          docuBaseDirExists: !!docuBaseDir && fs.existsSync(docuBaseDir),
+          pdfCount: pdfs.length,
+          ocrEnabled: env.TRAMITES_PDF_OCR_ENABLE,
+          ocrMaxPages: env.TRAMITES_PDF_OCR_MAX_PAGES,
+          tramites: TRAMITES,
+          poblaciones: POBLACIONES,
+          becaTipos: await listBecaTipos(sequelize),
+        },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] config error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al cargar configuracion' });
+    }
+  });
+
+  router.post('/analizar', async (req: Request, res: Response) => {
+    const inputDir = getInputDir();
+    if (!inputDir || !fs.existsSync(inputDir)) {
+      return res.status(400).json({ ok: false, error: `Carpeta de entrada no existe: ${inputDir || '(sin configurar)'}` });
+    }
+
+    const limit = Math.min(Number(req.body?.limit || 250) || 250, 500);
+    const files = listPdfFiles(inputDir).slice(0, limit);
+
+    try {
+      const rows: PdfAnalysisRow[] = [];
+      for (const fileName of files) {
+        rows.push(await analyzeOnePdf(sequelize, fileName));
+      }
+
+      const grouped = rows.reduce<Record<string, PdfAnalysisRow[]>>((acc, row) => {
+        const key = row.detectedDni ? String(row.detectedDni) : 'SIN_AGENTE';
+        (acc[key] ||= []).push(row);
+        return acc;
+      }, {});
+
+      return res.json({
+        ok: true,
+        data: {
+          inputDir,
+          docuBaseDir: getDocuBaseDir(),
+          rows,
+          grouped,
+          total: rows.length,
+          detected: rows.filter((r) => r.status === 'detectado').length,
+          needsReview: rows.filter((r) => r.status !== 'detectado').length,
+        },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] analizar error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al analizar PDFs' });
+    }
+  });
+
+  router.get('/beca-tipos', async (req: Request, res: Response) => {
+    try {
+      const rows = await listBecaTipos(sequelize, {
+        anioDesde: parseYear(req.query?.anioDesde),
+        anioHasta: parseYear(req.query?.anioHasta),
+        dependenciaId: req.query?.dependenciaId ? Number(req.query.dependenciaId) : null,
+      });
+      return res.json({ ok: true, data: { rows } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] beca tipos error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al cargar programas de beca' });
+    }
+  });
+
+  router.get('/dependencias', async (req: Request, res: Response) => {
+    try {
+      const rows = await listDependenciasFiltro(sequelize, {
+        anioDesde: parseYear(req.query?.anioDesde),
+        anioHasta: parseYear(req.query?.anioHasta),
+        tipoBeca: queryString(req.query?.tipoBeca),
+      });
+      return res.json({ ok: true, data: { rows } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] dependencias error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al cargar dependencias' });
+    }
+  });
+
+  router.post('/precargar', async (req: Request, res: Response) => {
+    try {
+      const rows = await preloadAgents(sequelize, {
+        poblacion: req.body?.poblacion,
+        anioDesde: parseYear(req.body?.anioDesde),
+        anioHasta: parseYear(req.body?.anioHasta),
+        tipoBeca: req.body?.tipoBeca,
+        dependenciaId: req.body?.dependenciaId ? Number(req.body.dependenciaId) : null,
+      });
+      return res.json({
+        ok: true,
+        data: {
+          rows,
+          total: rows.length,
+        },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] precargar error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al precargar agentes' });
+    }
+  });
+
+  router.post('/preview', async (req: Request, res: Response) => {
+    try {
+      const tramite = sanitizeTramite(req.body?.tramite);
+      const dni = parseDni(req.body?.dni);
+      if (!dni) {
+        return res.status(400).json({ ok: false, error: 'DNI invalido para previsualizar' });
+      }
+
+      const extraDocsRaw = req.body?.extraDocs || {};
+      const extraDocs: ExtraDocsOptions = {
+        includeCaratula: Boolean(extraDocsRaw.includeCaratula),
+        includeRupa: Boolean(extraDocsRaw.includeRupa),
+        rupaSourceMode: ['docu', 'descargas', 'custom'].includes(String(extraDocsRaw.rupaSourceMode))
+          ? String(extraDocsRaw.rupaSourceMode) as ExtraDocsOptions['rupaSourceMode']
+          : 'docu',
+        rupaDir: String(extraDocsRaw.rupaDir || '').trim() || null,
+      };
+      const documentOrder = parseDocumentOrder(req.body?.documentOrder);
+      const filesRaw = Array.isArray(req.body?.files) ? req.body.files as SaveFileInput[] : [];
+      const files = filesRaw
+        .filter((file) => file?.include !== false)
+        .map((file) => ({
+          fileName: String(file.fileName || ''),
+          dni: parseDni(file.dni),
+          expediente: String(file.expediente || '').trim() || null,
+          pageOrder: String(file.pageOrder || '').trim() || null,
+        }))
+        .filter((file): file is MergeFileInput => !!file.fileName && file.dni === dni);
+
+      if (!files.length && !extraDocs.includeCaratula && !extraDocs.includeRupa) {
+        return res.status(400).json({ ok: false, error: 'No hay PDFs para previsualizar' });
+      }
+
+      const merged = await PDFDocument.create();
+      const mergeItems = orderedMergeItems(files, extraDocs, documentOrder);
+      const skipped: Array<{ source: string; reason: string }> = [];
+
+      for (const mergeItem of mergeItems) {
+        if (mergeItem.kind === 'caratula') {
+          try {
+            const caratulaPath = findCaratulaPdf();
+            if (!caratulaPath) {
+              skipped.push({ source: 'caratula', reason: 'No se encontro PDF caratula en Descargas' });
+            } else {
+              await appendPdfToMerged(merged, caratulaPath, mergeItem.pageOrder);
+            }
+          } catch (err: any) {
+            skipped.push({ source: 'caratula', reason: err?.message || 'Error al previsualizar caratula' });
+          }
+        } else if (mergeItem.kind === 'rupa') {
+          try {
+            const rupaHit = await findRupaPdfByContent(sequelize, dni, extraDocs);
+            if (!rupaHit) {
+              skipped.push({ source: 'rupa', reason: 'No se encontro PDF RUPA para el DNI' });
+            } else {
+              await appendPdfToMerged(merged, rupaHit.path, mergeItem.pageOrder);
+            }
+          } catch (err: any) {
+            skipped.push({ source: 'rupa', reason: err?.message || 'Error al previsualizar RUPA' });
+          }
+        } else if (mergeItem.file) {
+          try {
+            await appendPdfToMerged(merged, resolveInputPdf(mergeItem.file.fileName), mergeItem.pageOrder);
+          } catch (err: any) {
+            skipped.push({ source: mergeItem.file.fileName, reason: err?.message || 'Error al previsualizar PDF' });
+          }
+        }
+      }
+
+      if (merged.getPageCount() <= 0) {
+        return res.status(400).json({ ok: false, error: skipped[0]?.reason || 'No se pudo generar previsualizacion' });
+      }
+
+      const bytes = await merged.save();
+      const filename = `PREVIEW_${tramite}_${dni}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      res.setHeader('X-Tramites-Skipped', encodeURIComponent(JSON.stringify(skipped)));
+      return res.send(Buffer.from(bytes));
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] preview error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al previsualizar tramite' });
+    }
+  });
+
+  router.post('/extra-status', async (req: Request, res: Response) => {
+    try {
+      const dnis = Array.isArray(req.body?.dnis)
+        ? Array.from(new Set(req.body.dnis.map((dni: unknown) => parseDni(String(dni))).filter(Boolean))) as number[]
+        : [];
+      const extraDocsRaw = req.body?.extraDocs || {};
+      const extraDocs: ExtraDocsOptions = {
+        includeCaratula: Boolean(extraDocsRaw.includeCaratula),
+        includeRupa: Boolean(extraDocsRaw.includeRupa),
+        rupaSourceMode: ['docu', 'descargas', 'custom'].includes(String(extraDocsRaw.rupaSourceMode))
+          ? String(extraDocsRaw.rupaSourceMode) as ExtraDocsOptions['rupaSourceMode']
+          : 'docu',
+        rupaDir: String(extraDocsRaw.rupaDir || '').trim() || null,
+      };
+
+      const rows: Record<string, any> = {};
+      for (const dni of dnis) {
+        const rupaHit = extraDocs.includeRupa ? await findRupaPdfByContent(sequelize, dni, extraDocs) : null;
+        rows[String(dni)] = {
+          rupa: rupaHit
+            ? { found: true, verificado: rupaHit.verificado, ...(await pdfMeta(rupaHit.path)) }
+            : { found: false, reason: extraDocs.includeRupa ? `No se encontro rupa.pdf para DNI ${dni}` : 'RUPA desactivado' },
+        };
+      }
+
+      return res.json({ ok: true, data: { rows } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] extra-status error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al consultar adjuntos' });
+    }
+  });
+
+  router.post('/extra-pdf', async (req: Request, res: Response) => {
+    try {
+      const kind = String(req.body?.kind || '').toLowerCase();
+      const dni = parseDni(req.body?.dni);
+      const extraDocsRaw = req.body?.extraDocs || {};
+      const extraDocs: ExtraDocsOptions = {
+        includeCaratula: Boolean(extraDocsRaw.includeCaratula),
+        includeRupa: Boolean(extraDocsRaw.includeRupa),
+        rupaSourceMode: ['docu', 'descargas', 'custom'].includes(String(extraDocsRaw.rupaSourceMode))
+          ? String(extraDocsRaw.rupaSourceMode) as ExtraDocsOptions['rupaSourceMode']
+          : 'docu',
+        rupaDir: String(extraDocsRaw.rupaDir || '').trim() || null,
+      };
+
+      const fullPath = kind === 'rupa'
+        ? (dni ? (await findRupaPdfByContent(sequelize, dni, extraDocs))?.path ?? null : null)
+        : kind === 'caratula'
+          ? findCaratulaPdf()
+          : null;
+      if (!fullPath) {
+        return res.status(404).json({ ok: false, error: 'Adjunto no encontrado' });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath).replace(/"/g, '_')}"`);
+      return fs.createReadStream(fullPath).pipe(res);
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al abrir adjunto' });
+    }
+  });
+
+  router.get('/expedientes', async (req: Request, res: Response) => {
+    try {
+      const q = String(req.query.q || '').trim();
+      const rows = await sequelize.query<{ value: string; label: string; total: number; createdAt: string | null }>(
+        `
+          SELECT
+            TRIM(numero) AS value,
+            CONCAT(TRIM(numero), ' (', COUNT(*), ')') AS label,
+            COUNT(*) AS total,
+            DATE_FORMAT(MAX(created_at), '%Y-%m-%d') AS createdAt
+          FROM expedientes
+          WHERE deleted_at IS NULL
+            AND numero IS NOT NULL
+            AND TRIM(numero) <> ''
+            AND (
+              :q = ''
+              OR numero LIKE :like
+              OR caratula LIKE :like
+            )
+          GROUP BY TRIM(numero)
+          ORDER BY MAX(created_at) DESC
+          LIMIT 50
+        `,
+        { replacements: { q, like: `%${q}%` }, type: QueryTypes.SELECT }
+      );
+      return res.json({ ok: true, data: { rows } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] expedientes error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al buscar expedientes' });
+    }
+  });
+
+  router.post('/guardar', async (req: Request, res: Response) => {
+    try {
+      const tramite = sanitizeTramite(req.body?.tramite);
+      const expediente = String(req.body?.expediente || '').trim() || null;
+      const actor = Number((req as any).auth?.principalId || 0) || null;
+      const extraDocsRaw = req.body?.extraDocs || {};
+      const extraDocs: ExtraDocsOptions = {
+        includeCaratula: Boolean(extraDocsRaw.includeCaratula),
+        includeRupa: Boolean(extraDocsRaw.includeRupa),
+        rupaSourceMode: ['docu', 'descargas', 'custom'].includes(String(extraDocsRaw.rupaSourceMode))
+          ? String(extraDocsRaw.rupaSourceMode) as ExtraDocsOptions['rupaSourceMode']
+          : 'docu',
+        rupaDir: String(extraDocsRaw.rupaDir || '').trim() || null,
+      };
+      const documentOrder = parseDocumentOrder(req.body?.documentOrder);
+      const documentOrdersRaw = req.body?.documentOrders && typeof req.body.documentOrders === 'object'
+        ? req.body.documentOrders
+        : {};
+      const filesRaw = Array.isArray(req.body?.files) ? req.body.files as SaveFileInput[] : [];
+      const files = filesRaw
+        .filter((file) => file?.include !== false)
+        .map((file) => ({
+          fileName: String(file.fileName || ''),
+          dni: parseDni(file.dni),
+          expediente: String(file.expediente || '').trim() || null,
+          pageOrder: String(file.pageOrder || '').trim() || null,
+        }))
+        .filter((file): file is MergeFileInput => !!file.fileName && !!file.dni);
+
+      if (!files.length) {
+        return res.status(400).json({ ok: false, error: 'No hay PDFs con DNI para guardar' });
+      }
+
+      const docuBaseDir = getDocuBaseDir();
+      if (!docuBaseDir) {
+        return res.status(400).json({ ok: false, error: 'TRAMITES_DOCU_BASE_DIR no esta configurado' });
+      }
+      if (!fs.existsSync(docuBaseDir)) {
+        return res.status(400).json({ ok: false, error: `Carpeta DOCU no existe: ${docuBaseDir}` });
+      }
+
+      const grouped = files.reduce<Record<string, MergeFileInput[]>>((acc, file) => {
+        (acc[String(file.dni)] ||= []).push(file);
+        return acc;
+      }, {});
+
+      const folders = Object.keys(grouped).map((dni) => ({
+        dni: Number(dni),
+        folder: targetFolderFor(Number(dni), tramite),
+        existed: fs.existsSync(targetFolderFor(Number(dni), tramite)),
+      }));
+
+      const results: any[] = [];
+      for (const item of folders) {
+        const filesForDni = grouped[String(item.dni)];
+        const expedienteGrupo = expediente || filesForDni.find((file) => file.expediente)?.expediente || null;
+        fs.mkdirSync(item.folder, { recursive: true });
+        const merged = await PDFDocument.create();
+        const copied: Array<{ source: string; savedAs: string }> = [];
+        const skipped: Array<{ source: string; reason: string }> = [];
+        const documentOrderForDni = parseDocumentOrder((documentOrdersRaw as Record<string, unknown>)[String(item.dni)]);
+        const mergeItems = orderedMergeItems(filesForDni, extraDocs, documentOrderForDni.length ? documentOrderForDni : documentOrder);
+
+        for (const mergeItem of mergeItems) {
+          if (mergeItem.kind === 'caratula') {
+            try {
+              const caratulaPath = findCaratulaPdf();
+              if (!caratulaPath) {
+                skipped.push({ source: 'caratula', reason: 'No se encontro PDF caratula en Descargas' });
+              } else {
+                const destPath = uniquePath(item.folder, safeFilename(path.basename(caratulaPath)));
+                fs.copyFileSync(caratulaPath, destPath);
+                copied.push({ source: `caratula:${path.basename(caratulaPath)}`, savedAs: path.basename(destPath) });
+                await appendPdfToMerged(merged, caratulaPath, mergeItem.pageOrder);
+              }
+            } catch (err: any) {
+              skipped.push({ source: 'caratula', reason: err?.message || 'Error al copiar/combinar caratula' });
+            }
+          } else if (mergeItem.kind === 'rupa') {
+            try {
+              const rupaHit = await findRupaPdfByContent(sequelize, item.dni, extraDocs);
+              if (!rupaHit) {
+                skipped.push({ source: 'rupa', reason: 'No se encontro PDF RUPA para el DNI' });
+              } else {
+                const rupaPath = rupaHit.path;
+                const destPath = uniquePath(item.folder, safeFilename(path.basename(rupaPath)));
+                fs.copyFileSync(rupaPath, destPath);
+                copied.push({ source: `rupa:${path.basename(rupaPath)}`, savedAs: path.basename(destPath) });
+                await appendPdfToMerged(merged, rupaPath, mergeItem.pageOrder);
+              }
+            } catch (err: any) {
+              skipped.push({ source: 'rupa', reason: err?.message || 'Error al copiar/combinar RUPA' });
+            }
+          } else if (mergeItem.file) {
+            try {
+              const sourcePath = resolveInputPdf(mergeItem.file.fileName);
+              const destPath = uniquePath(item.folder, safeFilename(path.basename(mergeItem.file.fileName)));
+              fs.copyFileSync(sourcePath, destPath);
+              copied.push({ source: mergeItem.file.fileName, savedAs: path.basename(destPath) });
+
+              await appendPdfToMerged(merged, sourcePath, mergeItem.pageOrder);
+            } catch (err: any) {
+              skipped.push({ source: mergeItem.file.fileName, reason: err?.message || 'Error al copiar/combinar' });
+            }
+          }
+        }
+
+        let combined: string | null = null;
+        let combinedPath: string | null = null;
+        let combinedFileUrl: string | null = null;
+        let documento: { id: number | null; fileUrl: string | null } | null = null;
+        let expedienteRegistro: { id: number | null; created: boolean } | null = null;
+        if (merged.getPageCount() > 0) {
+          const combinedName = `${tramite}_${item.dni}_COMBINADO.pdf`;
+          combinedPath = uniquePath(item.folder, combinedName);
+          fs.writeFileSync(combinedPath, Buffer.from(await merged.save()));
+          combined = path.basename(combinedPath);
+          combinedFileUrl = `/api/v1/tramites-documentales/saved-pdf?path=${encodeURIComponent(combinedPath)}`;
+          documento = await registerCombinedDocument(sequelize, {
+            dni: item.dni,
+            tramite,
+            combinedPath,
+            expediente: expedienteGrupo,
+            actor,
+          });
+          expedienteRegistro = await registerAgentExpediente(sequelize, {
+            dni: item.dni,
+            numero: expedienteGrupo,
+            tramite,
+            actor,
+          });
+        }
+
+        results.push({
+          dni: item.dni,
+          tramite,
+          expediente: expedienteGrupo,
+          folder: item.folder,
+          folderExisted: item.existed,
+          copied,
+          combined,
+          combinedFileUrl,
+          documento,
+          expedienteRegistro,
+          skipped,
+        });
+      }
+
+      return res.json({
+        ok: true,
+        data: {
+          tramite,
+          docuBaseDir,
+          results,
+        },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] guardar error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar tramite' });
+    }
+  });
+
+  router.get('/pdf', (req: Request, res: Response) => {
+    try {
+      const fileName = String(req.query.file || '');
+      const fullPath = resolveInputPdf(fileName);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath).replace(/"/g, '_')}"`);
+      return fs.createReadStream(fullPath).pipe(res);
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al abrir PDF' });
+    }
+  });
+
+  router.get('/saved-pdf', (req: Request, res: Response) => {
+    try {
+      const requested = String(req.query.path || '');
+      if (!requested) {
+        return res.status(400).json({ ok: false, error: 'Ruta requerida' });
+      }
+      const fullPath = path.resolve(requested);
+      const base = path.resolve(getDocuBaseDir());
+      const rel = path.relative(base, fullPath);
+      if (rel.startsWith('..') || path.isAbsolute(rel) || !fullPath.toLowerCase().endsWith('.pdf')) {
+        return res.status(400).json({ ok: false, error: 'Archivo fuera de DOCU' });
+      }
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ ok: false, error: 'PDF no encontrado' });
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath).replace(/"/g, '_')}"`);
+      return fs.createReadStream(fullPath).pipe(res);
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al abrir combinado' });
+    }
+  });
+
+  return router;
+}

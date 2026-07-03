@@ -1,5 +1,6 @@
 // src/pages/InfoPage/components/InfoContent.tsx
 import React from 'react';
+import '../styles/InfoPage.css';
 
 export function InfoContent() {
   return (

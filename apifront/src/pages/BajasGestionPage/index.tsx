@@ -1,7 +1,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { BajasPorEstructuraContent } from '../BajasPorEstructuraPage';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 interface BajaRow {
@@ -42,14 +44,23 @@ interface Stats {
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-const fmt = (d: string | null) => d ? d.slice(0, 10) : '—';
+const realDate = (d: string | null): string => {
+  const value = String(d ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+  const year = Number(value.slice(0, 4));
+  if (year < 1900 || value === '0000-00-00' || value === '1111-11-11') return '';
+  return value;
+};
+
+const fmt = (d: string | null) => realDate(d) || '—';
 
 function missingFields(r: BajaRow): string[] {
   const m: string[] = [];
   if (!r.sexo_id)           m.push('Sexo');
   if (!r.ley_id)            m.push('Ley');
   if (!r.servicio_id)       m.push('Servicio');
-  if (!r.fecha_egreso)      m.push('F.Egreso');
+  if (!realDate(r.fecha_ingreso)) m.push('F.Ingreso');
+  if (!realDate(r.fecha_egreso))  m.push('F.Egreso');
   if (!r.fecha_nacimiento)  m.push('F.Nacimiento');
   if (!r.cuil)              m.push('CUIL');
   return m;
@@ -217,7 +228,9 @@ function DistBar({ items, total }: { items: { label: string; count: number }[]; 
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-export function BajasGestionPage() {
+type BajasGestionSection = 'gestion' | 'estructura';
+
+export function BajasGestionPage({ initialSection = 'gestion' }: { initialSection?: BajasGestionSection } = {}) {
   const toast = useToast();
 
   const [loaded, setLoaded]     = useState(false);
@@ -235,7 +248,9 @@ export function BajasGestionPage() {
   const [filterLey, setFilterLey]       = useState('');
   const [filterServicio, setFilterServicio] = useState('');
   const [filterMissing, setFilterMissing]   = useState('');
+  const [excludeCompleteDates, setExcludeCompleteDates] = useState(false);
   const [tab, setTab] = useState<'tabla' | 'estadisticas'>('estadisticas');
+  const [pageTab, setPageTab] = useState<BajasGestionSection>(initialSection);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -281,9 +296,10 @@ export function BajasGestionPage() {
         const missing = missingFields(r);
         if (!missing.includes(filterMissing)) return false;
       }
+      if (excludeCompleteDates && realDate(r.fecha_ingreso) && realDate(r.fecha_egreso)) return false;
       return true;
     });
-  }, [rows, q, filterSexo, filterLey, filterServicio, filterMissing]);
+  }, [rows, q, filterSexo, filterLey, filterServicio, filterMissing, excludeCompleteDates]);
 
   // ─── Stats ───────────────────────────────────────────────────────────────
   const byLey = useMemo(() => {
@@ -339,8 +355,86 @@ export function BajasGestionPage() {
 
   const sel: React.CSSProperties = { fontSize: '0.82rem', padding: '6px 10px', borderRadius: 8, background: '#1e293b', border: '1px solid rgba(255,255,255,0.12)', color: '#e2e8f0' };
 
+  const exportarExcel = useCallback(() => {
+    if (!filtered.length) {
+      toast.error('Sin datos para exportar');
+      return;
+    }
+    const data = filtered.map(r => {
+      const faltantes = missingFields(r);
+      return {
+        DNI: r.dni,
+        Apellido: r.apellido ?? '',
+        Nombre: r.nombre ?? '',
+        Estado: r.estado_empleo ?? '',
+        Sexo: r.sexo_nombre ?? '',
+        Edad: r.edad ?? '',
+        Ley: r.ley_nombre ?? '',
+        Servicio: r.servicio_nombre ?? '',
+        'Fecha ingreso': fmt(r.fecha_ingreso),
+        'Fecha egreso': fmt(r.fecha_egreso),
+        'Fecha nacimiento': fmt(r.fecha_nacimiento),
+        CUIL: r.cuil ?? '',
+        Legajo: r.legajo ?? '',
+        Planta: r.planta_nombre ?? '',
+        Categoria: r.categoria_nombre ?? '',
+        Funcion: r.funcion_nombre ?? '',
+        Faltantes: faltantes.length ? faltantes.join(', ') : 'Completo',
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Bajas');
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `bajas_gestion_${fecha}.xlsx`);
+    toast.ok('Excel exportado', `${filtered.length} registros`);
+  }, [filtered, toast]);
+
   return (
     <Layout title="Personal de Baja" showBack>
+      <div className="card" style={{ padding: 0, marginBottom: 16, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <button
+            className={`btn${pageTab === 'gestion' ? ' active' : ''}`}
+            onClick={() => setPageTab('gestion')}
+            type="button"
+            style={{
+              borderRadius: 0,
+              border: 0,
+              borderRight: '1px solid rgba(255,255,255,0.08)',
+              padding: '12px 18px',
+              fontWeight: 700,
+              background: pageTab === 'gestion' ? 'rgba(124,58,237,0.28)' : 'transparent',
+            }}
+          >
+            Gestion de bajas
+          </button>
+          <button
+            className={`btn${pageTab === 'estructura' ? ' active' : ''}`}
+            onClick={() => setPageTab('estructura')}
+            type="button"
+            style={{
+              borderRadius: 0,
+              border: 0,
+              padding: '12px 18px',
+              fontWeight: 700,
+              background: pageTab === 'estructura' ? 'rgba(124,58,237,0.28)' : 'transparent',
+            }}
+          >
+            Bajas por estructura
+          </button>
+        </div>
+        <div style={{ padding: '10px 16px', color: '#94a3b8', fontSize: '0.82rem' }}>
+          {pageTab === 'gestion'
+            ? 'Estadisticas, completitud y edicion de datos faltantes.'
+            : 'Bajas agrupadas por servicio, con filtros y exportacion.'}
+        </div>
+      </div>
+
+      {pageTab === 'estructura' ? (
+        <BajasPorEstructuraContent />
+      ) : (
+        <>
 
       {/* ─── header ────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -458,11 +552,16 @@ export function BajasGestionPage() {
                 </select>
                 <select aria-label="Filtrar por datos incompletos" style={sel} value={filterMissing} onChange={e => setFilterMissing(e.target.value)}>
                   <option value="">Datos incompletos: todos</option>
-                  {['Sexo','Ley','Servicio','F.Egreso','F.Nacimiento','CUIL'].map(f => (
+                  {['Sexo','Ley','Servicio','F.Ingreso','F.Egreso','F.Nacimiento','CUIL'].map(f => (
                     <option key={f} value={f}>Sin {f}</option>
                   ))}
                 </select>
-                {(q || filterSexo || filterLey || filterServicio || filterMissing) && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: '#cbd5e1', padding: '0 4px' }}>
+                  <input type="checkbox" checked={excludeCompleteDates} onChange={e => setExcludeCompleteDates(e.target.checked)} />
+                  Excluir fechas completas
+                </label>
+                <button className="btn" onClick={exportarExcel} type="button" style={{ fontSize: '0.82rem' }}>Exportar Excel</button>
+                {(q || filterSexo || filterLey || filterServicio || filterMissing || excludeCompleteDates) && (
                   <button className="btn" onClick={() => { setQ(''); setFilterSexo(''); setFilterLey(''); setFilterServicio(''); setFilterMissing(''); }} type="button" style={{ fontSize: '0.82rem' }}>✕ Limpiar</button>
                 )}
               </div>
@@ -565,6 +664,8 @@ export function BajasGestionPage() {
           onClose={() => setEditing(null)}
           onSaved={upd => handleSaved(editing.dni, upd)}
         />
+      )}
+        </>
       )}
     </Layout>
   );

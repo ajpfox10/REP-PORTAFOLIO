@@ -30,6 +30,38 @@ import { logger } from '../logging/logger';
 let ExcelJS: any;
 try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
 
+// SheetJS: ExcelJS NO sabe leer el formato viejo .xls (binario OLE/BIFF).
+// Lo usamos solo para convertir .xls → .xlsx en memoria y dárselo a ExcelJS.
+let XLSX_SJS: any;
+try { XLSX_SJS = require('xlsx'); } catch { XLSX_SJS = null; }
+
+/**
+ * Carga un workbook ExcelJS desde cualquier formato soportado.
+ *  - .xlsx / .xltx → lectura nativa de ExcelJS.
+ *  - .xls          → se convierte a .xlsx en memoria con SheetJS y se carga el
+ *                    buffer. Sin esto, ExcelJS tira "Can't find end of central
+ *                    directory" porque el .xls no es un ZIP.
+ */
+async function loadWorkbook(fp: string): Promise<any> {
+  const wb = new ExcelJS.Workbook();
+  if (path.extname(fp).toLowerCase() === '.xls') {
+    if (!XLSX_SJS) {
+      throw new Error('Falta dependencia "xlsx" para leer archivos .xls (npm i xlsx)');
+    }
+    // cellDates:false a propósito: dejamos las fechas como serial numérico.
+    // Si SheetJS crea objetos Date, los arma en la zona horaria local del server
+    // (UTC-3) y una fecha-entero (medianoche) termina cayendo el día anterior en
+    // UTC → todo el Ministerio salía corrido -1 día. Como número, parseDate las
+    // convierte en UTC sin corrimiento.
+    const sjsWb = XLSX_SJS.readFile(fp, { cellDates: false });
+    const buf = XLSX_SJS.write(sjsWb, { type: 'buffer', bookType: 'xlsx' });
+    await wb.xlsx.load(buf);
+    return wb;
+  }
+  await wb.xlsx.readFile(fp);
+  return wb;
+}
+
 
 // Normaliza textos de "Novedad" para evitar falsos NO COINCIDENTE por:
 // - espacios alrededor de '-' o '.'
@@ -135,7 +167,13 @@ function getDir(): string {
 function listExcelFiles(dir: string) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir)
-    .filter(f => f.toLowerCase().endsWith('.xlsx') || f.toLowerCase().endsWith('.xltx'))
+    // Excluir archivos de bloqueo de Office ("~$MINISTERIO.xlsx") y ocultos:
+    // no son workbooks válidos y rompen ExcelJS con "Can't find end of central directory".
+    .filter(f => !f.startsWith('~$') && !f.startsWith('.'))
+    .filter(f => {
+      const lf = f.toLowerCase();
+      return lf.endsWith('.xlsx') || lf.endsWith('.xltx') || lf.endsWith('.xls');
+    })
     .map(f => ({ name: f, fullPath: path.join(dir, f) }));
 }
 
@@ -181,8 +219,13 @@ const DEFAULT_MAPEO: Record<string, string[]> = {
     '1R-ENFERMEDAD DE RIESGO',
   ],
 
+  // Una licencia "pendiente de justificación" todavía no tiene tipo definido:
+  // al justificarse puede resolverse como enfermedad propia, de familiar/niño, etc.
+  // Por eso engancha con cualquier novedad de enfermedad del SIAP.
   'E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)': [
     'ENFERMEDAD',
+    'ENFERMEDAD DE FAMILIAR O NIÑO/A O ADOLESCENTE',
+    'ATENCION FAMILIAR ENFERMO',
     'E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)',
   ],
 
@@ -430,8 +473,7 @@ function getOriginalHasta(row: any): Date | null {
   return parseDate(row?.hastaOriginal) ?? parseDate(row?.hasta) ?? getOriginalDesde(row);
 }
 async function parseMinisterio(fp: string): Promise<any[]> {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(fp);
+  const wb = await loadWorkbook(fp);
   const rows: any[] = [];
 
   const ws = wb.worksheets[0];
@@ -473,8 +515,7 @@ async function parseMinisterio(fp: string): Promise<any[]> {
 }
 
 async function parseSiap(fp: string): Promise<any[]> {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(fp);
+  const wb = await loadWorkbook(fp);
   const rows: any[] = [];
 
   const ws = wb.worksheets[0];
@@ -759,12 +800,12 @@ function compareRowsSiapVsMinisterio(
       vioMismoMapeo      ? 'MAPEO_OK_PERO_SIN_MATCH' :
                            'MAPEO_NO_ENCUENTRA_EQUIVALENTE';
 
-    // Si no hay match exacto pero el DNI existe en Ministerio → mostrar lo que tiene
+    // Mostrar Ministerio solo si hay una fila que conecte por mapeo.
     const displayMin = match ?? bestCandidate;
     const novedadesMinTexto = displayMin
       ? String(displayMin.novedad || '').trim()
       : mins.length > 0
-        ? [...new Set(mins.map((m: any) => String(m.novedad || '').trim()).filter(Boolean))].join(' / ')
+        ? 'SIN NOVEDAD MINISTERIO EQUIVALENTE'
         : '—';
 
     return {
@@ -1075,8 +1116,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       type HorarioDia = { lunes: boolean; martes: boolean; miercoles: boolean; jueves: boolean; viernes: boolean; sabado: boolean; domingo: boolean };
       const horariosMap: Record<string, HorarioDia> = {};
       if (horariosFile && fs.existsSync(horariosFile)) {
-        const wb = new ExcelJS.Workbook();
-        await wb.xlsx.readFile(horariosFile);
+        const wb = await loadWorkbook(horariosFile);
         const ws = wb.worksheets[0];
         if (ws) {
           const hdr: Record<string, number> = {};
@@ -1422,8 +1462,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       if (horariosFilePath && fs.existsSync(horariosFilePath)) {
         try {
-          const wb2 = new ExcelJS.Workbook();
-          await wb2.xlsx.readFile(horariosFilePath);
+          const wb2 = await loadWorkbook(horariosFilePath);
           const ws2 = wb2.worksheets[0];
           if (ws2) {
             const hdr2: Record<string, number> = {};
@@ -1837,8 +1876,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         ? path.join(dir, String(req.query.horariosFile))
         : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
       if (horariosFilePath2 && fs.existsSync(horariosFilePath2)) {
-        const wbH = new ExcelJS.Workbook();
-        await wbH.xlsx.readFile(horariosFilePath2);
+        const wbH = await loadWorkbook(horariosFilePath2);
         const wsH = wbH.worksheets[0];
         if (wsH) {
           const hdrH: Record<string, number> = {};
@@ -1903,6 +1941,283 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       return res.json({ ok: true, dni, nombre, periodo: req.query.periodo, data, dbError: dbErr });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // ── GET /presentes-turno ─────────────────────────────────────────────────
+  // Para una fecha y servicio: arma esperados desde horarios, cruza fichadas
+  // biométricas y muestra justificación SIAP/Ministerio para quienes no ficharon.
+  router.get('/presentes-turno', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!ExcelJS) return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs' });
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
+
+    try {
+      const servicioId = req.query.servicio_id ? Number(req.query.servicio_id) : null;
+      if (!servicioId) return res.status(400).json({ ok: false, error: 'Falta servicio_id' });
+
+      const fecha = String(req.query.fecha ?? '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return res.status(400).json({ ok: false, error: 'Falta fecha válida (YYYY-MM-DD)' });
+      }
+
+      const dir = getDir();
+      const files = listExcelFiles(dir);
+      const auto = findAutoFiles(files);
+
+      const horariosFile = req.query.horariosFile
+        ? path.join(dir, String(req.query.horariosFile))
+        : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
+      if (!horariosFile || !fs.existsSync(horariosFile)) {
+        return res.status(400).json({ ok: false, error: 'No se encontró el archivo de horarios' });
+      }
+
+      const siapFile = req.query.siapFile
+        ? path.join(dir, String(req.query.siapFile))
+        : auto.siap ?? null;
+      const ministerioFile = req.query.ministerioFile
+        ? path.join(dir, String(req.query.ministerioFile))
+        : files.find(f => f.name.toLowerCase().includes('ministerio'))?.fullPath ?? null;
+
+      const fechaDt = new Date(`${fecha}T00:00:00Z`);
+      const fechaNextDt = new Date(fechaDt);
+      fechaNextDt.setUTCDate(fechaNextDt.getUTCDate() + 1);
+      const fechaNext = fechaNextDt.toISOString().slice(0, 10);
+      const dowKeys = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'] as const;
+      const dowKey = dowKeys[fechaDt.getUTCDay()];
+
+      const toMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+      const pHora = (v: any): string | null => {
+        const s = String(v ?? '').trim();
+        const m = s.match(/^(\d{1,2}):(\d{2})/);
+        return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+      };
+      const turnoDia = (ent: string, sal: string): 'manana' | 'tarde' | 'noche' | '24hs' => {
+        if (ent === sal) return '24hs';
+        if (toMin(sal) < toMin(ent)) return 'noche';
+        const h = Number(ent.slice(0, 2));
+        if (h >= 5 && h < 12) return 'manana';
+        if (h >= 12 && h < 18) return 'tarde';
+        return 'noche';
+      };
+
+      const { QueryTypes } = await import('sequelize');
+      const [svcRow] = await sequelize.query<{ id: number; nombre: string }>(
+        'SELECT id, nombre FROM servicios WHERE id = :id AND deleted_at IS NULL LIMIT 1',
+        { type: QueryTypes.SELECT, replacements: { id: servicioId } }
+      );
+      if (!svcRow) return res.status(404).json({ ok: false, error: `Servicio ${servicioId} no encontrado` });
+
+      const agentesDb = await sequelize.query<any>(`
+        SELECT p.dni,
+               TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS nombre_db,
+               a.estado_empleo,
+               srv.id AS servicio_id,
+               srv.nombre AS servicio_nombre
+        FROM personal p
+        JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+        JOIN (
+          SELECT ags1.dni, ags1.servicio_id
+          FROM agentes_servicios ags1
+          JOIN (
+            SELECT dni, MAX(id) AS max_id
+            FROM agentes_servicios
+            WHERE deleted_at IS NULL
+              AND fecha_desde <= :fecha
+              AND (fecha_hasta IS NULL OR fecha_hasta >= :fecha)
+            GROUP BY dni
+          ) ult ON ult.max_id = ags1.id
+        ) vig ON vig.dni = p.dni
+        JOIN servicios srv ON srv.id = vig.servicio_id AND srv.deleted_at IS NULL
+        WHERE p.deleted_at IS NULL
+          AND a.estado_empleo = 'ACTIVO'
+          AND vig.servicio_id = :servicioId
+      `, { type: QueryTypes.SELECT, replacements: { fecha, servicioId } });
+
+      const dbByDni: Record<string, any> = {};
+      const dnisServicio = new Set<string>();
+      for (const r of agentesDb) {
+        const dni = normDni(r.dni);
+        if (!dni) continue;
+        dbByDni[dni] = r;
+        dnisServicio.add(dni);
+      }
+
+      const wb = await loadWorkbook(horariosFile);
+      const ws = wb.worksheets[0];
+      if (!ws) return res.status(400).json({ ok: false, error: 'Archivo de horarios vacío' });
+
+      const hdr: Record<string, number> = {};
+      ws.getRow(1).eachCell((c: any, col: number) => {
+        const v = normHeader(c?.value ?? '');
+        if (v) hdr[v] = col;
+      });
+      const colDni = hdr['nro_documento'] ?? hdr['nro documento'] ?? hdr['documento'] ?? hdr['dni'] ?? 4;
+      const colNom = hdr['apellido_nombre'] ?? hdr['apellido y nombres'] ?? hdr['apellido y nombre'] ?? 0;
+      const hasCtrl = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+        .some(d => hdr[`${d}_controlable`] > 0);
+
+      type Esperado = {
+        dni: string;
+        nombre: string;
+        entrada: string;
+        salida: string;
+        turno: 'manana' | 'tarde' | 'noche' | '24hs';
+        ficho: boolean;
+        fichajes: string[];
+        justificaciones: Array<{ fuente: 'SIAP' | 'Ministerio'; novedad: string; desde: string; hasta: string }>;
+      };
+
+      const esperadosBase: Esperado[] = [];
+      ws.eachRow((r: any, rn: number) => {
+        if (rn === 1) return;
+        const dni = normDni(r.getCell(colDni)?.value);
+        if (!dni || !dnisServicio.has(dni)) return;
+
+        const ent = pHora(r.getCell(hdr[`${dowKey}_entrada`] ?? 0)?.value);
+        const sal = pHora(r.getCell(hdr[`${dowKey}_salida`] ?? 0)?.value);
+        const colCtl = hdr[`${dowKey}_controlable`] ?? 0;
+        const controlable = hasCtrl
+          ? String(r.getCell(colCtl)?.value ?? '').toUpperCase().trim() === 'SI'
+          : !!ent;
+        if (!ent || !sal || !controlable) return;
+
+        esperadosBase.push({
+          dni,
+          nombre: (colNom ? cellToText(r.getCell(colNom)?.value) : '') || dbByDni[dni]?.nombre_db || dni,
+          entrada: ent,
+          salida: sal,
+          turno: turnoDia(ent, sal),
+          ficho: false,
+          fichajes: [],
+          justificaciones: [],
+        });
+      });
+
+      const dnis = esperadosBase.map(a => a.dni);
+      const justMap: Record<string, Esperado['justificaciones']> = {};
+      const addJust = (dni: string, fuente: 'SIAP' | 'Ministerio', row: any) => {
+        const desde = parseDate(row?.desde);
+        const hasta = parseDate(row?.hasta) ?? desde;
+        if (!desde || !hasta) return;
+        const ds = dateToStr(desde);
+        const hs = dateToStr(hasta);
+        if (ds <= fecha && hs >= fecha) {
+          (justMap[dni] = justMap[dni] || []).push({
+            fuente,
+            novedad: String(row?.novedad ?? '').trim(),
+            desde: ds,
+            hasta: hs,
+          });
+        }
+      };
+
+      if (siapFile && fs.existsSync(siapFile)) {
+        const rows = await parseSiap(siapFile);
+        for (const row of rows) {
+          const dni = normDni(row?.dni);
+          if (dnisServicio.has(dni)) addJust(dni, 'SIAP', row);
+        }
+      }
+      if (ministerioFile && fs.existsSync(ministerioFile)) {
+        const rows = await parseMinisterio(ministerioFile);
+        for (const row of rows) {
+          const dni = normDni(row?.dni);
+          if (dnisServicio.has(dni)) addJust(dni, 'Ministerio', row);
+        }
+      }
+
+      const fichajesMap: Record<string, string[]> = {};
+      let dbError: string | null = null;
+      const cfgPath = path.resolve(process.cwd(), 'fichero_config.json');
+      if (dnis.length && fs.existsSync(cfgPath)) {
+        try {
+          const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+          const bioConn = await mysql.createConnection({
+            host: cfg.mysqlHost || '127.0.0.1',
+            port: cfg.mysqlPort || 3306,
+            user: cfg.mysqlUser || 'root',
+            password: cfg.mysqlPass || '',
+            database: cfg.mysqlDb || 'adms_db',
+            connectTimeout: 10_000,
+            dateStrings: true,
+          });
+          const placeholders = dnis.map(() => '?').join(',');
+          const [ficRows] = await bioConn.query<RowDataPacket[]>(
+            `SELECT ui.badgenumber AS dni, ci.checktime, ci.checktype
+             FROM checkinout ci
+             INNER JOIN userinfo ui ON ci.userid = ui.userid
+             WHERE ui.badgenumber IN (${placeholders})
+               AND ci.checktime >= ? AND ci.checktime <= ?
+             ORDER BY ci.checktime ASC`,
+            [...dnis, `${fecha} 00:00:00`, `${fechaNext} 23:59:59`]
+          );
+          await bioConn.end();
+          for (const row of ficRows) {
+            const dni = normDni(row.dni);
+            const cts = String(row.checktime);
+            const f = cts.slice(0, 10);
+            const h = cts.slice(11, 16);
+            if (f !== fecha && f !== fechaNext) continue;
+            (fichajesMap[dni] = fichajesMap[dni] || []).push(`${f} ${h}`);
+          }
+        } catch (e: any) {
+          dbError = e?.message || 'No se pudo leer biométrico';
+        }
+      } else if (!fs.existsSync(cfgPath)) {
+        dbError = 'fichero_config.json no encontrado';
+      }
+
+      const agentes = esperadosBase
+        .map(a => {
+          const fichajes = fichajesMap[a.dni] || [];
+          const ficho = a.turno === 'noche' || a.turno === '24hs'
+            ? fichajes.some(x => x.startsWith(fecha))
+            : fichajes.some(x => x.startsWith(fecha));
+          return {
+            ...a,
+            ficho,
+            fichajes: fichajes.filter(x => a.turno === 'noche' || a.turno === '24hs' ? true : x.startsWith(fecha)),
+            justificaciones: justMap[a.dni] || [],
+          };
+        })
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+      const turnos = ['manana', 'tarde', 'noche', '24hs'] as const;
+      const data = turnos.map(turno => {
+        const rows = agentes.filter(a => a.turno === turno);
+        const ficharon = rows.filter(a => a.ficho);
+        const noFicharon = rows.filter(a => !a.ficho);
+        const justificados = noFicharon.filter(a => a.justificaciones.length > 0);
+        return {
+          turno,
+          esperadoBruto: rows.length,
+          ficharon: ficharon.length,
+          noFicharon: noFicharon.length,
+          justificados: justificados.length,
+          sinJustificar: noFicharon.length - justificados.length,
+          ficharonDetalle: ficharon,
+          noFicharonDetalle: noFicharon,
+        };
+      }).filter(t => t.esperadoBruto > 0);
+
+      return res.json({
+        ok: true,
+        fecha,
+        servicio: svcRow,
+        archivos: {
+          horarios: path.basename(horariosFile),
+          siap: siapFile ? path.basename(siapFile) : null,
+          ministerio: ministerioFile ? path.basename(ministerioFile) : null,
+        },
+        totalEsperado: agentes.length,
+        totalFicharon: agentes.filter(a => a.ficho).length,
+        totalNoFicharon: agentes.filter(a => !a.ficho).length,
+        dbError,
+        turnos: data,
+      });
+    } catch (err: any) {
+      logger.error({ msg: 'presentes-turno error', err: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
     }
   });
 
@@ -1975,8 +2290,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const horariosMap: Record<string, AgHorario> = {};
 
       if (horariosFile && fs.existsSync(horariosFile)) {
-        const wb = new ExcelJS.Workbook();
-        await wb.xlsx.readFile(horariosFile);
+        const wb = await loadWorkbook(horariosFile);
         const ws = wb.worksheets[0];
         if (ws) {
           const hdr: Record<string, number> = {};
@@ -2381,6 +2695,176 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       });
     } catch (err: any) {
       logger.error({ msg: 'reporte-servicio error', err: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
+    }
+  });
+
+  // ─── GET /asistencia/cruce-horarios ─────────────────────────────────────────
+  // Cruza el archivo de horarios (entrada/salida por día) con el servicio vigente
+  // y la ley de revista de la BD. Clasifica cada día en turno mañana/tarde/noche/24hs
+  // (nocturno = salida < entrada, 24hs = salida == entrada) y marca franqueros
+  // (solo trabajan sábado/domingo).
+  router.get('/cruce-horarios', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!ExcelJS) return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs' });
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
+    try {
+      const dir = getDir();
+      const files = listExcelFiles(dir);
+      const horariosFile = req.query.horariosFile
+        ? path.join(dir, String(req.query.horariosFile))
+        : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
+      if (!horariosFile || !fs.existsSync(horariosFile)) {
+        return res.status(400).json({ ok: false, error: 'No se encontró el archivo de horarios' });
+      }
+
+      const toMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+      const pHora = (v: any): string | null => {
+        const s = String(v ?? '').trim();
+        const m = s.match(/^(\d{1,2}):(\d{2})/);
+        return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+      };
+      const turnoDia = (ent: string, sal: string): 'manana' | 'tarde' | 'noche' | '24hs' => {
+        if (ent === sal) return '24hs';
+        if (toMin(sal) < toMin(ent)) return 'noche'; // cruza medianoche
+        const h = Number(ent.slice(0, 2));
+        if (h >= 5 && h < 12) return 'manana';
+        if (h >= 12 && h < 18) return 'tarde';
+        return 'noche';
+      };
+      const horasDia = (ent: string, sal: string): number => {
+        if (ent === sal) return 24;
+        return ((toMin(sal) - toMin(ent) + 1440) % 1440) / 60;
+      };
+
+      // ── 1. Parsear horarios.xlsx completo ──────────────────────────────────
+      const wb = await loadWorkbook(horariosFile);
+      const ws = wb.worksheets[0];
+      if (!ws) return res.status(400).json({ ok: false, error: 'Archivo de horarios vacío' });
+
+      const hdr: Record<string, number> = {};
+      ws.getRow(1).eachCell((c: any, col: number) => {
+        const v = normHeader(c?.value ?? '');
+        if (v) hdr[v] = col;
+      });
+      const colDni   = hdr['nro_documento'] ?? hdr['documento'] ?? hdr['dni'] ?? 4;
+      const colNom   = hdr['apellido_nombre'] ?? hdr['apellido y nombre'] ?? 2;
+      const colReg   = hdr['regimen_estaturario'] ?? hdr['regimen_estatutario'] ?? 19;
+      const colPlan  = hdr['planta'] ?? 20;
+      const colRev   = hdr['planta_de_revista'] ?? 21;
+      const colAgrup = hdr['agrupamiento'] ?? 22;
+      const colEstr  = hdr['estructura_servicio'] ?? 23;
+
+      const DIAS_CH = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+      type DiaCruce = { entrada: string | null; salida: string | null; turno: string | null; horas: number };
+      const agentesXlsx: any[] = [];
+
+      ws.eachRow((r: any, rn: number) => {
+        if (rn === 1) return;
+        const dni = normDni(r.getCell(colDni)?.value);
+        if (!dni) return;
+        const dias: Record<string, DiaCruce> = {};
+        let hsSemanales = 0;
+        const turnosSet = new Set<string>();
+        const diasTrabajados: string[] = [];
+        for (const d of DIAS_CH) {
+          const ent = pHora(r.getCell(hdr[`${d}_entrada`] ?? 0)?.value);
+          const sal = pHora(r.getCell(hdr[`${d}_salida`] ?? 0)?.value);
+          if (ent && sal) {
+            const turno = turnoDia(ent, sal);
+            const horas = horasDia(ent, sal);
+            dias[d] = { entrada: ent, salida: sal, turno, horas };
+            hsSemanales += horas;
+            turnosSet.add(turno);
+            diasTrabajados.push(d);
+          } else {
+            dias[d] = { entrada: null, salida: null, turno: null, horas: 0 };
+          }
+        }
+        const esFranquero = diasTrabajados.length > 0
+          && diasTrabajados.every(d => d === 'sabado' || d === 'domingo');
+        agentesXlsx.push({
+          dni,
+          nombre_xlsx: cellToText(r.getCell(colNom)?.value),
+          regimen: cellToText(r.getCell(colReg)?.value),
+          planta_xlsx: cellToText(r.getCell(colPlan)?.value).toUpperCase(),
+          revista: cellToText(r.getCell(colRev)?.value).toUpperCase(),
+          agrupamiento: cellToText(r.getCell(colAgrup)?.value),
+          estructura: cellToText(r.getCell(colEstr)?.value),
+          dias,
+          turnos: [...turnosSet],
+          esFranquero,
+          hsSemanales: Math.round(hsSemanales * 100) / 100,
+          diasTrabajados: diasTrabajados.length,
+        });
+      });
+
+      // ── 2. Enriquecer desde la BD: servicio vigente + ley + planta ─────────
+      const { QueryTypes } = await import('sequelize');
+      const dniNums = [...new Set(agentesXlsx.map(a => Number(a.dni)).filter(n => Number.isFinite(n) && n > 0))];
+      const dbMap: Record<string, any> = {};
+      if (dniNums.length) {
+        const dbRows = await sequelize.query<any>(`
+          SELECT p.dni, p.apellido, p.nombre,
+                 a.estado_empleo,
+                 l.nombre  AS ley_nombre,
+                 pl.nombre AS planta_nombre,
+                 oc.id     AS ocupacion_id,
+                 oc.nombre AS ocupacion_nombre,
+                 srv.id    AS servicio_id,
+                 srv.nombre AS servicio_nombre,
+                 dep.id    AS dependencia_id,
+                 dep.nombre AS dependencia_nombre
+          FROM personal p
+          JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+          LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
+          LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
+          LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+          LEFT JOIN (
+            SELECT ags1.dni, ags1.servicio_id, ags1.dependencia_id
+            FROM agentes_servicios ags1
+            JOIN (
+              SELECT dni, MAX(id) AS max_id
+              FROM agentes_servicios
+              WHERE deleted_at IS NULL AND fecha_hasta IS NULL
+              GROUP BY dni
+            ) ult ON ult.max_id = ags1.id
+          ) vig ON vig.dni = p.dni
+          LEFT JOIN servicios srv ON srv.id = vig.servicio_id AND srv.deleted_at IS NULL
+          LEFT JOIN dependencias dep ON dep.id = vig.dependencia_id AND dep.deleted_at IS NULL
+          WHERE p.deleted_at IS NULL AND p.dni IN (:dnis)
+        `, { type: QueryTypes.SELECT, replacements: { dnis: dniNums } });
+        for (const r of dbRows) dbMap[normDni(r.dni)] = r;
+      }
+
+      const servicioIdFiltro = req.query.servicio_id ? Number(req.query.servicio_id) : null;
+      let agentes = agentesXlsx.map(a => {
+        const db = dbMap[a.dni] || null;
+        return {
+          ...a,
+          en_sistema: !!db,
+          apellido: db?.apellido ?? null,
+          nombre: db?.nombre ?? null,
+          estado_empleo: db?.estado_empleo ?? null,
+          ley_nombre: db?.ley_nombre ?? null,
+          planta_nombre: db?.planta_nombre ?? null,
+          ocupacion_id: db?.ocupacion_id ?? null,
+          ocupacion_nombre: db?.ocupacion_nombre ?? null,
+          servicio_id: db?.servicio_id ?? null,
+          servicio_nombre: db?.servicio_nombre ?? null,
+          dependencia_id: db?.dependencia_id ?? null,
+          dependencia_nombre: db?.dependencia_nombre ?? null,
+        };
+      });
+      if (servicioIdFiltro) agentes = agentes.filter(a => Number(a.servicio_id) === servicioIdFiltro);
+
+      return res.json({
+        ok: true,
+        archivo: path.basename(horariosFile),
+        total: agentes.length,
+        agentes,
+      });
+    } catch (err: any) {
+      logger.error({ msg: 'cruce-horarios error', err: err?.message });
       return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
     }
   });

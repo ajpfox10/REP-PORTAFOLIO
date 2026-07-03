@@ -1,13 +1,15 @@
-// src/pages/ResolucionesPage/index.tsx
+﻿// src/pages/ResolucionesPage/index.tsx
 // Gestión de Resoluciones, Expedientes y Archivos por agente.
 // v2: incluye escaneo obligatorio al crear una resolución nueva.
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
+import { getApiBaseUrl } from '../../api/env';
 import { useToast } from '../../ui/toast';
 import { searchPersonal } from '../../api/searchPersonal';
 import { useAuth } from '../../auth/AuthProvider';
+import { fetchScanMusicBlobUrl } from '../GestionUsuarioPage/GestionUsuarioPage';
 import '../EscaneoPage/styles/EscaneoPage.css';
 
 // ─── Scanner API client ───────────────────────────────────────────────────────
@@ -77,7 +79,7 @@ interface PaperStatus {
 }
 interface ScannedPage {
   jobId: number; pageNumber: number;
-  storageKey: string; blobUrl: string | null; loadError: boolean;
+  storageKey: string; blobUrl: string | null; loadError: boolean; rotating?: boolean;
 }
 type ScanPhase = 'idle' | 'creating' | 'waiting' | 'loading_pages' | 'done' | 'error';
 type OutputFormat = 'pdf' | 'pdf_a' | 'tiff' | 'jpg';
@@ -116,6 +118,13 @@ function paperClass(state?: PaperState | null) {
   if (state === 'empty') return ' danger';
   return ' unknown';
 }
+function normSearch(value: any) {
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+function buildResolucionPersonalRef(motivo: string, numero: string, fecha: string) {
+  return ['respage', motivo || '', numero || '', fecha || ''].join('|');
+}
+const DEVICE_PAGE_SIZE = 4;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(d?: string | null): string {
@@ -200,6 +209,8 @@ export function ResolucionesPage() {
   const [scanSelectedDevice, setScanSelectedDevice] = useState<number | null>(null);
   const [scanLoadingDevices, setScanLoadingDevices] = useState(false);
   const [scanDiscovering,    setScanDiscovering]    = useState(false);
+  const [scanDeviceSearch,   setScanDeviceSearch]   = useState('');
+  const [scanDevicePage,     setScanDevicePage]     = useState(1);
 
   // ── Scanner — papel ────────────────────────────────────────────────────────
   const [scanPaperStatus,           setScanPaperStatus]           = useState<PaperStatus | null>(null);
@@ -229,11 +240,59 @@ export function ResolucionesPage() {
   const [bypassInput,    setBypassInput]    = useState('');
   const [bypassUnlocked, setBypassUnlocked] = useState(false);
 
+  // ── Música de espera (archivo MP3 de la carpeta musicadeespera) ──────────────
+  const [scanMelodiaFile, setScanMelodiaFile] = useState('');
+  const [scanVolumen,     setScanVolumen]     = useState(0.5);
+  const scanAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    apiFetch<any>('/user-scan-music/me')
+      .then(r => {
+        if (r?.ok && r?.data) {
+          setScanMelodiaFile(r.data.melodia ?? '');
+          setScanVolumen(Number(r.data.volumen) || 0.5);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const stopScanMusic = useCallback(() => {
+    if (scanAudioRef.current) {
+      scanAudioRef.current.pause();
+      scanAudioRef.current.currentTime = 0;
+      scanAudioRef.current = null;
+    }
+  }, []);
+
+  // Iniciar / detener música según fase de escaneo
+  useEffect(() => {
+    const scanning = ['creating', 'waiting', 'loading_pages'].includes(scanPhase);
+    if (scanning && scanMelodiaFile) {
+      stopScanMusic();
+      let blobUrl: string | null = null;
+      fetchScanMusicBlobUrl(scanMelodiaFile).then(url => {
+        blobUrl = url;
+        const audio = new Audio(url);
+        audio.volume = scanVolumen;
+        audio.loop   = true;
+        scanAudioRef.current = audio;
+        audio.play().catch(() => {});
+      }).catch(() => {});
+      return () => {
+        stopScanMusic();
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+      };
+    } else {
+      stopScanMusic();
+    }
+  }, [scanPhase]);
+
   // ── Limpiar blob URLs al desmontar ─────────────────────────────────────────
   useEffect(() => {
     return () => {
       blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
       if (viewerUrlRef.current) URL.revokeObjectURL(viewerUrlRef.current);
+      if (scanAudioRef.current) { scanAudioRef.current.pause(); scanAudioRef.current = null; }
     };
   }, []);
 
@@ -307,8 +366,18 @@ export function ResolucionesPage() {
 
   // ── Scanner — efectos ─────────────────────────────────────────────────────
   useEffect(() => { cargarScanDevices(); }, []);
-  useEffect(() => { setScanFlatbedPromptDismissed(false); cargarPaperStatus(); }, [scanSelectedDevice]);
-  useEffect(() => { setScanFlatbedPromptDismissed(false); }, [scanSource, scanSelectedDevice]);
+  useEffect(() => {
+    setScanFlatbedPromptDismissed(false);
+    cargarPaperStatus();
+  }, [scanSelectedDevice, scanSource, cargarPaperStatus]);
+
+  // El equipo puede tardar unos segundos en detectar hojas recién cargadas.
+  useEffect(() => {
+    const usesAdf = scanSource === 'adf' || scanSource === 'adf_duplex';
+    if (!usesAdf || !scanSelectedDevice || scanPaperStatus?.adf !== 'empty') return;
+    const timer = setInterval(() => { cargarPaperStatus(); }, 4_000);
+    return () => clearInterval(timer);
+  }, [scanSource, scanSelectedDevice, scanPaperStatus?.adf, cargarPaperStatus]);
 
   // Validar caps cuando cambia dispositivo o config
   useEffect(() => {
@@ -342,14 +411,14 @@ export function ResolucionesPage() {
   }, []);
 
   // ── Scanner — poll job ─────────────────────────────────────────────────────
-  async function pollScanJob(jobId: number, maxMs = 120_000): Promise<any> {
+  async function pollScanJob(jobId: number, maxMs = 20 * 60_000): Promise<any> {
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       await new Promise(r => setTimeout(r, 2500));
       const job = await scannerFetch<any>(`/v1/scan-jobs/${jobId}`);
       if (['completed', 'failed', 'canceled'].includes(job.status)) return job;
     }
-    throw new Error('Tiempo de espera agotado (120s)');
+    throw new Error('Tiempo de espera agotado (20 min)');
   }
 
   // ── Scanner — lanzar escaneo ───────────────────────────────────────────────
@@ -373,7 +442,7 @@ export function ResolucionesPage() {
           auto_rotate: true, blank_page_detection: true,
           compression: 'medium', output_format: scanOutputFormat,
           personal_dni: agente.dni,
-          personal_ref: formRes.motivo || 'resolucion',
+          personal_ref: buildResolucionPersonalRef(formRes.motivo, formRes.numero, formRes.fecha),
           doc_class: 'resolucion',
           doc_name: docName,
         }),
@@ -400,11 +469,12 @@ export function ResolucionesPage() {
       });
       setScanPhase('done');
       toast.ok('✅ Página escaneada', `Job #${r.id} · ${docName}`);
+      void cargarPaperStatus();
     } catch (e: any) {
       setScanPhase('error'); setScanError(e?.message || 'Error desconocido');
       toast.error('Error al escanear', e?.message);
     }
-  }, [agente, scanSelectedDevice, scanSource, scanDuplex, scanDpi, scanColor, scanPaperSize, scanOutputFormat, formRes.motivo, formRes.numero]);
+  }, [agente, scanSelectedDevice, scanSource, scanDuplex, scanDpi, scanColor, scanPaperSize, scanOutputFormat, formRes.motivo, formRes.numero, cargarPaperStatus]);
 
   const quitarPaginaScan = useCallback((storageKey: string) => {
     setScanSession(prev => {
@@ -413,6 +483,28 @@ export function ResolucionesPage() {
       return prev.filter(p => p.storageKey !== storageKey);
     });
   }, []);
+
+  const rotarPaginaScan = useCallback(async (page: ScannedPage, degrees = 90) => {
+    if (page.rotating) return;
+    setScanSession(prev => prev.map(p => p.storageKey === page.storageKey ? { ...p, rotating: true } : p));
+    try {
+      const result = await scannerFetch<{ storage_key: string }>(
+        `/v1/scan-jobs/${page.jobId}/pages/${page.pageNumber}/rotate`,
+        { method: 'POST', body: JSON.stringify({ degrees }) }
+      );
+      const blobUrl = await loadScanImage(result.storage_key);
+      blobUrlsRef.current.push(blobUrl);
+      if (page.blobUrl) URL.revokeObjectURL(page.blobUrl);
+      setScanViewer(prev => prev?.url === page.blobUrl ? null : prev);
+      setScanSession(prev => prev.map(p => p.storageKey === page.storageKey
+        ? { ...p, storageKey: result.storage_key, blobUrl, loadError: false, rotating: false }
+        : p));
+      toast.ok('Pagina rotada', 'El archivo guardado tambien fue actualizado');
+    } catch (e: any) {
+      setScanSession(prev => prev.map(p => p.storageKey === page.storageKey ? { ...p, rotating: false } : p));
+      toast.error('No se pudo rotar', e?.message);
+    }
+  }, [toast]);
 
   const cerrarViewer = useCallback(() => {
     setScanViewer(prev => {
@@ -517,17 +609,29 @@ export function ResolucionesPage() {
         await apiFetch('/resoluciones', { method: 'POST', body: JSON.stringify(body) });
         // Sincronizar escáner → G:\docu\{dni}\
         if (scanSession.length > 0) {
-          const jobIds = [...new Set(scanSession.map(p => p.jobId))];
-          await Promise.all(jobIds.map(id =>
-            scannerFetch(`/v1/scan-jobs/${id}/sync-personal`, { method: 'POST' }).catch(() => {})
-          ));
+          const personalRef = buildResolucionPersonalRef(formRes.motivo, formRes.numero, formRes.fecha);
+          await scannerFetch('/v1/scan-jobs/consolidate', {
+            method: 'POST',
+            body: JSON.stringify({
+              job_ids: [...new Set(scanSession.map(p => p.jobId))],
+              page_keys: scanSession.map(p => p.storageKey),
+              personal_dni: agente.dni,
+              personal_ref: personalRef,
+              doc_class: 'resolucion',
+              output_format: scanOutputFormat,
+            }),
+          });
         }
         toast.ok('Guardado', `Resolución y ${scanSession.length} pág. escaneada(s)`);
       }
       setEditRes(null); setFormRes(emptyRes);
       resetScan();
-      const rows = await fetchAll<any>(`/resoluciones?dni=${agente.dni}`);
-      setResoluciones(rows);
+      const [rowsRes, rowsArch] = await Promise.all([
+        fetchAll<any>(`/resoluciones?dni=${agente.dni}`),
+        fetchAll<any>(`/tblarchivos?dni=${agente.dni}`),
+      ]);
+      setResoluciones(rowsRes);
+      setArchivos(rowsArch);
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setSavingRes(false); }
   };
@@ -601,13 +705,23 @@ export function ResolucionesPage() {
   const scanCaps     = scanDevice?.capabilities;
   const scanIsOnline = scanDevice ? deviceOnline(scanDevice) : false;
   const scanOnlineDevices = scanDevices.filter(deviceOnline);
+  const scanDeviceNeedle  = normSearch(scanDeviceSearch);
+  const scanFilteredDevices = scanOnlineDevices.filter(d =>
+    !scanDeviceNeedle ||
+    normSearch([d.name, d.hostname, d.driver, d.capabilities?.model, d.capabilities?.manufacturer].join(' ')).includes(scanDeviceNeedle)
+  );
+  const scanDevicePageCount = Math.max(1, Math.ceil(scanFilteredDevices.length / DEVICE_PAGE_SIZE));
+  const scanSafePage = Math.min(scanDevicePage, scanDevicePageCount);
+  const scanPagedDevices = scanFilteredDevices.slice((scanSafePage - 1) * DEVICE_PAGE_SIZE, scanSafePage * DEVICE_PAGE_SIZE);
   const scanUsesAdf  = scanSource === 'adf' || scanSource === 'adf_duplex';
   const scanAdfEmpty = scanUsesAdf && scanPaperStatus?.adf === 'empty';
   const scanFlatbedQ = scanUsesAdf && scanPaperStatus?.flatbed === 'loaded' && !scanFlatbedPromptDismissed;
   const isScanning   = ['creating', 'waiting', 'loading_pages'].includes(scanPhase);
   const hasPages     = scanSession.length > 0;
-  const puedeEscanear = !!agente && !!scanSelectedDevice && scanIsOnline && !isScanning && !scanAdfEmpty && !scanFlatbedQ;
-  const puedeGuardar  = !editRes ? (hasPages || bypassUnlocked) : true;
+  // El estado ADF vacío es informativo: el escáner valida el papel al lanzar.
+  const puedeEscanear = !!agente && !!scanSelectedDevice && scanIsOnline && !isScanning && !scanFlatbedQ;
+  const scanRotating = scanSession.some(page => page.rotating);
+  const puedeGuardar  = (!editRes ? (hasPages || bypassUnlocked) : true) && !scanRotating;
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -706,7 +820,10 @@ export function ResolucionesPage() {
                     TAB RESOLUCIONES
                 ══════════════════════════════════════════ */}
                 {tab === 'resoluciones' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: editRes ? '1fr 340px' : '1fr 520px', gap: 14, alignItems: 'start' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                  {/* ── Fila superior: tabla + formulario ── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14, alignItems: 'start' }}>
 
                     {/* ── Tabla resoluciones ── */}
                     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -745,10 +862,8 @@ export function ResolucionesPage() {
                       )}
                     </div>
 
-                    {/* ── Columna derecha: form + scanner ── */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                      {/* ── Formulario ── */}
+                    {/* ── Columna derecha: solo formulario ── */}
+                    <div>
                       <div className="card" style={{ padding: '14px 16px' }}>
                         <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 12 }}>
                           {editRes ? '✏️ Editar resolución' : '+ Nueva resolución'}
@@ -848,11 +963,17 @@ export function ResolucionesPage() {
                         </form>
                       </div>
 
-                      {/* ══════════════════════════════════════
-                          SECCIÓN ESCÁNER — solo nueva resolución
-                      ══════════════════════════════════════ */}
-                      {!editRes && (
-                        <div className="card scan-card">
+                    </div>
+                    {/* fin columna derecha */}
+
+                  </div>
+                  {/* fin fila superior */}
+
+                  {/* ══════════════════════════════════════════════════════
+                      SECCIÓN ESCÁNER — debajo de tabla + form, solo nueva
+                  ══════════════════════════════════════════════════════ */}
+                  {!editRes && (
+                    <div className="card scan-card">
                           <div className="scan-section-title" style={{ marginBottom: 12 }}>
                             📷 Escanear resolución
                             {formRes.motivo && (
@@ -863,47 +984,80 @@ export function ResolucionesPage() {
                           </div>
 
                           {/* ── Dispositivo ── */}
-                          <div className="muted scan-label">Dispositivo</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <div className="scan-section-title" style={{ marginBottom: 0, fontSize: '0.82rem' }}>🖨️ Dispositivo</div>
+                            <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }} onClick={cargarScanDevices} disabled={scanLoadingDevices}>
+                              {scanLoadingDevices ? '🔄' : '↺'}
+                            </button>
+                          </div>
                           {scanLoadingDevices ? (
-                            <div className="muted" style={{ fontSize: '0.8rem', marginTop: 4 }}>Cargando escáneres…</div>
+                            <div className="muted" style={{ fontSize: '0.8rem' }}>Cargando dispositivos…</div>
                           ) : scanOnlineDevices.length === 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
-                              <div className="muted" style={{ fontSize: '0.78rem' }}>No hay escáneres en línea</div>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button className="btn" style={{ fontSize: '0.75rem' }} onClick={cargarScanDevices} disabled={scanLoadingDevices}>↺ Actualizar</button>
-                                <button className="btn" style={{ fontSize: '0.75rem' }} onClick={descubrirScanDevices} disabled={scanDiscovering}>
-                                  {scanDiscovering ? '🔄 Buscando…' : '📡 Buscar en red'}
-                                </button>
-                              </div>
+                            <div className="scan-no-devices">
+                              <div style={{ fontSize: '1.5rem' }}>🔍</div>
+                              <div style={{ fontSize: '0.8rem' }}>No hay escáneres en línea</div>
+                              {scanDevices.length > 0 && (
+                                <div className="muted" style={{ fontSize: '0.72rem' }}>
+                                  Hay {scanDevices.length} registrado(s), sin conexión activa.
+                                </div>
+                              )}
+                              <button className="btn" style={{ fontSize: '0.75rem' }} onClick={descubrirScanDevices} disabled={scanDiscovering}>
+                                {scanDiscovering ? '🔄 Buscando…' : '📡 Buscar en red'}
+                              </button>
                             </div>
                           ) : (
-                            <div style={{ marginTop: 4 }}>
-                              <div className="scan-device-list scan-device-list-scroll" style={{ maxHeight: 160 }}>
-                                {scanOnlineDevices.map(d => {
-                                  const isFav = scanFavorites.includes(d.id);
-                                  return (
-                                    <button key={d.id}
-                                      className={`scan-device-btn${scanSelectedDevice === d.id ? ' selected' : ''}`}
-                                      onClick={() => setScanSelectedDevice(d.id)}>
-                                      <div className="scan-device-row">
-                                        <span style={{ fontSize: '0.85rem', cursor: 'pointer', color: isFav ? '#fbbf24' : 'rgba(255,255,255,0.2)' }}
-                                          onClick={e => toggleScanFavorite(d.id, e)}>
-                                          {isFav ? '★' : '☆'}
-                                        </span>
-                                        <span className="scan-dot online" />
-                                        <b style={{ flexGrow: 1, textAlign: 'left', fontSize: '0.8rem' }}>{d.name}</b>
-                                      </div>
-                                      {d.capabilities?.model && (
-                                        <div className="muted" style={{ fontSize: '0.68rem', paddingLeft: 36 }}>
-                                          {d.capabilities.manufacturer} {d.capabilities.model}
+                            <div className="scan-device-picker">
+                              <input
+                                className="input scan-device-search"
+                                value={scanDeviceSearch}
+                                onChange={e => { setScanDeviceSearch(e.target.value); setScanDevicePage(1); }}
+                                placeholder="Buscar escáner"
+                              />
+                              {scanFilteredDevices.length === 0 ? (
+                                <div className="scan-empty-inline">Sin escáneres para esa búsqueda</div>
+                              ) : (
+                                <div className="scan-device-list scan-device-list-scroll">
+                                  {scanPagedDevices.map(d => {
+                                    const isFav = scanFavorites.includes(d.id);
+                                    return (
+                                      <button key={d.id}
+                                        className={`scan-device-btn${scanSelectedDevice === d.id ? ' selected' : ''}`}
+                                        onClick={() => setScanSelectedDevice(d.id)}>
+                                        <div className="scan-device-row">
+                                          <span title={isFav ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                                            style={{ fontSize: '0.9rem', cursor: 'pointer', flexShrink: 0, color: isFav ? '#fbbf24' : 'rgba(255,255,255,0.2)' }}
+                                            onClick={e => toggleScanFavorite(d.id, e)}>
+                                            {isFav ? '★' : '☆'}
+                                          </span>
+                                          <span className="scan-dot online" />
+                                          <b style={{ flexGrow: 1, textAlign: 'left' }}>{d.name}</b>
+                                          <span className="muted" style={{ fontSize: '0.72rem' }}>En línea</span>
                                         </div>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              <button className="btn" style={{ fontSize: '0.72rem', marginTop: 4 }} onClick={cargarScanDevices} disabled={scanLoadingDevices}>
-                                {scanLoadingDevices ? '🔄' : '↺ Actualizar'}
+                                        {d.hostname && (
+                                          <div className="muted" style={{ fontSize: '0.68rem', paddingLeft: 40 }}>
+                                            {d.hostname} · {d.driver}
+                                            {isFav && <span style={{ marginLeft: 6, color: '#fbbf24', fontSize: '0.65rem' }}>★ FAV</span>}
+                                          </div>
+                                        )}
+                                        {d.capabilities?.model && (
+                                          <div className="muted" style={{ fontSize: '0.68rem', paddingLeft: 40 }}>
+                                            {d.capabilities.manufacturer} {d.capabilities.model}
+                                          </div>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {scanFilteredDevices.length > DEVICE_PAGE_SIZE && (
+                                <div className="scan-pager">
+                                  <button className="btn" onClick={() => setScanDevicePage(p => Math.max(1, p - 1))} disabled={scanSafePage <= 1}>‹</button>
+                                  <span className="muted">Pág. {scanSafePage} de {scanDevicePageCount}</span>
+                                  <button className="btn" onClick={() => setScanDevicePage(p => Math.min(scanDevicePageCount, p + 1))} disabled={scanSafePage >= scanDevicePageCount}>›</button>
+                                </div>
+                              )}
+                              <button className="btn" style={{ marginTop: 6, fontSize: '0.75rem' }} onClick={descubrirScanDevices} disabled={scanDiscovering}>
+                                {scanDiscovering ? '🔄 Buscando…' : '📡 Buscar en red'}
                               </button>
                             </div>
                           )}
@@ -1058,7 +1212,6 @@ export function ResolucionesPage() {
                             onClick={lanzarEscaneo} disabled={!puedeEscanear}>
                             {isScanning ? (SCAN_PHASE_LABEL[scanPhase] || '⏳ Escaneando…')
                               : !scanSelectedDevice || !scanIsOnline ? '🔌 Sin escáner'
-                              : scanAdfEmpty ? '📄 ADF sin hojas'
                               : scanFlatbedQ  ? '🪟 Confirmar fuente'
                               : hasPages ? '📄 Escanear otra página'
                               : '▶ Escanear resolución'}
@@ -1099,6 +1252,18 @@ export function ResolucionesPage() {
                                         </div>
                                       )}
                                       <div className="scan-preview-num">Pág. {idx + 1}</div>
+                                      <button type="button" className="scan-preview-rotate"
+                                        disabled={page.rotating || !page.blobUrl}
+                                        onClick={e => { e.stopPropagation(); rotarPaginaScan(page); }}
+                                        title="Rotar 90 grados">
+                                        {page.rotating ? '...' : '↻'}
+                                      </button>
+                                      <button type="button" className="scan-preview-rotate scan-preview-rotate-180"
+                                        disabled={page.rotating || !page.blobUrl}
+                                        onClick={e => { e.stopPropagation(); rotarPaginaScan(page, 180); }}
+                                        title="Rotar 180 grados">
+                                        180°
+                                      </button>
                                       <button type="button" className="scan-preview-remove"
                                         onClick={e => { e.stopPropagation(); quitarPaginaScan(page.storageKey); }}
                                         title="Quitar">×</button>
@@ -1108,10 +1273,9 @@ export function ResolucionesPage() {
                               </div>
                             </div>
                           )}
-                        </div>
-                      )}
                     </div>
-                    {/* fin columna derecha */}
+                  )}
+                  {/* fin sección escáner */}
 
                   </div>
                 )}
@@ -1278,7 +1442,7 @@ export function ResolucionesPage() {
                             <thead>
                               <tr>
                                 <th style={th}>Archivo</th><th style={th}>Tipo</th><th style={th}>Número</th>
-                                <th style={th}>Año</th><th style={th}>Fecha</th><th style={th}>Descripción</th><th style={th}>Ruta</th>
+                                <th style={th}>Año</th><th style={th}>Fecha</th><th style={th}>Descripción</th><th style={th}></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1294,8 +1458,13 @@ export function ResolucionesPage() {
                                   <td style={td}>{a.anio || '—'}</td>
                                   <td style={td}>{fmt(a.fecha)}</td>
                                   <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.descripcion_archivo || '—'}</td>
-                                  <td style={{ ...td, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    <span className="muted" style={{ fontSize: '0.7rem', fontFamily: 'monospace' }} title={a.ruta || ''}>{a.ruta || '—'}</span>
+                                  <td style={td}>
+                                    <a
+                                      href={`${String(getApiBaseUrl() || '').replace(/\/+$/, '')}/api/v1/documents/${a.id}/file`}
+                                      target="_blank" rel="noopener noreferrer"
+                                      className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                                      Abrir
+                                    </a>
                                   </td>
                                 </tr>
                               ))}

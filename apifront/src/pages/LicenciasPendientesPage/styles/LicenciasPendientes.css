@@ -1,0 +1,266 @@
+/*
+  LicenciasPendientesPage — /app/licencias-pendientes
+*/
+
+.lp-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ─── Filtros ─── */
+.lp-filters-card {
+  padding: 1.1rem 1.2rem;
+}
+
+.lp-filters-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 12px;
+}
+
+.lp-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .lp-filters-grid { grid-template-columns: 1fr; }
+}
+
+.lp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lp-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lp-field-action {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: flex-end;
+  padding-bottom: 0;
+}
+
+/* ─── Matches ─── */
+.lp-matches {
+  margin-top: 10px;
+  border-top: 1px solid #1e293b;
+  padding-top: 10px;
+}
+
+.lp-matches-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.lp-match-item {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #e2e8f0;
+  transition: background 0.15s;
+}
+
+.lp-match-item:hover { background: #2d3f55; }
+
+/* ─── Tabla ─── */
+.lp-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.lp-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.2rem;
+  border-bottom: 1px solid #1e293b;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lp-table-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lp-total-badge {
+  font-size: 0.75rem;
+  background: #1e293b;
+  color: #94a3b8;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.lp-table-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lp-table-pag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lp-pag-info {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.lp-table-wrap {
+  overflow-x: auto;
+}
+
+.lp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.lp-table thead tr {
+  background: #0f172a;
+}
+
+.lp-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border-bottom: 1px solid #1e293b;
+}
+
+.lp-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #0f172a;
+  color: #cbd5e1;
+  vertical-align: middle;
+}
+
+.lp-table tbody tr:hover {
+  background: #0f172a55;
+}
+
+/* Filas con misma persona: borde superior más claro para separar grupos */
+.lp-row-new-agent td:first-child {
+  border-top: 1px solid #1e293b;
+}
+.lp-row-cont td:first-child,
+.lp-row-cont td:nth-child(2),
+.lp-row-cont td:nth-child(3) {
+  color: transparent;
+  user-select: none;
+}
+
+/* ─── Badge días pendientes ─── */
+.lp-dias-ok {
+  display: inline-block;
+  background: #14532d;
+  color: #4ade80;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  min-width: 28px;
+  text-align: center;
+}
+
+.lp-dias-cero {
+  display: inline-block;
+  background: #1e293b;
+  color: #475569;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  min-width: 28px;
+  text-align: center;
+}
+
+/* ─── States ─── */
+.lp-loading,
+.lp-empty {
+  padding: 2.5rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.lp-pag-bottom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 0.8rem 1.2rem;
+  border-top: 1px solid #1e293b;
+}
+
+.lp-mt-8  { margin-top: 8px; }
+.lp-btn-buscar { min-width: 90px; }
+.lp-btn-export { min-width: 110px; }
+
+/* ─── Botones estado ─── */
+.lp-estado-btns {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.lp-estado-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #94a3b8;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.lp-estado-btn:hover {
+  background: #2d3f55;
+  color: #e2e8f0;
+}
+
+.lp-estado-btn.active {
+  background: #1d4ed8;
+  border-color: #3b82f6;
+  color: #fff;
+}
