@@ -5,6 +5,7 @@ import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
 import XLSXStyle from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
+import { CruceHorariosTab } from './CruceHorariosTab';
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ export function ReporteAsistenciaServicioPage() {
   // ── Vista ──
   const [agenteAbierto, setAgenteAbierto] = useState<string | null>(null);
   const [vistaAgente, setVistaAgente]     = useState<'semanas' | 'dias'>('semanas');
+  const [tab, setTab]                     = useState<'reporte' | 'cruce'>('reporte');
 
   // Cargar servicios y archivos al montar
   useEffect(() => {
@@ -261,6 +263,26 @@ export function ReporteAsistenciaServicioPage() {
 
   return (
     <Layout title="📊 Reporte de Asistencia por Servicio" showBack>
+
+      {/* ── Pestañas ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button type="button" className="btn"
+          style={tab === 'reporte' ? { background: 'rgba(99,102,241,0.25)', color: '#818cf8', fontWeight: 700 } : {}}
+          onClick={() => setTab('reporte')}>
+          📊 Reporte mensual
+        </button>
+        <button type="button" className="btn"
+          style={tab === 'cruce' ? { background: 'rgba(99,102,241,0.25)', color: '#818cf8', fontWeight: 700 } : {}}
+          onClick={() => setTab('cruce')}>
+          🕐 Cruce de horarios
+        </button>
+      </div>
+
+      {tab === 'cruce' && (
+        <CruceHorariosTab servicios={servicios} horariosFile={horariosFile} />
+      )}
+
+      {tab === 'reporte' && (<>
 
       {/* ── Panel de selección ── */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -605,6 +627,8 @@ export function ReporteAsistenciaServicioPage() {
           )}
         </>
       )}
+
+      </>)}
 
     </Layout>
   );

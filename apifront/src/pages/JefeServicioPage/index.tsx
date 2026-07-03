@@ -35,6 +35,26 @@ async function fetchAll<T = any>(baseUrl: string, pageSize = 500): Promise<T[]> 
   return all;
 }
 
+const normalizarServicio = (v: any): string =>
+  String(v || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+const perteneceAlServicio = (pase: any, servicioId: number | null, servicioNombre: string): boolean => {
+  if (!pase) return false;
+  if (servicioId != null && String(pase.servicio_id || '') === String(servicioId)) return true;
+  if (pase.servicio_id != null && String(pase.servicio_id).trim() !== '') return false;
+
+  // Hay pases históricos cargados solo con nombre y servicio_id nulo.
+  // Para jefes de servicio, esos pases activos también deben computar como propios.
+  const nombrePase = normalizarServicio(pase.nombre || pase.servicio_nombre);
+  const nombreServicio = normalizarServicio(servicioNombre);
+  return !!nombrePase && !!nombreServicio && nombrePase === nombreServicio;
+};
+
 // ─── Helpers fecha (sin offset UTC — mismo fix que embarazadas) ───────────────
 function fmt(d?: string | null): string {
   if (!d) return '—';
@@ -57,6 +77,32 @@ function fmtDateTime(dt?: string | null): string {
 }
 
 // ─── Modal asignar nuevo servicio ─────────────────────────────────────────────
+// ─── Situación de revista ─────────────────────────────────────────────────────
+// TITULAR (trámites por SIAPE): ley 10430, o ley 10471 con planta PERMANENTE.
+// El resto (10471 sin planta = interino, becas, programas, residentes, IRAB,
+// art. 48) carga enfermedad / art. 26 / pap-colpo / examen en este sistema.
+const esTitularSiape = (a: any): boolean => {
+  const ley = String(a?.ley_nombre || '').toLowerCase();
+  const planta = String(a?.planta_nombre || '').toUpperCase();
+  return ley.includes('10430') || (ley.includes('10471') && planta === 'PERMANENTE');
+};
+
+const revistaTag = (a: any): string => {
+  if (esTitularSiape(a)) return 'TITULAR';
+  const ley = String(a?.ley_nombre || '').toLowerCase();
+  if (ley.includes('10471')) return 'INTERINO';
+  if (ley.includes('residente')) return 'RESIDENTE';
+  if (ley.includes('beca') || ley.includes('programa')) return 'BECA';
+  if (ley.includes('irab')) return 'IRAB';
+  if (ley.includes('48')) return 'ART. 48';
+  return ley ? 'OTRA' : 'SIN LEY';
+};
+
+const tagRevistaStyle: React.CSSProperties = {
+  fontSize: '0.65rem', background: 'rgba(251,191,36,0.16)', color: '#fbbf24',
+  borderRadius: 4, padding: '1px 5px', fontWeight: 700,
+};
+
 interface AsignarServicioModalProps {
   agente: any;
   servicios: any[];
@@ -890,7 +936,7 @@ function NuevoFrancoSectorModal({ agentes, sectorId, jefeNombre, onClose, onSave
           fecha_trabajo: form.fecha_trabajo || null,
           motivo:        form.motivo        || null,
           observaciones: form.observaciones || null,
-          estado:        'PENDIENTE',
+          estado:        'APROBADO',
           jefe_nombre:   jefeNombre         || null,
           sector_id:     sectorId           ?? null,
         }),
@@ -956,11 +1002,6 @@ function NuevoFrancoSectorModal({ agentes, sectorId, jefeNombre, onClose, onSave
                 value={jefeNombre} disabled />
             </div>
           </div>
-          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6,
-            background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
-            fontSize: '0.74rem', color: '#fbbf24' }}>
-            ⚠️ El franco queda en estado <b>PENDIENTE</b> hasta que el administrador lo apruebe.
-          </div>
           <div className="js-modal-actions">
             <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
             <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
@@ -1006,7 +1047,7 @@ function NuevoFrancoModal({ agente, sectorId, jefeNombre, onClose, onSaved }: Nu
           fecha_trabajo: form.fecha_trabajo || null,
           motivo:        form.motivo        || null,
           observaciones: form.observaciones || null,
-          estado:        'PENDIENTE',
+          estado:        'APROBADO',
           jefe_nombre:   jefeNombre         || null,
           sector_id:     sectorId           ?? null,
         }),
@@ -1060,11 +1101,6 @@ function NuevoFrancoModal({ agente, sectorId, jefeNombre, onClose, onSaved }: Nu
               <input id="nfm-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }}
                 value={jefeNombre} disabled />
             </div>
-          </div>
-          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6,
-            background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
-            fontSize: '0.74rem', color: '#fbbf24' }}>
-            ⚠️ El franco queda en estado <b>PENDIENTE</b> hasta que el administrador lo apruebe.
           </div>
           <div className="js-modal-actions">
             <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
@@ -1438,6 +1474,246 @@ function Art26Agente({ agente, sectorId, jefeNombre }: Art26AgenteProps) {
   );
 }
 
+// ─── Panel Prácticas Profesionales ───────────────────────────────────────────
+interface PracticasModalProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+  record?: any;
+  onClose: () => void;
+  onSaved: () => void;
+}
+function PracticasModal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: PracticasModalProps) {
+  const toast = useToast();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    fecha_desde: record?.fecha_desde?.slice(0, 10) || hoy,
+    dias:        record?.dias ? String(record.dias) : '1',
+    motivo:      record?.motivo || '',
+    observaciones: record?.observaciones || '',
+    estado:      record?.estado || 'PENDIENTE',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+
+  const guardar = async () => {
+    if (!form.fecha_desde) { toast.error('Ingresá la fecha'); return; }
+    const dias = Number(form.dias);
+    if (!Number.isInteger(dias) || dias < 1 || dias > 10) {
+      toast.error('Días inválidos', 'Prácticas profesionales permite de 1 a 10 días.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        dni: agente.dni,
+        fecha_desde: form.fecha_desde,
+        dias,
+        motivo: form.motivo || null,
+        observaciones: form.observaciones || null,
+        sector_id: sectorId ?? null,
+        jefe_nombre: jefeNombre || null,
+        estado: form.estado,
+      };
+      if (record?.id) {
+        await apiFetch<any>(`/practicas_profesionales/${record.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        toast.ok('Práctica actualizada');
+      } else {
+        await apiFetch<any>('/practicas_profesionales', { method: 'POST', body: JSON.stringify(body) });
+        toast.ok('Práctica cargada', `${agente.apellido}, ${agente.nombre}`);
+      }
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al guardar', e?.message || 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="js-overlay" onClick={onClose}>
+      <div className="js-modal" onClick={e => e.stopPropagation()}>
+        <div className="js-modal-header">
+          <div>
+            <div className="js-modal-title">🎒 {record ? 'Editar' : 'Nueva'} Práctica profesional</div>
+            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+          </div>
+          <button className="btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <div className="js-modal-body">
+          <div className="js-form-grid">
+            <div className="js-field">
+              <label htmlFor="prac-fecha" style={lbl}>Fecha desde *</label>
+              <input id="prac-fecha" name="fecha_desde" type="date" className="input" style={fld} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
+            </div>
+            <div className="js-field">
+              <label htmlFor="prac-dias" style={lbl}>Días * (máx. 10)</label>
+              <input id="prac-dias" name="dias" type="number" className="input" style={fld} value={form.dias} min="1" max="10" onChange={e => set('dias', e.target.value)} />
+            </div>
+            <div className="js-field">
+              <label htmlFor="prac-estado" style={lbl}>Estado</label>
+              <select id="prac-estado" name="estado" className="input" style={fld} value={form.estado} onChange={e => set('estado', e.target.value)}>
+                <option value="PENDIENTE">PENDIENTE</option>
+                <option value="APROBADO">APROBADO</option>
+                <option value="RECHAZADO">RECHAZADO</option>
+                <option value="ANULADO">ANULADO</option>
+              </select>
+            </div>
+            <div className="js-field">
+              <label htmlFor="prac-jefe" style={lbl}>Jefe</label>
+              <input id="prac-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
+            </div>
+            <div className="js-field js-field-full">
+              <label htmlFor="prac-motivo" style={lbl}>Motivo</label>
+              <input id="prac-motivo" name="motivo" type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Detalle de la práctica profesional..." />
+            </div>
+            <div className="js-field js-field-full">
+              <label htmlFor="prac-obs" style={lbl}>Observaciones</label>
+              <textarea id="prac-obs" name="observaciones" className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
+            </div>
+          </div>
+          <div className="js-modal-actions">
+            <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="btn js-btn-save" onClick={guardar} disabled={saving}>
+              {saving ? '⏳ Guardando...' : '💾 Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PracticasAgenteProps {
+  agente: any;
+  sectorId: number | null;
+  jefeNombre: string;
+}
+function PracticasAgente({ agente, sectorId, jefeNombre }: PracticasAgenteProps) {
+  const toast = useToast();
+  const [records, setRecords] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editRecord, setEditRecord] = useState<any>(null);
+
+  const ESTADO_COLOR: Record<string, string> = {
+    PENDIENTE: '#fbbf24', APROBADO: '#22c55e', RECHAZADO: '#ef4444', ANULADO: '#64748b',
+  };
+  const canEdit = (r: any) => Date.now() - new Date(r.created_at).getTime() < 48 * 60 * 60 * 1000;
+
+  const cargar = () => {
+    if (!agente?.dni) return;
+    setLoading(true);
+    fetchAll(`/practicas_profesionales?dni=${agente.dni}&sort=-fecha_desde`)
+      .then(rows => setRecords(rows))
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { cargar(); }, [agente?.dni]);
+
+  const eliminar = async (id: number, created_at: string) => {
+    if (!canEdit({ created_at })) { toast.error('No se puede eliminar', 'Han pasado más de 48 horas'); return; }
+    if (!confirm('¿Eliminar esta práctica profesional?')) return;
+    try {
+      await apiFetch<any>(`/practicas_profesionales/${id}`, { method: 'DELETE' });
+      toast.ok('Práctica eliminada');
+      cargar();
+    } catch (e: any) {
+      toast.error('Error', e?.message || 'Error');
+    }
+  };
+
+  const pendientes = records.filter(r => r.estado === 'PENDIENTE').length;
+
+  return (
+    <>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0' }}>
+            🎒 Prácticas profesionales
+            <span style={{ marginLeft: 8, fontSize: '0.7rem', color: '#64748b' }}>
+              {records.length} registro{records.length !== 1 ? 's' : ''}
+              {pendientes > 0 && <span style={{ marginLeft: 6, color: '#fbbf24' }}>· {pendientes} pendiente{pendientes !== 1 ? 's' : ''}</span>}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button className="btn js-btn-save" type="button" style={{ padding: '2px 9px', fontSize: '0.73rem' }}
+              onClick={() => { setEditRecord(null); setModalOpen(true); }}>
+              ➕ Cargar
+            </button>
+            <button className="btn" type="button" style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+              onClick={() => setExpanded(v => !v)}>
+              {expanded ? '▲' : '▼'}
+            </button>
+          </div>
+        </div>
+
+        {expanded && (
+          loading ? (
+            <div style={{ color: '#64748b', fontSize: '0.8rem' }}>🔄 Cargando...</div>
+          ) : records.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: '0.8rem' }}>Sin prácticas profesionales</div>
+          ) : (
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {records.map((r: any) => {
+                const editable = canEdit(r);
+                return (
+                  <div key={r.id} style={{
+                    padding: '7px 10px', marginBottom: 5, borderRadius: 7,
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                    fontSize: '0.78rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                      <span style={{ fontWeight: 600, color: ESTADO_COLOR[r.estado] || '#e2e8f0' }}>
+                        {r.estado || 'PENDIENTE'}
+                        <span style={{ marginLeft: 6, color: '#94a3b8' }}>{r.dias} día{Number(r.dias) !== 1 ? 's' : ''}</span>
+                      </span>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {editable ? (
+                          <>
+                            <button className="btn" type="button" style={{ padding: '1px 7px', fontSize: '0.68rem' }}
+                              onClick={() => { setEditRecord(r); setModalOpen(true); }}>✏️</button>
+                            <button className="btn js-btn-danger" type="button" style={{ padding: '1px 7px', fontSize: '0.68rem' }}
+                              onClick={() => eliminar(r.id, r.created_at)}>🗑️</button>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '0.65rem', color: '#475569' }}>🔒 +48h</span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                      <span>Desde: <b>{fmt(r.fecha_desde)}</b></span>
+                      {r.jefe_nombre && <span>👤 {r.jefe_nombre}</span>}
+                    </div>
+                    {r.motivo && <div style={{ color: '#cbd5e1', marginTop: 3 }}>{r.motivo}</div>}
+                    {r.observaciones && <div style={{ color: '#64748b', marginTop: 2, fontStyle: 'italic' }}>{r.observaciones}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
+
+      {modalOpen && (
+        <PracticasModal
+          agente={agente}
+          sectorId={sectorId}
+          jefeNombre={jefeNombre}
+          record={editRecord}
+          onClose={() => { setModalOpen(false); setEditRecord(null); }}
+          onSaved={() => { setExpanded(true); cargar(); }}
+        />
+      )}
+    </>
+  );
+}
+
 // ─── Componentes genéricos: Papcolpo / Examen / Pre-examen ──────────────────
 // Reutilizamos un único modal y un único panel por tabla.
 interface MedModalProps {
@@ -1755,6 +2031,80 @@ function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal
   );
 }
 
+interface PracticasTablaGlobalProps {
+  agentesMap: Record<string, any>;
+  sectorId: number | null;
+  isGlobal: boolean;
+}
+function PracticasTablaGlobal({ agentesMap, sectorId, isGlobal }: PracticasTablaGlobalProps) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const url = isGlobal
+      ? '/practicas_profesionales?sort=-fecha_desde'
+      : `/practicas_profesionales?sector_id=${sectorId}&sort=-fecha_desde`;
+    fetchAll(url)
+      .then(r => setRows(r))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [sectorId, isGlobal]);
+
+  return (
+    <div className="card js-card">
+      <div className="js-section-title" style={{ marginBottom: 12 }}>
+        🎒 Prácticas profesionales
+        <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+          ({rows.length} registro{rows.length !== 1 ? 's' : ''} · {isGlobal ? 'todo el sistema' : 'este sector'})
+        </span>
+      </div>
+      {loading ? (
+        <div className="js-loading">🔄 Cargando...</div>
+      ) : rows.length === 0 ? (
+        <div className="js-empty">Sin prácticas profesionales</div>
+      ) : (
+        <div className="js-tabla-wrap">
+          <table className="js-tabla">
+            <thead>
+              <tr>
+                <th>DNI</th>
+                <th>Agente</th>
+                <th>Desde</th>
+                <th>Días</th>
+                <th>Motivo</th>
+                <th>Estado</th>
+                <th>Jefe</th>
+                <th>Cargado el</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r: any) => {
+                const ag = agentesMap[String(r.dni)];
+                const nombre = ag ? `${ag.apellido}, ${ag.nombre}` : `DNI ${r.dni}`;
+                return (
+                  <tr key={r.id}>
+                    <td className="js-td-dni">{r.dni}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{nombre}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{fmt(r.fecha_desde)}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#fbbf24' }}>{r.dias}</td>
+                    <td className="js-td-muted" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.motivo || r.observaciones || '—'}
+                    </td>
+                    <td className="js-td-muted">{r.estado || 'PENDIENTE'}</td>
+                    <td className="js-td-muted">{r.jefe_nombre || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#64748b' }}>{fmtDateTime(r.created_at)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function JefeServicioPage() {
   const toast = useToast();
@@ -1791,15 +2141,6 @@ export function JefeServicioPage() {
   // Paginación listas de agentes
   const PAGE_SIZE = 20;
 
-  // Identifica becados Y temporarios (tienen fecha_egreso o ley de programa/beca/residentes)
-  const isBecadoOTemporario = (a: any) => {
-    const ley = (a.ley_nombre || '').toLowerCase();
-    return ley.includes('beca')
-      || ley.includes('programa')
-      || ley.includes('residente')
-      || ley.includes('temporar')
-      || !!a.fecha_egreso;
-  };
   const [paginaAgentes,   setPaginaAgentes]   = useState(1);
   const [paginaAsignados, setPaginaAsignados] = useState(1);
 
@@ -1809,6 +2150,8 @@ export function JefeServicioPage() {
 
   // Agente seleccionado
   const [agenteActivo, setAgenteActivo] = useState<any>(null);
+  // Titular (10430 / 10471 permanente): enfermedad, art. 26, pap/colpo y exámenes van por SIAPE
+  const titularSiape = !!agenteActivo && esTitularSiape(agenteActivo);
 
   // Pases del agente seleccionado
   const [pases,       setPases]       = useState<any[]>([]);
@@ -1842,7 +2185,7 @@ export function JefeServicioPage() {
   const [modalCerrar,        setModalCerrar]        = useState<any>(null);
 
   // Tab
-  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos' | 'papcolpo' | 'examen' | 'prexamen'>('agentes');
+  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen'>('agentes');
 
   // Agentes de licencia (reconocimientos médicos activos del sector)
   const [licenciasActivas, setLicenciasActivas] = useState<any[]>([]);
@@ -1890,6 +2233,37 @@ export function JefeServicioPage() {
     }
   }, [isGlobal]);
 
+  // ── Vista combinada enfermería (solo jefes servicio 24 y 34) ────────────────
+  const SERVICIOS_ENFERMERIA = [24, 34];
+  const esJefeEnfermeria = !isGlobal && servicioId !== null && SERVICIOS_ENFERMERIA.includes(servicioId);
+  const otroServicioEnfermeriaId = servicioId === 24 ? 34 : servicioId === 34 ? 24 : null;
+  const [enfermeriaOtrosPases,   setEnfermeriaOtrosPases]   = useState<any[]>([]);
+  const [loadingEnfermeria,      setLoadingEnfermeria]      = useState(false);
+  const [dniSectorActivoOtros,   setDniSectorActivoOtros]   = useState<Record<string, number | null>>({});
+
+  const cargarEnfermeria = useCallback(async () => {
+    if (!esJefeEnfermeria || !otroServicioEnfermeriaId) return;
+    setLoadingEnfermeria(true);
+    try {
+      const [pases, pasesSector] = await Promise.all([
+        fetchAll(`/agentes_servicios?servicio_id=${otroServicioEnfermeriaId}`),
+        fetchAll(`/agentes_sectores?servicio_id=${otroServicioEnfermeriaId}`),
+      ]);
+      setEnfermeriaOtrosPases(pases.filter((p: any) => !p.fecha_hasta));
+      const mapaOtros: Record<string, number | null> = {};
+      for (const ps of pasesSector) {
+        if (!ps.fecha_hasta) mapaOtros[String(ps.dni)] = Number(ps.sector_id);
+      }
+      setDniSectorActivoOtros(mapaOtros);
+    } catch {
+      setEnfermeriaOtrosPases([]);
+      setDniSectorActivoOtros({});
+    }
+    finally { setLoadingEnfermeria(false); }
+  }, [esJefeEnfermeria, otroServicioEnfermeriaId]);
+
+  useEffect(() => { cargarEnfermeria(); }, [cargarEnfermeria]);
+
   // ── DNIs con servicio activo (sin fecha_hasta) ───────────────────────────
   const [dniConServicio,  setDniConServicio]  = useState<Set<string>>(new Set());
   const [art26Records,    setArt26Records]    = useState<any[]>([]);
@@ -1931,11 +2305,14 @@ export function JefeServicioPage() {
         setAgentesAsignados(todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
         setAgentes(        todos.filter((a: any) => !dnisConServicio.has(String(a.dni))));
       } else {
-        // Jefe: filtra por su servicio_id
-        const [pasesServicio, pasesSector] = await Promise.all([
-          fetchAll(`/agentes_servicios?servicio_id=${servicioId}`),
+        // Jefe: filtra por servicio_id y por nombre cuando el pase histórico no tiene id cargado
+        const [todosPasesServicio, pasesSector] = await Promise.all([
+          fetchAll(`/agentes_servicios`),
           fetchAll(`/agentes_sectores?servicio_id=${servicioId}`),
         ]);
+        const pasesServicio = todosPasesServicio.filter((p: any) =>
+          perteneceAlServicio(p, servicioId, servicioNombre)
+        );
         const pasesActivos = pasesServicio.filter((p: any) => !p.fecha_hasta);
         const dnisConServicio = new Set(pasesActivos.map((p: any) => String(p.dni)));
         setDniConServicio(dnisConServicio);
@@ -1958,7 +2335,7 @@ export function JefeServicioPage() {
     } finally {
       setLoadingAg(false);
     }
-  }, [isGlobal, servicioId]);
+  }, [isGlobal, servicioId, servicioNombre]);
 
   useEffect(() => { cargarAgentes(); }, [cargarAgentes]);
 
@@ -2007,10 +2384,10 @@ export function JefeServicioPage() {
     if (!isGlobal && !servicioId) return;
     setLoadingTodosPases(true);
     try {
-      const url = isGlobal
-        ? `/agentes_servicios?sort=-created_at`
-        : `/agentes_servicios?servicio_id=${servicioId}&sort=-created_at`;
-      const rows = await fetchAll(url);
+      const url = `/agentes_servicios?sort=-created_at`;
+      const rows = (await fetchAll(url)).filter((p: any) =>
+        isGlobal || perteneceAlServicio(p, servicioId, servicioNombre)
+      );
       setTodosPases(rows);
 
       // Enriquecer con personal de DNIs que no estén en agentesMap
@@ -2033,7 +2410,7 @@ export function JefeServicioPage() {
       }
     } catch { setTodosPases([]); }
     finally { setLoadingTodosPases(false); }
-  }, [isGlobal, servicioId]);
+  }, [isGlobal, servicioId, servicioNombre]);
 
   useEffect(() => {
     if (tab === 'todos_pases') cargarTodosPases();
@@ -2390,6 +2767,11 @@ export function JefeServicioPage() {
                                 color: '#a5b4fc', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
                               }}>📋 Art. 26</span>
                             )}
+                            {!esTitularSiape(a) && (
+                              <span title="No titular: enfermedad, art. 26, pap/colpo y exámenes se cargan en este sistema" style={tagRevistaStyle}>
+                                {revistaTag(a)}
+                              </span>
+                            )}
                           </div>
                           <div className="js-agente-meta">
                             DNI {a.dni}
@@ -2428,6 +2810,100 @@ export function JefeServicioPage() {
         {/* ── PANEL DERECHO: Detalle agente ── */}
         <div className="js-right">
 
+          {/* ── Card exclusiva jefes enfermería (servicio 24 y 34) ── */}
+          {esJefeEnfermeria && (() => {
+            const propiosSvc = servicioId === 24 ? 'SALA DE ENFERMERÍA' : 'DPTO ENFERMERÍA';
+            const otroSvc    = servicioId === 24 ? 'DPTO ENFERMERÍA'    : 'SALA DE ENFERMERÍA';
+            const totalPropios = agentesAsignados.length;
+            const totalOtros   = enfermeriaOtrosPases.length;
+            const totalGral    = totalPropios + totalOtros;
+
+            // Sectores de DPTO ENFERMERIA (id=34) para el desglose
+            const sectoresDpto = sectores.filter((s: any) => s.servicio_id === 34);
+
+            // Agrupar propios por sector (via dniSectorActivo)
+            const propiosPorSector: Record<string, number> = {};
+            for (const a of agentesAsignados) {
+              const sec = dniSectorActivo[String(a.dni)];
+              const key = sec ? String(sec) : '__sin_sector__';
+              propiosPorSector[key] = (propiosPorSector[key] || 0) + 1;
+            }
+            // Agrupar otros por sector (via agentes_sectores)
+            const otrosPorSector: Record<string, number> = {};
+            for (const p of enfermeriaOtrosPases) {
+              const sec = dniSectorActivoOtros[String(p.dni)];
+              const key = sec ? String(sec) : '__sin_sector__';
+              otrosPorSector[key] = (otrosPorSector[key] || 0) + 1;
+            }
+
+            // Todas las keys de sector que aparecen
+            const allSectorKeys = [...new Set([
+              ...Object.keys(propiosPorSector),
+              ...Object.keys(otrosPorSector),
+            ])];
+
+            const getSectorNombre = (key: string) => {
+              if (key === '__sin_sector__') return 'Sin sector asignado';
+              const s = sectoresDpto.find((s: any) => String(s.id) === key)
+                     || sectores.find((s: any) => String(s.id) === key);
+              return s?.nombre || `Sector #${key}`;
+            };
+
+            const rowSt: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.8rem' };
+            const numSt: React.CSSProperties = { fontWeight: 700, minWidth: 28, textAlign: 'right' };
+
+            return (
+              <div className="card js-card" style={{ marginBottom: 12, border: '1px solid rgba(99,102,241,0.35)', background: 'rgba(99,102,241,0.06)' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 10, color: '#a5b4fc' }}>
+                  🏥 Enfermería — Vista completa
+                </div>
+
+                {/* Totales */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+                  {[
+                    { label: `Mis agentes`, sub: propiosSvc, val: totalPropios, color: '#86efac' },
+                    { label: `Otro total`,  sub: otroSvc,    val: totalOtros,   color: '#93c5fd' },
+                    { label: 'Total',        sub: 'enfermería', val: totalGral,  color: '#fbbf24' },
+                  ].map(({ label, sub, val, color }) => (
+                    <div key={label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color }}>{loadingAg || loadingEnfermeria ? '…' : val}</div>
+                      <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', marginTop: 1 }}>{label}</div>
+                      <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 1 }}>{sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desglose por sector */}
+                {allSectorKeys.length > 0 && (
+                  <>
+                    <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: '#64748b', marginBottom: 6 }}>Por sector</div>
+                    {allSectorKeys
+                      .sort((a, b) => getSectorNombre(a).localeCompare(getSectorNombre(b), 'es'))
+                      .map(key => {
+                        const propios = propiosPorSector[key] || 0;
+                        const otros   = otrosPorSector[key]   || 0;
+                        return (
+                          <div key={key} style={rowSt}>
+                            <span style={{ color: 'rgba(255,255,255,0.75)', flex: 1 }}>{getSectorNombre(key)}</span>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                              <span style={{ ...numSt, color: '#86efac' }} title="Mis agentes">{propios || '—'}</span>
+                              <span style={{ ...numSt, color: '#93c5fd' }} title="Otro">{otros || '—'}</span>
+                              <span style={{ ...numSt, color: '#fbbf24', minWidth: 32 }}>{propios + otros}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 6, fontSize: '0.68rem', color: '#64748b' }}>
+                      <span style={{ color: '#86efac', minWidth: 28, textAlign: 'right' }}>Míos</span>
+                      <span style={{ color: '#93c5fd', minWidth: 28, textAlign: 'right' }}>Otros</span>
+                      <span style={{ color: '#fbbf24', minWidth: 32, textAlign: 'right' }}>Total</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Tabs */}
           <div className="card js-card js-tabs-card">
             <div className="js-tabs">
@@ -2464,6 +2940,11 @@ export function JefeServicioPage() {
                 className={`js-tab${tab === 'francos' ? ' active' : ''}`}
                 onClick={() => setTab('francos')}
               >📅 Francos</button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'practicas' ? ' active' : ''}`}
+                onClick={() => setTab('practicas')}
+              >🎒 Prácticas</button>
               <button
                 type="button"
                 className={`js-tab${tab === 'papcolpo' ? ' active' : ''}`}
@@ -2512,12 +2993,19 @@ export function JefeServicioPage() {
                         <div className="js-detail-nombre">{agenteActivo.apellido}, {agenteActivo.nombre}</div>
                         <div className="js-detail-meta">DNI {agenteActivo.dni} · {agenteActivo.cuil || 'Sin CUIL'}</div>
                       </div>
-                      <span className={`badge ${agenteActivo.estado_empleo === 'ACTIVO' ? '' : 'danger'}`}>
-                        {agenteActivo.estado_empleo || 'ACTIVO'}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                        <span className={`badge ${agenteActivo.estado_empleo === 'ACTIVO' ? '' : 'danger'}`}>
+                          {agenteActivo.estado_empleo || 'ACTIVO'}
+                        </span>
+                        <span style={titularSiape
+                          ? { fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 5, background: 'rgba(129,140,248,0.16)', color: '#a5b4fc', border: '1px solid rgba(129,140,248,0.45)' }
+                          : { fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 5, background: 'rgba(251,191,36,0.16)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.5)' }}>
+                          {revistaTag(agenteActivo)}{titularSiape ? ' · trámites por SIAPE' : ' · se carga acá'}
+                        </span>
+                      </div>
                     </div>
                     <div className="js-detail-grid">
-                      <div><span className="js-label">Ley</span><div>{agenteActivo.ley_nombre || '—'}</div></div>
+                      <div><span className="js-label">Ley</span><div style={titularSiape ? undefined : { color: '#fbbf24', fontWeight: 700 }}>{agenteActivo.ley_nombre || '—'}</div></div>
                       <div><span className="js-label">Categoría</span><div>{agenteActivo.categoria_nombre || '—'}</div></div>
                       <div><span className="js-label">Función</span><div>{agenteActivo.funcion_nombre || '—'}</div></div>
                       <div><span className="js-label">Ingreso</span><div>{fmt(agenteActivo.fecha_ingreso)}</div></div>
@@ -2529,10 +3017,19 @@ export function JefeServicioPage() {
                       )}
                     </div>
 
-                    {/* Reconocimientos médicos (solo lectura) */}
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 12, paddingTop: 10 }}>
-                      <RecMedicos dni={agenteActivo.dni} />
-                    </div>
+                    {/* Titular 10430 / 10471 permanente: estos trámites van por SIAPE */}
+                    {titularSiape && (
+                      <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.5)', borderRadius: 8, color: '#fcd34d', fontSize: '0.82rem', fontWeight: 600, lineHeight: 1.5 }}>
+                        ⚠️ Agente TITULAR ({agenteActivo.ley_nombre || 'sin ley'}): Enfermedad, Artículo 26, Prácticas profesionales, Pap/Colpo, Examen y Pre-examen se solicitan por <strong>SIAPE</strong> — en este sistema solo se cargan para no titulares.
+                      </div>
+                    )}
+
+                    {/* Reconocimientos médicos (solo lectura) — titulares: por SIAPE */}
+                    {!titularSiape && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 12, paddingTop: 10 }}>
+                        <RecMedicos dni={agenteActivo.dni} />
+                      </div>
+                    )}
 
                     {/* Francos compensatorios (lectura + carga) */}
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
@@ -2543,8 +3040,8 @@ export function JefeServicioPage() {
                       />
                     </div>
 
-                    {/* Artículo 26 — becados Y temporarios */}
-                    {isBecadoOTemporario(agenteActivo) && (
+                    {/* Artículo 26 — solo no titulares (interinos, becados, residentes, etc.) */}
+                    {!titularSiape && (
                       <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
                         <Art26Agente
                           agente={agenteActivo}
@@ -2554,44 +3051,61 @@ export function JefeServicioPage() {
                       </div>
                     )}
 
-                    {/* Papanicolaou / Colposcopía */}
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
-                      <MedAgente
-                        agente={agenteActivo}
-                        sectorId={sectorId}
-                        jefeNombre={u?.nombre || ''}
-                        endpoint="/papcolpo"
-                        label="Pap / Colpo"
-                        emoji="🩺"
-                        tipoOpciones={['PAP', 'COLPO', 'PAP_COLPO']}
-                      />
-                    </div>
+                    {/* Prácticas profesionales — solo no titulares */}
+                    {!titularSiape && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                        <PracticasAgente
+                          agente={agenteActivo}
+                          sectorId={sectorId}
+                          jefeNombre={u?.nombre || ''}
+                        />
+                      </div>
+                    )}
 
-                    {/* Examen (académico / facultad) */}
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
-                      <MedAgente
-                        agente={agenteActivo}
-                        sectorId={sectorId}
-                        jefeNombre={u?.nombre || ''}
-                        endpoint="/examen"
-                        label="Examen"
-                        emoji="🎓"
-                        tipoOpciones={null}
-                      />
-                    </div>
+                    {/* Papanicolaou / Colposcopía — solo no titulares */}
+                    {!titularSiape && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                        <MedAgente
+                          agente={agenteActivo}
+                          sectorId={sectorId}
+                          jefeNombre={u?.nombre || ''}
+                          endpoint="/papcolpo"
+                          label="Pap / Colpo"
+                          emoji="🩺"
+                          tipoOpciones={['PAP', 'COLPO', 'PAP_COLPO']}
+                        />
+                      </div>
+                    )}
 
-                    {/* Pre-examen (académico / facultad) */}
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
-                      <MedAgente
-                        agente={agenteActivo}
-                        sectorId={sectorId}
-                        jefeNombre={u?.nombre || ''}
-                        endpoint="/prexamen"
-                        label="Pre-examen"
-                        emoji="📝"
-                        tipoOpciones={null}
-                      />
-                    </div>
+                    {/* Examen (académico / facultad) — solo no titulares */}
+                    {!titularSiape && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                        <MedAgente
+                          agente={agenteActivo}
+                          sectorId={sectorId}
+                          jefeNombre={u?.nombre || ''}
+                          endpoint="/examen"
+                          label="Examen"
+                          emoji="🎓"
+                          tipoOpciones={null}
+                        />
+                      </div>
+                    )}
+
+                    {/* Pre-examen (académico / facultad) — solo no titulares */}
+                    {!titularSiape && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                        <MedAgente
+                          agente={agenteActivo}
+                          sectorId={sectorId}
+                          jefeNombre={u?.nombre || ''}
+                          endpoint="/prexamen"
+                          label="Pre-examen"
+                          emoji="📝"
+                          tipoOpciones={null}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Servicios del agente */}
@@ -2818,10 +3332,10 @@ export function JefeServicioPage() {
             </div>
           )}
 
-          {/* ── Tab Artículo 26 (becados + temporarios) ── */}
+          {/* ── Tab Artículo 26 (no titulares: interinos, becados, residentes, etc.) ── */}
           {tab === 'articulo26' && (() => {
-            const becados = agentes.filter(isBecadoOTemporario);
-            // Filtrar registros Art.26 solo de becados/temporarios del sector
+            const becados = agentes.filter((a: any) => !esTitularSiape(a));
+            // Filtrar registros Art.26 solo de no titulares del sector
             const dnisBecados = new Set(becados.map((a: any) => String(a.dni)));
             const registros = art26Records.filter((r: any) => dnisBecados.has(String(r.dni)));
 
@@ -2932,6 +3446,14 @@ export function JefeServicioPage() {
               </div>
             );
           })()}
+          {/* ── Tab Prácticas profesionales ── */}
+          {tab === 'practicas' && (
+            <PracticasTablaGlobal
+              agentesMap={agentesMap}
+              sectorId={isGlobal ? null : sectorId}
+              isGlobal={isGlobal}
+            />
+          )}
           {/* ── Tabs genéricos: Papcolpo / Examen / Pre-examen ── */}
           {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen') && (() => {
             const cfg = {
@@ -3021,6 +3543,11 @@ export function JefeServicioPage() {
                               fontSize: '0.65rem', background: 'rgba(34,197,94,0.15)',
                               color: '#4ade80', borderRadius: 4, padding: '1px 5px', fontWeight: 600, marginLeft: 6,
                             }}>🟢 En servicio</span>
+                            {!esTitularSiape(a) && (
+                              <span title="No titular: enfermedad, art. 26, pap/colpo y exámenes se cargan en este sistema" style={{ ...tagRevistaStyle, marginLeft: 6 }}>
+                                {revistaTag(a)}
+                              </span>
+                            )}
                           </div>
                           <div className="js-agente-meta">
                             DNI {a.dni}

@@ -8,6 +8,7 @@ import { useToast } from '../../ui/toast';
 import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { loadSession } from '../../auth/session';
+import { atenderCitacion } from '../../api/citaciones';
 import './styles/AtencionPublicoPage.css';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
@@ -1190,30 +1191,31 @@ export function AtencionPublicoPage() {
                 onClick={async () => {
                   setBajandoCitacion(true);
                   try {
-                    const s = loadSession();
-                    const u: any = s?.user || {};
-                    const operador = u?.nombre || u?.email || `Usuario #${u?.id}` || 'anon';
-
-                    await apiFetch(`/citaciones/${citacion.id}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({
-                        citacion_activa: 0,
-                        cierre_citacion: new Date().toISOString(),
-                      }),
+                    const resultado = await atenderCitacion(citacion);
+                    const consultaId = resultado.consulta?.id ?? Date.now();
+                    setTicketEmitido({
+                      id: consultaId,
+                      agente: `${row?.apellido ?? ''}, ${row?.nombre ?? ''}`.trim(),
+                      dni: citacion.dni,
+                      motivo_label: 'Citación atendida',
+                      explicacion: citacion.motivo || '',
+                      hora_atencion: nowHHMM(),
+                      leyenda: '',
+                      tramitesPendientes: pedidos.filter((p: any) => p.estado === 'pendiente'),
+                      operador: resultado.operador,
+                      fecha: resultado.cierreCitacion,
                     });
-
-                    await apiFetch('/citaciones_vistas', {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        citacion_id: citacion.id,
-                        visto_por: operador,
-                        usuario_id: u?.id ?? null,
-                        accion: 'dado_de_baja',
-                      }),
-                    }).catch(() => {});
+                    if (resultado.consulta) {
+                      setConsultas(prev => [resultado.consulta, ...prev]);
+                    }
 
                     setCitacion(null);
                     setShowCitacionModal(false);
+                    setCitacionesHist(prev => prev.map((c: any) =>
+                      c.id === citacion.id
+                        ? { ...c, citacion_activa: 0, cierre_citacion: resultado.cierreCitacion }
+                        : c
+                    ));
                     toast.ok('Citación dada de baja');
                   } catch (e: any) {
                     toast.error('Error al dar de baja', e?.message || 'Error');

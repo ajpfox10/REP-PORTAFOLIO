@@ -6,6 +6,7 @@ import { apiFetch } from '../../api/http';
 import { usePendingRequests } from './hooks/usePendingRequests';
 import { SolicitudesTab } from './components/SolicitudesTab';
 import { CatalogosTab } from './components/CatalogosTab';
+import { DashboardAlertsTab } from './components/DashboardAlertsTab';
 import './styles/AdminPage.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -484,7 +485,7 @@ function RolesTab({ roles, permissions, onRefresh }: {
 export function AdminPage() {
   const admin = useAdminUsers();
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'users' | 'roles' | 'solicitudes' | 'catalogos'>('users');
+  const [tab, setTab] = useState<'users' | 'roles' | 'solicitudes' | 'catalogos' | 'banners'>('users');
   const pending = usePendingRequests(admin.roles);
   const [userPermsModal, setUserPermsModal] = useState<{ user: UserRow; perms: Set<number> } | null>(null);
   const [userPermsSaving, setUserPermsSaving] = useState(false);
@@ -565,6 +566,9 @@ export function AdminPage() {
           </button>
           <button className={`tab-btn${tab === 'catalogos' ? ' active' : ''}`} onClick={() => setTab('catalogos')}>
             🗂️ Catálogos
+          </button>
+          <button className={`tab-btn${tab === 'banners' ? ' active' : ''}`} onClick={() => setTab('banners')}>
+            Banners del dashboard
           </button>
         </div>
 
@@ -655,6 +659,8 @@ export function AdminPage() {
 
         {/* ── TAB CATÁLOGOS ── */}
         {tab === 'catalogos' && <CatalogosTab />}
+
+        {tab === 'banners' && <DashboardAlertsTab />}
 
         {/* ── MODALES ── */}
         {admin.createModal && (

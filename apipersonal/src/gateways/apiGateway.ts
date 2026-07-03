@@ -43,15 +43,26 @@ import { buildAsistenciaRouter } from '../routes/asistencia.routes';
 import { buildSinSalidaRouter }  from '../routes/sinSalida.routes';
 import { buildScannerRouter } from '../routes/scanner.routes';
 import { buildFicheroRouter } from '../routes/fichero.routes';
+import { buildIclockAdmsRouter } from '../routes/iclockAdms.routes';
 import { buildExamenIngresoRouter } from '../routes/examenIngreso.routes';
 import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
 import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
+import { buildHerramientasRouter } from '../routes/herramientas.routes';
 import { buildWhatsappRouter } from '../routes/whatsapp.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildStressRouter }   from '../routes/stress.routes';
+import { buildAntiguedadRouter } from '../routes/antiguedad.routes';
+import { buildLicenciasRouter } from '../routes/licencias.routes';
+import { buildResidentesRouter } from '../routes/residentes.routes';
+import { buildFcCertReemplazosRouter } from '../routes/fcCertReemplazos.routes';
+import { buildNombramientoRouter } from '../routes/nombramiento.routes';
+import { buildTramitesDocumentalesRouter } from '../routes/tramitesDocumentales.routes';
 import { buildJefaturasRouter }      from '../routes/jefaturas.routes';
 import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
+import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
+import { buildDashboardAlertsRouter } from '../routes/dashboardAlerts.routes';
+import { buildUserScanMusicRouter } from '../routes/userScanMusic.routes';
 import { buildSwaggerRouter } from '../routes/swagger.routes';
 import { buildDocsRouter } from '../routes/docs.routes';
 import { idempotencyMiddleware } from '../middlewares/idempotency';
@@ -119,6 +130,9 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
     }
   });
 
+
+  // ADMS/ZKTeco push protocol. Public by design: biometric devices do not send JWT.
+  app.use('/iclock', buildIclockAdmsRouter());
   // ── Swagger / OpenAPI Docs ────────────────────────────────────────────────
   if (env.DOCS_ENABLE) {
     const docsPath = env.DOCS_PATH || '/docs';
@@ -157,8 +171,15 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/accidentes-punzo`, ...protect, buildAccidentesPunzoRouter(sequelize));
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
+  app.use(`${apiPrefix}/herramientas`,     ...protect, buildHerramientasRouter(sequelize));
   app.use(`${apiPrefix}/whatsapp`,         ...protect, buildWhatsappRouter(sequelize));
   app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
+  app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
+  app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));
+  app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
+  app.use(`${apiPrefix}/fc-cert-reemplazos`, ...protect, buildFcCertReemplazosRouter(sequelize));
+  app.use(`${apiPrefix}/nombramiento`,       ...protect, buildNombramientoRouter(sequelize));
+  app.use(`${apiPrefix}/tramites-documentales`, ...protect, buildTramitesDocumentalesRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)
@@ -167,8 +188,13 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   // ── Audit reads (registra lecturas sensibles) ─────────────────────────────
   app.use(apiPrefix, authContext(sequelize), auditReadMiddleware(sequelize));
 
+  // ── Preferencias de música de escaneo por usuario ────────────────────────
+  app.use(`${apiPrefix}/user-scan-music`, authContext(sequelize), buildUserScanMusicRouter(sequelize));
+
   // ── Alertas por agente (RRHH interno) ────────────────────────────────────
   app.use(`${apiPrefix}/alertas-agente`, ...protect, buildAlertasAgenteRouter(sequelize));
+  app.use(`${apiPrefix}/dashboard-alerts`, ...protect, buildDashboardAlertsRouter(sequelize));
+  app.use(`${apiPrefix}/becarios-art`,   ...protect, buildBecariosArtRouter(sequelize));
 
   // ── Jefaturas (custom: enriquece con nombre real desde personal) ─────────
   app.use(`${apiPrefix}/jefaturas`, ...protect, buildJefaturasRouter(sequelize));

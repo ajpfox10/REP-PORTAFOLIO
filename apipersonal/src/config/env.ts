@@ -287,6 +287,13 @@ const schema = z.object({
   // Si está definido, el servicio de documentos busca aquí cuando no encuentra en DOCUMENTS_BASE_DIR.
   DOCUMENTS_SCAN_DIR: strish(""),
 
+  // Trámites documentales: entrada de PDFs descargados y base final por DNI/trámite.
+  TRAMITES_PDF_INPUT_DIR: strish(""),
+  TRAMITES_DOCU_BASE_DIR: strish(""),
+  TRAMITES_PDF_OCR_ENABLE: boolish.default(true),
+  TRAMITES_PDF_OCR_MAX_PAGES: intish(20),
+  TRAMITES_PDF_OCR_SCALE: intish(2),
+
   // Estadística de asistencia — carpeta donde se buscan los Excel MINISTERIO/SIAP
   // Ejemplo Windows: D:\Asistencia\Excel
   // Ejemplo Linux:   /data/asistencia
@@ -336,6 +343,13 @@ const schema = z.object({
   API_VERSION: strish("v1"),
   APP_URL: strish("http://localhost:5173"),
 
+  // Dashboard alert banners
+  DASHBOARD_ALERTS_ENABLED: boolish.default(true),
+  DASHBOARD_ALERTS_DELAY_MS: intish(0),
+  DASHBOARD_ALERTS_DURATION_MS: intish(0),
+  DASHBOARD_ALERTS_REFRESH_MS: intish(0),
+  DASHBOARD_ALERTS_CONFIG_JSON: strish(""),
+
   // Guardrails de producción (fail-fast)
   PROD_FAIL_FAST: boolish.default(true),
   PROD_REQUIRE_DOCS_PROTECT: boolish.default(true),
@@ -382,6 +396,10 @@ export const env = {
 
   // si PHOTOS_BASE_DIR está vacío, reutilizamos DOCUMENTS_BASE_DIR
   PHOTOS_BASE_DIR: raw.PHOTOS_BASE_DIR?.trim() ? raw.PHOTOS_BASE_DIR : raw.DOCUMENTS_BASE_DIR,
+  TRAMITES_PDF_INPUT_DIR: raw.TRAMITES_PDF_INPUT_DIR?.trim() ? raw.TRAMITES_PDF_INPUT_DIR : "D:\\G\\Descargas",
+  TRAMITES_DOCU_BASE_DIR: raw.TRAMITES_DOCU_BASE_DIR?.trim()
+    ? raw.TRAMITES_DOCU_BASE_DIR
+    : (raw.DOCUMENTS_SCAN_DIR?.trim() || raw.DOCUMENTS_BASE_DIR),
 
   // normalización de CORS allow/deny list (string → string[])
   CORS_ALLOWLIST: String(raw.CORS_ALLOWLIST || "")

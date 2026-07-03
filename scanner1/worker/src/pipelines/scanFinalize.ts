@@ -40,7 +40,11 @@ export async function runScanFinalize(pool: Pool, data: any) {
     )
 
     // NOTIFICAR A APIPERSONAL SI HAY DNI VINCULADO
-    if (personal_dni) {
+    // Scans de la página de resoluciones (personal_ref empieza con "respage|") se saltan
+    // aquí: el frontend llama a sync-personal después de que el usuario guarda el formulario,
+    // momento en que ya tiene motivo/numero completos para nombrar y rutear el archivo bien.
+    const isResolucionesPageScan = String(personal_ref || "").startsWith("respage|")
+    if (personal_dni && !isResolucionesPageScan) {
       await notifyPersonalApiFromWorker(pool, tenant_id, {
         personal_dni,
         personal_ref: personal_ref || null,

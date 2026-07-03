@@ -16,7 +16,7 @@
 // PAGINACIÓN: el backend devuelve máx ~200 por página. Hay ~1400 agentes.
 // Hay que iterar hasta meta.total o hasta que no haya más datos.
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
@@ -203,6 +203,491 @@ function agruparPorAnio(arr: any[], campo: string): { anio: string; total: numbe
     .sort((a, b) => Number(a.anio) - Number(b.anio));
 }
 
+// ─── Estilos de tabla reutilizables ───────────────────────────────────────────
+const thSt: React.CSSProperties = {
+  padding: '5px 9px', textAlign: 'left', color: '#94a3b8',
+  fontSize: '0.7rem', whiteSpace: 'nowrap', fontWeight: 600,
+};
+const tdSt: React.CSSProperties = { padding: '4px 9px', verticalAlign: 'middle' };
+
+// ─── EditSelect: select inline con guardar/cancelar ──────────────────────────
+function EditSelect({
+  opciones, valorActual, guardando, onGuardar, onCancelar,
+}: {
+  opciones: { id: number; nombre: string }[];
+  valorActual: string;
+  guardando: boolean;
+  onGuardar: (v: string) => void;
+  onCancelar: () => void;
+}) {
+  const [val, setVal] = useState(valorActual);
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+      <select
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        disabled={guardando}
+        autoFocus
+        style={{
+          fontSize: '0.76rem', padding: '2px 6px', maxWidth: 240,
+          background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.25)',
+          borderRadius: 5, color: 'inherit',
+        }}
+      >
+        <option value="">(sin asignar)</option>
+        {opciones.map(o => <option key={o.id} value={String(o.id)}>{o.nombre}</option>)}
+      </select>
+      <button
+        className="btn"
+        onClick={() => onGuardar(val)}
+        disabled={guardando}
+        style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#16a34a', color: '#fff' }}
+      >
+        {guardando ? '…' : '✔'}
+      </button>
+      <button
+        className="btn"
+        onClick={onCancelar}
+        disabled={guardando}
+        style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+// ─── SECCIÓN ESTRUCTURA ORGANIZACIONAL ───────────────────────────────────────
+function EstructuraOrgSection() {
+  const toast = useToast();
+  const [cargado, setCargado] = useState(false);
+  const [loadingEst, setLoadingEst] = useState(false);
+  const [dependencias, setDependencias] = useState<any[]>([]);
+  const [reparticiones, setReparticiones] = useState<any[]>([]);
+  const [servicios, setServicios] = useState<any[]>([]);
+  const [sectores, setSectores] = useState<any[]>([]);
+
+  const [filtroDep, setFiltroDep] = useState('');
+  const [filtroTexto, setFiltroTexto] = useState('');
+
+  type EditTarget = {
+    tipo: 'servicio' | 'reparticion';
+    id: number;
+    valorActual: string;
+  };
+  const [editando, setEditando] = useState<EditTarget | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = async () => {
+    setLoadingEst(true);
+    try {
+      const [rDep, rRep, rSvc, rSec] = await Promise.all([
+        apiFetch<any>('/dependencias?limit=500'),
+        apiFetch<any>('/reparticiones?limit=500'),
+        apiFetch<any>('/servicios?limit=500'),
+        apiFetch<any>('/sectores?limit=500'),
+      ]);
+      setDependencias(rDep?.data || []);
+      setReparticiones(rRep?.data || []);
+      setServicios(rSvc?.data || []);
+      setSectores(rSec?.data || []);
+      setCargado(true);
+    } catch (e: any) {
+      toast.error('Error al cargar estructura', e?.message);
+    } finally {
+      setLoadingEst(false);
+    }
+  };
+
+  const rows = useMemo(() => {
+    const depMap: Record<number, string> = Object.fromEntries(dependencias.map(d => [d.id, d.nombre]));
+    const repMap: Record<number, { nombre: string; dep_id: number | null }> = Object.fromEntries(
+      reparticiones.map(r => [r.id, { nombre: r.reparticion_nombre, dep_id: r.dependencia_id ?? null }])
+    );
+    const secByServicio: Record<number, string[]> = {};
+    for (const s of sectores) {
+      if (s.servicio_id) {
+        if (!secByServicio[s.servicio_id]) secByServicio[s.servicio_id] = [];
+        secByServicio[s.servicio_id].push(s.nombre);
+      }
+    }
+    return servicios.map(sv => {
+      const rep = sv.reparticion_id ? repMap[sv.reparticion_id] : null;
+      const depId = rep?.dep_id ?? null;
+      return {
+        _sv_id: sv.id as number,
+        _rep_id: sv.reparticion_id as number | null,
+        _dep_id: depId,
+        Dependencia: depId ? (depMap[depId] ?? `#${depId}`) : '(sin dependencia)',
+        'Repartición': rep?.nombre ?? '(sin repartición)',
+        Servicio: sv.nombre as string,
+        Sectores: (secByServicio[sv.id] || []).join(', ') || '—',
+      };
+    }).sort((a, b) => {
+      const dc = a.Dependencia.localeCompare(b.Dependencia, 'es');
+      if (dc !== 0) return dc;
+      const rc = a['Repartición'].localeCompare(b['Repartición'], 'es');
+      if (rc !== 0) return rc;
+      return a.Servicio.localeCompare(b.Servicio, 'es');
+    });
+  }, [dependencias, reparticiones, servicios, sectores]);
+
+  const rowsFiltradas = useMemo(() => rows.filter(r => {
+    if (filtroDep && String(r._dep_id) !== filtroDep) return false;
+    if (filtroTexto) {
+      const t = filtroTexto.toLowerCase();
+      return (
+        r.Dependencia.toLowerCase().includes(t) ||
+        r['Repartición'].toLowerCase().includes(t) ||
+        r.Servicio.toLowerCase().includes(t) ||
+        r.Sectores.toLowerCase().includes(t)
+      );
+    }
+    return true;
+  }), [rows, filtroDep, filtroTexto]);
+
+  const exportRows = useMemo(() => rowsFiltradas.map(({ Dependencia, 'Repartición': Reparticion, Servicio, Sectores }) => ({
+    Dependencia, Repartición: Reparticion, Servicio, Sectores,
+  })), [rowsFiltradas]);
+
+  const guardar = async (nuevoValor: string) => {
+    if (!editando) return;
+    setGuardando(true);
+    try {
+      const parsed = nuevoValor ? Number(nuevoValor) : null;
+      if (editando.tipo === 'servicio') {
+        await apiFetch(`/servicios/${editando.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ reparticion_id: parsed }),
+        });
+        setServicios(prev => prev.map(s => s.id === editando.id ? { ...s, reparticion_id: parsed } : s));
+      } else {
+        await apiFetch(`/reparticiones/${editando.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ dependencia_id: parsed }),
+        });
+        setReparticiones(prev => prev.map(r => r.id === editando.id ? { ...r, dependencia_id: parsed } : r));
+      }
+      toast.ok('Guardado');
+      setEditando(null);
+    } catch (e: any) {
+      toast.error('Error al guardar', e?.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Section
+      title="🏗️ Estructura organizacional"
+      rows={cargado ? exportRows : undefined}
+      filename="estructura_organizacional"
+    >
+      {!cargado ? (
+        <div style={{ textAlign: 'center', padding: '18px 0' }}>
+          <button className="btn" onClick={cargar} disabled={loadingEst} style={{ fontSize: '0.82rem' }}>
+            {loadingEst ? '⏳ Cargando…' : '📂 Cargar estructura'}
+          </button>
+          <div className="muted" style={{ fontSize: '0.72rem', marginTop: 8 }}>
+            Carga la jerarquía: Dependencia → Repartición → Servicio → Sectores
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Filtros */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              value={filtroDep}
+              onChange={e => { setFiltroDep(e.target.value); setEditando(null); }}
+              style={{
+                fontSize: '0.78rem', padding: '4px 8px', minWidth: 180,
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 6, color: 'inherit',
+              }}
+            >
+              <option value="">Todas las dependencias</option>
+              {dependencias.map(d => <option key={d.id} value={String(d.id)}>{d.nombre}</option>)}
+            </select>
+            <input
+              type="text"
+              placeholder="Buscar repartición / servicio…"
+              value={filtroTexto}
+              onChange={e => { setFiltroTexto(e.target.value); setEditando(null); }}
+              style={{
+                fontSize: '0.78rem', padding: '4px 8px', minWidth: 200,
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 6, color: 'inherit',
+              }}
+            />
+            <span className="muted" style={{ fontSize: '0.73rem' }}>
+              {rowsFiltradas.length} de {rows.length} servicios
+            </span>
+            <button
+              className="btn"
+              onClick={cargar}
+              style={{ fontSize: '0.7rem', padding: '3px 8px', marginLeft: 'auto' }}
+            >
+              🔄 Recargar
+            </button>
+          </div>
+
+          {/* Leyenda */}
+          <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 8 }}>
+            Hacé click en <strong style={{ color: 'rgba(255,255,255,0.7)' }}>Repartición</strong> o <strong style={{ color: 'rgba(255,255,255,0.7)' }}>Servicio</strong> para editar de quién depende.
+          </div>
+
+          {/* Tabla */}
+          <div style={{ overflowX: 'auto', maxHeight: 500, overflowY: 'auto' }}>
+            <table style={{ width: '100%', fontSize: '0.78rem', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, zIndex: 1 }}>
+                  <th style={thSt}>Dependencia</th>
+                  <th style={thSt}>Repartición ✎</th>
+                  <th style={thSt}>Servicio ✎</th>
+                  <th style={thSt}>Sectores</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rowsFiltradas.map(r => (
+                  <tr key={r._sv_id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={tdSt}>{r.Dependencia}</td>
+
+                    {/* Repartición — editable: cambia dependencia_id de la repartición */}
+                    <td style={tdSt}>
+                      {editando?.tipo === 'reparticion' && editando.id === r._rep_id ? (
+                        <EditSelect
+                          opciones={dependencias.map(d => ({ id: d.id, nombre: d.nombre }))}
+                          valorActual={String(r._dep_id ?? '')}
+                          guardando={guardando}
+                          onGuardar={guardar}
+                          onCancelar={() => setEditando(null)}
+                        />
+                      ) : (
+                        <span
+                          title={r._rep_id ? 'Click para cambiar dependencia de esta repartición' : 'Sin repartición asignada'}
+                          onClick={() => r._rep_id && setEditando({ tipo: 'reparticion', id: r._rep_id, valorActual: String(r._dep_id ?? '') })}
+                          style={{
+                            cursor: r._rep_id ? 'pointer' : 'default',
+                            borderBottom: r._rep_id ? '1px dashed rgba(99,179,237,0.5)' : 'none',
+                            color: r._rep_id ? 'inherit' : 'rgba(255,255,255,0.35)',
+                          }}
+                        >
+                          {r['Repartición']}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Servicio — editable: cambia reparticion_id del servicio */}
+                    <td style={tdSt}>
+                      {editando?.tipo === 'servicio' && editando.id === r._sv_id ? (
+                        <EditSelect
+                          opciones={reparticiones.map(rp => ({ id: rp.id, nombre: rp.reparticion_nombre }))}
+                          valorActual={String(r._rep_id ?? '')}
+                          guardando={guardando}
+                          onGuardar={guardar}
+                          onCancelar={() => setEditando(null)}
+                        />
+                      ) : (
+                        <span
+                          title="Click para cambiar repartición de este servicio"
+                          onClick={() => setEditando({ tipo: 'servicio', id: r._sv_id, valorActual: String(r._rep_id ?? '') })}
+                          style={{ cursor: 'pointer', borderBottom: '1px dashed rgba(167,139,250,0.5)' }}
+                        >
+                          {r.Servicio}
+                        </span>
+                      )}
+                    </td>
+
+                    <td style={{ ...tdSt, color: 'rgba(255,255,255,0.5)', fontSize: '0.74rem' }}>
+                      {r.Sectores}
+                    </td>
+                  </tr>
+                ))}
+                {rowsFiltradas.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>
+                      Sin resultados para los filtros aplicados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Resumen */}
+          <div style={{ marginTop: 10, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Dependencias', val: dependencias.length, color: '#7c3aed' },
+              { label: 'Reparticiones', val: reparticiones.length, color: '#2563eb' },
+              { label: 'Servicios', val: servicios.length, color: '#10b981' },
+              { label: 'Sectores', val: sectores.length, color: '#f59e0b' },
+            ].map(item => (
+              <div key={item.label} style={{ fontSize: '0.75rem' }}>
+                <span style={{ color: item.color, fontWeight: 700 }}>{item.val}</span>
+                <span className="muted" style={{ marginLeft: 4 }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Section>
+  );
+}
+
+// ─── IngresosAnioProf: sección con filtros interactivos (extraída para no violar Rules of Hooks) ───
+function IngresosAnioProf({
+  agentes,
+  servicios,
+  catalogos,
+}: {
+  agentes: any[];
+  servicios: any[];
+  catalogos: { ocupacion: Record<number, string>; servicio: Record<number, string> };
+}) {
+  const [filtAnio, setFiltAnio] = useState('');
+  const [filtProf, setFiltProf] = useState('');
+  const [filtSvc,  setFiltSvc]  = useState('');
+
+  // Construir mapa dni → nombre de servicio usando servicio_id → catalogos.servicio
+  const dniServicio: Record<string, string> = {};
+  const svcActuales = servicios.filter((s: any) => !s.fecha_hasta);
+  const svcTodos    = [...servicios].sort((a: any, b: any) =>
+    (b.fecha_desde ?? '').localeCompare(a.fecha_desde ?? ''));
+  const getSvcNombre = (s: any) =>
+    (s.servicio_id && catalogos.servicio[s.servicio_id])
+      ? catalogos.servicio[s.servicio_id]
+      : (s.nombre || '(sin servicio)');
+  for (const s of svcActuales)  dniServicio[String(s.dni)] = getSvcNombre(s);
+  for (const s of svcTodos) {
+    if (!dniServicio[String(s.dni)]) dniServicio[String(s.dni)] = getSvcNombre(s);
+  }
+
+  const map: Record<string, number> = {};
+  for (const a of agentes) {
+    if (!a.fecha_ingreso) continue;
+    const anio  = String(new Date(a.fecha_ingreso).getFullYear());
+    const prof  = catalogos.ocupacion[a.ocupacion_id] ?? '(sin profesión)';
+    const svc   = dniServicio[String(a.dni)] ?? '(sin servicio)';
+    const key   = `${anio}|||${prof}|||${svc}`;
+    map[key] = (map[key] || 0) + 1;
+  }
+
+  const filas = Object.entries(map).map(([k, total]) => {
+    const [anio, profesion, servicio] = k.split('|||');
+    return { anio, profesion, servicio, total };
+  }).sort((a, b) =>
+    Number(b.anio) - Number(a.anio) ||
+    a.servicio.localeCompare(b.servicio, 'es') ||
+    a.profesion.localeCompare(b.profesion, 'es')
+  );
+
+  const anios = [...new Set(filas.map(f => f.anio))].sort((a, b) => Number(b) - Number(a));
+  const profs = [...new Set(filas.map(f => f.profesion))].sort();
+  const svcs  = [...new Set(filas.map(f => f.servicio))].sort();
+
+  const filtradas = filas.filter(f =>
+    (!filtAnio || f.anio === filtAnio) &&
+    (!filtProf || f.profesion === filtProf) &&
+    (!filtSvc  || f.servicio  === filtSvc)
+  );
+
+  // Totales por servicio
+  const totalesPorSvc: Record<string, number> = {};
+  for (const f of filtradas) {
+    totalesPorSvc[f.servicio] = (totalesPorSvc[f.servicio] || 0) + f.total;
+  }
+  const totalesSvc = Object.entries(totalesPorSvc)
+    .sort((a, b) => b[1] - a[1]);
+
+  const exportRows = [
+    ...filtradas.map(f => ({ Año: f.anio, Profesión: f.profesion, Servicio: f.servicio, Total: f.total })),
+    ...totalesSvc.map(([svc, tot]) => ({ Año: 'TOTAL', Profesión: '', Servicio: svc, Total: tot })),
+  ];
+
+  const selSt: React.CSSProperties = {
+    fontSize: '0.76rem', padding: '4px 8px',
+    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 6, color: 'inherit', maxWidth: 220,
+  };
+
+  return (
+    <Section title="📊 Ingresos por año, profesión y servicio"
+      rows={exportRows} filename="ingresos_anio_profesion_servicio">
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+        <select style={selSt} value={filtAnio} onChange={e => setFiltAnio(e.target.value)}>
+          <option value="">Todos los años</option>
+          {anios.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select style={selSt} value={filtProf} onChange={e => setFiltProf(e.target.value)}>
+          <option value="">Todas las profesiones</option>
+          {profs.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select style={selSt} value={filtSvc} onChange={e => setFiltSvc(e.target.value)}>
+          <option value="">Todos los servicios</option>
+          {svcs.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="muted" style={{ fontSize: '0.72rem' }}>
+          {filtradas.reduce((s, f) => s + f.total, 0)} ingresos · {filtradas.length} combinaciones
+        </span>
+      </div>
+
+      {/* Tabla principal: año × profesión × servicio */}
+      <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto', marginBottom: 16 }}>
+        <table style={{ width: '100%', fontSize: '0.78rem', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
+              <th style={thSt}>Año</th>
+              <th style={thSt}>Profesión</th>
+              <th style={thSt}>Servicio</th>
+              <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtradas.map((f, i) => (
+              <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <td style={{ ...tdSt, fontWeight: 600, color: '#93c5fd' }}>{f.anio}</td>
+                <td style={tdSt}>{f.profesion}</td>
+                <td style={{ ...tdSt, color: 'rgba(255,255,255,0.65)' }}>{f.servicio}</td>
+                <td style={{ ...tdSt, textAlign: 'right', fontWeight: 700 }}>{f.total}</td>
+              </tr>
+            ))}
+            {filtradas.length === 0 && (
+              <tr><td colSpan={4} style={{ padding: 24, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>Sin resultados</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Totales por servicio */}
+      {totalesSvc.length > 0 && (
+        <>
+          <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>
+            Total por servicio
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', fontSize: '0.78rem', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
+                  <th style={thSt}>Servicio</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {totalesSvc.map(([svc, tot], i) => (
+                  <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ ...tdSt, color: 'rgba(255,255,255,0.8)' }}>{svc}</td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: 700, color: '#86efac' }}>{tot}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Section>
+  );
+}
+
 // ─── ESTADO GLOBAL ────────────────────────────────────────────────────────────
 interface Stats {
   agentes: any[];
@@ -217,6 +702,9 @@ interface Stats {
     reparticiones: Record<number, string>;
     sexo: Record<number, string>;
     ocupacion: Record<number, string>;
+    servicio: Record<number, string>;
+    dependencia: Record<number, string>;
+    mapaHospital: Record<number, string>;
   };
   pedidosTotal: number | null;
   lastUpdate: string;
@@ -244,7 +732,7 @@ export function EstadisticasPage() {
       //   ley (campo nombre), jefaturas (campo sector), reparticiones
       const [
         rPlanta, rSexo, rCategoria, rRegimen, rOcupacion,
-        rLey, rJefaturas, rReparticiones,
+        rLey, rJefaturas, rReparticiones, rServicios, rDependencias,
       ] = await Promise.allSettled([
         apiFetch<any>('/plantas?limit=500&page=1'),
         apiFetch<any>('/sexos?limit=500&page=1'),
@@ -254,6 +742,8 @@ export function EstadisticasPage() {
         apiFetch<any>('/ley?limit=500&page=1'),
         apiFetch<any>('/jefaturas?limit=500&page=1'),
         apiFetch<any>('/reparticiones?limit=500&page=1'),
+        apiFetch<any>('/servicios?limit=500&page=1'),
+        apiFetch<any>('/dependencias?limit=500&page=1'),
       ]);
 
       const buildMap = (
@@ -270,6 +760,17 @@ export function EstadisticasPage() {
         return m;
       };
 
+      // Mapa dependencia_id → nombre del HOSPITAL (dependencia padre, o ella misma si es raíz).
+      // Permite totalizar agentes por hospital sumando sus UPA hijas.
+      const depRows = rDependencias.status === 'fulfilled' ? (rDependencias.value?.data || rDependencias.value || []) : [];
+      const depNombre: Record<number, string> = {};
+      for (const d of depRows) depNombre[Number(d.id)] = String(d.nombre ?? d.id);
+      const mapaHospital: Record<number, string> = {};
+      for (const d of depRows) {
+        const pid = d.parent_id != null ? Number(d.parent_id) : null;
+        mapaHospital[Number(d.id)] = pid != null ? (depNombre[pid] ?? depNombre[Number(d.id)]) : depNombre[Number(d.id)];
+      }
+
       const catalogos = {
         planta:       buildMap(rPlanta,       'id',  'nombre'),
         sexo:         buildMap(rSexo,         'id',  'nombre'),
@@ -279,6 +780,9 @@ export function EstadisticasPage() {
         ley:          buildMap(rLey,          'id',  'nombre'),   // campo es 'nombre' no 'ley_nombre'
         jefaturas:    buildMap(rJefaturas,    'id',  'servicio_nombre'),
         reparticiones:buildMap(rReparticiones,'id',  'reparticion_nombre'),
+        servicio:     buildMap(rServicios,    'id',  'nombre'),
+        dependencia:  depNombre,
+        mapaHospital,
       };
 
       // ── Agentes (PAGINACIÓN COMPLETA) ──
@@ -415,10 +919,12 @@ export function EstadisticasPage() {
   const porSector = agrupar(agentes, 'sector_id', catalogos.reparticiones);
   const porOcupacion = agrupar(agentes, 'ocupacion_id', catalogos.ocupacion);
   const porSexo = agrupar(personal, 'sexo_id', catalogos.sexo);
+  // Por hospital: agrupa agentes por su dependencia mapeada al hospital padre (UPA → HIGA).
+  const porHospital = agrupar(agentes, 'dependencia_id', catalogos.mapaHospital);
 
   // Servicios: agrupación por servicio_nombre y por dependencia
   const porServicio = agrupar(servicios, 'servicio_nombre').slice(0, 30);
-  const porDependencia = agrupar(servicios, 'dependencia_id', catalogos.reparticiones).slice(0, 20);
+  const porDependencia = agrupar(servicios, 'dependencia_id', catalogos.dependencia).slice(0, 20);
   // Solo servicios ACTUALES (sin fecha_hasta o fecha_hasta null = destino actual)
   const serviciosActuales = servicios.filter(s => !s.fecha_hasta);
   const porServicioActual = agrupar(serviciosActuales, 'servicio_nombre').slice(0, 30);
@@ -565,6 +1071,16 @@ export function EstadisticasPage() {
             total={agentes.length} />
         ))}
       </Section>
+
+      {/* ── Por hospital (dependencia padre, sumando UPA) ── */}
+      {porHospital.length > 0 && (
+        <Section title="🏥 Personal por hospital" rows={porHospital} filename="estadisticas_por_hospital">
+          {porHospital.map((d, i) => (
+            <BarRow key={d.nombre} label={d.nombre} value={d.total}
+              max={porHospital[0]?.total || 1} color={COLORES[i % COLORES.length]} total={agentes.length} />
+          ))}
+        </Section>
+      )}
 
       {/* ── Por ley ── */}
       {porLey.length > 0 && (
@@ -807,6 +1323,12 @@ export function EstadisticasPage() {
           ]} />
         </Section>
       )}
+
+      {/* ── Ingresos por año, profesión y servicio ── */}
+      <IngresosAnioProf agentes={agentes} servicios={servicios} catalogos={catalogos} />
+
+      {/* ── Estructura organizacional ── */}
+      <EstructuraOrgSection />
 
       {/* ── Sin email ── */}
       {sinEmailExport.length > 0 && (

@@ -196,9 +196,17 @@ try {
   }
 }
 
+// ── Helper tamaño de papel ────────────────────────────────────────────────────
+function getEsclPaperDims300(value?: string | null): { width: number; height: number } {
+  const v = String(value || "A4").toLowerCase().trim()
+  if (v === "letter" || v === "carta")   return { width: Math.round(215.9 / 25.4 * 300), height: Math.round(279.4 / 25.4 * 300) }
+  if (v === "legal"  || v === "oficio")  return { width: Math.round(215.9 / 25.4 * 300), height: Math.round(355.6 / 25.4 * 300) }
+  return { width: Math.round(210 / 25.4 * 300), height: Math.round(297 / 25.4 * 300) }  // A4
+}
+
 // ── eSCL fallback (si hay escáner en red con eSCL) ────────────────────────────
 async function scanESCLFallback(ip: string, opts: {
-  dpi: number; color: boolean; source: string
+  dpi: number; color: boolean; source: string; paper_size?: string
 }): Promise<Buffer[]> {
   const candidates = [
     { proto: "http",  port: 80 },
@@ -221,8 +229,7 @@ async function scanESCLFallback(ip: string, opts: {
   const inputSource = opts.source === "adf" ? "Feeder" : "Platen"
   const colorMode   = opts.color ? "RGB24" : "Grayscale8"
   const dpi = opts.dpi || 300
-  const w   = Math.round(dpi * (210 / 25.4))
-  const h   = Math.round(dpi * (297 / 25.4))
+  const dims = getEsclPaperDims300(opts.paper_size)
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <scan:ScanSettings xmlns:scan="http://schemas.hp.com/imaging/escl/2011/05/03"
@@ -231,8 +238,8 @@ async function scanESCLFallback(ip: string, opts: {
   <pwg:ScanRegions>
     <pwg:ScanRegion>
       <pwg:ContentRegionUnits>escl:ThreeHundredthsOfInches</pwg:ContentRegionUnits>
-      <pwg:Width>${Math.round(w * 300 / dpi)}</pwg:Width>
-      <pwg:Height>${Math.round(h * 300 / dpi)}</pwg:Height>
+      <pwg:Width>${dims.width}</pwg:Width>
+      <pwg:Height>${dims.height}</pwg:Height>
       <pwg:XOffset>0</pwg:XOffset>
       <pwg:YOffset>0</pwg:YOffset>
     </pwg:ScanRegion>
@@ -330,6 +337,7 @@ async function poll(): Promise<void> {
       profile?: { dpi: number; color: boolean; auto_rotate: boolean } | null
       source?: string
       duplex?: boolean
+      paper_size?: string
     }>("/agent/poll")
 
     if (!data.job_id) return
@@ -337,6 +345,7 @@ async function poll(): Promise<void> {
     const { job_id, upload_nonce, profile } = data
     const src = data.source || "flatbed"
     const dup = !!data.duplex
+    const paperSize = data.paper_size || "A4"
     const dpi   = profile?.dpi   ?? 300
     const color = profile?.color !== false
 
@@ -345,6 +354,7 @@ async function poll(): Promise<void> {
     let pages: Buffer[]
     try {
       pages = await scanWIA({ dpi, color, source: src, duplex: dup })
+      // paper_size no aplica a WIA (el driver usa el tamaño físico del vidrio)
       console.log(`[lite] ✅ WIA → ${pages.length} pág.`)
     } catch (e: any) {
       console.error(`[lite] ❌ scan falló: ${e.message}`)

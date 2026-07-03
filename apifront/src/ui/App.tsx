@@ -2,15 +2,14 @@
 import React from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
+import { isAtilioVarelaUser } from '../auth/userIdentity';
 import { ToastProvider } from './toast';
 import { ErrorBoundary } from './ErrorBoundary';
 import { GatePage } from '../pages/GatePage';
 import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
-import { TablesPage } from '../pages/TablesPage';
 import { TableViewPage } from '../pages/TableViewPage';
-import { InfoPage } from '../pages/InfoPage';
 import { GestionPage } from '../pages/Gesytionpage';
 import { AdminPage } from '../pages/AdminPage';
 import { CargaAgentePage } from '../pages/CargaAgentePage';
@@ -30,7 +29,9 @@ import { ForbiddenPage } from '../pages/ForbiddenPage';
 import { GestionUsuarioPage } from '../pages/GestionUsuarioPage';
 import { SaludLaboralPage } from '../pages/SaludLaboralPage';
 import { EmbarazadasPage } from '../pages/EmbarazadasPage';
+import { GuarderiaPage } from '../pages/GuarderiaPage';
 import { ResidentesRotacionPage } from '../pages/ResidentesRotacionPage';
+import { ResidentesPage } from '../pages/ResidentesPage';
 import { AsistenciaPage } from '../pages/AsistenciaPage';
 import { AtencionPublicoPage } from '../pages/AtencionPublicoPage';
 import { EscaneoPage } from '../pages/EscaneoPage';
@@ -45,14 +46,20 @@ import { AusenciasConFichajesPage } from '../pages/AusenciasConFichajesPage';
 import { SinFichajeSalidaPage }    from '../pages/SinFichajeSalidaPage';
 import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
 import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
-import { BajasPorEstructuraPage } from '../pages/BajasPorEstructuraPage';
 import { BajasGestionPage } from '../pages/BajasGestionPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
 import { HerramientasPage }    from '../pages/HerramientasPage';
+import { ConcursosPage }         from '../pages/ConcursosPage';
+import { DirectorEjecutivoPage } from '../pages/DirectorEjecutivoPage';
 import { AlertasAgentePage }   from '../pages/AlertasAgentePage';
 import { StressAlertasPage }  from '../pages/StressAlertasPage';
 import { JefedeptosPage } from '../pages/JefedeptosPage';
 import { ReporteAsistenciaServicioPage } from '../pages/ReporteAsistenciaServicioPage';
+import { PresentesTurnoPage } from '../pages/PresentesTurnoPage';
+import { EstructuraPage } from '../pages/EstructuraPage';
+import { FcCertReemplazosPage } from '../pages/FcCertReemplazosPage';
+import { BecariosArtPage }      from '../pages/BecariosArtPage';
+import { TramitesDocumentalesPage } from '../pages/TramitesDocumentalesPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -79,19 +86,23 @@ function KioskRedirect({ children }: { children: React.ReactNode }) {
 function Guard({
   perm,
   anyOf,
+  denyAtilioVarela,
   children,
 }: {
   perm?: string;
   anyOf?: string[];
+  denyAtilioVarela?: boolean;
   children: React.ReactNode;
 }) {
-  const { hasPerm } = useAuth();
+  const { hasPerm, session } = useAuth();
 
   const ok =
     (perm ? hasPerm(perm) : false) ||
     (Array.isArray(anyOf) ? anyOf.some(p => hasPerm(p)) : false);
 
-  if (!ok) return <Navigate to="/app/forbidden" replace />;
+  if (!ok || (denyAtilioVarela && isAtilioVarelaUser(session?.user))) {
+    return <Navigate to="/app/forbidden" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -127,7 +138,7 @@ export function App() {
               element={
                 <Private>
                   <Guard perm="api:access">
-                    <InfoPage />
+                    <GestionUsuarioPage initialTab="informacion" />
                   </Guard>
                 </Private>
               }
@@ -175,11 +186,22 @@ export function App() {
               }
             />
             <Route
+              path="/app/tramites-documentales"
+              element={
+                <Private>
+                  <Guard anyOf={['documents:read', 'crud:*:*']}>
+                    <TramitesDocumentalesPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route path="/app/nombramiento" element={<Navigate to="/app/tramites-documentales" replace />} />
+            <Route
               path="/app/tables"
               element={
                 <Private>
                   <Guard anyOf={['crud:*:read', 'crud:*:*']}>
-                    <TablesPage />
+                    <GestionUsuarioPage initialTab="tablas" />
                   </Guard>
                 </Private>
               }
@@ -220,8 +242,18 @@ export function App() {
               path="/app/embarazadas"
               element={
                 <Private>
-                  <Guard anyOf={['crud:embarazadas:read', 'crud:*:*']}>
+                  <Guard perm="crud:*:*">
                     <EmbarazadasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/guarderia"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <GuarderiaPage />
                   </Guard>
                 </Private>
               }
@@ -230,8 +262,18 @@ export function App() {
               path="/app/residentes-rotacion"
               element={
                 <Private>
-                  <Guard anyOf={['crud:residentes_rotacion:read', 'crud:*:*']}>
+                  <Guard anyOf={['crud:residentes_rotacion:read', 'crud:*:*']} denyAtilioVarela>
                     <ResidentesRotacionPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/residentes"
+              element={
+                <Private>
+                  <Guard anyOf={['app:residentes:access', 'crud:*:*']}>
+                    <ResidentesPage />
                   </Guard>
                 </Private>
               }
@@ -499,7 +541,7 @@ export function App() {
               element={
                 <Private>
                   <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
-                    <BajasPorEstructuraPage />
+                    <BajasGestionPage initialSection="estructura" />
                   </Guard>
                 </Private>
               }
@@ -521,20 +563,54 @@ export function App() {
               path="/app/alertas-agente"
               element={
                 <Private>
-                  <Guard perm="api:access">
+                  <Guard anyOf={['crud:alertas_agente:read', 'crud:*:*']}>
                     <AlertasAgentePage />
                   </Guard>
                 </Private>
               }
             />
 
-            {/* Herramientas */}
+            {/* Estructura organizacional */}
+            <Route
+              path="/app/estructura"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <EstructuraPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            {/* Jubilación IPS */}
             <Route
               path="/app/herramientas"
               element={
                 <Private>
                   <Guard perm="crud:*:*">
                     <HerramientasPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            {/* Director Ejecutivo */}
+            <Route
+              path="/app/director"
+              element={
+                <Private>
+                  <Guard perm="app:director_ejecutivo:access">
+                    <DirectorEjecutivoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            {/* Concursos Ley 10471 */}
+            <Route
+              path="/app/concursos"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <ConcursosPage />
                   </Guard>
                 </Private>
               }
@@ -560,11 +636,54 @@ export function App() {
               }
             />
             <Route
+              path="/app/presentes-turno"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:asistencia:read', 'crud:*:*']}>
+                    <PresentesTurnoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/jefedeptos"
               element={
                 <Private>
                   <Guard anyOf={['crud:jefedeptos:read', 'crud:*:*']}>
                     <JefedeptosPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/licencias-pendientes"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <StressAlertasPage initialSection="licencias" />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/fc-cert-reemplazos"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:fc_cert_reemplazos:read', 'crud:*:*']}>
+                    <FcCertReemplazosPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/becarios-art"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:becarios_art:read', 'crud:*:*']}>
+                    <BecariosArtPage />
                   </Guard>
                 </Private>
               }

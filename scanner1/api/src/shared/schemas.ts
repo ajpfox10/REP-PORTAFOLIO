@@ -32,6 +32,7 @@ export const createScanJobSchema = z.object({
   priority:     z.number().int().min(0).max(10).default(0),
   source:       z.enum(["flatbed", "adf", "adf_duplex"]).default("flatbed"),
   duplex:       z.boolean().default(false),
+  paper_size:   z.enum(["A4", "Letter", "Legal", "Carta", "Oficio"]).default("A4"),
   dpi:          z.number().int().min(72).max(1200).optional(),
   color:        z.boolean().optional(),
   auto_rotate:  z.boolean().default(true),

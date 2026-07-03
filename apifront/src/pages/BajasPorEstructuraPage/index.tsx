@@ -23,7 +23,7 @@ function fmt(d?: string | null) {
   return `${dd}/${m}/${y}`;
 }
 
-export function BajasPorEstructuraPage() {
+export function BajasPorEstructuraContent() {
   const toast = useToast();
 
   const [data,       setData]       = useState<Baja[]>([]);
@@ -91,8 +91,7 @@ export function BajasPorEstructuraPage() {
   const sinFecha = data.filter(b => !b.fecha_egreso).length;
 
   return (
-    <Layout title="Bajas por Estructura">
-
+    <>
       {/* Filtros */}
       <div className="card" style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
         <input aria-label="Buscar apellido, nombre o DNI" className="input" placeholder="Buscar apellido, nombre o DNI…"
@@ -219,6 +218,14 @@ export function BajasPorEstructuraPage() {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+export function BajasPorEstructuraPage() {
+  return (
+    <Layout title="Bajas por Estructura">
+      <BajasPorEstructuraContent />
     </Layout>
   );
 }

@@ -6,52 +6,21 @@ import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
+import { AdmsConsole } from './adms/components/AdmsConsole';
+import { updateAdmsDispositivo, pullFichadasDispositivo } from './adms/services/admsApi';
+import type { DbPreview, Dispositivo, EstadoFichero, ExportarRangoResult, FicheroConfig } from './types';
+import {
+  getFicheroConfig,
+  getFicheroDbPreview,
+  getFicheroDispositivos,
+  getFicheroEstado,
+  getFicheroRedActiva,
+  postFicheroAction,
+  postFicheroExportar,
+  putFicheroConfig,
+} from './services/ficheroApi';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-
-interface FicheroConfig {
-  mysqlHost: string; mysqlPort: number; mysqlUser: string; mysqlPass: string; mysqlDb: string;
-  sftpHost: string;  sftpPort: number;  sftpUser: string;  sftpPass: string;  sftpDir: string;
-  sftpLocalAddr: string;
-  outputDir: string; prefijo: string;   sufijo: string;    limite: number;    intervaloMin: number;
-  modoContinu: boolean; fechaDesdeContinu: string | null; horaDesdeContinu: string | null;
-}
-
-interface LogEntry {
-  fechaCreacion: string;
-  nombreArchivo: string;
-  fechaSubida:   string;
-  exitoso:       boolean;
-  error:         string;
-  rangoDesde?:   string;
-  rangoHasta?:   string;
-  registros?:    number;
-}
-
-interface EstadoFichero {
-  corriendo: boolean; redCaida: boolean;
-  total: number; exitosos: number; fallidos: number;
-  primerArchivo: string | null; ultimoArchivo: string | null; ultimaSubidaExitosa: string | null;
-  intervaloMin: number | null;
-  proximaEjecucionMs: number | null;
-  entradas: LogEntry[];
-}
-
-interface DbPreview {
-  columna:  { COLUMN_TYPE: string; COLUMN_NAME: string } | null;
-  minFecha: string | null;
-  maxFecha: string | null;
-  muestras: { badgenumber: string; checktime: string; checktype: number; name: string }[];
-}
-
-interface Dispositivo {
-  sn:                   string;
-  alias:                string;
-  lastActivity:         string | null;
-  segundosSinActividad: number | null;
-  estado:               'online' | 'offline' | 'pausado';
-  ip:                   string | null;
-}
 
 const REFRESH_MS = 30_000;
 
@@ -73,8 +42,9 @@ export function FicheroPage() {
   const [guardando,  setGuardando]  = useState(false);
   const [accionando, setAccionando] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [accionReloj, setAccionReloj] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<'monitor' | 'exportar' | 'continu' | 'config'>('monitor');
+  const [tab, setTab] = useState<'monitor' | 'adms' | 'exportar' | 'continu' | 'config'>('monitor');
   const [ultimaAct, setUltimaAct] = useState<Date | null>(null);
 
   // Rango de exportación puntual
@@ -83,11 +53,17 @@ export function FicheroPage() {
   const [fechaHasta, setFechaHasta] = useState(hoy);
   const [horaDesde,  setHoraDesde]  = useState('00:00');
   const [horaHasta,  setHoraHasta]  = useState('23:59');
-  const [resultExport, setResultExport] = useState<{ ok: boolean; registros: number; archivo: string; error?: string } | null>(null);
+  const [exportMode, setExportMode] = useState<'todos' | 'uno' | 'grupo'>('todos');
+  const [exportSn,   setExportSn]   = useState('');
+  const [exportSns,  setExportSns]  = useState<string[]>([]);
+  const [resultExport, setResultExport] = useState<ExportarRangoResult | null>(null);
 
   // Modo continuo
   const [continuDesde,     setContinuDesde]     = useState(hoy);
   const [continuHoraDesde, setContinuHoraDesde] = useState('00:00');
+  const [continuMode, setContinuMode] = useState<'todos' | 'uno' | 'grupo'>('todos');
+  const [continuSn, setContinuSn] = useState('');
+  const [continuSns, setContinuSns] = useState<string[]>([]);
   const [guardandoContinu, setGuardandoContinu] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -97,9 +73,9 @@ export function FicheroPage() {
   const cargarDispositivos = useCallback(async () => {
     setDispError(null);
     try {
-      const res = await apiFetch<{ ok: boolean; data: Dispositivo[]; warning?: string }>('/fichero/dispositivos');
-      if (res?.ok) setDispositivos(res.data ?? []);
-      if (res?.warning) setDispError(res.warning);
+      const res = await getFicheroDispositivos();
+      setDispositivos(res.data);
+      if (res.warning) setDispError(res.warning);
     } catch { /* silencioso, no bloquea la UI */ }
   }, []);
 
@@ -107,11 +83,11 @@ export function FicheroPage() {
     setCargando(true);
     try {
       const [resEstado, resRed] = await Promise.all([
-        apiFetch<{ ok: boolean; data: EstadoFichero }>('/fichero/estado'),
-        apiFetch<{ ok: boolean; red: string }>('/fichero/red'),
+        getFicheroEstado(),
+        getFicheroRedActiva(),
       ]);
-      if (resEstado?.ok) setEstado(resEstado.data);
-      if (resRed?.ok)    setRedActiva(resRed.red === 'activa');
+      setEstado(resEstado);
+      setRedActiva(resRed);
       setUltimaAct(new Date());
     } catch {
       toast.error('Error al obtener estado');
@@ -122,28 +98,24 @@ export function FicheroPage() {
   }, [toast, cargarDispositivos]);
 
   const cargarConfig = useCallback(async () => {
-    const res = await apiFetch<{ ok: boolean; data: FicheroConfig }>('/fichero/config');
-    if (res?.ok) {
-      setConfig(res.data);
-      setEditConfig(res.data);
-      if (res.data.fechaDesdeContinu) setContinuDesde(res.data.fechaDesdeContinu);
-      if (res.data.horaDesdeContinu)  setContinuHoraDesde(res.data.horaDesdeContinu);
-    }
+    const res = await getFicheroConfig();
+    setConfig(res);
+    setEditConfig(res);
+    if (res.fechaDesdeContinu) setContinuDesde(res.fechaDesdeContinu);
+    if (res.horaDesdeContinu)  setContinuHoraDesde(res.horaDesdeContinu);
+    setContinuMode(res.continuoModo ?? 'todos');
+    setContinuSn(res.continuoSn ?? '');
+    setContinuSns(Array.isArray(res.continuoSns) ? res.continuoSns : []);
   }, []);
 
   const cargarDbPreview = useCallback(async () => {
     setDbError(null);
     setDbPreview(null);
     try {
-      const res = await apiFetch<{ ok: boolean } & DbPreview & { error?: string }>('/fichero/db-preview');
-      if (res?.ok) {
-        setDbPreview({ columna: res.columna, minFecha: res.minFecha, maxFecha: res.maxFecha, muestras: res.muestras });
-        // Pre-cargar rangos de fecha con los datos reales de la DB
-        if (res.minFecha) setFechaDesde(res.minFecha.slice(0, 10));
-        if (res.maxFecha) setFechaHasta(res.maxFecha.slice(0, 10));
-      } else {
-        setDbError((res as any)?.error ?? 'No se pudo conectar a la DB del reloj');
-      }
+      const res = await getFicheroDbPreview();
+      setDbPreview(res);
+      if (res.minFecha) setFechaDesde(res.minFecha.slice(0, 10));
+      if (res.maxFecha) setFechaHasta(res.maxFecha.slice(0, 10));
     } catch (e: any) {
       setDbError(e?.message ?? 'Error de conexión a la DB');
     }
@@ -165,20 +137,46 @@ export function FicheroPage() {
   async function accion(endpoint: string, msg: string) {
     setAccionando(true);
     try {
-      const r = await apiFetch<{ ok: boolean; msg?: string }>(`/fichero/${endpoint}`, { method: 'POST' });
+      const r = await postFicheroAction(endpoint);
       if (r?.ok) { toast.ok(r.msg ?? msg); await cargarEstado(); }
     } catch { toast.error(`Error: ${endpoint}`); }
     finally { setAccionando(false); }
   }
 
+  // Reanuda un reloj pausado (State=1): el server vuelve a aceptar su push ADMS.
+  const reanudarReloj = useCallback(async (d: Dispositivo) => {
+    setAccionReloj(d.sn);
+    try {
+      await updateAdmsDispositivo(d.sn, { state: true });
+      toast.ok('Reloj reanudado', `${d.alias} vuelve a recibir fichadas por ADMS.`);
+      await cargarDispositivos();
+    } catch (e: any) {
+      toast.error('No se pudo reanudar', e?.message);
+    } finally { setAccionReloj(null); }
+  }, [toast, cargarDispositivos]);
+
+  // Trae por ZK/TCP las fichadas faltantes de un rango (o encola re-lectura ADMS si el reloj tiene muchas).
+  const traerFichadas = useCallback(async (d: Dispositivo) => {
+    const defDesde = d.lastActivity?.slice(0, 10) || new Date(Date.now() - 15 * 86_400_000).toISOString().slice(0, 10);
+    const desde = window.prompt(`Traer fichadas faltantes de "${d.alias}" desde (YYYY-MM-DD):`, defDesde);
+    if (!desde) return;
+    const hasta = new Date().toISOString().slice(0, 10);
+    setAccionReloj(d.sn);
+    try {
+      const r = await pullFichadasDispositivo(d.sn, desde, hasta);
+      if ((r?.insertadas ?? 0) > 0) toast.ok('Fichadas recuperadas', `${r.insertadas} nuevas · ${r.duplicadas} ya estaban.`);
+      else toast.ok('Pedido enviado', 'Si el reloj tiene muchas fichadas, entrarán cuando procese el comando ADMS (unos segundos).');
+      await cargarDispositivos();
+    } catch (e: any) {
+      toast.error('No se pudieron traer fichadas', e?.message);
+    } finally { setAccionReloj(null); }
+  }, [toast, cargarDispositivos]);
+
   async function guardarConfig() {
     if (!editConfig) return;
     setGuardando(true);
     try {
-      const r = await apiFetch<{ ok: boolean }>('/fichero/config', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editConfig),
-      });
+      const r = await putFicheroConfig(editConfig);
       if (r?.ok) { toast.ok('Configuración guardada'); await cargarConfig(); setTab('monitor'); }
     } catch { toast.error('Error al guardar'); }
     finally { setGuardando(false); }
@@ -186,21 +184,23 @@ export function FicheroPage() {
 
   async function activarModoContinu() {
     if (!continuDesde) return;
+    if (continuMode === 'uno' && !continuSn) { toast.error('Elegí un fichero/reloj para el continuo'); return; }
+    if (continuMode === 'grupo' && continuSns.length === 0) { toast.error('Elegí al menos un fichero para el grupo continuo'); return; }
     setGuardandoContinu(true);
     try {
       // 1. Guardar config con modoContinu=true y la fecha elegida
-      const r = await apiFetch<{ ok: boolean }>('/fichero/config', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...editConfig,
-          modoContinu:       true,
-          fechaDesdeContinu: continuDesde,
-          horaDesdeContinu:  continuHoraDesde,
-        }),
+      const r = await putFicheroConfig({
+        ...editConfig,
+        modoContinu:       true,
+        fechaDesdeContinu: continuDesde,
+        horaDesdeContinu:  continuHoraDesde,
+        continuoModo:      continuMode,
+        continuoSn:        continuMode === 'uno' ? continuSn : null,
+        continuoSns:       continuMode === 'grupo' ? continuSns : [],
       });
       if (!r?.ok) { toast.error('Error al guardar config'); return; }
       // 2. (Re)arrancar el timer para que tome la nueva config
-      const r2 = await apiFetch<{ ok: boolean; msg?: string }>('/fichero/iniciar', { method: 'POST' });
+      const r2 = await postFicheroAction('iniciar');
       if (r2?.ok) {
         toast.ok(`Modo continuo activado desde ${continuDesde} ${continuHoraDesde}`);
         await cargarConfig();
@@ -214,10 +214,7 @@ export function FicheroPage() {
   async function desactivarModoContinu() {
     setGuardandoContinu(true);
     try {
-      const r = await apiFetch<{ ok: boolean }>('/fichero/config', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editConfig, modoContinu: false, fechaDesdeContinu: null, horaDesdeContinu: null }),
-      });
+      const r = await putFicheroConfig({ ...editConfig, modoContinu: false, fechaDesdeContinu: null, horaDesdeContinu: null });
       if (r?.ok) {
         toast.ok('Modo continuo desactivado — el timer ahora trae los últimos N registros sin filtro de fecha');
         await cargarConfig();
@@ -231,14 +228,22 @@ export function FicheroPage() {
     setExportando(true);
     setResultExport(null);
     try {
-      const r = await apiFetch<{ ok: boolean; registros: number; archivo: string; error?: string }>(
-        '/fichero/exportar',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fechaDesde, fechaHasta, horaDesde, horaHasta }),
-        }
-      );
+      if (exportMode === 'uno' && !exportSn) {
+        toast.error('Elegí un fichero/reloj');
+        return;
+      }
+      if (exportMode === 'grupo' && exportSns.length === 0) {
+        toast.error('Elegí al menos un fichero para el grupo');
+        return;
+      }
+      const r = await postFicheroExportar({
+        fechaDesde,
+        fechaHasta,
+        horaDesde,
+        horaHasta,
+        sn: exportMode === 'uno' ? exportSn : null,
+        sns: exportMode === 'grupo' ? exportSns : null,
+      });
       setResultExport(r);
       if (r?.ok) {
         toast.ok(`Exportado: ${r.registros} registros`);
@@ -257,6 +262,25 @@ export function FicheroPage() {
 
   const fmtF = (s: string | null | undefined) => s ? s.replace('T', ' ').substring(0, 16) : '—';
   const hayRedCaida = estado?.redCaida || redActiva === false;
+  const exportTargetLabel = exportMode === 'grupo'
+    ? `${exportSns.length} fichero(s): ${exportSns.map(sn => dispositivos.find(d => d.sn === sn)?.alias || sn).join(', ')}`
+    : exportMode === 'uno' && exportSn
+    ? (dispositivos.find(d => d.sn === exportSn)?.alias || exportSn)
+    : 'todos los relojes';
+
+  function toggleExportSn(sn: string) {
+    setExportSns(prev => prev.includes(sn) ? prev.filter(x => x !== sn) : [...prev, sn]);
+  }
+
+  function toggleContinuSn(sn: string) {
+    setContinuSns(prev => prev.includes(sn) ? prev.filter(x => x !== sn) : [...prev, sn]);
+  }
+
+  const continuTargetLabel = continuMode === 'grupo'
+    ? `${continuSns.length} fichero(s): ${continuSns.map(sn => dispositivos.find(d => d.sn === sn)?.alias || sn).join(', ')}`
+    : continuMode === 'uno' && continuSn
+    ? (dispositivos.find(d => d.sn === continuSn)?.alias || continuSn)
+    : 'todos los relojes';
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -284,9 +308,10 @@ export function FicheroPage() {
 
       {/* Tabs */}
       <div style={S.tabs}>
-        {(['monitor', 'exportar', 'continu', 'config'] as const).map(t => (
+        {(['monitor', 'adms', 'exportar', 'continu', 'config'] as const).map(t => (
           <button key={t} style={{ ...S.tab, ...(tab === t ? S.tabActive : {}), ...(t === 'continu' && config?.modoContinu ? S.tabContinu : {}) }} onClick={() => setTab(t)}>
             {t === 'monitor'  ? '📊 Monitor'
+           : t === 'adms'     ? 'ADMS'
            : t === 'exportar' ? '📅 Exportar por rango'
            : t === 'continu'  ? (config?.modoContinu ? '🔄 Continuo ●' : '🔄 Continuo desde fecha')
            :                    '⚙️ Configuración'}
@@ -340,6 +365,9 @@ export function FicheroPage() {
                 {dispositivos.map(d => {
                   const isOnline  = d.estado === 'online';
                   const isPausado = d.estado === 'pausado';
+                  const zkOk = d.protocolOnline ?? d.tcpOnline ?? null;
+                  const protocolMs = d.protocolLatencyMs ?? d.tcpLatencyMs ?? null;
+                  const admsSinPush = d.admsEstado === 'offline' && zkOk === true;
                   const bg     = isOnline ? '#f0fdf4' : isPausado ? '#f9fafb' : '#fef2f2';
                   const border = isOnline ? '#86efac' : isPausado ? '#e2e8f0' : '#fca5a5';
                   const color  = isOnline ? '#16a34a' : isPausado ? '#6b7280' : '#b91c1c';
@@ -349,6 +377,21 @@ export function FicheroPage() {
                     <div key={d.sn} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: '10px 16px', minWidth: 150, display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#374151' }}>{d.alias}</span>
                       <span style={{ fontSize: '0.82rem', fontWeight: 700, color }}>{label}</span>
+                      {zkOk === true && (
+                        <span style={{ fontSize: '0.7rem', color: '#16a34a' }}>
+                          Protocolo ZK OK{protocolMs != null ? ` (${protocolMs} ms)` : ''}
+                        </span>
+                      )}
+                      {zkOk === false && (
+                        <span style={{ fontSize: '0.7rem', color: '#b91c1c' }}>
+                          Protocolo ZK sin respuesta
+                        </span>
+                      )}
+                      {admsSinPush && (
+                        <span style={{ fontSize: '0.7rem', color: '#d97706' }}>
+                          ADMS sin push reciente
+                        </span>
+                      )}
                       {d.ip && <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{d.ip}</span>}
                       {mins != null && !isOnline && !isPausado && (
                         <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
@@ -359,6 +402,20 @@ export function FicheroPage() {
                         <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
                           {d.lastActivity.slice(0, 16)}
                         </span>
+                      )}
+                      {(isPausado || admsSinPush) && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                          {isPausado && (
+                            <button onClick={() => reanudarReloj(d)} disabled={accionReloj === d.sn}
+                              style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: 5, border: '1px solid #86efac', background: '#dcfce7', color: '#15803d', cursor: 'pointer' }}>
+                              {accionReloj === d.sn ? '…' : '▶ Reanudar'}
+                            </button>
+                          )}
+                          <button onClick={() => traerFichadas(d)} disabled={accionReloj === d.sn}
+                            style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: 5, border: '1px solid #fbbf24', background: '#fef3c7', color: '#b45309', cursor: 'pointer' }}>
+                            {accionReloj === d.sn ? '…' : '⬇ Traer fichadas'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -433,6 +490,8 @@ export function FicheroPage() {
         </>
       )}
 
+      {tab === 'adms' && <AdmsConsole active={tab === 'adms'} />}
+
       {/* ══════════════════ TAB EXPORTAR ═════════════════════════════════════ */}
       {tab === 'exportar' && (
         <div style={{ maxWidth: 700 }}>
@@ -494,6 +553,63 @@ export function FicheroPage() {
             <div style={S.sectionTitle as React.CSSProperties}>📅 Seleccionar rango a exportar</div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Field label="Qué fichero genera el TXT" id="fich-exp-mode">
+                  <select
+                    id="fich-exp-mode"
+                    name="exportMode"
+                    style={S.input}
+                    value={exportMode}
+                    onChange={e => setExportMode(e.target.value as 'todos' | 'uno' | 'grupo')}
+                  >
+                    <option value="todos">Todos los relojes en un TXT general</option>
+                    <option value="uno">Un solo reloj/fichero</option>
+                    <option value="grupo">Grupo manual de relojes</option>
+                  </select>
+                </Field>
+              </div>
+              {exportMode === 'uno' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <Field label="Fichero / reloj" id="fich-exp-sn">
+                    <select
+                      id="fich-exp-sn"
+                      name="sn"
+                      style={S.input}
+                      value={exportSn}
+                      onChange={e => setExportSn(e.target.value)}
+                    >
+                      <option value="">Elegir reloj...</option>
+                      {dispositivos.map(d => (
+                        <option key={d.sn} value={d.sn}>
+                          {(d.alias || d.sn)}{d.ip ? ` - ${d.ip}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              )}
+              {exportMode === 'grupo' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>
+                    Ficheros del grupo
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8 }}>
+                    {dispositivos.map(d => (
+                      <label key={d.sn} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: exportSns.includes(d.sn) ? '#eff6ff' : '#fff', color: '#111827', fontSize: '0.82rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={exportSns.includes(d.sn)}
+                          onChange={() => toggleExportSn(d.sn)}
+                        />
+                        <span>
+                          <strong>{d.alias || d.sn}</strong>
+                          {d.ip ? <span style={{ color: '#6b7280' }}> - {d.ip}</span> : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Field label="Fecha desde" id="fich-exp-fecha-desde">
                 <input id="fich-exp-fecha-desde" name="fechaDesde" type="date" style={S.input} value={fechaDesde}
                   min={dbPreview?.minFecha?.slice(0, 10)}
@@ -521,10 +637,13 @@ export function FicheroPage() {
             </div>
 
             <div style={{ marginTop: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ flexBasis: '100%', fontSize: '0.78rem', color: '#6b7280' }}>
+                Fichero elegido: <strong>{exportTargetLabel}</strong>
+              </div>
               <button
                 className="btn"
                 onClick={exportarRango}
-                disabled={exportando || !fechaDesde || !fechaHasta}
+                disabled={exportando || !fechaDesde || !fechaHasta || (exportMode === 'uno' && !exportSn) || (exportMode === 'grupo' && exportSns.length === 0)}
                 style={{ background: '#2563eb', color: '#fff', border: 'none', minWidth: 200 }}
               >
                 {exportando ? '⏳ Exportando…' : '📤 Generar y subir por SFTP'}
@@ -561,7 +680,7 @@ export function FicheroPage() {
               <div>
                 <div style={{ fontWeight: 700, color: '#15803d' }}>Modo continuo ACTIVO</div>
                 <div style={{ fontSize: '0.82rem', color: '#166534', marginTop: 2 }}>
-                  Subiendo fichadas desde <strong>{config.fechaDesdeContinu} {config.horaDesdeContinu ?? '00:00'}</strong> hasta ahora, cada <strong>{config.intervaloMin} min</strong>
+                  Subiendo fichadas desde <strong>{config.fechaDesdeContinu} {config.horaDesdeContinu ?? '00:00'}</strong> hasta ahora, cada <strong>{config.intervaloMin} min</strong> ({continuTargetLabel})
                 </div>
               </div>
             </div>
@@ -585,6 +704,63 @@ export function FicheroPage() {
           <div style={S.section}>
             <div style={S.sectionTitle as React.CSSProperties}>📅 Fecha y hora de inicio del continuo</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Field label="Qué fichero genera cada ciclo" id="fich-cont-mode">
+                  <select
+                    id="fich-cont-mode"
+                    name="continuMode"
+                    style={S.input}
+                    value={continuMode}
+                    onChange={e => setContinuMode(e.target.value as 'todos' | 'uno' | 'grupo')}
+                  >
+                    <option value="todos">Todos los relojes en un TXT general</option>
+                    <option value="uno">Un solo reloj/fichero</option>
+                    <option value="grupo">Grupo manual de relojes</option>
+                  </select>
+                </Field>
+              </div>
+              {continuMode === 'uno' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <Field label="Fichero / reloj" id="fich-cont-sn">
+                    <select
+                      id="fich-cont-sn"
+                      name="continuSn"
+                      style={S.input}
+                      value={continuSn}
+                      onChange={e => setContinuSn(e.target.value)}
+                    >
+                      <option value="">Elegir reloj...</option>
+                      {dispositivos.map(d => (
+                        <option key={d.sn} value={d.sn}>
+                          {(d.alias || d.sn)}{d.ip ? ` - ${d.ip}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              )}
+              {continuMode === 'grupo' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>
+                    Ficheros del grupo continuo
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8 }}>
+                    {dispositivos.map(d => (
+                      <label key={d.sn} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: continuSns.includes(d.sn) ? '#eff6ff' : '#fff', color: '#111827', fontSize: '0.82rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={continuSns.includes(d.sn)}
+                          onChange={() => toggleContinuSn(d.sn)}
+                        />
+                        <span>
+                          <strong>{d.alias || d.sn}</strong>
+                          {d.ip ? <span style={{ color: '#6b7280' }}> - {d.ip}</span> : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Field label="Fecha desde (inclusive)" id="fich-cont-fecha-desde">
                 <input id="fich-cont-fecha-desde" name="continuDesde" type="date" style={S.input} value={continuDesde}
                   onChange={e => setContinuDesde(e.target.value)} />
@@ -595,7 +771,7 @@ export function FicheroPage() {
               </Field>
             </div>
             <div style={{ marginTop: 10, fontSize: '0.78rem', color: '#6b7280' }}>
-              Cada ciclo exportará: <code>{continuDesde} {continuHoraDesde}:00</code> → <em>ahora</em>
+              Cada ciclo exportará: <code>{continuDesde} {continuHoraDesde}:00</code> → <em>ahora</em> · <strong>{continuTargetLabel}</strong>
             </div>
           </div>
 
@@ -700,9 +876,8 @@ export function FicheroBanner() {
 
   useEffect(() => {
     if (!session || !canVer) return;
-    apiFetch<{ ok: boolean; data: Dispositivo[] }>('/fichero/dispositivos')
+    getFicheroDispositivos()
       .then(async r => {
-        if (!r?.ok) return;
         const caidos = (r.data ?? []).filter(d => d.estado === 'offline');
         if (!caidos.length) return;
         setOffline(caidos);

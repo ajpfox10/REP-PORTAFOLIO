@@ -73,6 +73,7 @@ export function Layout({ title, children, showBack }: {
 
   const canSeeEmbarazadas = hasPerm('crud:embarazadas:read');
   const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
+  const canSeeResidentes = hasPerm('app:residentes:access') || hasPerm('crud:*:*');
 
   const isGestionTurnos =
     hasPerm('app:gestion_turnos:access') && !hasPerm('crud:*:*');
@@ -156,6 +157,7 @@ export function Layout({ title, children, showBack }: {
             ) : isJefeServicio ? (
               <>
                 {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
+                {canSeeResidentes && navLink('/app/residentes', '🩺 Residentes')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
               </>
             ) : isSaludLaboral ? (
@@ -170,6 +172,7 @@ export function Layout({ title, children, showBack }: {
                 {navLink('/app/consultas', '💬 Consultas')}
                 {navLink('/app/pedidos', '📨 Pedidos')}
                 {navLink('/app/documentos', '📂 Docs')}
+                {navLink('/app/tramites-documentales', 'Trámites')}
                 {navLink('/app/reportes', '🎂 Reportes')}
                 {navLink('/app/citaciones', '⚠️ Citaciones')}
 
@@ -217,12 +220,12 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/reporte-servicio', '📊 Reporte por Servicio')}
                       {navLink('/app/ausencias-fichajes', '🕵️ Ausentes vs Fichajes')}
                       {navLink('/app/sin-fichaje-salida', '🚪 Sin fichaje de salida')}
+                      {(hasPerm('crud:fc_cert_reemplazos:read') || isAdmin) && navLink('/app/fc-cert-reemplazos', '📋 FC / Cert. / Reemplazos')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
                       {navLink('/app/alertas', '🔔 Alertas')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
                       {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
                       {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
-                      {navLink('/app/bajas-estructura', '📉 Bajas por Estructura')}
                       {isAdmin && navLink('/app/bajas-gestion', '📋 Gestión de Bajas')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
@@ -230,17 +233,20 @@ export function Layout({ title, children, showBack }: {
                       <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
                         Herramientas
                       </div>
+                      {navLink('/app/estructura', '🏗️ Estructura Org.')}
                       {navLink('/app/jefedeptos', '🏛️ Historial Jefaturas')}
+                      {navLink('/app/guarderia', '👶 Guardería y Salario')}
                       {navLink('/app/alertas-agente', '🚨 Alertas por Agente')}
+                      {hasPerm('app:director_ejecutivo:access') && navLink('/app/director', '🏛️ Dirección Ejecutiva')}
                       {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
+                      {navLink('/app/concursos', '🏆 Concursos Ley 10471')}
                       {navLink('/app/buscador', '🔍 Buscador')}
                       {navLink('/app/comparador', '⚖️ Comparador')}
                       {navLink('/app/legajo', '📋 Legajo')}
-                      {navLink('/app/tables', '⊞ Tablas')}
-                      {navLink('/app/info', 'ℹ Info')}
                       {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
                       {navLink('/app/escaneo', '🖨 Escaneo')}
                       {canSeeResidentesRotacion && navLink('/app/residentes-rotacion', '🔄 Residentes Rotación')}
+                      {canSeeResidentes && navLink('/app/residentes', '🩺 Residentes')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 

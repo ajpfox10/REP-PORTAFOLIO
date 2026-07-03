@@ -18,6 +18,45 @@ import { searchPersonal } from '../../api/searchPersonal';
 import { useToast }                     from '../../ui/toast';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
+const JUB_WIN_START = parseInt((import.meta as any).env?.VITE_JUB_WINDOW_DAY_START ?? '1');
+const JUB_WIN_END   = parseInt((import.meta as any).env?.VITE_JUB_WINDOW_DAY_END   ?? '10');
+const LEY_IDS_NOMBRADOS = [1, 2, 3, 4, 5, 14];
+// mes (0-based) → { dia de baja, mes texto, offset de año }
+const JUB_BAJA: Record<number, { dia: string; mes: string; yearOffset: number }> = {
+  11: { dia: '31', mes: 'de marzo',        yearOffset: 1 },
+  2:  { dia: '30', mes: 'de junio',        yearOffset: 0 },
+  5:  { dia: '30', mes: 'de septiembre',   yearOffset: 0 },
+  8:  { dia: '31', mes: 'de diciembre',    yearOffset: 0 },
+};
+function getJubVentana(): { activa: boolean; fechaBaja: string | null } {
+  const now  = new Date();
+  const mes  = now.getMonth();
+  const dia  = now.getDate();
+  if (dia < JUB_WIN_START || dia > JUB_WIN_END) return { activa: false, fechaBaja: null };
+  const baja = JUB_BAJA[mes];
+  if (!baja) return { activa: false, fechaBaja: null };
+  const year = now.getFullYear() + baja.yearOffset;
+  return { activa: true, fechaBaja: `${baja.dia} ${baja.mes} de ${year}` };
+}
+
+function formatDateDMY(value: any): string {
+  if (!value) return '';
+  const raw = String(value).trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '';
+  if (
+    dt.getUTCHours() === 0 &&
+    dt.getUTCMinutes() === 0 &&
+    dt.getUTCSeconds() === 0 &&
+    dt.getUTCMilliseconds() === 0
+  ) {
+    return `${String(dt.getUTCDate()).padStart(2, '0')}/${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${dt.getUTCFullYear()}`;
+  }
+  return dt.toLocaleDateString('es-AR');
+}
+
 const DOCS = [
   { id: 1,  label: 'Certificado de Trabajo',   implementado: false,
     frase: 'Se certifica que el/la agente presta servicios en esta reparticion con el cargo y antiguedad que se detalla a continuacion.' },
@@ -33,8 +72,8 @@ const DOCS = [
     frase: 'Se certifica que el/la agente se encuentra en condiciones de retomar sus funciones a partir de la fecha indicada.' },
   { id: 7,  label: 'Dispo Rectificacion',        implementado: true,
     frase: 'Disposicion de rectificacion para subsanar errores en expedientes administrativos.' },
-  { id: 8,  label: 'Jubilacion / Retiro',       implementado: false,
-    frase: 'Se certifica la antiguedad y condiciones de revista a los efectos previsionales correspondientes.' },
+  { id: 8,  label: 'Jubilacion / Retiro',       implementado: true,
+    frase: 'Notas de comunicacion de cese jubilatorio y constancia de antecedentes sumariales.' },
   { id: 9,  label: 'Resolucion Interna',        implementado: false,
     frase: 'Se confecciona la presente resolucion interna segun los antecedentes obrantes en el legajo del agente.' },
   { id: 10, label: 'Nota a Direccion',          implementado: false,
@@ -49,6 +88,12 @@ const DOCS = [
     frase: 'Certificado laboral de rotacion para medico residente cubierto por ART Provincia.' },
   { id: 15, label: 'Nota Certificacion',         implementado: true,
     frase: 'Certificacion de servicios para becarios de contingencia del Programa de Becas para Contingencias Institucionales Criticas.' },
+  { id: 16, label: 'Curriculum Vitae',           implementado: true,
+    frase: 'Curriculum vitae con datos personales, domicilio, estudios y experiencia laboral del agente.' },
+  { id: 17, label: 'Nota Designacion Becario',    implementado: true,
+    frase: 'Solicitud de designacion de agente becario con cargo, ley y regimen horario seleccionable.' },
+  { id: 18, label: 'Nota Elevacion Becario',       implementado: true,
+    frase: 'Elevacion administrativa de la solicitud de designacion del agente becario.' },
 ];
 
 function DocModal({ agente, doc, onClose }: {
@@ -81,6 +126,24 @@ function DocModal({ agente, doc, onClose }: {
 
   const [certServiciosDatos, setCertServiciosDatos] = useState<any>(null);
   const [certServiciosOcupacion, setCertServiciosOcupacion] = useState('');
+
+  const [designacionDatos, setDesignacionDatos] = useState<any>(null);
+  const [designacionFields, setDesignacionFields] = useState({
+    cargo: '',
+    ley: '10471',
+    regimen10471: 'planta',
+  });
+
+  const [cvDatos, setCvDatos] = useState<any>(null);
+  const [cvFields, setCvFields] = useState({
+    estadoCivil: 'SOLTERO',
+    secundario: 'BACHILLER',
+    terciario: '',
+    profesion: '',
+  });
+
+  const [jubDatos, setJubDatos] = useState<any>(null);
+  const [loadingJub, setLoadingJub] = useState(false);
 
   const [dispRectFields, setDispRectFields] = useState({
     expNro: '', tramite: '', agentes: '', ifgra1: '', orden1: '', motivo1: '',
@@ -218,6 +281,15 @@ function DocModal({ agente, doc, onClose }: {
   }, [doc.id, certRotacionDatos, certRotacionFields, agente.dni]);
 
   useEffect(() => {
+    if (doc.id !== 8) return;
+    setLoadingJub(true);
+    apiFetch<any>(`/certificados/jubilacion/datos?dni=${agente.dni}`)
+      .then(r => setJubDatos(r?.data ?? null))
+      .catch(() => setJubDatos(null))
+      .finally(() => setLoadingJub(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
     if (doc.id !== 7) return;
     setLoadingPreview(true);
     const params = new URLSearchParams({ ...dispRectFields });
@@ -250,6 +322,72 @@ function DocModal({ agente, doc, onClose }: {
       .catch(() => setPreviewHtml(''))
       .finally(() => setLoadingPreview(false));
   }, [doc.id, certServiciosDatos, certServiciosOcupacion, agente.dni]);
+
+  const esNotaBecario = doc.id === 17 || doc.id === 18;
+  const endpointNotaBecario = doc.id === 18 ? 'elevacion-becario' : 'designacion-becario';
+
+  useEffect(() => {
+    if (!esNotaBecario) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/${endpointNotaBecario}/datos?dni=${agente.dni}`)
+      .then(r => {
+        const data = r?.data ?? null;
+        setDesignacionDatos(data);
+        setDesignacionFields({
+          cargo: data?.cargo || data?.ocupacionSugerida || '',
+          ley: data?.leySugerida || data?.ley || '10471',
+          regimen10471: data?.regimen10471 || 'planta',
+        });
+      })
+      .catch(() => {
+        setDesignacionDatos(null);
+        setDesignacionFields({ cargo: '', ley: '10471', regimen10471: 'planta' });
+      })
+      .finally(() => setLoadingDatos(false));
+  }, [esNotaBecario, endpointNotaBecario, agente.dni]);
+
+  useEffect(() => {
+    if (!esNotaBecario || !designacionDatos) return;
+    setLoadingPreview(true);
+    const params = new URLSearchParams({ dni: String(agente.dni), ...designacionFields });
+    apiFetchBlob(`/certificados/${endpointNotaBecario}/preview?${params}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [esNotaBecario, endpointNotaBecario, designacionDatos, designacionFields, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 16) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/cv/datos?dni=${agente.dni}`)
+      .then(r => {
+        const data = r?.data ?? null;
+        setCvDatos(data);
+        setCvFields({
+          estadoCivil: data?.estadoCivil || 'SOLTERO',
+          secundario: data?.secundario || 'BACHILLER',
+          terciario: data?.terciario || '',
+          profesion: data?.profesion || data?.terciario || data?.ocupacion || '',
+        });
+      })
+      .catch(() => {
+        setCvDatos(null);
+        setCvFields({ estadoCivil: 'SOLTERO', secundario: 'BACHILLER', terciario: '', profesion: '' });
+      })
+      .finally(() => setLoadingDatos(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 16 || !cvDatos) return;
+    setLoadingPreview(true);
+    const params = new URLSearchParams({ dni: String(agente.dni), ...cvFields });
+    apiFetchBlob(`/certificados/cv/preview?${params}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, cvDatos, cvFields, agente.dni]);
 
   const descargarDocxIoma = async () => {
     setDescargando(true);
@@ -327,6 +465,20 @@ function DocModal({ agente, doc, onClose }: {
     } finally { setDescargando(false); }
   };
 
+  const descargarDocxDesignacionBecario = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta(`/certificados/${endpointNotaBecario}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni, ...designacionFields }),
+      });
+      triggerDownload(blob, filename || `${endpointNotaBecario}_${agente.dni}.docx`);
+    } catch (e: any) {
+      toast.error('Error al generar la nota: ' + (e?.message || 'Error'));
+    } finally { setDescargando(false); }
+  };
+
   const descargarDocxDispRect = async () => {
     setDescargando(true);
     try {
@@ -352,6 +504,21 @@ function DocModal({ agente, doc, onClose }: {
       triggerDownload(blob, filename || `cert_rotacion_${agente.dni}.docx`);
     } catch (e: any) {
       toast.error('Error al generar Cert Rotacion: ' + (e?.message || 'Error'));
+    } finally { setDescargando(false); }
+  };
+
+  const descargarDocxCv = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni, ...cvFields }),
+      });
+      triggerDownload(blob, filename || `cv_${agente.dni}.docx`);
+      toast.ok('CV DOCX y JPG guardados en DOCU');
+    } catch (e: any) {
+      toast.error('Error al generar CV: ' + (e?.message || 'Error'));
     } finally { setDescargando(false); }
   };
 
@@ -633,6 +800,129 @@ function DocModal({ agente, doc, onClose }: {
       );
     }
 
+    if (esNotaBecario) {
+      const inp: React.CSSProperties = {
+        width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
+        fontSize: '0.83rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8,
+      };
+      const lbl: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: 2, display: 'block' };
+      if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando datos del agente...</p>;
+      if (!designacionDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+      const setF17 = (key: keyof typeof designacionFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+        setDesignacionFields(prev => ({ ...prev, [key]: e.target.value }));
+      return (
+        <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
+          <div style={{ width: 270, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 8,
+              textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Datos del agente</div>
+            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 2, textAlign: 'center' }}>
+              <strong>{designacionDatos.apellidoNombre}</strong></div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>DNI: {designacionDatos.dni}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Ley base: {designacionDatos.leyBase || '-'}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Ocupacion: {designacionDatos.ocupacionSugerida || '-'}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Dependencia: {designacionDatos.dependencia || '-'}</div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '10px 0' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completar</div>
+            <label htmlFor="rd-17-ley" style={lbl}>Ley de nombramiento</label>
+            <select id="rd-17-ley" name="ley" style={inp} value={designacionFields.ley} onChange={setF17('ley')}>
+              <option value="10471">10471</option>
+              <option value="10430">10430</option>
+            </select>
+            <label htmlFor="rd-17-cargo" style={lbl}>Profesion / cargo</label>
+            <input id="rd-17-cargo" name="cargo" style={inp} value={designacionFields.cargo}
+              onChange={setF17('cargo')} placeholder="Ej: Enfermero" />
+            {designacionFields.ley === '10471' && (
+              <>
+                <label htmlFor="rd-17-regimen" style={lbl}>Regimen 10471</label>
+                <select id="rd-17-regimen" name="regimen10471" style={inp} value={designacionFields.regimen10471}
+                  onChange={setF17('regimen10471')}>
+                  <option value="planta">36 horas semanales planta</option>
+                  <option value="guardia">36 horas semanales guardia</option>
+                </select>
+              </>
+            )}
+            {designacionFields.ley === '10430' && (
+              <div style={{ fontSize: '0.78rem', color: '#374151', background: '#e0f2fe',
+                border: '1px solid #bae6fd', borderRadius: 6, padding: '8px 10px' }}>
+                Para 10430 se imprime con {doc.id === 18 ? '48 horas semanales de labor' : '48 horas semanales'}.
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+            {loadingPreview
+              ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
+              : previewHtml
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title={`Preview ${doc.label}`} />
+                : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>
+            }
+          </div>
+        </div>
+      );
+    }
+
+    if (doc.id === 16) {
+      const inp: React.CSSProperties = {
+        width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
+        fontSize: '0.83rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8,
+      };
+      const lbl: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: 2, display: 'block' };
+      if (loadingDatos) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando datos del agente...</p>;
+      if (!cvDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+      const setF16 = (key: keyof typeof cvFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+        setCvFields(prev => ({ ...prev, [key]: e.target.value }));
+      return (
+        <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: 540 }}>
+          <div style={{ width: 270, flexShrink: 0, padding: '16px 14px', overflowY: 'auto',
+            borderRight: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 8,
+              textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Datos del agente</div>
+            <div style={{ fontSize: '0.8rem', color: '#111', marginBottom: 2, textAlign: 'center' }}>
+              <strong>{cvDatos.apellidoNombre}</strong></div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>DNI: {cvDatos.dni}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>{cvDatos.domicilio} {cvDatos.numeroDom}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>{cvDatos.localidad}{cvDatos.cp ? ` CP ${cvDatos.cp}` : ''}</div>
+            <div style={{ fontSize: '0.76rem', color: '#555', marginBottom: 1, textAlign: 'center' }}>Ingreso: {cvDatos.fechaIngreso || '-'}</div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '10px 0' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#374151', marginBottom: 10,
+              textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completar</div>
+            <label htmlFor="rd-16-estado" style={lbl}>Estado civil</label>
+            <select id="rd-16-estado" name="estadoCivil" style={inp} value={cvFields.estadoCivil} onChange={setF16('estadoCivil')}>
+              <option value="SOLTERO">SOLTERO</option>
+              <option value="SOLTERA">SOLTERA</option>
+              <option value="CASADO">CASADO</option>
+              <option value="CASADA">CASADA</option>
+              <option value="DIVORCIADO">DIVORCIADO</option>
+              <option value="DIVORCIADA">DIVORCIADA</option>
+              <option value="VIUDO">VIUDO</option>
+              <option value="VIUDA">VIUDA</option>
+              <option value="UNION CONVIVENCIAL">UNION CONVIVENCIAL</option>
+              <option value="SEPARADO">SEPARADO</option>
+              <option value="SEPARADA">SEPARADA</option>
+            </select>
+            <label htmlFor="rd-16-sec" style={lbl}>Estudios secundarios</label>
+            <input id="rd-16-sec" name="secundario" style={inp} value={cvFields.secundario}
+              onChange={setF16('secundario')} placeholder="Ej: BACHILLER" />
+            <label htmlFor="rd-16-ter" style={lbl}>Terciario / universitario</label>
+            <input id="rd-16-ter" name="terciario" style={inp} value={cvFields.terciario}
+              onChange={setF16('terciario')} placeholder="Ej: ENFERMERA" />
+            <label htmlFor="rd-16-prof" style={lbl}>Profesion experiencia</label>
+            <input id="rd-16-prof" name="profesion" style={inp} value={cvFields.profesion}
+              onChange={setF16('profesion')} placeholder="Ej: ENFERMERIA" />
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', background: '#fff' }}>
+            {loadingPreview
+              ? <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Actualizando preview...</p>
+              : previewHtml
+                ? <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview CV" />
+                : <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>
+            }
+          </div>
+        </div>
+      );
+    }
+
     if (doc.id === 7) {
       const inp: React.CSSProperties = {
         width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.2)',
@@ -686,6 +976,74 @@ function DocModal({ agente, doc, onClose }: {
       );
     }
 
+    if (doc.id === 8) {
+      if (loadingJub) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando datos del agente...</p>;
+      if (!jubDatos)  return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+
+      const ventana    = getJubVentana();
+      const esNombrado = LEY_IDS_NOMBRADOS.includes(jubDatos.ley_id);
+      const esActivo   = jubDatos.estado_empleo === 'ACTIVO';
+      const esFemenino = String(jubDatos.sexo ?? '').toUpperCase().includes('FEMENINO');
+      const tratamiento = esFemenino ? 'doña' : 'don';
+      const encabezado  = esFemenino ? 'SRA' : 'SR';
+
+      if (!esActivo || !esNombrado) {
+        return (
+          <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#dc2626', marginBottom: 8 }}>No habilitado</div>
+            <div style={{ fontSize: '0.84rem', color: '#555' }}>
+              {!esActivo
+                ? 'El agente no se encuentra en estado ACTIVO.'
+                : 'Este documento solo está disponible para agentes nombrados (no becados ni residentes).'}
+            </div>
+          </div>
+        );
+      }
+
+      if (!ventana.activa) {
+        return (
+          <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#b45309', marginBottom: 8 }}>Fuera del período de impresión</div>
+            <div style={{ fontSize: '0.84rem', color: '#78350f' }}>
+              La impresión está habilitada del <strong>{JUB_WIN_START}</strong> al <strong>{JUB_WIN_END}</strong> de diciembre, marzo, junio y septiembre.
+            </div>
+          </div>
+        );
+      }
+
+      const bodyStyle: React.CSSProperties = { marginTop: 0, marginBottom: 0, textAlign: 'justify' };
+      const secLabel: React.CSSProperties  = { fontSize: '0.68rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 };
+      const dato: React.CSSProperties      = { fontWeight: 700 };
+
+      return (
+        <div style={{ padding: '28px 36px', fontFamily: 'Georgia, serif', fontSize: '0.95rem', color: '#111', lineHeight: 1.9, overflowY: 'auto' }}>
+
+          {/* Nota 1 */}
+          <div style={secLabel as any}>Nota de jubilación</div>
+          <p style={{ ...bodyStyle, marginBottom: 4 }}><span style={dato}>{encabezado}: {jubDatos.apellidoNombre}</span></p>
+          <p style={{ ...bodyStyle, marginBottom: 4 }}>DNI: <span style={dato}>{jubDatos.dni}</span></p>
+          <p style={{ ...bodyStyle, marginBottom: 20 }}><span style={dato}>{jubDatos.dependencia}.</span></p>
+          <p style={{ ...bodyStyle, marginBottom: 36 }}>
+            Me dirijo a Usted por medio de la presente, a fin de llevar a vuestro conocimiento que, habiendo reunido
+            las condiciones para acogerse a los beneficios jubilatorios, se dará cumplimiento a lo estatuido por el
+            decreto N° 431/13, sustituyente del artículo 14 inciso g de la Ley 10430 (Texto Ordenado 1.869/96),
+            reglamentada por Decreto N° 4161/96-Decreto Acuerdo N°2760/97, a partir del <span style={dato}>{ventana.fechaBaja}</span>.
+          </p>
+
+          {/* Nota 2 */}
+          <div style={secLabel as any}>Constancia de antecedentes sumariales</div>
+          <p style={{ ...bodyStyle }}>
+            Por intermedio de la presente, se deja establecido que {tratamiento}{' '}
+            <span style={dato}>{jubDatos.apellidoNombre}</span> DNI:{' '}
+            <span style={dato}>{jubDatos.dni}</span> LEGAJO DE CONTADURÍA N°{' '}
+            <span style={dato}>{jubDatos.legajo || '—'}</span> no registra a la actualidad, ningún tipo de antecedentes
+            de actuaciones sumariales pendientes ni en trámite, por lo que se estima que el particular, se encuentra
+            apto para ser cursado su cese bajo la modalidad ejecutiva (Decreto 1770/11).
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div style={{ textAlign: 'center', padding: '32px 16px' }}>
         <div style={{ fontSize: '2.2rem', marginBottom: 10 }}>&#x1F6A7;</div>
@@ -706,7 +1064,7 @@ function DocModal({ agente, doc, onClose }: {
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 16, padding: 24, maxWidth: [11, 13, 14].includes(doc.id) ? 1100 : 860, width: '100%',
+        borderRadius: 16, padding: 24, maxWidth: [11, 13, 14, 16, 17, 18].includes(doc.id) ? 1100 : 860, width: '100%',
         maxHeight: '95vh', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -718,10 +1076,10 @@ function DocModal({ agente, doc, onClose }: {
         </div>
 
         <div style={{
-          borderRadius: 8, overflow: [11, 13, 14].includes(doc.id) ? 'hidden' : 'auto', flex: 1,
+          borderRadius: 8, overflow: [11, 13, 14, 16, 17, 18].includes(doc.id) ? 'hidden' : 'auto', flex: 1,
           boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
-          background: doc.implementado ? ([7, 11, 13, 14, 15].includes(doc.id) ? '#f9fafb' : '#fff') : '#fffbeb',
-          border: doc.implementado ? ([7, 11, 13, 14, 15].includes(doc.id) ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
+          background: doc.implementado ? ([7, 11, 13, 14, 15, 16, 17, 18].includes(doc.id) ? '#f9fafb' : '#fff') : '#fffbeb',
+          border: doc.implementado ? ([7, 11, 13, 14, 15, 16, 17, 18].includes(doc.id) ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
         }}>
           {renderPreview()}
         </div>
@@ -732,6 +1090,30 @@ function DocModal({ agente, doc, onClose }: {
               <button className="btn" onClick={descargarDocxCertServicios} disabled={descargando || !certServiciosDatos}
                 style={{ background: '#7c3aed', color: '#fff' }}>
                 {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
+            </>
+          )}
+          {esNotaBecario && (
+            <>
+              <button className="btn" onClick={descargarDocxDesignacionBecario} disabled={descargando || !designacionDatos}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
+            </>
+          )}
+          {doc.id === 16 && (
+            <>
+              <button className="btn" onClick={descargarDocxCv} disabled={descargando || !cvDatos}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Generar y guardar DOCX'}
               </button>
               <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
                 style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
@@ -819,6 +1201,52 @@ function DocModal({ agente, doc, onClose }: {
                 style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
             </>
           )}
+          {doc.id === 8 && (() => {
+            const ventana    = getJubVentana();
+            const esNombrado = jubDatos ? LEY_IDS_NOMBRADOS.includes(jubDatos.ley_id) : false;
+            const esActivo   = jubDatos?.estado_empleo === 'ACTIVO';
+            const habilitado = !!jubDatos && ventana.activa && esNombrado && esActivo;
+            const esFemenino = String(jubDatos?.sexo ?? '').toUpperCase().includes('FEMENINO');
+            const tratamiento = esFemenino ? 'doña' : 'don';
+            const encabezado  = esFemenino ? 'SRA' : 'SR';
+            const imprimirJub = () => {
+              if (!jubDatos || !ventana.fechaBaja) return;
+              const w = window.open('', '_blank');
+              if (!w) return;
+              w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+                <style>
+                  body { font-family: Georgia, serif; font-size: 12pt; line-height: 1.9;
+                         margin: 2.5cm 3cm; color: #000; }
+                  p { text-align: justify; margin: 0 0 6pt 0; }
+                  .sep { margin-bottom: 2cm; }
+                  @page { margin: 2cm; }
+                </style></head><body>
+                <p><b>${encabezado}: ${jubDatos.apellidoNombre}</b></p>
+                <p>DNI: <b>${jubDatos.dni}</b></p>
+                <p class="sep"><b>${jubDatos.dependencia}.</b></p>
+                <p class="sep">Me dirijo a Usted por medio de la presente, a fin de llevar a vuestro
+                conocimiento que, habiendo reunido las condiciones para acogerse a los beneficios
+                jubilatorios, se dará cumplimiento a lo estatuido por el decreto N° 431/13, sustituyente
+                del artículo 14 inciso g de la Ley 10430 (Texto Ordenado 1.869/96), reglamentada por
+                Decreto N° 4161/96-Decreto Acuerdo N°2760/97, a partir del <b>${ventana.fechaBaja}</b>.</p>
+                <p>Por intermedio de la presente, se deja establecido que ${tratamiento}
+                <b>${jubDatos.apellidoNombre}</b> DNI: <b>${jubDatos.dni}</b>
+                LEGAJO DE CONTADURÍA N° <b>${jubDatos.legajo || '—'}</b> no registra a la actualidad,
+                ningún tipo de antecedentes de actuaciones sumariales pendientes ni en trámite, por lo
+                que se estima que el particular, se encuentra apto para ser cursado su cese bajo la
+                modalidad ejecutiva (Decreto 1770/11).</p>
+                </body></html>`);
+              w.document.close();
+              w.focus();
+              setTimeout(() => { w.print(); }, 400);
+            };
+            return (
+              <button className="btn" onClick={imprimirJub} disabled={!habilitado}
+                style={{ background: habilitado ? '#0369a1' : '#64748b', color: '#fff' }}>
+                Imprimir
+              </button>
+            );
+          })()}
           <button className="btn" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
         </div>
         {doc.implementado && (
@@ -943,7 +1371,7 @@ export function RedaccionPage() {
                   {selected.cuil ? ` - CUIL ${selected.cuil}` : ''}
                   {selected.email ? ` - ${selected.email}` : ''}
                   {selected.telefono ? ` - Tel: ${selected.telefono}` : ''}
-                  {selected.fecha_ingreso ? ` - Ingreso: ${new Date(selected.fecha_ingreso).toLocaleDateString('es-AR')}` : ''}
+                  {selected.fecha_ingreso ? ` - Ingreso: ${formatDateDMY(selected.fecha_ingreso)}` : ''}
                   {selected.estado_empleo ? ` - ${selected.estado_empleo}` : ''}
                   {selected.sector_id ? ` - Sector: ${selected.sector_id}` : ''}
                 </div>

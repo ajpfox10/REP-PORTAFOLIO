@@ -377,12 +377,19 @@ function EstadisticasConsultasTab() {
     setPorDia([]); setPorMes([]); setPorAgente([]); setPorAtendido([]); setDetalle([]);
     setComparativo([]); setComparativoMes([]);
     try {
-      const [all, waRes] = await Promise.all([
+      const [all, waRes, citaciones] = await Promise.all([
         fetchConsultasConNombres(buildParamsFecha(desde, hasta)),
         apiFetch<any>(`/whatsapp?desde=${desde}&hasta=${hasta}`).catch(() => null),
+        fetchAllPages('/citaciones',
+          `cierre_citacion_gte=${desde} 00:00:00&cierre_citacion_lte=${hasta} 23:59:59&sort=cierre_citacion`
+        ).catch(() => []),
       ]);
 
-      if (!all.length) { toast.error('Sin resultados en ese rango'); return; }
+      const waRows: any[] = waRes?.data || [];
+      if (!all.length && !waRows.length && !citaciones.length) {
+        toast.error('Sin resultados en ese rango');
+        return;
+      }
 
       // ── Por día ──
       const byDia: Record<string, number> = {};
@@ -441,7 +448,6 @@ function EstadisticasConsultasTab() {
       setDetalle(all);
 
       // ── Comparativo ventanilla vs WhatsApp ──
-      const waRows: any[] = waRes?.data || [];
       const waByDia: Record<string, number> = {};
       const waByMes: Record<string, number> = {};
       for (const w of waRows) {
@@ -453,25 +459,38 @@ function EstadisticasConsultasTab() {
       }
 
       // Comparativo por día
-      const allFechas = new Set([...Object.keys(byDia), ...Object.keys(waByDia)]);
+      const citByDia: Record<string, number> = {};
+      const citByMes: Record<string, number> = {};
+      for (const citacion of citaciones) {
+        const fecha = String(citacion.cierre_citacion || '').split('T')[0].split(' ')[0];
+        if (!fecha || fecha === '1111-11-11') continue;
+        citByDia[fecha] = (citByDia[fecha] ?? 0) + 1;
+        const parts = fecha.split('-');
+        const mesKey = parts.length >= 2 ? `${parts[0]}-${parts[1]}` : fecha;
+        citByMes[mesKey] = (citByMes[mesKey] ?? 0) + 1;
+      }
+
+      const allFechas = new Set([...Object.keys(byDia), ...Object.keys(waByDia), ...Object.keys(citByDia)]);
       const comp = Array.from(allFechas).sort().map(fecha => ({
         FECHA:      fmtLocalDate(fecha),
         VENTANILLA: byDia[fecha] ?? 0,
         WHATSAPP:   waByDia[fecha] ?? 0,
-        TOTAL:      (byDia[fecha] ?? 0) + (waByDia[fecha] ?? 0),
+        CITACIONES: citByDia[fecha] ?? 0,
+        TOTAL:      (byDia[fecha] ?? 0) + (waByDia[fecha] ?? 0) + (citByDia[fecha] ?? 0),
         _sort:      fecha,
       }));
       setComparativo(comp);
 
       // Comparativo por mes
-      const allMeses = new Set([...Object.keys(byMes), ...Object.keys(waByMes)]);
+      const allMeses = new Set([...Object.keys(byMes), ...Object.keys(waByMes), ...Object.keys(citByMes)]);
       const compMes = Array.from(allMeses).sort().map(m => {
         const [y, mm] = m.split('-');
         return {
           MES:        mm ? `${MESES[Number(mm)-1]} ${y}` : m,
           VENTANILLA: byMes[m] ?? 0,
           WHATSAPP:   waByMes[m] ?? 0,
-          TOTAL:      (byMes[m] ?? 0) + (waByMes[m] ?? 0),
+          CITACIONES: citByMes[m] ?? 0,
+          TOTAL:      (byMes[m] ?? 0) + (waByMes[m] ?? 0) + (citByMes[m] ?? 0),
           _sort:      m,
         };
       });
@@ -629,7 +648,7 @@ function EstadisticasConsultasTab() {
       {comparativo.length > 0 && (
         <>
           <div style={{ marginTop: 4, fontWeight: 700, fontSize: '0.88rem', color: '#94a3b8' }}>
-            📊 Comparativo Ventanilla vs WhatsApp
+            📊 Comparativo Ventanilla, WhatsApp y Citaciones
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px,1fr))', gap: 12 }}>
 
@@ -645,10 +664,10 @@ function EstadisticasConsultasTab() {
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
                   <thead style={{ position: 'sticky', top: 0, background: '#0f172a' }}>
                     <tr>
-                      {['FECHA','VENTANILLA','WHATSAPP','TOTAL'].map(h => (
+                      {['FECHA','VENTANILLA','WHATSAPP','CITACIONES','TOTAL'].map(h => (
                         <th key={h} style={{ padding: '5px 8px',
                           textAlign: h === 'FECHA' ? 'left' : 'right',
-                          color: h === 'VENTANILLA' ? '#38bdf8' : h === 'WHATSAPP' ? '#4ade80' : h === 'TOTAL' ? '#e2e8f0' : '#94a3b8',
+                          color: h === 'VENTANILLA' ? '#38bdf8' : h === 'WHATSAPP' ? '#4ade80' : h === 'CITACIONES' ? '#f59e0b' : h === 'TOTAL' ? '#e2e8f0' : '#94a3b8',
                           fontSize: '0.72rem', borderBottom: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap' }}>
                           {h}
                         </th>
@@ -661,6 +680,7 @@ function EstadisticasConsultasTab() {
                         <td style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>{r.FECHA}</td>
                         <td style={{ padding: '4px 8px', textAlign: 'right', color: '#38bdf8', fontWeight: 600 }}>{r.VENTANILLA}</td>
                         <td style={{ padding: '4px 8px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{r.WHATSAPP}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#f59e0b', fontWeight: 600 }}>{r.CITACIONES}</td>
                         <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700 }}>{r.TOTAL}</td>
                       </tr>
                     ))}
@@ -671,6 +691,9 @@ function EstadisticasConsultasTab() {
                       </td>
                       <td style={{ padding: '5px 8px', textAlign: 'right', color: '#4ade80' }}>
                         {comparativo.reduce((s, r) => s + r.WHATSAPP, 0)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#f59e0b' }}>
+                        {comparativo.reduce((s, r) => s + r.CITACIONES, 0)}
                       </td>
                       <td style={{ padding: '5px 8px', textAlign: 'right' }}>
                         {comparativo.reduce((s, r) => s + r.TOTAL, 0)}
@@ -690,10 +713,10 @@ function EstadisticasConsultasTab() {
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
-                      {['MES','VENTANILLA','WHATSAPP','TOTAL'].map(h => (
+                      {['MES','VENTANILLA','WHATSAPP','CITACIONES','TOTAL'].map(h => (
                         <th key={h} style={{ padding: '5px 8px',
                           textAlign: h === 'MES' ? 'left' : 'right',
-                          color: h === 'VENTANILLA' ? '#38bdf8' : h === 'WHATSAPP' ? '#4ade80' : h === 'TOTAL' ? '#e2e8f0' : '#94a3b8',
+                          color: h === 'VENTANILLA' ? '#38bdf8' : h === 'WHATSAPP' ? '#4ade80' : h === 'CITACIONES' ? '#f59e0b' : h === 'TOTAL' ? '#e2e8f0' : '#94a3b8',
                           fontSize: '0.72rem', borderBottom: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap' }}>
                           {h}
                         </th>
@@ -706,6 +729,7 @@ function EstadisticasConsultasTab() {
                         <td style={{ padding: '4px 8px' }}>{r.MES}</td>
                         <td style={{ padding: '4px 8px', textAlign: 'right', color: '#38bdf8', fontWeight: 600 }}>{r.VENTANILLA}</td>
                         <td style={{ padding: '4px 8px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{r.WHATSAPP}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#f59e0b', fontWeight: 600 }}>{r.CITACIONES}</td>
                         <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700 }}>{r.TOTAL}</td>
                       </tr>
                     ))}
@@ -716,6 +740,9 @@ function EstadisticasConsultasTab() {
                       </td>
                       <td style={{ padding: '5px 8px', textAlign: 'right', color: '#4ade80' }}>
                         {comparativoMes.reduce((s, r) => s + r.WHATSAPP, 0)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#f59e0b' }}>
+                        {comparativoMes.reduce((s, r) => s + r.CITACIONES, 0)}
                       </td>
                       <td style={{ padding: '5px 8px', textAlign: 'right' }}>
                         {comparativoMes.reduce((s, r) => s + r.TOTAL, 0)}
