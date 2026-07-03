@@ -1,24 +1,25 @@
-// src/pages/EscaneoPage/index.tsx — Scanner v3: dispositivos, bandejas, cola en tiempo real
-// CAMBIOS: selector de tipo de documento OBLIGATORIO, agente OBLIGATORIO, guardado en G:\docu\{DNI}\
+﻿// src/pages/EscaneoPage/index.tsx — Scanner v3: dispositivos, bandejas, cola en tiempo real
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
+import { TIPOS_DOCUMENTO, GROUP_LABELS } from './documentTypes';
 import './styles/EscaneoPage.css';
 
-// ─── Scanner API client ───────────────────────────────────────────────────────
 function getScannerBase() {
   const cfg = (window as any).__RUNTIME_CONFIG__ || {};
   return (cfg.scannerApiUrl || (import.meta as any)?.env?.VITE_SCANNER_API_URL || 'http://localhost:3002').replace(/\/$/, '');
 }
+
 function getScannerHeaders(): Record<string, string> {
   const cfg = (window as any).__RUNTIME_CONFIG__ || {};
   const tenant = cfg.scannerTenantId || (import.meta as any)?.env?.VITE_SCANNER_TENANT_ID || '1';
   const runtimeToken = cfg.scannerToken || (import.meta as any)?.env?.VITE_SCANNER_TOKEN || '';
   let sessionToken = '';
   try {
-    // Intentar localStorage, sessionStorage y memory en orden
     const raw = localStorage.getItem('personalv5.session') || sessionStorage.getItem('personalv5.session') || '';
     sessionToken = JSON.parse(raw || '{}')?.accessToken || '';
   } catch {}
@@ -45,16 +46,23 @@ async function scannerFetch<T = any>(path: string, opts?: RequestInit): Promise<
   return res.json();
 }
 
-// Carga una imagen del scanner con auth y devuelve un blob URL (fix: las imágenes SÍ se ven)
-async function loadScanImage(storageKey: string): Promise<string> {
+async function loadScanImage(storageKey: string, timeoutMs = 20_000): Promise<string> {
   const url = `${getScannerBase()}/v1/documents/files/${storageKey}`;
-  const res = await fetch(url, { headers: getScannerHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers: getScannerHeaders(), signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('Timeout cargando miniatura');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-// Favoritos en localStorage
 const FAV_KEY = 'scanner_favorites_v1';
 function loadFavorites(): number[] {
   try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; }
@@ -63,30 +71,6 @@ function saveFavorites(ids: number[]) {
   try { localStorage.setItem(FAV_KEY, JSON.stringify(ids)); } catch {}
 }
 
-// ─── Tipos de documento disponibles ──────────────────────────────────────────
-const TIPOS_DOCUMENTO = [
-  { value: 'dni_frente',           label: 'DNI — Frente',                    icon: '🪪' },
-  { value: 'dni_dorso',            label: 'DNI — Dorso',                     icon: '🪪' },
-  { value: 'titulo_secundario',    label: 'Título Secundario',               icon: '📜' },
-  { value: 'titulo_universitario', label: 'Título Universitario / Terciario',icon: '🎓' },
-  { value: 'licencia_conducir',    label: 'Licencia de Conducir',            icon: '🚗' },
-  { value: 'acta_nacimiento',      label: 'Acta de Nacimiento',              icon: '👶' },
-  { value: 'partida_matrimonio',   label: 'Partida de Matrimonio',           icon: '💍' },
-  { value: 'contrato_trabajo',     label: 'Contrato de Trabajo',             icon: '📋' },
-  { value: 'certificado_medico',   label: 'Certificado Médico',              icon: '🏥' },
-  { value: 'certificado_estudio',  label: 'Certificado de Estudios',         icon: '📚' },
-  { value: 'recibo_sueldo',        label: 'Recibo de Sueldo',                icon: '💰' },
-  { value: 'declaracion_jurada',   label: 'Declaración Jurada',              icon: '✍️' },
-  { value: 'resolucion',           label: 'Resolución',                      icon: '📄' },
-  { value: 'nota_pedido',          label: 'Nota / Pedido',                   icon: '📝' },
-  { value: 'jubilacion',           label: 'Documentación Jubilación',        icon: '🏦' },
-  { value: 'ioma',                 label: 'Documentación IOMA',              icon: '🏥' },
-  { value: 'foto_carnet',          label: 'Foto Carnet',                     icon: '📷' },
-  { value: 'cert_rotacion',        label: 'Certificación de rotación',       icon: '🔄' },
-  { value: 'otro',                 label: 'Otro documento',                  icon: '📦' },
-];
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface Device {
   id: number; name: string; driver: string; is_active: boolean;
   last_seen_at: string | null; hostname: string | null;
@@ -130,7 +114,7 @@ interface ScanProfile {
 }
 interface ScannedPage {
   jobId: number; pageNumber: number;
-  storageKey: string; blobUrl: string | null; loadError: boolean;
+  storageKey: string; blobUrl: string | null; loadError: boolean; rotating?: boolean;
 }
 type ScanPhase = 'idle' | 'creating' | 'waiting' | 'loading_pages' | 'done' | 'error';
 
@@ -143,6 +127,14 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const SOURCE_LABEL: Record<string, string> = {
   flatbed: '🪟 Vidrio plano', adf: '📄 ADF (alimentador)', adf_duplex: '📄 ADF Dúplex',
+};
+
+const PAPER_SIZE_LABELS: Record<string, string> = {
+  A4: 'A4', A3: 'A3', A5: 'A5', A6: 'A6', B4: 'B4', B5: 'B5',
+  Letter: 'Carta / Letter', Carta: 'Carta / Letter',
+  Legal: 'Oficio / Legal', Oficio: 'Oficio / Legal',
+  Folio: 'Folio', Tabloid: 'Tabloid / Ledger', Ledger: 'Tabloid / Ledger',
+  Executive: 'Executive', Statement: 'Statement',
 };
 
 const PAPER_LABEL: Record<PaperState, string> = {
@@ -161,6 +153,9 @@ function fmtDT(s?: string | null) {
   if (!s) return '—';
   try { return new Date(s).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); }
   catch { return s; }
+}
+function scanUserLabel(d: any) {
+  return d?.escaneado_por_nombre || d?.escaneado_por_email || '';
 }
 function deviceOnline(d: Device) {
   if (d.capabilities?.online === true) return true;
@@ -377,11 +372,16 @@ export function EscaneoPage() {
   useEffect(() => {
     setFlatbedPromptDismissed(false);
     cargarPaperStatus();
-  }, [selectedDevice, cargarPaperStatus]);
+  }, [selectedDevice, source, cargarPaperStatus]);
 
+  // Auto-refresh del estado del papel cada 4s cuando el ADF dice "vacío"
+  // (el escáner tarda en detectar el papel después de cargarlo)
   useEffect(() => {
-    setFlatbedPromptDismissed(false);
-  }, [source, selectedDevice]);
+    const usesAdf = source === 'adf' || source === 'adf_duplex';
+    if (!usesAdf || !selectedDevice || paperStatus?.adf !== 'empty') return;
+    const t = setInterval(() => { cargarPaperStatus(); }, 4_000);
+    return () => clearInterval(t);
+  }, [source, selectedDevice, paperStatus?.adf, cargarPaperStatus]);
 
   useEffect(() => {
     const selected = devices.find(d => d.id === selectedDevice);
@@ -412,9 +412,6 @@ export function EscaneoPage() {
     if (usesAdf && paperStatus?.flatbed === 'loaded' && !flatbedPromptDismissed) {
       toast.error('Hoja en cristal', 'Confirma si queres usar cristal o seguir por ADF');
       return;
-    }
-    if (outputFormat === 'jpg' && (source !== 'flatbed' || duplex)) {
-      setOutputFormat('pdf');
     }
   }, [outputFormat, source, duplex]);
 
@@ -464,14 +461,14 @@ export function EscaneoPage() {
   }, []);
 
   // ── Poll job ────────────────────────────────────────────────────────────────
-  async function pollJob(jobId: number, maxMs = 120_000): Promise<ScanJob> {
+  async function pollJob(jobId: number, maxMs = 20 * 60_000): Promise<ScanJob> {
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       await new Promise(r => setTimeout(r, 2500));
       const job = await scannerFetch<ScanJob>(`/v1/scan-jobs/${jobId}`);
       if (['completed', 'failed', 'canceled'].includes(job.status)) return job;
     }
-    throw new Error('Tiempo de espera agotado (120s)');
+    throw new Error('Tiempo de espera agotado (20 min)');
   }
 
   // ── Escanear una página (multi-página) ─────────────────────────────────────
@@ -479,10 +476,6 @@ export function EscaneoPage() {
     if (!agente) { toast.error('Agente requerido', 'Buscá y seleccioná el agente antes de escanear'); return; }
     if (!tipoDoc) { toast.error('Tipo de documento requerido', 'Seleccioná qué documento vas a escanear'); return; }
     if (!selectedDevice) { toast.error('Seleccioná un dispositivo'); return; }
-    if (outputFormat === 'jpg' && (source !== 'flatbed' || duplex)) {
-      toast.error('JPG solo con cristal', 'Para ADF o dúplex usá PDF o TIFF');
-      return;
-    }
 
     const tipoLabel = TIPOS_DOCUMENTO.find(t => t.value === tipoDoc)?.label || tipoDoc;
     setScanPhase('creating');
@@ -506,7 +499,6 @@ export function EscaneoPage() {
           blank_page_detection: true,
           compression: 'medium',
           output_format: outputFormat,
-          personal_dni: agente.dni,
           personal_ref: tipoDoc,
           doc_class: tipoDoc,
         }),
@@ -547,13 +539,14 @@ export function EscaneoPage() {
 
       setScanPhase('done');
       toast.ok(`✅ Pág. escaneada`, `${tipoLabel} — job #${r.id}`);
+      void cargarPaperStatus();
       // NO cambiamos de tab automáticamente
     } catch (e: any) {
       setScanPhase('error');
       setScanError(e?.message || 'Error desconocido');
       toast.error('Error al escanear', e?.message);
     } finally { setLaunching(false); }
-  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, paperSize, outputFormat, paperStatus, flatbedPromptDismissed]);
+  }, [agente, tipoDoc, selectedDevice, selectedProfile, source, duplex, dpi, color, paperSize, outputFormat, paperStatus, flatbedPromptDismissed, cargarPaperStatus]);
 
   // ── Guardar sesión ──────────────────────────────────────────────────────────
   const guardarSesion = useCallback(async () => {
@@ -561,19 +554,47 @@ export function EscaneoPage() {
     setSaving(true);
     try {
       const jobIds = Array.from(new Set(session.map(p => p.jobId)));
-      await Promise.all(jobIds.map(jobId =>
-        scannerFetch(`/v1/scan-jobs/${jobId}/sync-personal`, { method: 'POST' })
-      ));
-      toast.ok('✅ Guardado', `${session.length} página(s) registradas`);
+      const resp = await scannerFetch<{ output_format?: string; documents?: number }>('/v1/scan-jobs/consolidate', {
+        method: 'POST',
+        body: JSON.stringify({
+          job_ids: jobIds,
+          page_keys: session.map(p => p.storageKey),
+          personal_dni: agente.dni,
+          personal_ref: tipoDoc,
+          doc_class: tipoDoc,
+          output_format: outputFormat,
+        }),
+      });
+      const savedFmt = resp?.output_format || outputFormat;
+      const fmtLabel = savedFmt === 'pdf_a' ? 'PDF/A' : savedFmt.toUpperCase();
+      const nDocs = resp?.documents ?? 1;
+      if (savedFmt === 'jpg' && nDocs > 1) {
+        toast.ok(`✅ ${nDocs} JPG guardados`, `1 archivo por página (${session.length} en total)`);
+      } else {
+        toast.ok(`✅ ${fmtLabel} guardado`, `${session.length} página(s) unidas en un documento`);
+      }
       apiFetch<any>(`/scanner/documents/${agente.dni}`)
         .then(r => setDocHistory(r?.data || [])).catch(() => {});
       blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
       blobUrlsRef.current = [];
       setSession([]); setScanPhase('idle'); setScanError(null);
     } catch (e: any) {
-      toast.error('No se pudo guardar', e?.message || 'Error sincronizando con legajo');
+      const msg = e?.message || 'Error sincronizando con legajo';
+      const isPagesLost = msg.includes('scan_pages_lost') || msg.includes('ya no están disponibles');
+      if (isPagesLost) {
+        // Las páginas se perdieron (reinicio del servidor) — descartar automáticamente y avisar
+        blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
+        blobUrlsRef.current = [];
+        setSession([]); setScanPhase('idle'); setScanError(null);
+        toast.error(
+          '⚠️ Páginas perdidas — hay que escanear de nuevo',
+          'El servidor se reinició y los archivos ya no están disponibles. La sesión fue descartada.'
+        );
+      } else {
+        toast.error('No se pudo guardar', msg);
+      }
     } finally { setSaving(false); }
-  }, [session, agente]);
+  }, [session, agente, tipoDoc, outputFormat]);
 
   const descartarSesion = useCallback(() => {
     blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
@@ -589,6 +610,28 @@ export function EscaneoPage() {
       return prev.filter(p => p.storageKey !== storageKey);
     });
   }, []);
+
+  const rotarPagina = useCallback(async (page: ScannedPage, degrees = 90) => {
+    if (page.rotating) return;
+    setSession(prev => prev.map(p => p.storageKey === page.storageKey ? { ...p, rotating: true } : p));
+    try {
+      const result = await scannerFetch<{ storage_key: string }>(
+        `/v1/scan-jobs/${page.jobId}/pages/${page.pageNumber}/rotate`,
+        { method: 'POST', body: JSON.stringify({ degrees }) }
+      );
+      const blobUrl = await loadScanImage(result.storage_key);
+      blobUrlsRef.current.push(blobUrl);
+      if (page.blobUrl) URL.revokeObjectURL(page.blobUrl);
+      setViewer(prev => prev?.kind === 'scan' && prev.url === page.blobUrl ? null : prev);
+      setSession(prev => prev.map(p => p.storageKey === page.storageKey
+        ? { ...p, storageKey: result.storage_key, blobUrl, loadError: false, rotating: false }
+        : p));
+      toast.ok('Pagina rotada', 'El archivo guardado tambien fue actualizado');
+    } catch (e: any) {
+      setSession(prev => prev.map(p => p.storageKey === page.storageKey ? { ...p, rotating: false } : p));
+      toast.error('No se pudo rotar', e?.message);
+    }
+  }, [toast]);
 
   const cerrarViewer = useCallback(() => {
     setViewer(prev => {
@@ -651,11 +694,14 @@ export function EscaneoPage() {
 
   const isScanning = ['creating', 'waiting', 'loading_pages'].includes(scanPhase);
   const hasPages   = session.length > 0;
+  const isRotating = session.some(page => page.rotating);
 
   const activeJobs = jobs.filter(j => ['queued','in_progress'].includes(j.status));
   const doneJobs   = jobs.filter(j => !['queued','in_progress'].includes(j.status));
 
-  const puedeEscanear = !!agente && !!tipoDoc && !!selectedDevice && isOnline && !isScanning && !adfPaperEmpty && !flatbedPaperQuestion;
+  // adfPaperEmpty ya NO bloquea el botón — solo muestra advertencia.
+  // El escáner dará el error real si realmente no hay papel.
+  const puedeEscanear = !!agente && !!tipoDoc && !!selectedDevice && isOnline && !isScanning && !flatbedPaperQuestion;
 
   const sortedDevices = [...devices].sort((a, b) => {
     const af = favorites.includes(a.id) ? 0 : 1;
@@ -680,7 +726,7 @@ export function EscaneoPage() {
   const filteredDocHistory = docHistory.filter((d: any) => {
     if (!docNeedle) return true;
     const tipoLabel = TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.label || d.tipo;
-    return normSearch([d.nombre, tipoLabel, d.descripcion_archivo, d.ruta, fmtDT(d.created_at)].join(' ')).includes(docNeedle);
+    return normSearch([d.nombre, tipoLabel, d.descripcion_archivo, d.ruta, fmtDT(d.created_at), scanUserLabel(d)].join(' ')).includes(docNeedle);
   });
 
   useEffect(() => { setDevicePage(1); }, [deviceSearch, onlineDevices.length]);
@@ -726,6 +772,18 @@ export function EscaneoPage() {
                 </div>
               )}
               <div className="scan-preview-num">Pág. {idx + 1}</div>
+              <button type="button" className="scan-preview-rotate"
+                disabled={page.rotating || !page.blobUrl}
+                onClick={e => { e.stopPropagation(); rotarPagina(page); }}
+                title="Rotar 90 grados">
+                {page.rotating ? '...' : '↻'}
+              </button>
+              <button type="button" className="scan-preview-rotate scan-preview-rotate-180"
+                disabled={page.rotating || !page.blobUrl}
+                onClick={e => { e.stopPropagation(); rotarPagina(page, 180); }}
+                title="Rotar 180 grados">
+                180°
+              </button>
               <button
                 type="button"
                 className="scan-preview-remove"
@@ -768,6 +826,7 @@ export function EscaneoPage() {
                   <div className="scan-doc-name">{d.nombre || `Documento #${d.id}`}</div>
                   <div className="muted" style={{ fontSize: '0.72rem' }}>
                     {TIPOS_DOCUMENTO.find(t => t.value === d.tipo)?.label || d.tipo} · {fmtDT(d.created_at)}
+                    {scanUserLabel(d) && <> · {scanUserLabel(d)}</>}
                   </div>
                 </div>
               </button>
@@ -884,8 +943,9 @@ export function EscaneoPage() {
                   🗂️ Tipo de Documento
                   <span className="scan-required-badge">obligatorio</span>
                 </div>
+                {/* Tipos sin grupo */}
                 <div className="scan-tipos-grid">
-                  {TIPOS_DOCUMENTO.map(t => (
+                  {TIPOS_DOCUMENTO.filter(t => !t.group).map(t => (
                     <button
                       key={t.value}
                       className={`scan-tipo-btn${tipoDoc === t.value ? ' selected' : ''}`}
@@ -897,6 +957,25 @@ export function EscaneoPage() {
                     </button>
                   ))}
                 </div>
+                {/* Grupos con encabezado */}
+                {[...new Set(TIPOS_DOCUMENTO.filter(t => t.group).map(t => t.group!))].map(group => (
+                  <div key={group} className="scan-group-section">
+                    <div className="scan-group-header">{GROUP_LABELS[group] ?? group.toUpperCase()}</div>
+                    <div className="scan-tipos-grid">
+                      {TIPOS_DOCUMENTO.filter(t => t.group === group).map(t => (
+                        <button
+                          key={t.value}
+                          className={`scan-tipo-btn${tipoDoc === t.value ? ' selected' : ''}`}
+                          onClick={() => setTipoDoc(t.value)}
+                          type="button"
+                        >
+                          <span className="scan-tipo-icon">{t.icon}</span>
+                          <span className="scan-tipo-label">{t.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
                 {!tipoDoc && (
                   <div className="scan-required-hint">⚠️ Seleccioná qué documento vas a escanear</div>
                 )}
@@ -1117,10 +1196,7 @@ export function EscaneoPage() {
                         onClick={() => setPaperSize(p)}
                         type="button"
                       >
-                        {p === 'A4' ? 'A4' :
-                         p === 'Letter' || p === 'Carta' ? 'Carta / Letter' :
-                         p === 'Legal' || p === 'Oficio' ? 'Oficio / Legal' :
-                         p}
+                        {PAPER_SIZE_LABELS[p] || p}
                       </button>
                     ))}
                   </div>
@@ -1133,14 +1209,13 @@ export function EscaneoPage() {
                       ['tiff', 'TIFF'],
                       ['jpg', 'JPG'],
                     ] as [OutputFormat, string][]).map(([fmt, label]) => {
-                      const disabled = fmt === 'jpg' && (source !== 'flatbed' || duplex);
+                      const jpgPorPagina = fmt === 'jpg' && (source !== 'flatbed' || duplex || session.length > 1);
                       return (
                         <button
                           key={fmt}
                           className={`scan-cap-btn${outputFormat === fmt ? ' selected' : ''}`}
-                          onClick={() => { if (!disabled) { setOutputFormat(fmt); setSelectedProfile(null); } }}
-                          disabled={disabled}
-                          title={disabled ? 'JPG solo se usa con cristal / vidrio plano' : undefined}
+                          onClick={() => { setOutputFormat(fmt); setSelectedProfile(null); }}
+                          title={jpgPorPagina ? 'Con ADF/dúplex se guarda 1 archivo JPG por página' : undefined}
                         >
                           {label}
                         </button>
@@ -1149,7 +1224,7 @@ export function EscaneoPage() {
                   </div>
                   {outputFormat === 'jpg' && (
                     <div className="muted" style={{ fontSize: '0.72rem', marginTop: 6 }}>
-                      JPG se guarda como imagen de una sola pÃ¡gina.
+                      JPG se guarda como imagen de una sola página.
                     </div>
                   )}
 
@@ -1298,7 +1373,6 @@ export function EscaneoPage() {
                   {isScanning ? (scanPhaseLabel[scanPhase] || '⏳ Escaneando…')
                     : !agente ? '👤 Falta el agente'
                     : !tipoDoc ? '🗂️ Falta el tipo de documento'
-                    : adfPaperEmpty ? '📄 ADF sin hojas'
                     : flatbedPaperQuestion ? '🪟 Confirmar fuente'
                     : !isOnline ? '🔌 Scanner sin conexión'
                     : hasPages ? '📄 Escanear otra página'
@@ -1309,12 +1383,12 @@ export function EscaneoPage() {
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <button className="btn" style={{ flex: 1,
                       background: 'rgba(16,185,129,0.15)', borderColor: '#10b981', color: '#6ee7b7' }}
-                      onClick={guardarSesion} disabled={saving}>
-                      {saving ? '⏳ Guardando…' : `✅ Guardar ${session.length} pág.`}
+                      onClick={guardarSesion} disabled={saving || isRotating}>
+                      {isRotating ? 'Rotando página...' : saving ? '⏳ Guardando…' : `✅ Guardar ${session.length} pág. en ${outputFormat === 'pdf_a' ? 'PDF/A' : outputFormat.toUpperCase()}`}
                     </button>
                     <button className="btn" style={{
                       background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' }}
-                      onClick={descartarSesion} disabled={saving} title="Descartar sesión">
+                      onClick={descartarSesion} disabled={saving || isRotating} title="Descartar sesión">
                       🗑️
                     </button>
                   </div>
@@ -1645,6 +1719,7 @@ export function EscaneoPage() {
                     )}
                     <div className="muted" style={{ fontSize: '0.72rem', marginTop: 4 }}>
                       {fmtDT(d.created_at)}
+                      {scanUserLabel(d) && <> · {scanUserLabel(d)}</>}
                     </div>
                   </button>
                 ))}

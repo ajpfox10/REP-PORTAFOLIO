@@ -601,6 +601,9 @@ export function AsistenciaPage() {
   const [filtroDni, setFiltroDni] = useState("");
   const [filtroNombre, setFiltroNombre] = useState("");
 
+  // Pestaña activa: todos los resultados o solo las pendientes de justificación
+  const [tab, setTab] = useState<"TODOS" | "PENDIENTES">("TODOS");
+
   useEffect(() => {
     apiFetch<any>("/asistencia/config")
       .then((r) => {
@@ -842,6 +845,39 @@ export function AsistenciaPage() {
         return true;
       })
     : [];
+
+  // "Pendiente de justificación": la novedad del Ministerio dice "PENDIENTE JUSTIFIC..."
+  // (ej. E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)) o el SIAP trae JUSTIFICADO = NO.
+  const esPendienteJust = (r: CompareRow) =>
+    /PENDIENTE\s*JUSTIFIC/.test((r.novedad_ministerio || "").toUpperCase()) ||
+    (r.justificado || "").toUpperCase() === "NO";
+
+  const pendientes = results ? results.filter(esPendienteJust) : [];
+
+  // Filas que se muestran según la pestaña activa (sobre el resto de filtros).
+  const shown = tab === "PENDIENTES" ? filtered.filter(esPendienteJust) : filtered;
+
+  // Novedades del SIAP que NO tienen equivalencia en el mapeo.
+  // Se chequea contra los VALORES del mapeo (no contra el motivo de cada fila:
+  // una novedad mapeada igual puede fallar para una persona puntual por DNI/fecha).
+  const novedadesSinMapear = (() => {
+    if (!results) return [] as string[];
+    const mapeoVals = new Set<string>();
+    Object.values(mapeo ?? {}).forEach((arr) =>
+      (arr ?? []).forEach((v) => mapeoVals.add(norm(v)))
+    );
+    const omit = skipNovedades.map(norm);
+    const estaMapeada = (v: string) => {
+      const nv = norm(v);
+      const partes = [nv, ...nv.split(" / ").map((s) => s.trim())];
+      return partes.some((p) => mapeoVals.has(p));
+    };
+    return Array.from(
+      new Set(results.map((r) => r.novedad_siap).filter((v) => v && v !== "—"))
+    )
+      .filter((v) => !estaMapeada(v) && !omit.includes(norm(v)))
+      .sort();
+  })();
 
   const agentesTotal = results ? new Set(results.map((r) => String(r.dni))).size : 0;
   const agentesFiltered =
@@ -1190,6 +1226,24 @@ export function AsistenciaPage() {
                 + Agregar
               </button>
             </div>
+
+            {/* Novedades del SIAP que la comparación no pudo mapear (se llenan al comparar) */}
+            <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 10 }}>
+              <div style={{ ...sh, marginBottom: 6 }}>
+                SIN MAPEAR{novedadesSinMapear.length ? ` (${novedadesSinMapear.length})` : ""}
+              </div>
+              {novedadesSinMapear.length === 0 ? (
+                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                  {results ? "Todo el SIAP tiene equivalencia ✔" : "Aparecen acá después de comparar."}
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.76rem", color: "#fbbf24", lineHeight: 1.7 }}>
+                  {novedadesSinMapear.map((n) => (
+                    <div key={n}>• {n}</div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1333,6 +1387,32 @@ export function AsistenciaPage() {
         {/* ── TABLA DE RESULTADOS ── */}
         {results && (
           <div className="card gp-card-14" style={{ padding: 16 }}>
+            {/* Pestañas: todos / pendientes de justificación */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+              {([
+                { key: "TODOS" as const, label: `Todos (${results.length})` },
+                { key: "PENDIENTES" as const, label: `⏳ Pendientes de justificación (${pendientes.length})` },
+              ]).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: tab === t.key ? "2px solid #f59e0b" : "2px solid transparent",
+                    color: tab === t.key ? "#fbbf24" : "#94a3b8",
+                    padding: "6px 12px",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap" as const,
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8, marginBottom: 12, alignItems: "flex-end" }}>
               <div>
                 <label htmlFor="as-filtro-dep" style={lbl}>DEPENDENCIA</label>
@@ -1452,8 +1532,8 @@ export function AsistenciaPage() {
 
               <button
                 className="btn"
-                disabled={filtered.length === 0}
-                onClick={() => exportXLSX(filtered, meta)}
+                disabled={shown.length === 0}
+                onClick={() => exportXLSX(shown, meta)}
                 style={{ padding: "7px 12px", fontSize: "0.76rem", whiteSpace: "nowrap" as const, alignSelf: "flex-end" as const }}
               >
                 Exportar Excel
@@ -1507,19 +1587,24 @@ export function AsistenciaPage() {
                 </thead>
 
                 <tbody>
-                  {filtered.length === 0 ? (
+                  {shown.length === 0 ? (
                     <tr>
                       <td colSpan={12} style={{ padding: 24, textAlign: "center" as const, color: "var(--muted)" }}>
                         Sin resultados
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((r, i) => (
+                    shown.map((r, i) => {
+                      const pend = esPendienteJust(r);
+                      return (
                       <tr
                         key={i}
                         style={{
                           borderBottom: "1px solid rgba(255,255,255,.05)",
-                          background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,.02)",
+                          background: pend
+                            ? "rgba(245,158,11,.10)"
+                            : i % 2 === 0 ? "transparent" : "rgba(255,255,255,.02)",
+                          borderLeft: pend ? "3px solid #f59e0b" : "3px solid transparent",
                         }}
                       >
                         <td
@@ -1629,14 +1714,16 @@ export function AsistenciaPage() {
                           {r.motivo || "—"}
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
             </div>
 
             <div style={{ marginTop: 8, fontSize: "0.72rem", color: "#64748b" }}>
-              Mostrando {filtered.length} de {results.length} registros
+              Mostrando {shown.length} de {results.length} registros
+              {tab === "PENDIENTES" ? " · pendientes de justificación" : ""}
             </div>
           </div>
         )}

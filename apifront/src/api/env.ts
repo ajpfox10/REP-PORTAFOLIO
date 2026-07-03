@@ -21,6 +21,21 @@ function fromVite(key: string): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+// Reescribe el host de una URL para que apunte a la MISMA IP/host por la que se
+// abrió el front. Necesario en servidores con varias redes (p.ej. 192.168.0.x y
+// 10.115.31.x): el cliente que entra por una IP debe llamar a la API por esa
+// misma IP, sin depender de ruteo entre redes. Mantiene protocolo, puerto y path.
+export function rewriteHostToCurrent(url: string): string {
+  try {
+    if (typeof window === 'undefined' || !window.location?.hostname) return url;
+    const u = new URL(url);
+    u.hostname = window.location.hostname;
+    return u.toString().replace(/\/+$/, '');
+  } catch {
+    return url;
+  }
+}
+
 export function getApiBaseUrl(): string {
   // prioridad: runtime-config.json -> .env -> default
   const cfg = runtime();
@@ -35,7 +50,8 @@ export function getApiBaseUrl(): string {
     (typeof v === 'string' && v.trim()) ||
     'http://192.168.0.21:3000/api/v1';
 
-  return base.replace(/\/+$/, ''); // sin trailing slash
+  // host = el mismo por el que se abrió el front (servidor multi-red); sin trailing slash
+  return rewriteHostToCurrent(base);
 }
 
 

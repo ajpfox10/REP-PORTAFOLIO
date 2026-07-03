@@ -89,3 +89,23 @@
 .btn-warn:hover { background: rgba(245,158,11,0.1) !important; }
 .btn-primary { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
 .btn-primary:hover { opacity: 0.85; }
+
+/* Banners del dashboard */
+.dashboard-alerts-admin { display: flex; flex-direction: column; gap: 1rem; }
+.dashboard-alerts-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.dashboard-alerts-head h3 { margin: 0 0 0.35rem; color: var(--text); }
+.dashboard-alerts-head p { margin: 0; color: var(--muted); font-size: 0.86rem; max-width: 760px; }
+.dashboard-alerts-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.dashboard-alerts-warning { margin-top: 0.75rem; border: 1px solid rgba(245,158,11,0.45); background: rgba(245,158,11,0.1); color: #fbbf24; border-radius: 8px; padding: 0.65rem 0.8rem; font-size: 0.82rem; }
+.dashboard-alerts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0.8rem; }
+.dashboard-alert-card { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 1rem; }
+.dashboard-alert-card.disabled { opacity: 0.62; }
+.dashboard-alert-card-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; margin-bottom: 1rem; }
+.dashboard-alert-card-title strong { color: var(--text); display: block; margin-bottom: 0.2rem; }
+.dashboard-alert-card-title span { color: var(--muted); font-size: 0.78rem; }
+.dashboard-alert-toggle { display: flex; align-items: center; gap: 0.35rem; color: var(--text); font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.dashboard-alert-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.65rem; }
+.dashboard-alert-fields label { display: flex; flex-direction: column; gap: 0.3rem; color: var(--muted); font-size: 0.76rem; }
+.dashboard-alert-fields input { width: 100%; box-sizing: border-box; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 7px; background: rgba(255,255,255,0.06); color: var(--text); }
+.dashboard-alert-fields span { font-size: 0.68rem; }
+@media (max-width: 720px) { .dashboard-alert-fields { grid-template-columns: 1fr; } }

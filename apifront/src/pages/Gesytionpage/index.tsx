@@ -6,6 +6,7 @@ import { apiFetch } from '../../api/http';
 import { useAuth } from '../../auth/AuthProvider';
 import { exportToExcel, exportToPdf, exportToWord, printTable } from '../../utils/export';
 import { loadSession } from '../../auth/session';
+import { atenderCitacion } from '../../api/citaciones';
 
 import { useAgenteSearch } from './hooks/useAgenteSearch';
 import { useModules, type ModuleKey } from './hooks/useModules';
@@ -24,6 +25,7 @@ import { FotoCredencialCard } from './components/components/FotoCredencialCard';
 import { PedidoModal } from './components/modals/PedidoModal';
 import { CellModal } from './components/modals/CellModal';
 import { DocViewerModal } from './components/modals/DocViewerModal';
+import { ExpedientesModal } from './components/modals/ExpedientesModal';
 import { GestionDocumentPreview }        from './components/components/GestionDocumentPreview';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
@@ -113,10 +115,7 @@ function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) 
     if (!citCerrar) return;
     setSavingCerrar(true);
     try {
-      await apiFetch<any>(`/citaciones/${citCerrar.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ citacion_activa: 0, cierre_citacion: new Date().toISOString() }),
-      });
+      await atenderCitacion(citCerrar);
       toast.ok('Citación cerrada');
       setCitCerrar(null);
       cargar();
@@ -494,6 +493,14 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
   });
 
   const save = async () => {
+    if (form.fecha_egreso && (!form.estado_empleo || form.estado_empleo === 'ACTIVO')) {
+      toast.error(
+        'Seleccioná el motivo del egreso',
+        'Una vinculación con fecha de egreso debe quedar INACTIVA, de BAJA, en COMISIÓN o en TRÁMITE.'
+      );
+      setExpanded(true);
+      return;
+    }
     setSaving(true);
     try {
       const payload: any = {};
@@ -673,7 +680,37 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
             {renderCatalogSelect('servicio_id', 'SERVICIO')}
             {renderCatalogSelect('sector_id', 'SECTOR')}
             {renderText('fecha_ingreso', 'F. INGRESO', 'date')}
-            {renderText('fecha_egreso', 'F. EGRESO', 'date')}
+            <div style={{ minWidth: 0 }}>
+              <label htmlFor="gp-edit-fecha-egreso" style={labelStyle}>F. EGRESO</label>
+              <input id="gp-edit-fecha-egreso" name="fecha_egreso" className="input" type="date"
+                value={form.fecha_egreso ?? ''} style={fieldStyle}
+                onChange={e => {
+                  const fecha = e.target.value;
+                  setForm((f: any) => ({
+                    ...f,
+                    fecha_egreso: fecha,
+                    estado_empleo: fecha && f.estado_empleo === 'ACTIVO' ? '' : f.estado_empleo,
+                  }));
+                }} />
+            </div>
+            {form.fecha_egreso && (
+              <div style={{
+                gridColumn: '1 / -1', padding: 8, borderRadius: 8,
+                background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+              }}>
+                <label htmlFor="gp-edit-estado-egreso" style={{ ...labelStyle, color: '#fbbf24' }}>
+                  MOTIVO / ESTADO AL EGRESAR
+                </label>
+                <select id="gp-edit-estado-egreso" className="input" value={form.estado_empleo || ''}
+                  style={fieldStyle} onChange={e => set('estado_empleo', e.target.value)}>
+                  <option value="">— seleccioná una opción —</option>
+                  <option value="INACTIVO">INACTIVO</option>
+                  <option value="BAJA">BAJA</option>
+                  <option value="COMISION">COMISION</option>
+                  <option value="TRAMITE">TRAMITE</option>
+                </select>
+              </div>
+            )}
             {renderText('legajo', 'LEGAJO')}
             {renderText('salario_mensual', 'SALARIO MENSUAL')}
           </div>
@@ -718,6 +755,10 @@ export function GestionPage() {
   const [modalCitaciones,   setModalCitaciones]   = useState(false);
   const [citacionesActivas, setCitacionesActivas] = useState(0);
 
+  // Expedientes
+  const [modalExpedientes, setModalExpedientes] = useState(false);
+  const [expedientesCount, setExpedientesCount] = useState(0);
+
   useEffect(() => { setRow(agenteSearch.row); }, [agenteSearch.row]);
   useEffect(() => { setLoading(agenteSearch.loading); }, [agenteSearch.loading]);
 
@@ -729,6 +770,16 @@ export function GestionPage() {
     apiFetch<any>(`/citaciones?dni=${agenteSearch.cleanDni}&citacion_activa=1&limit=100`)
       .then(r => setCitacionesActivas(Array.isArray(r?.data) ? r.data.length : 0))
       .catch(() => setCitacionesActivas(0));
+  }, [agenteSearch.cleanDni]);
+
+  // Reset expedientes al cambiar agente
+  useEffect(() => {
+    setExpedientesCount(0);
+    setModalExpedientes(false);
+    if (!agenteSearch.cleanDni) return;
+    apiFetch<any>(`/expedientes?dni=${agenteSearch.cleanDni}&limit=200`)
+      .then(r => setExpedientesCount(Array.isArray(r?.data) ? r.data.length : 0))
+      .catch(() => setExpedientesCount(0));
   }, [agenteSearch.cleanDni]);
 
   useEffect(() => {
@@ -853,6 +904,8 @@ export function GestionPage() {
                 onCloseModule={closeModule}
                 onOpenCitaciones={() => setModalCitaciones(true)}
                 citacionesActivas={citacionesActivas}
+                onOpenExpedientes={() => setModalExpedientes(true)}
+                expedientesCount={expedientesCount}
               />
             )}
           </div>
@@ -943,6 +996,15 @@ export function GestionPage() {
           row={row}
           onClose={() => setModalCitaciones(false)}
           onCountChange={n => setCitacionesActivas(n)}
+        />
+      )}
+
+      {/* ── Modal expedientes ── */}
+      {modalExpedientes && row && (
+        <ExpedientesModal
+          row={row}
+          onClose={() => setModalExpedientes(false)}
+          onCountChange={n => setExpedientesCount(n)}
         />
       )}
     </Layout>

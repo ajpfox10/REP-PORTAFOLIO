@@ -573,6 +573,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/adms_device_structures:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List adms_device_structures
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_adms_device_structures"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create adms_device_structures
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_adms_device_structures_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/adms_device_structures/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get adms_device_structures by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update adms_device_structures by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_adms_device_structures"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch adms_device_structures by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_adms_device_structures_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete adms_device_structures by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/agentes:
     get:
       tags:
@@ -1629,6 +1761,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/app_runtime_config:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List app_runtime_config
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_app_runtime_config"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create app_runtime_config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_app_runtime_config_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/app_runtime_config/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get app_runtime_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update app_runtime_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_app_runtime_config"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch app_runtime_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_app_runtime_config_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete app_runtime_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/articulo_26:
     get:
       tags:
@@ -2014,6 +2278,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete auth_login_guard by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/becarios_art:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List becarios_art
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_becarios_art"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create becarios_art
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_becarios_art_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/becarios_art/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get becarios_art by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update becarios_art by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_becarios_art"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch becarios_art by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_becarios_art_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete becarios_art by id
       parameters:
         - name: id
           in: path
@@ -2938,6 +3334,402 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete codigoa by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/concursos_funciones_examenes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List concursos_funciones_examenes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_concursos_funciones_examenes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create concursos_funciones_examenes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_funciones_examenes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/concursos_funciones_examenes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get concursos_funciones_examenes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update concursos_funciones_examenes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_funciones_examenes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch concursos_funciones_examenes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_funciones_examenes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete concursos_funciones_examenes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/concursos_funciones_inscriptos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List concursos_funciones_inscriptos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_concursos_funciones_inscriptos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create concursos_funciones_inscriptos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_funciones_inscriptos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/concursos_funciones_inscriptos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get concursos_funciones_inscriptos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update concursos_funciones_inscriptos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_funciones_inscriptos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch concursos_funciones_inscriptos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_funciones_inscriptos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete concursos_funciones_inscriptos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/concursos_jurados:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List concursos_jurados
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_concursos_jurados"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create concursos_jurados
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_jurados_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/concursos_jurados/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get concursos_jurados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update concursos_jurados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_jurados"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch concursos_jurados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_concursos_jurados_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete concursos_jurados by id
       parameters:
         - name: id
           in: path
@@ -5274,6 +6066,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/fc_cert_reemplazos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List fc_cert_reemplazos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_fc_cert_reemplazos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create fc_cert_reemplazos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_fc_cert_reemplazos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/fc_cert_reemplazos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get fc_cert_reemplazos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update fc_cert_reemplazos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_fc_cert_reemplazos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch fc_cert_reemplazos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_fc_cert_reemplazos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete fc_cert_reemplazos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/feriados:
     get:
       tags:
@@ -5659,6 +6583,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete funciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/guarderia:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List guarderia
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_guarderia"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create guarderia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/guarderia/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get guarderia by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update guarderia by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch guarderia by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete guarderia by id
       parameters:
         - name: id
           in: path
@@ -9498,6 +10554,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/posibles_jubilados:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List posibles_jubilados
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_posibles_jubilados"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create posibles_jubilados
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_posibles_jubilados_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/posibles_jubilados/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get posibles_jubilados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update posibles_jubilados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_posibles_jubilados"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch posibles_jubilados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_posibles_jubilados_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete posibles_jubilados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/practicas_profesionales:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List practicas_profesionales
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_practicas_profesionales"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create practicas_profesionales
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_practicas_profesionales_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/practicas_profesionales/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get practicas_profesionales by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update practicas_profesionales by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_practicas_profesionales"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch practicas_profesionales by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_practicas_profesionales_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete practicas_profesionales by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/prexamen:
     get:
       tags:
@@ -11742,6 +13062,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/sin_salida_ausentes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List sin_salida_ausentes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_sin_salida_ausentes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create sin_salida_ausentes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_sin_salida_ausentes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/sin_salida_ausentes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get sin_salida_ausentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update sin_salida_ausentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_sin_salida_ausentes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch sin_salida_ausentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_sin_salida_ausentes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete sin_salida_ausentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/tareas:
     get:
       tags:
@@ -12655,6 +14107,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete tipoderesolucion by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/user_scan_music:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List user_scan_music
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_user_scan_music"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create user_scan_music
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_user_scan_music_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/user_scan_music/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get user_scan_music by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update user_scan_music by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_user_scan_music"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch user_scan_music by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_user_scan_music_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete user_scan_music by id
       parameters:
         - name: id
           in: path
@@ -13840,6 +15424,114 @@ components:
         created_at:
           type: string
           format: date-time
+    Table_adms_device_structures:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        sn:
+          type: string
+        reparticion_id:
+          type: number
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - sn
+    Table_adms_device_structures_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        sn:
+          type: string
+        reparticion_id:
+          type: number
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - sn
+    Table_adms_device_structures_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        sn:
+          type: string
+        reparticion_id:
+          type: number
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_agentes:
       type: object
       additionalProperties: false
@@ -14797,6 +16489,63 @@ components:
         created_at:
           type: string
           format: date-time
+    Table_app_runtime_config:
+      type: object
+      additionalProperties: false
+      properties:
+        config_key:
+          type: string
+        config_json:
+          type: string
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - config_key
+        - config_json
+    Table_app_runtime_config_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        config_key:
+          type: string
+        config_json:
+          type: string
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - config_key
+        - config_json
+    Table_app_runtime_config_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        config_key:
+          type: string
+        config_json:
+          type: string
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Table_articulo_26:
       type: object
       additionalProperties: false
@@ -15188,6 +16937,89 @@ components:
           format: date-time
           nullable: true
         last_attempt_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_becarios_art:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        pagina:
+          type: string
+        creado_por:
+          type: number
+          nullable: true
+        actualizado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+        - pagina
+    Table_becarios_art_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        pagina:
+          type: string
+        creado_por:
+          type: number
+          nullable: true
+        actualizado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - pagina
+    Table_becarios_art_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        pagina:
+          type: string
+        creado_por:
+          type: number
+          nullable: true
+        actualizado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
           type: string
           format: date-time
           nullable: true
@@ -15888,6 +17720,557 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+    Table_concursos_funciones_examenes:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tipo:
+          type: string
+        cargo:
+          type: string
+          nullable: true
+        modalidad:
+          type: string
+          nullable: true
+        nombre_cargo:
+          type: string
+          nullable: true
+        tipo_unidad:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        ocupacion_id:
+          type: number
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        regimen_horario:
+          type: string
+          nullable: true
+        dependencia_texto:
+          type: string
+          nullable: true
+        resolucion_llamado:
+          type: string
+          nullable: true
+        disposicion_llamado:
+          type: string
+          nullable: true
+        titulo:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        hora:
+          type: string
+          format: date-time
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        ciudad:
+          type: string
+          nullable: true
+        hospital:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        hora_cierre:
+          type: string
+          format: date-time
+          nullable: true
+        estado:
+          type: string
+        fecha_cierre:
+          type: string
+          format: date-time
+          nullable: true
+        acta_observaciones:
+          type: string
+          nullable: true
+        cerrado_por:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - titulo
+        - fecha
+    Table_concursos_funciones_examenes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        tipo:
+          type: string
+        cargo:
+          type: string
+          nullable: true
+        modalidad:
+          type: string
+          nullable: true
+        nombre_cargo:
+          type: string
+          nullable: true
+        tipo_unidad:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        ocupacion_id:
+          type: number
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        regimen_horario:
+          type: string
+          nullable: true
+        dependencia_texto:
+          type: string
+          nullable: true
+        resolucion_llamado:
+          type: string
+          nullable: true
+        disposicion_llamado:
+          type: string
+          nullable: true
+        titulo:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        hora:
+          type: string
+          format: date-time
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        ciudad:
+          type: string
+          nullable: true
+        hospital:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        hora_cierre:
+          type: string
+          format: date-time
+          nullable: true
+        estado:
+          type: string
+        fecha_cierre:
+          type: string
+          format: date-time
+          nullable: true
+        acta_observaciones:
+          type: string
+          nullable: true
+        cerrado_por:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - titulo
+        - fecha
+    Table_concursos_funciones_examenes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        tipo:
+          type: string
+        cargo:
+          type: string
+          nullable: true
+        modalidad:
+          type: string
+          nullable: true
+        nombre_cargo:
+          type: string
+          nullable: true
+        tipo_unidad:
+          type: string
+          nullable: true
+        servicio_id:
+          type: number
+          nullable: true
+        ocupacion_id:
+          type: number
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        regimen_horario:
+          type: string
+          nullable: true
+        dependencia_texto:
+          type: string
+          nullable: true
+        resolucion_llamado:
+          type: string
+          nullable: true
+        disposicion_llamado:
+          type: string
+          nullable: true
+        titulo:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        hora:
+          type: string
+          format: date-time
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        ciudad:
+          type: string
+          nullable: true
+        hospital:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        hora_cierre:
+          type: string
+          format: date-time
+          nullable: true
+        estado:
+          type: string
+        fecha_cierre:
+          type: string
+          format: date-time
+          nullable: true
+        acta_observaciones:
+          type: string
+          nullable: true
+        cerrado_por:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_concursos_funciones_inscriptos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        examen_id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        puntaje:
+          type: number
+          nullable: true
+        orden_prelacion:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - examen_id
+        - dni
+    Table_concursos_funciones_inscriptos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        examen_id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        puntaje:
+          type: number
+          nullable: true
+        orden_prelacion:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - examen_id
+        - dni
+    Table_concursos_funciones_inscriptos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        examen_id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        puntaje:
+          type: number
+          nullable: true
+        orden_prelacion:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    Table_concursos_jurados:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        examen_id:
+          type: number
+        representacion:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        apellido_nombre:
+          type: string
+        profesion:
+          type: string
+          nullable: true
+        especialidad:
+          type: string
+          nullable: true
+        condicion:
+          type: string
+        asistio:
+          type: number
+        orden:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - examen_id
+        - representacion
+        - apellido_nombre
+    Table_concursos_jurados_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        examen_id:
+          type: number
+        representacion:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        apellido_nombre:
+          type: string
+        profesion:
+          type: string
+          nullable: true
+        especialidad:
+          type: string
+          nullable: true
+        condicion:
+          type: string
+        asistio:
+          type: number
+        orden:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - examen_id
+        - representacion
+        - apellido_nombre
+    Table_concursos_jurados_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        examen_id:
+          type: number
+        representacion:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        apellido_nombre:
+          type: string
+        profesion:
+          type: string
+          nullable: true
+        especialidad:
+          type: string
+          nullable: true
+        condicion:
+          type: string
+        asistio:
+          type: number
+        orden:
+          type: number
+        observaciones:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
           nullable: true
     Table_consultas:
       type: object
@@ -17889,6 +20272,196 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_fc_cert_reemplazos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        anio:
+          type: number
+        seccion:
+          type: string
+        agente:
+          type: string
+        enero:
+          type: string
+          nullable: true
+        febrero:
+          type: string
+          nullable: true
+        marzo:
+          type: string
+          nullable: true
+        abril:
+          type: string
+          nullable: true
+        mayo:
+          type: string
+          nullable: true
+        junio:
+          type: string
+          nullable: true
+        julio:
+          type: string
+          nullable: true
+        agosto:
+          type: string
+          nullable: true
+        septiembre:
+          type: string
+          nullable: true
+        octubre:
+          type: string
+          nullable: true
+        noviembre:
+          type: string
+          nullable: true
+        diciembre:
+          type: string
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - anio
+        - seccion
+        - agente
+    Table_fc_cert_reemplazos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        anio:
+          type: number
+        seccion:
+          type: string
+        agente:
+          type: string
+        enero:
+          type: string
+          nullable: true
+        febrero:
+          type: string
+          nullable: true
+        marzo:
+          type: string
+          nullable: true
+        abril:
+          type: string
+          nullable: true
+        mayo:
+          type: string
+          nullable: true
+        junio:
+          type: string
+          nullable: true
+        julio:
+          type: string
+          nullable: true
+        agosto:
+          type: string
+          nullable: true
+        septiembre:
+          type: string
+          nullable: true
+        octubre:
+          type: string
+          nullable: true
+        noviembre:
+          type: string
+          nullable: true
+        diciembre:
+          type: string
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - anio
+        - seccion
+        - agente
+    Table_fc_cert_reemplazos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        anio:
+          type: number
+        seccion:
+          type: string
+        agente:
+          type: string
+        enero:
+          type: string
+          nullable: true
+        febrero:
+          type: string
+          nullable: true
+        marzo:
+          type: string
+          nullable: true
+        abril:
+          type: string
+          nullable: true
+        mayo:
+          type: string
+          nullable: true
+        junio:
+          type: string
+          nullable: true
+        julio:
+          type: string
+          nullable: true
+        agosto:
+          type: string
+          nullable: true
+        septiembre:
+          type: string
+          nullable: true
+        octubre:
+          type: string
+          nullable: true
+        noviembre:
+          type: string
+          nullable: true
+        diciembre:
+          type: string
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_feriados:
       type: object
       additionalProperties: false
@@ -18170,6 +20743,200 @@ components:
           type: number
           nullable: true
         updated_by:
+          type: number
+          nullable: true
+    Table_guarderia:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha_nacimiento:
+          type: string
+          format: date-time
+        alerta_45_avisada:
+          type: number
+        alerta_45_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_usuario_id:
+          type: number
+          nullable: true
+        alerta_45_usuario_nombre:
+          type: string
+          nullable: true
+        alerta_45_usuario_email:
+          type: string
+          nullable: true
+        tramite_realizado:
+          type: number
+        tramite_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        tramite_usuario_id:
+          type: number
+          nullable: true
+        tramite_usuario_nombre:
+          type: string
+          nullable: true
+        tramite_usuario_email:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha_nacimiento
+    Table_guarderia_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha_nacimiento:
+          type: string
+          format: date-time
+        alerta_45_avisada:
+          type: number
+        alerta_45_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_usuario_id:
+          type: number
+          nullable: true
+        alerta_45_usuario_nombre:
+          type: string
+          nullable: true
+        alerta_45_usuario_email:
+          type: string
+          nullable: true
+        tramite_realizado:
+          type: number
+        tramite_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        tramite_usuario_id:
+          type: number
+          nullable: true
+        tramite_usuario_nombre:
+          type: string
+          nullable: true
+        tramite_usuario_email:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - fecha_nacimiento
+    Table_guarderia_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha_nacimiento:
+          type: string
+          format: date-time
+        alerta_45_avisada:
+          type: number
+        alerta_45_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        alerta_45_usuario_id:
+          type: number
+          nullable: true
+        alerta_45_usuario_nombre:
+          type: string
+          nullable: true
+        alerta_45_usuario_email:
+          type: string
+          nullable: true
+        tramite_realizado:
+          type: number
+        tramite_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        tramite_usuario_id:
+          type: number
+          nullable: true
+        tramite_usuario_nombre:
+          type: string
+          nullable: true
+        tramite_usuario_email:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_by:
           type: number
           nullable: true
     Table_idempotency_keys:
@@ -18722,6 +21489,9 @@ components:
           type: number
         anses_insalubre:
           type: number
+        servicios_anses:
+          type: string
+          nullable: true
         servicios_externos:
           type: string
           nullable: true
@@ -18791,6 +21561,9 @@ components:
           type: number
         anses_insalubre:
           type: number
+        servicios_anses:
+          type: string
+          nullable: true
         servicios_externos:
           type: string
           nullable: true
@@ -18861,6 +21634,9 @@ components:
           type: number
         anses_insalubre:
           type: number
+        servicios_anses:
+          type: string
+          nullable: true
         servicios_externos:
           type: string
           nullable: true
@@ -21816,6 +24592,341 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_posibles_jubilados:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        ocupacion_nombre:
+          type: string
+          nullable: true
+        es_insalubre:
+          type: number
+        tipo_jubilacion:
+          type: string
+          nullable: true
+        mes_corte:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        jubilacion_calculo_id:
+          type: number
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        creado_por_nombre:
+          type: string
+          nullable: true
+        modificado_por:
+          type: number
+          nullable: true
+        modificado_por_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+        - apellido
+        - nombre
+    Table_posibles_jubilados_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        ocupacion_nombre:
+          type: string
+          nullable: true
+        es_insalubre:
+          type: number
+        tipo_jubilacion:
+          type: string
+          nullable: true
+        mes_corte:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        jubilacion_calculo_id:
+          type: number
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        creado_por_nombre:
+          type: string
+          nullable: true
+        modificado_por:
+          type: number
+          nullable: true
+        modificado_por_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+    Table_posibles_jubilados_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_ingreso:
+          type: string
+          format: date-time
+          nullable: true
+        ley_nombre:
+          type: string
+          nullable: true
+        ocupacion_nombre:
+          type: string
+          nullable: true
+        es_insalubre:
+          type: number
+        tipo_jubilacion:
+          type: string
+          nullable: true
+        mes_corte:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        jubilacion_calculo_id:
+          type: number
+          nullable: true
+        creado_por:
+          type: number
+          nullable: true
+        creado_por_nombre:
+          type: string
+          nullable: true
+        modificado_por:
+          type: number
+          nullable: true
+        modificado_por_nombre:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_practicas_profesionales:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha_desde:
+          type: string
+          format: date-time
+        dias:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha_desde
+        - dias
+    Table_practicas_profesionales_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha_desde:
+          type: string
+          format: date-time
+        dias:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - fecha_desde
+        - dias
+    Table_practicas_profesionales_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha_desde:
+          type: string
+          format: date-time
+        dias:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
     Table_prexamen:
       type: object
       additionalProperties: false
@@ -22906,6 +26017,8 @@ components:
           type: string
         duplex:
           type: number
+        paper_size:
+          type: string
         status:
           type: string
         page_count:
@@ -22959,6 +26072,8 @@ components:
           type: string
         duplex:
           type: number
+        paper_size:
+          type: string
         status:
           type: string
         page_count:
@@ -23013,6 +26128,8 @@ components:
           type: string
         duplex:
           type: number
+        paper_size:
+          type: string
         status:
           type: string
         page_count:
@@ -23526,6 +26643,185 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+    Table_sin_salida_ausentes:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: string
+        nombre:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+        dia_semana:
+          type: string
+          nullable: true
+        hora_entrada_programada:
+          type: string
+          nullable: true
+        hora_salida_programada:
+          type: string
+          nullable: true
+        entrada_real:
+          type: string
+          nullable: true
+        upa:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        es_guardia:
+          type: number
+        estado_origen:
+          type: string
+          nullable: true
+        resolucion:
+          type: string
+        observacion:
+          type: string
+          nullable: true
+        cargado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha
+    Table_sin_salida_ausentes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: string
+        nombre:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+        dia_semana:
+          type: string
+          nullable: true
+        hora_entrada_programada:
+          type: string
+          nullable: true
+        hora_salida_programada:
+          type: string
+          nullable: true
+        entrada_real:
+          type: string
+          nullable: true
+        upa:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        es_guardia:
+          type: number
+        estado_origen:
+          type: string
+          nullable: true
+        resolucion:
+          type: string
+        observacion:
+          type: string
+          nullable: true
+        cargado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+        - fecha
+    Table_sin_salida_ausentes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: string
+        nombre:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+        dia_semana:
+          type: string
+          nullable: true
+        hora_entrada_programada:
+          type: string
+          nullable: true
+        hora_salida_programada:
+          type: string
+          nullable: true
+        entrada_real:
+          type: string
+          nullable: true
+        upa:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        ocupacion:
+          type: string
+          nullable: true
+        es_guardia:
+          type: number
+        estado_origen:
+          type: string
+          nullable: true
+        resolucion:
+          type: string
+        observacion:
+          type: string
+          nullable: true
+        cargado_por:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
           nullable: true
     Table_tareas:
       type: object
@@ -24180,6 +27476,54 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_user_scan_music:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        usuario_id:
+          type: number
+        melodia:
+          type: string
+        volumen:
+          type: number
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - usuario_id
+    Table_user_scan_music_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        usuario_id:
+          type: number
+        melodia:
+          type: string
+        volumen:
+          type: number
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - usuario_id
+    Table_user_scan_music_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        usuario_id:
+          type: number
+        melodia:
+          type: string
+        volumen:
+          type: number
+        updated_at:
+          type: string
+          format: date-time
     Table_users:
       type: object
       additionalProperties: false

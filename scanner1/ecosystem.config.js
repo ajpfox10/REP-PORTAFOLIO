@@ -65,26 +65,6 @@ module.exports = {
         MYSQL_PASSWORD: 'Cuernos2503'
       }
     },
-    {
-      name: 'scanner-agent-dev',
-      cwd: 'C:\\apps\\personaldev\\scanner1\\agent',
-      script: 'dist/agent.js',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_restarts: 10,
-      restart_delay: 3000,
-      env: {
-        NODE_ENV: 'development',
-        BASE_URL: 'http://localhost:3003',
-        AGENT_TENANT_ID: '1',
-        AGENT_EMAIL: 'admin@scanner.local',
-        AGENT_PASSWORD: 'Admin12345@',
-        HEARTBEAT_MS: '30000',
-        DISCOVER_INTERVAL_MS: '300000'
-      }
-    },
     // ── AGENT LITE (servidor, siempre corriendo en el server) ─────────────────
     // Para PCs remotas: copiar agent-lite/ a la PC, crear .env, y correr npm start
     {

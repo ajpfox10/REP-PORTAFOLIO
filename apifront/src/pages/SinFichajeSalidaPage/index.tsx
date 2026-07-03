@@ -125,9 +125,33 @@ interface RawFichajeRow {
   tipo:      "Entrada" | "Salida";
 }
 
-type Tab          = "registros" | "agentes" | "invertidos" | "fichosindeber" | "sinhorario" | "horarios";
+type Tab          = "registros" | "agentes" | "invertidos" | "fichosindeber" | "sinhorario" | "horarios" | "ausentes";
 type ModoConsulta = "fecha" | "periodo" | "rango";
 type FiltroEstado = "todos" | "SOSPECHOSO" | "SIN_SALIDA" | "SOLO_SALIDA" | "PRESENTE_SIN_ESTAR" | "SIN_FICHAJE" | "REQUIERE_REVISION" | "JUSTIFICADO" | "CON_SALIDA";
+
+// Registro de un agente marcado AUSENTE por no fichar la salida (tabla sin_salida_ausentes)
+interface AusenteRow {
+  id:                    number;
+  dni:                   string;
+  nombre:                string | null;
+  fecha:                 string | null;   // YYYY-MM-DD
+  diaSemana:             string | null;
+  horaEntradaProgramada: string | null;
+  horaSalidaProgramada:  string | null;
+  entradaReal:           string | null;
+  upa:                   string | null;
+  servicio:              string | null;
+  ocupacion:             string | null;
+  esGuardia:             boolean;
+  estadoOrigen:          string | null;
+  resolucion:            string;
+  observacion:           string | null;
+  cargadoPor:            number | null;
+  cargadoPorNombre:      string | null;
+  cargadoPorEmail:       string | null;
+  createdAt:             string | null;
+  updatedAt:             string | null;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtFecha(iso: string): string {
@@ -210,13 +234,15 @@ function Paginacion({ pagina, total, onChange }: { pagina: number; total: number
 }
 
 // ── Modal fichajes de agente (Agentes c/ problema y Fichaje invertido) ────────
-function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNovedades, horarioAgente }: {
+function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNovedades, horarioAgente, ausentesMap, onMarcar }: {
   agente:            { dni: string; nombre: string; upa: string };
   rows:              SinSalidaRow[];
   highlightInvertido?: boolean;
   onClose:           () => void;
   siapNovedades?:    Array<{ novedad: string; desde: string; hasta: string }>;
   horarioAgente?:    { diasLaborables: string[]; horas: Record<string, { entrada: string | null; salida: string | null }> };
+  ausentesMap?:      Map<string, AusenteRow>;
+  onMarcar?:         (row: SinSalidaRow) => void;
 }) {
   const agentRows = rows
     .filter(r => r.dni === agente.dni)
@@ -278,7 +304,7 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                {["Fecha", "Día", "Prog. Entrada", "Prog. Salida", "Real Entrada", "Real Salida", "Estado", "Nov. SIAP", "Rec. Médico"].map(h => (
+                {["Fecha", "Día", "Prog. Entrada", "Prog. Salida", "Real Entrada", "Real Salida", "Estado", "Nov. SIAP", "Rec. Médico", "Ausente"].map(h => (
                   <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--card, #1e293b)" }}>
                     {h}
                   </th>
@@ -287,7 +313,7 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
             </thead>
             <tbody>
               {agentRows.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin registros.</td></tr>
+                <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin registros.</td></tr>
               ) : agentRows.map((r, i) => {
                 const esProblema  = r.estado === "SIN_SALIDA" || r.estado === "SOLO_SALIDA" || r.estado === "PRESENTE_SIN_ESTAR" || r.estado === "SIN_FICHAJE";
                 const esInvertido = highlightInvertido ? r.fichajeInvertido : false;
@@ -328,6 +354,29 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
                           </span>
                         : <span style={{ color: "#475569" }}>—</span>
                       }
+                    </td>
+                    <td style={{ padding: "7px 12px", whiteSpace: "nowrap" }}>
+                      {(() => {
+                        const marc = ausentesMap?.get(`${r.dni}|${r.fecha}`);
+                        if (marc) {
+                          return (
+                            <span
+                              style={{ ...badge, background: "rgba(239,68,68,0.18)", color: "#f87171", border: "1px solid rgba(239,68,68,0.35)", fontSize: "0.7rem" }}
+                              title={`Cargado por ${marc.cargadoPorNombre ?? marc.cargadoPorEmail ?? "—"}${marc.observacion ? " · " + marc.observacion : ""}`}
+                            >
+                              ✓ Ausente{marc.cargadoPorNombre ? ` · ${marc.cargadoPorNombre}` : ""}
+                            </span>
+                          );
+                        }
+                        if (r.estado === "SIN_SALIDA" && onMarcar) {
+                          return (
+                            <button className="btn" style={{ fontSize: "0.7rem", padding: "3px 9px" }} onClick={() => onMarcar(r)}>
+                              Marcar ausente
+                            </button>
+                          );
+                        }
+                        return <span style={{ color: "#475569" }}>—</span>;
+                      })()}
                     </td>
                   </tr>
                 );
@@ -695,6 +744,14 @@ export function SinFichajeSalidaPage() {
   // modal fichó sin deber agente (doble click en tabla agrupada)
   const [fichoDeberModal, setFichoDeberModal] = useState<FichoAgenteAgrupado | null>(null);
 
+  // registro de AUSENTES (sin salida marcados ausente)
+  const [ausentes, setAusentes]               = useState<AusenteRow[]>([]);
+  const [ausentesLoading, setAusentesLoading] = useState(false);
+  const [consultaRange, setConsultaRange]     = useState<{ desde: string; hasta: string } | null>(null);
+  const [marcarTarget, setMarcarTarget]       = useState<SinSalidaRow | null>(null);
+  const [marcarObs, setMarcarObs]             = useState("");
+  const [marcarSaving, setMarcarSaving]       = useState(false);
+
   const autoLoadRef = useRef(false);
 
   useEffect(() => { setPaginaR(1); setPaginaA(1); setPaginaI(1); setPaginaF(1); }, [rows]);
@@ -764,6 +821,18 @@ export function SinFichajeSalidaPage() {
       setSinHorarioAgentes((r as any).sinHorarioAgentes ?? []);
       if (rf && rf.ok) { setRowsFicho(rf.data ?? []); setMetaFicho(rf.meta ?? null); }
       setLoaded(true);
+
+      // Rango aplicado → dispara la carga del registro de ausentes (efecto sobre consultaRange)
+      let aDesde = "", aHasta = "";
+      if (modo === "fecha")        { aDesde = fecha; aHasta = fecha; }
+      else if (modo === "rango")   { aDesde = desde; aHasta = hasta; }
+      else if (modo === "periodo") {
+        const [y, m] = periodo.split("-").map(Number);
+        const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+        aDesde = `${periodo}-01`;
+        aHasta = `${periodo}-${String(last).padStart(2, "0")}`;
+      }
+      setConsultaRange({ desde: aDesde, hasta: aHasta });
     } catch (e: any) {
       toastError("Error", e?.message ?? "No se pudo cargar");
     } finally {
@@ -797,6 +866,81 @@ export function SinFichajeSalidaPage() {
       setFichajeRawLoading(false);
     }
   }, [modo, fecha, periodo]);
+
+  // ── Registro de ausentes ──────────────────────────────────────────────────
+  const cargarAusentes = useCallback(async (d: string, h: string) => {
+    setAusentesLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (d) qs.set("desde", d);
+      if (h) qs.set("hasta", h);
+      const r = await apiFetch<{ ok: boolean; data: AusenteRow[] }>(`/sin-salida/ausentes?${qs.toString()}`);
+      if (r.ok) setAusentes(r.data ?? []);
+    } catch (e: any) {
+      toastError("Error", e?.message ?? "No se pudieron cargar los ausentes");
+    } finally {
+      setAusentesLoading(false);
+    }
+  }, [toastError]);
+
+  // Cada consulta (nuevo rango) recarga el registro de ausentes de ese período
+  useEffect(() => {
+    if (consultaRange) cargarAusentes(consultaRange.desde, consultaRange.hasta);
+  }, [consultaRange, cargarAusentes]);
+
+  const marcarAusente = useCallback(async (row: SinSalidaRow, observacion: string) => {
+    setMarcarSaving(true);
+    try {
+      const r = await apiFetch<{ ok: boolean; data: AusenteRow; error?: string }>(
+        "/sin-salida/ausentes",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dni:                   row.dni,
+            nombre:                row.nombre,
+            fecha:                 row.fecha,
+            diaSemana:             row.diaSemana,
+            horaEntradaProgramada: row.horaEntradaProgramada,
+            horaSalidaProgramada:  row.horaSalidaProgramada,
+            entradaReal:           row.entrada,
+            upa:                   row.upa,
+            servicio:              row.servicio,
+            ocupacion:             row.ocupacion,
+            esGuardia:             row.esGuardia,
+            estadoOrigen:          row.estado,
+            resolucion:            "AUSENTE",
+            observacion:           observacion || null,
+          }),
+        },
+      );
+      if (!r.ok || !r.data) throw new Error(r.error ?? "No se pudo guardar");
+      const saved = r.data;
+      setAusentes(prev => [saved, ...prev.filter(a => !(a.dni === saved.dni && a.fecha === saved.fecha))]);
+      setMarcarTarget(null);
+      setMarcarObs("");
+    } catch (e: any) {
+      toastError("Error", e?.message ?? "No se pudo marcar ausente");
+    } finally {
+      setMarcarSaving(false);
+    }
+  }, [toastError]);
+
+  const eliminarAusente = useCallback(async (id: number) => {
+    try {
+      const r = await apiFetch<{ ok: boolean; error?: string }>(`/sin-salida/ausentes/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(r.error ?? "No se pudo eliminar");
+      setAusentes(prev => prev.filter(a => a.id !== id));
+    } catch (e: any) {
+      toastError("Error", e?.message ?? "No se pudo eliminar el ausente");
+    }
+  }, [toastError]);
+
+  const ausentesMap = React.useMemo(() => {
+    const m = new Map<string, AusenteRow>();
+    for (const a of ausentes) if (a.fecha) m.set(`${a.dni}|${a.fecha}`, a);
+    return m;
+  }, [ausentes]);
 
   const upasUnicas        = React.useMemo(() => [...new Set(rows.map(r => r.upa).filter(Boolean))].sort(), [rows]);
   const ocupacionesUnicas = React.useMemo(() => [...new Set(rows.map(r => r.ocupacion).filter(Boolean))].sort(), [rows]);
@@ -956,6 +1100,7 @@ export function SinFichajeSalidaPage() {
     { id: "fichosindeber", label: `Fichó sin deber (${fichoAgrupadoAll.length})` },
     { id: "sinhorario",    label: `Sin horario (${sinHorarioAgentes.length})` },
     { id: "horarios",      label: "Horarios agrupados" },
+    { id: "ausentes",      label: `Registro de ausentes (${ausentes.length})` },
   ];
 
   // Estilo hover para DNI clickeable
@@ -1639,6 +1784,88 @@ export function SinFichajeSalidaPage() {
         </div>
       )}
 
+      {/* ══════════════ TAB: REGISTRO DE AUSENTES ══════════════ */}
+      {loaded && tab === "ausentes" && (
+        <>
+          <div className="card" style={{ marginBottom: 12, marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            <div style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+              Ausentes cargados en el período — <strong style={{ color: "#e2e8f0" }}>{ausentes.length}</strong>
+            </div>
+            <button className="btn" type="button" disabled={ausentesLoading}
+              onClick={() => cargarAusentes(consultaRange?.desde ?? "", consultaRange?.hasta ?? "")}
+              style={{ fontSize: "0.75rem", padding: "4px 12px" }}>
+              {ausentesLoading ? "Actualizando…" : "↻ Actualizar"}
+            </button>
+            <button className="btn" type="button" disabled={ausentes.length === 0}
+              onClick={() => exportToExcel("ausentes_sin_salida", ausentes.map(a => ({
+                DNI:                 a.dni,
+                "Apellido y Nombre": a.nombre ?? "",
+                Fecha:               a.fecha ? fmtFecha(a.fecha) : "",
+                Día:                 a.diaSemana ?? "",
+                "Prog. Entrada":     a.horaEntradaProgramada ?? "",
+                "Prog. Salida":      a.horaSalidaProgramada ?? "",
+                "Entrada real":      a.entradaReal ?? "",
+                Servicio:            a.servicio ?? "",
+                Dependencia:         a.upa ?? "",
+                Resolución:          a.resolucion,
+                Observación:         a.observacion ?? "",
+                "Cargado por":       a.cargadoPorNombre ?? a.cargadoPorEmail ?? "",
+                "Fecha de carga":    a.createdAt ?? "",
+              })))}
+              style={{ fontSize: "0.75rem", padding: "4px 12px", whiteSpace: "nowrap", marginLeft: "auto" }}>
+              📥 Exportar Excel
+            </button>
+          </div>
+
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                    {["Apellido y Nombre", "DNI", "Fecha", "Día", "Prog. Entrada", "Prog. Salida", "Entrada real", "Servicio", "Dependencia", "Observación", "Cargado por", "Fecha de carga", ""].map(h => (
+                      <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ausentes.length === 0 ? (
+                    <tr><td colSpan={13} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>
+                      {ausentesLoading ? "Cargando…" : "Sin ausentes cargados en este período."}
+                    </td></tr>
+                  ) : ausentes.map((a, i) => (
+                    <tr key={a.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
+                      <td style={{ padding: "8px 12px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.nombre ?? ""}>
+                        {a.nombre || <span style={{ color: "#475569" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#94a3b8" }}>{a.dni}</td>
+                      <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>{a.fecha ? fmtFecha(a.fecha) : "—"}</td>
+                      <td style={{ padding: "8px 12px", color: "#94a3b8" }}>{a.diaSemana ?? "—"}</td>
+                      <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#64748b" }}>{a.horaEntradaProgramada ?? "—"}</td>
+                      <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#64748b" }}>{a.horaSalidaProgramada ?? "—"}</td>
+                      <td style={{ padding: "8px 12px", fontFamily: "monospace", color: a.entradaReal ? "#22c55e" : "#475569" }}>{a.entradaReal ?? "—"}</td>
+                      <td style={{ padding: "8px 12px", color: "#94a3b8", fontSize: "0.78rem", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.servicio ?? ""}>
+                        {a.servicio || "—"}
+                      </td>
+                      <td style={{ padding: "8px 12px", color: "#cbd5e1", fontSize: "0.78rem" }}>{a.upa || "—"}</td>
+                      <td style={{ padding: "8px 12px", color: "#cbd5e1", fontSize: "0.78rem", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.observacion ?? ""}>
+                        {a.observacion || <span style={{ color: "#475569" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px", fontSize: "0.78rem" }} title={a.cargadoPorEmail ?? ""}>
+                        {a.cargadoPorNombre || a.cargadoPorEmail || <span style={{ color: "#475569" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px", color: "#64748b", fontSize: "0.75rem", whiteSpace: "nowrap" }}>{a.createdAt ?? "—"}</td>
+                      <td style={{ padding: "8px 12px" }}>
+                        <button className="btn" title="Dar de baja" onClick={() => eliminarAusente(a.id)} style={{ fontSize: "0.7rem", padding: "3px 9px" }}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── Modal asistencia agente (doble click) ─────────────────────────── */}
       {agentModal && (
         <AgentModal
@@ -1648,7 +1875,59 @@ export function SinFichajeSalidaPage() {
           onClose={() => setAgentModal(null)}
           siapNovedades={siapAgentes[agentModal.dni]?.novedades}
           horarioAgente={horariosAgentes[agentModal.dni]}
+          ausentesMap={ausentesMap}
+          onMarcar={(row) => { setMarcarObs(""); setMarcarTarget(row); }}
         />
+      )}
+
+      {/* ── Modal marcar ausente ──────────────────────────────────────────── */}
+      {marcarTarget && (
+        <div
+          onClick={() => { if (!marcarSaving) { setMarcarTarget(null); setMarcarObs(""); } }}
+          style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, width: "min(460px, 94vw)" }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#e2e8f0" }}>Marcar ausente</div>
+              <div className="muted" style={{ fontSize: "0.75rem", marginTop: 2 }}>
+                {marcarTarget.nombre || "—"} · DNI {marcarTarget.dni} · {fmtFecha(marcarTarget.fecha)} ({marcarTarget.diaSemana})
+              </div>
+            </div>
+            <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
+                Le correspondía:{" "}
+                <strong style={{ color: "#cbd5e1" }}>{marcarTarget.horaEntradaProgramada ?? "—"}</strong> a{" "}
+                <strong style={{ color: "#cbd5e1" }}>{marcarTarget.horaSalidaProgramada ?? "—"}</strong>
+                {marcarTarget.entrada
+                  ? <> · fichó entrada <strong style={{ color: "#22c55e" }}>{marcarTarget.entrada}</strong>, sin salida.</>
+                  : null}
+              </div>
+              <label style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                Observación (opcional)
+                <textarea
+                  value={marcarObs}
+                  onChange={e => setMarcarObs(e.target.value)}
+                  rows={3}
+                  placeholder="Motivo / aclaración…"
+                  style={{ width: "100%", marginTop: 4, background: "#0b1220", color: "#e2e8f0", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "8px 10px", fontSize: "0.82rem", resize: "vertical" }}
+                />
+              </label>
+            </div>
+            <div style={{ padding: "12px 18px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn" disabled={marcarSaving}
+                onClick={() => { setMarcarTarget(null); setMarcarObs(""); }}
+                style={{ fontSize: "0.8rem", padding: "5px 14px" }}>
+                Cancelar
+              </button>
+              <button className="btn primary" disabled={marcarSaving}
+                onClick={() => marcarAusente(marcarTarget, marcarObs)}
+                style={{ fontSize: "0.8rem", padding: "5px 14px" }}>
+                {marcarSaving ? "Guardando…" : "Confirmar ausente"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Modal fichajes crudos DB (click en DNI) ───────────────────────── */}

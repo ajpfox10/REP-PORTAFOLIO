@@ -307,7 +307,7 @@ function buildMultiPageTiff(pages: Array<{ width: number; height: number; rgb: B
   ])
 }
 
-async function buildStoredOutput(
+export async function buildStoredOutput(
   tenant_id: number,
   scan_job_id: number,
   requestedOutputFormat: string | undefined,

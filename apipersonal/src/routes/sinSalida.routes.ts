@@ -31,9 +31,46 @@ import mysql, { RowDataPacket } from 'mysql2/promise';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { QueryTypes } from 'sequelize';
 
 let ExcelJS: any;
 try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
+
+// ── Tabla de AUSENTES (agentes marcados ausente por no fichar la salida) ───────
+// Creación idempotente en runtime (red de seguridad; la DDL canónica vive en
+// scripts/migrations/029__sin_salida_ausentes.sql). Mismo patrón que app_runtime_config.
+const ausentesTableReady = new WeakSet<object>();
+async function ensureAusentesTable(sequelize: import('sequelize').Sequelize): Promise<void> {
+  if (ausentesTableReady.has(sequelize)) return;
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS sin_salida_ausentes (
+      id INT NOT NULL AUTO_INCREMENT,
+      dni VARCHAR(20) NOT NULL,
+      nombre VARCHAR(255) NULL,
+      fecha DATE NOT NULL,
+      dia_semana VARCHAR(10) NULL,
+      hora_entrada_programada VARCHAR(5) NULL,
+      hora_salida_programada VARCHAR(5) NULL,
+      entrada_real VARCHAR(5) NULL,
+      upa VARCHAR(100) NULL,
+      servicio VARCHAR(255) NULL,
+      ocupacion VARCHAR(255) NULL,
+      es_guardia TINYINT(1) NOT NULL DEFAULT 0,
+      estado_origen VARCHAR(30) NULL,
+      resolucion VARCHAR(20) NOT NULL DEFAULT 'AUSENTE',
+      observacion TEXT NULL,
+      cargado_por INT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      deleted_at DATETIME NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_ausente_dni_fecha (dni, fecha),
+      KEY idx_ausente_fecha (fecha),
+      KEY idx_ausente_cargado_por (cargado_por)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  `);
+  ausentesTableReady.add(sequelize);
+}
 
 // ── Helpers de texto ─────────────────────────────────────────────────────────
 function normHeader(s: any): string {
@@ -131,9 +168,8 @@ type HorasDia = { horaEntrada: string | null; horaSalida: string | null };
 // Umbral de corte para reasignar salidas al día anterior:
 //   agentes normales → salidas hasta las 06:00 del día siguiente
 //   GUARDIA (24hs)   → salidas hasta las 14:00 del día siguiente
-const CUTOFF_NORMAL  = '06:00';
+const CUTOFF_NORMAL  = '14:00';
 const CUTOFF_GUARDIA = '14:00';
-const RANGO_SALIDA_NOCTURNA = 180;
 
 const DOW_KEYS  = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'] as const;
 const DOW_LABELS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -173,19 +209,12 @@ function shouldAssignSalidaToPreviousDay(
   fichajesMap: Record<string, Record<string, { entrada: string | null; salida: string | null }>>,
   horariosMap: Record<string, { nombre: string; esGuardia: boolean; planta: string; horario: HorarioDia; horas: Record<string, HorasDia> }>,
 ): boolean {
-  if (fichajesMap[dni]?.[fechaOrig]?.entrada) return false;
-
   const info = horariosMap[dni];
   const fechaPrev = addDaysIso(fechaOrig, -1);
-  if (info && shiftSpansNextDay(info, fechaPrev)) {
-    const prevDowKey = getDowKeyFromDate(fechaPrev);
-    const horaSalidaProg = info.horas?.[prevDowKey]?.horaSalida ?? null;
-    if (!horaSalidaProg) return false;
-    return timeDiffMins(hora, horaSalidaProg) <= RANGO_SALIDA_NOCTURNA;
-  }
+  if (!fichajesMap[dni]?.[fechaPrev]?.entrada) return false;
 
   const cutoff = info?.esGuardia ? CUTOFF_GUARDIA : CUTOFF_NORMAL;
-  return hora <= cutoff && !!fichajesMap[dni]?.[fechaPrev]?.entrada;
+  return hora <= cutoff;
 }
 
 // ── Parser horarios ──────────────────────────────────────────────────────────
@@ -909,18 +938,21 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
         if (fich?.eventos?.length && row.horaEntradaProg && row.horaSalidaProg) {
           const entProg = row.horaEntradaProg;
           const salProg = row.horaSalidaProg;
-          const RANGO   = 120; // ±2 horas en minutos
+          const salidaEnLectorEntrada = fich.eventos.some(e =>
+            e.checktype === 1 && tipoLector(e.sn, e.checktype) === 0
+          );
 
           if (entProg !== salProg) {
             // Turno normal: cada evento pertenece a la mitad del turno que le queda más cerca.
             // Si el tipo del lector no coincide con el esperado para esa mitad → invertido.
-            const eventosHoy = fich.eventos.filter(e => e.fechaOrig === row.fecha);
+            const cruzaDia = salProg < entProg;
+            const eventosTurno = cruzaDia ? fich.eventos : fich.eventos.filter(e => e.fechaOrig === row.fecha);
             const cercaEntrada = (hora: string) => timeDiffMins(hora, entProg) <= timeDiffMins(hora, salProg);
 
-            const hayEntradaValida = eventosHoy.some(e =>  cercaEntrada(e.hora) && tipoLector(e.sn, e.checktype) === 0);
-            const haySalidaValida  = eventosHoy.some(e => !cercaEntrada(e.hora) && tipoLector(e.sn, e.checktype) === 1);
+            const hayEntradaValida = eventosTurno.some(e => e.checktype === 0 && tipoLector(e.sn, e.checktype) === 0);
+            const haySalidaValida  = eventosTurno.some(e => e.checktype === 1);
 
-            fichajeInvertido = eventosHoy.some(e => {
+            fichajeInvertido = salidaEnLectorEntrada || eventosTurno.some(e => {
               const tipo     = tipoLector(e.sn, e.checktype);
               const esperado = cercaEntrada(e.hora) ? 0 : 1;
               return tipo !== esperado;
@@ -934,9 +966,9 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
             const nextDay = nextDayDt.toISOString().slice(0, 10);
 
             const hayEntradaValidaHoy    = fich.eventos.some(e => e.fechaOrig === row.fecha && tipoLector(e.sn, e.checktype) === 0);
-            const haySalidaValidaNextDay = fich.eventos.some(e => e.fechaOrig === nextDay   && tipoLector(e.sn, e.checktype) === 1);
+            const haySalidaValidaNextDay = fich.eventos.some(e => e.fechaOrig === nextDay && e.checktype === 1);
 
-            fichajeInvertido = fich.eventos.some(e => {
+            fichajeInvertido = salidaEnLectorEntrada || fich.eventos.some(e => {
               const tipo     = tipoLector(e.sn, e.checktype);
               const esperado = e.fechaOrig === row.fecha ? 0 : 1;
               return tipo !== esperado;
@@ -944,6 +976,7 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
             salidaFaltante = hayEntradaValidaHoy && !haySalidaValidaNextDay;
           }
         }
+        if (fich?.salida) salidaFaltante = false;
 
         if (fichajeInvertido) estado = 'SOSPECHOSO';
 
@@ -1382,6 +1415,182 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
       return res.json({ ok: true, data });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error al consultar DB' });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // REGISTRO DE AUSENTES — persistencia de los SIN_SALIDA marcados "ausente".
+  // Guarda quién cargó (cargado_por = usuario del token, NO del body) + contexto.
+  // Tabla sin_salida_ausentes (migración 029).
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // SELECT con fechas formateadas como string (la conexión Sequelize no usa dateStrings)
+  // y join a usuarios para resolver el nombre/email de quién cargó el ausente.
+  const SELECT_AUSENTE = `
+    SELECT
+      a.id, a.dni, a.nombre,
+      DATE_FORMAT(a.fecha, '%Y-%m-%d')              AS fecha,
+      a.dia_semana, a.hora_entrada_programada, a.hora_salida_programada, a.entrada_real,
+      a.upa, a.servicio, a.ocupacion, a.es_guardia, a.estado_origen, a.resolucion, a.observacion,
+      a.cargado_por,
+      DATE_FORMAT(a.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+      DATE_FORMAT(a.updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at,
+      u.nombre AS cargado_por_nombre, u.email AS cargado_por_email
+    FROM sin_salida_ausentes a
+    LEFT JOIN usuarios u ON u.id = a.cargado_por
+  `;
+
+  const mapAusente = (r: any) => ({
+    id:                    Number(r.id),
+    dni:                   String(r.dni),
+    nombre:                r.nombre ?? null,
+    fecha:                 r.fecha ? String(r.fecha).slice(0, 10) : null,
+    diaSemana:             r.dia_semana ?? null,
+    horaEntradaProgramada: r.hora_entrada_programada ?? null,
+    horaSalidaProgramada:  r.hora_salida_programada ?? null,
+    entradaReal:           r.entrada_real ?? null,
+    upa:                   r.upa ?? null,
+    servicio:              r.servicio ?? null,
+    ocupacion:             r.ocupacion ?? null,
+    esGuardia:             !!r.es_guardia,
+    estadoOrigen:          r.estado_origen ?? null,
+    resolucion:            r.resolucion ?? 'AUSENTE',
+    observacion:           r.observacion ?? null,
+    cargadoPor:            r.cargado_por != null ? Number(r.cargado_por) : null,
+    cargadoPorNombre:      r.cargado_por_nombre ?? null,
+    cargadoPorEmail:       r.cargado_por_email ?? null,
+    createdAt:             r.created_at ? String(r.created_at) : null,
+    updatedAt:             r.updated_at ? String(r.updated_at) : null,
+  });
+
+  // Usuario que realiza la acción: solo principal humano (user/dev), nunca api_key.
+  const userIdDe = (req: Request): number | null => {
+    const t = req.auth?.principalType;
+    return (t === 'user' || t === 'dev') ? (req.auth?.principalId ?? null) : null;
+  };
+
+  // GET /sin-salida/ausentes?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&dni=...
+  router.get('/ausentes', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!sequelize) return res.status(503).json({ ok: false, error: 'DB no disponible' });
+    try {
+      await ensureAusentesTable(sequelize);
+      const desde = String(req.query.desde ?? '').trim();
+      const hasta = String(req.query.hasta ?? '').trim();
+      const dni   = normDni(String(req.query.dni ?? ''));
+
+      const where: string[] = ['a.deleted_at IS NULL'];
+      const repl: Record<string, any> = {};
+      if (/^\d{4}-\d{2}-\d{2}$/.test(desde)) { where.push('a.fecha >= :desde'); repl.desde = desde; }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(hasta)) { where.push('a.fecha <= :hasta'); repl.hasta = hasta; }
+      if (dni)                               { where.push('a.dni = :dni');      repl.dni = dni; }
+
+      const rows = await sequelize.query(
+        `${SELECT_AUSENTE} WHERE ${where.join(' AND ')} ORDER BY a.fecha DESC, a.nombre ASC, a.id DESC`,
+        { type: QueryTypes.SELECT, replacements: repl },
+      );
+      return res.json({ ok: true, data: (rows as any[]).map(mapAusente) });
+    } catch (err: any) {
+      logger.error({ msg: 'sin-salida/ausentes GET error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al listar ausentes' });
+    }
+  });
+
+  // POST /sin-salida/ausentes  → marca/actualiza un ausente (UPSERT por dni+fecha)
+  router.post('/ausentes', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!sequelize) return res.status(503).json({ ok: false, error: 'DB no disponible' });
+    try {
+      await ensureAusentesTable(sequelize);
+      const b     = req.body ?? {};
+      const dni   = normDni(String(b.dni ?? ''));
+      const fecha = String(b.fecha ?? '').trim();
+      if (!dni)                               return res.status(400).json({ ok: false, error: 'Falta "dni"' });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ ok: false, error: 'Falta "fecha" válida (YYYY-MM-DD)' });
+
+      const repl: Record<string, any> = {
+        dni,
+        nombre:       b.nombre                ? String(b.nombre).slice(0, 255)                : null,
+        fecha,
+        diaSemana:    b.diaSemana             ? String(b.diaSemana).slice(0, 10)              : null,
+        hep:          b.horaEntradaProgramada ? String(b.horaEntradaProgramada).slice(0, 5)   : null,
+        hsp:          b.horaSalidaProgramada  ? String(b.horaSalidaProgramada).slice(0, 5)    : null,
+        ent:          b.entradaReal           ? String(b.entradaReal).slice(0, 5)             : null,
+        upa:          b.upa                   ? String(b.upa).slice(0, 100)                   : null,
+        servicio:     b.servicio              ? String(b.servicio).slice(0, 255)             : null,
+        ocupacion:    b.ocupacion             ? String(b.ocupacion).slice(0, 255)            : null,
+        esGuardia:    b.esGuardia ? 1 : 0,
+        estadoOrigen: b.estadoOrigen          ? String(b.estadoOrigen).slice(0, 30)          : null,
+        resolucion:   b.resolucion            ? String(b.resolucion).slice(0, 20).toUpperCase() : 'AUSENTE',
+        observacion:  b.observacion           ? String(b.observacion)                        : null,
+        cargadoPor:   userIdDe(req),
+      };
+
+      await sequelize.query(
+        `INSERT INTO sin_salida_ausentes
+           (dni, nombre, fecha, dia_semana, hora_entrada_programada, hora_salida_programada,
+            entrada_real, upa, servicio, ocupacion, es_guardia, estado_origen, resolucion,
+            observacion, cargado_por, created_at, updated_at)
+         VALUES
+           (:dni, :nombre, :fecha, :diaSemana, :hep, :hsp,
+            :ent, :upa, :servicio, :ocupacion, :esGuardia, :estadoOrigen, :resolucion,
+            :observacion, :cargadoPor, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+            nombre = VALUES(nombre),
+            dia_semana = VALUES(dia_semana),
+            hora_entrada_programada = VALUES(hora_entrada_programada),
+            hora_salida_programada = VALUES(hora_salida_programada),
+            entrada_real = VALUES(entrada_real),
+            upa = VALUES(upa),
+            servicio = VALUES(servicio),
+            ocupacion = VALUES(ocupacion),
+            es_guardia = VALUES(es_guardia),
+            estado_origen = VALUES(estado_origen),
+            resolucion = VALUES(resolucion),
+            observacion = VALUES(observacion),
+            cargado_por = VALUES(cargado_por),
+            deleted_at = NULL,
+            updated_at = NOW()`,
+        { replacements: repl },
+      );
+
+      const rows = await sequelize.query(
+        `${SELECT_AUSENTE} WHERE a.dni = :dni AND a.fecha = :fecha LIMIT 1`,
+        { type: QueryTypes.SELECT, replacements: { dni, fecha } },
+      );
+      const saved = (rows as any[])[0] ? mapAusente((rows as any[])[0]) : null;
+
+      (res.locals as any).audit = {
+        action: 'sin_salida_ausente_marcar',
+        table_name: 'sin_salida_ausentes',
+        record_pk: saved ? String(saved.id) : `${dni}|${fecha}`,
+        request_json: { dni, fecha, resolucion: repl.resolucion, observacion: repl.observacion },
+      };
+      return res.json({ ok: true, data: saved });
+    } catch (err: any) {
+      logger.error({ msg: 'sin-salida/ausentes POST error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al guardar ausente' });
+    }
+  });
+
+  // DELETE /sin-salida/ausentes/:id  → baja lógica
+  router.delete('/ausentes/:id', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!sequelize) return res.status(503).json({ ok: false, error: 'DB no disponible' });
+    try {
+      await ensureAusentesTable(sequelize);
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ ok: false, error: 'id inválido' });
+      const [result] = await sequelize.query(
+        `UPDATE sin_salida_ausentes SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL`,
+        { replacements: { id } },
+      ) as [any, unknown];
+      (res.locals as any).audit = {
+        action: 'sin_salida_ausente_baja',
+        table_name: 'sin_salida_ausentes',
+        record_pk: String(id),
+      };
+      return res.json({ ok: true, data: { id, affected: (result as any)?.affectedRows ?? null } });
+    } catch (err: any) {
+      logger.error({ msg: 'sin-salida/ausentes DELETE error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al dar de baja el ausente' });
     }
   });
 

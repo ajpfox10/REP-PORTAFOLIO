@@ -30,6 +30,8 @@ export interface AltaAgenteDto {
   telefono?: string;
   domicilio?: string;
   localidad_id?: number;
+  nacionalidad?: string;
+  observaciones?: string;
 
   // Datos laborales (tabla: agentes)
   ley_id?: number;
@@ -41,12 +43,19 @@ export interface AltaAgenteDto {
   jefatura_id?: number;
   sector_id?: number;
   dependencia_id?: number;
+  reparticion_id?: number;
   fecha_ingreso?: string;
-  fecha_alta?: string;
+  fecha_egreso?: string;
+  estado_empleo?: string;
+  legajo?: number;
+  salario_mensual?: number;
+  decreto_designacion?: string;
 
   // Servicios adicionales (tabla: agentes_servicios)
   servicios?: Array<{
     servicio_id: number;
+    sector_id?: number;
+    dependencia_id?: number;
     fecha_desde?: string;
     fecha_hasta?: string;
   }>;
@@ -76,17 +85,26 @@ export class AgenteService {
     const t = await this.sequelize.transaction();
 
     try {
-      // Paso 1: Verificar que no exista un agente vigente (no dado de baja) con ese DNI
-      const agenteVigente = await this.sequelize.query<{ id: number; estado: string }>(
-        `SELECT id, estado FROM agentes WHERE dni = :dni AND estado != 'baja' LIMIT 1`,
+      if (dto.fecha_egreso && (dto.estado_empleo || 'ACTIVO') === 'ACTIVO') {
+        throw Object.assign(
+          new Error('Una vinculacion con fecha de egreso no puede permanecer ACTIVO. Seleccione INACTIVO, BAJA, COMISION o TRAMITE.'),
+          { status: 400 }
+        );
+      }
+
+      // Una nueva vinculacion solo es valida si no existe otra activa.
+      const agenteVigente = await this.sequelize.query<{ id: number; estado_empleo: string }>(
+        `SELECT id, estado_empleo FROM agentes
+         WHERE dni = :dni AND deleted_at IS NULL
+           AND estado_empleo = 'ACTIVO' AND fecha_egreso IS NULL
+         ORDER BY id DESC LIMIT 1`,
         { replacements: { dni: dto.dni }, type: QueryTypes.SELECT, transaction: t }
       );
       if (agenteVigente.length > 0) {
-        const estado = agenteVigente[0].estado;
         throw Object.assign(
           new Error(
-            `El agente con DNI ${dto.dni} ya tiene un alta vigente (estado: ${estado}). ` +
-            `Debe registrar la baja antes de crear un nuevo alta.`
+            `El agente con DNI ${dto.dni} ya tiene una vinculacion activa. ` +
+            `Debe editarla o registrar la baja antes de crear un reingreso.`
           ),
           { status: 409 }
         );
@@ -100,8 +118,10 @@ export class AgenteService {
       if (personalExistente.length === 0) {
         await this.sequelize.query(
           `INSERT INTO personal
-           (dni, apellido, nombre, fecha_nacimiento, sexo_id, cuil, email, telefono, domicilio, localidad_id, created_by, created_at)
-           VALUES (:dni, :apellido, :nombre, :fecha_nacimiento, :sexo_id, :cuil, :email, :telefono, :domicilio, :localidad_id, :actor, NOW())`,
+           (dni, apellido, nombre, fecha_nacimiento, sexo_id, cuil, email, telefono, domicilio, localidad_id,
+            nacionalidad, observaciones, created_by, created_at, updated_at)
+           VALUES (:dni, :apellido, :nombre, :fecha_nacimiento, :sexo_id, :cuil, :email, :telefono, :domicilio, :localidad_id,
+                   :nacionalidad, :observaciones, :actor, NOW(), NOW())`,
           {
             replacements: {
               dni: dto.dni,
@@ -114,6 +134,34 @@ export class AgenteService {
               telefono: dto.telefono || null,
               domicilio: dto.domicilio || null,
               localidad_id: dto.localidad_id || null,
+              nacionalidad: dto.nacionalidad || null,
+              observaciones: dto.observaciones || null,
+              actor: dto.actor || null,
+            },
+            transaction: t,
+          }
+        );
+      } else {
+        await this.sequelize.query(
+          `UPDATE personal SET apellido = :apellido, nombre = :nombre, fecha_nacimiento = :fecha_nacimiento,
+             sexo_id = :sexo_id, cuil = :cuil, email = :email, telefono = :telefono,
+             domicilio = :domicilio, localidad_id = :localidad_id, nacionalidad = :nacionalidad,
+             observaciones = :observaciones, updated_by = :actor, updated_at = NOW()
+           WHERE dni = :dni AND deleted_at IS NULL`,
+          {
+            replacements: {
+              dni: dto.dni,
+              apellido: String(dto.apellido || '').trim().toUpperCase(),
+              nombre: String(dto.nombre || '').trim(),
+              fecha_nacimiento: dto.fecha_nacimiento || null,
+              sexo_id: dto.sexo_id || null,
+              cuil: dto.cuil || null,
+              email: dto.email || null,
+              telefono: dto.telefono || null,
+              domicilio: dto.domicilio || null,
+              localidad_id: dto.localidad_id || null,
+              nacionalidad: dto.nacionalidad || null,
+              observaciones: dto.observaciones || null,
               actor: dto.actor || null,
             },
             transaction: t,
@@ -125,9 +173,11 @@ export class AgenteService {
       const [agenteResult]: any = await this.sequelize.query(
         `INSERT INTO agentes
          (dni, ley_id, planta_id, categoria_id, funcion_id, ocupacion_id, regimen_horario_id,
-          jefatura_id, dependencia_id, fecha_ingreso, fecha_alta, created_by, created_at)
+          jefatura_id, dependencia_id, reparticion_id, fecha_ingreso, fecha_egreso,
+          estado_empleo, legajo, salario_mensual, decreto_designacion, created_by, created_at, updated_at)
          VALUES (:dni, :ley_id, :planta_id, :categoria_id, :funcion_id, :ocupacion_id, :regimen_horario_id,
-                 :jefatura_id, :dependencia_id, :fecha_ingreso, :fecha_alta, :actor, NOW())`,
+                 :jefatura_id, :dependencia_id, :reparticion_id, :fecha_ingreso, :fecha_egreso,
+                 :estado_empleo, :legajo, :salario_mensual, :decreto_designacion, :actor, NOW(), NOW())`,
         {
           replacements: {
             dni: dto.dni,
@@ -139,8 +189,13 @@ export class AgenteService {
             regimen_horario_id: dto.regimen_horario_id || null,
             jefatura_id: dto.jefatura_id || null,
             dependencia_id: dto.dependencia_id || null,
+            reparticion_id: dto.reparticion_id || null,
             fecha_ingreso: dto.fecha_ingreso || null,
-            fecha_alta: dto.fecha_alta || null,
+            fecha_egreso: dto.fecha_egreso || null,
+            estado_empleo: dto.estado_empleo || 'ACTIVO',
+            legajo: dto.legajo || null,
+            salario_mensual: dto.salario_mensual ?? null,
+            decreto_designacion: dto.decreto_designacion || null,
             actor: dto.actor || null,
           },
           transaction: t,
@@ -152,14 +207,18 @@ export class AgenteService {
       if (dto.servicios && dto.servicios.length > 0) {
         for (const srv of dto.servicios) {
           await this.sequelize.query(
-            `INSERT INTO agentes_servicios (dni, servicio_id, fecha_desde, fecha_hasta, created_at)
-             VALUES (:dni, :servicio_id, :fecha_desde, :fecha_hasta, NOW())`,
+            `INSERT INTO agentes_servicios
+             (dni, servicio_id, sector_id, dependencia_id, fecha_desde, fecha_hasta, created_by, created_at, updated_at)
+             VALUES (:dni, :servicio_id, :sector_id, :dependencia_id, :fecha_desde, :fecha_hasta, :actor, NOW(), NOW())`,
             {
               replacements: {
                 dni: dto.dni,
                 servicio_id: srv.servicio_id,
-                fecha_desde: srv.fecha_desde || null,
+                sector_id: srv.sector_id || null,
+                dependencia_id: srv.dependencia_id || dto.reparticion_id || null,
+                fecha_desde: srv.fecha_desde || dto.fecha_ingreso || null,
                 fecha_hasta: srv.fecha_hasta || null,
+                actor: dto.actor || null,
               },
               transaction: t,
             }
@@ -204,15 +263,28 @@ export class AgenteService {
       }
 
       // Actualizar agentes si hay campos laborales
-      const agenteFields = ['ley_id', 'planta_id', 'categoria_id', 'funcion_id', 'ocupacion_id', 'regimen_horario_id', 'jefatura_id', 'dependencia_id', 'fecha_ingreso', 'fecha_alta'];
+      const agenteFields = ['ley_id', 'planta_id', 'categoria_id', 'funcion_id', 'ocupacion_id', 'regimen_horario_id', 'jefatura_id', 'dependencia_id', 'fecha_ingreso'];
       const agenteUpdate = Object.fromEntries(
         Object.entries(dto).filter(([k]) => agenteFields.includes(k))
       );
       if (Object.keys(agenteUpdate).length > 0) {
+        const vigente = await this.sequelize.query<{ id: number }>(
+          `SELECT id FROM agentes
+           WHERE dni = :dni AND deleted_at IS NULL
+             AND estado_empleo = 'ACTIVO' AND fecha_egreso IS NULL
+           ORDER BY id DESC LIMIT 1`,
+          { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
+        );
+        if (!vigente[0]?.id) {
+          throw Object.assign(
+            new Error(`El DNI ${dni} no tiene una vinculacion activa. Registre un reingreso para preservar el historial.`),
+            { status: 409 }
+          );
+        }
         const setClauses = Object.keys(agenteUpdate).map(k => `${k} = :${k}`).join(', ');
         await this.sequelize.query(
-          `UPDATE agentes SET ${setClauses}, updated_at = NOW() WHERE dni = :dni`,
-          { replacements: { ...agenteUpdate, dni }, transaction: t }
+          `UPDATE agentes SET ${setClauses}, updated_at = NOW() WHERE id = :agenteId`,
+          { replacements: { ...agenteUpdate, agenteId: vigente[0].id }, transaction: t }
         );
       }
 
@@ -231,9 +303,14 @@ export class AgenteService {
     const rows = await this.sequelize.query(
       `SELECT p.*, a.ley_id, a.planta_id, a.categoria_id, a.funcion_id,
               a.ocupacion_id, a.regimen_horario_id, a.jefatura_id,
-              a.dependencia_id, a.fecha_ingreso, a.fecha_alta
+              a.dependencia_id, a.fecha_ingreso
        FROM personal p
-       LEFT JOIN agentes a ON a.dni = p.dni
+       LEFT JOIN agentes a ON a.id = (
+         SELECT ax.id FROM agentes ax
+         WHERE ax.dni = p.dni AND ax.deleted_at IS NULL
+         ORDER BY (ax.estado_empleo = 'ACTIVO' AND ax.fecha_egreso IS NULL) DESC, ax.id DESC
+         LIMIT 1
+       )
        WHERE p.dni = :dni AND p.deleted_at IS NULL LIMIT 1`,
       { replacements: { dni }, type: QueryTypes.SELECT }
     );

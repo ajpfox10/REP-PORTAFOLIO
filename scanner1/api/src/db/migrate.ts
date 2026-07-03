@@ -14,7 +14,8 @@ async function ensureColumn(table: string, column: string, ddl: string) {
 async function ensureScanJobSettingColumns() {
   await ensureColumn("scan_jobs", "source", "source VARCHAR(30) NOT NULL DEFAULT 'flatbed' AFTER priority")
   await ensureColumn("scan_jobs", "duplex", "duplex TINYINT NOT NULL DEFAULT 0 AFTER source")
-  await ensureColumn("scan_jobs", "dpi", "dpi INT NULL AFTER duplex")
+  await ensureColumn("scan_jobs", "paper_size", "paper_size VARCHAR(30) NOT NULL DEFAULT 'A4' AFTER duplex")
+  await ensureColumn("scan_jobs", "dpi", "dpi INT NULL AFTER paper_size")
   await ensureColumn("scan_jobs", "color", "color TINYINT NULL AFTER dpi")
   await ensureColumn("scan_jobs", "auto_rotate", "auto_rotate TINYINT NULL AFTER color")
   await ensureColumn("scan_jobs", "blank_page_detection", "blank_page_detection TINYINT NULL AFTER auto_rotate")

@@ -10,6 +10,8 @@ interface Props {
   onCloseModule: (key: ModuleKey) => void;
   onOpenCitaciones?: () => void;
   citacionesActivas?: number;
+  onOpenExpedientes?: () => void;
+  expedientesCount?: number;
 }
 
 export function ModuleGrid({
@@ -20,6 +22,8 @@ export function ModuleGrid({
   onCloseModule,
   onOpenCitaciones,
   citacionesActivas = 0,
+  onOpenExpedientes,
+  expedientesCount = 0,
 }: Props) {
   return (
     <div className="card gp-card-14">
@@ -142,6 +146,30 @@ export function ModuleGrid({
               style={citacionesActivas > 0 ? { borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' } : undefined}
             >
               ⚠️ Citaciones
+            </button>
+          </div>
+        </div>
+
+        {/* EXPEDIENTES */}
+        <div className="card gp-card-12">
+          <div className="row gp-row-between-center">
+            <b>Expedientes</b>
+            {expedientesCount > 0
+              ? <span className="badge" style={{ background: 'rgba(124,58,237,0.2)', color: '#c4b5fd', border: '1px solid rgba(124,58,237,0.3)' }}>
+                  {expedientesCount} cargado{expedientesCount > 1 ? 's' : ''}
+                </span>
+              : <span className="badge">/expedientes</span>
+            }
+          </div>
+          <p className="muted gp-mt-6">Expedientes cargados del agente. Ver, cargar y editar.</p>
+          <div className="row gp-row-between-center">
+            <button
+              className="btn"
+              type="button"
+              onClick={onOpenExpedientes}
+              style={expedientesCount > 0 ? { borderColor: 'rgba(124,58,237,0.4)', color: '#c4b5fd' } : undefined}
+            >
+              📁 Expedientes
             </button>
           </div>
         </div>

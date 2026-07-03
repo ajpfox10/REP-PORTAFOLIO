@@ -179,6 +179,9 @@ export async function apiFetch<T = any>(path: string, init: RequestInit = {}): P
   await loadRuntimeConfig();
 
   let headers = buildHeaders(init.headers);
+  if (typeof FormData !== 'undefined' && init.body instanceof FormData) {
+    headers.delete('Content-Type');
+  }
 
   try {
     let res = await doFetch(path, init, headers);

@@ -9,7 +9,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlob } from '../../api/http';
 import { searchPersonal, getAllPersonal } from '../../api/searchPersonal';
 import './styles/AgentesServiciosPage.css';
 
@@ -261,6 +261,144 @@ function CerrarPaseModal({ pase, onClose, onSaved }: CerrarPaseModalProps) {
   );
 }
 
+// ─── Modal exportar antigüedad ────────────────────────────────────────────────
+interface ExportarAntiguedadModalProps {
+  servicios: any[];
+  dependencias: any[];
+  initialServicio?: string;
+  initialDependencia?: string;
+  onClose: () => void;
+}
+function ExportarAntiguedadModal({
+  servicios, dependencias, initialServicio, initialDependencia, onClose
+}: ExportarAntiguedadModalProps) {
+  const toast = useToast();
+  const [soloActivos,    setSoloActivos]    = useState(true);
+  const [servicioId,     setServicioId]     = useState(initialServicio || '');
+  const [dependenciaId,  setDependenciaId]  = useState(initialDependencia || '');
+  const [leyes,          setLeyes]          = useState<any[]>([]);
+  const [leyId,          setLeyId]          = useState('');
+  const [exporting,      setExporting]      = useState(false);
+
+  useEffect(() => {
+    apiFetch<any>('/leyes?limit=200')
+      .then(r => setLeyes(Array.isArray(r?.data) ? r.data : []))
+      .catch(() => setLeyes([]));
+  }, []);
+
+  const exportar = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('solo_activos', soloActivos ? '1' : '0');
+      if (servicioId)    params.set('servicio_id', servicioId);
+      if (dependenciaId) params.set('dependencia_id', dependenciaId);
+      if (leyId)         params.set('ley_id', leyId);
+
+      const blob = await apiFetchBlob(`/antiguedad/excel?${params.toString()}`);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `antiguedad_servicios_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.ok('Excel generado', 'El archivo se descargó correctamente');
+      onClose();
+    } catch (e: any) {
+      toast.error('Error al exportar', e?.message || 'Error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className="asv-modal-overlay" onClick={onClose}>
+      <div className="asv-modal asv-modal-form" onClick={e => e.stopPropagation()}>
+        <div className="asv-modal-header">
+          <div>
+            <div className="asv-modal-title">📊 Exportar Antigüedad a Excel</div>
+            <div className="asv-modal-sub">Reporte por servicio y sector con antigüedad y ley</div>
+          </div>
+          <button className="btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <div className="asv-modal-body">
+          <div className="asv-form-grid">
+
+            {/* Estado */}
+            <div className="asv-field asv-field-full">
+              <div className="asv-label">Estado de los pases</div>
+              <div className="asv-estado-btns">
+                <button
+                  type="button"
+                  className={`asv-estado-btn${soloActivos ? ' active' : ''}`}
+                  onClick={() => setSoloActivos(true)}
+                >
+                  🟢 Solo activos (sin cierre)
+                </button>
+                <button
+                  type="button"
+                  className={`asv-estado-btn${!soloActivos ? ' active' : ''}`}
+                  onClick={() => setSoloActivos(false)}
+                >
+                  📋 Todos (activos + cerrados)
+                </button>
+              </div>
+            </div>
+
+            {/* Servicio */}
+            <div className="asv-field">
+              <label htmlFor="exp-srv" className="asv-label">Filtrar por Servicio (opcional)</label>
+              <select id="exp-srv" className="input" value={servicioId} onChange={e => setServicioId(e.target.value)}>
+                <option value="">— Todos los servicios —</option>
+                {servicios.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.nombre || `#${s.id}`}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sector / Dependencia */}
+            <div className="asv-field">
+              <label htmlFor="exp-dep" className="asv-label">Filtrar por Sector (opcional)</label>
+              <select id="exp-dep" className="input" value={dependenciaId} onChange={e => setDependenciaId(e.target.value)}>
+                <option value="">— Todos los sectores —</option>
+                {dependencias.map((d: any) => (
+                  <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ley */}
+            <div className="asv-field">
+              <label htmlFor="exp-ley" className="asv-label">Filtrar por Ley (opcional)</label>
+              <select id="exp-ley" className="input" value={leyId} onChange={e => setLeyId(e.target.value)}>
+                <option value="">— Todas las leyes —</option>
+                {leyes.map((l: any) => (
+                  <option key={l.id} value={l.id}>{l.nombre || `Ley #${l.id}`}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="asv-field asv-field-full asv-export-info">
+              <span className="asv-export-hint">
+                ℹ El Excel incluye una hoja de detalle (agrupada por servicio y sector) y una hoja de resumen con totales y promedios de antigüedad.
+              </span>
+            </div>
+          </div>
+
+          <div className="asv-modal-actions">
+            <button className="btn" onClick={onClose} type="button" disabled={exporting}>Cancelar</button>
+            <button className="btn asv-btn-export" onClick={exportar} disabled={exporting} type="button">
+              {exporting ? '⏳ Generando Excel…' : '⬇ Descargar Excel'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export function AgentesServiciosPage() {
   const toast = useToast();
@@ -288,9 +426,10 @@ export function AgentesServiciosPage() {
   const [loadingNom, setLoadingNom] = useState(false);
 
   // Modales
-  const [modalHistorial, setModalHistorial] = useState<any>(null); // { dni, nombre }
-  const [modalNuevo,     setModalNuevo]     = useState<any>(null); // agente obj
-  const [modalCerrar,    setModalCerrar]    = useState<any>(null); // pase obj
+  const [modalHistorial,  setModalHistorial]  = useState<any>(null); // { dni, nombre }
+  const [modalNuevo,      setModalNuevo]      = useState<any>(null); // agente obj
+  const [modalCerrar,     setModalCerrar]     = useState<any>(null); // pase obj
+  const [modalExportar,   setModalExportar]   = useState(false);
 
   // Mapa DNI → { apellido, nombre } (cargado una vez, usa cache global de personal)
   const [personalMap, setPersonalMap] = useState<Record<string, { apellido: string; nombre: string }>>({});
@@ -531,6 +670,14 @@ export function AgentesServiciosPage() {
               {!loading && <span className="asv-total-badge">{total} total</span>}
             </div>
             <div className="asv-table-pag">
+              <button
+                className="btn asv-btn-export-xl"
+                type="button"
+                title="Exportar reporte de antigüedad por servicio y sector"
+                onClick={() => setModalExportar(true)}
+              >
+                📊 Antigüedad Excel
+              </button>
               <button className="btn" onClick={() => cargarTabla(page - 1)} disabled={page <= 1 || loading} type="button">‹ Anterior</button>
               <span className="asv-pag-info">Pág. {page} / {totalPages}</span>
               <button className="btn" onClick={() => cargarTabla(page + 1)} disabled={page >= totalPages || loading} type="button">Siguiente ›</button>
@@ -661,6 +808,15 @@ export function AgentesServiciosPage() {
           pase={modalCerrar}
           onClose={() => setModalCerrar(null)}
           onSaved={() => cargarTabla(page)}
+        />
+      )}
+      {modalExportar && (
+        <ExportarAntiguedadModal
+          servicios={servicios}
+          dependencias={dependencias}
+          initialServicio={filtroServicio}
+          initialDependencia={filtroDependencia}
+          onClose={() => setModalExportar(false)}
         />
       )}
     </Layout>

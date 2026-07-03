@@ -84,6 +84,7 @@ interface JobResponse {
   job_id: number | null; upload_nonce?: string
   personal_ref?: string; personal_dni?: number | null
   source?: string; duplex?: boolean
+  paper_size?: string
   profile?: { dpi: number; color: boolean; auto_rotate: boolean; blank_page_detection: boolean; compression: string; output_format: string } | null
 }
 
@@ -143,6 +144,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
   const color     = profile?.color  !== false
   const source    = profile?.source ?? "flatbed"
   const duplex    = !!profile?.duplex
+  const paperSize = profile?.paper_size || "A4"
   const escl_port = profile?.escl_port ?? null  // puerto real del mDNS SRV record
   const driver    = profile?.driver ?? "wia"
   const errors: string[] = []
@@ -156,7 +158,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
   // En red los Olivetti/Kyocera anuncian eSCL/WSD, y WIA en este servidor suele estar vacio.
   if (process.platform === "win32" && isLocalDevice) {
     try {
-      const pages = await scanWIA(ip, { dpi, color, source, duplex })
+      const pages = await scanWIA(ip, { dpi, color, source, duplex, paper_size: paperSize })
       console.log(`[wia] ✅ ${ip} → ${pages.length} pág.`)
       return pages
     } catch (e: any) {
@@ -167,7 +169,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
 
   // 2. eSCL / AirScan (estándar moderno, HP/Canon/Ricoh/Brother)
   try {
-    const pages = await scanESCL(ip, { dpi, color, source, duplex, escl_port })
+    const pages = await scanESCL(ip, { dpi, color, source, duplex, paper_size: paperSize, escl_port })
     console.log(`[escl] ✅ ${ip} → ${pages.length} pág.`)
     return pages
   } catch (e: any) {
@@ -177,7 +179,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
 
   // 2b. Kyocera private scan API (KMTWAIN / Boxless Scanning Module)
   try {
-    const pages = await scanKyoceraPrivate(ip, { dpi, color, source, duplex })
+    const pages = await scanKyoceraPrivate(ip, { dpi, color, source, duplex, paper_size: paperSize })
     console.log(`[kyocera] ✅ ${ip} → ${pages.length} pág.`)
     return pages
   } catch (e: any) {
@@ -187,7 +189,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
 
   // 3. WS-Scan / WSD-Scan via puerto 5357 (Kyocera, Olivetti, Canon)
   try {
-    const pages = await scanWSDScan(ip, { dpi, color, source, duplex })
+    const pages = await scanWSDScan(ip, { dpi, color, source, duplex, paper_size: paperSize })
     console.log(`[wsd-scan] ✅ ${ip} → ${pages.length} pág.`)
     return pages
   } catch (e: any) {
@@ -197,23 +199,63 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
 
   // 4. IPP con probe de paths (fallback legacy)
   try {
-    return await scanIPP(ip, { dpi, color, source })
+    return await scanIPP(ip, { dpi, color, source, paper_size: paperSize })
   } catch (e: any) {
     errors.push(`IPP: ${e.message}`)
   }
 
-  throw new Error(errors.join(" | "))
+  const combinedError = errors.join(" | ")
+
+  // ── Si todos fallaron por "escáner ocupado con trabajo anterior",
+  //    reintentamos hasta 3 veces con esperas progresivas (10s, 20s, 30s).
+  //    El Kyocera puede tardar hasta ~45s en liberar el scanner tras un scan por cristal.
+  if (/ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(combinedError)) {
+    const waitMs = [10_000, 20_000, 30_000]
+    let retryErrors: string[] = []
+    for (let attempt = 0; attempt < waitMs.length; attempt++) {
+      const waitSec = waitMs[attempt] / 1000
+      console.warn(`[scan] ${ip} escáner bloqueado — esperando ${waitSec}s (intento ${attempt + 1}/${waitMs.length})…`)
+      await sleep(waitMs[attempt])
+      retryErrors = []
+      try {
+        const pages = await scanESCL(ip, { dpi, color, source, duplex, paper_size: paperSize, escl_port })
+        console.log(`[escl-retry-${attempt + 1}] ✅ ${ip} → ${pages.length} pág.`)
+        return pages
+      } catch (e: any) { retryErrors.push(`eSCL: ${e.message}`) }
+      try {
+        const pages = await scanWSDScan(ip, { dpi, color, source, duplex, paper_size: paperSize })
+        console.log(`[wsd-retry-${attempt + 1}] ✅ ${ip} → ${pages.length} pág.`)
+        return pages
+      } catch (e: any) { retryErrors.push(`WSD: ${e.message}`) }
+      // Si todavía está bloqueado, seguir con el siguiente intento
+      if (/ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(retryErrors.join(" "))) continue
+      // Si ya no está bloqueado pero falló por otra razón, abortar
+      break
+    }
+    throw new Error(
+      `SCANNER_BUSY: El escáner quedó ocupado con el trabajo anterior. ` +
+      `Se esperaron hasta 60 segundos pero sigue bloqueado. Espere un momento e intente nuevamente. ` +
+      `(detalle: ${retryErrors.join(" | ")})`
+    )
+  }
+
+  throw new Error(combinedError)
 }
 
 // ── 1. WIA via PowerShell (Windows) ─────────────────────────────────────────
 // Funciona para escáneres locales Y de red (via WSD/WIA)
 async function scanWIA(ip: string, opts: {
-  dpi: number; color: boolean; source: string; duplex: boolean
+  dpi: number; color: boolean; source: string; duplex: boolean; paper_size?: string
 }): Promise<Buffer[]> {
   const tmpDir = path.join(os.tmpdir(), `scan_${Date.now()}`)
   fs.mkdirSync(tmpDir, { recursive: true })
 
   const isLocal = !ip || ip === "127.0.0.1" || ip === HOSTNAME
+
+  // Calcular extensión en píxeles según tamaño de papel y DPI
+  const paperMm = getPaperSizeMm(opts.paper_size)
+  const extentW = Math.round(paperMm.widthMm  / 25.4 * (opts.dpi || 300))
+  const extentH = Math.round(paperMm.heightMm / 25.4 * (opts.dpi || 300))
 
   // PowerShell: busca el escáner WIA por IP/hostname, luego escanea
   const ps = `
@@ -275,6 +317,10 @@ try {
   try { $item.Properties("Horizontal Resolution").Value = ${opts.dpi} } catch {}
   try { $item.Properties("Vertical Resolution").Value   = ${opts.dpi} } catch {}
 
+  # Configurar área de escaneo (tamaño de papel: ${paperMm.paper})
+  try { $item.Properties("Horizontal Extent").Value = ${extentW} } catch {}
+  try { $item.Properties("Vertical Extent").Value   = ${extentH} } catch {}
+
   # Configurar color: 4=color, 2=gris, 1=b&w
   try { $item.Properties("Current Intent").Value = ${opts.color ? 4 : 2} } catch {}
 
@@ -318,11 +364,62 @@ try {
   }
 }
 
+// ── Helpers de tamaño de papel ───────────────────────────────────────────────
+function normalizePaperSize(value?: string | null): "A4" | "Letter" | "Legal" {
+  const v = String(value || "A4").toLowerCase().trim()
+  if (v === "letter" || v === "carta") return "Letter"
+  if (v === "legal" || v === "oficio") return "Legal"
+  return "A4"
+}
+
+function getPaperSizeMm(value?: string | null) {
+  const paper = normalizePaperSize(value)
+  switch (paper) {
+    case "Letter":
+      return { paper, widthMm: 215.9, heightMm: 279.4 }
+    case "Legal":
+      return { paper, widthMm: 215.9, heightMm: 355.6 }
+    case "A4":
+    default:
+      return { paper: "A4" as const, widthMm: 210, heightMm: 297 }
+  }
+}
+
+/** eSCL usa ThreeHundredthsOfInches como unidad base — siempre 300dpi como referencia */
+function getEsclRegion300(value?: string | null) {
+  const p = getPaperSizeMm(value)
+  return {
+    paper: p.paper,
+    width:  Math.round(p.widthMm  / 25.4 * 300),
+    height: Math.round(p.heightMm / 25.4 * 300),
+  }
+}
+
+/** WSD-Scan usa milésimas de pulgada */
+function getWsdRegion(value?: string | null) {
+  const p = getPaperSizeMm(value)
+  return {
+    paper:  p.paper,
+    width:  Math.round(p.widthMm  / 25.4 * 1000),
+    height: Math.round(p.heightMm / 25.4 * 1000),
+  }
+}
+
+function getKyoceraOriginalSize(value?: string | null): string {
+  const paper = normalizePaperSize(value)
+  switch (paper) {
+    case "Letter": return "LETTER_R"
+    case "Legal":  return "LEGAL_R"
+    case "A4":
+    default:       return "A4_R"
+  }
+}
+
 // ── 2. eSCL / AirScan ────────────────────────────────────────────────────────
 // Protocolo estándar soportado por Kyocera, Olivetti, HP, Canon, Ricoh, Brother, Epson
 // RFC: https://www.mopria.org/spec-archive
 async function scanESCL(ip: string, opts: {
-  dpi: number; color: boolean; source: string; duplex: boolean; escl_port?: number | null
+  dpi: number; color: boolean; source: string; duplex: boolean; paper_size?: string; escl_port?: number | null
 }): Promise<Buffer[]> {
   let base: string
 
@@ -370,21 +467,28 @@ async function scanESCL(ip: string, opts: {
     })
   }
 
+  // Limpiar cualquier trabajo zombie del escaneo anterior antes de crear uno nuevo.
+  // (Ej.: cambiar de Cristal a ADF deja el job anterior en "Processing" → 503.)
+  const cleared = await clearStuckEsclJobs(base, ip)
+  if (cleared > 0) {
+    console.log(`[escl] ${ip} ${cleared} job(s) zombie limpiados — esperando 2s antes de escanear`)
+    await sleep(2_000)
+  }
+
   // Construir XML de scan settings
   const inputSource = (opts.source === "adf" || opts.source === "adf_duplex") ? "Feeder" : "Platen"
   const colorMode   = opts.color ? "RGB24" : "Grayscale8"
   const dpi         = opts.dpi || 300
-  // A4: 2480 x 3508 a 300dpi (en unidades de 1/300")
-  const w = Math.round(dpi * (210 / 25.4))
-  const h = Math.round(dpi * (297 / 25.4))
+  const region      = getEsclRegion300(opts.paper_size)
+  console.log(`[escl] paper_size=${region.paper} width=${region.width} height=${region.height}`)
 
   // Crear trabajo de escaneo
   const variants = buildEsclScanSettingsVariants({
     inputSource,
     colorMode,
     dpi,
-    width: Math.round(w * 300 / dpi),
-    height: Math.round(h * 300 / dpi),
+    width: region.width,
+    height: region.height,
     duplex: opts.duplex,
   })
   let jobLocation = ""
@@ -392,7 +496,7 @@ async function scanESCL(ip: string, opts: {
   for (const variant of variants) {
     try {
       console.log(`[escl] ${ip} creando job (${variant.label})`)
-      jobLocation = await httpPostWithRetry(`${base}/eSCL/ScanJobs`, variant.xml, "text/xml; charset=utf-8", 20_000, 2)
+      jobLocation = await httpPostWithRetry(`${base}/eSCL/ScanJobs`, variant.xml, "text/xml; charset=utf-8", 20_000, 5)
       if (jobLocation) break
       lastPostError = new Error("respuesta sin Location")
     } catch (e: any) {
@@ -411,42 +515,59 @@ async function scanESCL(ip: string, opts: {
   const pages: Buffer[] = []
   const fullJobUrl = resolveDeviceUrl(base, jobLocation)
   const startedAt = Date.now()
+  const isAdf = opts.source === "adf" || opts.source === "adf_duplex"
+  let lastPageAt = startedAt
   let missesAfterPage = 0
 
   await sleep(1_500)
 
-  for (let attempt = 0; attempt < 100; attempt++) {
-    try {
-      const pageData = await httpGetBinary(`${fullJobUrl}/NextDocument`, 30_000)
-      if (!pageData || pageData.length < 100) {
-        missesAfterPage++
-        if (pages.length && missesAfterPage >= 2) break
-        await sleep(1_000)
-        continue
+  try {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      try {
+        const pageData = await httpGetBinary(`${fullJobUrl}/NextDocument`, 30_000)
+        if (!pageData || pageData.length < 100) {
+          missesAfterPage++
+          if (pages.length && missesAfterPage >= 2) break
+          await sleep(1_000)
+          continue
+        }
+        missesAfterPage = 0
+        pages.push(pageData)
+        lastPageAt = Date.now()
+        console.log(`[escl] página ${pages.length} → ${pageData.length} bytes`)
+      } catch (e: any) {
+        // 404 = no más páginas, es el fin normal
+        const msg = e?.message || String(e)
+        if (msg.includes("404") || msg.includes("503")) {
+          if (pages.length && (!isAdf || Date.now() - lastPageAt > 15_000)) break
+          if (Date.now() - startedAt > 60_000) break
+          await sleep(1_500)
+          continue
+        }
+        // Si ya tenemos al menos una página y la impresora cerró la conexión,
+        // es fin normal (flatbed/cristal cierra el socket en lugar de devolver 404)
+        if (pages.length > 0 && !isAdf && (msg.includes('socket hang up') || msg.includes('ECONNRESET') || msg.includes('EPIPE'))) {
+          console.log(`[escl] ${ip} conexión cerrada tras ${pages.length} pág. — fin normal`)
+          break
+        }
+        // Sin páginas aún: no reintentar más de 15s (scanner probablemente no pudo escanear)
+        // Con páginas: reintentar hasta 75s para conexiones intermitentes entre páginas
+        const maxRetryMs = pages.length > 0 ? 75_000 : 15_000
+        if (isTransientHttpError(e) && Date.now() - startedAt <= maxRetryMs) {
+          console.warn(`[escl] ${ip} NextDocument transitorio: ${msg}; reintentando...`)
+          await sleep(1_500)
+          continue
+        }
+        throw e
       }
-      missesAfterPage = 0
-      pages.push(pageData)
-      console.log(`[escl] página ${pages.length} → ${pageData.length} bytes`)
-    } catch (e: any) {
-      // 404 = no más páginas, es el fin normal
-      const msg = e?.message || String(e)
-      if (msg.includes("404") || msg.includes("503")) {
-        if (pages.length) break
-        if (Date.now() - startedAt > 60_000) break
-        await sleep(1_500)
-        continue
-      }
-      if (isTransientHttpError(e) && Date.now() - startedAt <= 75_000) {
-        console.warn(`[escl] ${ip} NextDocument transitorio: ${msg}; reintentando...`)
-        await sleep(1_500)
-        continue
-      }
-      throw e
     }
+  } finally {
+    // CRÍTICO: cerrar SIEMPRE el trabajo en el escáner, aunque el escaneo falle.
+    // Si no se borra, el job queda en "Processing" para siempre y el Kyocera
+    // rechaza todos los escaneos siguientes con 503 ServerErrorNotAcceptingJobs.
+    try { await httpDelete(`${fullJobUrl}`) } catch {}
+    await sleep(3_000)
   }
-
-  // Limpiar el job
-  httpDelete(`${fullJobUrl}`).catch(() => {})
 
   if (!pages.length) throw new Error("eSCL: el escáner no devolvió páginas")
   return pages
@@ -515,7 +636,7 @@ ${common}`),
 // Kyocera KMTWAIN / Boxless Scanning Module.
 // Some d-COPIA/TASKalfa devices keep standard WSD scan stopped but accept this API.
 async function scanKyoceraPrivate(ip: string, opts: {
-  dpi: number; color: boolean; source: string; duplex: boolean
+  dpi: number; color: boolean; source: string; duplex: boolean; paper_size?: string
 }): Promise<Buffer[]> {
   const base = `http://${ip}:9090/ws/km-wsdl/job/scan_operation`
   const serviceInfo = await kyoceraSoap(base, "get_service_information", "<k:get_service_informationRequest/>", 8_000)
@@ -535,13 +656,14 @@ async function scanKyoceraPrivate(ip: string, opts: {
     const dpi = nearestKyoceraDpi(opts.dpi || 300)
     const colorSelection = opts.color ? "FULL_COLOR" : "GRAYSCALE"
     const duplexMode = opts.duplex ? "DUPLEX" : "SIMPLEX"
+    const originalSize = getKyoceraOriginalSize(opts.paper_size)
     const scanSettings = `<k:scan_image_configuration>
   <k:color_selection>${colorSelection}</k:color_selection>
   <k:scan_resolution>RESOLUTION_${dpi}X${dpi}</k:scan_resolution>
   <k:duplex_mode>${duplexMode}</k:duplex_mode>
 </k:scan_image_configuration>
 <k:original_configuration>
-  <k:original_size>A4_R</k:original_size>
+  <k:original_size>${originalSize}</k:original_size>
 </k:original_configuration>
 <k:output_image_configuration>
   <k:image_file_format>JPEG</k:image_file_format>
@@ -655,7 +777,7 @@ function extractKyoceraImage(res: { text: string; buffer: Buffer }): Buffer | nu
 }
 
 async function scanWSDScan(ip: string, opts: {
-  dpi: number; color: boolean; source: string; duplex: boolean
+  dpi: number; color: boolean; source: string; duplex: boolean; paper_size?: string
 }): Promise<Buffer[]> {
   // Probar puertos WSD en paralelo. Algunos Kyocera/Olivetti publican SOAP HTTP en 5358.
   const wsdPort = await new Promise<{ port: number; mod: typeof http | typeof https }>((resolve, reject) => {
@@ -679,8 +801,10 @@ async function scanWSDScan(ip: string, opts: {
   const colorMode = opts.color ? "RGB24" : "Grayscale8"
   const inputSrc  = (opts.source === "adf" || opts.source === "adf_duplex") ? "ADF" : "Platen"
   const dpi = opts.dpi || 300
-  const regionWidth = 8266
-  const regionHeight = 11690
+  const wsdRegion = getWsdRegion(opts.paper_size)
+  const regionWidth  = wsdRegion.width
+  const regionHeight = wsdRegion.height
+  console.log(`[wsd-scan] paper_size=${wsdRegion.paper} width=${regionWidth} height=${regionHeight}`)
 
   // ── Paso 1: CreateScanJobRequest ──────────────────────────────────────────
   const createJobXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -943,7 +1067,7 @@ function extractMTOMImage(data: Buffer): Buffer | null {
 const IPP_PATHS = ["/ipp/scan", "/ipp", "/ipp/printer", "/ipp/print", "/ipp/scan/0", "/scanner"]
 
 async function scanIPP(ip: string, opts: {
-  dpi: number; color: boolean; source: string
+  dpi: number; color: boolean; source: string; paper_size?: string
 }): Promise<Buffer[]> {
   let lastError = new Error("IPP: ningún path respondió")
 
@@ -1067,7 +1191,7 @@ function resolveDeviceUrl(base: string, location: string): string {
 function isTransientHttpError(err: any): boolean {
   const msg = err?.message || String(err)
   const code = err?.code || ""
-  return /socket hang up|ECONNRESET|EPIPE|ETIMEDOUT|timeout/i.test(`${code} ${msg}`)
+  return /socket hang up|ECONNRESET|EPIPE|ETIMEDOUT|timeout|HTTP 503|Service Unavailable/i.test(`${code} ${msg}`)
 }
 
 function httpGet(url: string, timeoutMs = 5000, maxRedirects = 3): Promise<string> {
@@ -1137,7 +1261,7 @@ async function httpPostWithRetry(url: string, body: string, contentType: string,
     } catch (e: any) {
       lastError = e
       if (!isTransientHttpError(e) || i === attempts - 1) break
-      await sleep(700)
+      await sleep(1_500)
     }
   }
   throw lastError
@@ -1207,6 +1331,34 @@ function httpDelete(url: string): Promise<void> {
   })
 }
 
+// Cancela trabajos zombie (Processing/Pending) que quedaron pegados en el escáner.
+// Un job sin cerrar deja al Kyocera devolviendo 503 ServerErrorNotAcceptingJobs
+// a todos los escaneos siguientes (típico al cambiar de Cristal a ADF).
+async function clearStuckEsclJobs(base: string, ip: string): Promise<number> {
+  try {
+    const xml = await httpGet(`${base}/eSCL/ScannerStatus`, 5000)
+    if (!xml) return 0
+    const jobBlocks = xml.split(/<scan:JobInfo>/i).slice(1)
+    let cleared = 0
+    for (const block of jobBlocks) {
+      const state = block.match(/<pwg:JobState>\s*([^<]+?)\s*<\/pwg:JobState>/i)?.[1]?.trim()
+      const uri   = block.match(/<pwg:JobUri>\s*([^<]+?)\s*<\/pwg:JobUri>/i)?.[1]?.trim()
+      if (!uri || !state) continue
+      if (/^(Processing|Pending)$/i.test(state)) {
+        try {
+          await httpDelete(resolveDeviceUrl(base, uri))
+          cleared++
+          console.log(`[escl] ${ip} 🧹 job zombie (${state}) cancelado: ${uri}`)
+        } catch {}
+      }
+    }
+    return cleared
+  } catch (e: any) {
+    console.warn(`[escl] ${ip} no se pudo consultar ScannerStatus para limpieza: ${e?.message || e}`)
+    return 0
+  }
+}
+
 // ── Fallback virtual (solo para testing) ──────────────────────────────────────
 async function scanVirtual(profile?: any): Promise<Buffer[]> {
   const page = new Jimp({ width: 1600, height: 1100, color: 0xffffffff })
@@ -1268,9 +1420,17 @@ function shouldAutoRotate(image: any): boolean {
   return image.bitmap.width > (image.bitmap.height * 1.08)
 }
 
-function isLikelyBlankPage(image: any): boolean {
+type BlankPageAnalysis = {
+  isBlank: boolean
+  nonWhiteRatio: number
+  strongInkRatio: number
+}
+
+function analyzeBlankPage(image: any): BlankPageAnalysis {
   const { width, height, data } = image.bitmap
-  if (!width || !height || !data.length) return false
+  if (!width || !height || !data.length) {
+    return { isBlank: false, nonWhiteRatio: 1, strongInkRatio: 1 }
+  }
 
   const stepX = Math.max(1, Math.floor(width / 160))
   const stepY = Math.max(1, Math.floor(height / 220))
@@ -1290,7 +1450,14 @@ function isLikelyBlankPage(image: any): boolean {
 
   const nonWhiteRatio = nonWhite / Math.max(1, samples)
   const strongInkRatio = strongInk / Math.max(1, samples)
-  return nonWhiteRatio < 0.015 && strongInkRatio < 0.003
+  // Ser conservadores: una firma, sello o texto tenue no debe descartarse.
+  // Los umbrales anteriores (1.5% / 0.3%) marcaban como blancas páginas
+  // con poco contenido real.
+  return {
+    isBlank: nonWhiteRatio < 0.0035 && strongInkRatio < 0.0008,
+    nonWhiteRatio,
+    strongInkRatio,
+  }
 }
 
 async function normalizePageForUpload(page: Buffer, profile: JobResponse["profile"]): Promise<Buffer> {
@@ -1322,8 +1489,10 @@ async function processScannedPages(pages: Buffer[], profile: JobResponse["profil
 
   const processed: Buffer[] = []
   const fallback: Buffer[] = []
+  let blankPages = 0
 
-  for (const page of pages) {
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+    const page = pages[pageIndex]
     const normalized = await normalizePageForUpload(page, profile)
     fallback.push(normalized)
 
@@ -1340,8 +1509,17 @@ async function processScannedPages(pages: Buffer[], profile: JobResponse["profil
 
     try {
       const image = await Jimp.read(normalized)
-      if (!isLikelyBlankPage(image)) {
+      const analysis = analyzeBlankPage(image)
+      console.log(
+        `[blank-detection] página ${pageIndex + 1}/${pages.length}: ` +
+        `no-blanco=${(analysis.nonWhiteRatio * 100).toFixed(3)}% ` +
+        `tinta-fuerte=${(analysis.strongInkRatio * 100).toFixed(3)}% ` +
+        `resultado=${analysis.isBlank ? "blanca" : "con contenido"}`
+      )
+      if (!analysis.isBlank) {
         processed.push(normalized)
+      } else {
+        blankPages++
       }
     } catch {
       processed.push(normalized)
@@ -1349,7 +1527,13 @@ async function processScannedPages(pages: Buffer[], profile: JobResponse["profil
   }
 
   if (processed.length) return processed
-  return fallback.length ? [fallback[0]] : pages
+  if (fallback.length && blankPages === fallback.length) {
+    // Nunca perder un trabajo completo por una decisión automática. Si todas
+    // parecen blancas, puede tratarse de texto tenue, una firma o un sello.
+    console.warn(`[blank-detection] las ${fallback.length} página(s) parecían blancas; se conservan por seguridad`)
+    return fallback
+  }
+  return pages
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1366,17 +1550,27 @@ async function uploadPages(_deviceKey: string, jobId: number, nonce: string, pag
       contentType: file.contentType,
     })
   }
-  await axios.post(`${API}/v1/scan-jobs/${jobId}/upload`, form, {
-    headers: {
-      ...form.getHeaders(),
-      "Authorization": `Bearer ${jwt_token}`,
-      "x-tenant": TENANT,
-      "x-device-key": _deviceKey,
-    },
-    timeout: 120_000,
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
-  })
+  try {
+    await axios.post(`${API}/v1/scan-jobs/${jobId}/upload`, form, {
+      headers: {
+        ...form.getHeaders(),
+        "Authorization": `Bearer ${jwt_token}`,
+        "x-tenant": TENANT,
+        "x-device-key": _deviceKey,
+      },
+      timeout: 120_000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    })
+  } catch (e: any) {
+    // 409 = el servidor ya tiene este upload (reintentos por ECONNRESET) → OK
+    const status = e?.response?.status ?? e?.status
+    if (status === 409) {
+      console.log(`[agent] job ${jobId} → 409 Conflict: upload ya existente, se ignora`)
+      return
+    }
+    throw e
+  }
   console.log(`[agent] ✅ job ${jobId} → subidas ${pages.length} pág.`)
 }
 
@@ -1614,6 +1808,36 @@ async function heartbeatAll(devices: DeviceRow[]): Promise<void> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MENSAJES DE ERROR AMIGABLES
+// ══════════════════════════════════════════════════════════════════════════════
+
+function friendlyErrorMessage(technical: string): string {
+  if (/SCAN_EMPTY|solamente páginas en blanco/i.test(technical)) {
+    return 'El escáner devolvió solamente páginas en blanco. Verifique si seleccionó ADF o cristal y vuelva a intentar.'
+  }
+  if (/SCANNER_BUSY|ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(technical)) {
+    return '⚠️ El escáner quedó bloqueado con un trabajo anterior. Se esperaron 12 segundos pero sigue ocupado. Espere 1-2 minutos y vuelva a intentarlo.'
+  }
+  if (/no devolvió páginas|no se recibió páginas|sin páginas/i.test(technical)) {
+    return '⚠️ El escáner no devolvió ninguna página. Verifique que haya papel en el alimentador o en el cristal.'
+  }
+  if (/ECONNREFUSED/i.test(technical)) {
+    return '⚠️ No se pudo conectar con el escáner. Verifique que esté encendido y conectado a la red.'
+  }
+  if (/ECONNRESET|socket hang up|EPIPE/i.test(technical)) {
+    return '⚠️ El escáner cortó la conexión inesperadamente. Intente nuevamente.'
+  }
+  if (/ETIMEDOUT|timeout/i.test(technical)) {
+    return '⚠️ El escáner tardó demasiado en responder. Puede estar ocupado o sin papel.'
+  }
+  if (/503|Service Unavailable/i.test(technical)) {
+    return '⚠️ El escáner no está disponible (503). Puede estar procesando otra tarea o necesitar reinicio.'
+  }
+  // Genérico: mostrar el error técnico igual
+  return `❌ Error de escaneo: ${technical}`
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // POLL
 // ══════════════════════════════════════════════════════════════════════════════
 let polling = false
@@ -1633,19 +1857,20 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
         const { job_id, upload_nonce, profile, personal_ref, personal_dni } = data
         const src = data.source || "flatbed"
         const dup = !!data.duplex
+        const paperSize = data.paper_size || "A4"
         const ip  = dev.hostname || "127.0.0.1"
 
-        console.log(`[poll] 📋 job ${job_id} → device "${dev.name}" (${ip})`)
+        console.log(`[poll] 📋 job ${job_id} → device "${dev.name}" (${ip}) source=${src} duplex=${dup} paper=${paperSize}`)
 
         let pages: Buffer[]
         try {
-          pages = await scanDevice(ip, { ...profile, source: src, duplex: dup, escl_port: dev.escl_port || null, driver: dev.driver })
+          pages = await scanDevice(ip, { ...profile, source: src, duplex: dup, paper_size: paperSize, escl_port: dev.escl_port || null, driver: dev.driver })
           pages = await processScannedPages(pages, profile || null)
         } catch (scanErr: any) {
           console.error(`[scan] ❌ job ${job_id} falló:`, scanErr.message)
           await client.post("/agent/fail", {
             job_id,
-            error_message: `Scan error: ${scanErr.message}`
+            error_message: friendlyErrorMessage(scanErr.message)
           }).catch(() => {})
           return
         }
@@ -1660,7 +1885,7 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
           console.error(`[upload] job ${job_id} falló:`, uploadErr.message)
           await client.post("/agent/fail", {
             job_id,
-            error_message: `Upload error: ${uploadErr.message}`
+            error_message: friendlyErrorMessage(uploadErr.message)
           }).catch(() => {})
         }
 

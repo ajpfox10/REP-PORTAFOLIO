@@ -1,5 +1,5 @@
 // src/pages/JefedeptosPage/index.tsx
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
 import { useAuth } from '../../auth/AuthProvider';
 import { useToast } from '../../ui/toast';
@@ -12,6 +12,7 @@ interface Jefatura {
   id: number;
   sector: string;
   servicio_nombre: string | null;
+  reparticion_nombre: string | null;
   jefe: string | null;
 }
 
@@ -35,6 +36,7 @@ interface Jefedepto {
   apellido?: string;
   nombre?: string;
   sector?: string;
+  reparticion?: string;
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -132,11 +134,9 @@ export function JefedeptosAlertaBanner() {
       try {
         const res = await apiFetch<any>('/jefedeptos?limit=500');
         const rows: Jefedepto[] = res?.data || res || [];
-
         const enAl = rows.filter(r => enAlerta(r));
         if (!enAl.length) return;
 
-        // enriquecer con datos de personal y jefaturas
         const [jefaturasRes, ...personalRes] = await Promise.all([
           apiFetch<any>('/jefaturas?limit=500').catch(() => null),
           ...enAl.map(r => r.dni ? apiFetch<any>(`/personal/${r.dni}`).catch(() => null) : Promise.resolve(null)),
@@ -179,16 +179,7 @@ export function JefedeptosAlertaBanner() {
   if (!visible || dismissed || !alertas.length) return null;
 
   return (
-    <div style={{
-      margin: '0 0 16px 0',
-      padding: '14px 16px',
-      background: 'rgba(234,179,8,0.12)',
-      border: '2px solid rgba(234,179,8,0.6)',
-      borderRadius: 12,
-      display: 'flex',
-      gap: 12,
-      alignItems: 'flex-start',
-    }}>
+    <div style={{ margin: '0 0 16px 0', padding: '14px 16px', background: 'rgba(234,179,8,0.12)', border: '2px solid rgba(234,179,8,0.6)', borderRadius: 12, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
       <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>🏛️</span>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, color: '#eab308', marginBottom: 4 }}>
@@ -199,21 +190,12 @@ export function JefedeptosAlertaBanner() {
             const dias = diasHasta(a.fecha_hasta!);
             return (
               <div key={a.id} style={{ fontSize: '0.85rem', display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontWeight: 600 }}>
-                  {a.apellido ? `${a.apellido}, ${a.nombre}` : `DNI ${a.dni}`}
-                </span>
+                <span style={{ fontWeight: 600 }}>{a.apellido ? `${a.apellido}, ${a.nombre}` : `DNI ${a.dni}`}</span>
                 <span className="muted">·</span>
                 <span>{a.sector ?? '—'}</span>
                 <span className="muted">·</span>
                 <span>Vence: {fmt(a.fecha_hasta)}</span>
-                <span style={{
-                  background: dias <= 0 ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)',
-                  color: dias <= 0 ? '#ef4444' : '#eab308',
-                  borderRadius: 6,
-                  padding: '1px 7px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                }}>
+                <span style={{ background: dias <= 0 ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)', color: dias <= 0 ? '#ef4444' : '#eab308', borderRadius: 6, padding: '1px 7px', fontSize: '0.78rem', fontWeight: 700 }}>
                   {dias <= 0 ? `venció hace ${Math.abs(dias)}d` : `en ${dias}d`}
                 </span>
               </div>
@@ -224,22 +206,41 @@ export function JefedeptosAlertaBanner() {
           Ir a <a href="/app/jefedeptos" style={{ color: '#eab308', textDecoration: 'underline' }}>Historial de Jefaturas</a> para marcar como avisadas.
         </div>
       </div>
-      <button
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: '1.1rem', padding: 0 }}
-        onClick={() => setDismissed(true)}
-        title="Cerrar"
-      >✕</button>
+      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: '1.1rem', padding: 0 }} onClick={() => setDismissed(true)} title="Cerrar">✕</button>
     </div>
   );
 }
 
 // ─── PÁGINA PRINCIPAL ────────────────────────────────────────────────────────
 
+type Tab = 'cargar' | 'historial';
+
+interface Filtros {
+  agente: string;
+  dni: string;
+  reparticion: string;
+  jefatura: string;
+  tipo: string;
+  alerta: string;
+  fechaDesdeDesde: string;
+  fechaDesdeHasta: string;
+  fechaHastaDesde: string;
+  fechaHastaHasta: string;
+}
+
+const FILTROS_VACÍOS: Filtros = {
+  agente: '', dni: '', reparticion: '', jefatura: '',
+  tipo: '', alerta: '',
+  fechaDesdeDesde: '', fechaDesdeHasta: '',
+  fechaHastaDesde: '', fechaHastaHasta: '',
+};
+
 export function JefedeptosPage() {
   const { canCrud, session } = useAuth();
   const toast = useToast();
   const search = useAgenteSearch();
 
+  const [tab, setTab] = useState<Tab>('cargar');
   const [rows, setRows] = useState<Jefedepto[]>([]);
   const [jefaturas, setJefaturas] = useState<Jefatura[]>([]);
   const [loading, setLoading] = useState(false);
@@ -253,12 +254,15 @@ export function JefedeptosPage() {
   const [editFechaDesde, setEditFechaDesde] = useState('');
   const [editFechaHasta, setEditFechaHasta] = useState('');
 
-  // formulario
+  // formulario cargar
   const [jefaturaId, setJefaturaId] = useState('');
   const [tipoFuncion, setTipoFuncion] = useState<'INTERINO' | 'POR CONCURSO'>('INTERINO');
   const [nroActo, setNroActo] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+
+  // filtros historial
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACÍOS);
 
   const auditInfo = {
     id: (session?.user as any)?.id ?? null,
@@ -278,10 +282,10 @@ export function JefedeptosPage() {
       const jefs: Jefatura[] = rJef?.data || rJef || [];
       setJefaturas(jefs);
       const jefMap = new Map(jefs.map(j => [j.id, j.servicio_nombre || j.sector]));
+      const repMap = new Map(jefs.map(j => [j.id, j.reparticion_nombre ?? undefined]));
 
       const hist: Jefedepto[] = rHist?.data || rHist || [];
 
-      // enriquecer con nombres de personal
       const dnis = [...new Set(hist.filter(r => r.dni).map(r => String(r.dni)))];
       const nameMap = new Map<string, { apellido: string; nombre: string }>();
       await Promise.allSettled(
@@ -296,6 +300,7 @@ export function JefedeptosPage() {
       setRows(hist.map(r => ({
         ...r,
         sector: r.jefatura_id ? jefMap.get(r.jefatura_id) : r.jefedepto ?? undefined,
+        reparticion: r.jefatura_id ? repMap.get(r.jefatura_id) : undefined,
         ...nameMap.get(String(r.dni ?? '')),
       })));
     } catch (e: any) { toast.error('Error', e?.message); }
@@ -304,13 +309,9 @@ export function JefedeptosPage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Auto-calcular fecha_hasta cuando cambia tipo o fecha_desde
   useEffect(() => {
-    if (tipoFuncion === 'INTERINO') {
-      setFechaHasta('');
-    } else if (fechaDesde) {
-      setFechaHasta(addYears(fechaDesde, 4));
-    }
+    if (tipoFuncion === 'INTERINO') setFechaHasta('');
+    else if (fechaDesde) setFechaHasta(addYears(fechaDesde, 4));
   }, [tipoFuncion, fechaDesde]);
 
   // ── Guardar ──
@@ -320,7 +321,6 @@ export function JefedeptosPage() {
     if (!jefaturaId) { toast.error('Sin jefatura', 'Seleccioná una jefatura.'); return; }
     if (!fechaDesde) { toast.error('Sin fecha', 'Ingresá la fecha desde.'); return; }
     if (!nroActo.trim()) { toast.error('Sin acto', 'Ingresá el Nro. de Acto Administrativo.'); return; }
-
     setSaving(true);
     try {
       const body: any = {
@@ -334,16 +334,13 @@ export function JefedeptosPage() {
         updated_by: auditInfo.id,
       };
       await apiFetch('/jefedeptos', { method: 'POST', body: JSON.stringify(body) });
-      // Actualizar jefaturas.jefe con el nombre del agente asignado
       const nombreJefe = `${search.row.apellido || ''}, ${search.row.nombre || ''}`.trim().replace(/^,\s*/, '');
-      await apiFetch(`/jefaturas/${jefaturaId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ jefe: nombreJefe }),
-      }).catch(() => {});
+      await apiFetch(`/jefaturas/${jefaturaId}`, { method: 'PATCH', body: JSON.stringify({ jefe: nombreJefe }) }).catch(() => {});
       toast.ok('Guardado', 'Registro de jefatura guardado.');
       search.clear();
       setJefaturaId(''); setNroActo(''); setFechaDesde(''); setFechaHasta('');
       await loadAll();
+      setTab('historial');
     } catch (e: any) { toast.error('Error al guardar', e?.message); }
     finally { setSaving(false); }
   };
@@ -363,8 +360,6 @@ export function JefedeptosPage() {
           updated_by: auditInfo.id,
         }),
       });
-
-      // registrar en alerta_vistas quién la marcó
       await apiFetch('/alerta_vistas', {
         method: 'POST',
         body: JSON.stringify({
@@ -375,7 +370,6 @@ export function JefedeptosPage() {
           detalle_json: JSON.stringify({ id: row.id, dni: row.dni, fecha_hasta: row.fecha_hasta }),
         }),
       }).catch(() => {});
-
       toast.ok('Marcada', 'Alerta marcada como avisada.');
       await loadAll();
     } catch (e: any) { toast.error('Error', e?.message); }
@@ -408,7 +402,7 @@ export function JefedeptosPage() {
           tipo_funcion: editTipo,
           nro_acto_admin: editNroActo.trim() || null,
           fecha_desde: editFechaDesde,
-          fecha_hasta: editTipo === 'POR CONCURSO' ? (editFechaHasta || null) : null,
+          fecha_hasta: editFechaHasta || null,
           updated_by: auditInfo.id,
         }),
       });
@@ -423,8 +417,51 @@ export function JefedeptosPage() {
   const enAlertaRows = rows.filter(r => enAlerta(r));
   const vigentes = rows.filter(r => !r.fecha_hasta || diasHasta(r.fecha_hasta) > -30);
   const avisadas = rows.filter(r => r.alerta_45_avisada);
-
   const jefaturaSeleccionada = jefaturas.find(j => j.id === Number(jefaturaId));
+
+  const jefaturaOcupada = useMemo(() => {
+    if (!jefaturaId) return null;
+    return rows.find(r =>
+      r.jefatura_id === Number(jefaturaId) &&
+      (!r.fecha_hasta || diasHasta(r.fecha_hasta) >= 0)
+    ) ?? null;
+  }, [jefaturaId, rows]);
+
+  // ── Opciones únicas para selects de filtros ──
+  const optsReparticion = useMemo(() =>
+    [...new Set(rows.map(r => r.reparticion).filter(Boolean) as string[])].sort(),
+  [rows]);
+
+  const optsJefatura = useMemo(() =>
+    [...new Set(rows.map(r => r.sector ?? r.jefedepto).filter(Boolean) as string[])].sort(),
+  [rows]);
+
+  // ── Aplicar filtros ──
+  const rowsFiltrados = useMemo(() => {
+    return rows.filter(r => {
+      const nombreCompleto = r.apellido ? `${r.apellido} ${r.nombre}`.toLowerCase() : '';
+      if (filtros.agente && !nombreCompleto.includes(filtros.agente.toLowerCase())) return false;
+      if (filtros.dni && !(r.dni ?? '').includes(filtros.dni.replace(/\D/g, ''))) return false;
+      if (filtros.reparticion && r.reparticion !== filtros.reparticion) return false;
+      if (filtros.jefatura && (r.sector ?? r.jefedepto) !== filtros.jefatura) return false;
+      if (filtros.tipo && r.tipo_funcion !== filtros.tipo) return false;
+      if (filtros.alerta) {
+        if (filtros.alerta === 'alerta' && !enAlerta(r)) return false;
+        if (filtros.alerta === 'avisada' && !r.alerta_45_avisada) return false;
+        if (filtros.alerta === 'vencida' && (!r.fecha_hasta || diasHasta(r.fecha_hasta) >= 0)) return false;
+        if (filtros.alerta === 'sin' && (enAlerta(r) || r.alerta_45_avisada)) return false;
+      }
+      if (filtros.fechaDesdeDesde && (r.fecha_desde ?? '') < filtros.fechaDesdeDesde) return false;
+      if (filtros.fechaDesdeHasta && (r.fecha_desde ?? '') > filtros.fechaDesdeHasta) return false;
+      if (filtros.fechaHastaDesde && (r.fecha_hasta ?? '') < filtros.fechaHastaDesde) return false;
+      if (filtros.fechaHastaHasta && (r.fecha_hasta ?? '') > filtros.fechaHastaHasta) return false;
+      return true;
+    });
+  }, [rows, filtros]);
+
+  const hayFiltros = Object.values(filtros).some(v => v !== '');
+  const setF = (k: keyof Filtros) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setFiltros(prev => ({ ...prev, [k]: e.target.value }));
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
 
@@ -450,8 +487,7 @@ export function JefedeptosPage() {
                 <span className="muted">Nro. acto: {r.nro_acto_admin ?? '—'}</span>
                 <button className="btn" type="button"
                   style={{ fontSize: '0.72rem', padding: '2px 8px', background: 'rgba(234,179,8,0.2)', color: '#eab308' }}
-                  onClick={() => handleMarcarAvisada(r)}
-                  disabled={markingId === r.id}>
+                  onClick={() => handleMarcarAvisada(r)} disabled={markingId === r.id}>
                   {markingId === r.id ? '...' : '✓ Marcar avisada'}
                 </button>
               </div>
@@ -474,216 +510,351 @@ export function JefedeptosPage() {
         ))}
       </div>
 
-      {/* ── BÚSQUEDA AGENTE ── */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="h2" style={{ marginBottom: 10 }}>Buscar agente</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div>
-            <label htmlFor="jd-search-dni" style={lbl}>DNI</label>
-            <div className="row" style={{ gap: 6 }}>
-              <input id="jd-search-dni" name="dni" className="input" style={{ flex: 1 }} value={search.dni}
-                onChange={e => search.setDni(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && search.onSearch()}
-                placeholder="Enter para buscar" disabled={search.loading} />
-              <button className="btn" type="button" onClick={() => search.onSearch()} disabled={search.loading}>
-                {search.loading ? '...' : 'Buscar'}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label htmlFor="jd-search-nombre" style={lbl}>Apellido / Nombre</label>
-            <div className="row" style={{ gap: 6 }}>
-              <input id="jd-search-nombre" name="fullName" className="input" style={{ flex: 1 }} value={search.fullName}
-                onChange={e => search.setFullName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && search.onSearchByName()}
-                placeholder="Apellido Nombre (Enter)" disabled={search.loading} />
-              <button className="btn" type="button" onClick={search.onSearchByName} disabled={search.loading}>
-                {search.loading ? '...' : 'Buscar'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {search.matches.length > 0 && (
-          <div style={{ marginTop: 10, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {search.matches.map((m: any) => (
-              <button key={m.dni} className="btn" type="button"
-                style={{ textAlign: 'left', justifyContent: 'flex-start' }}
-                onClick={() => search.loadByDni(String(m.dni))}>
-                <strong>{m.apellido}, {m.nombre}</strong>
-                <span className="muted" style={{ marginLeft: 8, fontSize: '0.82rem' }}>DNI {m.dni}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {search.row && (
-          <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.3)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>{search.row.apellido}, {search.row.nombre}</div>
-              <div className="muted" style={{ fontSize: '0.82rem' }}>DNI {search.row.dni}</div>
-            </div>
-            <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={search.clear}>✕ Limpiar</button>
-          </div>
-        )}
+      {/* ── TABS ── */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid rgba(255,255,255,0.08)' }}>
+        {([
+          { key: 'cargar', label: '➕ Cargar jefatura' },
+          { key: 'historial', label: `📋 Historial${loading ? '' : ` (${rowsFiltrados.length})`}` },
+        ] as { key: Tab; label: string }[]).map(t => (
+          <button key={t.key} type="button" onClick={() => setTab(t.key)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '10px 20px', fontSize: '0.9rem', fontWeight: tab === t.key ? 700 : 400,
+              color: tab === t.key ? '#818cf8' : 'rgba(255,255,255,0.5)',
+              borderBottom: tab === t.key ? '2px solid #818cf8' : '2px solid transparent',
+              marginBottom: -2, transition: 'all 0.15s',
+            }}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* ── FORMULARIO ── */}
-      {canCrud('jefedeptos', 'create') && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="h2" style={{ marginBottom: 10 }}>➕ Cargar jefatura</div>
-          {!search.row && (
-            <div style={alertStyle}>⚠️ Buscá y seleccioná un agente antes de cargar.</div>
-          )}
-          <form onSubmit={handleSave}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-              <div style={fg}>
-                <label htmlFor="jd-jefatura" style={lbl}>Jefatura *</label>
-                <select id="jd-jefatura" name="jefaturaId" className="input" value={jefaturaId} onChange={e => setJefaturaId(e.target.value)} required>
-                  <option value="">— Seleccionar —</option>
-                  {jefaturas.map(j => (
-                    <option key={j.id} value={j.id}>{j.servicio_nombre || j.sector}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={fg}>
-                <div style={lbl}>Tipo de función *</div>
-                <div className="row" style={{ gap: 16, marginTop: 4 }}>
-                  {(['INTERINO', 'POR CONCURSO'] as const).map(t => (
-                    <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.88rem' }}>
-                      <input type="radio" name="tipoFuncion" checked={tipoFuncion === t} onChange={() => setTipoFuncion(t)} />
-                      {t}
-                    </label>
-                  ))}
+      {/* ── TAB: CARGAR JEFATURA ── */}
+      {tab === 'cargar' && (
+        <>
+          {/* Búsqueda agente */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="h2" style={{ marginBottom: 10 }}>Buscar agente</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label htmlFor="jd-search-dni" style={lbl}>DNI</label>
+                <div className="row" style={{ gap: 6 }}>
+                  <input id="jd-search-dni" name="dni" className="input" style={{ flex: 1 }} value={search.dni}
+                    onChange={e => search.setDni(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && search.onSearch()}
+                    placeholder="Enter para buscar" disabled={search.loading} />
+                  <button className="btn" type="button" onClick={() => search.onSearch()} disabled={search.loading}>
+                    {search.loading ? '...' : 'Buscar'}
+                  </button>
                 </div>
               </div>
-              <div style={fg}>
-                <label htmlFor="jd-nro-acto" style={lbl}>Nro. Acto Administrativo *</label>
-                <input id="jd-nro-acto" name="nroActo" className="input" type="text" placeholder="Ej: RESO-2025-1234-GDEBA-MSALGP"
-                  value={nroActo} onChange={e => setNroActo(e.target.value)} />
-              </div>
-              <div style={fg}>
-                <label htmlFor="jd-fecha-desde" style={lbl}>Fecha desde *</label>
-                <input id="jd-fecha-desde" name="fechaDesde" className="input" type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+              <div>
+                <label htmlFor="jd-search-nombre" style={lbl}>Apellido / Nombre</label>
+                <div className="row" style={{ gap: 6 }}>
+                  <input id="jd-search-nombre" name="fullName" className="input" style={{ flex: 1 }} value={search.fullName}
+                    onChange={e => search.setFullName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && search.onSearchByName()}
+                    placeholder="Apellido Nombre (Enter)" disabled={search.loading} />
+                  <button className="btn" type="button" onClick={search.onSearchByName} disabled={search.loading}>
+                    {search.loading ? '...' : 'Buscar'}
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Preview vencimiento */}
-            <div style={{ padding: '8px 12px', borderRadius: 8, fontSize: '0.83rem', marginBottom: 12, ...(tipoFuncion === 'INTERINO' ? { background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.25)', color: '#14b8a6' } : { background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', color: '#eab308' }) }}>
-              {tipoFuncion === 'INTERINO'
-                ? '✓ INTERINO — Sin fecha de vencimiento'
-                : fechaDesde
-                  ? `⏳ POR CONCURSO — Vence el ${fmt(fechaHasta)} (4 años desde el ${fmt(fechaDesde)})`
-                  : '⏳ POR CONCURSO — Ingresá la fecha desde para calcular el vencimiento'
-              }
-            </div>
-
-            {jefaturaSeleccionada && (
-              <div style={{ marginBottom: 12, padding: '6px 10px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, fontSize: '0.82rem', color: '#818cf8' }}>
-                Jefatura seleccionada: <strong>{jefaturaSeleccionada.servicio_nombre || jefaturaSeleccionada.sector}</strong>
+            {search.matches.length > 0 && (
+              <div style={{ marginTop: 10, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {search.matches.map((m: any) => (
+                  <button key={m.dni} className="btn" type="button"
+                    style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                    onClick={() => search.loadByDni(String(m.dni))}>
+                    <strong>{m.apellido}, {m.nombre}</strong>
+                    <span className="muted" style={{ marginLeft: 8, fontSize: '0.82rem' }}>DNI {m.dni}</span>
+                  </button>
+                ))}
               </div>
             )}
 
-            <button className="btn" type="submit" disabled={saving || !search.row}>
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
-          </form>
+            {search.row && (
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.3)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{search.row.apellido}, {search.row.nombre}</div>
+                  <div className="muted" style={{ fontSize: '0.82rem' }}>DNI {search.row.dni}</div>
+                </div>
+                <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={search.clear}>✕ Limpiar</button>
+              </div>
+            )}
+          </div>
+
+          {/* Formulario */}
+          {canCrud('jefedeptos', 'create') && (
+            <div className="card">
+              <div className="h2" style={{ marginBottom: 10 }}>➕ Cargar jefatura</div>
+              {!search.row && (
+                <div style={alertStyle}>⚠️ Buscá y seleccioná un agente antes de cargar.</div>
+              )}
+              <form onSubmit={handleSave}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div style={fg}>
+                    <label htmlFor="jd-jefatura" style={lbl}>Jefatura *</label>
+                    <select id="jd-jefatura" name="jefaturaId" className="input" value={jefaturaId} onChange={e => setJefaturaId(e.target.value)} required>
+                      <option value="">— Seleccionar —</option>
+                      {jefaturas.map(j => (
+                        <option key={j.id} value={j.id}>{j.servicio_nombre || j.sector}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={fg}>
+                    <div style={lbl}>Tipo de función *</div>
+                    <div className="row" style={{ gap: 16, marginTop: 4 }}>
+                      {(['INTERINO', 'POR CONCURSO'] as const).map(t => (
+                        <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.88rem' }}>
+                          <input type="radio" name="tipoFuncion" checked={tipoFuncion === t} onChange={() => setTipoFuncion(t)} />
+                          {t}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="jd-nro-acto" style={lbl}>Nro. Acto Administrativo *</label>
+                    <input id="jd-nro-acto" name="nroActo" className="input" type="text" placeholder="Ej: RESO-2025-1234-GDEBA-MSALGP"
+                      value={nroActo} onChange={e => setNroActo(e.target.value)} />
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="jd-fecha-desde" style={lbl}>Fecha desde *</label>
+                    <input id="jd-fecha-desde" name="fechaDesde" className="input" type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 12px', borderRadius: 8, fontSize: '0.83rem', marginBottom: 12, ...(tipoFuncion === 'INTERINO' ? { background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.25)', color: '#14b8a6' } : { background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', color: '#eab308' }) }}>
+                  {tipoFuncion === 'INTERINO'
+                    ? '✓ INTERINO — Sin fecha de vencimiento'
+                    : fechaDesde
+                      ? `⏳ POR CONCURSO — Vence el ${fmt(fechaHasta)} (4 años desde el ${fmt(fechaDesde)})`
+                      : '⏳ POR CONCURSO — Ingresá la fecha desde para calcular el vencimiento'
+                  }
+                </div>
+
+                {jefaturaSeleccionada && !jefaturaOcupada && (
+                  <div style={{ marginBottom: 12, padding: '6px 10px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, fontSize: '0.82rem', color: '#818cf8' }}>
+                    Jefatura seleccionada: <strong>{jefaturaSeleccionada.servicio_nombre || jefaturaSeleccionada.sector}</strong>
+                  </div>
+                )}
+
+                {jefaturaOcupada && (
+                  <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 8, fontSize: '0.85rem', color: '#fca5a5' }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>🔒 Jefatura ya ocupada</div>
+                    <div>
+                      {jefaturaOcupada.apellido
+                        ? <><strong>{jefaturaOcupada.apellido}, {jefaturaOcupada.nombre}</strong> · DNI {jefaturaOcupada.dni}</>
+                        : <>DNI {jefaturaOcupada.dni}</>
+                      }
+                      {' · '}Desde {fmt(jefaturaOcupada.fecha_desde)}
+                      {jefaturaOcupada.fecha_hasta
+                        ? <> · Hasta {fmt(jefaturaOcupada.fecha_hasta)}</>
+                        : <> · Sin fecha de vencimiento</>
+                      }
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: '0.78rem', color: 'rgba(252,165,165,0.7)' }}>
+                      Para cargar una nueva jefatura, primero finalizá el registro vigente desde el historial.
+                    </div>
+                  </div>
+                )}
+
+                <button className="btn" type="submit" disabled={saving || !search.row || !!jefaturaOcupada}>
+                  {saving ? 'Guardando...' : 'Guardar'}
+                </button>
+              </form>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── TAB: HISTORIAL ── */}
+      {tab === 'historial' && (
+        <div className="card">
+
+          {/* ── FILTROS ── */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'rgba(255,255,255,0.7)' }}>
+                Filtros
+              </span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {hayFiltros && (
+                  <span style={{ fontSize: '0.78rem', color: '#818cf8' }}>
+                    {rowsFiltrados.length} de {rows.length} registros
+                  </span>
+                )}
+                {hayFiltros && (
+                  <button className="btn" type="button"
+                    style={{ fontSize: '0.75rem', padding: '3px 10px', background: 'rgba(239,68,68,0.15)', color: '#f87171' }}
+                    onClick={() => setFiltros(FILTROS_VACÍOS)}>
+                    ✕ Limpiar filtros
+                  </button>
+                )}
+                {loading && <span className="muted" style={{ fontSize: '0.78rem' }}>Cargando...</span>}
+              </div>
+            </div>
+
+            {/* fila 1 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+              <div style={fg}>
+                <label style={lbl}>Agente</label>
+                <input className="input" placeholder="Apellido o nombre..." value={filtros.agente} onChange={setF('agente')} />
+              </div>
+              <div style={fg}>
+                <label style={lbl}>DNI</label>
+                <input className="input" placeholder="Número de DNI..." value={filtros.dni} onChange={setF('dni')} />
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Repartición</label>
+                <select className="input" value={filtros.reparticion} onChange={setF('reparticion')}>
+                  <option value="">— Todas —</option>
+                  {optsReparticion.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Jefatura / Servicio</label>
+                <select className="input" value={filtros.jefatura} onChange={setF('jefatura')}>
+                  <option value="">— Todas —</option>
+                  {optsJefatura.map(j => <option key={j} value={j}>{j}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* fila 2 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+              <div style={fg}>
+                <label style={lbl}>Tipo</label>
+                <select className="input" value={filtros.tipo} onChange={setF('tipo')}>
+                  <option value="">— Todos —</option>
+                  <option value="INTERINO">INTERINO</option>
+                  <option value="POR CONCURSO">POR CONCURSO</option>
+                </select>
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Estado alerta</label>
+                <select className="input" value={filtros.alerta} onChange={setF('alerta')}>
+                  <option value="">— Todos —</option>
+                  <option value="alerta">⚠️ En alerta</option>
+                  <option value="avisada">✓ Avisada</option>
+                  <option value="vencida">🔴 Vencida</option>
+                  <option value="sin">Sin alerta</option>
+                </select>
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Fecha desde — desde</label>
+                <input className="input" type="date" value={filtros.fechaDesdeDesde} onChange={setF('fechaDesdeDesde')} />
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Fecha desde — hasta</label>
+                <input className="input" type="date" value={filtros.fechaDesdeHasta} onChange={setF('fechaDesdeHasta')} />
+              </div>
+            </div>
+
+            {/* fila 3 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              <div style={fg}>
+                <label style={lbl}>Fecha venc. — desde</label>
+                <input className="input" type="date" value={filtros.fechaHastaDesde} onChange={setF('fechaHastaDesde')} />
+              </div>
+              <div style={fg}>
+                <label style={lbl}>Fecha venc. — hasta</label>
+                <input className="input" type="date" value={filtros.fechaHastaHasta} onChange={setF('fechaHastaHasta')} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', marginBottom: 14 }} />
+
+          {/* ── TABLA ── */}
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table" style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th>Agente</th>
+                  <th>DNI</th>
+                  <th>Repartición</th>
+                  <th>Jefatura</th>
+                  <th>Tipo</th>
+                  <th>Nro. Acto Admin.</th>
+                  <th>Desde</th>
+                  <th>Hasta</th>
+                  <th>Alerta</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rowsFiltrados.map(r => {
+                  const dias = r.fecha_hasta ? diasHasta(r.fecha_hasta) : null;
+                  return (
+                    <tr key={r.id} style={getRowStyle(r)}>
+                      <td>{r.apellido ? `${r.apellido}, ${r.nombre}` : '—'}</td>
+                      <td>{r.dni ?? '—'}</td>
+                      <td>{r.reparticion ?? '—'}</td>
+                      <td>{r.sector ?? r.jefedepto ?? '—'}</td>
+                      <td>
+                        <span style={{
+                          background: r.tipo_funcion === 'INTERINO' ? 'rgba(20,184,166,0.15)' : 'rgba(99,102,241,0.15)',
+                          color: r.tipo_funcion === 'INTERINO' ? '#14b8a6' : '#818cf8',
+                          borderRadius: 6, padding: '1px 7px', fontSize: '0.78rem', fontWeight: 700,
+                        }}>
+                          {r.tipo_funcion ?? '—'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.8rem' }}>{r.nro_acto_admin ?? '—'}</td>
+                      <td>{fmt(r.fecha_desde)}</td>
+                      <td>
+                        {r.fecha_hasta ? (
+                          <span style={{ color: dias !== null && dias <= 45 && dias > 0 ? '#eab308' : dias !== null && dias <= 0 ? '#ef4444' : undefined }}>
+                            {fmt(r.fecha_hasta)}
+                            {dias !== null && <span style={{ marginLeft: 4, fontSize: '0.75rem', opacity: 0.7 }}>
+                              ({dias <= 0 ? 'venció' : `en ${dias}d`})
+                            </span>}
+                          </span>
+                        ) : <span className="muted" style={{ fontSize: '0.8rem' }}>Sin venc.</span>}
+                      </td>
+                      <td>
+                        {r.alerta_45_avisada
+                          ? <span style={{ color: '#10b981', fontSize: '0.78rem' }}>✓ Avisada<br /><span className="muted" style={{ fontSize: '0.72rem' }}>{r.alerta_45_usuario_nombre ?? ''}</span></span>
+                          : enAlerta(r)
+                            ? <span style={{ color: '#eab308', fontSize: '0.78rem', fontWeight: 700 }}>⚠️ Pendiente</span>
+                            : <span className="muted" style={{ fontSize: '0.78rem' }}>—</span>
+                        }
+                      </td>
+                      <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {!r.alerta_45_avisada && enAlerta(r) && (
+                          <button className="btn" type="button"
+                            style={{ fontSize: '0.72rem', padding: '2px 8px', background: 'rgba(234,179,8,0.18)', color: '#eab308' }}
+                            onClick={() => handleMarcarAvisada(r)} disabled={markingId === r.id}>
+                            {markingId === r.id ? '...' : '✓ Marcar avisada'}
+                          </button>
+                        )}
+                        <button className="btn" type="button"
+                          style={{ fontSize: '0.72rem', padding: '2px 8px', background: 'rgba(99,102,241,0.18)', color: '#818cf8' }}
+                          onClick={() => openEdit(r)}>
+                          ✏️ Editar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!rowsFiltrados.length && !loading && (
+                  <tr><td colSpan={10} className="muted" style={{ padding: 12 }}>
+                    {hayFiltros ? 'Sin registros que coincidan con los filtros.' : 'Sin registros.'}
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* ── HISTORIAL ── */}
-      <div className="card">
-        <div className="h2" style={{ marginBottom: 10 }}>
-          Historial {loading && <span className="muted" style={{ fontSize: '0.8rem', fontWeight: 400 }}>Cargando...</span>}
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="table" style={{ width: '100%' }}>
-            <thead>
-              <tr>
-                <th>Agente</th>
-                <th>DNI</th>
-                <th>Jefatura</th>
-                <th>Tipo</th>
-                <th>Nro. Acto Admin.</th>
-                <th>Desde</th>
-                <th>Hasta</th>
-                <th>Alerta</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => {
-                const dias = r.fecha_hasta ? diasHasta(r.fecha_hasta) : null;
-                return (
-                  <tr key={r.id} style={getRowStyle(r)}>
-                    <td>{r.apellido ? `${r.apellido}, ${r.nombre}` : '—'}</td>
-                    <td>{r.dni ?? '—'}</td>
-                    <td>{r.sector ?? r.jefedepto ?? '—'}</td>
-                    <td>
-                      <span style={{
-                        background: r.tipo_funcion === 'INTERINO' ? 'rgba(20,184,166,0.15)' : 'rgba(99,102,241,0.15)',
-                        color: r.tipo_funcion === 'INTERINO' ? '#14b8a6' : '#818cf8',
-                        borderRadius: 6, padding: '1px 7px', fontSize: '0.78rem', fontWeight: 700,
-                      }}>
-                        {r.tipo_funcion ?? '—'}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: '0.8rem' }}>{r.nro_acto_admin ?? '—'}</td>
-                    <td>{fmt(r.fecha_desde)}</td>
-                    <td>
-                      {r.fecha_hasta ? (
-                        <span style={{ color: dias !== null && dias <= 45 && dias > 0 ? '#eab308' : dias !== null && dias <= 0 ? '#ef4444' : undefined }}>
-                          {fmt(r.fecha_hasta)}
-                          {dias !== null && <span style={{ marginLeft: 4, fontSize: '0.75rem', opacity: 0.7 }}>
-                            ({dias <= 0 ? `venció` : `en ${dias}d`})
-                          </span>}
-                        </span>
-                      ) : <span className="muted" style={{ fontSize: '0.8rem' }}>Sin venc.</span>}
-                    </td>
-                    <td>
-                      {r.alerta_45_avisada
-                        ? <span style={{ color: '#10b981', fontSize: '0.78rem' }}>✓ Avisada<br /><span className="muted" style={{ fontSize: '0.72rem' }}>{r.alerta_45_usuario_nombre ?? ''}</span></span>
-                        : enAlerta(r)
-                          ? <span style={{ color: '#eab308', fontSize: '0.78rem', fontWeight: 700 }}>⚠️ Pendiente</span>
-                          : <span className="muted" style={{ fontSize: '0.78rem' }}>—</span>
-                      }
-                    </td>
-                    <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {!r.alerta_45_avisada && enAlerta(r) && (
-                        <button className="btn" type="button"
-                          style={{ fontSize: '0.72rem', padding: '2px 8px', background: 'rgba(234,179,8,0.18)', color: '#eab308' }}
-                          onClick={() => handleMarcarAvisada(r)}
-                          disabled={markingId === r.id}>
-                          {markingId === r.id ? '...' : '✓ Marcar avisada'}
-                        </button>
-                      )}
-                      <button className="btn" type="button"
-                        style={{ fontSize: '0.72rem', padding: '2px 8px', background: 'rgba(99,102,241,0.18)', color: '#818cf8' }}
-                        onClick={() => openEdit(r)}>
-                        ✏️ Editar
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!rows.length && !loading && (
-                <tr><td colSpan={9} className="muted" style={{ padding: 12 }}>Sin registros.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       {/* ── MODAL EDICIÓN ── */}
       {editingRow && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-        }}>
-          <div style={{
-            background: '#1e1e2e', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520,
-            border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
-          }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#1e1e2e', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontWeight: 700, fontSize: '1rem' }}>
                 Editar — {editingRow.apellido ? `${editingRow.apellido}, ${editingRow.nombre}` : `DNI ${editingRow.dni}`}
@@ -724,12 +895,25 @@ export function JefedeptosPage() {
                     if (editTipo === 'POR CONCURSO' && e.target.value) setEditFechaHasta(addYears(e.target.value, 4));
                   }} required />
                 </div>
-                {editTipo === 'POR CONCURSO' && (
-                  <div style={{ ...fg, flex: 1 }}>
-                    <label style={lbl}>Fecha hasta</label>
-                    <input className="input" type="date" value={editFechaHasta} onChange={e => setEditFechaHasta(e.target.value)} />
+                <div style={{ ...fg, flex: 1 }}>
+                  <label style={lbl}>
+                    Fecha hasta
+                    {editTipo === 'INTERINO' && (
+                      <span style={{ marginLeft: 6, color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>(opcional — deja vacío si sigue vigente)</span>
+                    )}
+                  </label>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input className="input" type="date" value={editFechaHasta} onChange={e => setEditFechaHasta(e.target.value)} style={{ flex: 1 }} />
+                    {editFechaHasta && (
+                      <button type="button" className="btn"
+                        style={{ padding: '0 10px', fontSize: '0.8rem', opacity: 0.6 }}
+                        onClick={() => setEditFechaHasta('')}
+                        title="Quitar fecha hasta">
+                        ✕
+                      </button>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
                 <button type="button" className="btn" onClick={() => setEditingRow(null)} style={{ opacity: 0.7 }}>Cancelar</button>

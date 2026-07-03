@@ -15,28 +15,91 @@ r.get("/poll", asyncRoute(async (req, res) => {
   const tenant_id = (req as any).tenant_id as number
   const device_id = (req as any).device_id as number
 
-  const [rows] = await pool.query(
-    `SELECT j.id, j.priority, j.profile_id, j.upload_nonce, j.personal_dni, j.personal_ref,
-            j.source, j.duplex,
-            COALESCE(j.dpi, p.dpi) AS dpi,
-            COALESCE(j.color, p.color) AS color,
-            COALESCE(j.auto_rotate, p.auto_rotate) AS auto_rotate,
-            COALESCE(j.blank_page_detection, p.blank_page_detection) AS blank_page_detection,
-            COALESCE(j.compression, p.compression) AS compression,
-            COALESCE(j.output_format, p.output_format) AS output_format
-     FROM scan_jobs j
-     LEFT JOIN scan_profiles p ON p.id=j.profile_id AND p.tenant_id=j.tenant_id
-     WHERE j.tenant_id=? AND j.device_id=? AND j.status='queued'
-     ORDER BY j.priority DESC, j.id ASC LIMIT 1`,
-    [tenant_id, device_id]
-  )
-  const job = (rows as any[])[0]
+  const connection = await pool.getConnection()
+  let job: any = null
+  let lockName = ""
+
+  try {
+    const [deviceRows] = await connection.query(
+      "SELECT hostname FROM devices WHERE tenant_id=? AND id=? AND is_active=1",
+      [tenant_id, device_id]
+    )
+    const device = (deviceRows as any[])[0]
+    if (!device) throw new ApiError(404, "device_not_found")
+
+    const physicalKey = String(device.hostname || `device-${device_id}`).trim().toLowerCase()
+    lockName = `scan-claim:${tenant_id}:${physicalKey}`.slice(0, 64)
+    const [lockRows] = await connection.query("SELECT GET_LOCK(?, 0) AS acquired", [lockName])
+    if (Number((lockRows as any[])[0]?.acquired) !== 1) {
+      return res.json({ job_id: null })
+    }
+
+    // Un agente caido no debe bloquear el escaner para siempre.
+    await connection.query(
+      `UPDATE scan_jobs j
+         JOIN devices d ON d.id=j.device_id AND d.tenant_id=j.tenant_id
+          SET j.status='failed',
+              j.error_message='agent_timeout: trabajo abandonado por el agente',
+              j.completed_at=now(),
+              j.updated_at=now()
+        WHERE j.tenant_id=?
+          AND LOWER(COALESCE(NULLIF(d.hostname, ''), CONCAT('device-', d.id)))=?
+          AND j.status='in_progress'
+          AND j.started_at < DATE_SUB(now(), INTERVAL 20 MINUTE)`,
+      [tenant_id, physicalKey]
+    )
+
+    const [activeRows] = await connection.query(
+      `SELECT j.id
+         FROM scan_jobs j
+         JOIN devices d ON d.id=j.device_id AND d.tenant_id=j.tenant_id
+        WHERE j.tenant_id=?
+          AND LOWER(COALESCE(NULLIF(d.hostname, ''), CONCAT('device-', d.id)))=?
+          AND j.status='in_progress'
+        LIMIT 1`,
+      [tenant_id, physicalKey]
+    )
+    if ((activeRows as any[]).length) {
+      return res.json({ job_id: null })
+    }
+
+    const [rows] = await connection.query(
+      `SELECT j.id, j.priority, j.profile_id, j.upload_nonce, j.personal_dni, j.personal_ref,
+              j.source, j.duplex, j.paper_size,
+              COALESCE(j.dpi, p.dpi) AS dpi,
+              COALESCE(j.color, p.color) AS color,
+              COALESCE(j.auto_rotate, p.auto_rotate) AS auto_rotate,
+              COALESCE(j.blank_page_detection, p.blank_page_detection) AS blank_page_detection,
+              COALESCE(j.compression, p.compression) AS compression,
+              COALESCE(j.output_format, p.output_format) AS output_format
+       FROM scan_jobs j
+       LEFT JOIN scan_profiles p ON p.id=j.profile_id AND p.tenant_id=j.tenant_id
+       WHERE j.tenant_id=? AND j.device_id=? AND j.status='queued'
+       ORDER BY j.priority DESC, j.id ASC LIMIT 1`,
+      [tenant_id, device_id]
+    )
+    job = (rows as any[])[0]
+    if (!job) return res.json({ job_id: null })
+
+    const [claimResult] = await connection.query(
+      `UPDATE scan_jobs
+          SET status='in_progress', started_at=now(), updated_at=now()
+        WHERE tenant_id=? AND id=? AND status='queued'`,
+      [tenant_id, job.id]
+    )
+    if (Number((claimResult as any).affectedRows) !== 1) {
+      job = null
+      return res.json({ job_id: null })
+    }
+  } finally {
+    if (lockName) {
+      await connection.query("SELECT RELEASE_LOCK(?)", [lockName]).catch(() => {})
+    }
+    connection.release()
+  }
+
   if (!job) return res.json({ job_id: null })
 
-  await pool.query(
-    "UPDATE scan_jobs SET status='in_progress', started_at=now(), updated_at=now() WHERE tenant_id=? AND id=?",
-    [tenant_id, job.id]
-  )
   await deliverWebhookToSubscribers(tenant_id, "scan.started", { scan_job_id: job.id, device_id })
 
   return res.json({
@@ -46,6 +109,7 @@ r.get("/poll", asyncRoute(async (req, res) => {
     personal_dni: job.personal_dni,
     source:       job.source || "flatbed",
     duplex:       !!job.duplex,
+    paper_size:   job.paper_size || "A4",
     profile: {
       dpi:                  job.dpi || 300,
       color:                job.color == null ? true : !!job.color,

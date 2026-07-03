@@ -13,6 +13,7 @@ import { MatchesList } from '../Gesytionpage/components/components/MatchesList';
 import { useAgenteSearch } from '../Gesytionpage/hooks/useAgenteSearch';
 import { useDebounce } from '../Gesytionpage/hooks/useDebounce';
 import { loadSession } from '../../auth/session';
+import { atenderCitacion } from '../../api/citaciones';
 import './styles/CitacionesPage.css';
 
 function fmtDateTime(dt?: string | null) {
@@ -144,10 +145,7 @@ function CerrarCitacionModal({ citacion, nombreAgente, onClose, onSaved }: Cerra
   const cerrar = async () => {
     setSaving(true);
     try {
-      await apiFetch<any>(`/citaciones/${citacion.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ citacion_activa: 0, cierre_citacion: new Date().toISOString() }),
-      });
+      await atenderCitacion(citacion);
       toast.ok('Citación cerrada');
       onSaved();
       onClose();

@@ -193,6 +193,31 @@ function agruparServicioLey(
   })).sort((a, b) => b.count - a.count);
 }
 
+// Agrupa agentes por su dependencia, anidados bajo la dependencia PADRE (parent_id).
+// Ej: HIGA (raíz) → [HIGA, UPA 4, UPA 18]. Las UPA cuelgan del hospital vía parent_id.
+function agruparPorDependencia(
+  agentes: any[],
+  mapaDep: Record<number, string>,
+  mapaParent: Record<number, number | null>,
+): GrupoJerarquico[] {
+  const porRaiz: Record<string, { label: string; registros: any[] }> = {};
+  for (const a of agentes) {
+    const depRaw = a.dependencia_id;
+    const depId = depRaw != null && depRaw !== '' ? Number(depRaw) : null;
+    const raizId = depId == null ? null : (mapaParent[depId] != null ? Number(mapaParent[depId]) : depId);
+    const raizKey = raizId != null ? String(raizId) : '__sin__';
+    const raizLabel = raizId != null ? (mapaDep[raizId] ?? `Dependencia #${raizId}`) : '(sin dependencia)';
+    if (!porRaiz[raizKey]) porRaiz[raizKey] = { label: raizLabel, registros: [] };
+    porRaiz[raizKey].registros.push(a);
+  }
+  return Object.entries(porRaiz).map(([raizKey, v]) => ({
+    id: raizKey,
+    label: v.label,
+    count: v.registros.length,
+    sectores: agrupar(v.registros, 'dependencia_id', mapaDep),
+  })).sort((a, b) => b.count - a.count);
+}
+
 // ── Colores ───────────────────────────────────────────────────────────────────
 
 const COLORES = ['#7c3aed','#2563eb','#10b981','#f59e0b','#ec4899','#06b6d4','#a3e635','#fb923c','#ef4444','#8b5cf6','#22d3ee','#f472b6'];
@@ -248,9 +273,9 @@ function SectorCard({ sector, color, mapaPersonal }: {
 
 // ── Card de servicio (Servicio → Sector) ─────────────────────────────────────
 
-function ServicioCard({ grupo, color, totalGlobal, mapaPersonal }: {
+function ServicioCard({ grupo, color, totalGlobal, mapaPersonal, subSingular = 'sector', subPlural = 'sectores' }: {
   grupo: GrupoJerarquico; color: string; totalGlobal: number;
-  mapaPersonal: Record<number, string>;
+  mapaPersonal: Record<number, string>; subSingular?: string; subPlural?: string;
 }) {
   const [open, setOpen] = useState(false);
   const pct = totalGlobal ? Math.round((grupo.count / totalGlobal) * 100) : 0;
@@ -278,7 +303,7 @@ function ServicioCard({ grupo, color, totalGlobal, mapaPersonal }: {
             {grupo.label}
           </div>
           <div className="muted" style={{ fontSize: '0.7rem', marginTop: 1 }}>
-            {grupo.sectores.length} sector{grupo.sectores.length !== 1 ? 'es' : ''}
+            {grupo.sectores.length} {grupo.sectores.length !== 1 ? subPlural : subSingular}
           </div>
         </div>
         <div style={{ width: 120, height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
@@ -531,7 +556,7 @@ function GrupoCard({ grupo, color, total, mapaPersonal }: {
 
 // ── Tipos de vista ────────────────────────────────────────────────────────────
 
-type Vista = 'ley' | 'jefatura' | 'sector' | 'planta' | 'regimen' | 'servicio' | 'servicio_ley' | 'ley_sexo' | 'ley_sexo_ocu';
+type Vista = 'dependencia' | 'ley' | 'jefatura' | 'sector' | 'planta' | 'regimen' | 'servicio' | 'servicio_ley' | 'ley_sexo' | 'ley_sexo_ocu';
 type FiltroEstado = 'todos' | 'activo' | 'baja';
 
 // ── Componente principal ──────────────────────────────────────────────────────
@@ -558,7 +583,8 @@ export function OrganigramaPage() {
     regimen: Record<number,string>; servicios: Record<number,string>;
     sectores: Record<number,string>; sexos: Record<number,string>;
     ocupaciones: Record<number,string>;
-  }>({ ley: {}, jefaturas: {}, reparticiones: {}, planta: {}, regimen: {}, servicios: {}, sectores: {}, sexos: {}, ocupaciones: {} });
+    dependencias: Record<number,string>; depParent: Record<number, number | null>;
+  }>({ ley: {}, jefaturas: {}, reparticiones: {}, planta: {}, regimen: {}, servicios: {}, sectores: {}, sexos: {}, ocupaciones: {}, dependencias: {}, depParent: {} });
   const [vista, setVista] = useState<Vista>('servicio');
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('todos');
 
@@ -566,7 +592,7 @@ export function OrganigramaPage() {
     setLoading(true);
     try {
       setStep('Catálogos…');
-      const [rLey, rJef, rRep, rPlanta, rReg, rSrv, rSec, rSexo, rOcu] = await Promise.allSettled([
+      const [rLey, rJef, rRep, rPlanta, rReg, rSrv, rSec, rSexo, rOcu, rDep] = await Promise.allSettled([
         apiFetch<any>('/ley?limit=200&page=1'),
         apiFetch<any>('/jefaturas?limit=200&page=1'),
         apiFetch<any>('/reparticiones?limit=200&page=1'),
@@ -576,7 +602,9 @@ export function OrganigramaPage() {
         apiFetch<any>('/sectores?limit=500&page=1'),
         apiFetch<any>('/sexos?limit=200&page=1'),
         apiFetch<any>('/ocupaciones?limit=200&page=1'),
+        apiFetch<any>('/dependencias?limit=200&page=1'),
       ]);
+      const depRows = rDep.status === 'fulfilled' ? (rDep.value?.data || []) : [];
       setCatalogos({
         ley:          rLey.status    === 'fulfilled' ? buildMap(rLey.value?.data    || [], 'id', 'nombre') : {},
         jefaturas:    rJef.status    === 'fulfilled' ? buildMap(rJef.value?.data    || [], 'id', 'servicio_nombre') : {},
@@ -587,6 +615,8 @@ export function OrganigramaPage() {
         sectores:     rSec.status    === 'fulfilled' ? buildMap(rSec.value?.data    || [], 'id', 'nombre') : {},
         sexos:        rSexo.status   === 'fulfilled' ? buildMap(rSexo.value?.data   || [], 'id', 'nombre') : {},
         ocupaciones:  rOcu.status    === 'fulfilled' ? buildMap(rOcu.value?.data    || [], 'id', 'nombre') : {},
+        dependencias: buildMap(depRows, 'id', 'nombre'),
+        depParent:    Object.fromEntries(depRows.map((d: any) => [Number(d.id), d.parent_id != null ? Number(d.parent_id) : null])),
       });
 
       // Ocupaciones tiene 800+ registros — paginar completo para el mapa de nombres
@@ -658,6 +688,8 @@ export function OrganigramaPage() {
     ? agruparServicioLey(pasesVisibles, agentesFiltrados, catalogos.servicios, catalogos.ley)
     : vista === 'ley_sexo'
     ? agruparPorLeySexo(agentesFiltrados, mapaDniSexo, catalogos.sexos, catalogos.ley)
+    : vista === 'dependencia'
+    ? agruparPorDependencia(agentesFiltrados, catalogos.dependencias, catalogos.depParent)
     : [];
 
   const gruposTresNiveles: GrupoTresNiveles[] = vista === 'ley_sexo_ocu'
@@ -678,7 +710,7 @@ export function OrganigramaPage() {
     : gruposJerarquicos.reduce((s, g) => s + g.count, 0);
   const totalPlano = grupos.reduce((s, g) => s + g.count, 0);
 
-  const isJerarquico = vista === 'servicio' || vista === 'servicio_ley' || vista === 'ley_sexo';
+  const isJerarquico = vista === 'servicio' || vista === 'servicio_ley' || vista === 'ley_sexo' || vista === 'dependencia';
   const isTresNiveles = vista === 'ley_sexo_ocu';
   const hayDatos = isTresNiveles
     ? gruposTresNiveles.length > 0
@@ -781,6 +813,18 @@ export function OrganigramaPage() {
         )
       );
       exportToExcel('organigrama_ley_sexo_ocupacion', rows);
+    } else if (vista === 'dependencia') {
+      const rows = gruposJerarquicos.flatMap(g =>
+        g.sectores.flatMap(s =>
+          s.agentes.map(a => ({
+            Hospital: g.label, Dependencia: s.label,
+            DNI: a.dni,
+            Apellido_Nombre: mapaPersonal[Number(a.dni)] || '',
+            Estado: a.estado_empleo || a.estado || '',
+          }))
+        )
+      );
+      exportToExcel('organigrama_dependencia', rows);
     } else {
       const rows = grupos.map(g => ({
         Grupo: g.label, Cantidad: g.count,
@@ -791,6 +835,7 @@ export function OrganigramaPage() {
   };
 
   const VISTAS: { key: Vista; label: string }[] = [
+    { key: 'dependencia',  label: '🏥 Por Dependencia (Hospital → UPA)' },
     { key: 'servicio',     label: '🏢 Por Servicio' },
     { key: 'servicio_ley', label: '🏢 Por Servicio y Ley' },
     { key: 'sector',       label: '📍 Por Sector' },
@@ -885,6 +930,13 @@ export function OrganigramaPage() {
               </div>
             )}
           </div>
+
+          {/* Vista: Dependencia (Hospital → UPA) */}
+          {vista === 'dependencia' && gruposJerarquicos.map((g, i) => (
+            <ServicioCard key={g.id} grupo={g} color={COLORES[i % COLORES.length]}
+              totalGlobal={totalJerarquico} mapaPersonal={mapaPersonal}
+              subSingular="dependencia" subPlural="dependencias" />
+          ))}
 
           {/* Vista: Servicio → Sector */}
           {vista === 'servicio' && gruposJerarquicos.map((g, i) => (

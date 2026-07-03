@@ -24,10 +24,12 @@ export function buildJefaturasRouter(sequelize: any) {
           ) AS jefe,
           p.apellido,
           p.nombre,
-          s.nombre AS servicio_nombre
+          s.nombre AS servicio_nombre,
+          r.reparticion_nombre
         FROM jefaturas j
         LEFT JOIN personal p ON p.dni = j.dni
         LEFT JOIN servicios s ON s.id = j.servicio_id
+        LEFT JOIN reparticiones r ON r.id = s.reparticion_id
         WHERE j.deleted_at IS NULL
         ORDER BY s.nombre
         LIMIT :limit OFFSET :offset

@@ -165,6 +165,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           SELECT p.dni, p.apellido, p.nombre, p.cuil, p.email, p.telefono, a.estado_empleo,
                  a.id         AS agente_id,
                  a.fecha_ingreso,
+                 a.fecha_egreso,
                  l.nombre     AS ley_nombre,
                  pl.nombre    AS planta_nombre,
                  cat.nombre   AS categoria_nombre,
@@ -174,7 +175,12 @@ export function buildPersonalRouter(sequelize: Sequelize) {
                   WHERE ags_sub.dni = p.dni AND ags_sub.deleted_at IS NULL
                   ORDER BY ags_sub.fecha_desde DESC LIMIT 1) AS servicio_nombre
           FROM personal p
-          LEFT JOIN agentes a         ON a.dni = p.dni        AND a.deleted_at IS NULL
+          LEFT JOIN agentes a ON a.id = (
+            SELECT ax.id FROM agentes ax
+            WHERE ax.dni = p.dni AND ax.deleted_at IS NULL
+            ORDER BY (ax.estado_empleo = 'ACTIVO' AND ax.fecha_egreso IS NULL) DESC, ax.id DESC
+            LIMIT 1
+          )
           LEFT JOIN ley     l         ON l.id  = a.ley_id     AND l.deleted_at IS NULL
           LEFT JOIN plantas pl        ON pl.id = a.planta_id  AND pl.deleted_at IS NULL
           LEFT JOIN categorias cat    ON cat.ID = a.categoria_id
@@ -183,7 +189,15 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           ORDER BY p.apellido ASC, p.nombre ASC
           LIMIT :limit OFFSET :offset
         `, { replacements: repl, type: QueryTypes.SELECT }),
-        sequelize.query(`SELECT COUNT(1) AS total FROM personal p LEFT JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL ${where}`,
+        sequelize.query(`SELECT COUNT(1) AS total
+          FROM personal p
+          LEFT JOIN agentes a ON a.id = (
+            SELECT ax.id FROM agentes ax
+            WHERE ax.dni = p.dni AND ax.deleted_at IS NULL
+            ORDER BY (ax.estado_empleo = 'ACTIVO' AND ax.fecha_egreso IS NULL) DESC, ax.id DESC
+            LIMIT 1
+          )
+          ${where}`,
           { replacements: repl, type: QueryTypes.SELECT }),
       ]);
 
@@ -357,7 +371,12 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             a.estado         AS estado_laboral
 
           FROM personal p
-          LEFT JOIN agentes a               ON a.dni  = p.dni            AND a.deleted_at IS NULL
+          LEFT JOIN agentes a ON a.id = (
+            SELECT ax.id FROM agentes ax
+            WHERE ax.dni = p.dni AND ax.deleted_at IS NULL
+            ORDER BY (ax.estado_empleo = 'ACTIVO' AND ax.fecha_egreso IS NULL) DESC, ax.id DESC
+            LIMIT 1
+          )
           LEFT JOIN sexos s                 ON s.id   = p.sexo_id
           LEFT JOIN ley l                   ON l.id   = a.ley_id
           LEFT JOIN plantas pl              ON pl.id  = a.planta_id
@@ -400,6 +419,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           ok: true,
           data: {
             ...profile,
+            has_active_agente: profile.estado_empleo === 'ACTIVO' && !profile.fecha_egreso,
             servicios,
             totalDocumentos,
           },
@@ -455,6 +475,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       // servicio_id y sector_id viven en agentes_servicios, NO en agentes
       const newServicioId = (data as any).servicio_id;
       const newSectorId   = (data as any).sector_id;
+      let fechaCierreVinculacion: string | null = null;
 
       for (const [k, v] of Object.entries(data)) {
         if (PERSONAL_COLS.includes(k)) personalFields[k] = v;
@@ -463,7 +484,6 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         else if (k === 'fecha_baja') agenteFields['fecha_egreso'] = v;
       }
 
-      let reactivando = false;
       const t = await sequelize.transaction();
       try {
         // Verificar que el agente existe en personal
@@ -487,48 +507,52 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         if (Object.keys(agenteFields).length > 0) {
           // Verificar estado actual del registro de agente activo
           const agenteActual = await sequelize.query(
-            `SELECT id, estado_empleo FROM agentes
+            `SELECT id, estado_empleo, fecha_egreso FROM agentes
              WHERE dni = :dni AND deleted_at IS NULL
+               AND estado_empleo = 'ACTIVO' AND fecha_egreso IS NULL
              ORDER BY id DESC LIMIT 1`,
             { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
           ) as any[];
 
-          const estadoActual = agenteActual[0]?.estado_empleo ?? null;
-          const esBaja = estadoActual === 'BAJA' || estadoActual === 'TRAMITE';
-          const nuevoEstado = agenteFields.estado_empleo;
-          reactivando = !!(esBaja && nuevoEstado && !['BAJA','TRAMITE'].includes(nuevoEstado));
-
-          if (reactivando) {
-            // Soft-delete el registro de baja — queda como historial
-            if (agenteActual[0]?.id) {
-              await sequelize.query(
-                `UPDATE agentes SET deleted_at = NOW() WHERE id = :id`,
-                { replacements: { id: agenteActual[0].id }, transaction: t }
-              );
-            }
-            // Nueva vinculación: excluir fecha_egreso (era la fecha de baja anterior)
-            const insertFields = { ...agenteFields };
-            delete insertFields['fecha_egreso'];
-            const newCols = Object.keys(insertFields).join(', ');
-            const newVals = Object.keys(insertFields).map(k => `:${k}`).join(', ');
-            await sequelize.query(
-              `INSERT INTO agentes (dni, ${newCols}, created_at, updated_at)
-               VALUES (:dni, ${newVals}, NOW(), NOW())`,
-              { replacements: { ...insertFields, dni }, transaction: t }
-            );
-          } else {
-            // Agente activo o edición sin cambio de estado: actualizar registro existente
-            const setCols = Object.keys(agenteFields).map(k => `${k} = :${k}`).join(', ');
-            await sequelize.query(
-              `UPDATE agentes SET ${setCols}, updated_at = NOW()
-               WHERE dni = :dni AND deleted_at IS NULL`,
-              { replacements: { ...agenteFields, dni }, transaction: t }
-            );
+          if (!agenteActual[0]?.id) {
+            await t.rollback();
+            return res.status(409).json({
+              ok: false,
+              error: `El DNI ${dni} no tiene una vinculacion activa. Registre un reingreso para preservar el historial.`,
+            });
           }
+
+          const estadoResultante = agenteFields.estado_empleo ?? agenteActual[0].estado_empleo;
+          const egresoResultante = Object.prototype.hasOwnProperty.call(agenteFields, 'fecha_egreso')
+            ? agenteFields.fecha_egreso
+            : agenteActual[0].fecha_egreso;
+          if (egresoResultante && estadoResultante === 'ACTIVO') {
+            await t.rollback();
+            return res.status(400).json({
+              ok: false,
+              error: 'Una vinculacion con fecha de egreso no puede permanecer ACTIVO. Seleccione INACTIVO, BAJA, COMISION o TRAMITE.',
+            });
+          }
+          if (egresoResultante && estadoResultante !== 'ACTIVO') {
+            fechaCierreVinculacion = egresoResultante;
+          }
+
+          const setCols = Object.keys(agenteFields).map(k => `${k} = :${k}`).join(', ');
+          await sequelize.query(
+            `UPDATE agentes SET ${setCols}, updated_at = NOW() WHERE id = :agenteId`,
+            { replacements: { ...agenteFields, agenteId: agenteActual[0].id }, transaction: t }
+          );
         }
 
         // ── servicio_id / sector_id → agentes_servicios (NO van en agentes) ──
-        if (newServicioId !== undefined || newSectorId !== undefined) {
+        if (fechaCierreVinculacion) {
+          await sequelize.query(
+            `UPDATE agentes_servicios
+             SET fecha_hasta = :fecha_hasta, updated_at = NOW()
+             WHERE dni = :dni AND fecha_hasta IS NULL AND deleted_at IS NULL`,
+            { replacements: { dni, fecha_hasta: fechaCierreVinculacion }, transaction: t }
+          );
+        } else if (newServicioId !== undefined || newSectorId !== undefined) {
           // Buscar el pase abierto actual
           const openPase = (await sequelize.query(
             `SELECT id, servicio_id, sector_id FROM agentes_servicios
@@ -566,20 +590,18 @@ export function buildPersonalRouter(sequelize: Sequelize) {
 
         // Audit
         (res.locals as any).audit = {
-          action: reactivando ? 'personal_reactivacion' : 'personal_update',
+          action: 'personal_update',
           table_name: 'personal',
           record_pk: dni,
           request_json: data,
         };
 
-        trackAction('personal_update', { dni, fields: Object.keys(data), reactivado: reactivando }, { id: (req as any).auth?.principalId ?? undefined });
+        trackAction('personal_update', { dni, fields: Object.keys(data) }, { id: (req as any).auth?.principalId ?? undefined });
 
         return res.json({
           ok: true,
-          reactivado: reactivando ?? false,
-          message: reactivando
-            ? `Agente DNI ${dni} reactivado — nueva vinculación laboral creada`
-            : `Agente DNI ${dni} actualizado`,
+          reactivado: false,
+          message: `Agente DNI ${dni} actualizado`,
         });
       } catch (err: any) {
         await t.rollback().catch(() => {});

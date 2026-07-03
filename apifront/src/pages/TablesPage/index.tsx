@@ -8,7 +8,7 @@ import { TablesGrid } from './components/TablesGrid';
 // CSS si existe
 import './styles/TablesPage.css';
 
-export function TablesPage() {
+export function TablesContent() {
   const toast = useToast();
   const tablesData = useTablesData();
 
@@ -20,14 +20,20 @@ export function TablesPage() {
   }, [tablesData.error, toast]);
 
   return (
+    <div className="card tables-card">
+      <TablesGrid
+        tables={tablesData.tables}
+        loading={tablesData.loading}
+        error={tablesData.error}
+      />
+    </div>
+  );
+}
+
+export function TablesPage() {
+  return (
     <Layout title="Tablas" showBack>
-      <div className="card tables-card">
-        <TablesGrid
-          tables={tablesData.tables}
-          loading={tablesData.loading}
-          error={tablesData.error}
-        />
-      </div>
+      <TablesContent />
     </Layout>
   );
 }
