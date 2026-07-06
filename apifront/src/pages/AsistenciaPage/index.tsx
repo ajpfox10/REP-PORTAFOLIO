@@ -3,6 +3,8 @@
 // Lee los Excel directo del directorio configurado en EXCEL_ASISTENCIA_DIR (.env backend)
 
 import React, { useState, useEffect, useCallback } from "react";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import { Layout } from "../../components/Layout";
 import { useToast } from "../../ui/toast";
 import { apiFetch } from "../../api/http";
@@ -86,18 +88,7 @@ const NOVEDADES_OMISIBLES_DEFAULT = [
 ].map(norm);
 
 async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
-  const XLSX =
-    (window as any).XLSX ||
-    (await new Promise<any>((resolve, reject) => {
-      if ((window as any).XLSX) return resolve((window as any).XLSX);
-      const s = document.createElement("script");
-      s.src =
-        "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-      s.onload = () => resolve((window as any).XLSX);
-      s.onerror = reject;
-      document.head.appendChild(s);
-    }));
-
+  // SheetJS bundleado localmente (no CDN) para que funcione sin salida a internet.
   const wb = XLSX.utils.book_new();
 
   const headers = [
@@ -165,7 +156,12 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
 
   XLSX.utils.book_append_sheet(wb, wsRes, "Resumen");
   XLSX.utils.book_append_sheet(wb, ws, "Comparacion");
-  XLSX.writeFile(wb, `asistencia_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  // Descarga vía Blob + file-saver (writeFile no dispara la descarga con el paquete bundleado).
+  const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+  saveAs(
+    new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    `asistencia_${new Date().toISOString().slice(0, 10)}.xlsx`,
+  );
 }
 
 // "2026-04-11" → "26-04-11"

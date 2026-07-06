@@ -323,10 +323,17 @@ function findNamedPdf(rootDir: string, namePart: string, dni?: number, exactName
   return matches[0];
 }
 
-function findCaratulaPdf(): string | null {
-  const inputDir = getInputDir();
-  if (!inputDir || !fs.existsSync(inputDir)) return null;
-  return findNamedPdf(inputDir, 'caratula');
+type EstablecimientoToken = 'htal' | 'upa18' | 'upa4';
+type CaratulaInfo = { estab: EstablecimientoToken; ley: '10430' | '10471'; dependenciaNombre: string | null };
+type CaratulaHit = { path: string; verificado: boolean; key: string };
+
+// La dependencia del agente define el establecimiento de la caratula:
+//   "UPA 18" -> upa18 ; "UPA 4" -> upa4 ; cualquier otra (HIGA/EVITA) -> htal
+function establecimientoToken(dependenciaNombre: string | null): EstablecimientoToken {
+  const norm = normalizeSearch(dependenciaNombre || '');
+  if (/upa\D{0,6}18/.test(norm)) return 'upa18';
+  if (/upa\D{0,6}4(?!\d)/.test(norm)) return 'upa4';
+  return 'htal';
 }
 
 function findRupaPdf(dni: number, opts: ExtraDocsOptions): string | null {
@@ -414,6 +421,99 @@ async function findRupaPdfByContent(sequelize: Sequelize, dni: number, opts: Ext
   return { path: candidatos[0], verificado: false };
 }
 
+// Resuelve establecimiento (dependencia) + ley (ocupacion) del agente por DNI, con la misma
+// logica de resolucion de dependencia que usa la precarga (directa o via servicios).
+async function agenteCaratulaInfo(sequelize: Sequelize, dni: number): Promise<CaratulaInfo | null> {
+  try {
+    const rows = await sequelize.query<{ dependenciaNombre: string | null; ocupacionLey: string | null }>(
+      `
+        SELECT
+          COALESCE(
+            dep_directa.nombre,
+            (
+              SELECT dep_serv.nombre
+              FROM agentes_servicios ags_serv
+              LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
+              LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
+              LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+              WHERE ags_serv.dni = p.dni
+                AND ags_serv.deleted_at IS NULL
+                AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
+              ORDER BY ags_serv.fecha_desde DESC, ags_serv.id DESC
+              LIMIT 1
+            )
+          ) AS dependenciaNombre,
+          CASE
+            WHEN ocl.nombre LIKE '%10471%' THEN '10471'
+            WHEN ocl.nombre LIKE '%10430%' THEN '10430'
+            ELSE NULL
+          END AS ocupacionLey
+        FROM personal p
+        JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+        LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+        LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
+        LEFT JOIN dependencias dep_directa ON dep_directa.id = a.dependencia_id AND dep_directa.deleted_at IS NULL
+        WHERE p.dni = :dni AND p.deleted_at IS NULL
+        LIMIT 1
+      `,
+      { replacements: { dni }, type: QueryTypes.SELECT }
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      estab: establecimientoToken(row.dependenciaNombre),
+      ley: row.ocupacionLey === '10471' ? '10471' : '10430',
+      dependenciaNombre: row.dependenciaNombre,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ¿El contenido de la caratula corresponde al establecimiento + ley esperados?
+// Se compacta el texto (sin espacios/puntos/simbolos) para tolerar "U.P.A. N° 18", "Ley N° 10.430", etc.
+function caratulaContenidoOk(text: string, info: CaratulaInfo): boolean {
+  const compact = normalizeSearch(text).replace(/[^a-z0-9]/g, '');
+  const leyOk = compact.includes(info.ley);
+  const estabOk =
+    info.estab === 'upa18' ? /upa\D{0,4}18/.test(compact)
+    : info.estab === 'upa4' ? /upa\D{0,4}4(?!\d)/.test(compact)
+    : /evita|higa|hospital/.test(compact);
+  return leyOk && estabOk;
+}
+
+// Elige la caratula por establecimiento+ley del agente: caratula<estab><ley>.pdf en Descargas
+// (p.ej. caratulahtal10430). Verifica por contenido (texto/OCR) que sea la correcta; si no se
+// puede confirmar, devuelve el archivo igual pero verificado=false (para mostrar "a revisar").
+async function findCaratulaPdfByAgent(sequelize: Sequelize, dni: number): Promise<CaratulaHit | null> {
+  const info = await agenteCaratulaInfo(sequelize, dni);
+  if (!info) return null;
+  const key = `caratula${info.estab}${info.ley}`; // ya compacto, ej "caratulahtal10430"
+  const inputDir = getInputDir();
+  if (!inputDir || !fs.existsSync(inputDir)) return null;
+
+  // Match tolerante: compacta el nombre del archivo (sin espacios/puntos/mayus) para aceptar
+  // "caratulahtal10430.pdf", "Caratula HTAL 10430.pdf", "caratulahtal 10471.pdf", etc.
+  const candidatos = listPdfPathsRecursive(inputDir).map((fp) => ({
+    fp,
+    stem: normalizeSearch(path.basename(fp, path.extname(fp))).replace(/[^a-z0-9]/g, ''),
+  }));
+  const found = (candidatos.find((c) => c.stem === key) || candidatos.find((c) => c.stem.includes(key)))?.fp || null;
+  if (!found) return null;
+
+  let text = '';
+  try {
+    text = (await extractPdfText(found)).text || '';
+    if (!text.trim() && env.TRAMITES_PDF_OCR_ENABLE) {
+      text = (await extractPdfTextWithOcr(found)).text || '';
+    }
+  } catch {
+    text = '';
+  }
+  const verificado = Boolean(text.trim() && caratulaContenidoOk(text, info));
+  return { path: found, verificado, key };
+}
+
 async function pdfMeta(fullPath: string) {
   const stat = fs.statSync(fullPath);
   const pdf = await PDFDocument.load(fs.readFileSync(fullPath));
@@ -480,7 +580,6 @@ function orderedMergeItems(
   documentOrder: DocumentOrderInput[]
 ) {
   const byFileName = new Map(filesForDni.map((file) => [file.fileName, file]));
-  const usedFiles = new Set<string>();
   const items: Array<{ kind: 'caratula' | 'file' | 'rupa'; file?: MergeFileInput; pageOrder?: string | null }> = [];
 
   const pushOrderItem = (orderItem: DocumentOrderInput) => {
@@ -491,19 +590,19 @@ function orderedMergeItems(
     } else if (orderItem.kind === 'file' && orderItem.fileName) {
       const file = byFileName.get(orderItem.fileName);
       if (file) {
-        usedFiles.add(file.fileName);
         items.push({ kind: 'file', file, pageOrder: orderItem.pageOrder || file.pageOrder || null });
       }
     }
   };
 
   if (documentOrder.length) {
+    // El editor de hojas manda un documentOrder COMPLETO: lista cada hoja/documento
+    // que quedo incluido, en el orden exacto que ve el usuario. Un documento ausente
+    // significa "excluido a proposito" (p.ej. destildar un PDF de una sola hoja o la
+    // ultima hoja que le quedaba). Por eso NO se re-agregan los archivos faltantes:
+    // hacerlo hacia reaparecer documentos excluidos y el combinado no quedaba igual
+    // que en el editor.
     documentOrder.forEach(pushOrderItem);
-    for (const file of filesForDni) {
-      if (!usedFiles.has(file.fileName)) {
-        items.push({ kind: 'file', file, pageOrder: file.pageOrder || null });
-      }
-    }
     return items;
   }
 
@@ -650,6 +749,32 @@ async function registerAgentExpediente(
 async function loadPdfJs() {
   const pdfjsFile = path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.mjs');
   return dynamicImport(pathToFileURL(pdfjsFile).href);
+}
+
+// pdfjs + @napi-rs/canvas pueden colgarse o tirar un rechazo no manejado al destruir el
+// documento (NodeCanvasFactory.destroy). Un timeout garantiza que la request SIEMPRE responda:
+// si el OCR se cuelga, el PDF queda como "sin texto" en vez de colgar toda la operación.
+const OCR_TIMEOUT_MS = Math.max(10000, Number(env.TRAMITES_PDF_OCR_TIMEOUT_MS || 60000) || 60000);
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(Object.assign(new Error(`${label}: se agoto el tiempo (${ms}ms)`), { status: 504 }));
+    }, ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
+// Destruye el documento pdfjs sin propagar el crash de teardown del canvas nativo.
+async function safeDestroyPdf(pdf: any) {
+  try {
+    await pdf?.destroy?.();
+  } catch {
+    /* el teardown de @napi-rs/canvas a veces tira; no debe romper la operacion */
+  }
 }
 
 async function extractPdfText(pdfPath: string): Promise<{ text: string; pages: number }> {
@@ -1007,10 +1132,44 @@ async function analyzeOnePdf(sequelize: Sequelize, fileName: string): Promise<Pd
 export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
   const router = Router();
 
-  router.get('/listados', (_req: Request, res: Response) => {
+  router.get('/listados', async (_req: Request, res: Response) => {
     const rows = readSavedListados()
       .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
       .slice(0, 25);
+
+    // Enriquecer con la ocupación ACTUAL de la base (para que el listado no quede congelado).
+    try {
+      const dnis = Array.from(new Set(
+        rows.flatMap((l) => (Array.isArray(l.rows) ? l.rows : []))
+          .map((r: any) => Number(String(r?.dni ?? '').replace(/\D/g, '')))
+          .filter((d) => Number.isInteger(d) && d > 0)
+      ));
+      if (dnis.length) {
+        const vivos = await sequelize.query<{ dni: number; ocupacion: string | null; ley: string | null }>(
+          `SELECT p.dni, oc.nombre AS ocupacion,
+                  CASE WHEN ocl.nombre LIKE '%10471%' THEN '10471' WHEN ocl.nombre LIKE '%10430%' THEN '10430' ELSE NULL END AS ley
+           FROM personal p
+           JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+           LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+           LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
+           WHERE p.dni IN (:dnis) AND p.deleted_at IS NULL`,
+          { replacements: { dnis }, type: QueryTypes.SELECT }
+        );
+        const map = new Map(vivos.map((v) => [String(v.dni), v]));
+        for (const l of rows) {
+          for (const r of (Array.isArray(l.rows) ? l.rows : []) as any[]) {
+            const hit = map.get(String(Number(String(r?.dni ?? '').replace(/\D/g, ''))));
+            if (hit) {
+              if (hit.ocupacion) r.ocupacionNombre = hit.ocupacion;
+              r.ocupacionLey = hit.ley;
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.warn({ msg: '[tramites] no se pudo enriquecer listados con ocupacion actual', error: err?.message });
+    }
+
     return res.json({ ok: true, data: { rows, storePath: getListadosStorePath() } });
   });
 
@@ -1197,11 +1356,11 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       for (const mergeItem of mergeItems) {
         if (mergeItem.kind === 'caratula') {
           try {
-            const caratulaPath = findCaratulaPdf();
-            if (!caratulaPath) {
-              skipped.push({ source: 'caratula', reason: 'No se encontro PDF caratula en Descargas' });
+            const caratulaHit = await findCaratulaPdfByAgent(sequelize, dni);
+            if (!caratulaHit) {
+              skipped.push({ source: 'caratula', reason: 'No se encontro caratula para el establecimiento/ley del agente en Descargas' });
             } else {
-              await appendPdfToMerged(merged, caratulaPath, mergeItem.pageOrder);
+              await appendPdfToMerged(merged, caratulaHit.path, mergeItem.pageOrder);
             }
           } catch (err: any) {
             skipped.push({ source: 'caratula', reason: err?.message || 'Error al previsualizar caratula' });
@@ -1260,10 +1419,14 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       const rows: Record<string, any> = {};
       for (const dni of dnis) {
         const rupaHit = extraDocs.includeRupa ? await findRupaPdfByContent(sequelize, dni, extraDocs) : null;
+        const caratulaHit = extraDocs.includeCaratula ? await findCaratulaPdfByAgent(sequelize, dni) : null;
         rows[String(dni)] = {
           rupa: rupaHit
             ? { found: true, verificado: rupaHit.verificado, ...(await pdfMeta(rupaHit.path)) }
             : { found: false, reason: extraDocs.includeRupa ? `No se encontro rupa.pdf para DNI ${dni}` : 'RUPA desactivado' },
+          caratula: caratulaHit
+            ? { found: true, verificado: caratulaHit.verificado, key: caratulaHit.key, ...(await pdfMeta(caratulaHit.path)) }
+            : { found: false, reason: extraDocs.includeCaratula ? `No se encontro caratula para el establecimiento/ley del DNI ${dni}` : 'Caratula desactivada' },
         };
       }
 
@@ -1291,7 +1454,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       const fullPath = kind === 'rupa'
         ? (dni ? (await findRupaPdfByContent(sequelize, dni, extraDocs))?.path ?? null : null)
         : kind === 'caratula'
-          ? findCaratulaPdf()
+          ? (dni ? (await findCaratulaPdfByAgent(sequelize, dni))?.path ?? null : null)
           : null;
       if (!fullPath) {
         return res.status(404).json({ ok: false, error: 'Adjunto no encontrado' });
@@ -1310,22 +1473,25 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       const q = String(req.query.q || '').trim();
       const rows = await sequelize.query<{ value: string; label: string; total: number; createdAt: string | null }>(
         `
-          SELECT
-            TRIM(numero) AS value,
-            CONCAT(TRIM(numero), ' (', COUNT(*), ')') AS label,
-            COUNT(*) AS total,
-            DATE_FORMAT(MAX(created_at), '%Y-%m-%d') AS createdAt
-          FROM expedientes
-          WHERE deleted_at IS NULL
-            AND numero IS NOT NULL
-            AND TRIM(numero) <> ''
-            AND (
-              :q = ''
-              OR numero LIKE :like
-              OR caratula LIKE :like
-            )
-          GROUP BY TRIM(numero)
-          ORDER BY MAX(created_at) DESC
+          SELECT value, CONCAT(value, ' (', total, ')') AS label, total, createdAt
+          FROM (
+            SELECT
+              TRIM(numero) AS value,
+              COUNT(*) AS total,
+              MAX(created_at) AS createdAtRaw,
+              DATE_FORMAT(MAX(created_at), '%Y-%m-%d') AS createdAt
+            FROM expedientes
+            WHERE deleted_at IS NULL
+              AND numero IS NOT NULL
+              AND TRIM(numero) <> ''
+              AND (
+                :q = ''
+                OR numero LIKE :like
+                OR caratula LIKE :like
+              )
+            GROUP BY TRIM(numero)
+          ) t
+          ORDER BY createdAtRaw DESC
           LIMIT 50
         `,
         { replacements: { q, like: `%${q}%` }, type: QueryTypes.SELECT }
@@ -1403,10 +1569,11 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
         for (const mergeItem of mergeItems) {
           if (mergeItem.kind === 'caratula') {
             try {
-              const caratulaPath = findCaratulaPdf();
-              if (!caratulaPath) {
-                skipped.push({ source: 'caratula', reason: 'No se encontro PDF caratula en Descargas' });
+              const caratulaHit = await findCaratulaPdfByAgent(sequelize, item.dni);
+              if (!caratulaHit) {
+                skipped.push({ source: 'caratula', reason: 'No se encontro caratula para el establecimiento/ley del agente en Descargas' });
               } else {
+                const caratulaPath = caratulaHit.path;
                 const destPath = uniquePath(item.folder, safeFilename(path.basename(caratulaPath)));
                 fs.copyFileSync(caratulaPath, destPath);
                 copied.push({ source: `caratula:${path.basename(caratulaPath)}`, savedAs: path.basename(destPath) });

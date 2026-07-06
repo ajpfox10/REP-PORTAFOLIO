@@ -46,6 +46,7 @@ import { buildFicheroRouter } from '../routes/fichero.routes';
 import { buildIclockAdmsRouter } from '../routes/iclockAdms.routes';
 import { buildExamenIngresoRouter } from '../routes/examenIngreso.routes';
 import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
+import { buildTareasLivianasRouter } from '../routes/tareasLivianas.routes';
 import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildHerramientasRouter } from '../routes/herramientas.routes';
@@ -169,6 +170,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/fichero`,          ...protect, buildFicheroRouter());
   app.use(`${apiPrefix}/examen-ingreso`,   ...protect, buildExamenIngresoRouter(sequelize));
   app.use(`${apiPrefix}/accidentes-punzo`, ...protect, buildAccidentesPunzoRouter(sequelize));
+  app.use(`${apiPrefix}/tareas-livianas`,  ...protect, buildTareasLivianasRouter(sequelize));
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
   app.use(`${apiPrefix}/herramientas`,     ...protect, buildHerramientasRouter(sequelize));

@@ -84,7 +84,10 @@ type ExtraDocInfo = {
   pages?: number;
   bytes?: number;
   reason?: string;
+  key?: string;
 };
+
+type ExtraDocsStatus = { rupa?: ExtraDocInfo; caratula?: ExtraDocInfo };
 
 type SavedListado = {
   id: string;
@@ -313,7 +316,7 @@ export function TramitesDocumentalesPage() {
   const [pageOrderByDoc, setPageOrderByDoc] = useState<Record<string, string>>({});
   const [combinedOrderByGroup, setCombinedOrderByGroup] = useState<Record<string, string[]>>({});
   const [combinedExcludedByGroup, setCombinedExcludedByGroup] = useState<Record<string, string[]>>({});
-  const [extraDocsByDni, setExtraDocsByDni] = useState<Record<string, { rupa?: ExtraDocInfo }>>({});
+  const [extraDocsByDni, setExtraDocsByDni] = useState<Record<string, ExtraDocsStatus>>({});
   const [extraStatusLoading, setExtraStatusLoading] = useState(false);
   const [modal, setModal] = useState<PdfModal | null>(null);
   const modalUrlRef = useRef<string | null>(null);
@@ -454,7 +457,7 @@ export function TramitesDocumentalesPage() {
       return;
     }
     setExtraStatusLoading(true);
-    apiFetch<{ ok: boolean; data: { rows: Record<string, { rupa?: ExtraDocInfo }> } }>('/tramites-documentales/extra-status', {
+    apiFetch<{ ok: boolean; data: { rows: Record<string, ExtraDocsStatus> } }>('/tramites-documentales/extra-status', {
       method: 'POST',
       body: JSON.stringify({
         dnis,
@@ -483,11 +486,13 @@ export function TramitesDocumentalesPage() {
   const agentesSeteados = manualRows.filter((row) => row.incluido !== false && (row.dni || row.apellidoNombre));
 
   function providenciaCargo(row: ManualRow) {
-    return normalizeProvidenciaText(row.ocupacionNombre)
+    const raw = normalizeProvidenciaText(row.ocupacionNombre)
       || normalizeProvidenciaText(row.plantaNombre)
       || normalizeProvidenciaText(row.tipoBeca)
       || normalizeProvidenciaText(row.leyNombre)
       || '-';
+    // Sacar el grado final (A/B/C/D) y mostrar en mayúsculas: "Enfermero C" -> "ENFERMERO"
+    return (raw.replace(/\s+[A-D]\s*$/i, '').trim() || raw).toUpperCase();
   }
 
   function providenciaBaseRows() {
@@ -530,10 +535,18 @@ export function TramitesDocumentalesPage() {
   }
 
   // Aclaraciones por agentes marcados como "cambio excepcional".
+  // El texto cambia segun la ley del agente:
+  //  - 10471: se lo solicita como {cargo} por un cambio excepcional...
+  //  - 10430: se tramita por expediente {expediente} su designacion atento a...
   function providenciaAclaraciones() {
     return providenciaBaseRows()
       .filter((r) => r.cambioExcepcional)
-      .map((r) => `${r.apellidoNombre} se lo solicita como ${r.cargo} por un cambio excepcional y responde por las necesidades de la dependencia.`);
+      .map((r) => {
+        if (r.ley === '10430') {
+          return `El cambio excepcional del agente ${r.apellidoNombre} se tramita por expediente __________ atento a las necesidades del servicio.`;
+        }
+        return `${r.apellidoNombre} se lo solicita como ${r.cargo} por un cambio excepcional y responde por las necesidades de la dependencia.`;
+      });
   }
 
   function providenciaPlainText() {
@@ -779,7 +792,13 @@ export function TramitesDocumentalesPage() {
       revokeModalUrl();
       const url = URL.createObjectURL(blob);
       modalUrlRef.current = url;
-      setModal({ title: `${kind.toUpperCase()} - ${group.agenteNombre}`, url, filename });
+      setModal({
+        title: `${kind.toUpperCase()} - ${group.agenteNombre}`,
+        url,
+        filename,
+        groupKey: group.key,
+        currentFileName: kind === 'rupa' ? RUPA_DOC_KEY : CARATULA_DOC_KEY,
+      });
     } catch (e: any) {
       toast.error('No se pudo abrir adjunto', e?.message || 'Error');
     }
@@ -846,7 +865,7 @@ export function TramitesDocumentalesPage() {
 
   function defaultDocKeysForGroup(group: PdfGroup) {
     return [
-      ...(includeCaratula ? [CARATULA_DOC_KEY] : []),
+      ...(hasCaratulaForGroup(group) ? [CARATULA_DOC_KEY] : []),
       ...group.rows.map((row) => fileDocKey(row.fileName)),
       ...(hasRupaForGroup(group) ? [RUPA_DOC_KEY] : []),
     ];
@@ -881,6 +900,15 @@ export function TramitesDocumentalesPage() {
     return Boolean(includeRupa && rupa?.found && Number(rupa.pages || 0) > 0);
   }
 
+  function caratulaForGroup(group: PdfGroup) {
+    return group.dni ? extraDocsByDni[group.dni]?.caratula || null : null;
+  }
+
+  function hasCaratulaForGroup(group: PdfGroup) {
+    const caratula = caratulaForGroup(group);
+    return Boolean(includeCaratula && caratula?.found && Number(caratula.pages || 0) > 0);
+  }
+
   function renderRupaHint(group: PdfGroup) {
     if (!includeRupa || !group.dni) return null;
     const rupa = extraDocsByDni[group.dni]?.rupa;
@@ -894,8 +922,21 @@ export function TramitesDocumentalesPage() {
     return <div className={`td-rupa-hint ${cls}`}>{text}</div>;
   }
 
+  function renderCaratulaHint(group: PdfGroup) {
+    if (!includeCaratula || !group.dni) return null;
+    const caratula = caratulaForGroup(group);
+    const [cls, text] = extraStatusLoading
+      ? ['loading', '⏳ Buscando carátula (OCR)…']
+      : caratula?.found
+        ? (caratula.verificado
+            ? ['ok', `✓ Carátula ${caratula.key || ''}`.trim()]
+            : ['review', `⚠ Carátula ${caratula.key || ''} sin verificar — revisar`.trim()])
+        : ['bad', '— Carátula no encontrada (establecimiento/ley)'];
+    return <div className={`td-rupa-hint ${cls}`}>{text}</div>;
+  }
+
   function hasMergeableExtraForGroup(group: PdfGroup) {
-    return includeCaratula || hasRupaForGroup(group);
+    return hasCaratulaForGroup(group) || hasRupaForGroup(group);
   }
 
   function moveDocInGroup(group: PdfGroup, key: string, delta: number) {
@@ -963,7 +1004,7 @@ export function TramitesDocumentalesPage() {
 
   function defaultCombinedPageKeysForGroup(group: PdfGroup) {
     const keys: string[] = [];
-    if (includeCaratula) keys.push(combinedPageKey(CARATULA_DOC_KEY, 0));
+    if (hasCaratulaForGroup(group)) keys.push(combinedPageKey(CARATULA_DOC_KEY, 0));
 
     for (const row of group.rows) {
       const docKey = fileDocKey(row.fileName);
@@ -1177,7 +1218,8 @@ export function TramitesDocumentalesPage() {
     }
     const files = filesPayload(group.dni);
     const includeRupaForGroup = hasRupaForGroup(group);
-    if (!files.length && !includeCaratula && !includeRupaForGroup) {
+    const includeCaratulaForGroup = hasCaratulaForGroup(group);
+    if (!files.length && !includeCaratulaForGroup && !includeRupaForGroup) {
       toast.warning('Sin PDFs', 'No hay documentos para previsualizar.');
       return;
     }
@@ -1192,7 +1234,7 @@ export function TramitesDocumentalesPage() {
           tramite,
           dni: group.dni,
           extraDocs: {
-            includeCaratula,
+            includeCaratula: includeCaratulaForGroup,
             includeRupa: includeRupaForGroup,
             rupaSourceMode,
             rupaDir: rupaSourceMode === 'custom' ? rupaDir : null,
@@ -1418,6 +1460,12 @@ export function TramitesDocumentalesPage() {
   const modalGroup = modal?.groupKey ? pdfGroups.find((group) => group.key === modal.groupKey) || null : null;
   const isCombinedPreviewModal = Boolean(modalGroup && !modal?.currentFileName);
   const modalScopeRows = isCombinedPreviewModal ? [] : (modalGroup?.rows || (modal?.currentFileName ? analysisRows : []));
+  const modalExtras: string[] = modalGroup && !isCombinedPreviewModal
+    ? [
+        ...(hasCaratulaForGroup(modalGroup) ? [CARATULA_DOC_KEY] : []),
+        ...(hasRupaForGroup(modalGroup) ? [RUPA_DOC_KEY] : []),
+      ]
+    : [];
   const modalTitle = modalGroup
     ? `${modalGroup.agenteNombre} - ${modalGroup.dni ? `DNI ${modalGroup.dni}` : 'sin DNI'}`
     : modal?.title || '';
@@ -1782,6 +1830,7 @@ export function TramitesDocumentalesPage() {
                 <div className="td-agent-info">
                   <div className="td-agent-name">{group.agenteNombre}</div>
                   <div className="muted">{group.dni ? `DNI ${group.dni}` : 'Completar DNI manual'} · {group.includedCount}/{group.rows.length} PDF(s) · {group.totalPages || '-'} pág.</div>
+                  {renderCaratulaHint(group)}
                   {renderRupaHint(group)}
                 </div>
                 <span className={`td-agent-status ${group.status}`}>
@@ -1805,6 +1854,26 @@ export function TramitesDocumentalesPage() {
                     </button>
                   </div>
                 ))}
+                {hasCaratulaForGroup(group) ? (() => {
+                  const caratula = caratulaForGroup(group);
+                  return (
+                    <div className="td-package-file-row" key={CARATULA_DOC_KEY}>
+                      <button className="td-package-file" type="button" onClick={() => openExtraDoc('caratula', group)} title={caratula?.fileName || 'Carátula del combinado'}>
+                        Carátula{caratula?.key ? ` - ${caratula.key}` : ''}{caratula?.pages ? ` - ${caratula.pages} pág.` : ''}
+                      </button>
+                    </div>
+                  );
+                })() : null}
+                {hasRupaForGroup(group) ? (() => {
+                  const rupa = extraDocForKey(group, RUPA_DOC_KEY);
+                  return (
+                    <div className="td-package-file-row" key={RUPA_DOC_KEY}>
+                      <button className="td-package-file" type="button" onClick={() => openExtraDoc('rupa', group)} title={rupa?.fileName || 'RUPA desde G DOCU'}>
+                        RUPA - {rupa?.pages || '-'} pág. - {bytesLabel(rupa?.bytes || 0)}
+                      </button>
+                    </div>
+                  );
+                })() : null}
               </div>
               {group.status !== 'listo' ? (
                 <label className="td-group-dni">
@@ -2099,7 +2168,8 @@ export function TramitesDocumentalesPage() {
                             <td>{row.cargo}</td>
                             <td>
                               <select
-                                className="input td-providencia-cell-select"
+                                className="td-providencia-cell-select"
+                                style={{ color: '#111', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 4, padding: '1px 4px', fontWeight: 700 }}
                                 value={row.ley}
                                 onChange={(e) => updateManual(row.id, { leyOverride: e.target.value as ProvidenciaLey })}
                               >
@@ -2110,7 +2180,8 @@ export function TramitesDocumentalesPage() {
                             <td>
                               {row.ley === '10471' ? (
                                 <select
-                                  className="input td-providencia-cell-select"
+                                  className="td-providencia-cell-select"
+                                  style={{ color: '#111', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 4, padding: '1px 4px' }}
                                   value={row.regimen10471}
                                   onChange={(e) => updateManual(row.id, { regimen10471Override: e.target.value as ProvidenciaRegimen10471 })}
                                 >
@@ -2221,7 +2292,7 @@ export function TramitesDocumentalesPage() {
                     </button>
                   </div>
                 </div>
-              ) : modalScopeRows.length > 1 ? (
+              ) : modalScopeRows.length + modalExtras.length > 1 ? (
                 <div className="td-modal-list">
                   {modalScopeRows.map((row, idx) => (
                     <button
@@ -2235,6 +2306,24 @@ export function TramitesDocumentalesPage() {
                       <small>{dniFromAnalysis(row) || 'sin DNI'}</small>
                     </button>
                   ))}
+                  {modalGroup ? modalExtras.map((extraKey) => {
+                    const info = extraKey === RUPA_DOC_KEY ? extraDocForKey(modalGroup, RUPA_DOC_KEY) : null;
+                    const label = extraKey === RUPA_DOC_KEY
+                      ? `RUPA - ${info?.pages || '-'} pág.`
+                      : 'Carátula';
+                    return (
+                      <button
+                        key={extraKey}
+                        className={modal.currentFileName === extraKey ? 'td-modal-list-item active' : 'td-modal-list-item'}
+                        type="button"
+                        onClick={() => openExtraDoc(extraKey === RUPA_DOC_KEY ? 'rupa' : 'caratula', modalGroup)}
+                        title={label}
+                      >
+                        <span>{label}</span>
+                        <small>{extraKey === RUPA_DOC_KEY ? 'G DOCU' : 'adjunto'}</small>
+                      </button>
+                    );
+                  }) : null}
                 </div>
               ) : null}
               <iframe title="pdf-tramite" src={modal.url} className="td-pdf-frame" />

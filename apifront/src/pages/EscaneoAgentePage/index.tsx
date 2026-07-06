@@ -7,6 +7,7 @@ import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { TIPOS_DOCUMENTO, GROUP_LABELS } from '../EscaneoPage/documentTypes';
+import { SUBCARPETAS_PRESETS, presetSubdivisiones } from '../EscaneoPage/subcarpetas';
 import '../EscaneoPage/styles/EscaneoPage.css';
 
 function getScannerBase() {
@@ -203,6 +204,68 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
   const [tipoDoc, setTipoDoc]         = useState<string>('');
   const [descripcion, setDescripcion] = useState('');
 
+  // Subcarpeta destino dentro del legajo (…\docu\<DNI>\<categoría>\<subdivisión>\)
+  const [subCategoria, setSubCategoria] = useState('');
+  const [subDivision, setSubDivision]   = useState('');
+  const [subDiskL1, setSubDiskL1]       = useState<string[]>([]);
+  const [subDiskL2, setSubDiskL2]       = useState<string[]>([]);
+  const [nuevaSub, setNuevaSub]         = useState('');
+  const [creandoSub, setCreandoSub]     = useState(false);
+
+  const subRelPath = [subCategoria, subDivision].filter(Boolean).join('/');
+  const rutaLegajoLabel = subRelPath ? subRelPath.replace(/\//g, '\\') : '';
+  const categoriaOptions = Array.from(new Set([
+    ...SUBCARPETAS_PRESETS.map(p => p.categoria),
+    ...subDiskL1,
+  ]));
+  const subdivisionOptions = subCategoria
+    ? Array.from(new Set([...presetSubdivisiones(subCategoria), ...subDiskL2]))
+    : [];
+
+  const cargarSubDisk = useCallback(async (dniStr: string, parentRel: string, level: 1 | 2) => {
+    try {
+      const q = parentRel ? `?path=${encodeURIComponent(parentRel)}` : '';
+      const r = await apiFetch<any>(`/scanner/subcarpetas/${dniStr}${q}`);
+      const list: string[] = r?.data || [];
+      if (level === 1) setSubDiskL1(list); else setSubDiskL2(list);
+    } catch {
+      if (level === 1) setSubDiskL1([]); else setSubDiskL2([]);
+    }
+  }, []);
+
+  const seleccionarCategoria = useCallback((cat: string, dniStr: string) => {
+    setSubCategoria(cat);
+    setSubDivision('');
+    setSubDiskL2([]);
+    if (cat) cargarSubDisk(dniStr, cat, 2);
+  }, [cargarSubDisk]);
+
+  const crearSubcarpeta = useCallback(async () => {
+    const nombre = nuevaSub.trim();
+    if (!nombre || !agente) return;
+    const parent = subCategoria; // '' = raíz → crea categoría; con categoría → crea subdivisión
+    setCreandoSub(true);
+    try {
+      const r = await apiFetch<any>(`/scanner/subcarpetas/${agente.dni}`, {
+        method: 'POST',
+        body: JSON.stringify({ path: parent, nombre }),
+      });
+      const created = r?.data?.nombre || nombre;
+      setNuevaSub('');
+      if (!parent) {
+        await cargarSubDisk(String(agente.dni), '', 1);
+        setSubCategoria(created); setSubDivision(''); setSubDiskL2([]);
+        cargarSubDisk(String(agente.dni), created, 2);
+      } else {
+        await cargarSubDisk(String(agente.dni), parent, 2);
+        setSubDivision(created);
+      }
+      toast.ok('Subcarpeta creada', created);
+    } catch (e: any) {
+      toast.error('No se pudo crear la subcarpeta', e?.message);
+    } finally { setCreandoSub(false); }
+  }, [nuevaSub, agente, subCategoria, cargarSubDisk]);
+
   // Dispositivos, capacidades y favoritos
   const [devices, setDevices]               = useState<Device[]>([]);
   const [favorites, setFavorites]           = useState<number[]>(loadFavorites);
@@ -259,6 +322,7 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
     const clean = dniParam.replace(/\D/g, '');
     if (!clean) return;
     setLoadingAgente(true);
+    setSubCategoria(''); setSubDivision(''); setSubDiskL1([]); setSubDiskL2([]); setNuevaSub('');
     apiFetch<any>(`/personal/${clean}`)
       .then(res => {
         if (!res?.ok || !res?.data) { toast.error('Agente no encontrado', `DNI ${clean}`); return; }
@@ -267,10 +331,11 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
         apiFetch<any>(`/scanner/documents/${clean}`)
           .then(r => setDocHistory(r?.data || []))
           .catch(() => {});
+        cargarSubDisk(clean, '', 1);
       })
       .catch((e: any) => toast.error('Error al cargar agente', e?.message))
       .finally(() => setLoadingAgente(false));
-  }, [dniParam]);
+  }, [dniParam, cargarSubDisk]);
 
   // ── Cargar dispositivos ───────────────────────────────────────────────────
   const cargarDevices = useCallback(async () => {
@@ -477,13 +542,15 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
     setSaving(true);
     try {
       const jobIds = Array.from(new Set(session.map(p => p.jobId)));
+      // Subcarpeta destino codificada en personal_ref: 'docu|<relpath>|<tipo>' ('' = raíz)
+      const personalRef = subRelPath ? `docu|${subRelPath}|${tipoDoc}` : tipoDoc;
       const resp = await scannerFetch<{ output_format?: string }>('/v1/scan-jobs/consolidate', {
         method: 'POST',
         body: JSON.stringify({
           job_ids: jobIds,
           page_keys: session.map(p => p.storageKey),
           personal_dni: agente.dni,
-          personal_ref: tipoDoc,
+          personal_ref: personalRef,
           doc_class: tipoDoc,
           output_format: outputFormat,
         }),
@@ -511,7 +578,7 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
         toast.error('No se pudo guardar', msg);
       }
     } finally { setSaving(false); }
-  }, [session, agente, tipoDoc, outputFormat]);
+  }, [session, agente, tipoDoc, outputFormat, subRelPath]);
 
   const descartarSesion = useCallback(() => {
     blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
@@ -734,7 +801,7 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
                   {agente.ley_nombre && <span className="muted" style={{ fontSize: '0.78rem' }}>{agente.ley_nombre}</span>}
                 </div>
                 <div className="scan-ruta-hint muted" style={{ fontSize: '0.7rem', marginTop: 4 }}>
-                  📁 Se guardará en: …\docu\{agente.dni}\
+                  📁 Se guardará en: …\docu\{agente.dni}\{rutaLegajoLabel ? `${rutaLegajoLabel}\\` : ''}
                 </div>
               </div>
               <button className="btn" style={{ marginLeft: 'auto', fontSize: '0.78rem' }}
@@ -769,6 +836,88 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
 
             {/* IZQUIERDA */}
             <div className="scan-col">
+
+              {/* ── CARPETA DESTINO EN EL LEGAJO (opcional) ── */}
+              {agente && (
+                <div className="card scan-card">
+                  <div className="scan-section-title">📂 Carpeta destino en el legajo</div>
+
+                  {/* Nivel 1: categoría (o raíz) */}
+                  <div className="muted scan-label">Carpeta</div>
+                  <div className="scan-tipos-grid">
+                    <button
+                      type="button"
+                      className={`scan-tipo-btn${!subCategoria ? ' selected' : ''}`}
+                      onClick={() => seleccionarCategoria('', String(agente.dni))}
+                    >
+                      <span className="scan-tipo-icon">📁</span>
+                      <span className="scan-tipo-label">Raíz del legajo</span>
+                    </button>
+                    {categoriaOptions.map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        className={`scan-tipo-btn${subCategoria === cat ? ' selected' : ''}`}
+                        onClick={() => seleccionarCategoria(cat, String(agente.dni))}
+                      >
+                        <span className="scan-tipo-icon">🗂️</span>
+                        <span className="scan-tipo-label">{cat}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Nivel 2: subdivisión dentro de la categoría */}
+                  {subCategoria && (
+                    <div className="scan-group-section">
+                      <div className="scan-group-header">📁 {subCategoria} › subcarpeta</div>
+                      <div className="scan-tipos-grid">
+                        <button
+                          type="button"
+                          className={`scan-tipo-btn${!subDivision ? ' selected' : ''}`}
+                          onClick={() => setSubDivision('')}
+                        >
+                          <span className="scan-tipo-icon">📂</span>
+                          <span className="scan-tipo-label">Carpeta principal</span>
+                        </button>
+                        {subdivisionOptions.map(sub => (
+                          <button
+                            key={sub}
+                            type="button"
+                            className={`scan-tipo-btn${subDivision === sub ? ' selected' : ''}`}
+                            onClick={() => setSubDivision(sub)}
+                          >
+                            <span className="scan-tipo-icon">📄</span>
+                            <span className="scan-tipo-label">{sub}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Crear nueva carpeta en el nivel actual */}
+                  <label className="muted scan-label" style={{ marginTop: 12, display: 'block' }}>
+                    ➕ Crear {subCategoria ? `subcarpeta dentro de "${subCategoria}"` : 'carpeta nueva'}
+                  </label>
+                  <div className="row" style={{ gap: 8 }}>
+                    <input
+                      className="input"
+                      value={nuevaSub}
+                      onChange={e => setNuevaSub(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && crearSubcarpeta()}
+                      placeholder="Nombre de la carpeta"
+                      style={{ flex: 1, boxSizing: 'border-box' }}
+                    />
+                    <button className="btn" onClick={crearSubcarpeta} disabled={creandoSub || !nuevaSub.trim()}>
+                      {creandoSub ? '…' : 'Crear'}
+                    </button>
+                  </div>
+
+                  <div className="scan-tipo-selected" style={{ marginTop: 10 }}>
+                    📁 Destino: …\docu\{agente.dni}\{rutaLegajoLabel ? `${rutaLegajoLabel}\\` : ''}
+                    {!rutaLegajoLabel && <span className="muted"> (raíz del legajo)</span>}
+                  </div>
+                </div>
+              )}
 
               {/* Tipo de documento */}
               <div className={`card scan-card${!tipoDoc ? ' scan-card-required' : ' scan-card-ok'}`}>
