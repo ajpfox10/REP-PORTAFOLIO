@@ -1042,6 +1042,24 @@
   text-align: left;
 }
 
+/* Los selects (Ley / Regimen) van dentro de la hoja blanca: el .input global
+   usa texto claro + fondo casi transparente, por lo que quedaban invisibles
+   sobre blanco. Forzamos negro sobre blanco para que se vean e impriman. */
+.td-providencia-sheet select.input,
+.td-providencia-cell-select {
+  background: #fff;
+  color: #111;
+  border: 1px solid #999;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.td-providencia-cell-select option {
+  background: #fff;
+  color: #111;
+}
+
 .td-providencia-actions {
   display: flex;
   justify-content: flex-end;

@@ -476,7 +476,7 @@ export function App() {
               path="/app/escaneo-agente/:dni"
               element={
                 <Private>
-                  <Guard perm="crud:*:*">
+                  <Guard anyOf={['crud:*:read', 'crud:*:*']}>
                     <EscaneoAgentePage />
                   </Guard>
                 </Private>

@@ -81,17 +81,49 @@ function getScannerDocumentsBaseDir(): string {
   );
 }
 
+// ── Subcarpetas dentro del legajo del agente (DOCUMENTS_SCAN_DIR/<DNI>/...) ────
+// La ruta relativa viaja SIEMPRE con '/' como separador (formato de "cable").
+// Cada segmento se sanea para impedir path traversal y caracteres inválidos.
+const SUBCARPETA_MAX = 60;
+const SUBCARPETA_MAX_NIVELES = 3;
+
+function sanitizeSegment(name: string): string {
+  return String(name || '')
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ') // separadores, '|' y control
+    .replace(/\s+/g, ' ')
+    .replace(/^\.+$/, '')                        // nunca "." ni ".."
+    .trim()
+    .slice(0, SUBCARPETA_MAX);
+}
+
+/** Normaliza una ruta relativa 'a/b/c' → segmentos saneados unidos por '/'. */
+function sanitizeRelPath(relPath: string): string {
+  return String(relPath || '')
+    .split('/')
+    .map(sanitizeSegment)
+    .filter(Boolean)
+    .slice(0, SUBCARPETA_MAX_NIVELES)
+    .join('/');
+}
+
+/** Convierte la ruta relativa saneada a segmentos aptos para path.join. */
+function relToFsSegments(relPath: string): string[] {
+  return sanitizeRelPath(relPath).split('/').filter(Boolean);
+}
+
 /**
  * Crea la carpeta de destino para un DNI si no existe.
+ * subRelPath: subcarpeta(s) opcional(es) dentro del legajo (ej: 'Nombramiento/IPS').
  * useBaseDir=true → DOCUMENTS_BASE_DIR (ej: resoluciones page)
  * useBaseDir=false → DOCUMENTS_SCAN_DIR (flujo general)
  */
-function resolveDestDir(dni: number, useBaseDir = false): string {
+function resolveDestDir(dni: number, subRelPath = '', useBaseDir = false): string {
   const base = useBaseDir
     ? (env.DOCUMENTS_BASE_DIR?.trim() || getScannerDocumentsBaseDir())
     : getScannerDocumentsBaseDir();
   if (!base) throw new Error('DOCUMENTS_SCAN_DIR/DOCUMENTS_BASE_DIR no configurado en .env');
-  const destDir = path.join(base, String(dni));
+  const segs = relToFsSegments(subRelPath);
+  const destDir = path.join(base, String(dni), ...segs);
   if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
     logger.info({ msg: '[scanner] carpeta creada', destDir });
@@ -250,9 +282,19 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
         return; // ya respondimos arriba
       }
 
+      // Subcarpeta destino: el front codifica personal_ref = 'docu|<relpath>|<ref_real>'
+      // (ej: 'docu|Nombramiento/IPS|cert_ips_aportes'). Sin ese prefijo → raíz del legajo.
+      let subRelPath = '';
+      let effectiveRef = personal_ref || '';
+      if (typeof personal_ref === 'string' && personal_ref.startsWith('docu|')) {
+        const dp = personal_ref.split('|');
+        subRelPath = sanitizeRelPath(dp[1] || '');
+        effectiveRef = dp.slice(2).join('|') || doc_class || '';
+      }
+
       const tipoArchivo = isResolucionesYVariosPage
         ? (refMotivo || 'resolucion')
-        : (TIPOS_DOCUMENTO_ESCANER.find(t => t.value === personal_ref)?.value ||
+        : (TIPOS_DOCUMENTO_ESCANER.find(t => t.value === effectiveRef)?.value ||
            TIPOS_DOCUMENTO_ESCANER.find(t => t.value === doc_class)?.value ||
            doc_class || 'documento_escaneado');
 
@@ -272,7 +314,7 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       const anioDocumento = Number(String(fechaDocumento).slice(0, 4)) || now.getFullYear();
 
       // 1. Resolver carpeta destino (resoluciones → DOCUMENTS_BASE_DIR, resto → DOCUMENTS_SCAN_DIR)
-      const destDir = isResolucionesYVariosPage ? resolveResolucionesYVariosDestDir() : resolveDestDir(dniNum);
+      const destDir = isResolucionesYVariosPage ? resolveResolucionesYVariosDestDir() : resolveDestDir(dniNum, subRelPath);
 
       // 2. Conservar extensión real del archivo del scanner
       const ext = inferExtensionFromStorageKey(storage_key);
@@ -289,8 +331,10 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
           ? preferredFileName
           : `${safeDocumentFileBase(fileBase)}-${scanner_document_id}${ext}`;
 
-      // 3. Ruta relativa y absoluta
-      const rutaRelativa = isResolucionesYVariosPage ? fileName : path.join(String(dniNum), fileName);
+      // 3. Ruta relativa y absoluta (respetando la subcarpeta elegida)
+      const rutaRelativa = isResolucionesYVariosPage
+        ? fileName
+        : path.join(String(dniNum), ...relToFsSegments(subRelPath), fileName);
       const rutaAbsoluta = path.join(destDir, fileName);
 
       // 4. Descargar físicamente el archivo desde scanner API y escribirlo en disco
@@ -320,7 +364,8 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       const descripcion = [
         doc_class ? `Tipo: ${doc_class}` : null,
         hasPageSuffix ? `Página ${pageIdx} de ${pageTot}` : (page_count ? `Páginas: ${page_count}` : null),
-        personal_ref ? `Ref: ${personal_ref}` : null,
+        effectiveRef ? `Ref: ${effectiveRef}` : null,
+        subRelPath ? `Carpeta: ${subRelPath}` : null,
         ocr_summary ? `Extracto: ${String(ocr_summary).slice(0, 200)}` : null,
       ].filter(Boolean).join(' | ');
 
@@ -657,6 +702,62 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
 
     } catch (e: any) {
       logger.error({ msg: '[scanner] registrar-escaneo error', error: e?.message });
+      return res.status(500).json({ ok: false, error: e?.message || 'internal_error' });
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // GET /api/v1/scanner/subcarpetas/:dni?path=<relpath>
+  // Lista las subcarpetas (directorios) inmediatas dentro de DOCUMENTS_SCAN_DIR/<DNI>/<relpath>.
+  // ─────────────────────────────────────────────────────────────────────────
+  router.get('/subcarpetas/:dni', (req: Request, res: Response) => {
+    try {
+      const dni = Number(req.params.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'invalid_dni' });
+
+      const base = getScannerDocumentsBaseDir();
+      if (!base) return res.status(500).json({ ok: false, error: 'DOCUMENTS_SCAN_DIR no configurado' });
+
+      const relPath = sanitizeRelPath(String(req.query.path || ''));
+      const dir = path.join(base, String(dni), ...relToFsSegments(relPath));
+
+      let data: string[] = [];
+      if (fs.existsSync(dir)) {
+        data = fs.readdirSync(dir, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name)
+          .sort((a, b) => a.localeCompare(b, 'es'));
+      }
+      return res.json({ ok: true, data });
+    } catch (e: any) {
+      logger.error({ msg: '[scanner] subcarpetas list error', error: e?.message, dni: req.params.dni });
+      return res.status(500).json({ ok: false, error: 'internal_error' });
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/v1/scanner/subcarpetas/:dni  body: { path?: string, nombre: string }
+  // Crea la carpeta DOCUMENTS_SCAN_DIR/<DNI>/<path>/<nombre> (idempotente).
+  // ─────────────────────────────────────────────────────────────────────────
+  router.post('/subcarpetas/:dni', (req: Request, res: Response) => {
+    try {
+      const dni = Number(req.params.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'invalid_dni' });
+
+      const parentRel = sanitizeRelPath(String(req.body?.path || ''));
+      const nombre = sanitizeSegment(String(req.body?.nombre || ''));
+      if (!nombre) return res.status(400).json({ ok: false, error: 'nombre_invalido' });
+
+      const relPath = [parentRel, nombre].filter(Boolean).join('/');
+      if (relToFsSegments(relPath).length > SUBCARPETA_MAX_NIVELES) {
+        return res.status(400).json({ ok: false, error: 'max_niveles' });
+      }
+
+      const destDir = resolveDestDir(dni, relPath);
+      logger.info({ msg: '[scanner] subcarpeta creada', dni, relPath, destDir });
+      return res.status(201).json({ ok: true, data: { path: relPath, nombre } });
+    } catch (e: any) {
+      logger.error({ msg: '[scanner] subcarpeta create error', error: e?.message });
       return res.status(500).json({ ok: false, error: e?.message || 'internal_error' });
     }
   });

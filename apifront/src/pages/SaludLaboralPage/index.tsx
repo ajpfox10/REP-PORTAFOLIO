@@ -1,15 +1,19 @@
 // src/pages/SaludLaboralPage/index.tsx
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useAuth } from '../../auth/AuthProvider';
 import { useToast } from '../../ui/toast';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { exportToExcel, exportToPdf } from '../../utils/export';
 import { ReclamosLicenciasMedicasTab } from './ReclamosLicenciasMedicasTab';
 
 // ─── Leyes becados/residentes ─────────────────────────────────────────────────
 const LEYES_BECADOS = [6, 7, 8, 9, 10, 11, 12, 13];
+
+// ─── Turnos para tareas livianas ──────────────────────────────────────────────
+const TURNOS = ['Mañana', 'Tarde', 'Noche', 'Rotativo'];
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +24,7 @@ interface Persona {
   cuil?: string;
   ley?: string;
   dependencia_nombre?: string;
+  servicio_nombre?: string;
   estado_empleo?: string;
 }
 
@@ -58,7 +63,23 @@ interface ExamenAnual {
   updated_by_email: string | null;
 }
 
-type Tab = 'reconocimientos' | 'examenes' | 'reclamos';
+type Tab = 'reconocimientos' | 'examenes' | 'reclamos' | 'tareas';
+
+interface TareaLiviana {
+  id: number;
+  agente_dni: string;
+  agente_nombre: string | null;
+  servicio: string | null;
+  turno: string | null;
+  fecha_desde: string;
+  fecha_hasta: string | null;
+  cantidad_dias: number | null;
+  junta_medica_doc_id: number | null;
+  observaciones: string | null;
+  creado_por_email: string | null;
+  creado_at: string;
+  horas_desde_carga?: number;
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -194,7 +215,7 @@ function useLiveSearch(mode: 'becados' | 'todos', allBecados: Persona[]) {
         const res = await apiFetch<any>(`/personal/${clean}`);
         if (res?.ok && res?.data) {
           const r = { ...res.data }; if (!r.dni) r.dni = clean;
-          setSelected({ dni: r.dni, apellido: r.apellido || '', nombre: r.nombre || '', cuil: r.cuil, estado_empleo: r.estado_empleo, dependencia_nombre: r.dependencia });
+          setSelected({ dni: r.dni, apellido: r.apellido || '', nombre: r.nombre || '', cuil: r.cuil, estado_empleo: r.estado_empleo, dependencia_nombre: r.dependencia, servicio_nombre: r.servicio_nombre });
           toast.ok('Agente cargado', `${r.apellido ?? ''}, ${r.nombre ?? ''}`);
         } else { toast.error('No encontrado', `Sin agente con DNI ${clean}`); }
       } catch (e: any) { toast.error('Error', e?.message); }
@@ -241,9 +262,12 @@ function useLiveSearch(mode: 'becados' | 'todos', allBecados: Persona[]) {
 export function SaludLaboralPage() {
   const { canCrud, hasPerm, session } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const isAdmin = hasPerm('crud:*:*');
   // Visible a admin y user (cualquier permiso de tabla comodín), NO a salud_laboral (permisos tabla-específicos)
   const canSeeProcesado = hasPerm('crud:*:read');
+  // Tareas livianas: visible a admin + user (mismo criterio que canSeeProcesado)
+  const canTareas = hasPerm('crud:*:read');
 
   const [tab, setTab] = useState<Tab>('reconocimientos');
 
@@ -482,6 +506,150 @@ export function SaludLaboralPage() {
     return b ? `${b.apellido}, ${b.nombre}` : dni;
   };
 
+  // ══════════════ TAREAS LIVIANAS ══════════════
+  const tareaSearch = useLiveSearch('todos', allBecados);
+  const [allTareas, setAllTareas] = useState<TareaLiviana[]>([]);
+  const [loadingTareas, setLoadingTareas] = useState(false);
+  const [editingTarea, setEditingTarea] = useState<TareaLiviana | null>(null);
+  const [formTarea, setFormTarea] = useState({ fecha_desde: '', fecha_hasta: '', turno: '', servicio: '', observaciones: '', junta_medica_doc_id: '' });
+  const [savingTarea, setSavingTarea] = useState(false);
+  const [juntas, setJuntas] = useState<any[]>([]);
+  const [loadingJuntas, setLoadingJuntas] = useState(false);
+  const [verInforme, setVerInforme] = useState(false);
+  const [servicios, setServicios] = useState<any[]>([]);
+
+  // Maestro de servicios (para el desplegable) — sale de la base
+  useEffect(() => {
+    if (!canTareas) return;
+    apiFetch<any>('/servicios?limit=500')
+      .then(r => setServicios(Array.isArray(r?.data) ? r.data : []))
+      .catch(() => setServicios([]));
+  }, [canTareas]);
+
+  const loadAllTareas = useCallback(async () => {
+    if (!canTareas) return;
+    setLoadingTareas(true);
+    try { const r = await apiFetch<any>('/tareas-livianas'); setAllTareas(r?.data || []); }
+    catch (e: any) { toast.error('Error', e?.message); }
+    finally { setLoadingTareas(false); }
+  }, [canTareas]);
+
+  useEffect(() => { loadAllTareas(); }, [loadAllTareas]);
+
+  // Al seleccionar agente: precargar servicio y traer sus juntas médicas ya cargadas
+  useEffect(() => {
+    setEditingTarea(null);
+    const sel = tareaSearch.selected;
+    if (!sel) {
+      setJuntas([]);
+      setFormTarea({ fecha_desde: '', fecha_hasta: '', turno: '', servicio: '', observaciones: '', junta_medica_doc_id: '' });
+      return;
+    }
+    setFormTarea(f => ({ ...f, servicio: sel.servicio_nombre || sel.dependencia_nombre || '' }));
+    const dni = String(sel.dni).replace(/\D/g, '');
+    setLoadingJuntas(true);
+    apiFetch<any>(`/tareas-livianas/junta-medica/${dni}`)
+      .then(r => setJuntas(r?.data || []))
+      .catch(() => setJuntas([]))
+      .finally(() => setLoadingJuntas(false));
+  }, [tareaSearch.selected]);
+
+  // Auto-calcular días
+  useEffect(() => {
+    if (formTarea.fecha_desde && formTarea.fecha_hasta) {
+      const d = calcDias(formTarea.fecha_desde, formTarea.fecha_hasta);
+      // solo visual — el backend recalcula
+      void d;
+    }
+  }, [formTarea.fecha_desde, formTarea.fecha_hasta]);
+
+  const tareaDni = tareaSearch.selected ? String(tareaSearch.selected.dni).replace(/\D/g, '') : '';
+  const tareas = tareaDni ? allTareas.filter(t => String(t.agente_dni).replace(/\D/g, '') === tareaDni) : allTareas;
+
+  const abrirDocumento = async (id: number) => {
+    try {
+      const { blob } = await apiFetchBlobWithMeta(`/documents/${id}/file`);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) { toast.error('No se pudo abrir el documento', e?.message); }
+  };
+
+  const handleSaveTarea = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tareaSearch.selected) { toast.error('Sin agente', 'Seleccioná un agente primero.'); return; }
+    if (!formTarea.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
+    setSavingTarea(true);
+    try {
+      const dni = String(tareaSearch.selected.dni).replace(/\D/g, '');
+      const body = {
+        agente_dni: dni,
+        agente_nombre: `${tareaSearch.selected.apellido}, ${tareaSearch.selected.nombre}`,
+        servicio: formTarea.servicio || null,
+        turno: formTarea.turno || null,
+        fecha_desde: formTarea.fecha_desde,
+        fecha_hasta: formTarea.fecha_hasta || null,
+        junta_medica_doc_id: formTarea.junta_medica_doc_id ? Number(formTarea.junta_medica_doc_id) : null,
+        observaciones: formTarea.observaciones || null,
+      };
+      if (editingTarea) {
+        await apiFetch(`/tareas-livianas/${editingTarea.id}`, { method: 'PUT', body: JSON.stringify(body) });
+        toast.ok('Actualizado', 'Tarea liviana actualizada.');
+      } else {
+        await apiFetch('/tareas-livianas', { method: 'POST', body: JSON.stringify(body) });
+        toast.ok('Guardado', 'Tarea liviana cargada.');
+      }
+      setEditingTarea(null);
+      setFormTarea({ fecha_desde: '', fecha_hasta: '', turno: '', servicio: tareaSearch.selected.servicio_nombre || tareaSearch.selected.dependencia_nombre || '', observaciones: '', junta_medica_doc_id: '' });
+      loadAllTareas();
+    } catch (e: any) { toast.error('Error', e?.message); }
+    finally { setSavingTarea(false); }
+  };
+
+  const startEditTarea = (t: TareaLiviana) => {
+    if (!isAdmin && !isWithin24h(t.creado_at)) { toast.error('Sin permiso', 'Solo podés editar dentro de las 24hs de carga.'); return; }
+    setEditingTarea(t);
+    setFormTarea({
+      fecha_desde: t.fecha_desde?.slice(0, 10) || '',
+      fecha_hasta: t.fecha_hasta?.slice(0, 10) || '',
+      turno: t.turno || '',
+      servicio: t.servicio || '',
+      observaciones: t.observaciones || '',
+      junta_medica_doc_id: t.junta_medica_doc_id != null ? String(t.junta_medica_doc_id) : '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteTarea = async (t: TareaLiviana) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`¿Eliminar la tarea liviana de ${t.agente_nombre || t.agente_dni}?`)) return;
+    try {
+      await apiFetch(`/tareas-livianas/${t.id}`, { method: 'DELETE' });
+      toast.ok('Eliminado', '');
+      loadAllTareas();
+    } catch (e: any) { toast.error('Error', e?.message); }
+  };
+
+  // Informe: agrupar las tareas visibles por servicio → turno → agentes
+  const informe = (() => {
+    const grupos: Record<string, Record<string, TareaLiviana[]>> = {};
+    for (const t of tareas) {
+      const s = t.servicio || '(sin servicio)';
+      const tu = t.turno || '(sin turno)';
+      (grupos[s] ??= {});
+      (grupos[s][tu] ??= []).push(t);
+    }
+    return Object.entries(grupos)
+      .map(([servicio, turnos]) => ({
+        servicio,
+        total: Object.values(turnos).reduce((a, arr) => a + arr.length, 0),
+        turnos: Object.entries(turnos).map(([turno, ags]) => ({ turno, agentes: ags })),
+      }))
+      .sort((a, b) => a.servicio.localeCompare(b.servicio));
+  })();
+
+  const tareaFormDias = calcDias(formTarea.fecha_desde, formTarea.fecha_hasta);
+
   // ─── RENDER ───────────────────────────────────────────────────────────────
 
   return (
@@ -498,6 +666,12 @@ export function SaludLaboralPage() {
             📋 Examen Anual
             <span className="badge" style={{ marginLeft: 6, fontSize: '0.7rem' }}>{tab === 'examenes' ? exams.length : allExams.length}</span>
           </button>
+          {canTareas && (
+            <button className={`btn${tab === 'tareas' ? ' active' : ''}`} type="button" onClick={() => setTab('tareas')}>
+              🪶 Tareas Livianas
+              <span className="badge" style={{ marginLeft: 6, fontSize: '0.7rem' }}>{tab === 'tareas' ? tareas.length : allTareas.length}</span>
+            </button>
+          )}
           {isAdmin && (
             <button className={`btn${tab === 'reclamos' ? ' active' : ''}`} type="button" onClick={() => setTab('reclamos')}>
               Reclamos de licencias médicas
@@ -893,6 +1067,260 @@ export function SaludLaboralPage() {
                           <td style={td}><div style={{ fontSize: '0.75rem' }}><div>{ex.created_by_nombre || ex.created_by_email || '—'}</div><div className="muted">{fmt(ex.created_at)}</div></div></td>
                           <td style={td}><div style={{ fontSize: '0.75rem' }}>{ex.updated_by_nombre || ex.updated_by_email ? <><div>{ex.updated_by_nombre || ex.updated_by_email}</div><div className="muted">{fmt(ex.updated_at)}</div></> : <span className="muted">—</span>}</div></td>
                           <td style={td}>{canCrud('examen_anual','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditExam(ex)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ══════════════ TAB TAREAS LIVIANAS ══════════════ */}
+      {tab === 'tareas' && (
+        <>
+          {/* Buscador de agente */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="h2" style={{ marginBottom: 8 }}>Buscar agente</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label htmlFor="sl-tar-dni" style={lbl}>DNI</label>
+                <div className="row" style={{ gap: 6 }}>
+                  <input id="sl-tar-dni" name="tarDni" className="input" style={{ flex: 1 }}
+                    value={tareaSearch.dni}
+                    onChange={e => tareaSearch.setDni(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && tareaSearch.onSearchDni()}
+                    placeholder="Enter para buscar" />
+                  <button className="btn" type="button" onClick={() => tareaSearch.onSearchDni()}>
+                    {tareaSearch.loadingSearch ? '...' : 'Buscar'}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="sl-tar-nombre" style={lbl}>Apellido / Nombre</label>
+                <div className="row" style={{ gap: 6 }}>
+                  <input id="sl-tar-nombre" name="tarFullName" className="input" style={{ flex: 1 }}
+                    value={tareaSearch.fullName}
+                    onChange={e => tareaSearch.setFullName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && tareaSearch.onSearchName()}
+                    placeholder="Apellido Nombre (Enter)" />
+                  <button className="btn" type="button" onClick={tareaSearch.onSearchName}>
+                    {tareaSearch.loadingSearch ? '...' : 'Buscar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {tareaSearch.matches.length > 0 && (
+              <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {tareaSearch.matches.map(m => (
+                  <button key={m.dni} className="btn" type="button"
+                    style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                    onClick={() => tareaSearch.select(m)}>
+                    <strong>{m.apellido}, {m.nombre}</strong>
+                    <span className="muted" style={{ marginLeft: 8, fontSize: '0.8rem' }}>
+                      DNI {m.dni}{m.dependencia_nombre ? ` · ${m.dependencia_nombre}` : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {tareaSearch.selected && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.3)', borderRadius: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{tareaSearch.selected.apellido}, {tareaSearch.selected.nombre}</div>
+                    <div className="muted" style={{ fontSize: '0.82rem' }}>
+                      DNI {tareaSearch.selected.dni}
+                      {tareaSearch.selected.dependencia_nombre ? ` · ${tareaSearch.selected.dependencia_nombre}` : ''}
+                    </div>
+                  </div>
+                  <div className="row" style={{ gap: 6 }}>
+                    <button className="btn" type="button" style={{ fontSize: '0.78rem' }}
+                      onClick={() => navigate(`/app/escaneo-agente/${String(tareaSearch.selected!.dni).replace(/\D/g,'')}`)}>
+                      📷 Escanear documentación
+                    </button>
+                    <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={tareaSearch.clear}>✕ Limpiar</button>
+                  </div>
+                </div>
+
+                {/* Juntas médicas ya cargadas (de Resoluciones → G:\varios) */}
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 6 }}>⚖️ Juntas médicas cargadas</div>
+                  {loadingJuntas ? (
+                    <div className="muted" style={{ fontSize: '0.8rem' }}>Buscando…</div>
+                  ) : juntas.length === 0 ? (
+                    <div className="muted" style={{ fontSize: '0.8rem' }}>
+                      Sin junta médica cargada en Resoluciones para este agente. Usá 📷 Escanear o cargala en Resoluciones.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {juntas.map(j => (
+                        <div key={j.id} className="row" style={{ gap: 8, alignItems: 'center', fontSize: '0.8rem' }}>
+                          <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }} onClick={() => abrirDocumento(j.id)}>📄 Ver</button>
+                          <span>{j.nombre || `Documento #${j.id}`}</span>
+                          <span className="muted">{fmt(j.fecha || j.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!tareaSearch.selected && !tareaSearch.dni && !tareaSearch.fullName && (
+              <div className="muted" style={{ fontSize: '0.78rem', marginTop: 6 }}>
+                Sin agente seleccionado — mostrando todas las tareas livianas.
+              </div>
+            )}
+          </div>
+
+          {/* Formulario tarea liviana */}
+          {canCrud('tareas_livianas', 'create') && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="h2" style={{ marginBottom: 10 }}>
+                {editingTarea ? '✏️ Editar tarea liviana' : '➕ Nueva tarea liviana'}
+                {tareaSearch.selected && <span style={{ fontWeight: 400, fontSize: '0.85rem', marginLeft: 8, color: 'rgba(255,255,255,0.5)' }}>— {tareaSearch.selected.apellido}, {tareaSearch.selected.nombre}</span>}
+              </div>
+              {!tareaSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un agente antes de cargar.</div>}
+              <form onSubmit={handleSaveTarea}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <div style={fg}>
+                    <label htmlFor="sl-tar-desde" style={lbl}>Fecha desde *</label>
+                    <input id="sl-tar-desde" name="fecha_desde" className="input" type="date" value={formTarea.fecha_desde}
+                      onChange={e => setFormTarea(f => ({ ...f, fecha_desde: e.target.value }))} required />
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-tar-hasta" style={lbl}>
+                      Fecha hasta
+                      {tareaFormDias != null && <span style={{ marginLeft: 6, color: '#10b981', fontWeight: 700 }}>{tareaFormDias}d</span>}
+                    </label>
+                    <input id="sl-tar-hasta" name="fecha_hasta" className="input" type="date" value={formTarea.fecha_hasta}
+                      min={formTarea.fecha_desde || undefined}
+                      onChange={e => setFormTarea(f => ({ ...f, fecha_hasta: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-tar-turno" style={lbl}>Turno</label>
+                    <select id="sl-tar-turno" name="turno" className="input" value={formTarea.turno}
+                      onChange={e => setFormTarea(f => ({ ...f, turno: e.target.value }))}>
+                      <option value="">— Turno —</option>
+                      {TURNOS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-tar-servicio" style={lbl}>Servicio</label>
+                    <select id="sl-tar-servicio" name="servicio" className="input" value={formTarea.servicio}
+                      onChange={e => setFormTarea(f => ({ ...f, servicio: e.target.value }))}>
+                      <option value="">— Servicio —</option>
+                      {/* Servicio actual del agente aunque no esté en el maestro */}
+                      {formTarea.servicio && !servicios.some((s: any) => s.nombre === formTarea.servicio) && (
+                        <option value={formTarea.servicio}>{formTarea.servicio}</option>
+                      )}
+                      {servicios.map((s: any) => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-tar-junta" style={lbl}>Junta médica</label>
+                    <select id="sl-tar-junta" name="junta_medica_doc_id" className="input" value={formTarea.junta_medica_doc_id}
+                      onChange={e => setFormTarea(f => ({ ...f, junta_medica_doc_id: e.target.value }))}>
+                      <option value="">— Sin vincular —</option>
+                      {juntas.map(j => <option key={j.id} value={j.id}>{j.nombre || `Documento #${j.id}`}</option>)}
+                    </select>
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-tar-obs" style={lbl}>Observaciones</label>
+                    <input id="sl-tar-obs" name="observaciones" className="input" type="text" placeholder="Observaciones" value={formTarea.observaciones}
+                      onChange={e => setFormTarea(f => ({ ...f, observaciones: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="row" style={{ gap: 8, marginTop: 12 }}>
+                  <button className="btn ok" type="submit" disabled={savingTarea || !tareaSearch.selected}>
+                    {savingTarea ? 'Guardando...' : editingTarea ? 'Actualizar' : 'Guardar'}
+                  </button>
+                  {editingTarea && (
+                    <button className="btn" type="button" onClick={() => { setEditingTarea(null); setFormTarea({ fecha_desde: '', fecha_hasta: '', turno: '', servicio: tareaSearch.selected?.servicio_nombre || tareaSearch.selected?.dependencia_nombre || '', observaciones: '', junta_medica_doc_id: '' }); }}>
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Tabla / Informe */}
+          <div className="card">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div className="h2">
+                {tareaSearch.selected ? `Tareas de ${tareaSearch.selected.apellido} (${tareas.length})` : `Todas las tareas livianas (${allTareas.length})`}
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <button className={`btn${verInforme ? ' active' : ''}`} type="button" onClick={() => setVerInforme(v => !v)}>
+                  {verInforme ? '📋 Ver listado' : '📊 Ver informe por servicio/turno'}
+                </button>
+                <button className="btn" type="button" disabled={!tareas.length} onClick={() => exportToExcel('tareas_livianas', tareas)}>📊 Excel</button>
+                <button className="btn" type="button" disabled={!tareas.length} onClick={() => exportToPdf('tareas_livianas', tareas)}>📄 PDF</button>
+              </div>
+            </div>
+
+            {loadingTareas ? <div className="muted">Cargando...</div> : tareas.length === 0 ? (
+              <div className="muted">{tareaSearch.selected ? 'Este agente no tiene tareas livianas.' : 'No hay tareas livianas cargadas.'}</div>
+            ) : verInforme ? (
+              /* ── INFORME agrupado ── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {informe.map(g => (
+                  <div key={g.servicio} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>🏢 {g.servicio} <span className="muted" style={{ fontWeight: 400 }}>· {g.total} agente(s)</span></div>
+                    {g.turnos.map(tt => (
+                      <div key={tt.turno} style={{ marginBottom: 6 }}>
+                        <div style={{ fontSize: '0.82rem', color: '#14b8a6', fontWeight: 600 }}>🕐 {tt.turno} ({tt.agentes.length})</div>
+                        <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: '0.82rem' }}>
+                          {tt.agentes.map(a => (
+                            <li key={a.id}>
+                              {a.agente_nombre || a.agente_dni} — {fmt(a.fecha_desde)} → {a.fecha_hasta ? fmt(a.fecha_hasta) : 'sin fin'}
+                              {a.cantidad_dias != null && <span style={{ color: '#10b981' }}> ({a.cantidad_dias}d)</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* ── LISTADO ── */
+              <div style={{ overflowX: 'auto' }}>
+                <table style={tbl}>
+                  <thead>
+                    <tr>
+                      {['DNI','Apellido y Nombre','Servicio','Turno','Desde','Hasta','Días','Junta','Observaciones','Cargado por',''].map(h => <th key={h} style={th}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tareas.map(t => {
+                      const editable = isAdmin || isWithin24h(t.creado_at);
+                      return (
+                        <tr key={t.id}>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}><strong>{t.agente_dni}</strong></td>
+                          <td style={{ ...td, minWidth: 160 }}>{t.agente_nombre || '—'}</td>
+                          <td style={td}>{t.servicio || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{t.turno || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmt(t.fecha_desde)}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{t.fecha_hasta ? fmt(t.fecha_hasta) : <span className="muted">—</span>}</td>
+                          <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>{t.cantidad_dias != null ? <span style={{ fontWeight: 700, color: '#10b981' }}>{t.cantidad_dias}d</span> : <span className="muted">—</span>}</td>
+                          <td style={{ ...td, textAlign: 'center' }}>
+                            {t.junta_medica_doc_id
+                              ? <button className="btn" type="button" style={{ fontSize: '0.72rem', padding: '3px 8px' }} onClick={() => abrirDocumento(t.junta_medica_doc_id!)}>📄</button>
+                              : <span className="muted">—</span>}
+                          </td>
+                          <td style={{ ...td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.observaciones || <span className="muted">—</span>}</td>
+                          <td style={{ ...td, minWidth: 110 }}><div style={{ fontSize: '0.72rem' }}><div>{t.creado_por_email || '—'}</div><div className="muted">{fmt(t.creado_at)}</div></div></td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                            {canCrud('tareas_livianas','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 8px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditTarea(t)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}
+                            {isAdmin && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 8px', marginLeft: 4 }} onClick={() => handleDeleteTarea(t)} title="Eliminar">🗑️</button>}
+                          </td>
                         </tr>
                       );
                     })}
