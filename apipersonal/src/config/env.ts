@@ -299,6 +299,9 @@ const schema = z.object({
   // Ejemplo Linux:   /data/asistencia
   EXCEL_ASISTENCIA_DIR: strish(""),
 
+  // Carpeta con PDFs de licencias anuales (ANUAL + NOVEDADES) para la comparación
+  LICENCIAS_PDF_DIR: strish(""),
+
   // Módulo Fichero
   FICHERO_LOG_PATH: strish(""),          // legacy, ya no se usa (el log lo gestiona el módulo)
   // MySQL del reloj biométrico (si no se completa aquí, se puede configurar desde la UI)

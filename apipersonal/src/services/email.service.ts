@@ -54,6 +54,29 @@ export interface SendEmailOptions {
   text?: string;
   html?: string;
   from?: string;
+  replyTo?: string;
+  headers?: Record<string, string>;
+}
+
+// Envío "no-reply": marca el mensaje como automático y desalienta respuestas.
+// Setea Reply-To a una casilla no-reply + headers estándar de auto-generado.
+// Reply-To apunta a una casilla INEXISTENTE a propósito: si el agente responde,
+// el mail rebota como "no se pudo entregar" (no-reply real). Configurable por env.
+const NOREPLY_ADDR = (process.env.EMAIL_NOREPLY || 'rrhh32noreply@gmail.com').trim();
+
+export function noReplyOptions(fromLabel = 'Sistema de Personal'): Partial<SendEmailOptions> {
+  const addr = env.EMAIL_FROM || env.EMAIL_USER || 'noreply@localhost';
+  const bare = /<([^>]+)>/.exec(addr)?.[1] || addr;
+  return {
+    // From queda con el remitente verificado (Brevo lo exige); Reply-To es el no-reply.
+    from: `"${fromLabel} (No responder)" <${bare}>`,
+    replyTo: NOREPLY_ADDR,
+    headers: {
+      'Auto-Submitted': 'auto-generated',
+      'X-Auto-Response-Suppress': 'All',
+      'Precedence': 'bulk',
+    },
+  };
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<{ ok: boolean; error?: string; messageId?: string }> {
@@ -76,6 +99,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ ok: boolea
       subject: options.subject,
       text: options.text,
       html: options.html,
+      ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+      ...(options.headers ? { headers: options.headers } : {}),
     });
 
     logger.info({ 
