@@ -42,6 +42,8 @@ type PdfAnalysisRow = {
   status: 'detectado' | 'sin_agente' | 'ambiguedad' | 'sin_texto' | 'error';
   reason: string | null;
   lectura: 'texto' | 'ocr' | 'sin_texto';
+  pageTitles: string[];
+  pageSubOrder: number[];
 };
 
 type SaveFileInput = {
@@ -160,6 +162,28 @@ function writeSavedListados(rows: SavedListadoRow[]) {
   fs.writeFileSync(filePath, JSON.stringify(rows, null, 2), 'utf8');
 }
 
+// Un listado se considera "el mismo" por su combinación de población/trámite/año/programa/dependencia
+// (no por fecha ni id). Sirve para actualizar en lugar de acumular duplicados.
+function listadoIdentity(l: Pick<SavedListadoRow, 'poblacion' | 'tramite' | 'anioBeca' | 'programaBeca' | 'dependenciaId'>): string {
+  return [l.poblacion, l.tramite, l.anioBeca, l.programaBeca, l.dependenciaId]
+    .map((v) => String(v ?? '').trim().toUpperCase())
+    .join('|');
+}
+
+// Deja un solo listado por identidad: el más nuevo (por createdAt). Ordenado desc.
+function dedupSavedListados(rows: SavedListadoRow[]): SavedListadoRow[] {
+  const sorted = [...rows].sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''));
+  const seen = new Set<string>();
+  const out: SavedListadoRow[] = [];
+  for (const row of sorted) {
+    const key = listadoIdentity(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
 function cleanSavedListado(raw: any, actor: number | null): SavedListadoRow {
   const rows = Array.isArray(raw?.rows) ? raw.rows.slice(0, 500) : [];
   return {
@@ -178,6 +202,11 @@ function cleanSavedListado(raw: any, actor: number | null): SavedListadoRow {
     rows,
     savedBy: actor,
   };
+}
+
+// ¿Es una plantilla de caratula (caratula<estab><ley>.pdf)? Se excluye del analisis de documentos.
+function isCaratulaTemplateName(name: string): boolean {
+  return normalizeSearch(name).replace(/[^a-z0-9]/g, '').startsWith('caratula');
 }
 
 function listPdfFiles(inputDir: string): string[] {
@@ -203,6 +232,9 @@ function listPdfFiles(inputDir: string): string[] {
       if (entry.isDirectory()) {
         stack.push(fullPath);
       } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.pdf')) {
+        // Las plantillas de caratula (caratulahtal10430.pdf, etc.) viven en Descargas pero NO son
+        // documentos de agente: no se deben analizar/combinar como tales.
+        if (isCaratulaTemplateName(entry.name)) continue;
         found.push(path.relative(base, fullPath).replace(/\\/g, '/'));
       }
     }
@@ -407,7 +439,7 @@ async function findRupaPdfByContent(sequelize: Sequelize, dni: number, opts: Ext
     try {
       text = (await extractPdfText(fp)).text || '';
       if (!text.trim() && env.TRAMITES_PDF_OCR_ENABLE) {
-        text = (await extractPdfTextWithOcr(fp)).text || '';
+        text = (await withTimeout(extractPdfTextWithOcr(fp), OCR_TIMEOUT_MS, `OCR RUPA ${path.basename(fp)}`)).text || '';
       }
     } catch {
       text = '';
@@ -501,17 +533,34 @@ async function findCaratulaPdfByAgent(sequelize: Sequelize, dni: number): Promis
   const found = (candidatos.find((c) => c.stem === key) || candidatos.find((c) => c.stem.includes(key)))?.fp || null;
   if (!found) return null;
 
-  let text = '';
-  try {
-    text = (await extractPdfText(found)).text || '';
-    if (!text.trim() && env.TRAMITES_PDF_OCR_ENABLE) {
-      text = (await extractPdfTextWithOcr(found)).text || '';
-    }
-  } catch {
-    text = '';
-  }
-  const verificado = Boolean(text.trim() && caratulaContenidoOk(text, info));
+  // La caratula ya se eligio por establecimiento+ley (base) + nombre de archivo. El "control" solo
+  // lee la CAPA DE TEXTO (rapido, sin canvas ni OCR — el OCR de estas plantillas escaneadas colgaba
+  // 60s por agente). Si no hay texto, se confia en la seleccion; solo se marca "a revisar" si hay
+  // texto y CONTRADICE el establecimiento/ley esperado.
+  const text = await caratulaTextCached(found);
+  const verificado = !text.trim() ? true : caratulaContenidoOk(text, info);
   return { path: found, verificado, key };
+}
+
+// Lee la capa de texto de una caratula, cacheada por archivo (mtime+size). La plantilla es la misma
+// para todos los agentes del mismo estab/ley, asi que se lee a lo sumo una vez.
+const caratulaTextCache = new Map<string, { mtimeMs: number; size: number; text: string }>();
+async function caratulaTextCached(fp: string): Promise<string> {
+  try {
+    const stat = fs.statSync(fp);
+    const cached = caratulaTextCache.get(fp);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.text;
+    let text = '';
+    try {
+      text = (await extractPdfText(fp)).text || '';
+    } catch {
+      text = '';
+    }
+    caratulaTextCache.set(fp, { mtimeMs: stat.mtimeMs, size: stat.size, text });
+    return text;
+  } catch {
+    return '';
+  }
 }
 
 async function pdfMeta(fullPath: string) {
@@ -612,14 +661,21 @@ function orderedMergeItems(
   return items;
 }
 
-function targetFolderFor(dni: number, tramite: string): string {
+function targetFolderFor(dni: number, tramite: string, sub?: string): string {
   const base = path.resolve(getDocuBaseDir());
-  const target = path.resolve(base, String(dni), tramite);
+  const cleanSub = String(sub || '').replace(/[\\/]+/g, ' ').trim();
+  const parts = [base, String(dni), tramite, ...(cleanSub ? [cleanSub] : [])];
+  const target = path.resolve(...parts);
   const rel = path.relative(base, target);
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
     throw Object.assign(new Error('Carpeta destino insegura'), { status: 400 });
   }
   return target;
+}
+
+// Subcarpeta fija por año en curso donde se guarda el combinado, p.ej. "DESIGNACION INTERINO 2026".
+function subcarpetaCombinado(): string {
+  return `DESIGNACION INTERINO ${new Date().getFullYear()}`;
 }
 
 function routeForDocumentStorage(fullPath: string): string {
@@ -754,7 +810,7 @@ async function loadPdfJs() {
 // pdfjs + @napi-rs/canvas pueden colgarse o tirar un rechazo no manejado al destruir el
 // documento (NodeCanvasFactory.destroy). Un timeout garantiza que la request SIEMPRE responda:
 // si el OCR se cuelga, el PDF queda como "sin texto" en vez de colgar toda la operación.
-const OCR_TIMEOUT_MS = Math.max(10000, Number(env.TRAMITES_PDF_OCR_TIMEOUT_MS || 60000) || 60000);
+const OCR_TIMEOUT_MS = Math.max(10000, Number(process.env.TRAMITES_PDF_OCR_TIMEOUT_MS || 60000) || 60000);
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -795,8 +851,43 @@ async function extractPdfText(pdfPath: string): Promise<{ text: string; pages: n
     }
     return { text: parts.join('\n'), pages: pdf.numPages };
   } finally {
-    await pdf.destroy?.();
+    await safeDestroyPdf(pdf);
   }
+}
+
+// Texto de cada página por separado (capa de texto, sin OCR). Sirve para leer el título de la
+// hoja (encabezado del SIAPE/eRreH) y auto-ordenar el combinado por nombre de hoja.
+async function extractPdfPageTexts(pdfPath: string): Promise<string[]> {
+  const pdfjs = await loadPdfJs();
+  const data = new Uint8Array(fs.readFileSync(pdfPath));
+  const pdf = await pdfjs.getDocument({ data, disableWorker: true }).promise;
+  const out: string[] = [];
+  try {
+    for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+      const page = await pdf.getPage(pageNo);
+      const content = await page.getTextContent();
+      const text = (content.items || [])
+        .map((item: any) => String(item?.str || ''))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      out.push(text);
+    }
+    return out;
+  } finally {
+    await safeDestroyPdf(pdf);
+  }
+}
+
+// El título de la hoja está en el encabezado (primeros caracteres). Con eso alcanza para clasificar,
+// salvo el CV de eRreH: "CURRICULUM VITAE" SÍ es texto, pero pdfjs lo extrae al FINAL del stream (no
+// en el encabezado), por eso se busca en TODO el texto de la hoja. Respaldo: "antecedentes laborales".
+function pageTitleFrom(pageText: string): string {
+  const t = normalizeSearch(pageText);
+  if (t.includes('curriculum') || t.includes('antecedentes laborales')) {
+    return 'CURRICULUM VITAE';
+  }
+  return String(pageText || '').slice(0, 140).trim();
 }
 
 async function renderPdfPageToJpg(pdfjs: any, pdf: any, pageNo: number, tempDir: string): Promise<string> {
@@ -814,16 +905,38 @@ async function renderPdfPageToJpg(pdfjs: any, pdf: any, pageNo: number, tempDir:
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
 
+  page.cleanup();
   const out = path.join(tempDir, `page_${String(pageNo).padStart(3, '0')}.jpg`);
   const jpg = await canvas.encode('jpeg', 90);
   fs.writeFileSync(out, jpg);
   return out;
 }
 
+// pdfjs por defecto libera sus canvas con `canvas.width = 0`, que con @napi-rs/canvas tira
+// "Failed to unwrap exclusive reference of CanvasElement" y colgaba/crasheaba el OCR. Este factory
+// libera sin ese seteo → el render/OCR ya no rompe.
+function makeSafeCanvasFactory() {
+  const { createCanvas } = require('@napi-rs/canvas');
+  return {
+    create(width: number, height: number) {
+      const canvas = createCanvas(Math.ceil(width) || 1, Math.ceil(height) || 1);
+      return { canvas, context: canvas.getContext('2d') };
+    },
+    reset(cc: any, width: number, height: number) {
+      cc.canvas.width = Math.ceil(width) || 1;
+      cc.canvas.height = Math.ceil(height) || 1;
+    },
+    destroy(cc: any) {
+      cc.canvas = null;
+      cc.context = null;
+    },
+  };
+}
+
 async function extractPdfTextWithOcr(pdfPath: string): Promise<{ text: string; pages: number; processedPages: number }> {
   const pdfjs = await loadPdfJs();
   const data = new Uint8Array(fs.readFileSync(pdfPath));
-  const pdf = await pdfjs.getDocument({ data, disableWorker: true }).promise;
+  const pdf = await pdfjs.getDocument({ data, disableWorker: true, canvasFactory: makeSafeCanvasFactory() }).promise;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tramites-ocr-'));
   const parts: string[] = [];
 
@@ -831,15 +944,88 @@ async function extractPdfTextWithOcr(pdfPath: string): Promise<{ text: string; p
     const maxPages = Math.max(1, Number(env.TRAMITES_PDF_OCR_MAX_PAGES || 20) || 20);
     const pagesToRead = Math.min(pdf.numPages, maxPages);
     for (let pageNo = 1; pageNo <= pagesToRead; pageNo += 1) {
-      const imgPath = await renderPdfPageToJpg(pdfjs, pdf, pageNo, tempDir);
-      const text = await extractTextFromImage(imgPath);
-      if (text?.trim()) parts.push(text);
+      // Aislar cada pagina: un render/OCR que falle no debe abortar todo el PDF.
+      try {
+        const imgPath = await renderPdfPageToJpg(pdfjs, pdf, pageNo, tempDir);
+        const text = await extractTextFromImage(imgPath);
+        if (text?.trim()) parts.push(text);
+      } catch (err: any) {
+        logger.warn({ msg: '[tramites] OCR pagina fallo', page: pageNo, error: err?.message });
+      }
     }
     return { text: parts.join('\n'), pages: pdf.numPages, processedPages: pagesToRead };
   } finally {
-    await pdf.destroy?.();
+    await safeDestroyPdf(pdf);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+}
+
+// OCR de páginas puntuales, cacheado por archivo (path+mtime+página). Sirve para desempatar hojas
+// con el mismo título (cuerpo escaneado), p.ej. la DDJJ incompatibilidad. La primera vez OCR-ea; luego
+// sale de cache (re-analizar es rápido).
+const ocrPageCache = new Map<string, string>();
+async function ocrPagesText(pdfPath: string, pageNos: number[]): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  if (!pageNos.length) return out;
+  let mtimeMs = 0;
+  try { mtimeMs = fs.statSync(pdfPath).mtimeMs; } catch { /* noop */ }
+  const keyFor = (p: number) => `${pdfPath}|${mtimeMs}|${p}`;
+  const missing = pageNos.filter((p) => !ocrPageCache.has(keyFor(p)));
+  if (missing.length) {
+    const pdfjs = await loadPdfJs();
+    const data = new Uint8Array(fs.readFileSync(pdfPath));
+    const pdf = await pdfjs.getDocument({ data, disableWorker: true, canvasFactory: makeSafeCanvasFactory() }).promise;
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tramites-ocr-'));
+    try {
+      for (const pageNo of missing) {
+        let text = '';
+        try {
+          const imgPath = await renderPdfPageToJpg(pdfjs, pdf, pageNo, tempDir);
+          text = (await extractTextFromImage(imgPath)) || '';
+        } catch (err: any) {
+          logger.warn({ msg: '[tramites] OCR incompat pagina fallo', page: pageNo, error: err?.message });
+        }
+        ocrPageCache.set(keyFor(pageNo), text);
+      }
+    } finally {
+      await safeDestroyPdf(pdf);
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }
+  for (const p of pageNos) out.set(p, ocrPageCache.get(keyFor(p)) || '');
+  return out;
+}
+
+// Sub-orden dentro del bloque "DECLARACION JURADA SOBRE INCOMPATIBILIDAD" (mismo título, cuerpo
+// escaneado). Son DOS juegos que el SIAPE exporta desordenados; se ubican por CONTENIDO (el OCR lee
+// el cuerpo pero NO el "página X de Y"). Menor = primero. Las dos de incompatibilidad quedan intactas
+// (0 y 1); solo se ordenan las tres de compatibilidad horaria (2, 3, 4).
+//   Juego 1 · DDJJ incompatibilidad:  0 datos declarante  →  1 ítems + firma
+//   Juego 2 · Planilla compatibilidad horaria (Ley 13.644):  2 datos/banda  →  3 observaciones  →  4 ratifica superior/delegado
+// OJO: la incompatibilidad hoja 1 (ítem 4) dice "jerarquía", por eso ese término NO se usa para compat;
+// la hoja 3 de compat se detecta por "delegado" (exclusivo de la ratificación superior/delegado).
+function incompatSubRank(ocrText: string): number {
+  const t = normalizeSearch(ocrText);
+  // Incompatibilidad (NO se tocan; van primero)
+  if (t.includes('declarante') || t.includes('planta permanente') || t.includes('relacion contractual')) return 0; // hoja 1: datos + ítems 1-8
+  if (t.includes('declaro') || t.includes('juramento') || t.includes('afectado') || t.includes('rehabilit')) return 1; // hoja 2: ítems 9-17 + firma
+  // Compatibilidad horaria (estas se ordenan)
+  if (t.includes('delegado')) return 4;                                                                             // hoja 3: ratifica superior/delegado
+  if (t.includes('banda horaria') || t.includes('completado por') || t.includes('para ser completado')) return 2;  // hoja 1: datos del agente
+  return 3;                                                                                                          // hoja 2: observaciones
+}
+
+// Sub-orden dentro del bloque "DDJJ CONDICIONES DE SALUD" (mismo título, cuerpo escaneado). El SIAPE lo
+// exporta desordenado; se ordena por SECCIÓN (título que el OCR sí lee). Orden pedido por el área:
+//   0 datos personales → 1 hábitos → 2 antecedentes cardíacos → 3 antecedentes ginecológicos
+// Testeado en 5 agentes: 4 hojas c/u, todas clasificadas OK. Sección desconocida → 4 (al final).
+function saludSubRank(ocrText: string): number {
+  const t = normalizeSearch(ocrText);
+  if (t.includes('datos personales')) return 0;
+  if (t.includes('habito') || t.includes('fuma') || t.includes('tranquilizante')) return 1;
+  if (t.includes('cardiac') || t.includes('cardiaco') || t.includes('palpitaciones') || t.includes('cardiopatia')) return 2;
+  if (t.includes('ginecolog')) return 3;
+  return 4;
 }
 
 function collectDniCandidates(text: string): number[] {
@@ -1050,34 +1236,77 @@ async function analyzeOnePdf(sequelize: Sequelize, fileName: string): Promise<Pd
   const fullPath = resolveInputPdf(fileName);
   const stat = fs.statSync(fullPath);
 
+  const fileUrl = `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`;
   try {
-    const textResult = await extractPdfText(fullPath);
-    let pages = textResult.pages;
+    const pageTexts = await extractPdfPageTexts(fullPath);
+    let pages = pageTexts.length;
+    let pageTitles = pageTexts.map(pageTitleFrom);
     let lectura: PdfAnalysisRow['lectura'] = 'texto';
-    let trimmed = textResult.text.trim();
+    let trimmed = pageTexts.join('\n').trim();
 
     if (!trimmed && env.TRAMITES_PDF_OCR_ENABLE) {
-      const ocrResult = await extractPdfTextWithOcr(fullPath);
-      pages = ocrResult.pages || pages;
-      trimmed = ocrResult.text.trim();
-      lectura = trimmed ? 'ocr' : 'sin_texto';
+      try {
+        const ocrResult = await withTimeout(extractPdfTextWithOcr(fullPath), OCR_TIMEOUT_MS, `OCR ${fileName}`);
+        pages = ocrResult.pages || pages;
+        trimmed = ocrResult.text.trim();
+        lectura = trimmed ? 'ocr' : 'sin_texto';
+      } catch (err: any) {
+        logger.warn({ msg: '[tramites] OCR analizar fallo/timeout', fileName, error: err?.message });
+        lectura = 'sin_texto';
+      }
     }
 
     if (!trimmed) {
       return {
-        fileName,
-        fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
-        bytes: stat.size,
-        pages,
-        detectedDni: null,
-        agente: null,
-        candidates: [],
+        fileName, fileUrl, bytes: stat.size, pages,
+        detectedDni: null, agente: null, candidates: [],
         status: 'sin_texto',
         reason: env.TRAMITES_PDF_OCR_ENABLE
           ? 'No se pudo extraer texto ni con OCR.'
           : 'El PDF no tiene texto extraible; OCR desactivado.',
         lectura: 'sin_texto',
+        pageTitles, pageSubOrder: [],
       };
+    }
+
+    // Bloque de DDJJ (mismo título "incompatibilidad", cuerpo escaneado). El "página X de Y" no es legible,
+    // así que se ordena por CONTENIDO: incompatibilidad (0,1) queda intacta y primero; compatibilidad
+    // horaria (2,3,4) se ordena. OCR puntual solo de esas hojas, cacheado. Ver incompatSubRank.
+    const pageSubOrder = pageTitles.map(() => 0);
+    const incompatPages = pageTitles
+      .map((t, i) => ({ n: normalizeSearch(t), i }))
+      .filter((x) => x.n.includes('incompatibilidad'))
+      .map((x) => x.i);
+    if (incompatPages.length > 1 && env.TRAMITES_PDF_OCR_ENABLE) {
+      try {
+        const ocr = await withTimeout(
+          ocrPagesText(fullPath, incompatPages.map((i) => i + 1)),
+          Math.max(OCR_TIMEOUT_MS, incompatPages.length * 20000),
+          `OCR incompat ${fileName}`,
+        );
+        for (const i of incompatPages) pageSubOrder[i] = incompatSubRank(ocr.get(i + 1) || '');
+      } catch (err: any) {
+        logger.warn({ msg: '[tramites] OCR incompat orden fallo/timeout', fileName, error: err?.message });
+      }
+    }
+
+    // Bloque de DDJJ CONDICIONES DE SALUD: mismo título, cuerpo escaneado. Se ordena por SECCIÓN
+    // (datos personales → hábitos → cardíacos → ginecológicos). OCR puntual cacheado. Ver saludSubRank.
+    const saludPages = pageTitles
+      .map((t, i) => ({ n: normalizeSearch(t), i }))
+      .filter((x) => x.n.includes('condiciones de salud'))
+      .map((x) => x.i);
+    if (saludPages.length > 1 && env.TRAMITES_PDF_OCR_ENABLE) {
+      try {
+        const ocr = await withTimeout(
+          ocrPagesText(fullPath, saludPages.map((i) => i + 1)),
+          Math.max(OCR_TIMEOUT_MS, saludPages.length * 20000),
+          `OCR salud ${fileName}`,
+        );
+        for (const i of saludPages) pageSubOrder[i] = saludSubRank(ocr.get(i + 1) || '');
+      } catch (err: any) {
+        logger.warn({ msg: '[tramites] OCR salud orden fallo/timeout', fileName, error: err?.message });
+      }
     }
 
     const candidates = collectDniCandidates(trimmed);
@@ -1085,46 +1314,30 @@ async function analyzeOnePdf(sequelize: Sequelize, fileName: string): Promise<Pd
 
     if (agents.length === 1) {
       return {
-        fileName,
-        fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
-        bytes: stat.size,
-        pages,
-        detectedDni: agents[0].dni,
-        agente: agents[0],
-        candidates,
+        fileName, fileUrl, bytes: stat.size, pages,
+        detectedDni: agents[0].dni, agente: agents[0], candidates,
         status: 'detectado',
         reason: lectura === 'ocr' ? 'Detectado con OCR.' : null,
-        lectura,
+        lectura, pageTitles, pageSubOrder,
       };
     }
 
     return {
-      fileName,
-      fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
-      bytes: stat.size,
-      pages,
-      detectedDni: null,
-      agente: null,
-      candidates,
+      fileName, fileUrl, bytes: stat.size, pages,
+      detectedDni: null, agente: null, candidates,
       status: agents.length > 1 ? 'ambiguedad' : 'sin_agente',
       reason: agents.length > 1
         ? `Se encontraron ${agents.length} agentes posibles.`
         : 'No se encontro un DNI/CUIL coincidente con personal.',
-      lectura,
+      lectura, pageTitles, pageSubOrder,
     };
   } catch (err: any) {
     logger.warn({ msg: '[tramites] error analizando PDF', fileName, error: err?.message });
     return {
-      fileName,
-      fileUrl: `/tramites-documentales/pdf?file=${encodeURIComponent(fileName)}`,
-      bytes: stat.size,
-      pages: 0,
-      detectedDni: null,
-      agente: null,
-      candidates: [],
-      status: 'error',
-      reason: err?.message || 'Error al leer PDF',
-      lectura: 'sin_texto',
+      fileName, fileUrl, bytes: stat.size, pages: 0,
+      detectedDni: null, agente: null, candidates: [],
+      status: 'error', reason: err?.message || 'Error al leer PDF',
+      lectura: 'sin_texto', pageTitles: [], pageSubOrder: [],
     };
   }
 }
@@ -1133,9 +1346,8 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
   const router = Router();
 
   router.get('/listados', async (_req: Request, res: Response) => {
-    const rows = readSavedListados()
-      .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
-      .slice(0, 25);
+    // Colapsa duplicados históricos por identidad (deja el más nuevo de cada uno).
+    const rows = dedupSavedListados(readSavedListados()).slice(0, 25);
 
     // Enriquecer con la ocupación ACTUAL de la base (para que el listado no quede congelado).
     try {
@@ -1177,10 +1389,13 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     try {
       const actor = Number((req as any).auth?.principalId || 0) || null;
       const listado = cleanSavedListado(req.body?.listado || req.body, actor);
-      const current = readSavedListados().filter((item) => item.id !== listado.id);
-      const rows = [listado, ...current]
-        .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
-        .slice(0, 25);
+      const identity = listadoIdentity(listado);
+      // Reemplaza cualquier listado con la misma identidad (mismo año/programa/dependencia/etc.)
+      // en vez de acumular un duplicado nuevo por cada guardado.
+      const current = readSavedListados().filter(
+        (item) => item.id !== listado.id && listadoIdentity(item) !== identity
+      );
+      const rows = dedupSavedListados([listado, ...current]).slice(0, 25);
       writeSavedListados(rows);
       return res.json({ ok: true, data: { row: listado, rows, storePath: getListadosStorePath() } });
     } catch (err: any) {
@@ -1549,10 +1764,11 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
         return acc;
       }, {});
 
+      const subCombinado = subcarpetaCombinado();
       const folders = Object.keys(grouped).map((dni) => ({
         dni: Number(dni),
-        folder: targetFolderFor(Number(dni), tramite),
-        existed: fs.existsSync(targetFolderFor(Number(dni), tramite)),
+        folder: targetFolderFor(Number(dni), tramite, subCombinado),
+        existed: fs.existsSync(targetFolderFor(Number(dni), tramite, subCombinado)),
       }));
 
       const results: any[] = [];
@@ -1566,6 +1782,8 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
         const documentOrderForDni = parseDocumentOrder((documentOrdersRaw as Record<string, unknown>)[String(item.dni)]);
         const mergeItems = orderedMergeItems(filesForDni, extraDocs, documentOrderForDni.length ? documentOrderForDni : documentOrder);
 
+        // Se guarda SOLO el PDF combinado (ya contiene fuentes + caratula + rupa adentro).
+        // No se copian los archivos sueltos a la carpeta del agente.
         for (const mergeItem of mergeItems) {
           if (mergeItem.kind === 'caratula') {
             try {
@@ -1573,14 +1791,10 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
               if (!caratulaHit) {
                 skipped.push({ source: 'caratula', reason: 'No se encontro caratula para el establecimiento/ley del agente en Descargas' });
               } else {
-                const caratulaPath = caratulaHit.path;
-                const destPath = uniquePath(item.folder, safeFilename(path.basename(caratulaPath)));
-                fs.copyFileSync(caratulaPath, destPath);
-                copied.push({ source: `caratula:${path.basename(caratulaPath)}`, savedAs: path.basename(destPath) });
-                await appendPdfToMerged(merged, caratulaPath, mergeItem.pageOrder);
+                await appendPdfToMerged(merged, caratulaHit.path, mergeItem.pageOrder);
               }
             } catch (err: any) {
-              skipped.push({ source: 'caratula', reason: err?.message || 'Error al copiar/combinar caratula' });
+              skipped.push({ source: 'caratula', reason: err?.message || 'Error al combinar caratula' });
             }
           } else if (mergeItem.kind === 'rupa') {
             try {
@@ -1588,37 +1802,32 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
               if (!rupaHit) {
                 skipped.push({ source: 'rupa', reason: 'No se encontro PDF RUPA para el DNI' });
               } else {
-                const rupaPath = rupaHit.path;
-                const destPath = uniquePath(item.folder, safeFilename(path.basename(rupaPath)));
-                fs.copyFileSync(rupaPath, destPath);
-                copied.push({ source: `rupa:${path.basename(rupaPath)}`, savedAs: path.basename(destPath) });
-                await appendPdfToMerged(merged, rupaPath, mergeItem.pageOrder);
+                await appendPdfToMerged(merged, rupaHit.path, mergeItem.pageOrder);
               }
             } catch (err: any) {
-              skipped.push({ source: 'rupa', reason: err?.message || 'Error al copiar/combinar RUPA' });
+              skipped.push({ source: 'rupa', reason: err?.message || 'Error al combinar RUPA' });
             }
           } else if (mergeItem.file) {
             try {
               const sourcePath = resolveInputPdf(mergeItem.file.fileName);
-              const destPath = uniquePath(item.folder, safeFilename(path.basename(mergeItem.file.fileName)));
-              fs.copyFileSync(sourcePath, destPath);
-              copied.push({ source: mergeItem.file.fileName, savedAs: path.basename(destPath) });
-
               await appendPdfToMerged(merged, sourcePath, mergeItem.pageOrder);
             } catch (err: any) {
-              skipped.push({ source: mergeItem.file.fileName, reason: err?.message || 'Error al copiar/combinar' });
+              skipped.push({ source: mergeItem.file.fileName, reason: err?.message || 'Error al combinar' });
             }
           }
         }
 
         let combined: string | null = null;
         let combinedPath: string | null = null;
+        let combinedReemplazado = false;
         let combinedFileUrl: string | null = null;
         let documento: { id: number | null; fileUrl: string | null } | null = null;
         let expedienteRegistro: { id: number | null; created: boolean } | null = null;
         if (merged.getPageCount() > 0) {
           const combinedName = `${tramite}_${item.dni}_COMBINADO.pdf`;
-          combinedPath = uniquePath(item.folder, combinedName);
+          // Nombre fijo: si ya existe el combinado de ese agente/año, se REEMPLAZA (queda 1 solo, el actual).
+          combinedPath = path.join(item.folder, safeFilename(combinedName));
+          combinedReemplazado = fs.existsSync(combinedPath);
           fs.writeFileSync(combinedPath, Buffer.from(await merged.save()));
           combined = path.basename(combinedPath);
           combinedFileUrl = `/api/v1/tramites-documentales/saved-pdf?path=${encodeURIComponent(combinedPath)}`;
@@ -1645,6 +1854,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
           folderExisted: item.existed,
           copied,
           combined,
+          combinedReemplazado,
           combinedFileUrl,
           documento,
           expedienteRegistro,

@@ -2869,5 +2869,48 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
+  // ── LICENCIAS PDF ─────────────────────────────────────────────────────────────
+
+  // GET /asistencia/licencias-pdf/archivos → lista los PDFs en LICENCIAS_PDF_DIR
+  router.get('/licencias-pdf/archivos', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      const dir = env.LICENCIAS_PDF_DIR;
+      if (!dir) return res.json({ ok: true, dir: null, archivos: [] });
+      if (!fs.existsSync(dir)) return res.json({ ok: true, dir, existe: false, archivos: [] });
+
+      const archivos = fs.readdirSync(dir)
+        .filter((f) => f.toLowerCase().endsWith('.pdf'))
+        .map((f) => {
+          const fp = path.join(dir, f);
+          const stat = fs.statSync(fp);
+          return { nombre: f, tamaño: stat.size, modificado: stat.mtime };
+        });
+
+      return res.json({ ok: true, dir, existe: true, archivos });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message });
+    }
+  });
+
+  // GET /asistencia/licencias-pdf/comparar → corre la comparación
+  router.get('/licencias-pdf/comparar', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      const dir = env.LICENCIAS_PDF_DIR;
+      if (!dir || !fs.existsSync(dir)) {
+        return res.status(400).json({ ok: false, error: 'LICENCIAS_PDF_DIR no configurado o no existe' });
+      }
+
+      const mapeo = loadMapeo(env.EXCEL_ASISTENCIA_DIR || dir);
+
+      const { compararLicencias } = await import('../services/parseLicenciasPdf.js');
+      const resultado = await compararLicencias(dir, mapeo);
+
+      return res.json({ ok: true, data: resultado });
+    } catch (err: any) {
+      logger.error({ msg: 'licencias-pdf/comparar error', err: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message });
+    }
+  });
+
   return router;
 }
