@@ -8,6 +8,7 @@ import { saveAs } from "file-saver";
 import { Layout } from "../../components/Layout";
 import { useToast } from "../../ui/toast";
 import { apiFetch } from "../../api/http";
+import { LicenciasPdfSection } from "./LicenciasPdfSection";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 interface ArchivoInfo {
@@ -600,6 +601,9 @@ export function AsistenciaPage() {
   // Pestaña activa: todos los resultados o solo las pendientes de justificación
   const [tab, setTab] = useState<"TODOS" | "PENDIENTES">("TODOS");
 
+  // Sección principal de la página
+  const [seccion, setSeccion] = useState<"excel" | "pdf">("excel");
+
   useEffect(() => {
     apiFetch<any>("/asistencia/config")
       .then((r) => {
@@ -934,6 +938,39 @@ export function AsistenciaPage() {
   return (
     <Layout title="Estadistica de Asistencia" showBack>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+        {/* ── TABS DE SECCIÓN ── */}
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+          {([
+            { key: "excel", label: "Novedades Excel (Min. vs SIAP)" },
+            { key: "pdf",   label: "Licencias PDF (Anual vs Novedades)" },
+          ] as const).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setSeccion(key)}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderBottom: seccion === key ? "2px solid #f59e0b" : "2px solid transparent",
+                color: seccion === key ? "#fbbf24" : "#94a3b8",
+                padding: "8px 18px",
+                fontSize: "0.82rem",
+                cursor: "pointer",
+                fontWeight: seccion === key ? 700 : 400,
+                transition: "color .15s",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── SECCIÓN PDF ── */}
+        {seccion === "pdf" && <LicenciasPdfSection />}
+
+        {/* ── SECCIÓN EXCEL ── */}
+        {seccion === "excel" && <>
+
         {/* ── BANNER CONFIG ── */}
         {dirConfig && (
           <div
@@ -1723,6 +1760,7 @@ export function AsistenciaPage() {
             </div>
           </div>
         )}
+        </> /* fin sección excel */ }
       </div>
     </Layout>
   );

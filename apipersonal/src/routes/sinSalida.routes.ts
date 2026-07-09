@@ -32,6 +32,7 @@ import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
 import { QueryTypes } from 'sequelize';
+import { registerSinSalidaNotifRoutes } from './sinSalidaNotif.routes';
 
 let ExcelJS: any;
 try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
@@ -1593,6 +1594,9 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
       return res.status(500).json({ ok: false, error: err?.message || 'Error al dar de baja el ausente' });
     }
   });
+
+  // ── Notificaciones por mail (no-reply) — módulo aparte ──
+  registerSinSalidaNotifRoutes(router, sequelize);
 
   return router;
 }

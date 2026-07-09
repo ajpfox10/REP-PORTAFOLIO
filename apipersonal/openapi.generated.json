@@ -22921,6 +22921,456 @@
         }
       }
     },
+    "/api/v1/tareas_livianas": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List tareas_livianas",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_tareas_livianas"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create tareas_livianas",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tareas_livianas_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/tareas_livianas/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get tareas_livianas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update tareas_livianas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tareas_livianas"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch tareas_livianas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tareas_livianas_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete tareas_livianas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/tareas_livianas_auditoria": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List tareas_livianas_auditoria",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_tareas_livianas_auditoria"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create tareas_livianas_auditoria",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tareas_livianas_auditoria_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/tareas_livianas_auditoria/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get tareas_livianas_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update tareas_livianas_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tareas_livianas_auditoria"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch tareas_livianas_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tareas_livianas_auditoria_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete tareas_livianas_auditoria by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/tareasadquiridias": {
       "get": {
         "tags": [
@@ -42744,6 +43194,393 @@
           "updated_by": {
             "type": "number",
             "nullable": true
+          }
+        }
+      },
+      "Table_tareas_livianas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "agente_dni": {
+            "type": "string"
+          },
+          "agente_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "expediente": {
+            "type": "string",
+            "nullable": true
+          },
+          "servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "turno": {
+            "type": "string",
+            "nullable": true
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cantidad_dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "junta_medica_doc_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "activo": {
+            "type": "number"
+          },
+          "creado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modificado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "modificado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "modificado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "eliminado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "eliminado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "eliminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "agente_dni",
+          "fecha_desde"
+        ]
+      },
+      "Table_tareas_livianas_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "agente_dni": {
+            "type": "string"
+          },
+          "agente_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "expediente": {
+            "type": "string",
+            "nullable": true
+          },
+          "servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "turno": {
+            "type": "string",
+            "nullable": true
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cantidad_dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "junta_medica_doc_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "activo": {
+            "type": "number"
+          },
+          "creado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modificado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "modificado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "modificado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "eliminado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "eliminado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "eliminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "agente_dni",
+          "fecha_desde"
+        ]
+      },
+      "Table_tareas_livianas_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "agente_dni": {
+            "type": "string"
+          },
+          "agente_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "expediente": {
+            "type": "string",
+            "nullable": true
+          },
+          "servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "turno": {
+            "type": "string",
+            "nullable": true
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cantidad_dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "junta_medica_doc_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "activo": {
+            "type": "number"
+          },
+          "creado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modificado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "modificado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "modificado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "eliminado_por_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "eliminado_por_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "eliminado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Table_tareas_livianas_auditoria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "registro_id": {
+            "type": "number"
+          },
+          "accion": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "datos_antes": {
+            "type": "string",
+            "nullable": true
+          },
+          "datos_despues": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "registro_id",
+          "accion"
+        ]
+      },
+      "Table_tareas_livianas_auditoria_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "registro_id": {
+            "type": "number"
+          },
+          "accion": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "datos_antes": {
+            "type": "string",
+            "nullable": true
+          },
+          "datos_despues": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "registro_id",
+          "accion"
+        ]
+      },
+      "Table_tareas_livianas_auditoria_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "registro_id": {
+            "type": "number"
+          },
+          "accion": {
+            "type": "string"
+          },
+          "usuario_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "usuario_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "datos_antes": {
+            "type": "string",
+            "nullable": true
+          },
+          "datos_despues": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

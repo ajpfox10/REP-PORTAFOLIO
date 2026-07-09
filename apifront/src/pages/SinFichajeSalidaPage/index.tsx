@@ -4,6 +4,7 @@ import { Layout } from "../../components/Layout";
 import { useToast } from "../../ui/toast";
 import { apiFetch } from "../../api/http";
 import { exportToExcel } from "../../utils/export";
+import { NotificacionesMailModal } from "./NotificacionesMailModal";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface ArchivoInfo { name: string; }
@@ -697,6 +698,7 @@ export function SinFichajeSalidaPage() {
   const [rows, setRows]       = useState<SinSalidaRow[]>([]);
   const [meta, setMeta]       = useState<Meta | null>(null);
   const [loaded, setLoaded]   = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   // filtros tab Registros
   const [filtroEstado, setFiltroEstado]         = useState<FiltroEstado>("SIN_SALIDA");
@@ -1207,8 +1209,20 @@ export function SinFichajeSalidaPage() {
             disabled={loading || horariosFiles.filter(Boolean).length === 0} type="button" style={{ height: 36 }}>
             {loading ? "Cargando…" : loaded ? "↻ Recargar" : "Cargar"}
           </button>
+          <button className="btn" onClick={() => setNotifOpen(true)} type="button" style={{ height: 36 }}
+            title="Enviar mail de aviso a los agentes que no ficharon la salida">
+            📧 Notificar por mail
+          </button>
         </div>
       </div>
+
+      <NotificacionesMailModal
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        periodo={modo === "periodo" ? periodo : undefined}
+        desde={modo === "rango" ? desde : modo === "fecha" ? fecha : undefined}
+        hasta={modo === "rango" ? hasta : modo === "fecha" ? fecha : undefined}
+      />
 
       {/* ── Alerta sin biométrico ────────────────────────────────────────── */}
       {meta?.sinBiometrico && (

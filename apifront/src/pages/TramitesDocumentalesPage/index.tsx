@@ -38,6 +38,8 @@ type AnalysisRow = {
   lectura: 'texto' | 'ocr' | 'sin_texto';
   manualDni?: string;
   incluido?: boolean;
+  pageTitles?: string[];
+  pageSubOrder?: number[];
 };
 
 type ManualRow = {
@@ -171,14 +173,27 @@ function storeSavedListados(rows: SavedListado[]) {
   window.localStorage.setItem(SAVED_LISTADOS_KEY, JSON.stringify(rows));
 }
 
+// Identidad de un listado: población/trámite/año/programa/dependencia (no fecha ni id).
+// Dos listados con la misma identidad son "el mismo" → se actualiza, no se duplica.
+function listadoIdentity(l: SavedListado): string {
+  return [l.poblacion, l.tramite, l.anioBeca, l.programaBeca, l.dependenciaId]
+    .map((v) => String(v ?? '').trim().toUpperCase())
+    .join('|');
+}
+
 function mergeSavedListados(...groups: SavedListado[][]) {
-  const byId = new Map<string, SavedListado>();
-  for (const item of groups.flat()) {
-    if (item?.id && !byId.has(item.id)) byId.set(item.id, item);
+  const sorted = groups.flat()
+    .filter((item) => item?.id)
+    .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''));
+  const seen = new Set<string>();
+  const out: SavedListado[] = [];
+  for (const item of sorted) {
+    const key = listadoIdentity(item);
+    if (seen.has(key)) continue; // ya hay uno más nuevo con esta identidad
+    seen.add(key);
+    out.push(item);
   }
-  return Array.from(byId.values())
-    .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
-    .slice(0, 25);
+  return out.slice(0, 25);
 }
 
 function newManualRow(): ManualRow {
@@ -258,6 +273,46 @@ function movePageInOrder(pages: number[], fromPage: number, toPage: number) {
   const [moved] = next.splice(fromIndex, 1);
   next.splice(toIndex, 0, moved);
   return next;
+}
+
+function normTitle(s: string): string {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Orden fijo del combinado (planilla del área). Cada hoja se ubica por su TÍTULO (encabezado
+// del SIAPE/eRreH). El menor rank va primero. Ver Excel "Orden en personalPV5".
+const COMBINED_PAGE_ORDER: Array<{ rank: number; match: (t: string) => boolean }> = [
+  { rank: 1, match: (t) => t.includes('planilla de datos personales') },
+  { rank: 2, match: (t) => t.includes('documento de identidad') },
+  { rank: 3, match: (t) => t.includes('constancia de cuil') },
+  { rank: 4, match: (t) => t.includes('curriculum') },
+  { rank: 5, match: (t) => t.includes('titulo') && t.includes('matricula') },
+  { rank: 6, match: (t) => t.includes('incompatibilidad') },
+  { rank: 7, match: (t) => t.includes('antecedentes') && t.includes('provincial') },
+  { rank: 8, match: (t) => t.includes('reincidencia') },
+  { rank: 10, match: (t) => t.includes('condiciones de salud') },
+  { rank: 11, match: (t) => t.includes('aptitud psicofisica') || t.includes('medicina ocupacional') },
+  { rank: 12, match: (t) => t.includes('libre deuda') || t.includes('registro de deudores') },
+  { rank: 15, match: (t) => t.includes('acepto designacion') || t.includes('conformidad de designacion') },
+];
+const RANK_RUPA = 13;
+const RANK_CARATULA = 14;
+const RANK_UNKNOWN = 12.5; // hojas sin match → antes de rupa/carátula/aceptación
+
+function rankForPageTitle(title: string): number {
+  const t = normTitle(title);
+  for (const o of COMBINED_PAGE_ORDER) {
+    if (o.match(t)) return o.rank;
+  }
+  return RANK_UNKNOWN;
+}
+
+// Nombre corto de la hoja para mostrar: el título sin el encabezado (fecha + nombre + CUIL).
+function pageTitleShort(title?: string): string {
+  const t = String(title || '').trim();
+  if (!t) return '';
+  const afterCuil = t.replace(/^.*?\b\d{11}\b\s*/, '');
+  return (afterCuil || t).slice(0, 45).trim();
 }
 
 function pageDragPayload(groupKey: string, docKey: string, page: number) {
@@ -1003,25 +1058,35 @@ export function TramitesDocumentalesPage() {
   }
 
   function defaultCombinedPageKeysForGroup(group: PdfGroup) {
-    const keys: string[] = [];
-    if (hasCaratulaForGroup(group)) keys.push(combinedPageKey(CARATULA_DOC_KEY, 0));
+    // Orden por defecto = por TÍTULO de hoja (COMBINED_PAGE_ORDER). Estable: a igual rank se
+    // respeta el orden original (así las hojas de un mismo doc, ej. TÍTULO, quedan juntas).
+    const entries: Array<{ key: string; rank: number; sub: number; seq: number }> = [];
+    let seq = 0;
+
+    if (hasCaratulaForGroup(group)) {
+      entries.push({ key: combinedPageKey(CARATULA_DOC_KEY, 0), rank: RANK_CARATULA, sub: 0, seq: seq++ });
+    }
 
     for (const row of group.rows) {
       const docKey = fileDocKey(row.fileName);
       const pages = Math.max(1, Number(row.pages || 1));
       for (let page = 1; page <= pages; page += 1) {
-        keys.push(combinedPageKey(docKey, page));
+        const title = row.pageTitles?.[page - 1] || '';
+        const sub = Number(row.pageSubOrder?.[page - 1] || 0);
+        entries.push({ key: combinedPageKey(docKey, page), rank: rankForPageTitle(title), sub, seq: seq++ });
       }
     }
 
     if (hasRupaForGroup(group)) {
       const pages = Math.max(0, Number(extraDocsByDni[group.dni]?.rupa?.pages || 0));
       for (let page = 1; page <= pages; page += 1) {
-        keys.push(combinedPageKey(RUPA_DOC_KEY, page));
+        entries.push({ key: combinedPageKey(RUPA_DOC_KEY, page), rank: RANK_RUPA, sub: 0, seq: seq++ });
       }
     }
 
-    return keys;
+    // Orden: rank (nombre de hoja) → sub-orden (desempate OCR dentro de un mismo título) → original.
+    entries.sort((a, b) => a.rank - b.rank || a.sub - b.sub || a.seq - b.seq);
+    return entries.map((entry) => entry.key);
   }
 
   function orderedCombinedPageKeysForGroup(group: PdfGroup) {
@@ -1052,24 +1117,17 @@ export function TramitesDocumentalesPage() {
     });
   }
 
-  function moveCombinedPage(group: PdfGroup, fromKey: string, toKey: string) {
-    if (!fromKey || !toKey || fromKey === toKey) return;
-    setCombinedOrderByGroup((current) => {
-      const defaults = defaultCombinedPageKeysForGroup(group);
-      const allowed = new Set(defaults);
-      const saved = current[group.key] || [];
-      const order = [
-        ...saved.filter((key) => allowed.has(key)),
-        ...defaults.filter((key) => !saved.includes(key)),
-      ];
-      const fromIndex = order.indexOf(fromKey);
-      const toIndex = order.indexOf(toKey);
-      if (fromIndex < 0 || toIndex < 0) return current;
-      const next = [...order];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return { ...current, [group.key]: next };
-    });
+  // Reordena por ÍNDICE sobre la lista exacta que se ve en pantalla (orderedKeys). No usa indexOf
+  // por key: así es inmune a keys repetidas y a cualquier desajuste al recomputar el orden — la
+  // fila que arrastrás es exactamente la que se mueve.
+  function reorderCombinedByIndex(group: PdfGroup, orderedKeys: string[], fromIndex: number, toIndex: number) {
+    if (!Number.isInteger(fromIndex) || fromIndex < 0 || fromIndex >= orderedKeys.length) return;
+    if (!Number.isInteger(toIndex) || toIndex < 0 || toIndex >= orderedKeys.length) return;
+    if (fromIndex === toIndex) return;
+    const next = [...orderedKeys];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setCombinedOrderByGroup((current) => ({ ...current, [group.key]: next }));
   }
 
   function resetCombinedPages(group: PdfGroup) {
@@ -1083,8 +1141,9 @@ export function TramitesDocumentalesPage() {
     if (docKey === RUPA_DOC_KEY) return `${index + 1}. RUPA${page ? ` hoja ${page}` : ''}`;
     const fileName = fileNameFromDocKey(docKey);
     const rowIndex = group.rows.findIndex((row) => row.fileName === fileName);
+    const short = pageTitleShort(group.rows[rowIndex]?.pageTitles?.[page - 1]);
     const name = rowIndex >= 0 ? `PDF ${rowIndex + 1}` : 'PDF';
-    return `${index + 1}. ${name} hoja ${page}`;
+    return `${index + 1}. ${short || `${name} hoja ${page}`}`;
   }
 
   function hasCombinedPageEdits(group: PdfGroup) {
@@ -1092,25 +1151,18 @@ export function TramitesDocumentalesPage() {
   }
 
   function documentOrderForGroup(group: PdfGroup) {
-    if (hasCombinedPageEdits(group)) {
-      const excluded = new Set(combinedExcludedByGroup[group.key] || []);
-      return orderedCombinedPageKeysForGroup(group)
-        .filter((pageKey) => !excluded.has(pageKey))
-        .map((pageKey) => {
-          const { docKey, page } = parseCombinedPageKey(pageKey);
-          const pageOrder = page > 0 ? String(page) : null;
-          if (docKey === CARATULA_DOC_KEY) return { kind: 'caratula', pageOrder };
-          if (docKey === RUPA_DOC_KEY) return { kind: 'rupa', pageOrder };
-          return { kind: 'file', fileName: fileNameFromDocKey(docKey), pageOrder };
-        });
-    }
-
-    return orderedDocKeysForGroup(group).map((key) => {
-      const pageOrder = pageOrderByDoc[pageOrderKeyFor(key, group)]?.trim() || null;
-      if (key === CARATULA_DOC_KEY) return { kind: 'caratula', pageOrder };
-      if (key === RUPA_DOC_KEY) return { kind: 'rupa', pageOrder };
-      return { kind: 'file', fileName: fileNameFromDocKey(key), pageOrder };
-    });
+    // SIEMPRE por página (incluye el auto-orden por título + cualquier reorden/exclusión manual),
+    // así el preview y el combinado quedan EXACTAMENTE igual que la lista del editor.
+    const excluded = new Set(combinedExcludedByGroup[group.key] || []);
+    return orderedCombinedPageKeysForGroup(group)
+      .filter((pageKey) => !excluded.has(pageKey))
+      .map((pageKey) => {
+        const { docKey, page } = parseCombinedPageKey(pageKey);
+        const pageOrder = page > 0 ? String(page) : null;
+        if (docKey === CARATULA_DOC_KEY) return { kind: 'caratula', pageOrder };
+        if (docKey === RUPA_DOC_KEY) return { kind: 'rupa', pageOrder };
+        return { kind: 'file', fileName: fileNameFromDocKey(docKey), pageOrder };
+      });
   }
 
   function openEscaneoAgente(dniValue: string) {
@@ -1333,8 +1385,12 @@ export function TramitesDocumentalesPage() {
       toast.warning('Sin agentes', 'No hay filas cargadas para setear.');
       return null;
     }
+    const draft = { poblacion, tramite, anioBeca, programaBeca, dependenciaId } as SavedListado;
+    // Si ya hay un listado seteado con la misma identidad, se reusa su id para ACTUALIZARLO
+    // en lugar de crear un duplicado nuevo.
+    const existente = savedListados.find((item) => listadoIdentity(item) === listadoIdentity(draft));
     const snapshot: SavedListado = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id: existente?.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       name: currentListadoName(rows),
       createdAt: new Date().toISOString(),
       poblacion,
@@ -1896,7 +1952,7 @@ export function TramitesDocumentalesPage() {
                     </button>
                   </div>
                   <div className="td-combined-page-list" aria-label="Orden final de hojas del combinado">
-                    {orderedCombinedPageKeysForGroup(group).map((pageKey, pageIdx) => {
+                    {orderedCombinedPageKeysForGroup(group).map((pageKey, pageIdx, keys) => {
                       const excluded = (combinedExcludedByGroup[group.key] || []).includes(pageKey);
                       return (
                         <button
@@ -1906,7 +1962,7 @@ export function TramitesDocumentalesPage() {
                           className={excluded ? 'td-combined-page-chip removed' : 'td-combined-page-chip selected'}
                           onClick={() => toggleCombinedPage(group, pageKey)}
                           onDragStart={(event) => {
-                            event.dataTransfer.setData('text/plain', pageKey);
+                            event.dataTransfer.setData('text/plain', String(pageIdx));
                             event.dataTransfer.effectAllowed = 'move';
                           }}
                           onDragOver={(event) => {
@@ -1915,7 +1971,7 @@ export function TramitesDocumentalesPage() {
                           }}
                           onDrop={(event) => {
                             event.preventDefault();
-                            moveCombinedPage(group, event.dataTransfer.getData('text/plain'), pageKey);
+                            reorderCombinedByIndex(group, keys, Number(event.dataTransfer.getData('text/plain')), pageIdx);
                           }}
                           title={excluded ? 'Hoja excluida del combinado' : 'Hoja incluida. Arrastra para ordenar'}
                         >
@@ -2078,7 +2134,7 @@ export function TramitesDocumentalesPage() {
                 <div><b>DNI {item.dni}</b> - {item.tramite}</div>
                 <div className="muted">{item.folder}</div>
                 <div className="muted">
-                  {item.folderExisted ? 'Carpeta existente: se agregaron archivos' : 'Carpeta creada'} - {item.copied?.length || 0} PDF(s) copiados - combinado: {item.combined || '-'}
+                  {item.folderExisted ? 'Carpeta del año existente' : 'Carpeta del año creada'} - combinado {item.combinedReemplazado ? 'reemplazado' : 'creado'}: {item.combined || '-'}
                 </div>
                 {item.skipped?.length ? (
                   <div className="td-skip-list">
@@ -2254,7 +2310,7 @@ export function TramitesDocumentalesPage() {
                           key={pageKey}
                           draggable
                           onDragStart={(event) => {
-                            event.dataTransfer.setData('text/plain', pageKey);
+                            event.dataTransfer.setData('text/plain', String(pageIdx));
                             event.dataTransfer.effectAllowed = 'move';
                           }}
                           onDragOver={(event) => {
@@ -2263,7 +2319,7 @@ export function TramitesDocumentalesPage() {
                           }}
                           onDrop={(event) => {
                             event.preventDefault();
-                            moveCombinedPage(modalGroup, event.dataTransfer.getData('text/plain'), pageKey);
+                            reorderCombinedByIndex(modalGroup, keys, Number(event.dataTransfer.getData('text/plain')), pageIdx);
                           }}
                         >
                           <input
@@ -2276,8 +2332,8 @@ export function TramitesDocumentalesPage() {
                             {combinedPageLabel(modalGroup, pageKey, pageIdx)}
                           </span>
                           <div className="td-modal-page-actions">
-                            <button className="btn td-icon-btn" type="button" onClick={() => moveCombinedPage(modalGroup, pageKey, keys[pageIdx - 1] || '')} disabled={pageIdx === 0}>^</button>
-                            <button className="btn td-icon-btn" type="button" onClick={() => moveCombinedPage(modalGroup, pageKey, keys[pageIdx + 1] || '')} disabled={pageIdx === keys.length - 1}>v</button>
+                            <button className="btn td-icon-btn" type="button" onClick={() => reorderCombinedByIndex(modalGroup, keys, pageIdx, pageIdx - 1)} disabled={pageIdx === 0}>^</button>
+                            <button className="btn td-icon-btn" type="button" onClick={() => reorderCombinedByIndex(modalGroup, keys, pageIdx, pageIdx + 1)} disabled={pageIdx === keys.length - 1}>v</button>
                           </div>
                         </div>
                       );
