@@ -55,6 +55,8 @@ import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildStressRouter }   from '../routes/stress.routes';
 import { buildAntiguedadRouter } from '../routes/antiguedad.routes';
 import { buildLicenciasRouter } from '../routes/licencias.routes';
+import { buildComparacionSiapeRouter } from '../routes/comparacionSiape.routes';
+import { buildIntranetRouter } from '../domains/personalv5/routes/intranet.routes';
 import { buildResidentesRouter } from '../routes/residentes.routes';
 import { buildFcCertReemplazosRouter } from '../routes/fcCertReemplazos.routes';
 import { buildNombramientoRouter } from '../routes/nombramiento.routes';
@@ -178,6 +180,8 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
   app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
   app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));
+  app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter());
+  app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter());
   app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
   app.use(`${apiPrefix}/fc-cert-reemplazos`, ...protect, buildFcCertReemplazosRouter(sequelize));
   app.use(`${apiPrefix}/nombramiento`,       ...protect, buildNombramientoRouter(sequelize));

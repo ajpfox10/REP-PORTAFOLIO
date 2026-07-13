@@ -170,6 +170,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
                  pl.nombre    AS planta_nombre,
                  cat.nombre   AS categoria_nombre,
                  fn.nombre    AS funcion_nombre,
+                 oc.nombre    AS ocupacion_nombre,
                  -- agentes_servicios ya tiene campo 'nombre' directo, no necesita JOIN a servicios
                  (SELECT ags_sub.nombre FROM agentes_servicios ags_sub
                   WHERE ags_sub.dni = p.dni AND ags_sub.deleted_at IS NULL
@@ -181,10 +182,11 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             ORDER BY (ax.estado_empleo = 'ACTIVO' AND ax.fecha_egreso IS NULL) DESC, ax.id DESC
             LIMIT 1
           )
-          LEFT JOIN ley     l         ON l.id  = a.ley_id     AND l.deleted_at IS NULL
-          LEFT JOIN plantas pl        ON pl.id = a.planta_id  AND pl.deleted_at IS NULL
-          LEFT JOIN categorias cat    ON cat.ID = a.categoria_id
-          LEFT JOIN funciones fn      ON fn.id = a.funcion_id AND fn.deleted_at IS NULL
+          LEFT JOIN ley        l   ON l.id   = a.ley_id        AND l.deleted_at  IS NULL
+          LEFT JOIN plantas    pl  ON pl.id  = a.planta_id     AND pl.deleted_at IS NULL
+          LEFT JOIN categorias cat ON cat.ID = a.categoria_id
+          LEFT JOIN funciones  fn  ON fn.id  = a.funcion_id    AND fn.deleted_at IS NULL
+          LEFT JOIN ocupaciones oc ON oc.id  = a.ocupacion_id  AND oc.deleted_at IS NULL
           ${where}
           ORDER BY p.apellido ASC, p.nombre ASC
           LIMIT :limit OFFSET :offset

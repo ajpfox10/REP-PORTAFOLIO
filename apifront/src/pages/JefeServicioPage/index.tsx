@@ -2233,34 +2233,59 @@ export function JefeServicioPage() {
     }
   }, [isGlobal]);
 
-  // ── Vista combinada enfermería (solo jefes servicio 24 y 34) ────────────────
+  // ── Vista combinada enfermería (jefes servicio 24/34 + admin) ───────────────
   const SERVICIOS_ENFERMERIA = [24, 34];
-  const esJefeEnfermeria = !isGlobal && servicioId !== null && SERVICIOS_ENFERMERIA.includes(servicioId);
-  const otroServicioEnfermeriaId = servicioId === 24 ? 34 : servicioId === 34 ? 24 : null;
+  const esJefeEnfermeria = isGlobal || (servicioId !== null && SERVICIOS_ENFERMERIA.includes(servicioId));
+  const otroServicioEnfermeriaId = isGlobal ? 34 : (servicioId === 24 ? 34 : servicioId === 34 ? 24 : null);
   const [enfermeriaOtrosPases,   setEnfermeriaOtrosPases]   = useState<any[]>([]);
   const [loadingEnfermeria,      setLoadingEnfermeria]      = useState(false);
   const [dniSectorActivoOtros,   setDniSectorActivoOtros]   = useState<Record<string, number | null>>({});
+  // Admin: datos de SALA (servicio 24) cargados aparte (los "otros" cargan DPTO=34)
+  const [enfermeriaS24Pases,     setEnfermeriaS24Pases]     = useState<any[]>([]);
+  const [dniSectorActivoS24,     setDniSectorActivoS24]     = useState<Record<string, number | null>>({});
+  // Pases activos del servicio propio del jefe (para obtener fecha_desde en el modal)
+  const [pasesServicioPropio,    setPasesServicioPropio]    = useState<any[]>([]);
+  // Modal de detalle al doble-click en un número del desglose
+  const [enfermeriaModal, setEnfermeriaModal] = useState<null|{titulo:string;filas:{apellido:string;nombre:string;ocupacion:string;servicio:string;sector:string;fechaDesde:string}[]}>(null);
 
   const cargarEnfermeria = useCallback(async () => {
     if (!esJefeEnfermeria || !otroServicioEnfermeriaId) return;
     setLoadingEnfermeria(true);
     try {
-      const [pases, pasesSector] = await Promise.all([
-        fetchAll(`/agentes_servicios?servicio_id=${otroServicioEnfermeriaId}`),
-        fetchAll(`/agentes_sectores?servicio_id=${otroServicioEnfermeriaId}`),
-      ]);
-      setEnfermeriaOtrosPases(pases.filter((p: any) => !p.fecha_hasta));
-      const mapaOtros: Record<string, number | null> = {};
-      for (const ps of pasesSector) {
-        if (!ps.fecha_hasta) mapaOtros[String(ps.dni)] = Number(ps.sector_id);
+      if (isGlobal) {
+        const [pasesS24, sectorS24, pasesS34, sectorS34] = await Promise.all([
+          fetchAll('/agentes_servicios?servicio_id=24'),
+          fetchAll('/agentes_sectores?servicio_id=24'),
+          fetchAll('/agentes_servicios?servicio_id=34'),
+          fetchAll('/agentes_sectores?servicio_id=34'),
+        ]);
+        setEnfermeriaS24Pases(pasesS24.filter((p: any) => !p.fecha_hasta));
+        const mapaS24: Record<string, number | null> = {};
+        for (const ps of sectorS24) { if (!ps.fecha_hasta) mapaS24[String(ps.dni)] = Number(ps.sector_id); }
+        setDniSectorActivoS24(mapaS24);
+        setEnfermeriaOtrosPases(pasesS34.filter((p: any) => !p.fecha_hasta));
+        const mapaS34: Record<string, number | null> = {};
+        for (const ps of sectorS34) { if (!ps.fecha_hasta) mapaS34[String(ps.dni)] = Number(ps.sector_id); }
+        setDniSectorActivoOtros(mapaS34);
+      } else {
+        const [pases, pasesSector] = await Promise.all([
+          fetchAll(`/agentes_servicios?servicio_id=${otroServicioEnfermeriaId}`),
+          fetchAll(`/agentes_sectores?servicio_id=${otroServicioEnfermeriaId}`),
+        ]);
+        setEnfermeriaOtrosPases(pases.filter((p: any) => !p.fecha_hasta));
+        const mapaOtros: Record<string, number | null> = {};
+        for (const ps of pasesSector) {
+          if (!ps.fecha_hasta) mapaOtros[String(ps.dni)] = Number(ps.sector_id);
+        }
+        setDniSectorActivoOtros(mapaOtros);
       }
-      setDniSectorActivoOtros(mapaOtros);
     } catch {
       setEnfermeriaOtrosPases([]);
       setDniSectorActivoOtros({});
+      if (isGlobal) { setEnfermeriaS24Pases([]); setDniSectorActivoS24({}); }
     }
     finally { setLoadingEnfermeria(false); }
-  }, [esJefeEnfermeria, otroServicioEnfermeriaId]);
+  }, [esJefeEnfermeria, isGlobal, otroServicioEnfermeriaId]);
 
   useEffect(() => { cargarEnfermeria(); }, [cargarEnfermeria]);
 
@@ -2326,6 +2351,7 @@ export function JefeServicioPage() {
           if (!ps.fecha_hasta) mapaSecActivo[String(ps.dni)] = Number(ps.sector_id);
         }
         setDniSectorActivo(mapaSecActivo);
+        setPasesServicioPropio(pasesActivos);
         const todos = await fetchAll(`/personal/search?estado_empleo=ACTIVO`);
         setAgentesAsignados(todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
         setAgentes(         todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
@@ -2810,47 +2836,109 @@ export function JefeServicioPage() {
         {/* ── PANEL DERECHO: Detalle agente ── */}
         <div className="js-right">
 
-          {/* ── Card exclusiva jefes enfermería (servicio 24 y 34) ── */}
+          {/* ── Card enfermería: jefes servicio 24/34 + admin ── */}
           {esJefeEnfermeria && (() => {
-            const propiosSvc = servicioId === 24 ? 'SALA DE ENFERMERÍA' : 'DPTO ENFERMERÍA';
-            const otroSvc    = servicioId === 24 ? 'DPTO ENFERMERÍA'    : 'SALA DE ENFERMERÍA';
-            const totalPropios = agentesAsignados.length;
+            const propiosSvc = isGlobal ? 'SALA DE ENFERMERÍA' : (servicioId === 24 ? 'SALA DE ENFERMERÍA' : 'DPTO ENFERMERÍA');
+            const otroSvc    = isGlobal ? 'DPTO ENFERMERÍA'    : (servicioId === 24 ? 'DPTO ENFERMERÍA'    : 'SALA DE ENFERMERÍA');
+            const colA       = isGlobal ? 'SALA' : 'Míos';
+            const colB       = isGlobal ? 'DPTO' : 'Otros';
+            const propiosList = isGlobal ? enfermeriaS24Pases : agentesAsignados;
+            const propiosSectorMap = isGlobal ? dniSectorActivoS24 : dniSectorActivo;
+            const totalPropios = propiosList.length;
             const totalOtros   = enfermeriaOtrosPases.length;
             const totalGral    = totalPropios + totalOtros;
 
-            // Sectores de DPTO ENFERMERIA (id=34) para el desglose
-            const sectoresDpto = sectores.filter((s: any) => s.servicio_id === 34);
-
-            // Agrupar propios por sector (via dniSectorActivo)
-            const propiosPorSector: Record<string, number> = {};
-            for (const a of agentesAsignados) {
-              const sec = dniSectorActivo[String(a.dni)];
-              const key = sec ? String(sec) : '__sin_sector__';
-              propiosPorSector[key] = (propiosPorSector[key] || 0) + 1;
-            }
-            // Agrupar otros por sector (via agentes_sectores)
-            const otrosPorSector: Record<string, number> = {};
-            for (const p of enfermeriaOtrosPases) {
-              const sec = dniSectorActivoOtros[String(p.dni)];
-              const key = sec ? String(sec) : '__sin_sector__';
-              otrosPorSector[key] = (otrosPorSector[key] || 0) + 1;
-            }
-
-            // Todas las keys de sector que aparecen
-            const allSectorKeys = [...new Set([
-              ...Object.keys(propiosPorSector),
-              ...Object.keys(otrosPorSector),
-            ])];
-
-            const getSectorNombre = (key: string) => {
-              if (key === '__sin_sector__') return 'Sin sector asignado';
-              const s = sectoresDpto.find((s: any) => String(s.id) === key)
-                     || sectores.find((s: any) => String(s.id) === key);
-              return s?.nombre || `Sector #${key}`;
+            const getSectorNombre = (id: string) => {
+              const s = sectores.find((s: any) => String(s.id) === id);
+              return s?.nombre || `Sector #${id}`;
             };
 
-            const rowSt: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.8rem' };
-            const numSt: React.CSSProperties = { fontWeight: 700, minWidth: 28, textAlign: 'right' };
+            // Agrupar por NOMBRE de sector (unifica IDs homónimos de distintos servicios)
+            const porNombre: Record<string, { propios: number; otros: number }> = {};
+            for (const a of propiosList) {
+              const sec = propiosSectorMap[String(a.dni)];
+              if (!sec) continue;
+              const nom = getSectorNombre(String(sec));
+              if (!porNombre[nom]) porNombre[nom] = { propios: 0, otros: 0 };
+              porNombre[nom].propios++;
+            }
+            for (const p of enfermeriaOtrosPases) {
+              const sec = dniSectorActivoOtros[String(p.dni)];
+              if (!sec) continue;
+              const nom = getSectorNombre(String(sec));
+              if (!porNombre[nom]) porNombre[nom] = { propios: 0, otros: 0 };
+              porNombre[nom].otros++;
+            }
+            const filasOrdenadas = Object.entries(porNombre).sort(([a], [b]) => a.localeCompare(b, 'es'));
+
+            // Sin sector — lista de nombres (solo admin)
+            const dniToNombre: Record<string, string> = {};
+            if (isGlobal) {
+              for (const a of agentesAsignados) {
+                dniToNombre[String(a.dni)] = [a.apellido, a.nombre].filter(Boolean).join(', ') || `DNI ${a.dni}`;
+              }
+            }
+            const sinSectorSala = isGlobal
+              ? enfermeriaS24Pases.filter((p: any) => !dniSectorActivoS24[String(p.dni)]).map((p: any) => dniToNombre[String(p.dni)] || `DNI ${p.dni}`)
+              : [];
+            const sinSectorDpto = isGlobal
+              ? enfermeriaOtrosPases.filter((p: any) => !dniSectorActivoOtros[String(p.dni)]).map((p: any) => dniToNombre[String(p.dni)] || `DNI ${p.dni}`)
+              : [];
+            const sinSectorTotal = isGlobal
+              ? sinSectorSala.length + sinSectorDpto.length
+              : (propiosList.filter((a: any) => !propiosSectorMap[String(a.dni)]).length) +
+                (enfermeriaOtrosPases.filter((p: any) => !dniSectorActivoOtros[String(p.dni)]).length);
+
+            const rowSt: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.8rem' };
+            const numSt: React.CSSProperties = { fontWeight: 700, minWidth: 36, textAlign: 'right' };
+            const colsSt: React.CSSProperties = { display: 'flex', gap: 8, alignItems: 'center' };
+
+            // ── openModal: construye la lista de agentes para el modal ──────────
+            const dniToAgente: Record<string, any> = {};
+            for (const a of agentesAsignados) dniToAgente[String(a.dni)] = a;
+            const propiosPases = isGlobal ? enfermeriaS24Pases : pasesServicioPropio;
+            const dniToFechaPropio: Record<string, string> = {};
+            for (const p of propiosPases) dniToFechaPropio[String(p.dni)] = p.fecha_desde || '';
+            const dniToFechaOtros: Record<string, string> = {};
+            for (const p of enfermeriaOtrosPases) dniToFechaOtros[String(p.dni)] = p.fecha_desde || '';
+
+            const openModal = (sectorNom: string | null, col: 'sala' | 'dpto' | 'total') => {
+              const matchIds = sectorNom
+                ? new Set(sectores.filter((s: any) => s.nombre === sectorNom).map((s: any) => String(s.id)))
+                : null;
+              const inSector = (dni: string, map: Record<string, number | null>) => {
+                const sid = map[dni];
+                if (sectorNom === null) return !sid;
+                return sid ? matchIds!.has(String(sid)) : false;
+              };
+              const getSecNom = (dni: string, map: Record<string, number | null>) => {
+                const sid = map[dni];
+                if (!sid) return 'Sin sector';
+                return sectores.find((s: any) => String(s.id) === String(sid))?.nombre || `Sector #${sid}`;
+              };
+              const filas: {apellido:string;nombre:string;ocupacion:string;servicio:string;sector:string;fechaDesde:string}[] = [];
+              if (col === 'sala' || col === 'total') {
+                for (const p of propiosList) {
+                  const dniStr = String(p.dni);
+                  if (!inSector(dniStr, propiosSectorMap)) continue;
+                  const a = dniToAgente[dniStr] || {};
+                  filas.push({ apellido: a.apellido || '', nombre: a.nombre || '', ocupacion: a.ocupacion_nombre || '', servicio: propiosSvc, sector: getSecNom(dniStr, propiosSectorMap), fechaDesde: dniToFechaPropio[dniStr] || (isGlobal ? (p.fecha_desde || '') : '') });
+                }
+              }
+              if (col === 'dpto' || col === 'total') {
+                for (const p of enfermeriaOtrosPases) {
+                  const dniStr = String(p.dni);
+                  if (!inSector(dniStr, dniSectorActivoOtros)) continue;
+                  const a = dniToAgente[dniStr] || {};
+                  filas.push({ apellido: a.apellido || '', nombre: a.nombre || '', ocupacion: a.ocupacion_nombre || '', servicio: otroSvc, sector: getSecNom(dniStr, dniSectorActivoOtros), fechaDesde: dniToFechaOtros[dniStr] || p.fecha_desde || '' });
+                }
+              }
+              filas.sort((a, b) => a.apellido.localeCompare(b.apellido, 'es'));
+              const colLabel = col === 'sala' ? propiosSvc : col === 'dpto' ? otroSvc : 'Total';
+              const titulo = sectorNom ? `${sectorNom} · ${colLabel}` : `Sin sector · ${colLabel}`;
+              setEnfermeriaModal({ titulo, filas });
+            };
+            const clickNum: React.CSSProperties = { cursor: 'pointer' };
 
             return (
               <div className="card js-card" style={{ marginBottom: 12, border: '1px solid rgba(99,102,241,0.35)', background: 'rgba(99,102,241,0.06)' }}>
@@ -2861,48 +2949,126 @@ export function JefeServicioPage() {
                 {/* Totales */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
                   {[
-                    { label: `Mis agentes`, sub: propiosSvc, val: totalPropios, color: '#86efac' },
-                    { label: `Otro total`,  sub: otroSvc,    val: totalOtros,   color: '#93c5fd' },
-                    { label: 'Total',        sub: 'enfermería', val: totalGral,  color: '#fbbf24' },
+                    { label: isGlobal ? propiosSvc : 'Mis agentes', sub: isGlobal ? '' : propiosSvc, val: totalPropios, color: '#86efac' },
+                    { label: isGlobal ? otroSvc   : 'Otro total',  sub: isGlobal ? '' : otroSvc,    val: totalOtros,   color: '#93c5fd' },
+                    { label: 'Total', sub: 'enfermería', val: totalGral, color: '#fbbf24' },
                   ].map(({ label, sub, val, color }) => (
                     <div key={label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
                       <div style={{ fontSize: '1.4rem', fontWeight: 800, color }}>{loadingAg || loadingEnfermeria ? '…' : val}</div>
                       <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', marginTop: 1 }}>{label}</div>
-                      <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 1 }}>{sub}</div>
+                      {sub && <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 1 }}>{sub}</div>}
                     </div>
                   ))}
                 </div>
 
                 {/* Desglose por sector */}
-                {allSectorKeys.length > 0 && (
+                {filasOrdenadas.length > 0 && (
                   <>
-                    <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: '#64748b', marginBottom: 6 }}>Por sector</div>
-                    {allSectorKeys
-                      .sort((a, b) => getSectorNombre(a).localeCompare(getSectorNombre(b), 'es'))
-                      .map(key => {
-                        const propios = propiosPorSector[key] || 0;
-                        const otros   = otrosPorSector[key]   || 0;
-                        return (
-                          <div key={key} style={rowSt}>
-                            <span style={{ color: 'rgba(255,255,255,0.75)', flex: 1 }}>{getSectorNombre(key)}</span>
-                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                              <span style={{ ...numSt, color: '#86efac' }} title="Mis agentes">{propios || '—'}</span>
-                              <span style={{ ...numSt, color: '#93c5fd' }} title="Otro">{otros || '—'}</span>
-                              <span style={{ ...numSt, color: '#fbbf24', minWidth: 32 }}>{propios + otros}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 6, fontSize: '0.68rem', color: '#64748b' }}>
-                      <span style={{ color: '#86efac', minWidth: 28, textAlign: 'right' }}>Míos</span>
-                      <span style={{ color: '#93c5fd', minWidth: 28, textAlign: 'right' }}>Otros</span>
-                      <span style={{ color: '#fbbf24', minWidth: 32, textAlign: 'right' }}>Total</span>
+                    <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: '#64748b', marginBottom: 4 }}>Por sector</div>
+                    {/* Encabezado de columnas */}
+                    <div style={{ ...rowSt, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 4, marginBottom: 2 }}>
+                      <span style={{ flex: 1, fontSize: '0.68rem', color: '#64748b' }}>Sector</span>
+                      <div style={colsSt}>
+                        <span style={{ ...numSt, color: '#86efac', fontSize: '0.68rem' }}>{colA}</span>
+                        <span style={{ ...numSt, color: '#93c5fd', fontSize: '0.68rem' }}>{colB}</span>
+                        <span style={{ ...numSt, color: '#fbbf24', fontSize: '0.68rem' }}>Total</span>
+                      </div>
                     </div>
+                    {filasOrdenadas.map(([nom, { propios, otros }]) => (
+                      <div key={nom} style={rowSt}>
+                        <span style={{ color: 'rgba(255,255,255,0.75)', flex: 1 }}>{nom}</span>
+                        <div style={colsSt}>
+                          <span style={{ ...numSt, ...clickNum, color: propios ? '#86efac' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => propios && openModal(nom, 'sala')}>{propios}</span>
+                          <span style={{ ...numSt, ...clickNum, color: otros   ? '#93c5fd' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => otros   && openModal(nom, 'dpto')}>{otros}</span>
+                          <span style={{ ...numSt, ...clickNum, color: '#fbbf24' }} title="Doble-click para ver detalle" onDoubleClick={() => openModal(nom, 'total')}>{propios + otros}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {sinSectorTotal > 0 && (
+                      <div style={{ ...rowSt, borderBottom: 'none', paddingTop: 6 }}>
+                        <span style={{ color: '#f87171', flex: 1, fontStyle: 'italic' }}>Sin sector asignado</span>
+                        <div style={colsSt}>
+                          {isGlobal
+                            ? <>
+                                <span style={{ ...numSt, ...clickNum, color: sinSectorSala.length ? '#f87171' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => sinSectorSala.length && openModal(null, 'sala')}>{sinSectorSala.length}</span>
+                                <span style={{ ...numSt, ...clickNum, color: sinSectorDpto.length ? '#f87171' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => sinSectorDpto.length && openModal(null, 'dpto')}>{sinSectorDpto.length}</span>
+                              </>
+                            : <>
+                                <span style={{ ...numSt, color: 'rgba(255,255,255,0.2)' }}>—</span>
+                                <span style={{ ...numSt, color: 'rgba(255,255,255,0.2)' }}>—</span>
+                              </>
+                          }
+                          <span style={{ ...numSt, ...clickNum, color: '#f87171' }} title="Doble-click para ver detalle" onDoubleClick={() => openModal(null, 'total')}>{sinSectorTotal}</span>
+                        </div>
+                      </div>
+                    )}
                   </>
+                )}
+
+                {/* Lista sin sector — solo admin */}
+                {isGlobal && (sinSectorSala.length > 0 || sinSectorDpto.length > 0) && (
+                  <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(248,113,113,0.06)', borderRadius: 6, border: '1px solid rgba(248,113,113,0.2)' }}>
+                    <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: '#f87171', marginBottom: 6 }}>Sin sector asignado</div>
+                    {sinSectorSala.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.65rem', color: '#86efac', marginBottom: 3 }}>SALA ({sinSectorSala.length})</div>
+                        {sinSectorSala.sort().map(n => <div key={n} style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', paddingLeft: 8 }}>{n}</div>)}
+                      </>
+                    )}
+                    {sinSectorDpto.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.65rem', color: '#93c5fd', marginTop: sinSectorSala.length > 0 ? 6 : 0, marginBottom: 3 }}>DPTO ({sinSectorDpto.length})</div>
+                        {sinSectorDpto.sort().map(n => <div key={n} style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', paddingLeft: 8 }}>{n}</div>)}
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             );
           })()}
+
+          {/* ── Modal detalle sector enfermería ── */}
+          {enfermeriaModal && (
+            <div
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+              onClick={() => setEnfermeriaModal(null)}
+            >
+              <div
+                style={{ background: '#1e2235', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 12, padding: '20px 24px', maxWidth: 680, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12 }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '1rem', color: '#a5b4fc' }}>{enfermeriaModal.titulo}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>{enfermeriaModal.filas.length} agente{enfermeriaModal.filas.length !== 1 ? 's' : ''} · doble-click fuera para cerrar</div>
+                  </div>
+                  <button type="button" onClick={() => setEnfermeriaModal(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1.2rem', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                        {['Apellido / Nombre', 'Ocupación', 'Servicio', 'Sector', 'Desde'].map(h => (
+                          <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enfermeriaModal.filas.map((f, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '6px 8px', color: 'rgba(255,255,255,0.9)', fontWeight: 600, whiteSpace: 'nowrap' }}>{f.apellido}{f.nombre ? `, ${f.nombre}` : ''}</td>
+                          <td style={{ padding: '6px 8px', color: '#93c5fd' }}>{f.ocupacion || '—'}</td>
+                          <td style={{ padding: '6px 8px', color: f.servicio.includes('SALA') ? '#86efac' : '#93c5fd', whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{f.servicio}</td>
+                          <td style={{ padding: '6px 8px', color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>{f.sector}</td>
+                          <td style={{ padding: '6px 8px', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', fontSize: '0.75rem' }}>{f.fechaDesde ? new Date(f.fechaDesde).toLocaleDateString('es-AR') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="card js-card js-tabs-card">

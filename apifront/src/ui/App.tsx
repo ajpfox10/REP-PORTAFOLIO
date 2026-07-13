@@ -21,6 +21,7 @@ import { RedaccionPage } from '../pages/RedaccionPage';
 import { EstadisticasPage } from '../pages/EstadisticasPage';
 import { OrganigramaPage } from '../pages/OrganigramaPage';
 import { ComparadorPage } from '../pages/ComparadorPage';
+import { ComparadorSiapePage } from '../pages/ComparadorSiapePage';
 import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
@@ -358,6 +359,16 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <ComparadorPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/comparador-siape"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <ComparadorSiapePage />
                   </Guard>
                 </Private>
               }

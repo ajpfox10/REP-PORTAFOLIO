@@ -33,7 +33,7 @@ interface CompareRow {
   novedad_siap: string;
   fecha_desde_siap: string;
   fecha_hasta_siap: string;
-  estado: "COINCIDENTE" | "NO COINCIDENTE" | "OMITIDO";
+  estado: "COINCIDENTE" | "NO COINCIDENTE" | "RANGO_DISTINTO" | "OMITIDO";
   upa?: string;
   motivo?: string;
   justificado?: string; // "SI" | "NO" del SIAP
@@ -50,10 +50,43 @@ function norm(s: string) {
     .trim();
 }
 
+function monthBounds(periodo: string) {
+  const m = /^(\d{4})-(\d{2})$/.exec(periodo || "");
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return {
+    start: `${m[1]}-${m[2]}-01`,
+    end: `${m[1]}-${m[2]}-${String(last).padStart(2, "0")}`,
+  };
+}
+
+function validDateText(v?: string) {
+  const s = String(v ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+}
+
+function rowTouchesMonth(r: CompareRow, periodo: string) {
+  const bounds = monthBounds(periodo);
+  if (!bounds) return true;
+  const ranges = [
+    [validDateText(r.fecha_desde_ministerio), validDateText(r.fecha_hasta_ministerio)],
+    [validDateText(r.fecha_desde_siap), validDateText(r.fecha_hasta_siap)],
+  ].filter(([d, h]) => d || h);
+  if (ranges.length === 0) return true;
+  return ranges.some(([d, h]) => {
+    const desde = d || h;
+    const hasta = h || d;
+    return desde <= bounds.end && hasta >= bounds.start;
+  });
+}
+
 interface CompareMeta {
   total: number;
   coincidentes: number;
   noCoincidentes: number;
+  rangoDistinto: number;
   omitidos: number;
   ministerioRows: number;
   siapRows: number;
@@ -149,6 +182,7 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
     ["Total SIAP", meta?.siapRows || 0],
     ["Coincidentes", meta?.coincidentes || 0],
     ["No coincidentes", meta?.noCoincidentes || 0],
+    ["Rango distinto", meta?.rangoDistinto || 0],
     ["Omitidos", meta?.omitidos || 0],
   ];
 
@@ -724,10 +758,10 @@ export function AsistenciaPage() {
       const validEntries = ministerioEntries.filter((e) => e.file && e.upa);
       const body: any = {
         skipNovedades: skipNovedades.map(norm).join(","),
-        periodoMes,
         direccion,
         ministerioFiles: validEntries,
         siapFile: selectedSiap || undefined,
+        soloErrores: false,
       };
 
       const r = await apiFetch<any>("/asistencia/comparar", {
@@ -746,6 +780,7 @@ export function AsistenciaPage() {
         total: comparado.length,
         coincidentes: totals.coincidencias ?? 0,
         noCoincidentes: totals.no_coinciden ?? 0,
+        rangoDistinto: totals.rango_distinto ?? 0,
         omitidos: totals.omitidos ?? 0,
         ministerioRows: totals.ministerio ?? 0,
         siapRows: totals.siap ?? 0,
@@ -804,13 +839,15 @@ export function AsistenciaPage() {
     }
   };
 
-  const depOptions = results
-    ? Array.from(new Set(results.map((r) => r.upa || "—"))).sort()
+  const monthResults = results ? results.filter((r) => rowTouchesMonth(r, periodoMes)) : [];
+
+  const depOptions = monthResults.length
+    ? Array.from(new Set(monthResults.map((r) => r.upa || "—"))).sort()
     : [];
-  const motivoOptions = results
-    ? Array.from(new Set(results.map((r) => r.motivo || "—"))).sort()
+  const motivoOptions = monthResults.length
+    ? Array.from(new Set(monthResults.map((r) => r.motivo || "—"))).sort()
     : [];
-  const licenciaOptions = results
+  const licenciaOptions = monthResults.length
     ? Array.from(
         new Set(
           results
@@ -858,14 +895,15 @@ export function AsistenciaPage() {
   const shown = tab === "PENDIENTES" ? filtered.filter(esPendienteJust) : filtered;
 
   // Novedades del SIAP que NO tienen equivalencia en el mapeo.
-  // Se chequea contra los VALORES del mapeo (no contra el motivo de cada fila:
+  // Se chequea contra claves y valores del mapeo (no contra el motivo de cada fila:
   // una novedad mapeada igual puede fallar para una persona puntual por DNI/fecha).
   const novedadesSinMapear = (() => {
     if (!results) return [] as string[];
     const mapeoVals = new Set<string>();
-    Object.values(mapeo ?? {}).forEach((arr) =>
-      (arr ?? []).forEach((v) => mapeoVals.add(norm(v)))
-    );
+    Object.entries(mapeo ?? {}).forEach(([key, arr]) => {
+      mapeoVals.add(norm(key));
+      (arr ?? []).forEach((v) => mapeoVals.add(norm(v)));
+    });
     const omit = skipNovedades.map(norm);
     const estaMapeada = (v: string) => {
       const nv = norm(v);
@@ -884,6 +922,7 @@ export function AsistenciaPage() {
     filtered.length > 0 ? new Set(filtered.map((r) => String(r.dni))).size : 0;
 
   const hayFiltrosActivos =
+    !!periodoMes ||
     filtroEstado !== "TODOS" ||
     filtroDep !== "TODAS" ||
     filtroMotivo !== "TODOS" ||
@@ -906,6 +945,12 @@ export function AsistenciaPage() {
     marginBottom: 8,
   };
 
+  const estadoLabel = (estado: CompareRow["estado"]) =>
+    estado === "COINCIDENTE" ? "OK" :
+    estado === "NO COINCIDENTE" ? "NO" :
+    estado === "RANGO_DISTINTO" ? "RANGO" :
+    "OMIT.";
+
   const badge: Record<string, React.CSSProperties> = {
     COINCIDENTE: {
       background: "rgba(16,185,129,.15)",
@@ -920,6 +965,15 @@ export function AsistenciaPage() {
       background: "rgba(239,68,68,.15)",
       border: "1px solid rgba(239,68,68,.45)",
       color: "#ef4444",
+      borderRadius: 8,
+      padding: "2px 10px",
+      fontSize: "0.72rem",
+      fontWeight: 600,
+    },
+    RANGO_DISTINTO: {
+      background: "rgba(245,158,11,.15)",
+      border: "1px solid rgba(245,158,11,.45)",
+      color: "#f59e0b",
       borderRadius: 8,
       padding: "2px 10px",
       fontSize: "0.72rem",
@@ -1354,6 +1408,10 @@ export function AsistenciaPage() {
                 ? filtered.filter((r) => r.estado === "NO COINCIDENTE").length
                 : meta.noCoincidentes;
 
+              const fRango = hayFiltrosActivos
+                ? filtered.filter((r) => r.estado === "RANGO_DISTINTO").length
+                : meta.rangoDistinto;
+
               const fOmit = hayFiltrosActivos
                 ? filtered.filter((r) => r.estado === "OMITIDO").length
                 : meta.omitidos;
@@ -1363,6 +1421,7 @@ export function AsistenciaPage() {
                 { l: "SIAP", v: meta.siapRows, c: "var(--muted)", sub: meta.siapFile },
                 { l: "COINCIDENTES", v: fCoinc, c: "var(--ok)", base: meta.coincidentes },
                 { l: "NO COINCIDENTES", v: fNoC, c: "var(--danger)", base: meta.noCoincidentes },
+                { l: "RANGO DISTINTO", v: fRango, c: "#f59e0b", base: meta.rangoDistinto },
                 { l: "OMITIDOS", v: fOmit, c: "#94a3b8", base: meta.omitidos },
               ].map(({ l, v, c, sub, base }: any) => (
                 <div key={l} className="card" style={{ padding: "12px 14px", textAlign: "center" as const }}>
@@ -1423,7 +1482,7 @@ export function AsistenciaPage() {
             {/* Pestañas: todos / pendientes de justificación */}
             <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid rgba(255,255,255,.08)" }}>
               {([
-                { key: "TODOS" as const, label: `Todos (${results.length})` },
+                { key: "TODOS" as const, label: `Todos (${monthResults.length})` },
                 { key: "PENDIENTES" as const, label: `⏳ Pendientes de justificación (${pendientes.length})` },
               ]).map((t) => (
                 <button
@@ -1476,9 +1535,10 @@ export function AsistenciaPage() {
                   style={{ ...fs, width: "auto", minWidth: 130, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
                   onChange={(e) => setFiltroEstado(e.target.value)}
                 >
-                  <option value="TODOS">Todos ({results.length})</option>
+                  <option value="TODOS">Todos ({monthResults.length})</option>
                   <option value="COINCIDENTE">Coincidentes ({meta?.coincidentes})</option>
                   <option value="NO COINCIDENTE">No coinc. ({meta?.noCoincidentes})</option>
+                  <option value="RANGO_DISTINTO">Rango distinto ({meta?.rangoDistinto})</option>
                   <option value="OMITIDO">Omitidos ({meta?.omitidos})</option>
                 </select>
               </div>
@@ -1739,7 +1799,7 @@ export function AsistenciaPage() {
 
                         <td style={{ padding: "4px 5px" }}>
                           <span style={{ ...(badge as any)[r.estado], padding: "1px 6px", fontSize: "0.65rem" }}>
-                            {r.estado === "COINCIDENTE" ? "✔" : r.estado === "NO COINCIDENTE" ? "✗ NO" : "OMIT."}
+                            {estadoLabel(r.estado)}
                           </span>
                         </td>
 
@@ -1755,7 +1815,7 @@ export function AsistenciaPage() {
             </div>
 
             <div style={{ marginTop: 8, fontSize: "0.72rem", color: "#64748b" }}>
-              Mostrando {shown.length} de {results.length} registros
+              Mostrando {shown.length} de {monthResults.length} registros
               {tab === "PENDIENTES" ? " · pendientes de justificación" : ""}
             </div>
           </div>
