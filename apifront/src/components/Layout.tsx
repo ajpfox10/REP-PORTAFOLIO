@@ -220,6 +220,7 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/reporte-servicio', '📊 Reporte por Servicio')}
                       {navLink('/app/ausencias-fichajes', '🕵️ Ausentes vs Fichajes')}
                       {navLink('/app/sin-fichaje-salida', '🚪 Sin fichaje de salida')}
+                      {isAdmin && navLink('/app/comparador-siape', '📋 SIAPE vs Novedades')}
                       {(hasPerm('crud:fc_cert_reemplazos:read') || isAdmin) && navLink('/app/fc-cert-reemplazos', '📋 FC / Cert. / Reemplazos')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
                       {navLink('/app/alertas', '🔔 Alertas')}

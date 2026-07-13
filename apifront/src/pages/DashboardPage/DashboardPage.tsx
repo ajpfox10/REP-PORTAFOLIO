@@ -99,6 +99,12 @@ function AsistenciaTile() {
         >
           Presentes por Turno
         </GroupTab>
+        <GroupTab
+          to="/app/comparador-siape"
+          tooltip="Compara los PDFs de licencias ANUAL del Ministerio contra las Novedades Intranet del Hospital. Detecta quién no tiene código 08."
+        >
+          SIAPE vs Novedades
+        </GroupTab>
       </div>
     </div>
   );

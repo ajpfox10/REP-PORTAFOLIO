@@ -472,6 +472,35 @@ function getOriginalDesde(row: any): Date | null {
 function getOriginalHasta(row: any): Date | null {
   return parseDate(row?.hastaOriginal) ?? parseDate(row?.hasta) ?? getOriginalDesde(row);
 }
+
+function sameDateRange(aDesde: Date | null, aHasta: Date | null, bDesde: Date | null, bHasta: Date | null): boolean {
+  if (!aDesde || !aHasta || !bDesde || !bHasta) return false;
+  return (
+    toUTCMidnight(aDesde).getTime() === toUTCMidnight(bDesde).getTime() &&
+    toUTCMidnight(aHasta).getTime() === toUTCMidnight(bHasta).getTime()
+  );
+}
+
+function novedadesMinisterioSiapConectan(
+  mapeoN: Record<string, string[]>,
+  novMinisterio: string,
+  novSiap: any,
+  justificadoSiap: any = '',
+): boolean {
+  const novMN = normNovedad(novMinisterio);
+  const novSN = normNovedad(novSiap);
+  const equivs = equivsMinisterio(mapeoN, novMN);
+  if (!novedadesConectan(equivs, novSN)) return false;
+
+  if (novSN.includes('ANUAL COMPLEMENTARIA')) {
+    const minEsDenegada = novMN.includes('DENEGADA');
+    const justS = String(justificadoSiap || '').trim().toUpperCase();
+    if (justS === 'NO' && !minEsDenegada) return false;
+    if (justS === 'SI' && minEsDenegada) return false;
+  }
+
+  return true;
+}
 async function parseMinisterio(fp: string): Promise<any[]> {
   const wb = await loadWorkbook(fp);
   const rows: any[] = [];
@@ -610,7 +639,6 @@ function compareRows(
   mapeo: Record<string, string[]>,
   skipNovedades: string[],
 ): any[] {
-  // Indexar SIAP por DNI normalizado para evitar falsos "NO COINCIDENTE"
   const siapByDni: Record<string, any[]> = {};
   for (const s of siap) {
     const dni = normDni((s as any).dni);
@@ -618,100 +646,132 @@ function compareRows(
   }
 
   const mapeoN = normMapeo(mapeo);
+  const usedSiap = new Set<any>();
+  const out: any[] = new Array(ministerio.length);
+  const pendientes: Array<{
+    idx: number;
+    min: any;
+    dniMin: string;
+    upa: string;
+    nov: string;
+    minDesde: Date | null;
+    minHasta: Date | null;
+  }> = [];
 
-  return ministerio.map(min => {
+  const candidatosSiap = (dni: string, upa: string) => (siapByDni[dni] || []).filter((s: any) => {
+    if (usedSiap.has(s)) return false;
+    const siapUpa = String((s as any).upa || '').trim();
+    return !upa || !siapUpa || siapUpa === upa;
+  });
+
+  ministerio.forEach((min, idx) => {
     const dniMin = normDni((min as any).dni);
-
+    const upa = String((min as any).upa || '').trim();
     const nov = String((min as any).novedad || '').trim();
     const novN = normNovedad(nov);
 
     if (skipNovedades.some(sk => novN.includes(normNovedad(sk)))) {
-      return {
+      out[idx] = {
         dni: (min as any).dni, nombre: (min as any).nombre,
         novedad_ministerio: nov,
         fecha_desde_ministerio: dateToStr(parseDate((min as any).desde)),
         fecha_hasta_ministerio: dateToStr(parseDate((min as any).hasta)),
         novedad_siap: '—', fecha_desde_siap: '—', fecha_hasta_siap: '—',
-        estado: 'OMITIDO',
+        estado: 'OMITIDO', upa,
       };
+      return;
     }
-
-    const equivs = equivsMinisterio(mapeoN, novN);
 
     const minDesde = getCmpDesde(min);
     const minHasta = getCmpHasta(min);
+    const match = candidatosSiap(dniMin, upa).find((s: any) =>
+      novedadesMinisterioSiapConectan(mapeoN, nov, s.novedad, s.justificado) &&
+      sameDateRange(minDesde, minHasta, getCmpDesde(s), getCmpHasta(s))
+    );
 
+    if (match) {
+      usedSiap.add(match);
+      out[idx] = {
+        dni: (min as any).dni, nombre: (min as any).nombre,
+        novedad_ministerio: nov,
+        fecha_desde_ministerio: dateToStr(getOriginalDesde(min)),
+        fecha_hasta_ministerio: dateToStr(getOriginalHasta(min)),
+        novedad_siap: match.novedad,
+        fecha_desde_siap: dateToStr(getOriginalDesde(match)),
+        fecha_hasta_siap: dateToStr(getOriginalHasta(match)),
+        estado: 'COINCIDENTE', upa,
+        motivo: '',
+      };
+      return;
+    }
+
+    pendientes.push({ idx, min, dniMin, upa, nov, minDesde, minHasta });
+  });
+
+  for (const p of pendientes) {
+    const todos = (siapByDni[p.dniMin] || []).filter((s: any) => {
+      const siapUpa = String((s as any).upa || '').trim();
+      return !p.upa || !siapUpa || siapUpa === p.upa;
+    });
+    const disponibles = todos.filter((s: any) => !usedSiap.has(s));
     let vioSiapConNovedadMapeada = false;
     let vioRangoDistinto = false;
     let vioSolape = false;
     let bestCandidate: any = null;
+    let motivo = 'SIAP_SIN_NOVEDAD_EQUIVALENTE';
 
-    const match = (siapByDni[dniMin] || []).find((s: any) => {
-      if (!novedadesConectan(equivs, s.novedad)) return false;
-      vioSiapConNovedadMapeada = true;
+    bestCandidate = disponibles.find((s: any) =>
+      !novedadesMinisterioSiapConectan(mapeoN, p.nov, s.novedad, s.justificado) &&
+      sameDateRange(p.minDesde, p.minHasta, getCmpDesde(s), getCmpHasta(s))
+    );
+    if (bestCandidate) {
+      motivo = 'NOVEDAD_DISTINTA';
+    } else {
+      for (const s of disponibles) {
+        if (!novedadesMinisterioSiapConectan(mapeoN, p.nov, s.novedad, s.justificado)) continue;
+        vioSiapConNovedadMapeada = true;
 
-      const sDesde = getCmpDesde(s);
-      const sHasta = getCmpHasta(s);
+        const sDesde = getCmpDesde(s);
+        const sHasta = getCmpHasta(s);
+        if (!p.minDesde || !p.minHasta || !sDesde || !sHasta) continue;
 
-      // Si faltan fechas, NO matcheamos (evita falsos coincidentes)
-      if (!minDesde || !minHasta || !sDesde || !sHasta) return false;
-
-      // Igualdad exacta de rangos (desde y hasta). Si conecta por novedad pero no por fecha,
-      // debe quedar como inconsistencia RANGO_DISTINTO, no desaparecer.
-      const ok =
-        toUTCMidnight(minDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
-        toUTCMidnight(minHasta).getTime() === toUTCMidnight(sHasta).getTime();
-
-      if (!ok) {
         if (!bestCandidate) bestCandidate = s;
-        vioRangoDistinto = true;
-        if (overlap(minDesde, minHasta, sDesde, sHasta)) vioSolape = true;
+        if (overlap(p.minDesde, p.minHasta, sDesde, sHasta)) vioSolape = true;
+        else vioRangoDistinto = true;
       }
 
-      return ok;
-    });
+      motivo =
+        vioSolape ? 'SOLAPA_PERO_NO_IGUAL' :
+        vioRangoDistinto ? 'RANGO_DISTINTO' :
+        disponibles.length === 0 && todos.length > 0 ? 'SIAP_YA_MATCHADO_EN_OTRA_FILA' :
+        vioSiapConNovedadMapeada ? 'MAPEO_OK_PERO_SIN_MATCH' :
+        'SIAP_SIN_NOVEDAD_EQUIVALENTE';
+    }
 
-    const motivo =
-      match ? '' :
-      vioRangoDistinto ? 'RANGO_DISTINTO' :
-      vioSolape ? 'SOLAPA_PERO_NO_IGUAL' :
-      vioSiapConNovedadMapeada ? 'MAPEO_OK_PERO_SIN_MATCH' :
-      'SIAP_SIN_NOVEDAD_EQUIVALENTE';
+    if (bestCandidate) usedSiap.add(bestCandidate);
 
-    const displaySiap = match ?? bestCandidate;
-
-    return {
-      dni: (min as any).dni, nombre: (min as any).nombre,
-      novedad_ministerio: nov,
-      fecha_desde_ministerio: dateToStr(getOriginalDesde(min)),
-      fecha_hasta_ministerio: dateToStr(getOriginalHasta(min)),
-      novedad_siap: displaySiap ? displaySiap.novedad : '—',
-      fecha_desde_siap: displaySiap ? dateToStr(getOriginalDesde(displaySiap)) : '—',
-      fecha_hasta_siap: displaySiap ? dateToStr(getOriginalHasta(displaySiap)) : '—',
-      estado: match ? 'COINCIDENTE' : 'NO COINCIDENTE',
+    out[p.idx] = {
+      dni: (p.min as any).dni, nombre: (p.min as any).nombre,
+      novedad_ministerio: p.nov,
+      fecha_desde_ministerio: dateToStr(getOriginalDesde(p.min)),
+      fecha_hasta_ministerio: dateToStr(getOriginalHasta(p.min)),
+      novedad_siap: bestCandidate ? bestCandidate.novedad : '—',
+      fecha_desde_siap: bestCandidate ? dateToStr(getOriginalDesde(bestCandidate)) : '—',
+      fecha_hasta_siap: bestCandidate ? dateToStr(getOriginalHasta(bestCandidate)) : '—',
+      estado: bestCandidate && motivo !== 'RANGO_DISTINTO' && motivo !== 'SOLAPA_PERO_NO_IGUAL' ? 'NO COINCIDENTE' : (bestCandidate ? 'RANGO_DISTINTO' : 'NO COINCIDENTE'),
       motivo,
+      upa: p.upa,
     };
-  });
+  }
+
+  return out;
 }
-
-
-
-/**
- * Compara SIAP vs múltiples archivos Ministerio.
- * ministerioMap: Record<"UPA 18" | "UPA 4" | "HOSPITAL", rows[]>
- * Cada fila SIAP tiene .upa (resuelta de E5/E6) y .justificado ("SI"|"NO").
- *
- * Regla especial ANUAL COMPLEMENTARIA:
- *   SIAP ANUAL COMPLEMENTARIA + JUSTIFICADO=NO  → busca "ANUAL COMPLEMENTARIA DENEGADA" en Ministerio
- *   SIAP ANUAL COMPLEMENTARIA + JUSTIFICADO=SI  → busca "ANUAL COMPLEMENTARIA" en Ministerio
- */
 function compareRowsSiapVsMinisterio(
   siap: any[],
   ministerioMap: Record<string, any[]>,
   mapeo: Record<string, string[]>,
   skipNovedades: string[],
 ): any[] {
-  // Pre-indexar cada ministerio por DNI
   const minByUpaAndDni: Record<string, Record<string, any[]>> = {};
   for (const [upa, rows] of Object.entries(ministerioMap)) {
     minByUpaAndDni[upa] = {};
@@ -722,13 +782,23 @@ function compareRowsSiapVsMinisterio(
   }
 
   const mapeoN = normMapeo(mapeo);
+  const usedMinisterio = new Set<any>();
+  const out: any[] = new Array(siap.length);
+  const pendientes: Array<{
+    idx: number;
+    baseRow: any;
+    mins: any[];
+    novSN: string;
+    sDesde: Date | null;
+    sHasta: Date | null;
+  }> = [];
 
-  return siap.map((s: any) => {
+  siap.forEach((s: any, idx) => {
     const dniS  = normDni((s as any).dni);
     const upa   = String((s as any).upa || '').trim();
     const novS  = String((s as any).novedad || '').trim();
     const novSN = normNovedad(novS);
-    const justS = String((s as any).justificado || '').trim().toUpperCase(); // "SI" | "NO" | ""
+    const justS = String((s as any).justificado || '').trim().toUpperCase();
     const sDesde = getCmpDesde(s);
     const sHasta = getCmpHasta(s);
 
@@ -743,82 +813,96 @@ function compareRowsSiapVsMinisterio(
     };
 
     if (skipNovedades.some(sk => novSN.includes(normNovedad(sk)))) {
-      return { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—', estado: 'OMITIDO' };
+      out[idx] = { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—', estado: 'OMITIDO' };
+      return;
     }
 
-    let vioMismoMapeo = false;    // el mapeo conecta, pero no se logró match exacto de fecha
-    let vioRangoDistinto = false; // mapeo conecta, pero rango no idéntico
-    let vioSolape = false;
-
     if (!upa || !minByUpaAndDni[upa]) {
-      return { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—',
+      out[idx] = { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—',
         estado: 'NO COINCIDENTE', motivo: upa ? `Sin archivo ministerio para ${upa}` : 'Sin UPA en SIAP' };
+      return;
     }
 
     const mins = minByUpaAndDni[upa][dniS] || [];
+    const disponibles = () => mins.filter((m: any) => !usedMinisterio.has(m));
+    const match = disponibles().find((m: any) =>
+      novedadesMinisterioSiapConectan(mapeoN, m.novedad, novS, justS) &&
+      sameDateRange(getCmpDesde(m), getCmpHasta(m), sDesde, sHasta)
+    );
 
-    // Mejor candidato: fila de Ministerio que conecta por novedad pero difiere en fechas
+    if (match) {
+      usedMinisterio.add(match);
+      out[idx] = {
+        ...baseRow,
+        novedad_ministerio:     String(match.novedad || '').trim(),
+        fecha_desde_ministerio: dateToStr(getOriginalDesde(match)),
+        fecha_hasta_ministerio: dateToStr(getOriginalHasta(match)),
+        estado: 'COINCIDENTE',
+        motivo: '',
+      };
+      return;
+    }
+
+    pendientes.push({ idx, baseRow, mins, novSN, sDesde, sHasta });
+  });
+
+  for (const p of pendientes) {
+    const disponibles = p.mins.filter((m: any) => !usedMinisterio.has(m));
+    let vioMismoMapeo = false;
+    let vioRangoDistinto = false;
+    let vioSolape = false;
     let bestCandidate: any = null;
+    let motivo = 'MAPEO_NO_ENCUENTRA_EQUIVALENTE';
 
-    const match = mins.find((m: any) => {
-      const novM  = String(m.novedad || '').trim();
-      const novMN = normNovedad(novM);
-      const equivs = equivsMinisterio(mapeoN, novMN);
+    bestCandidate = disponibles.find((m: any) =>
+      !novedadesMinisterioSiapConectan(mapeoN, m.novedad, p.baseRow.novedad_siap, p.baseRow.justificado) &&
+      sameDateRange(getCmpDesde(m), getCmpHasta(m), p.sDesde, p.sHasta)
+    );
+    if (bestCandidate) {
+      motivo = 'NOVEDAD_DISTINTA';
+    } else {
+      for (const m of disponibles) {
+        if (!novedadesMinisterioSiapConectan(mapeoN, m.novedad, p.baseRow.novedad_siap, p.baseRow.justificado)) continue;
+        vioMismoMapeo = true;
 
-      if (!novedadesConectan(equivs, novSN)) return false;
-      vioMismoMapeo = true;
+        const mDesde = getCmpDesde(m);
+        const mHasta = getCmpHasta(m);
+        if (!mDesde || !mHasta || !p.sDesde || !p.sHasta) continue;
 
-      // Regla ANUAL COMPLEMENTARIA: usar JUSTIFICADO para distinguir aprobada/denegada
-      if (novSN.includes('ANUAL COMPLEMENTARIA')) {
-        const minEsDenegada = novMN.includes('DENEGADA');
-        if (justS === 'NO' && !minEsDenegada) return false;
-        if (justS === 'SI' && minEsDenegada)  return false;
-      }
-
-      const mDesde = getCmpDesde(m);
-      const mHasta = getCmpHasta(m);
-      if (!mDesde || !mHasta || !sDesde || !sHasta) return false;
-
-      const ok =
-        toUTCMidnight(mDesde).getTime() === toUTCMidnight(sDesde).getTime() &&
-        toUTCMidnight(mHasta).getTime() === toUTCMidnight(sHasta).getTime();
-
-      if (!ok) {
         if (!bestCandidate) bestCandidate = m;
-        vioRangoDistinto = true;
-        if (overlap(mDesde, mHasta, sDesde, sHasta)) vioSolape = true;
+        if (overlap(mDesde, mHasta, p.sDesde, p.sHasta)) vioSolape = true;
+        else vioRangoDistinto = true;
       }
 
-      return ok;
-    });
+      motivo =
+        p.mins.length === 0  ? `DNI_NO_EXISTE_EN_MINISTERIO_PARA_${p.baseRow.upa}` :
+        vioSolape           ? 'SOLAPA_PERO_NO_IGUAL' :
+        vioRangoDistinto    ? 'RANGO_DISTINTO' :
+        disponibles.length === 0 && p.mins.length > 0 ? 'MINISTERIO_YA_MATCHADO_EN_OTRA_FILA' :
+        vioMismoMapeo       ? 'MAPEO_OK_PERO_SIN_MATCH' :
+                               'MAPEO_NO_ENCUENTRA_EQUIVALENTE';
+    }
 
-    const motivo =
-      match              ? '' :
-      mins.length === 0  ? `DNI_NO_EXISTE_EN_MINISTERIO_PARA_${upa}` :
-      vioRangoDistinto   ? 'RANGO_DISTINTO' :
-      vioSolape          ? 'SOLAPA_PERO_NO_IGUAL' :
-      vioMismoMapeo      ? 'MAPEO_OK_PERO_SIN_MATCH' :
-                           'MAPEO_NO_ENCUENTRA_EQUIVALENTE';
+    if (bestCandidate) usedMinisterio.add(bestCandidate);
 
-    // Mostrar Ministerio solo si hay una fila que conecte por mapeo.
-    const displayMin = match ?? bestCandidate;
-    const novedadesMinTexto = displayMin
-      ? String(displayMin.novedad || '').trim()
-      : mins.length > 0
+    const novedadesMinTexto = bestCandidate
+      ? String(bestCandidate.novedad || '').trim()
+      : disponibles.length > 0
         ? 'SIN NOVEDAD MINISTERIO EQUIVALENTE'
         : '—';
 
-    return {
-      ...baseRow,
+    out[p.idx] = {
+      ...p.baseRow,
       novedad_ministerio:     novedadesMinTexto,
-      fecha_desde_ministerio: displayMin ? dateToStr(getOriginalDesde(displayMin)) : '—',
-      fecha_hasta_ministerio: displayMin ? dateToStr(getOriginalHasta(displayMin)) : '—',
-      estado: match ? 'COINCIDENTE' : 'NO COINCIDENTE',
+      fecha_desde_ministerio: bestCandidate ? dateToStr(getOriginalDesde(bestCandidate)) : '—',
+      fecha_hasta_ministerio: bestCandidate ? dateToStr(getOriginalHasta(bestCandidate)) : '—',
+      estado: bestCandidate && motivo !== 'RANGO_DISTINTO' && motivo !== 'SOLAPA_PERO_NO_IGUAL' ? 'NO COINCIDENTE' : (bestCandidate ? 'RANGO_DISTINTO' : 'NO COINCIDENTE'),
       motivo,
     };
-  });
-}
+  }
 
+  return out;
+}
 export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize) {
   const router = Router();
 
@@ -991,17 +1075,6 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         });
       }
 
-      // ── Filtro por período (mes) ──────────────────────────────────────────
-      // Se conservan las fechas originales para mostrar/exportar, pero se agregan
-      // cmpDesde/cmpHasta recortadas al mes para comparar solo el período elegido.
-      const period = parsePeriodoMes(req.body?.periodoMes);
-      if (period) {
-        siapRows = siapRows.map(r => clipRowToPeriodForCompare(r, period)).filter(Boolean) as any[];
-        for (const upa of Object.keys(ministerioMap)) {
-          ministerioMap[upa] = ministerioMap[upa].map(r => clipRowToPeriodForCompare(r, period)).filter(Boolean) as any[];
-        }
-        totalMinisterioRows = Object.values(ministerioMap).reduce((acc, rows) => acc + rows.length, 0);
-      }
 
       // ── Deduplicar filas idénticas del Ministerio ─────────────────────────
       // Al igual que SIAP, el Ministerio puede tener filas duplicadas.
@@ -1020,14 +1093,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       let comparado: any[];
       if (direccion === 'MIN_VS_SIAP') {
         // Itera el Ministerio — qué tiene el Ministerio y si coincide en SIAP
-        const allMinRows = Object.values(ministerioMap).flat();
-        // Enriquecer con UPA para que el frontend pueda filtrar por dependencia
-        const dniToUpa: Record<string, string> = {};
-        for (const [upa, rows] of Object.entries(ministerioMap)) {
-          for (const r of rows) dniToUpa[normDni((r as any).dni)] = upa;
-        }
-        comparado = compareRows(allMinRows, siapRows, mapeo, skipFinal)
-          .map((r: any) => ({ ...r, upa: dniToUpa[normDni(r.dni)] ?? '' }));
+        const allMinRows = Object.entries(ministerioMap)
+          .flatMap(([upa, rows]) => rows.map((r: any) => ({ ...r, upa })));
+        comparado = compareRows(allMinRows, siapRows, mapeo, skipFinal);
       } else {
         // Itera el SIAP — qué tiene el SIAP y si coincide en Ministerio
         comparado = compareRowsSiapVsMinisterio(siapRows, ministerioMap, mapeo, skipFinal);
@@ -1038,7 +1106,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       // Si alguna vez necesitás ver todo, mandá { soloErrores: false } desde el front.
       const soloErrores = req.body?.soloErrores !== false;
       if (soloErrores) {
-        comparado = comparado.filter((r: any) => r.estado === 'NO COINCIDENTE');
+        comparado = comparado.filter((r: any) => r.estado !== 'COINCIDENTE' && r.estado !== 'OMITIDO');
       }
 
       const siapF = path.parse(siapFile);
@@ -1052,6 +1120,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             siap: siapRows.length,
             coincidencias: comparadoCompleto.filter(r => r.estado === 'COINCIDENTE').length,
             no_coinciden:  comparadoCompleto.filter(r => r.estado === 'NO COINCIDENTE').length,
+            rango_distinto: comparadoCompleto.filter(r => r.estado === 'RANGO_DISTINTO').length,
             omitidos:      comparadoCompleto.filter(r => r.estado === 'OMITIDO').length,
           },
           files: {

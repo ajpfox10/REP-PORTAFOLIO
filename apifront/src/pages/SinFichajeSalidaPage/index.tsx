@@ -36,6 +36,13 @@ interface SinHorarioAgente {
   upa:    string;
 }
 
+interface HorarioDuplicado {
+  dni:              string;
+  nombre:           string;
+  archivoAnterior:  string;
+  archivoNuevo:     string;
+}
+
 interface Meta {
   total:              number;
   sospechosos?:       number;
@@ -50,6 +57,7 @@ interface Meta {
   agentesInvertidos:  number;
   sinBiometrico:      boolean;
   dbError:            string | null;
+  horariosDuplicados?: HorarioDuplicado[];
 }
 
 interface AgenteRow {
@@ -114,6 +122,7 @@ interface MetaFichosindeber {
   agentes:       number;
   sinBiometrico: boolean;
   dbError:       string | null;
+  horariosDuplicados?: HorarioDuplicado[];
 }
 
 interface RawFichajeRow {
@@ -1232,6 +1241,12 @@ export function SinFichajeSalidaPage() {
       )}
 
       {/* ── Resumen ──────────────────────────────────────────────────────── */}
+      {!!meta?.horariosDuplicados?.length && (
+        <div className="card" style={{ marginBottom: 12, border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.07)", color: "#fbbf24", fontSize: "0.82rem" }}>
+          Atencion: {meta.horariosDuplicados.length} DNI aparece en mas de un archivo de horarios. Se uso el ultimo archivo seleccionado.
+        </div>
+      )}
+
       {meta && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
           {[
@@ -1565,6 +1580,12 @@ export function SinFichajeSalidaPage() {
       {/* ══════════════ TAB: FICHÓ SIN DEBER ══════════════ */}
       {loaded && tab === "fichosindeber" && (
         <>
+          {!!metaFicho?.horariosDuplicados?.length && (
+            <div className="card" style={{ marginBottom: 10, marginTop: 10, border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.07)", color: "#fbbf24", fontSize: "0.82rem" }}>
+              Atencion: {metaFicho.horariosDuplicados.length} DNI aparece en mas de un archivo de horarios. Se uso el ultimo archivo seleccionado.
+            </div>
+          )}
+
           {metaFicho?.sinBiometrico && (
             <div className="card" style={{ marginBottom: 10, marginTop: 10, border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.07)", color: "#fbbf24", fontSize: "0.82rem" }}>
               ⚠ Sin datos biométricos: {metaFicho.dbError}

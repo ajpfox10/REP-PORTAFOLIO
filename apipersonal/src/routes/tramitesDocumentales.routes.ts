@@ -1028,6 +1028,20 @@ function saludSubRank(ocrText: string): number {
   return 4;
 }
 
+// Sub-orden del bloque "TITULO - MATRICULA PROFESIONAL". La MATRÍCULA (certificados de matriculación /
+// libre de sanción + credencial: RUP Salud, COLFARMA, etc.) es LEGIBLE por OCR → va primero (0). El
+// TÍTULO/DIPLOMA son imágenes escaneadas SIN texto legible (OCR vacío) → van después (1), en orden
+// SIAPE (no se pueden distinguir entre sí). Orden pedido por el área: matrícula → título → diploma.
+function tituloSubRank(ocrText: string): number {
+  const t = normalizeSearch(ocrText);
+  if (
+    t.includes('matricul') || t.includes('certificado') || t.includes('credencial') ||
+    t.includes('colegio') || t.includes('consejo') || t.includes('colfarma') ||
+    t.includes('registro unico') || t.includes('libre de sancion') || t.includes('inscripto')
+  ) return 0; // matrícula (legible)
+  return 1;   // título / diploma (imagen sin texto)
+}
+
 function collectDniCandidates(text: string): number[] {
   const found = new Set<number>();
   const normalized = text.replace(/\s+/g, ' ');
@@ -1306,6 +1320,24 @@ async function analyzeOnePdf(sequelize: Sequelize, fileName: string): Promise<Pd
         for (const i of saludPages) pageSubOrder[i] = saludSubRank(ocr.get(i + 1) || '');
       } catch (err: any) {
         logger.warn({ msg: '[tramites] OCR salud orden fallo/timeout', fileName, error: err?.message });
+      }
+    }
+
+    // Bloque "TITULO - MATRICULA PROFESIONAL": matrícula (legible) primero, título/diploma (imágenes) después.
+    const tituloPages = pageTitles
+      .map((t, i) => ({ n: normalizeSearch(t), i }))
+      .filter((x) => x.n.includes('matricula profesional'))
+      .map((x) => x.i);
+    if (tituloPages.length > 1 && env.TRAMITES_PDF_OCR_ENABLE) {
+      try {
+        const ocr = await withTimeout(
+          ocrPagesText(fullPath, tituloPages.map((i) => i + 1)),
+          Math.max(OCR_TIMEOUT_MS, tituloPages.length * 20000),
+          `OCR titulo ${fileName}`,
+        );
+        for (const i of tituloPages) pageSubOrder[i] = tituloSubRank(ocr.get(i + 1) || '');
+      } catch (err: any) {
+        logger.warn({ msg: '[tramites] OCR titulo orden fallo/timeout', fileName, error: err?.message });
       }
     }
 

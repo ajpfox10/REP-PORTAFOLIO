@@ -113,6 +113,13 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
 
   useEffect(() => { if (open) cargarPreview(); /* eslint-disable-next-line */ }, [open]);
 
+  // ── servicios disponibles según ubicación seleccionada ──
+  const serviciosDisponibles = useMemo(() => {
+    if (!ubicSel.size) return facetas.servicios;
+    const set = new Set(allAgentes.filter(a => ubicSel.has(a.ubicacion)).map(a => a.servicio));
+    return facetas.servicios.filter(s => set.has(s));
+  }, [facetas.servicios, allAgentes, ubicSel]);
+
   // ── filtrado EN VIVO (cliente) ──
   const filtrados = useMemo(() => {
     return allAgentes.filter(a => {
@@ -194,12 +201,12 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
           <div style={box}>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Servicios ({servSel.size || "todos"})</div>
             <div style={{ maxHeight: 150, overflow: "auto", fontSize: 12 }}>
-              {facetas.servicios.map(s => (
+              {serviciosDisponibles.map(s => (
                 <label key={s} style={{ display: "block", cursor: "pointer" }}>
                   <input type="checkbox" checked={servSel.has(s)} onChange={() => toggle(servSel, s, setServSel)} /> {s || "(sin servicio)"}
                 </label>
               ))}
-              {facetas.servicios.length === 0 && <span style={{ color: "#999" }}>—</span>}
+              {serviciosDisponibles.length === 0 && <span style={{ color: "#999" }}>—</span>}
             </div>
           </div>
           <div style={box}>
