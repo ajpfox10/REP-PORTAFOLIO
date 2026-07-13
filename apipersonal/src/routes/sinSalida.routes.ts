@@ -531,12 +531,25 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
 
       // ── 1. Leer horarios (todos los archivos, merge por DNI) ──────────────
       const horariosMap: Record<string, { nombre: string; esGuardia: boolean; planta: string; horario: HorarioDia; horas: Record<string, HorasDia> }> = {};
+      const horariosOrigen: Record<string, string> = {};
+      const horariosDuplicados: Array<{ dni: string; nombre: string; archivoAnterior: string; archivoNuevo: string }> = [];
       for (const fileName of horariosFileNames) {
         const fp = path.join(dir, fileName);
         if (!fs.existsSync(fp)) continue;
         try {
           const parcial = await parseHorariosFile(fp);
-          Object.assign(horariosMap, parcial);
+          for (const [dni, info] of Object.entries(parcial)) {
+            if (horariosMap[dni]) {
+              horariosDuplicados.push({
+                dni,
+                nombre: info.nombre || horariosMap[dni].nombre || '',
+                archivoAnterior: horariosOrigen[dni] || '',
+                archivoNuevo: fileName,
+              });
+            }
+            horariosMap[dni] = info;
+            horariosOrigen[dni] = fileName;
+          }
         } catch (e: any) {
           logger.warn({ msg: 'sin-salida: error leyendo horarios', file: fileName, error: e?.message });
         }
@@ -645,7 +658,7 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
       }
 
       if (expanded.length === 0) {
-        const emptyMeta = { total: 0, sinSalida: 0, sinFichaje: 0, justificados: 0, conSalida: 0, sinBiometrico: false, dbError: null };
+        const emptyMeta = { total: 0, sinSalida: 0, sinFichaje: 0, justificados: 0, conSalida: 0, sinBiometrico: false, dbError: null, horariosDuplicados };
         return res.json({ ok: true, data: [], meta: emptyMeta });
       }
 
@@ -1081,6 +1094,7 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
           agentesInvertidos,
           sinBiometrico: !!dbError,
           dbError,
+          horariosDuplicados,
         },
       });
     } catch (err: any) {
@@ -1158,11 +1172,25 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
         : files.filter(f => f.name.toLowerCase().includes('horario')).map(f => f.name);
 
       const horariosMap: Record<string, { nombre: string; esGuardia: boolean; planta: string; horario: HorarioDia; horas: Record<string, HorasDia> }> = {};
+      const horariosOrigen: Record<string, string> = {};
+      const horariosDuplicados: Array<{ dni: string; nombre: string; archivoAnterior: string; archivoNuevo: string }> = [];
       for (const fileName of horariosFileNames) {
         const fp = path.join(dir, fileName);
         if (!fs.existsSync(fp)) continue;
         try {
-          Object.assign(horariosMap, await parseHorariosFile(fp));
+          const parcial = await parseHorariosFile(fp);
+          for (const [dni, info] of Object.entries(parcial)) {
+            if (horariosMap[dni]) {
+              horariosDuplicados.push({
+                dni,
+                nombre: info.nombre || horariosMap[dni].nombre || '',
+                archivoAnterior: horariosOrigen[dni] || '',
+                archivoNuevo: fileName,
+              });
+            }
+            horariosMap[dni] = info;
+            horariosOrigen[dni] = fileName;
+          }
         } catch (e: any) {
           logger.warn({ msg: 'ficho-sin-deber: error leyendo horarios', file: fileName, error: e?.message });
         }
@@ -1304,6 +1332,7 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
           agentes:       new Set(data.map(r => r.dni)).size,
           sinBiometrico: !!dbError,
           dbError,
+          horariosDuplicados,
         },
       });
     } catch (err: any) {
