@@ -151,6 +151,14 @@ function CargoCard({ c }: { c: any }) {
             border: `1px solid ${activo ? 'rgba(34,197,94,0.25)' : 'rgba(100,116,139,0.2)'}`,
           }}>{c.estado_empleo}</span>
         )}
+        {c.ley_nombre && (
+          <span style={{
+            padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 700,
+            background: 'rgba(245,158,11,0.10)',
+            color: '#fbbf24',
+            border: '1px solid rgba(245,158,11,0.25)',
+          }}>⚖ {c.ley_nombre}</span>
+        )}
       </div>
     </div>
   );

@@ -452,6 +452,9 @@ export function DashboardPage() {
           {hasPerm('crud:*:*') && (
             <Tile to="/app/bajas-gestion" title="📉 Gestión de Bajas" desc="Estadísticas, completitud de datos y bajas por estructura en pestañas. Filtros por ley, sexo, servicio y edad." accent="#f87171" />
           )}
+          {hasPerm('crud:*:*') && (
+            <Tile to="/app/historial-estructura" title="🗂️ Historial Estructura" desc="Descarga desde la Intranet del Ministerio el plantel completo de cada agente (activos e inactivos) a Excel en D:\G\HISTORIAL ESTRUCTURA." accent="#60a5fa" />
+          )}
         </div>
       </div>
 

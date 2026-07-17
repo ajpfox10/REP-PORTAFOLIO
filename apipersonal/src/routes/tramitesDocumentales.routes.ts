@@ -5,6 +5,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { Router, Request, Response } from 'express';
 import { PDFDocument } from 'pdf-lib';
+import * as XLSX from 'xlsx';
 import { QueryTypes, Sequelize } from 'sequelize';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
@@ -1905,6 +1906,97 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[tramites] guardar error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar tramite' });
+    }
+  });
+
+  // ── GET /tramites-documentales/aptos ──────────────────────────────────────
+  // Cruza D:\G\APTOS\APTOS.xlsx (exámenes de aptitud del Ministerio) con la base:
+  // por DNI trae ley, planta, ocupación y estado del agente. Los que no están
+  // en personal salen con en_sistema=false.
+  router.get('/aptos', async (_req: Request, res: Response) => {
+    const APTOS_XLSX = 'D:\\G\\APTOS\\APTOS.xlsx';
+    try {
+      if (!fs.existsSync(APTOS_XLSX)) {
+        return res.json({ ok: true, data: { rows: [], existe: false, path: APTOS_XLSX } });
+      }
+      const wb = XLSX.readFile(APTOS_XLSX, { cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json<any>(ws, { defval: '' });
+
+      const fmtFecha = (v: any): string => {
+        if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0, 10);
+        return String(v ?? '').trim();
+      };
+
+      const rows = raw.map((r: any) => ({
+        dni:        Number(String(r['NRO_DOCUMENTO'] ?? '').replace(/\D/g, '')) || 0,
+        apellido:   String(r['APELLIDO'] ?? '').trim(),
+        nombre:     String(r['NOMBRE'] ?? '').trim(),
+        cuil:       String(r['CUIT_CUIL'] ?? '').trim(),
+        codigo:     String(r['CODIGO_EXAMEN'] ?? '').trim(),
+        tipo:       String(r['TIPO_EXAMEN'] ?? '').trim(),
+        modalidad:  String(r['MODALIDAD_EXAMEN'] ?? '').trim(),
+        fecha:      fmtFecha(r['FECHA']),
+        estado_examen: String(r['ESTADO_EXAMEN'] ?? '').trim(),
+        resolucion: String(r['RESOLUCION'] ?? '').trim(),
+        tipo_tramite: String(r['TIPO_TRAMITE'] ?? '').trim(),
+        // enriquecimiento DB (defaults si no está)
+        en_sistema: false,
+        nombre_db:  '',
+        ley:        '',
+        planta:     '',
+        ocupacion:  '',
+        estado_empleo: '',
+        legajo:     '',
+      }));
+
+      // Enriquecimiento DB siempre en try/catch propio: la lectura del Excel no se cae por la DB
+      try {
+        const dnis = Array.from(new Set(rows.map((r) => r.dni).filter((d) => d > 0)));
+        if (dnis.length) {
+          const vivos = await sequelize.query<{
+            dni: number; nombre_db: string; ley: string | null; planta: string | null;
+            ocupacion: string | null; estado_empleo: string | null; legajo: number | null;
+          }>(
+            `SELECT p.dni,
+                    CONCAT(p.apellido, ', ', p.nombre) AS nombre_db,
+                    l.nombre  AS ley,
+                    pl.nombre AS planta,
+                    oc.nombre AS ocupacion,
+                    a.estado_empleo,
+                    a.legajo
+             FROM personal p
+             LEFT JOIN agentes a       ON a.dni = p.dni AND a.deleted_at IS NULL
+             LEFT JOIN ley l           ON l.id = a.ley_id
+             LEFT JOIN plantas pl      ON pl.id = a.planta_id
+             LEFT JOIN ocupaciones oc  ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+             WHERE p.dni IN (:dnis) AND p.deleted_at IS NULL
+             ORDER BY (a.estado_empleo = 'ACTIVO' AND a.fecha_egreso IS NULL) DESC, a.id DESC`,
+            { replacements: { dnis }, type: QueryTypes.SELECT }
+          );
+          // primera fila por DNI = la más relevante (activa primero, después la más nueva)
+          const map = new Map<number, typeof vivos[number]>();
+          for (const v of vivos) if (!map.has(Number(v.dni))) map.set(Number(v.dni), v);
+          for (const r of rows) {
+            const hit = map.get(r.dni);
+            if (!hit) continue;
+            r.en_sistema    = true;
+            r.nombre_db     = hit.nombre_db ?? '';
+            r.ley           = hit.ley ?? '';
+            r.planta        = hit.planta ?? '';
+            r.ocupacion     = hit.ocupacion ?? '';
+            r.estado_empleo = hit.estado_empleo ?? '';
+            r.legajo        = hit.legajo != null ? String(hit.legajo) : '';
+          }
+        }
+      } catch (dbErr: any) {
+        logger.warn({ msg: '[tramites] aptos: no se pudo enriquecer desde DB', error: dbErr?.message });
+      }
+
+      return res.json({ ok: true, data: { rows, existe: true, path: APTOS_XLSX } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] aptos error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al leer APTOS.xlsx' });
     }
   });
 

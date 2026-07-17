@@ -1720,20 +1720,24 @@ interface MedModalProps {
   agente: any;
   sectorId: number | null;
   jefeNombre: string;
-  endpoint: string;         // '/papcolpo' | '/examen' | '/prexamen'
+  endpoint: string;         // '/papcolpo' | '/examen' | '/prexamen' | '/permiso_salida'
   label: string;
   tipoOpciones: string[] | null;  // null → input libre
+  conHoras?: boolean;       // true → hora_desde/hora_hasta + motivo (permiso de salida)
   record?: any;
   onClose: () => void;
   onSaved: () => void;
 }
-function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones, record, onClose, onSaved }: MedModalProps) {
+function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones, conHoras, record, onClose, onSaved }: MedModalProps) {
   const toast = useToast();
   const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     fecha:        record?.fecha?.slice(0, 10) || hoy,
     tipo:         record?.tipo || (tipoOpciones ? tipoOpciones[0] : ''),
     resultado:    record?.resultado || '',
+    hora_desde:   record?.hora_desde?.slice(0, 5) || '',
+    hora_hasta:   record?.hora_hasta?.slice(0, 5) || '',
+    motivo:       record?.motivo || '',
     observaciones: record?.observaciones || '',
   });
   const [saving, setSaving] = useState(false);
@@ -1745,7 +1749,16 @@ function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones,
     if (!form.fecha) { toast.error('Ingresá la fecha'); return; }
     setSaving(true);
     try {
-      const body = {
+      const body = conHoras ? {
+        dni:          agente.dni,
+        fecha:        form.fecha,
+        hora_desde:   form.hora_desde || null,
+        hora_hasta:   form.hora_hasta || null,
+        motivo:       form.motivo || null,
+        observaciones: form.observaciones || null,
+        sector_id:    sectorId ?? null,
+        jefe_nombre:  jefeNombre || null,
+      } : {
         dni:          agente.dni,
         fecha:        form.fecha,
         tipo:         form.tipo || null,
@@ -1786,24 +1799,47 @@ function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones,
               <label htmlFor="med-fecha" style={lbl}>Fecha *</label>
               <input id="med-fecha" name="fecha" type="date" className="input" style={fld} value={form.fecha} onChange={e => set('fecha', e.target.value)} />
             </div>
-            <div className="js-field">
-              <label htmlFor="med-tipo" style={lbl}>Tipo</label>
-              {tipoOpciones ? (
-                <select id="med-tipo" name="tipo" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
-                  {tipoOpciones.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              ) : (
-                <input id="med-tipo" name="tipo" type="text" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)} placeholder="Tipo de examen…" />
-              )}
-            </div>
-            <div className="js-field">
-              <label htmlFor="med-jefe" style={lbl}>Jefe</label>
-              <input id="med-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
-            </div>
-            <div className="js-field js-field-full">
-              <label htmlFor="med-resultado" style={lbl}>Resultado</label>
-              <input id="med-resultado" name="resultado" type="text" className="input" style={fld} value={form.resultado} onChange={e => set('resultado', e.target.value)} placeholder="Resultado…" />
-            </div>
+            {conHoras ? (
+              <>
+                <div className="js-field">
+                  <label htmlFor="med-hora-desde" style={lbl}>Hora desde</label>
+                  <input id="med-hora-desde" name="hora_desde" type="time" className="input" style={fld} value={form.hora_desde} onChange={e => set('hora_desde', e.target.value)} />
+                </div>
+                <div className="js-field">
+                  <label htmlFor="med-hora-hasta" style={lbl}>Hora hasta</label>
+                  <input id="med-hora-hasta" name="hora_hasta" type="time" className="input" style={fld} value={form.hora_hasta} onChange={e => set('hora_hasta', e.target.value)} />
+                </div>
+                <div className="js-field">
+                  <label htmlFor="med-jefe" style={lbl}>Jefe</label>
+                  <input id="med-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
+                </div>
+                <div className="js-field js-field-full">
+                  <label htmlFor="med-motivo" style={lbl}>Motivo</label>
+                  <input id="med-motivo" name="motivo" type="text" className="input" style={fld} value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Motivo del permiso…" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="js-field">
+                  <label htmlFor="med-tipo" style={lbl}>Tipo</label>
+                  {tipoOpciones ? (
+                    <select id="med-tipo" name="tipo" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+                      {tipoOpciones.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : (
+                    <input id="med-tipo" name="tipo" type="text" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)} placeholder="Tipo de examen…" />
+                  )}
+                </div>
+                <div className="js-field">
+                  <label htmlFor="med-jefe" style={lbl}>Jefe</label>
+                  <input id="med-jefe" name="jefe_nombre" type="text" className="input" style={{ ...fld, color: '#94a3b8' }} value={jefeNombre} disabled />
+                </div>
+                <div className="js-field js-field-full">
+                  <label htmlFor="med-resultado" style={lbl}>Resultado</label>
+                  <input id="med-resultado" name="resultado" type="text" className="input" style={fld} value={form.resultado} onChange={e => set('resultado', e.target.value)} placeholder="Resultado…" />
+                </div>
+              </>
+            )}
             <div className="js-field js-field-full">
               <label htmlFor="med-obs" style={lbl}>Observaciones</label>
               <textarea id="med-obs" name="observaciones" className="input" rows={2} style={{ ...fld, resize: 'vertical' }} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
@@ -1829,8 +1865,10 @@ interface MedAgenteProps {
   label: string;
   emoji: string;
   tipoOpciones: string[] | null;
+  conHoras?: boolean;
 }
-function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoOpciones }: MedAgenteProps) {
+const hhmm = (t: any): string => t ? String(t).slice(0, 5) : '—';
+function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoOpciones, conHoras }: MedAgenteProps) {
   const toast = useToast();
   const [records,    setRecords]    = useState<any[]>([]);
   const [loading,    setLoading]    = useState(false);
@@ -1904,8 +1942,11 @@ function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoO
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                       <span style={{ fontWeight: 600, color: '#e2e8f0' }}>
-                        {r.tipo || label}
-                        {r.resultado && <span style={{ marginLeft: 6, color: '#94a3b8', fontWeight: 400 }}>→ {r.resultado}</span>}
+                        {conHoras ? (r.motivo || label) : (r.tipo || label)}
+                        {conHoras && (r.hora_desde || r.hora_hasta) && (
+                          <span style={{ marginLeft: 6, color: '#94a3b8', fontWeight: 400 }}>🕐 {hhmm(r.hora_desde)}–{hhmm(r.hora_hasta)}</span>
+                        )}
+                        {!conHoras && r.resultado && <span style={{ marginLeft: 6, color: '#94a3b8', fontWeight: 400 }}>→ {r.resultado}</span>}
                       </span>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {editable && (
@@ -1946,6 +1987,7 @@ function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoO
           endpoint={endpoint}
           label={label}
           tipoOpciones={tipoOpciones}
+          conHoras={conHoras}
           record={editRecord}
           onClose={() => { setModalOpen(false); setEditRecord(null); }}
           onSaved={() => { setExpanded(true); cargar(); }}
@@ -1965,8 +2007,9 @@ interface MedTablaGlobalProps {
   isGlobal: boolean;
   servicios: any[];
   sectores: any[];
+  conHoras?: boolean;
 }
-function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal, servicios, sectores }: MedTablaGlobalProps) {
+function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal, servicios, sectores, conHoras }: MedTablaGlobalProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1998,9 +2041,9 @@ function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal
               <tr>
                 <th>DNI</th>
                 <th>Agente</th>
-                <th>Tipo</th>
+                <th>{conHoras ? 'Motivo' : 'Tipo'}</th>
                 <th>Fecha</th>
-                <th>Resultado</th>
+                <th>{conHoras ? 'Horario' : 'Resultado'}</th>
                 <th>Jefe</th>
                 <th>Cargado el</th>
               </tr>
@@ -2013,10 +2056,12 @@ function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal
                   <tr key={r.id}>
                     <td className="js-td-dni">{r.dni}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{nombre}</td>
-                    <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{r.tipo || '—'}</td>
+                    <td style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{(conHoras ? r.motivo : r.tipo) || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{fmt(r.fecha)}</td>
                     <td className="js-td-muted" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.resultado || '—'}
+                      {conHoras
+                        ? ((r.hora_desde || r.hora_hasta) ? `${hhmm(r.hora_desde)}–${hhmm(r.hora_hasta)}` : '—')
+                        : (r.resultado || '—')}
                     </td>
                     <td className="js-td-muted">{r.jefe_nombre || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#64748b' }}>{fmtDateTime(r.created_at)}</td>
@@ -2185,7 +2230,7 @@ export function JefeServicioPage() {
   const [modalCerrar,        setModalCerrar]        = useState<any>(null);
 
   // Tab
-  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen'>('agentes');
+  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen' | 'permiso_salida'>('agentes');
 
   // Agentes de licencia (reconocimientos médicos activos del sector)
   const [licenciasActivas, setLicenciasActivas] = useState<any[]>([]);
@@ -3128,6 +3173,11 @@ export function JefeServicioPage() {
               >📝 Pre-examen</button>
               <button
                 type="button"
+                className={`js-tab${tab === 'permiso_salida' ? ' active' : ''}`}
+                onClick={() => setTab('permiso_salida')}
+              >🚪 Permiso salida</button>
+              <button
+                type="button"
                 className={`js-tab${tab === 'asignados' ? ' active' : ''}`}
                 onClick={() => setTab('asignados')}
               >
@@ -3269,6 +3319,22 @@ export function JefeServicioPage() {
                           label="Pre-examen"
                           emoji="📝"
                           tipoOpciones={null}
+                        />
+                      </div>
+                    )}
+
+                    {/* Permiso de salida — SOLO becados (ley beca/programa) */}
+                    {revistaTag(agenteActivo) === 'BECA' && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                        <MedAgente
+                          agente={agenteActivo}
+                          sectorId={sectorId}
+                          jefeNombre={u?.nombre || ''}
+                          endpoint="/permiso_salida"
+                          label="Permiso de salida"
+                          emoji="🚪"
+                          tipoOpciones={null}
+                          conHoras
                         />
                       </div>
                     )}
@@ -3620,12 +3686,13 @@ export function JefeServicioPage() {
               isGlobal={isGlobal}
             />
           )}
-          {/* ── Tabs genéricos: Papcolpo / Examen / Pre-examen ── */}
-          {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen') && (() => {
+          {/* ── Tabs genéricos: Papcolpo / Examen / Pre-examen / Permiso salida ── */}
+          {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen' || tab === 'permiso_salida') && (() => {
             const cfg = {
-              papcolpo: { endpoint: '/papcolpo', label: 'Pap / Colposcopía',        emoji: '🩺' },
-              examen:   { endpoint: '/examen',   label: 'Examen (Facultad)',         emoji: '🎓' },
-              prexamen: { endpoint: '/prexamen',  label: 'Pre-examen (Facultad)',    emoji: '📝' },
+              papcolpo:       { endpoint: '/papcolpo',       label: 'Pap / Colposcopía',           emoji: '🩺', conHoras: false },
+              examen:         { endpoint: '/examen',         label: 'Examen (Facultad)',           emoji: '🎓', conHoras: false },
+              prexamen:       { endpoint: '/prexamen',       label: 'Pre-examen (Facultad)',       emoji: '📝', conHoras: false },
+              permiso_salida: { endpoint: '/permiso_salida', label: 'Permiso de salida (Becados)', emoji: '🚪', conHoras: true },
             }[tab];
 
             return (
@@ -3638,6 +3705,7 @@ export function JefeServicioPage() {
                 isGlobal={isGlobal}
                 servicios={servicios}
                 sectores={sectores}
+                conHoras={cfg.conHoras}
               />
             );
           })()}

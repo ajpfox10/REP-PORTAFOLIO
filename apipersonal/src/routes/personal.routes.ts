@@ -693,10 +693,12 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         const [cargos, servicios, sectores] = await Promise.all([
           sequelize.query(`
             SELECT a.id, a.ocupacion_id, oc.nombre AS ocupacion_nombre,
+                   a.ley_id, l.nombre AS ley_nombre,
                    a.fecha_ingreso, a.fecha_egreso, a.estado_empleo,
                    a.created_at, a.deleted_at
             FROM agentes a
             LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id
+            LEFT JOIN ley l ON l.id = a.ley_id
             WHERE a.dni = :dni
             ORDER BY a.id ASC
           `, { replacements: { dni }, type: QueryTypes.SELECT }),

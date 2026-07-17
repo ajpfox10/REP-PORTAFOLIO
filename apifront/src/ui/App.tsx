@@ -48,6 +48,7 @@ import { SinFichajeSalidaPage }    from '../pages/SinFichajeSalidaPage';
 import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
 import { AccidentesPunzoPage } from '../pages/AccidentesPunzoPage';
 import { BajasGestionPage } from '../pages/BajasGestionPage';
+import { HistorialEstructuraPage } from '../pages/HistorialEstructuraPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
 import { HerramientasPage }    from '../pages/HerramientasPage';
 import { ConcursosPage }         from '../pages/ConcursosPage';
@@ -564,6 +565,17 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <BajasGestionPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/historial-estructura"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <HistorialEstructuraPage />
                   </Guard>
                 </Private>
               }
