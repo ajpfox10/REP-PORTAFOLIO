@@ -228,6 +228,7 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
                       {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
                       {isAdmin && navLink('/app/bajas-gestion', '📋 Gestión de Bajas')}
+                      {isAdmin && navLink('/app/historial-estructura', '🗂️ Historial Estructura')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 

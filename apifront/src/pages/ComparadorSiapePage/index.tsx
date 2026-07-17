@@ -38,6 +38,7 @@ interface ResultadoRow {
   hasta: string;
   estado: string;
   detalle: string;
+  ley?: string;
 }
 
 interface ApiResult {
@@ -178,7 +179,7 @@ function Tabla({ rows }: { rows: CompRow[] }) {
   );
 }
 
-const COLS_RES = ['Nombre','DNI','Novedad','Desde','Hasta','Estado','Detalle'];
+const COLS_RES = ['Nombre','DNI','Ley','Novedad','Desde','Hasta','Estado','Detalle'];
 const PAGE_SIZE = 50;
 
 function TablaResultados({ rows }: { rows: ResultadoRow[] }) {
@@ -206,6 +207,11 @@ function TablaResultados({ rows }: { rows: ResultadoRow[] }) {
                     <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: bg }}>
                       <td style={{ padding: '4px 8px', fontWeight: 500 }}>{r.nombre}</td>
                       <td style={{ padding: '4px 8px', fontFamily: 'monospace', fontSize: '0.73rem', color: '#94a3b8' }}>{r.dni}</td>
+                      <td style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: leyLabel(r.ley ?? '') === 'BECARIO' ? '#f59e0b' : '#94a3b8', fontWeight: leyLabel(r.ley ?? '') === 'BECARIO' ? 700 : 400, fontSize: '0.68rem' }}>
+                          {leyLabel(r.ley ?? '') || '—'}
+                        </span>
+                      </td>
                       <td style={{ padding: '4px 8px', color: '#a78bfa', fontSize: '0.72rem' }}>{r.novedad}</td>
                       <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', fontSize: '0.71rem' }}>{r.desde}</td>
                       <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', fontSize: '0.71rem' }}>{r.hasta}</td>
@@ -390,7 +396,9 @@ export function ComparadorSiapePage() {
   }, [resultado, filtroRes, filtroDetalle, textoRes]);
 
   const detallesDisponibles = useMemo(() => {
-    const base = filtroRes !== 'todos' ? resultado.filter(x => x.estado === filtroRes) : resultado;
+    let base = resultado;
+    if (filtroRes === 'no_ok') base = resultado.filter(x => x.estado !== 'OK');
+    else if (filtroRes !== 'todos') base = resultado.filter(x => x.estado === filtroRes);
     return [...new Set(base.map(x => x.detalle).filter(Boolean))].sort();
   }, [resultado, filtroRes]);
 

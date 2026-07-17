@@ -333,9 +333,13 @@ function loadMapeo(dir: string): Record<string, string[]> {
     const json = JSON.parse(raw);
 
     if (json && typeof json === 'object' && !Array.isArray(json)) {
+      // Las claves "__*" son configuración (p.ej. __aprueba_jefe), no equivalencias.
+      const soloMapeo = Object.fromEntries(
+        Object.entries(json).filter(([k]) => !k.startsWith('__')),
+      ) as Record<string, string[]>;
       // El JSON del editor NO debe pisar el mapeo base: se fusiona.
       // Así no se pierden equivalencias críticas para detectar RANGO_DISTINTO.
-      return mergeMapeo(DEFAULT_MAPEO, json);
+      return mergeMapeo(DEFAULT_MAPEO, soloMapeo);
     }
 
     return DEFAULT_MAPEO;
@@ -343,6 +347,7 @@ function loadMapeo(dir: string): Record<string, string[]> {
     return DEFAULT_MAPEO;
   }
 }
+
 
 
 function saveMapeo(dir: string, mapeo: Record<string, string[]>) {
@@ -566,6 +571,7 @@ async function parseSiap(fp: string): Promise<any[]> {
   const colDesde    = headers['fecha_desde'] ?? headers['fecha desde'] ?? headers['desde'] ?? 13;
   const colHasta    = headers['fecha_hasta'] ?? headers['fecha hasta'] ?? headers['hasta'] ?? 14;
   const colJustificado = headers['justificado'] ?? 15;
+  const colAgrup    = headers['agrupamiento'] ?? 10;
   // E5 = col 21, E6 = col 22 — juntos determinan la dependencia
   const colE5 = headers['e5'] ?? 21;
   const colE6 = headers['e6'] ?? 22;
@@ -627,6 +633,7 @@ function resolveDepedencia(e5raw: string, e6raw: string): string {
       hasta,
       justificado, // leído directo del SIAP, no calculado
       upa: dependencia, // clave para elegir el archivo ministerio correcto
+      agrupamiento: cellToText(r.getCell(colAgrup)?.value),
     });
   });
 
@@ -2934,6 +2941,145 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       });
     } catch (err: any) {
       logger.error({ msg: 'cruce-horarios error', err: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
+    }
+  });
+
+  // ─── HISTORIAL DE LICENCIAS (tabla `historial`, migraciones 032/033) ─────────
+  // Filtros comunes por query: anio, dependencia, novedad, agrupamiento,
+  // regimen (regimen_estatutario), planta, justificado, q (DNI o apellido),
+  // incluirPresente=1 (por defecto PRESENTE queda afuera: no es licencia).
+  function historialWhere(q: any): { where: string; repl: Record<string, any> } {
+    const conds: string[] = ['1=1'];
+    const repl: Record<string, any> = {};
+    if (String(q.incluirPresente || '') !== '1') conds.push("novedad <> 'PRESENTE'");
+    if (q.anio) {
+      const a = Number(q.anio);
+      if (Number.isFinite(a)) {
+        conds.push('fecha_desde >= :anioD AND fecha_desde < :anioH');
+        repl.anioD = `${a}-01-01`;
+        repl.anioH = `${a + 1}-01-01`;
+      }
+    }
+    const iguales: [string, string][] = [
+      ['dependencia', 'dependencia'],
+      ['novedad', 'novedad'],
+      ['agrupamiento', 'agrupamiento'],
+      ['regimen', 'regimen_estatutario'],
+      ['planta', 'planta'],
+      ['justificado', 'justificado'],
+    ];
+    for (const [param, col] of iguales) {
+      if (q[param]) { conds.push(`${col} = :${param}`); repl[param] = String(q[param]); }
+    }
+    if (q.q) {
+      const t = String(q.q).trim();
+      if (/^\d{6,}$/.test(t)) { conds.push('dni = :dniQ'); repl.dniQ = Number(t); }
+      else if (t) {
+        conds.push("(apellido LIKE :txtQ OR nombre LIKE :txtQ OR CONCAT(apellido, ' ', nombre) LIKE :txtQ)");
+        repl.txtQ = `%${t}%`;
+      }
+    }
+    return { where: conds.join(' AND '), repl };
+  }
+
+  // GET /asistencia/historial-analisis → todos los agregados para el tablero
+  router.get('/historial-analisis', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
+    try {
+      const { QueryTypes } = await import('sequelize');
+      const { where, repl } = historialWhere(req.query);
+      // días de cada licencia = hasta - desde + 1 (mínimo 1)
+      const DIAS = 'SUM(GREATEST(DATEDIFF(IFNULL(fecha_hasta, fecha_desde), fecha_desde) + 1, 1))';
+      const SEL = `COUNT(*) AS licencias, ${DIAS} AS dias, COUNT(DISTINCT dni) AS agentes`;
+      const Q = (sql: string) => sequelize.query<any>(sql, { type: QueryTypes.SELECT, replacements: repl });
+
+      const [
+        cardsRows, porAnio, porMesSerie, estacionalidad, porDiaSemana,
+        porNovedad, porDependencia, porAgrupamiento, porRegimen, porPlanta,
+        porJustificado, topAgentesDias, topAgentesLicencias, aniosRows,
+      ] = await Promise.all([
+        Q(`SELECT ${SEL}, COUNT(DISTINCT novedad) AS tipos FROM historial WHERE ${where}`),
+        Q(`SELECT YEAR(fecha_desde) AS anio, ${SEL} FROM historial WHERE ${where} AND fecha_desde IS NOT NULL GROUP BY anio ORDER BY anio`),
+        Q(`SELECT DATE_FORMAT(fecha_desde, '%Y-%m') AS mes, ${SEL} FROM historial WHERE ${where} AND fecha_desde IS NOT NULL GROUP BY mes ORDER BY mes`),
+        Q(`SELECT MONTH(fecha_desde) AS mes, ${SEL} FROM historial WHERE ${where} AND fecha_desde IS NOT NULL GROUP BY mes ORDER BY mes`),
+        Q(`SELECT WEEKDAY(fecha_desde) AS dia, ${SEL} FROM historial WHERE ${where} AND fecha_desde IS NOT NULL GROUP BY dia ORDER BY dia`),
+        // GROUP BY columna cruda (sin IFNULL) para que el índice cubridor (035)
+        // agrupe solo, sin tabla temporal; el NULL se traduce a '(sin dato)'
+        // abajo. FORCE INDEX porque el optimizador no lo elige solo (medido:
+        // 2-4× más rápido); con búsqueda por apellido (txtQ, columna fuera del
+        // índice) forzarlo obligaría a 1M de lookups → se deja al optimizador.
+        Q(`SELECT novedad AS valor, ${SEL} FROM historial WHERE ${where} GROUP BY novedad ORDER BY licencias DESC`),
+        Q(`SELECT dependencia AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__dep)'} WHERE ${where} GROUP BY dependencia ORDER BY licencias DESC`),
+        Q(`SELECT agrupamiento AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__agrup)'} WHERE ${where} GROUP BY agrupamiento ORDER BY licencias DESC`),
+        Q(`SELECT regimen_estatutario AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__regimen)'} WHERE ${where} GROUP BY regimen_estatutario ORDER BY licencias DESC`),
+        Q(`SELECT planta AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__planta)'} WHERE ${where} GROUP BY planta ORDER BY licencias DESC`),
+        Q(`SELECT justificado AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__justif)'} WHERE ${where} GROUP BY justificado ORDER BY licencias DESC`),
+        // agregamos por dni sobre el índice y recién ahí buscamos el nombre (25 filas)
+        Q(`SELECT t.dni, p.apellido, p.nombre, t.licencias, t.dias, t.tipos
+           FROM (
+             SELECT dni, COUNT(*) AS licencias, ${DIAS} AS dias, COUNT(DISTINCT novedad) AS tipos
+             FROM historial WHERE ${where} GROUP BY dni ORDER BY dias DESC LIMIT 25
+           ) t LEFT JOIN personal p ON p.dni = t.dni`),
+        Q(`SELECT t.dni, p.apellido, p.nombre, t.licencias, t.dias, t.tipos
+           FROM (
+             SELECT dni, COUNT(*) AS licencias, ${DIAS} AS dias, COUNT(DISTINCT novedad) AS tipos
+             FROM historial WHERE ${where} GROUP BY dni ORDER BY licencias DESC LIMIT 25
+           ) t LEFT JOIN personal p ON p.dni = t.dni`),
+        // años disponibles SIN filtros, para que el selector no se achique solo
+        sequelize.query<any>(
+          'SELECT DISTINCT YEAR(fecha_desde) AS anio FROM historial WHERE fecha_desde IS NOT NULL ORDER BY anio',
+          { type: QueryTypes.SELECT },
+        ),
+      ]);
+
+      const sinDato = (rows: any[]) => rows.map(r => ({ ...r, valor: r.valor ?? '(sin dato)' }));
+
+      return res.json({
+        ok: true,
+        cards: cardsRows[0] || { licencias: 0, dias: 0, agentes: 0, tipos: 0 },
+        porAnio, porMesSerie, estacionalidad, porDiaSemana,
+        porNovedad: sinDato(porNovedad),
+        porDependencia: sinDato(porDependencia),
+        porAgrupamiento: sinDato(porAgrupamiento),
+        porRegimen: sinDato(porRegimen),
+        porPlanta: sinDato(porPlanta),
+        porJustificado: sinDato(porJustificado),
+        topAgentesDias, topAgentesLicencias,
+        anios: aniosRows.map((r: any) => Number(r.anio)),
+      });
+    } catch (err: any) {
+      logger.error({ msg: 'historial-analisis error', err: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
+    }
+  });
+
+  // GET /asistencia/historial-detalle → filas crudas paginadas (mismos filtros)
+  router.get('/historial-detalle', requirePermission('api:access'), async (req: Request, res: Response) => {
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
+    try {
+      const { QueryTypes } = await import('sequelize');
+      const { where, repl } = historialWhere(req.query);
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const limit = Math.min(5000, Math.max(1, Number(req.query.limit) || 100));
+
+      const [totRows, rows] = await Promise.all([
+        sequelize.query<any>(`SELECT COUNT(*) AS n FROM historial WHERE ${where}`,
+          { type: QueryTypes.SELECT, replacements: repl }),
+        sequelize.query<any>(`
+          SELECT dni, apellido, nombre, novedad, fecha_desde, fecha_hasta,
+                 GREATEST(DATEDIFF(IFNULL(fecha_hasta, fecha_desde), fecha_desde) + 1, 1) AS dias,
+                 justificado, dependencia, agrupamiento, regimen_estatutario, planta, estructura_servicio
+          FROM historial
+          WHERE ${where}
+          ORDER BY fecha_desde DESC, id DESC
+          LIMIT :limQ OFFSET :offQ
+        `, { type: QueryTypes.SELECT, replacements: { ...repl, limQ: limit, offQ: (page - 1) * limit } }),
+      ]);
+
+      return res.json({ ok: true, total: Number(totRows[0]?.n || 0), page, limit, rows });
+    } catch (err: any) {
+      logger.error({ msg: 'historial-detalle error', err: err?.message });
       return res.status(500).json({ ok: false, error: err?.message || 'Error interno' });
     }
   });

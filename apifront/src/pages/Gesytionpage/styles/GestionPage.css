@@ -294,9 +294,31 @@
 /* ===== FIX PARA GRIDS ANIDADOS ===== */
 .gp-detail-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: clamp(10px, 1.2vw, 16px);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
   width: 100%;
+  margin-top: 8px;
+}
+
+.gp-detail-grid .gp-kv {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.gp-detail-grid .gp-k {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.gp-detail-grid .gp-v {
+  font-size: 0.84rem;
+  color: #e2e8f0;
+  word-break: break-word;
 }
 
 /* ===== FOTO CREDENCIAL ===== */
