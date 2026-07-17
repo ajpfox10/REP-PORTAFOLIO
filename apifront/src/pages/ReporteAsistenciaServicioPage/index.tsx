@@ -6,6 +6,7 @@ import { apiFetch } from '../../api/http';
 import XLSXStyle from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
 import { CruceHorariosTab } from './CruceHorariosTab';
+import { LicenciasHistorialTab } from './LicenciasHistorialTab';
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ export function ReporteAsistenciaServicioPage() {
   // ── Vista ──
   const [agenteAbierto, setAgenteAbierto] = useState<string | null>(null);
   const [vistaAgente, setVistaAgente]     = useState<'semanas' | 'dias'>('semanas');
-  const [tab, setTab]                     = useState<'reporte' | 'cruce'>('reporte');
+  const [tab, setTab]                     = useState<'reporte' | 'cruce' | 'licencias'>('reporte');
 
   // Cargar servicios y archivos al montar
   useEffect(() => {
@@ -276,11 +277,18 @@ export function ReporteAsistenciaServicioPage() {
           onClick={() => setTab('cruce')}>
           🕐 Cruce de horarios
         </button>
+        <button type="button" className="btn"
+          style={tab === 'licencias' ? { background: 'rgba(99,102,241,0.25)', color: '#818cf8', fontWeight: 700 } : {}}
+          onClick={() => setTab('licencias')}>
+          📋 Licencias
+        </button>
       </div>
 
       {tab === 'cruce' && (
         <CruceHorariosTab servicios={servicios} horariosFile={horariosFile} />
       )}
+
+      {tab === 'licencias' && <LicenciasHistorialTab />}
 
       {tab === 'reporte' && (<>
 

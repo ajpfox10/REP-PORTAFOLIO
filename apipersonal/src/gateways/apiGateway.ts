@@ -181,7 +181,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
   app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));
   app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter());
-  app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter());
+  app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter(sequelize));
   app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
   app.use(`${apiPrefix}/fc-cert-reemplazos`, ...protect, buildFcCertReemplazosRouter(sequelize));
   app.use(`${apiPrefix}/nombramiento`,       ...protect, buildNombramientoRouter(sequelize));

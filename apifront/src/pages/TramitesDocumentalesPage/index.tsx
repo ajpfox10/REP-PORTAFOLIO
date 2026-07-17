@@ -3,6 +3,7 @@ import { AlignmentType, BorderStyle, Document, Packer, Paragraph, Table, TableCe
 import { Layout } from '../../components/Layout';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { AptosTab } from './AptosTab';
 import './styles/TramitesDocumentalesPage.css';
 
 type ConfigData = {
@@ -109,6 +110,14 @@ const CARATULA_DOC_KEY = '__caratula__';
 const RUPA_DOC_KEY = '__rupa__';
 const SAVED_LISTADOS_KEY = 'tramites-documentales:listados-preparados:v1';
 const SAVED_LISTADOS_MIGRATED_KEY = 'tramites-documentales:listados-preparados:migrated-to-api:v1';
+const CARATULA_EXPECTED_NAMES = [
+  'caratulahtal10430.pdf',
+  'caratulahtal10471.pdf',
+  'caratulaupa1810430.pdf',
+  'caratulaupa1810471.pdf',
+  'caratulaupa410430.pdf',
+  'caratulaupa410471.pdf',
+];
 
 type ProvidenciaLey = '10471' | '10430';
 type ProvidenciaRegimen10471 = 'planta' | 'guardia';
@@ -334,6 +343,7 @@ function parsePageDragPayload(raw: string) {
 
 export function TramitesDocumentalesPage() {
   const toast = useToast();
+  const [pageTab, setPageTab] = useState<'tramites' | 'aptos'>('tramites');
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [becaTipos, setBecaTipos] = useState<Array<{ value: string; label: string; total?: number }>>([]);
   const [dependencias, setDependencias] = useState<Array<{ value: string; label: string; total?: number }>>([]);
@@ -1541,6 +1551,18 @@ export function TramitesDocumentalesPage() {
         <input type="checkbox" checked={includeCaratula} onChange={(e) => setIncludeCaratula(e.target.checked)} />
         <span>Carátula desde Descargas</span>
       </label>
+      {includeCaratula ? (
+        <div className="td-caratula-warning" role="note">
+          <strong>Caratula: nombre esperado en Descargas</strong>
+          <span>
+            La app busca <code>caratula</code> + establecimiento + ley. Hospital/Evita usa <code>htal</code>;
+            UPA 18 usa <code>upa18</code>; UPA 4 usa <code>upa4</code>. No usar <code>siape</code> en el nombre.
+          </span>
+          <div className="td-caratula-names">
+            {CARATULA_EXPECTED_NAMES.map((name) => <code key={name}>{name}</code>)}
+          </div>
+        </div>
+      ) : null}
       <label className="td-checkline">
         <input type="checkbox" checked={includeRupa} onChange={(e) => setIncludeRupa(e.target.checked)} />
         <span>RUPA desde G DOCU</span>
@@ -1564,6 +1586,23 @@ export function TramitesDocumentalesPage() {
 
   return (
     <Layout title="Trámites documentales" showBack>
+      {/* Pestañas de la página */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        {([['tramites', '📄 Trámites'], ['aptos', '🩺 Aptos']] as const).map(([key, label]) => (
+          <button key={key} type="button" onClick={() => setPageTab(key)}
+            style={{
+              padding: '7px 18px', fontSize: '0.8rem', fontWeight: pageTab === key ? 700 : 400,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: pageTab === key ? '#fff' : '#64748b',
+              borderBottom: pageTab === key ? '2px solid #7c3aed' : '2px solid transparent',
+              marginBottom: -1,
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {pageTab === 'aptos' ? <AptosTab /> : (<>
       <section className="td-card td-config">
         <div>
           <div className="td-eyebrow">Carpetas</div>
@@ -2387,6 +2426,7 @@ export function TramitesDocumentalesPage() {
           </div>
         </div>
       ) : null}
+      </>)}
     </Layout>
   );
 }

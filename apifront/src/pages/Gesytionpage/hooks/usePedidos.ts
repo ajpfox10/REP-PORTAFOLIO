@@ -21,6 +21,7 @@ export function usePedidos(cleanDni: string, moduleState: ModuleState) {
       "Copia de recibos": false,
       "Constancia de servicios": false,
       "Certificación de rotación": false,
+      "Certificado de cambio de recorrido": false,
     } as Record<string, boolean>,
     custom: "",
     caracteristicas: "",
