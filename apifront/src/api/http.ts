@@ -252,6 +252,71 @@ export async function apiFetch<T = any>(path: string, init: RequestInit = {}): P
   }
 }
 
+export async function apiFetchNdjson<T = any>(
+  path: string,
+  init: RequestInit = {},
+  onEvent: (event: T) => void
+): Promise<void> {
+  await loadRuntimeConfig();
+
+  let headers = buildHeaders(init.headers);
+  headers.set('Accept', 'application/x-ndjson');
+  if (typeof FormData !== 'undefined' && init.body instanceof FormData) {
+    headers.delete('Content-Type');
+  }
+
+  let res = await doFetch(path, init, headers);
+  if (res.status === 401 && !isAuthEndpoint(path)) {
+    const s = loadSession();
+    if (s?.refreshToken) {
+      try {
+        await refreshTokensIfPossible();
+        headers = buildHeaders(init.headers);
+        headers.set('Accept', 'application/x-ndjson');
+        res = await doFetch(path, init, headers);
+      } catch (e: any) {
+        clearSession();
+        logEvent({ level: 'warn', what: 'auth_401_refresh_failed', where: `apiFetchNdjson:${path}`, status: 401, details: e });
+        throw { message: e?.message ?? 'Sesion expirada', status: 401, details: e } as ApiError;
+      }
+    } else {
+      clearSession();
+    }
+  }
+
+  if (!res.ok) {
+    const body = await parseJsonSafe(res);
+    const raw = body?.error?.message ?? body?.error ?? body?.message ?? `Error ${res.status}`;
+    throw { message: errorToString(raw), status: res.status, details: body } as ApiError;
+  }
+
+  if (!res.body) {
+    throw { message: 'Respuesta streaming invalida', status: res.status } as ApiError;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      onEvent(JSON.parse(trimmed) as T);
+    }
+
+    if (done) break;
+  }
+
+  const tail = buffer.trim();
+  if (tail) onEvent(JSON.parse(tail) as T);
+}
+
 export async function apiFetchBlob(path: string, init: RequestInit = {}): Promise<Blob> {
   await loadRuntimeConfig();
 

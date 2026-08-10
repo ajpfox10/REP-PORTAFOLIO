@@ -9,7 +9,8 @@ export type DashboardAlertKey =
   | 'accidentesPunzo'
   | 'jefaturas'
   | 'concursos'
-  | 'alertasAgente';
+  | 'alertasAgente'
+  | 'cumpleanos';
 
 export interface DashboardAlertBehavior {
   enabled: boolean;
@@ -41,6 +42,7 @@ const FALLBACK_CONFIG: AlertsConfig = {
     jefaturas: FALLBACK_BEHAVIOR,
     concursos: FALLBACK_BEHAVIOR,
     alertasAgente: FALLBACK_BEHAVIOR,
+    cumpleanos: FALLBACK_BEHAVIOR,
   },
 };
 

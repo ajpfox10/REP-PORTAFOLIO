@@ -20,6 +20,7 @@ interface CompRow {
   novedad_siap: string;
   fecha_desde_siap: string;
   fecha_hasta_siap: string;
+  justificado_siap?: string;
   estado: 'COINCIDENTE' | 'NO COINCIDENTE' | 'RANGO_DISTINTO' | 'SOLO_SIAP';
   motivo: string;
 }
@@ -184,6 +185,7 @@ const PAGE_SIZE = 50;
 
 function TablaResultados({ rows }: { rows: ResultadoRow[] }) {
   const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [rows]);
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages - 1);
   const visible    = rows.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
@@ -245,12 +247,50 @@ const toRow = (r: CompRow) => ({
   'Desde Min': r.fecha_desde_min, 'Hasta Min': r.fecha_hasta_min,
   'Nov. SIAP': r.novedad_siap,
   'Desde SIAP': r.fecha_desde_siap, 'Hasta SIAP': r.fecha_hasta_siap,
+  JUSTIFICADO: r.justificado_siap ?? '',
   Motivo: r.motivo,
 });
 
 // Clave para identificar una novedad ya procesada con OK
 function resKey(dni: string, novedad: string, desde: string, hasta: string) {
   return `${dni}|${novedad}|${desde}|${hasta}`;
+}
+
+function detalleGrupo(detalle: string) {
+  const d = String(detalle ?? '').replace(/^×\s*Close\s*/i, '').trim();
+  const n = d.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  if (!d) return '';
+  if (n.startsWith('SUPERPOSICION EXACTA')) return 'Superposicion exacta';
+  if (n.startsWith('SUPERPOSICION NO EXACTA')) return 'Superposicion no exacta';
+  if (n.includes('SE SUPERPONE')) return 'Superposicion sin identificar';
+  if (n.includes('MAXIMO PERMITIDO') || n.includes('MAXIMO') || n.includes('SUPERA')) return 'Maximo permitido';
+  if (n.includes('NO PERTENECE') || n.includes('NO PRESTA SERVICIO')) return 'No pertenece / no presta servicio';
+  if (n.includes('OPCION NO DISPONIBLE')) return 'Opcion no disponible';
+  if (n.includes('TIMEOUT') || n.includes('LOCATOR')) return 'Timeout de pantalla';
+  if (n.includes('SIN FILA VALIDA')) return 'Sin fila valida';
+  if (n.includes('YA POSEE')) return 'Ya posee novedad';
+  if (n.includes('BROWSER CERRADO')) return 'Browser cerrado';
+  return d.split('|')[0].split('.')[0].slice(0, 120).trim();
+}
+
+function normFiltro(v: string) {
+  return String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+}
+
+function novedadesPisadas(detalle: string) {
+  const text = String(detalle ?? '').replace(/\s+/g, ' ').trim();
+  const idx = text.toLowerCase().indexOf('se pisa con ');
+  if (idx < 0) return [];
+
+  const tail = text.slice(idx + 'se pisa con '.length);
+  const found = new Map<string, string>();
+  for (const part of tail.split(/\s+\|\s+/)) {
+    const m = part.match(/^(.*?)(?=\s+\d{1,2}\/\d{1,2}\/\d{4})/);
+    const label = String(m?.[1] ?? '').replace(/\([^)]*\)/g, '').replace(/[.;,]+$/g, '').replace(/\s+/g, ' ').trim();
+    const key = normFiltro(label);
+    if (key && !found.has(key)) found.set(key, label.toUpperCase());
+  }
+  return [...found.values()];
 }
 
 export function ComparadorSiapePage() {
@@ -272,7 +312,9 @@ export function ComparadorSiapePage() {
   const [exportandoPend, setExportandoPend] = useState(false);
   const [tab, setTab] = useState<'comparacion' | 'resultados'>('comparacion');
   const [filtroDetalle, setFiltroDetalle] = useState('todos');
+  const [filtroPisada, setFiltroPisada] = useState('todos');
   const [cargando, setCargando]           = useState(false);
+  const [cargandoAusentes, setCargandoAusentes] = useState(false);
   const [segundaPasada, setSegundaPasada] = useState(false);
   const firstLoad = useRef(false);
 
@@ -382,30 +424,83 @@ export function ComparadorSiapePage() {
     };
   }, [completa, data]);
 
-  // Resultado filtrado
-  const resFiltrado = useMemo(() => {
+  const resultadoPorEstado = useMemo(() => {
     let r = resultado;
     if (filtroRes === 'no_ok') r = r.filter(x => x.estado !== 'OK');
     else if (filtroRes !== 'todos') r = r.filter(x => x.estado === filtroRes);
-    if (filtroDetalle !== 'todos') r = r.filter(x => x.detalle === filtroDetalle);
+    return r;
+  }, [resultado, filtroRes]);
+
+  const detallesDisponibles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of resultadoPorEstado) {
+      const g = detalleGrupo(row.detalle);
+      if (!g) continue;
+      counts.set(g, (counts.get(g) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'));
+  }, [resultadoPorEstado]);
+
+  const filtroDetalleActivo = useMemo(() => {
+    if (filtroDetalle === 'todos') return 'todos';
+    return detallesDisponibles.some(([d]) => d === filtroDetalle) ? filtroDetalle : 'todos';
+  }, [detallesDisponibles, filtroDetalle]);
+
+  useEffect(() => {
+    if (filtroDetalle !== filtroDetalleActivo) setFiltroDetalle(filtroDetalleActivo);
+  }, [filtroDetalle, filtroDetalleActivo]);
+
+  const resultadoPorMotivo = useMemo(() => {
+    let r = resultadoPorEstado;
+    if (filtroDetalleActivo !== 'todos') r = r.filter(x => detalleGrupo(x.detalle) === filtroDetalleActivo);
+    return r;
+  }, [resultadoPorEstado, filtroDetalleActivo]);
+
+  const pisadasDisponibles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of resultadoPorMotivo) {
+      const pisadas = novedadesPisadas(row.detalle);
+      if (!pisadas.length) continue;
+      const vistas = new Set<string>();
+      for (const p of pisadas) {
+        const key = normFiltro(p);
+        if (!key || vistas.has(key)) continue;
+        vistas.add(key);
+        counts.set(p, (counts.get(p) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'));
+  }, [resultadoPorMotivo]);
+
+  const filtroPisadaActivo = useMemo(() => {
+    if (filtroPisada === 'todos') return 'todos';
+    return pisadasDisponibles.some(([d]) => d === filtroPisada) ? filtroPisada : 'todos';
+  }, [pisadasDisponibles, filtroPisada]);
+
+  useEffect(() => {
+    if (filtroPisada !== filtroPisadaActivo) setFiltroPisada(filtroPisadaActivo);
+  }, [filtroPisada, filtroPisadaActivo]);
+
+  // Resultado filtrado
+  const resFiltrado = useMemo(() => {
+    let r = resultadoPorMotivo;
+    if (filtroPisadaActivo !== 'todos') r = r.filter(x => novedadesPisadas(x.detalle).includes(filtroPisadaActivo));
     if (textoRes.trim()) {
       const t = textoRes.toLowerCase();
       r = r.filter(x => x.nombre.toLowerCase().includes(t) || x.dni.includes(t));
     }
     return r;
-  }, [resultado, filtroRes, filtroDetalle, textoRes]);
-
-  const detallesDisponibles = useMemo(() => {
-    let base = resultado;
-    if (filtroRes === 'no_ok') base = resultado.filter(x => x.estado !== 'OK');
-    else if (filtroRes !== 'todos') base = resultado.filter(x => x.estado === filtroRes);
-    return [...new Set(base.map(x => x.detalle).filter(Boolean))].sort();
-  }, [resultado, filtroRes]);
+  }, [resultadoPorMotivo, filtroPisadaActivo, textoRes]);
 
   const resConteo = useMemo(() => ({
     ok:    resultado.filter(r => r.estado === 'OK').length,
     error: resultado.filter(r => r.estado !== 'OK').length,
   }), [resultado]);
+
+  const erroresVisibles = useMemo(
+    () => resFiltrado.filter(r => r.estado !== 'OK'),
+    [resFiltrado]
+  );
 
   return (
     <Layout title="Comparador SIAPE vs Ministerio" showBack>
@@ -436,6 +531,17 @@ export function ComparadorSiapePage() {
             style={{ background: '#2563eb', color: '#fff', padding: '9px 24px' }}>
             Cargar y comparar
           </button>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+            {(['HOSPITAL', 'UPA 4', 'UPA 18'] as const).map(d => (
+              <button key={`aus-inicial-${d}`} className="btn"
+                onClick={() => lanzarScript('/intranet/cargar-ausentes', { dependencia: d }, setCargandoAusentes)}
+                disabled={cargandoAusentes}
+                title="Carga AUSENTE SIN AVISO desde D:\\G\\comparacion\\SIAPE\\SIAPE.xlsx"
+                style={{ background: '#dc2626', color: '#fff', fontSize: '0.75rem' }}>
+                {cargandoAusentes ? '...' : `Ausentes ${d}`}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -552,6 +658,15 @@ export function ComparadorSiapePage() {
                 {cargando ? '⏳...' : `▶ ${d}`}
               </button>
             ))}
+            {(['HOSPITAL', 'UPA 4', 'UPA 18'] as const).map(d => (
+              <button key={`aus-${d}`} className="btn"
+                onClick={() => lanzarScript('/intranet/cargar-ausentes', { dependencia: d }, setCargandoAusentes)}
+                disabled={cargandoAusentes}
+                title="Carga AUSENTE SIN AVISO desde D:\\G\\comparacion\\SIAPE\\SIAPE.xlsx"
+                style={{ background: '#dc2626', color: '#fff', fontSize: '0.75rem' }}>
+                {cargandoAusentes ? '...' : `Ausentes ${d}`}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -568,7 +683,7 @@ export function ComparadorSiapePage() {
           {DEPS_RES.map(d => {
             const color = DEP_COLORS[d] ?? '#94a3b8';
             return (
-              <button key={d} onClick={() => { setDepRes(d); setFiltroRes('no_ok'); setFiltroDetalle('todos'); setTextoRes(''); }}
+              <button key={d} onClick={() => { setDepRes(d); setFiltroRes('no_ok'); setFiltroDetalle('todos'); setFiltroPisada('todos'); setTextoRes(''); }}
                 style={{
                   padding: '5px 16px', fontSize: '0.78rem', fontWeight: depRes === d ? 700 : 400,
                   background: 'none', border: 'none', cursor: 'pointer',
@@ -607,17 +722,16 @@ export function ComparadorSiapePage() {
                 📥 Exportar ({resFiltrado.length})
               </button>
             )}
-            {resFiltrado.some(r => r.estado !== 'OK') && (
+            {erroresVisibles.length > 0 && (
               <button className="btn"
                 onClick={() => {
-                  const errores = resFiltrado
-                    .filter(r => r.estado !== 'OK')
+                  const errores = erroresVisibles
                     .map(r => ({ Nombre: r.nombre, DNI: r.dni, Novedad: r.novedad, Desde: r.desde, Hasta: r.hasta }));
                   lanzarScript('/intranet/segunda-pasada', { filas: errores, dependencia: depRes }, setSegundaPasada);
                 }}
                 disabled={segundaPasada}
                 style={{ background: '#d97706', color: '#fff', fontSize: '0.73rem' }}>
-                {segundaPasada ? '⏳...' : `🔁 Segunda pasada ${depRes}`}
+                {segundaPasada ? '⏳...' : `🔁 Segunda pasada ${depRes} (${erroresVisibles.length})`}
               </button>
             )}
           </div>
@@ -633,7 +747,7 @@ export function ComparadorSiapePage() {
           <>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
               <select className="input" value={filtroRes}
-                onChange={e => { setFiltroRes(e.target.value); setFiltroDetalle('todos'); }}
+                onChange={e => { setFiltroRes(e.target.value); setFiltroDetalle('todos'); setFiltroPisada('todos'); }}
                 style={{ fontSize: '0.78rem', width: 160 }}>
                 <option value="no_ok">Solo errores</option>
                 <option value="todos">Todos los estados</option>
@@ -642,11 +756,19 @@ export function ComparadorSiapePage() {
                 <option value="EXCEPCION">Solo Excepción</option>
                 <option value="ERROR_NAV">Solo Nav error</option>
               </select>
-              <select className="input" value={filtroDetalle} onChange={e => setFiltroDetalle(e.target.value)}
+              <select className="input" value={filtroDetalleActivo} onChange={e => { setFiltroDetalle(e.target.value); setFiltroPisada('todos'); }}
                 style={{ fontSize: '0.78rem', flex: '1 1 200px', minWidth: 160 }}>
                 <option value="todos">Todos los motivos</option>
-                {detallesDisponibles.map(d => (
-                  <option key={d} value={d}>{d}</option>
+                {detallesDisponibles.map(([d, count]) => (
+                  <option key={d} value={d}>{d} ({count})</option>
+                ))}
+              </select>
+              <select className="input" value={filtroPisadaActivo} onChange={e => setFiltroPisada(e.target.value)}
+                disabled={pisadasDisponibles.length === 0}
+                style={{ fontSize: '0.78rem', flex: '1 1 180px', minWidth: 150 }}>
+                <option value="todos">Todas las pisadas</option>
+                {pisadasDisponibles.map(([d, count]) => (
+                  <option key={d} value={d}>Se pisa con {d} ({count})</option>
                 ))}
               </select>
               <input className="input" placeholder="Buscar nombre o DNI..."

@@ -28,6 +28,11 @@ echo === apifront ===
 robocopy "C:\apps\personaldev\apifront" "D:\Repositorios\apifront" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
 
 echo.
+echo === Sanitizar credenciales en los .py copiados (usuario/clave -^> xxxxxxx) ===
+if defined DRY echo   [dry] omitido en modo prueba
+if not defined DRY powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='D:\Repositorios\apipersonal\scripts'; if(Test-Path $d){ $q=[char]34; $sq=[char]39; $pat='(?im)^(\s*(?:USUARIO|USER|CLAVE|PASS|PASSWORD|PWD)\s*=\s*)([' + $sq + $q + ']).*?\2'; Get-ChildItem $d -Filter *.py -File | ForEach-Object { $p=$_.FullName; $c=Get-Content -Raw -Encoding UTF8 $p; $o=$c; $c=$c -replace 'PEVERIAJ','xxxxxxx'; $c=$c -replace $pat,'${1}${2}xxxxxxx${2}'; if($c -ne $o){ [System.IO.File]::WriteAllText($p,$c,(New-Object System.Text.UTF8Encoding($false))); Write-Host ('  redactado: '+$_.Name) } else { Write-Host ('  sin cambios: '+$_.Name) } } }"
+
+echo.
 echo ================================================================
 echo   Listo (modo %MODE%). NO se toco git.
 echo   Revisar:  git -C D:\Repositorios status

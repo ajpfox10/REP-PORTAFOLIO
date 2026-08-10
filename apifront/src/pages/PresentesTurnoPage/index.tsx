@@ -5,6 +5,11 @@ import { useToast } from '../../ui/toast';
 
 type Servicio = { id: number; nombre: string };
 type Archivo = { name: string };
+type AutoArchivos = {
+  horariosName?: string;
+  siapName?: string;
+  ministerioName?: string;
+};
 type Justificacion = { fuente: 'SIAP' | 'Ministerio'; novedad: string; desde: string; hasta: string };
 type AgenteTurno = {
   dni: string;
@@ -55,6 +60,10 @@ const TURNO_COLOR: Record<string, string> = {
 function todayIso() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function displayFileName(name: string) {
+  return name.replace(/[\\/]+/g, ' / ');
 }
 
 function fmtFecha(s: string) {
@@ -187,10 +196,11 @@ export function PresentesTurnoPage() {
     apiFetch<any>('/asistencia/archivos')
       .then((r) => {
         const files = Array.isArray(r?.files) ? r.files : [];
+        const auto: AutoArchivos = r?.auto ?? {};
         setArchivos(files);
-        const h = files.find((f: Archivo) => f.name.toUpperCase().includes('HORARIO'));
-        const s = files.find((f: Archivo) => f.name.toUpperCase().includes('SIAP'));
-        const m = files.find((f: Archivo) => f.name.toUpperCase().includes('MINISTERIO'));
+        const h = auto.horariosName ? files.find((f: Archivo) => f.name === auto.horariosName) : files.find((f: Archivo) => f.name.toUpperCase().includes('HORARIO'));
+        const s = auto.siapName ? files.find((f: Archivo) => f.name === auto.siapName) : files.find((f: Archivo) => f.name.toUpperCase().includes('SIAP'));
+        const m = auto.ministerioName ? files.find((f: Archivo) => f.name === auto.ministerioName) : files.find((f: Archivo) => f.name.toUpperCase().includes('MINISTERIO'));
         if (h) setHorariosFile(h.name);
         if (s) setSiapFile(s.name);
         if (m) setMinisterioFile(m.name);
@@ -249,21 +259,21 @@ export function PresentesTurnoPage() {
             <label htmlFor="pt-horarios" style={lbl}>Excel horarios</label>
             <select id="pt-horarios" className="input" value={horariosFile} onChange={e => setHorariosFile(e.target.value)}>
               <option value="">Auto</option>
-              {archivos.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+              {archivos.map(f => <option key={f.name} value={f.name}>{displayFileName(f.name)}</option>)}
             </select>
           </div>
           <div style={fg}>
             <label htmlFor="pt-siap" style={lbl}>SIAP</label>
             <select id="pt-siap" className="input" value={siapFile} onChange={e => setSiapFile(e.target.value)}>
-              <option value="">Sin SIAP</option>
-              {archivos.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+              <option value="">Auto</option>
+              {archivos.map(f => <option key={f.name} value={f.name}>{displayFileName(f.name)}</option>)}
             </select>
           </div>
           <div style={fg}>
             <label htmlFor="pt-ministerio" style={lbl}>Ministerio</label>
             <select id="pt-ministerio" className="input" value={ministerioFile} onChange={e => setMinisterioFile(e.target.value)}>
-              <option value="">Sin Ministerio</option>
-              {archivos.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+              <option value="">Auto</option>
+              {archivos.map(f => <option key={f.name} value={f.name}>{displayFileName(f.name)}</option>)}
             </select>
           </div>
         </div>

@@ -38,6 +38,12 @@ interface DetalleRow {
   regimen_estatutario: string | null; planta: string | null; estructura_servicio: string | null;
 }
 
+interface ExcesoRow {
+  dni: number; apellido: string | null; nombre: string | null; novedad: string;
+  anio: number; dias: number; veces: number;
+  regimen_estatutario: string | null; dependencia: string | null;
+}
+
 interface Filtros {
   anio: string; dependencia: string; novedad: string; agrupamiento: string;
   regimen: string; planta: string; justificado: string; q: string;
@@ -209,6 +215,11 @@ export function LicenciasHistorialTab() {
   const [rankAgentes, setRankAgentes]   = useState<'dias' | 'licencias'>('dias');
   const DET_LIMIT = 100;
 
+  // Control de topes
+  const [umbralInput, setUmbralInput] = useState('12');
+  const [umbral, setUmbral]           = useState(12);
+  const [excesos, setExcesos]         = useState<ExcesoRow[]>([]);
+
   const setF = (k: keyof Filtros, v: string) => { setFiltros(p => ({ ...p, [k]: p[k] === v ? '' : v })); setDetPage(1); };
   const limpiar = () => { setFiltros(FILTROS_VACIOS); setQInput(''); setDetPage(1); };
   const hayFiltros = Object.values(filtros).some(Boolean);
@@ -244,6 +255,24 @@ export function LicenciasHistorialTab() {
       .catch(() => {});
     return () => { vivo = false; };
   }, [params, detPage]);
+
+  // Umbral con debounce
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const n = Math.max(1, Number(umbralInput) || 12);
+      setUmbral(n);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [umbralInput]);
+
+  // Control de topes: agente + tipo + año con días acumulados >= umbral
+  useEffect(() => {
+    let vivo = true;
+    apiFetch<any>(`/asistencia/historial-excesos?${params}&minDias=${umbral}`)
+      .then(r => { if (vivo && r?.ok) setExcesos(r.rows); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [params, umbral]);
 
   // Derivados para cards
   const picoMes = useMemo(() => {
@@ -482,6 +511,53 @@ export function LicenciasHistorialTab() {
               </div>
             </Panel>
           </div>
+
+          {/* ── Control de topes ── */}
+          <Panel title="🚨 Control de topes" hint="agentes que acumulan N o más días del mismo tipo de licencia en un mismo año — combiná con los filtros de arriba (ej: Régimen BECARIOS + tipo de licencia + tope 12)">
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+              <label htmlFor="hl-umbral" style={{ ...lbl, margin: 0 }}>Días acumulados ≥</label>
+              <input id="hl-umbral" className="input" type="number" min={1} value={umbralInput}
+                onChange={e => setUmbralInput(e.target.value)} style={{ width: 90 }} />
+              <span className="muted" style={{ fontSize: '0.74rem' }}>
+                {nf(excesos.length)} casos{excesos.length === 500 ? ' (recortado a 500 — subí el tope o filtrá)' : ''}
+              </span>
+            </div>
+            <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
+              <table className="table" style={{ width: '100%', fontSize: '0.74rem' }}>
+                <thead>
+                  <tr>
+                    <th>Agente</th><th>DNI</th><th>Tipo de licencia</th><th>Año</th>
+                    <th>Días acum.</th><th>Veces</th><th>Régimen</th><th>Dependencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {excesos.map((x, i) => (
+                    <tr key={`${x.dni}-${x.novedad}-${x.anio}-${i}`} style={{ cursor: 'pointer' }}
+                      title="Ver el historial del agente abajo"
+                      onClick={() => { setQInput(String(x.dni)); setFiltros(p => ({ ...p, q: String(x.dni) })); setDetPage(1); }}>
+                      <td style={{ fontWeight: 600, padding: '4px 8px' }}>{nombreAgente(x)}</td>
+                      <td style={{ padding: '4px 8px' }}>{x.dni}</td>
+                      <td style={{ padding: '4px 8px', maxWidth: 220 }}>
+                        <span title={x.novedad} style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.novedad}</span>
+                      </td>
+                      <td style={{ padding: '4px 8px' }}>{x.anio}</td>
+                      <td style={{ padding: '4px 8px', fontWeight: 800, color: Number(x.dias) >= umbral * 2 ? '#ef4444' : '#f59e0b' }}>{nf(x.dias)}</td>
+                      <td style={{ padding: '4px 8px' }}>{nf(x.veces)}</td>
+                      <td style={{ padding: '4px 8px', maxWidth: 150 }}>
+                        <span title={x.regimen_estatutario || undefined} style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.regimen_estatutario || '—'}</span>
+                      </td>
+                      <td style={{ padding: '4px 8px' }}>{x.dependencia || '—'}</td>
+                    </tr>
+                  ))}
+                  {!excesos.length && (
+                    <tr><td colSpan={8} className="muted" style={{ padding: 12, textAlign: 'center' }}>
+                      Nadie supera {umbral} días acumulados con los filtros actuales.
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
 
           {/* ── Top agentes ── */}
           <Panel title="🏆 Top agentes" hint="click en un agente = ver su historial abajo">

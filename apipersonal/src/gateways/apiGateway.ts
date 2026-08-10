@@ -63,6 +63,7 @@ import { buildNombramientoRouter } from '../routes/nombramiento.routes';
 import { buildTramitesDocumentalesRouter } from '../routes/tramitesDocumentales.routes';
 import { buildJefaturasRouter }      from '../routes/jefaturas.routes';
 import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
+import { buildCumpleanosAlertasRouter } from '../routes/cumpleanosAlertas.routes';
 import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
 import { buildDashboardAlertsRouter } from '../routes/dashboardAlerts.routes';
 import { buildUserScanMusicRouter } from '../routes/userScanMusic.routes';
@@ -77,6 +78,7 @@ import { auditReadMiddleware } from '../middlewares/auditRead';
 import { mountAutoRoutes } from '../routes/auto';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { startArtAltaWorker } from '../services/artAltaQueue';
 import { pluginRegistry, PluginContext } from '../core/plugin';
 
 export interface GatewayOptions {
@@ -199,6 +201,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
 
   // ── Alertas por agente (RRHH interno) ────────────────────────────────────
   app.use(`${apiPrefix}/alertas-agente`, ...protect, buildAlertasAgenteRouter(sequelize));
+  app.use(`${apiPrefix}/alertas-cumpleanos`, ...protect, buildCumpleanosAlertasRouter(sequelize));
   app.use(`${apiPrefix}/dashboard-alerts`, ...protect, buildDashboardAlertsRouter(sequelize));
   app.use(`${apiPrefix}/becarios-art`,   ...protect, buildBecariosArtRouter(sequelize));
 
@@ -213,6 +216,10 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
 
   // ── Inicializar emisor de webhooks ────────────────────────────────────────
   initWebhookEmitter(sequelize);
+
+  await startArtAltaWorker(sequelize).catch((err) => {
+    logger.error({ msg: '[artAltaQueue] no se pudo iniciar', err: err?.message || String(err) });
+  });
 
   // ── Montar dominio + plugins registrados ──────────────────────────────────
   const ctx: PluginContext = { app, sequelize, schema, apiVersion, apiPrefix };
