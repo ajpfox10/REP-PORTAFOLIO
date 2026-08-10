@@ -37,6 +37,10 @@ interface CompareRow {
   upa?: string;
   motivo?: string;
   justificado?: string; // "SI" | "NO" del SIAP
+  estado_carga?: string;
+  detalle_carga?: string;
+  novedad_carga?: string;
+  archivo_carga?: string;
 }
 
 function norm(s: string) {
@@ -48,6 +52,18 @@ function norm(s: string) {
     .replace(/[.]/g, "") // saca puntos
     .replace(/\s+/g, " ") // colapsa espacios
     .trim();
+}
+
+function detalleCargaGeneral(v?: string) {
+  const t = norm(v ?? "");
+  if (!t) return "Sin detalle";
+  if (t.includes("OPCION NO DISPONIBLE")) return "Opcion no disponible";
+  if (t.includes("NO PERTENECE") || t.includes("PLANTEL")) return "No pertenece al plantel";
+  if (t.includes("SUPERPONE") || t.includes("SUPERPOSICION")) return "Superposicion";
+  if (t.includes("MAXIMO") || t.includes("2 DESCANSOS")) return "Limite anual";
+  if (t.includes("OK") || t.includes("CORRECTAMENTE")) return "Cargado OK";
+  if (t.includes("TIMEOUT") || t.includes("NAV") || t.includes("CONNECTION")) return "Error de navegacion";
+  return "Otros";
 }
 
 function monthBounds(periodo: string) {
@@ -92,6 +108,7 @@ interface CompareMeta {
   siapRows: number;
   ministerioFiles: string[];
   siapFile: string;
+  resultadoCargaFiles?: string[];
 }
 
 interface NovedadItem {
@@ -138,6 +155,9 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
     "JUSTIFICADO",
     "ESTADO",
     "MOTIVO",
+    "ESTADO CARGA",
+    "NOVEDAD CARGA",
+    "DETALLE CARGA",
   ];
 
   const data = rows.map((r) => [
@@ -153,6 +173,9 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
     r.justificado ?? "",
     r.estado,
     r.motivo ?? "",
+    r.estado_carga ?? "",
+    r.novedad_carga ?? "",
+    r.detalle_carga ?? "",
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
@@ -169,6 +192,9 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
     { wch: 10 },
     { wch: 18 },
     { wch: 28 },
+    { wch: 14 },
+    { wch: 28 },
+    { wch: 48 },
   ];
 
   const resumen = [
@@ -627,6 +653,7 @@ export function AsistenciaPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>("TODOS");
   const [filtroDep, setFiltroDep] = useState<string>("TODAS");
   const [filtroMotivo, setFiltroMotivo] = useState<string>("TODOS");
+  const [filtroDetalleCarga, setFiltroDetalleCarga] = useState<string>("TODOS");
   const [filtroLicencia, setFiltroLicencia] = useState<string>("TODAS");
   const [filtroJust, setFiltroJust] = useState<string>("TODOS");
   const [filtroDni, setFiltroDni] = useState("");
@@ -653,7 +680,7 @@ export function AsistenciaPage() {
 
           // Autodetectar SIAP
           if (r.auto?.siap) {
-            const n = r.auto.siap.split(/[\/]/).pop();
+            const n = fileList.find((f) => f.fullPath === r.auto.siap)?.name ?? r.auto.siap.split(/[\\/]/).pop();
             if (n) setSelectedSiap(n);
           }
 
@@ -786,6 +813,7 @@ export function AsistenciaPage() {
         siapRows: totals.siap ?? 0,
         ministerioFiles: files.ministerioFiles ?? [],
         siapFile: files.siapFile ?? "",
+        resultadoCargaFiles: files.resultadoCargaFiles ?? [],
       });
 
       toast.ok("Comparacion completa", `${comparado.length} registros`);
@@ -847,10 +875,18 @@ export function AsistenciaPage() {
   const motivoOptions = monthResults.length
     ? Array.from(new Set(monthResults.map((r) => r.motivo || "—"))).sort()
     : [];
+  const detalleCargaCounts = monthResults.reduce<Record<string, number>>((acc, r) => {
+    const k = detalleCargaGeneral(r.detalle_carga);
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+  const detalleCargaOptions = Object.entries(detalleCargaCounts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([name, count]) => ({ name, count }));
   const licenciaOptions = monthResults.length
     ? Array.from(
         new Set(
-          results
+          monthResults
             .flatMap((r) =>
               [r.novedad_siap, r.novedad_ministerio].filter(
                 (v) => v && v !== "—" && v !== "(sin mapeo)"
@@ -861,10 +897,11 @@ export function AsistenciaPage() {
     : [];
 
   const filtered = results
-    ? results.filter((r) => {
+    ? monthResults.filter((r) => {
         if (filtroEstado !== "TODOS" && r.estado !== filtroEstado) return false;
         if (filtroDep !== "TODAS" && (r.upa || "—") !== filtroDep) return false;
         if (filtroMotivo !== "TODOS" && (r.motivo || "—") !== filtroMotivo) return false;
+        if (filtroDetalleCarga !== "TODOS" && detalleCargaGeneral(r.detalle_carga) !== filtroDetalleCarga) return false;
         if (
           filtroLicencia !== "TODAS" &&
           r.novedad_siap !== filtroLicencia &&
@@ -889,10 +926,18 @@ export function AsistenciaPage() {
     /PENDIENTE\s*JUSTIFIC/.test((r.novedad_ministerio || "").toUpperCase()) ||
     (r.justificado || "").toUpperCase() === "NO";
 
-  const pendientes = results ? results.filter(esPendienteJust) : [];
+  const pendientes = monthResults.filter(esPendienteJust);
 
   // Filas que se muestran según la pestaña activa (sobre el resto de filtros).
   const shown = tab === "PENDIENTES" ? filtered.filter(esPendienteJust) : filtered;
+
+  const estadoCounts = {
+    todos: monthResults.length,
+    coincidente: monthResults.filter((r) => r.estado === "COINCIDENTE").length,
+    noCoincidente: monthResults.filter((r) => r.estado === "NO COINCIDENTE").length,
+    rango: monthResults.filter((r) => r.estado === "RANGO_DISTINTO").length,
+    omitido: monthResults.filter((r) => r.estado === "OMITIDO").length,
+  };
 
   // Novedades del SIAP que NO tienen equivalencia en el mapeo.
   // Se chequea contra claves y valores del mapeo (no contra el motivo de cada fila:
@@ -917,7 +962,7 @@ export function AsistenciaPage() {
       .sort();
   })();
 
-  const agentesTotal = results ? new Set(results.map((r) => String(r.dni))).size : 0;
+  const agentesTotal = monthResults.length ? new Set(monthResults.map((r) => String(r.dni))).size : 0;
   const agentesFiltered =
     filtered.length > 0 ? new Set(filtered.map((r) => String(r.dni))).size : 0;
 
@@ -926,6 +971,7 @@ export function AsistenciaPage() {
     filtroEstado !== "TODOS" ||
     filtroDep !== "TODAS" ||
     filtroMotivo !== "TODOS" ||
+    filtroDetalleCarga !== "TODOS" ||
     filtroLicencia !== "TODAS" ||
     filtroJust !== "TODOS" ||
     !!filtroDni ||
@@ -1464,10 +1510,10 @@ export function AsistenciaPage() {
             {/* NOVEDADES total */}
             <div className="card" style={{ padding: "12px 14px", textAlign: "center" as const }}>
               <div style={{ fontSize: "1.7rem", fontWeight: 700, color: "#a78bfa" }}>
-                {hayFiltrosActivos ? filtered.length : results?.length ?? 0}
+                {hayFiltrosActivos ? filtered.length : monthResults.length}
               </div>
-              {hayFiltrosActivos && filtered.length !== (results?.length ?? 0) && (
-                <div style={{ fontSize: "0.65rem", color: "#475569" }}>de {results?.length ?? 0}</div>
+              {hayFiltrosActivos && filtered.length !== monthResults.length && (
+                <div style={{ fontSize: "0.65rem", color: "#475569" }}>de {monthResults.length}</div>
               )}
               <div style={{ fontSize: "0.63rem", color: "#64748b", letterSpacing: "0.05em" }}>
                 NOVEDADES
@@ -1507,6 +1553,32 @@ export function AsistenciaPage() {
 
             <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8, marginBottom: 12, alignItems: "flex-end" }}>
               <div>
+                <label htmlFor="as-filtro-mes" style={lbl}>MES</label>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    id="as-filtro-mes"
+                    name="filtroMes"
+                    className="input"
+                    type="month"
+                    value={periodoMes}
+                    style={{ ...fs, width: 135, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
+                    onChange={(e) => setPeriodoMes(e.target.value)}
+                  />
+                  {periodoMes && (
+                    <button
+                      type="button"
+                      className="btn"
+                      title="Ver todos los meses"
+                      onClick={() => setPeriodoMes("")}
+                      style={{ padding: "7px 9px", fontSize: "0.72rem" }}
+                    >
+                      Todos
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
                 <label htmlFor="as-filtro-dep" style={lbl}>DEPENDENCIA</label>
                 <select
                   id="as-filtro-dep"
@@ -1535,11 +1607,11 @@ export function AsistenciaPage() {
                   style={{ ...fs, width: "auto", minWidth: 130, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
                   onChange={(e) => setFiltroEstado(e.target.value)}
                 >
-                  <option value="TODOS">Todos ({monthResults.length})</option>
-                  <option value="COINCIDENTE">Coincidentes ({meta?.coincidentes})</option>
-                  <option value="NO COINCIDENTE">No coinc. ({meta?.noCoincidentes})</option>
-                  <option value="RANGO_DISTINTO">Rango distinto ({meta?.rangoDistinto})</option>
-                  <option value="OMITIDO">Omitidos ({meta?.omitidos})</option>
+                  <option value="TODOS">Todos ({estadoCounts.todos})</option>
+                  <option value="COINCIDENTE">Coincidentes ({estadoCounts.coincidente})</option>
+                  <option value="NO COINCIDENTE">No coinc. ({estadoCounts.noCoincidente})</option>
+                  <option value="RANGO_DISTINTO">Rango distinto ({estadoCounts.rango})</option>
+                  <option value="OMITIDO">Omitidos ({estadoCounts.omitido})</option>
                 </select>
               </div>
 
@@ -1557,6 +1629,25 @@ export function AsistenciaPage() {
                   {motivoOptions.map((m) => (
                     <option key={m} value={m}>
                       {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="as-filtro-detalle-carga" style={lbl}>DETALLE CARGA</label>
+                <select
+                  id="as-filtro-detalle-carga"
+                  name="filtroDetalleCarga"
+                  className="input"
+                  value={filtroDetalleCarga}
+                  style={{ ...fs, width: "auto", minWidth: 190, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
+                  onChange={(e) => setFiltroDetalleCarga(e.target.value)}
+                >
+                  <option value="TODOS">Todos</option>
+                  {detalleCargaOptions.map(({ name, count }) => (
+                    <option key={name} value={name}>
+                      {name} ({count})
                     </option>
                   ))}
                 </select>
@@ -1648,17 +1739,19 @@ export function AsistenciaPage() {
                     {/* ✅ ACA estaba el error: tenías un { [ { [ ... */ }
                     {[
                       { h: "DNI", w: "8%" },
-                      { h: "NOMBRE", w: "12%" },
-                      { h: "NOV. MIN", w: "12%" },
+                      { h: "NOMBRE", w: "11%" },
+                      { h: "NOV. MIN", w: "10%" },
                       { h: "DESDE MIN", w: "6%" },
                       { h: "HASTA MIN", w: "6%" },
-                      { h: "NOV. SIAP", w: "12%" },
+                      { h: "NOV. SIAP", w: "10%" },
                       { h: "DESDE SIAP", w: "6%" },
                       { h: "HASTA SIAP", w: "6%" },
-                      { h: "DEP.", w: "6%" },
-                      { h: "J.", w: "4%" },
-                      { h: "ESTADO", w: "9%" },
-                      { h: "MOTIVO", w: "13%" },
+                      { h: "DEP.", w: "5%" },
+                      { h: "J.", w: "3%" },
+                      { h: "ESTADO", w: "7%" },
+                      { h: "MOTIVO", w: "12%" },
+                      { h: "CARGA", w: "6%" },
+                      { h: "DETALLE CARGA", w: "10%" },
                     ].map(({ h, w }) => (
                       <th
                         key={h}
@@ -1682,7 +1775,7 @@ export function AsistenciaPage() {
                 <tbody>
                   {shown.length === 0 ? (
                     <tr>
-                      <td colSpan={12} style={{ padding: 24, textAlign: "center" as const, color: "var(--muted)" }}>
+                      <td colSpan={14} style={{ padding: 24, textAlign: "center" as const, color: "var(--muted)" }}>
                         Sin resultados
                       </td>
                     </tr>
@@ -1805,6 +1898,32 @@ export function AsistenciaPage() {
 
                         <td style={{ padding: "4px 6px", fontSize: "0.68rem", color: "#fca5a5", wordBreak: "break-word" as const, whiteSpace: "normal" as const }}>
                           {r.motivo || "—"}
+                        </td>
+
+                        <td style={{ padding: "4px 5px" }}>
+                          {r.estado_carga ? (
+                            <span
+                              title={r.novedad_carga || ""}
+                              style={{
+                                background: norm(r.estado_carga).includes("OK") ? "rgba(16,185,129,.15)" : "rgba(239,68,68,.14)",
+                                border: norm(r.estado_carga).includes("OK") ? "1px solid rgba(16,185,129,.35)" : "1px solid rgba(239,68,68,.35)",
+                                color: norm(r.estado_carga).includes("OK") ? "#34d399" : "#f87171",
+                                borderRadius: 4,
+                                padding: "1px 5px",
+                                fontSize: "0.62rem",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap" as const,
+                              }}
+                            >
+                              {r.estado_carga}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#334155" }}>—</span>
+                          )}
+                        </td>
+
+                        <td style={{ padding: "4px 6px", fontSize: "0.66rem", color: "#cbd5e1", wordBreak: "break-word" as const, whiteSpace: "normal" as const }}>
+                          {r.detalle_carga || "—"}
                         </td>
                       </tr>
                       );

@@ -162,7 +162,8 @@ export function commandForDevice(command: string, pushVersion: unknown): string 
     return command
       .replace('DATA UPDATE USERINFO', 'DATA USER')
       .replace('DATA UPDATE FINGERTMP', 'DATA FP')
-      .replace('DATA UPDATE SMS', 'DATA SMS');
+      .replace('DATA DELETE USERINFO', 'DATA DEL_USER')
+      .replace('DATA DELETE FINGERTMP', 'DATA DEL_FP');
   }
   return command;
 }
@@ -253,6 +254,157 @@ interface PersonalSyncRow {
   estado_empleo?: string | null;
   servicio_id?: number | null;
   servicio_nombre?: string | null;
+}
+
+interface FicheroUserRow {
+  userid: number | null;
+  dni: string;
+  nombre: string;
+  sn: string;
+  alias: string;
+}
+
+interface DirectFicheroUserRow extends FicheroUserRow {
+  tarjeta: string | null;
+  privilegio: number | null;
+}
+
+interface DirectFicheroMessageUser {
+  uid: number | null;
+  dni: string;
+  nombre: string;
+}
+
+interface DirectFicheroTemplateRow {
+  uid: number;
+  dni: string;
+  nombre: string;
+  slot: number;
+  valid: number;
+  size: number;
+  version: string;
+  sn: string;
+  alias: string;
+}
+
+interface DirectFicheroReadResult {
+  reloj: { sn: string; alias: string; ip: string };
+  usuarios: DirectFicheroUserRow[];
+  templates: DirectFicheroTemplateRow[];
+  bytesTemplates: number;
+}
+
+const DIRECT_ZK_TEMPLATE_REQUEST = Buffer.from([0x01, 0x09, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+function directTemplateVersion(buf: Buffer, offset: number, size: number): string {
+  if (offset + size < offset + 12) return '';
+  const marker = buf.subarray(offset + 8, Math.min(offset + 12, offset + size))
+    .toString('ascii')
+    .replace(/[^\x20-\x7e]/g, '')
+    .trim();
+  return marker || 'binario';
+}
+
+function parseDirectZkTemplates(
+  payload: Buffer,
+  usersByUid: Map<number, DirectFicheroUserRow>,
+  sn: string,
+  alias: string
+): DirectFicheroTemplateRow[] {
+  const rows: DirectFicheroTemplateRow[] = [];
+  if (payload.length < 10) return rows;
+  let offset = 4;
+  while (offset + 6 <= payload.length) {
+    const size = payload.readUInt16LE(offset);
+    if (!size || size > 10_000 || offset + size > payload.length) break;
+    const uid = payload.readUInt16LE(offset + 2);
+    const slot = payload.readUInt8(offset + 4);
+    const valid = payload.readUInt8(offset + 5);
+    const user = usersByUid.get(uid);
+    rows.push({
+      uid,
+      dni: user?.dni || String(uid),
+      nombre: user?.nombre || '',
+      slot,
+      valid,
+      size,
+      version: directTemplateVersion(payload, offset, size),
+      sn,
+      alias,
+    });
+    offset += size;
+  }
+  return rows;
+}
+
+async function readDirectFicheroBiometrics(ZKTeco: any, rowDevice: RowDataPacket): Promise<DirectFicheroReadResult> {
+  const sn = String(rowDevice.SN);
+  const alias = String(rowDevice.Alias || rowDevice.SN);
+  const ip = String(rowDevice.IPAddress || '').trim();
+  if (!ip) throw new Error(`El reloj ${alias} no tiene IP registrada`);
+
+  const device = new ZKTeco(ip, 4370, 20_000, 8_000);
+  try {
+    await device.createSocket();
+    const usersResult = await device.getUsers();
+    const rawUsers = Array.isArray(usersResult?.data) ? usersResult.data : [];
+    const usuarios: DirectFicheroUserRow[] = rawUsers
+      .map((user: any) => ({
+        userid: Number.isFinite(Number(user?.uid)) ? Number(user.uid) : null,
+        dni: normalizeDni(user?.userId ?? user?.uid),
+        nombre: String(user?.name ?? '').trim(),
+        tarjeta: user?.cardno == null || Number(user.cardno) === 0 ? null : String(user.cardno),
+        privilegio: user?.role == null ? null : Number(user.role),
+        sn,
+        alias,
+      }))
+      .filter((user: DirectFicheroUserRow) => !!user.dni);
+
+    const usersByUid = new Map<number, DirectFicheroUserRow>();
+    for (const user of usuarios) {
+      if (user.userid != null) usersByUid.set(user.userid, user);
+    }
+
+    const tcp = device.ztcp;
+    if (!tcp?.readWithBuffer) throw new Error('El driver TCP no permite leer templates directos');
+    try { await tcp.freeData?.(); } catch { /* noop */ }
+    const templatesResult = await tcp.readWithBuffer(DIRECT_ZK_TEMPLATE_REQUEST);
+    try { await tcp.freeData?.(); } catch { /* noop */ }
+    const payload = Buffer.from(templatesResult?.data || []);
+    const templates = parseDirectZkTemplates(payload, usersByUid, sn, alias);
+
+    return {
+      reloj: { sn, alias, ip },
+      usuarios,
+      templates,
+      bytesTemplates: payload.length,
+    };
+  } finally {
+    try { await device.disconnect(); } catch { /* noop */ }
+  }
+}
+
+async function readDirectFicheroMessageUser(rowDevice: RowDataPacket, dni: string): Promise<DirectFicheroMessageUser> {
+  const alias = String(rowDevice.Alias || rowDevice.SN);
+  const ip = String(rowDevice.IPAddress || '').trim();
+  if (!ip) throw new Error(`El reloj ${alias} no tiene IP registrada`);
+  const mod: any = await import('zkteco-js' as any);
+  const ZKTeco = mod.default ?? mod;
+  const device = new ZKTeco(ip, 4370, 10_000, 5_000);
+  try {
+    await device.createSocket();
+    const usersResult = await device.getUsers();
+    const rawUsers = Array.isArray(usersResult?.data) ? usersResult.data : [];
+    const user = rawUsers.find((row: any) => normalizeDni(row?.userId ?? row?.uid) === dni);
+    if (!user) throw new Error(`El DNI ${dni} no existe en el fichero ${alias}`);
+    return {
+      uid: Number.isFinite(Number(user?.uid)) ? Number(user.uid) : null,
+      dni,
+      nombre: String(user?.name ?? '').trim(),
+    };
+  } finally {
+    try { await device.disconnect(); } catch { /* noop */ }
+  }
 }
 
 interface AdmsSyncOptions {
@@ -496,15 +648,20 @@ function renderMessageTemplate(template: string, vars: Record<string, unknown>):
   return template.replace(/\{(\w+)\}/g, (_m, key) => String(vars[key] ?? ''));
 }
 
+function clockMessageUid(): string {
+  return String((Date.now() % 900_000_000) + 100_000_000);
+}
+
 export function buildSmsCommands(input: {
   formato: string;
   dni: string;
   mensaje: string;
   inicio: string;
   minutos: number;
+  uid?: string;
 }): string[] {
   const msg = safeClockMessage(input.mensaje);
-  const uid = normalizeDni(input.dni) || String(Date.now()).slice(-9);
+  const uid = normalizeDni(input.uid) || clockMessageUid();
   switch (input.formato) {
     case 'idle':
       return [`DATA UPDATE SMS MSG=${msg}\tTAG=253\tUID=${uid}\tMIN=${input.minutos}\tStartTime=${input.inicio}`];
@@ -515,7 +672,6 @@ export function buildSmsCommands(input: {
       return [
         `DATA UPDATE SMS MSG=${msg}\tTAG=254\tUID=${uid}\tMIN=${input.minutos}\tStartTime=${input.inicio}`,
         `DATA UPDATE USER_SMS PIN=${input.dni}\tUID=${uid}`,
-        `SMS TAG=0xFE\tUID=${input.dni}\tMIN=${input.minutos}\tStartTime=${input.inicio}\tMSG=${msg}`,
       ];
   }
 }
@@ -704,7 +860,7 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     const inicio = messageStartTime(req.body?.inicio);
     if (!sn || !dni || !plantilla) throw new Error('sn, dni y mensaje/plantilla son requeridos');
 
-    const [devices] = await conn.query<RowDataPacket[]>('SELECT SN, Alias, PushVersion FROM iclock WHERE SN = ? LIMIT 1', [sn]);
+    const [devices] = await conn.query<RowDataPacket[]>('SELECT SN, Alias, IPAddress, PushVersion FROM iclock WHERE SN = ? LIMIT 1', [sn]);
     if (!devices.length) throw new Error(`Reloj ${sn} no encontrado`);
     const personalQuery = personalSyncSql({ soloActivos: true });
     const personalRows = await sequelize.query<PersonalSyncRow>(
@@ -718,6 +874,7 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
       'SELECT userid, badgenumber, name FROM userinfo WHERE badgenumber = ? LIMIT 1',
       [dni]
     );
+    const ficheroUser = await readDirectFicheroMessageUser(devices[0], dni);
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const vars = {
@@ -731,7 +888,8 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
       legajo: person.legajo ?? '',
     };
     const mensaje = safeClockMessage(renderMessageTemplate(plantilla, vars));
-    const comandos = buildSmsCommands({ formato, dni, mensaje, inicio, minutos });
+    const mensajeUid = clockMessageUid();
+    const comandos = buildSmsCommands({ formato, dni, mensaje, inicio, minutos, uid: mensajeUid });
     return {
       sn,
       dni,
@@ -743,6 +901,7 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
       tipo,
       comando: comandos.join('\n'),
       comandos,
+      mensajeUid,
       pushVersion: devices[0].PushVersion,
       agente: {
         dni,
@@ -751,8 +910,11 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
         servicioId: person.servicio_id ?? null,
         servicioNombre: person.servicio_nombre ?? null,
         registradoAdms: !!admsUsers.length,
+        registradoFichero: true,
+        uidFichero: ficheroUser.uid,
+        nombreFichero: ficheroUser.nombre || null,
       },
-      reloj: { sn, alias: devices[0].Alias || sn },
+      reloj: { sn, alias: devices[0].Alias || sn, ip: devices[0].IPAddress || null },
     };
   }
 
@@ -1291,7 +1453,7 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     const desde = parseDateParam(req.query.desde);
     const hasta = parseDateParam(req.query.hasta);
     const tipo = asStringOrNull(req.query.tipo);
-    const where: string[] = [];
+    const where: string[] = ['(DelTag IS NULL OR DelTag = 0)'];
     const params: Array<string | number> = [];
 
     if (dni) {
@@ -1367,51 +1529,68 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     const limit = clampInt(req.query.limit, 50, 1, 100);
     const offset = clampInt(req.query.offset, 0, 0, 50_000);
     const q = asStringOrNull(req.query.q);
-    const where: string[] = [];
-    const params: Array<string | number> = [];
-    if (q) {
-      const clean = q.replace(/[%_]/g, '');
-      where.push('(badgenumber LIKE ? OR name LIKE ?)');
-      params.push(`%${clean}%`, `%${clean}%`);
-    }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const sn = asStringOrNull(req.query.sn);
     let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
+    let device: any = null;
     try {
       conn = await conectarMySQL(cfg);
-      const [countRows] = await conn.query<RowDataPacket[]>(
-        `SELECT COUNT(1) AS total FROM userinfo ${whereSql}`,
-        params
-      );
-      const [rows] = await conn.query<RowDataPacket[]>(
-        `SELECT userid, badgenumber, name, defaultdeptid, Card, Privilege, AccGroup, TimeZones, SN, UTime
-           FROM userinfo
-           ${whereSql}
-          ORDER BY badgenumber
-          LIMIT ? OFFSET ?`,
-        [...params, limit, offset]
+      const [devices] = await conn.query<RowDataPacket[]>(
+        sn
+          ? 'SELECT SN, Alias, IPAddress FROM iclock WHERE SN = ? LIMIT 1'
+          : 'SELECT SN, Alias, IPAddress FROM iclock WHERE IPAddress IS NOT NULL AND IPAddress <> "" AND (DelTag IS NULL OR DelTag = 0) ORDER BY DelTag, LastActivity DESC, Alias, SN LIMIT 1',
+        sn ? [sn] : []
       );
       await conn.end();
       conn = null;
 
+      if (!devices.length) return res.status(404).json({ ok: false, error: sn ? `Reloj ${sn} no encontrado` : 'No hay relojes con IP configurada', data: [], total: 0 });
+      const rowDevice = devices[0];
+      const ip = asStringOrNull(rowDevice.IPAddress);
+      if (!ip) return res.status(400).json({ ok: false, error: `El reloj ${rowDevice.Alias || rowDevice.SN} no tiene IP registrada`, data: [], total: 0 });
+
+      let ZKTeco: any;
+      try {
+        const mod: any = await import('zkteco-js' as any);
+        ZKTeco = mod.default ?? mod;
+      } catch {
+        return res.status(503).json({ ok: false, error: 'zkteco-js no disponible', data: [], total: 0 });
+      }
+
+      device = new ZKTeco(ip, 4370, 8000, 8000);
+      await device.createSocket();
+      const result = await device.getUsers();
+      try { await device.disconnect(); } catch { /* noop */ }
+      device = null;
+
+      const clean = normalizedText(q || '');
+      const allRows = (Array.isArray(result?.data) ? result.data : [])
+        .map((u: any) => ({
+          userid: Number(u.uid ?? 0),
+          dni: String(u.userId ?? u.uid ?? '').trim(),
+          nombre: String(u.name ?? '').trim(),
+          departamentoId: null,
+          tarjeta: u.cardno == null || Number(u.cardno) === 0 ? null : String(u.cardno),
+          privilegio: u.role == null ? null : Number(u.role),
+          grupo: null,
+          zonas: null,
+          sn: String(rowDevice.SN),
+          actualizado: null,
+        }))
+        .filter((u: any) => !clean || normalizedText(`${u.dni} ${u.nombre} ${u.userid}`).includes(clean))
+        .sort((a: any, b: any) => Number(a.userid) - Number(b.userid));
+      const rows = allRows.slice(offset, offset + limit);
+
       return res.json({
         ok: true,
-        total: Number(countRows[0]?.total ?? 0),
+        total: allRows.length,
         limit,
         offset,
-        data: rows.map(r => ({
-          userid: r.userid,
-          dni: r.badgenumber,
-          nombre: r.name || '',
-          departamentoId: r.defaultdeptid ?? null,
-          tarjeta: r.Card || null,
-          privilegio: r.Privilege ?? null,
-          grupo: r.AccGroup ?? null,
-          zonas: r.TimeZones || null,
-          sn: r.SN || null,
-          actualizado: r.UTime || null,
-        })),
+        fuente: 'reloj',
+        reloj: { sn: rowDevice.SN, alias: rowDevice.Alias || rowDevice.SN, ip },
+        data: rows,
       });
     } catch (err: any) {
+      if (device) { try { await device.disconnect(); } catch { /* noop */ } }
       if (conn) { try { await conn.end(); } catch { /* noop */ } }
       return res.status(503).json({ ok: false, error: err?.message ?? String(err), data: [], total: 0 });
     }
@@ -1422,59 +1601,63 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     const limit = clampInt(req.query.limit, 100, 1, 500);
     const q = asStringOrNull(req.query.q);
     const sn = asStringOrNull(req.query.sn);
-    const where: string[] = ['t.Template IS NOT NULL', '(t.DelTag IS NULL OR t.DelTag = 0)'];
-    const params: Array<string | number> = [];
-    if (q) {
-      const clean = q.replace(/[%_]/g, '');
-      where.push('(ui.badgenumber LIKE ? OR ui.name LIKE ?)');
-      params.push(`%${clean}%`, `%${clean}%`);
-    }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
     try {
       conn = await conectarMySQL(cfg);
       const [devices] = await conn.query<RowDataPacket[]>(
         sn
-          ? 'SELECT SN, Alias, FPVersion FROM iclock WHERE SN = ? LIMIT 1'
-          : 'SELECT SN, Alias, FPVersion FROM iclock WHERE DelTag IS NULL OR DelTag = 0 ORDER BY Alias, SN',
+          ? 'SELECT SN, Alias, IPAddress FROM iclock WHERE SN = ? LIMIT 1'
+          : 'SELECT SN, Alias, IPAddress FROM iclock WHERE IPAddress IS NOT NULL AND IPAddress <> "" AND (DelTag IS NULL OR DelTag = 0) ORDER BY DelTag, LastActivity DESC, Alias, SN LIMIT 1',
         sn ? [sn] : []
-      );
-      const [rows] = await conn.query<RowDataPacket[]>(
-        `SELECT ui.userid, ui.badgenumber, ui.name, t.FingerID, t.Template
-           FROM template t
-           INNER JOIN userinfo ui ON ui.userid = t.userid
-           ${whereSql}
-          ORDER BY ui.badgenumber, t.FingerID
-          LIMIT ?`,
-        [...params, limit]
       );
       await conn.end();
       conn = null;
 
-      const data = rows.map(row => {
-        const version = fingerprintVersion(row.Template);
-        const size = String(row.Template ?? '').length;
-        return {
-          userid: Number(row.userid),
-          dni: String(row.badgenumber ?? ''),
-          nombre: row.name || '',
-          fingerId: Number(row.FingerID ?? 0),
-          version,
-          size,
-          compatible: devices.map(device => ({
-            sn: String(device.SN),
-            alias: String(device.Alias || device.SN),
-            fpVersion: String(device.FPVersion || ''),
-            ok: isFingerprintCompatible(device.FPVersion, row.Template),
-          })),
-        };
-      });
+      if (!devices.length) {
+        return res.status(404).json({ ok: false, error: sn ? `Reloj ${sn} no encontrado` : 'No hay relojes con IP configurada', data: [], total: 0 });
+      }
+
+      let ZKTeco: any;
+      try {
+        const mod: any = await import('zkteco-js' as any);
+        ZKTeco = mod.default ?? mod;
+      } catch {
+        return res.status(503).json({ ok: false, error: 'zkteco-js no disponible', data: [], total: 0 });
+      }
+
+      const direct = await readDirectFicheroBiometrics(ZKTeco, devices[0]);
+      const clean = normalizedText(q || '');
+      const filtered = direct.templates
+        .filter(row => !clean || normalizedText(`${row.dni} ${row.nombre} ${row.uid} ${row.slot}`).includes(clean))
+        .sort((a, b) => a.dni.localeCompare(b.dni, 'es') || a.slot - b.slot || a.uid - b.uid);
+      const data = filtered.slice(0, limit).map(row => ({
+        userid: row.uid,
+        dni: row.dni,
+        nombre: row.nombre,
+        tipo: 'template',
+        tipoLabel: 'Template',
+        fingerId: row.slot,
+        sn: row.sn,
+        fichero: row.alias,
+        version: row.version,
+        size: row.size,
+        valid: row.valid,
+        fuente: 'tcp_fichero',
+        compatible: [],
+      }));
 
       return res.json({
         ok: true,
-        total: data.length,
-        dispositivos: devices.map(d => ({ sn: d.SN, alias: d.Alias || d.SN, fpVersion: d.FPVersion || '' })),
+        fuente: 'tcp_fichero',
+        total: filtered.length,
+        reloj: direct.reloj,
+        resumen: {
+          usuarios: direct.usuarios.length,
+          templates: direct.templates.length,
+          bytesTemplates: direct.bytesTemplates,
+        },
+        dispositivos: [{ sn: direct.reloj.sn, alias: direct.reloj.alias, fpVersion: '' }],
         data,
       });
     } catch (err: any) {
@@ -1491,7 +1674,7 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     const sn = asStringOrNull(req.query.sn);
     const estadoRaw = asStringOrNull(req.query.estado) ?? 'incompleto';
     const exportar = String(req.query.exportar ?? '') === 'csv';
-    const estadosValidos = new Set(['todos', 'incompleto', 'no_existe', 'sin_biometria', 'solo_huella', 'solo_palma', 'ambas']);
+    const estadosValidos = new Set(['todos', 'incompleto', 'no_existe', 'fuera_estructura', 'sin_biometria', 'solo_huella', 'solo_palma', 'solo_cara', 'ambas']);
     const estado = estadosValidos.has(estadoRaw) ? estadoRaw : 'incompleto';
     let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
 
@@ -1499,12 +1682,66 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
       conn = await conectarMySQL(cfg);
       await ensureBiotemplateTable(conn);
       const estructura = await deviceStructure(sn);
-
-      const personalQuery = personalSyncSql({ soloActivos: true });
-      const personalRows = await sequelize.query<PersonalSyncRow>(
-        personalQuery.sql,
-        { type: QueryTypes.SELECT, replacements: personalQuery.replacements }
+      const [devices] = await conn.query<RowDataPacket[]>(
+        sn
+          ? 'SELECT SN, Alias, IPAddress FROM iclock WHERE SN = ? LIMIT 1'
+          : 'SELECT SN, Alias, IPAddress FROM iclock WHERE IPAddress IS NOT NULL AND IPAddress <> "" AND (DelTag IS NULL OR DelTag = 0) ORDER BY Alias, SN',
+        sn ? [sn] : []
       );
+      if (sn && !devices.length) {
+        await conn.end();
+        conn = null;
+        return res.status(404).json({ ok: false, error: `Reloj ${sn} no encontrado`, data: [], total: 0 });
+      }
+
+      let ZKTeco: any;
+      try {
+        const mod: any = await import('zkteco-js' as any);
+        ZKTeco = mod.default ?? mod;
+      } catch {
+        await conn.end();
+        conn = null;
+        return res.status(503).json({ ok: false, error: 'zkteco-js no disponible', data: [], total: 0 });
+      }
+
+      const ficheroUsers: FicheroUserRow[] = [];
+      for (const deviceRow of devices) {
+        const ip = asStringOrNull(deviceRow.IPAddress);
+        if (!ip) continue;
+        let zk: any = null;
+        try {
+          zk = new ZKTeco(ip, 4370, 8000, 8000);
+          await zk.createSocket();
+          const result = await zk.getUsers();
+          const users = Array.isArray(result?.data) ? result.data : [];
+          for (const user of users) {
+            const dni = normalizeDni(user?.userId ?? user?.uid);
+            if (!dni) continue;
+            ficheroUsers.push({
+              userid: Number.isFinite(Number(user?.uid)) ? Number(user.uid) : null,
+              dni,
+              nombre: String(user?.name ?? '').trim(),
+              sn: String(deviceRow.SN),
+              alias: String(deviceRow.Alias || deviceRow.SN),
+            });
+          }
+        } catch (err: any) {
+          console.warn('[adms estado biometrico] no se pudo leer usuarios del fichero', { sn: deviceRow.SN, ip, error: err?.message });
+        } finally {
+          if (zk) { try { await zk.disconnect(); } catch { /* noop */ } }
+        }
+      }
+
+      // Con fichero seleccionado se suma el plantel esperado por estructura.
+      // Sin fichero, la tabla se arma solo con usuarios leidos directo de los relojes.
+      const structFilters = await structureFiltersForSn(sn);
+      const personalQuery = sn ? personalSyncSql({ soloActivos: true, ...structFilters }) : null;
+      const personalRows = personalQuery
+        ? await sequelize.query<PersonalSyncRow>(
+            personalQuery.sql,
+            { type: QueryTypes.SELECT, replacements: personalQuery.replacements }
+          )
+        : [];
       const personalActivos = new Map<string, { dni: string; nombre: string }>();
       for (const row of personalRows) {
         const dni = normalizeDni(row.dni);
@@ -1512,69 +1749,139 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
         personalActivos.set(dni, { dni, nombre: personalToAdmsName(row) });
       }
 
+      // BioType: 1=huella (tabla template), 9=rostro/cara, 10=palma (tabla biotemplate).
+      // Las cuentas se agrupan por SN para no mezclar biometria de otro fichero.
       const aggregateSql = `
-        SELECT ui.userid, ui.badgenumber, ui.name, ui.SN,
-               COALESCE(fp.huellas, 0) AS huellas, COALESCE(pm.palmas, 0) AS palmas,
-               CASE WHEN ui.SN = ? OR fp.userid IS NOT NULL OR pm.userid IS NOT NULL THEN 1 ELSE 0 END AS existeEnFichero
+        SELECT ui.userid, ui.badgenumber, ui.name, bio.SN,
+               SUM(bio.huellas) AS huellas,
+               SUM(bio.palmas) AS palmas,
+               SUM(bio.caras) AS caras
           FROM userinfo ui
-          LEFT JOIN (
-            SELECT userid, COUNT(1) AS huellas
+          JOIN (
+            SELECT userid, SN, COUNT(1) AS huellas, 0 AS palmas, 0 AS caras
               FROM template
              WHERE Template IS NOT NULL AND (DelTag IS NULL OR DelTag = 0)
+               AND SN IS NOT NULL AND SN <> ''
                AND (? IS NULL OR SN = ?)
-             GROUP BY userid
-          ) fp ON fp.userid = ui.userid
-          LEFT JOIN (
-            SELECT userid, COUNT(1) AS palmas
+             GROUP BY userid, SN
+            UNION ALL
+            SELECT userid, SN, 0 AS huellas, COUNT(1) AS palmas, 0 AS caras
               FROM biotemplate
              WHERE BioType = 10 AND Template IS NOT NULL AND (DelTag IS NULL OR DelTag = 0)
+               AND SN IS NOT NULL AND SN <> ''
                AND (? IS NULL OR SN = ?)
-             GROUP BY userid
-          ) pm ON pm.userid = ui.userid
+             GROUP BY userid, SN
+            UNION ALL
+            SELECT userid, SN, 0 AS huellas, 0 AS palmas, COUNT(1) AS caras
+              FROM biotemplate
+             WHERE BioType = 9 AND Template IS NOT NULL AND (DelTag IS NULL OR DelTag = 0)
+               AND SN IS NOT NULL AND SN <> ''
+               AND (? IS NULL OR SN = ?)
+             GROUP BY userid, SN
+          ) bio ON bio.userid = ui.userid
+         GROUP BY ui.userid, ui.badgenumber, ui.name, bio.SN
       `;
       const [admsRows] = await conn.query<RowDataPacket[]>(
         `SELECT bio.* FROM (${aggregateSql}) bio ORDER BY bio.badgenumber`,
-        [sn, sn, sn, sn, sn]
+        [sn, sn, sn, sn, sn, sn]
       );
-      const admsByDni = new Map<string, RowDataPacket>();
+      const bioByFicheroDni = new Map<string, RowDataPacket>();
       for (const row of admsRows) {
         const dni = normalizeDni(row.badgenumber);
-        if (dni && !admsByDni.has(dni)) admsByDni.set(dni, row);
+        const rowSn = asStringOrNull(row.SN);
+        if (dni && rowSn) bioByFicheroDni.set(`${rowSn}|${dni}`, row);
       }
 
-      const allRows = [...personalActivos.values()].map(personal => {
-        const adms = admsByDni.get(personal.dni);
-        const huellas = Number(adms?.huellas ?? 0);
-        const palmas = Number(adms?.palmas ?? 0);
-        const existe = !!adms && (!sn || Number(adms.existeEnFichero) === 1);
-        const estadoBiometrico = !existe ? 'no_existe'
-          : huellas > 0 && palmas > 0 ? 'ambas'
+      const ficheroByDni = new Map<string, FicheroUserRow>();
+      for (const user of ficheroUsers) {
+        if (!ficheroByDni.has(user.dni)) ficheroByDni.set(user.dni, user);
+      }
+
+      // Universo = union del plantel (por estructura) + usuarios que el reloj REALMENTE devuelve.
+      // Asi se ven las dos caras: agentes del plantel que faltan cargar ("no existe"), y gente
+      // cargada en el reloj que no pertenece al plantel ("fuera de estructura").
+      const dniUniverse = new Set<string>(sn ? personalActivos.keys() : []);
+      for (const user of ficheroUsers) dniUniverse.add(user.dni);
+      const allRows = [...dniUniverse].map(dni => {
+        const personal = personalActivos.get(dni);
+        const fichero = ficheroByDni.get(dni);
+        const rowSn = fichero?.sn || sn || null;
+        const bio = rowSn ? bioByFicheroDni.get(`${rowSn}|${dni}`) : null;
+        const enEstructura = sn ? !!personal : true;
+        const huellas = Number(bio?.huellas ?? 0);
+        const palmas = Number(bio?.palmas ?? 0);
+        const caras = Number(bio?.caras ?? 0);
+        const existe = !!fichero; // cargado en el reloj, leído directo del fichero
+        const tipos = (huellas > 0 ? 1 : 0) + (palmas > 0 ? 1 : 0) + (caras > 0 ? 1 : 0);
+        const estadoBiometrico = (!enEstructura && existe) ? 'fuera_estructura'
+          : !existe ? 'no_existe'
+          : tipos >= 2 ? 'ambas'
           : huellas > 0 ? 'solo_huella'
           : palmas > 0 ? 'solo_palma'
+          : caras > 0 ? 'solo_cara'
           : 'sin_biometria';
         return {
-          userid: adms ? Number(adms.userid) : null,
-          dni: personal.dni,
-          nombre: personal.nombre || String(adms?.name ?? ''),
-          sn: adms?.SN || null,
+          userid: fichero?.userid ?? (bio ? Number(bio.userid) : null),
+          dni,
+          nombre: personal?.nombre || fichero?.nombre || String(bio?.name ?? ''),
+          sn: rowSn,
+          enEstructura,
           existe,
           huellas,
           palmas,
+          caras,
           estado: estadoBiometrico,
         };
       });
+      // El universo ya viene acotado a los agentes del fichero (por estructura), o al padron
+      // completo si no hay fichero. NO se filtra por "existe": los que estan en la estructura
+      // pero no cargados en el reloj son justamente los que hay que dar de alta ("no existe en fichero").
+      const universe = allRows;
+
+      // "Que usa el reloj": el tipo de biometria mas enrolado en ese fichero (dato guardado en
+      // template.SN / biotemplate.SN por reloj). Sin fichero no hay un unico requerido.
+      const conHuella = universe.filter(row => row.huellas > 0).length;
+      const conPalma  = universe.filter(row => row.palmas > 0).length;
+      const conCara   = universe.filter(row => row.caras > 0).length;
+      let requerido: 'huella' | 'palma' | 'cara' | null = null;
+      if (sn) {
+        const max = Math.max(conHuella, conPalma, conCara);
+        requerido = max === 0 ? null
+          : conHuella === max ? 'huella'
+          : conPalma === max ? 'palma'
+          : 'cara';
+      }
+      const tieneRequerido = (row: { huellas: number; palmas: number; caras: number }) =>
+        requerido === 'huella' ? row.huellas > 0
+        : requerido === 'palma' ? row.palmas > 0
+        : requerido === 'cara' ? row.caras > 0
+        : (row.huellas > 0 || row.palmas > 0 || row.caras > 0);
+      // "Le falta" aplica solo al plantel: agente que deberia estar y no esta cargado, o esta
+      // pero sin la biometria que el reloj usa. Los "fuera de estructura" no cuentan como falta.
+      const faltaRequerido = (row: { enEstructura: boolean; existe: boolean; huellas: number; palmas: number; caras: number }) =>
+        row.enEstructura && (!row.existe || !tieneRequerido(row));
+
       const resumen = {
-        total: allRows.length,
-        noExiste: allRows.filter(row => !row.existe).length,
-        sinBiometria: allRows.filter(row => row.estado === 'sin_biometria').length,
-        soloHuella: allRows.filter(row => row.estado === 'solo_huella').length,
-        soloPalma: allRows.filter(row => row.estado === 'solo_palma').length,
-        ambas: allRows.filter(row => row.estado === 'ambas').length,
+        total: universe.filter(row => row.enEstructura).length,             // plantel (deberia estar)
+        enReloj: universe.filter(row => row.enEstructura && row.existe).length, // del plantel, cargados
+        noExiste: universe.filter(row => row.enEstructura && !row.existe).length, // del plantel, faltan cargar
+        fueraEstructura: universe.filter(row => !row.enEstructura && row.existe).length, // cargados de mas
+        sinBiometria: universe.filter(row => row.estado === 'sin_biometria').length,
+        soloHuella: universe.filter(row => row.estado === 'solo_huella').length,
+        soloPalma: universe.filter(row => row.estado === 'solo_palma').length,
+        soloCara: universe.filter(row => row.estado === 'solo_cara').length,
+        ambas: universe.filter(row => row.estado === 'ambas').length,
+        conHuella,
+        conPalma,
+        conCara,
+        faltaRequerido: universe.filter(faltaRequerido).length,
       };
       const cleanQ = q ? q.replace(/[%_]/g, '').toUpperCase() : '';
-      const filteredRows = allRows.filter(row =>
+      const filteredRows = universe.filter(row =>
         (!cleanQ || row.dni.includes(cleanQ) || row.nombre.toUpperCase().includes(cleanQ))
-        && (estado === 'todos' || (estado === 'incompleto' ? row.estado !== 'ambas' : row.estado === estado))
+        && (estado === 'todos' ? true
+            : estado === 'incompleto' ? faltaRequerido(row)
+            : row.estado === estado)
       );
 
       if (exportar) {
@@ -1583,18 +1890,17 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
 
         const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
         const csv = [
-          ['DNI', 'Nombre', 'Existe en fichero', 'Fichero / reloj', 'Huellas', 'Palmas', 'Estado'].map(csvCell).join(';'),
+          ['DNI', 'Nombre', 'En plantel', 'Cargado en reloj', 'Fichero / reloj', 'Huellas', 'Palmas', 'Rostro', 'Estado', 'Le falta lo que usa el reloj'].map(csvCell).join(';'),
           ...filteredRows.map(row => {
-            const label = !row.existe
-              ? 'No existe en fichero'
-              : row.huellas > 0 && row.palmas > 0
-              ? 'Huella + palma'
-              : row.huellas > 0
-                ? 'Solo huella'
-                : row.palmas > 0
-                  ? 'Solo palma'
-                  : 'Sin huella ni palma';
-            return [row.dni, row.nombre, row.existe ? 'Sí' : 'No', row.sn || 'Sin asignar', row.huellas, row.palmas, label].map(csvCell).join(';');
+            const tipos = (row.huellas > 0 ? 1 : 0) + (row.palmas > 0 ? 1 : 0) + (row.caras > 0 ? 1 : 0);
+            const label = (!row.enEstructura && row.existe) ? 'Fuera de estructura'
+              : !row.existe ? 'No existe en fichero'
+              : tipos >= 2 ? 'Varias'
+              : row.huellas > 0 ? 'Solo huella'
+              : row.palmas > 0 ? 'Solo palma'
+              : row.caras > 0 ? 'Solo rostro'
+              : 'Sin biometría';
+            return [row.dni, row.nombre, row.enEstructura ? 'Sí' : 'No', row.existe ? 'Sí' : 'No', row.sn || 'Sin asignar', row.huellas, row.palmas, row.caras, label, faltaRequerido(row) ? 'Sí' : 'No'].map(csvCell).join(';');
           }),
         ].join('\r\n');
         const date = new Date().toISOString().slice(0, 10);
@@ -1605,12 +1911,18 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
       await conn.end();
       conn = null;
       const rows = filteredRows.slice(offset, offset + limit);
+      const requeridoLabel = requerido === 'huella' ? 'Huella'
+        : requerido === 'palma' ? 'Palma'
+        : requerido === 'cara' ? 'Rostro'
+        : null;
       return res.json({
         ok: true,
         alcance: sn ? 'fichero' : 'general',
         sn,
         estructura,
         estado,
+        requerido,
+        requeridoLabel,
         total: filteredRows.length,
         limit,
         offset,
@@ -1698,8 +2010,7 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     }
   });
 
-  // El borrado de agentes es SOLO hacia los relojes: la base ADMS nunca se borra.
-  // Encola DATA DELETE USERINFO (+ FINGERTMP) por cada DNI hacia los relojes activos (o el SN indicado).
+  // Encola DATA DELETE USERINFO (+ FINGERTMP) hacia los relojes. No toca userinfo.
   router.post('/adms/cruces/borrar-userinfo', admin, async (req: Request, res: Response) => {
     const cfg = cargarConfig();
     const dnis: string[] = Array.isArray(req.body?.dnis) ? req.body.dnis.map(String).filter(Boolean) : [];
@@ -2002,30 +2313,6 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
         conn = null;
         return res.status(404).json({ ok: false, error: `Reloj ${sn} no encontrado` });
       }
-      // Borrados dirigidos a una persona (sintaxis vieja o nueva): el PIN debe ser un DNI cargado
-      if (/^\s*DATA\s+(?:DELETE\s+(?:USERINFO|FINGERTMP)|DEL_(?:USER|FP))\b/i.test(comando)) {
-        const pin = comando.match(/PIN=(\d+)/i)?.[1] ?? null;
-        let existe = false;
-        if (pin) {
-          const [users] = await conn.query<RowDataPacket[]>('SELECT userid FROM userinfo WHERE badgenumber = ? LIMIT 1', [pin]);
-          existe = users.length > 0;
-        }
-        if (!existe) {
-          let pista = '';
-          if (pin) {
-            const [porUserid] = await conn.query<RowDataPacket[]>('SELECT badgenumber FROM userinfo WHERE userid = ? LIMIT 1', [Number(pin)]);
-            if (porUserid.length) pista = `; ${pin} es un userid interno (esa persona tiene DNI ${porUserid[0].badgenumber})`;
-          }
-          await conn.end();
-          conn = null;
-          return res.status(400).json({
-            ok: false,
-            error: pin
-              ? `El PIN ${pin} no es un DNI cargado en ADMS${pista}. No se encoló el borrado.`
-              : 'Comando de borrado sin PIN numérico. No se encoló.',
-          });
-        }
-      }
       const id = await appendDeviceCommand(conn, sn, comando, devices[0].PushVersion);
       await conn.end();
       conn = null;
@@ -2093,17 +2380,6 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
         await conn.end();
         conn = null;
         return res.status(404).json({ ok: false, error: `Reloj ${sn} no encontrado` });
-      }
-      // El PIN de un borrado debe ser un DNI (badgenumber) cargado; un userid interno borraría a otra persona
-      const [users] = await conn.query<RowDataPacket[]>('SELECT userid FROM userinfo WHERE badgenumber = ? LIMIT 1', [dni]);
-      if (!users.length) {
-        const [porUserid] = await conn.query<RowDataPacket[]>('SELECT badgenumber FROM userinfo WHERE userid = ? LIMIT 1', [Number(dni) || 0]);
-        await conn.end();
-        conn = null;
-        const pista = porUserid.length
-          ? `; ${dni} es un userid interno (esa persona tiene DNI ${porUserid[0].badgenumber})`
-          : '';
-        return res.status(404).json({ ok: false, error: `No existe usuario ADMS con DNI ${dni}${pista}. No se encoló ningún borrado.` });
       }
       const ids: number[] = [];
       if (fid != null) {

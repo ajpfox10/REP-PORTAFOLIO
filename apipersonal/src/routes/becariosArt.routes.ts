@@ -91,6 +91,46 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
     }
   });
 
+  // ── GET /errores — errores de la carga automática ART (tabla becarios_art_errores) ─
+  // DEBE ir antes de /:dni. La tabla la crea el script de carga; si no existe, devolvemos vacío.
+  router.get('/errores', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      const rows = await sequelize.query<Record<string, any>>(`
+        SELECT
+          e.dni, e.motivo, e.detalle, e.screenshot, e.lote, e.updated_at,
+          p.apellido, p.nombre, p.cuil, a.legajo, l.nombre AS ley_nombre
+        FROM becarios_art_errores e
+        LEFT JOIN personal p ON p.dni = e.dni AND p.deleted_at IS NULL
+        LEFT JOIN agentes  a ON a.dni = e.dni AND a.deleted_at IS NULL
+        LEFT JOIN ley      l ON l.id  = a.ley_id
+        ORDER BY e.updated_at DESC
+      `, { type: QueryTypes.SELECT });
+      return res.json({ ok: true, data: rows, total: rows.length });
+    } catch (err: any) {
+      if (err?.parent?.code === 'ER_NO_SUCH_TABLE' || /ER_NO_SUCH_TABLE|doesn't exist/i.test(err?.message || '')) {
+        return res.json({ ok: true, data: [], total: 0 });
+      }
+      logger.error({ msg: '[becariosArt] errores list error', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'Error al listar errores ART' });
+    }
+  });
+
+  // ── DELETE /errores/:dni — marcar error como resuelto (lo quita de la lista) ──
+  router.delete('/errores/:dni', requirePermission('api:access'), async (req: Request, res: Response) => {
+    try {
+      const dni = parseInt(req.params.dni, 10);
+      if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      await sequelize.query('DELETE FROM becarios_art_errores WHERE dni = :dni', { replacements: { dni } });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      if (err?.parent?.code === 'ER_NO_SUCH_TABLE' || /ER_NO_SUCH_TABLE|doesn't exist/i.test(err?.message || '')) {
+        return res.json({ ok: true });
+      }
+      logger.error({ msg: '[becariosArt] errores delete error', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'Error al resolver error ART' });
+    }
+  });
+
   // ── GET / — listado completo ──────────────────────────────────────────────
   router.get('/', requirePermission('api:access'), async (req: Request, res: Response) => {
     try {
@@ -108,6 +148,7 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
         SELECT
           b.id,
           b.dni,
+          COALESCE(b.origen_art, 'manual') AS origen_art,
           p.apellido,
           p.nombre,
           a.legajo,
@@ -145,6 +186,7 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
         SELECT
           b.id,
           b.dni,
+          COALESCE(b.origen_art, 'manual') AS origen_art,
           p.apellido,
           p.nombre,
           a.legajo,
@@ -194,8 +236,8 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
       }
 
       const [result] = await sequelize.query(
-        `INSERT INTO becarios_art (dni, pagina, creado_por, created_at, updated_at)
-         VALUES (:dni, :pagina, :userId, NOW(), NOW())`,
+        `INSERT INTO becarios_art (dni, pagina, origen_art, creado_por, created_at, updated_at)
+         VALUES (:dni, :pagina, 'manual', :userId, NOW(), NOW())`,
         { replacements: { dni, pagina, userId } }
       );
 

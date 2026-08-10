@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS art_alta_queue (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  agente_id INT NOT NULL,
+  dni INT NOT NULL,
+  fecha_ingreso_db DATE NULL,
+  estado_empleo VARCHAR(30) NULL,
+  status ENUM('PENDING','PROCESSING','DONE','ERROR','SKIPPED') NOT NULL DEFAULT 'PENDING',
+  attempts INT NOT NULL DEFAULT 0,
+  locked_at DATETIME NULL,
+  started_at DATETIME NULL,
+  finished_at DATETIME NULL,
+  last_error TEXT NULL,
+  resultado_art TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_art_alta_queue_agente (agente_id),
+  KEY idx_art_alta_queue_status (status, attempts, created_at),
+  KEY idx_art_alta_queue_dni (dni)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4

@@ -47,23 +47,42 @@ export function HistorialEstructuraPage() {
   const [origen, setOrigen]     = useState('todos');
   const [texto, setTexto]       = useState('');
   const [page, setPage]         = useState(0);
+  const [fuente, setFuente]     = useState<'db' | 'excel' | ''>('');
+  const [importando, setImportando] = useState(false);
   const firstLoad = useRef(false);
 
   const cargar = useCallback(async (d?: Dep) => {
     const key = d ?? dep;
     setLoading(true);
     try {
-      const r = await apiFetch<{ ok: boolean; filas: HistRow[]; existe: boolean }>(
+      const r = await apiFetch<{ ok: boolean; filas: HistRow[]; existe: boolean; fuente?: 'db' | 'excel' }>(
         `/intranet/historial-estructura/resultado?dep=${encodeURIComponent(key)}`
       );
       setFilas(r?.ok ? (r.filas ?? []) : []);
       setExiste(!!r?.existe);
+      setFuente(r?.fuente ?? '');
     } catch {
-      setFilas([]); setExiste(false);
+      setFilas([]); setExiste(false); setFuente('');
     } finally {
       setLoading(false);
     }
   }, [dep]);
+
+  async function importar() {
+    setImportando(true);
+    try {
+      const r = await apiFetch<{ ok: boolean; msg?: string; error?: string }>(
+        '/intranet/historial-estructura/importar',
+        { method: 'POST', body: JSON.stringify({ dependencia: dep }) }
+      );
+      if (r?.ok) { toast.ok(r.msg ?? 'Importado a la base'); cargar(); }
+      else toast.error(r?.error ?? 'Error al importar');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Error');
+    } finally {
+      setImportando(false);
+    }
+  }
 
   useEffect(() => {
     if (!firstLoad.current) { firstLoad.current = true; cargar('HOSPITAL'); }
@@ -114,6 +133,44 @@ export function HistorialEstructuraPage() {
   const totalPages = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages - 1);
   const visibles   = filtradas.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  const tableWrapStyle: React.CSSProperties = {
+    maxWidth: '100%',
+    minHeight: 280,
+    maxHeight: 'calc(100vh - 410px)',
+    overflow: 'auto',
+  };
+
+  const tableStyle: React.CSSProperties = {
+    width: 1660,
+    minWidth: 1660,
+    borderCollapse: 'collapse',
+    fontSize: '0.76rem',
+    tableLayout: 'fixed',
+  };
+
+  const thStyle: React.CSSProperties = {
+    padding: '8px 10px',
+    textAlign: 'left',
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    top: 0,
+    zIndex: 2,
+    background: '#2b2744',
+    borderBottom: '1px solid rgba(255,255,255,0.12)',
+  };
+
+  const tdStyle: React.CSSProperties = {
+    padding: '7px 10px',
+    borderTop: '1px solid rgba(255,255,255,0.05)',
+    verticalAlign: 'middle',
+  };
+
+  const textClip: React.CSSProperties = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  };
 
   return (
     <Layout title="Historial de Estructura" showBack>
@@ -167,6 +224,16 @@ export function HistorialEstructuraPage() {
           style={{ fontSize: '0.76rem', whiteSpace: 'nowrap', background: 'rgba(255,255,255,0.07)' }}>
           {loading ? '⏳...' : '🔄 Actualizar resultado'}
         </button>
+        <button className="btn" onClick={importar} disabled={importando}
+          title="Pasa el Excel del scraper a la tabla historial_estructura (reemplaza lo anterior de esta dependencia)"
+          style={{ fontSize: '0.76rem', whiteSpace: 'nowrap', background: 'rgba(99,102,241,0.2)', color: '#a5b4fc' }}>
+          {importando ? '⏳...' : '⬆ Guardar en base'}
+        </button>
+        {fuente && (
+          <span className="muted" style={{ fontSize: '0.7rem' }}>
+            {fuente === 'db' ? '🗄 fuente: base de datos' : '📄 fuente: Excel (todavía sin importar)'}
+          </span>
+        )}
 
         <select className="input" value={estado} onChange={e => { setEstado(e.target.value); setPage(0); }}
           style={{ fontSize: '0.78rem', width: 130 }}>
@@ -202,12 +269,25 @@ export function HistorialEstructuraPage() {
 
       {existe && (
         <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem' }}>
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <colgroup>
+                <col style={{ width: 82 }} />
+                <col style={{ width: 98 }} />
+                <col style={{ width: 102 }} />
+                <col style={{ width: 300 }} />
+                <col style={{ width: 88 }} />
+                <col style={{ width: 320 }} />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 128 }} />
+                <col style={{ width: 112 }} />
+                <col style={{ width: 220 }} />
+                <col style={{ width: 260 }} />
+              </colgroup>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
                   {['Estado', 'Origen', 'DNI', 'Nombre', 'Legajo', 'Apellido y Nombre', 'Parte', 'Plantel → Serv.', 'Fecha baja', 'Cargo', 'Detalle'].map(c => (
-                    <th key={c} style={{ padding: '6px 8px', textAlign: 'left', whiteSpace: 'nowrap' }}>{c}</th>
+                    <th key={c} style={thStyle}>{c}</th>
                   ))}
                 </tr>
               </thead>
@@ -217,19 +297,19 @@ export function HistorialEstructuraPage() {
                     borderTop: '1px solid rgba(255,255,255,0.05)',
                     background: r.estado !== 'OK' ? 'rgba(239,68,68,0.05)' : undefined,
                   }}>
-                    <td style={{ padding: '5px 8px', color: r.estado === 'OK' ? '#22c55e' : '#ef4444', whiteSpace: 'nowrap' }}>
+                    <td style={{ ...tdStyle, color: r.estado === 'OK' ? '#22c55e' : '#ef4444', whiteSpace: 'nowrap' }}>
                       {r.estado === 'OK' ? '✓ OK' : '✗ Error'}
                     </td>
-                    <td style={{ padding: '5px 8px', color: r.origen === 'ACTIVO' ? '#60a5fa' : '#94a3b8' }}>{r.origen}</td>
-                    <td style={{ padding: '5px 8px' }}>{r.dni}</td>
-                    <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{r.nombre}</td>
-                    <td style={{ padding: '5px 8px' }}>{r.legajo}</td>
-                    <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{r.apellido}</td>
-                    <td style={{ padding: '5px 8px' }}>{r.parte}</td>
-                    <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{r.plantel}</td>
-                    <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{r.fecha_baja}</td>
-                    <td style={{ padding: '5px 8px' }}>{r.cargo}</td>
-                    <td style={{ padding: '5px 8px', color: '#94a3b8' }}>{r.detalle}</td>
+                    <td title={r.origen} style={{ ...tdStyle, ...textClip, color: r.origen === 'ACTIVO' ? '#60a5fa' : '#94a3b8' }}>{r.origen}</td>
+                    <td title={r.dni} style={{ ...tdStyle, ...textClip }}>{r.dni}</td>
+                    <td title={r.nombre} style={{ ...tdStyle, ...textClip }}>{r.nombre}</td>
+                    <td title={r.legajo} style={{ ...tdStyle, ...textClip }}>{r.legajo}</td>
+                    <td title={r.apellido} style={{ ...tdStyle, ...textClip }}>{r.apellido}</td>
+                    <td title={r.parte} style={{ ...tdStyle, ...textClip }}>{r.parte}</td>
+                    <td title={r.plantel} style={{ ...tdStyle, ...textClip }}>{r.plantel}</td>
+                    <td title={r.fecha_baja} style={{ ...tdStyle, ...textClip }}>{r.fecha_baja}</td>
+                    <td title={r.cargo} style={{ ...tdStyle, ...textClip }}>{r.cargo}</td>
+                    <td title={r.detalle} style={{ ...tdStyle, ...textClip, color: '#94a3b8' }}>{r.detalle}</td>
                   </tr>
                 ))}
                 {!visibles.length && (

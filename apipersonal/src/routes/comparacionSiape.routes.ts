@@ -160,6 +160,7 @@ interface AgRow {
   hasta: Date | null;
   dependencia: string;
   ley: string;
+  justificado: string;
 }
 
 function findExcelInDir(dir: string): string | null {
@@ -203,7 +204,7 @@ function parseExcelMinisterio(fp: string): AgRow[] {
     const hasta  = parseDate(cHasta >= 0 ? r[cHasta] : null);
 
     if (!legajo && !dni && !nombre) continue;
-    rows.push({ legajo, dni, nombre, novedad, desde, hasta, dependencia: '—', ley: '' });
+    rows.push({ legajo, dni, nombre, novedad, desde, hasta, dependencia: '—', ley: '', justificado: '' });
   }
   return rows;
 }
@@ -232,6 +233,7 @@ function parseExcelSiape(fp: string): AgRow[] {
   const cE5     = ci(['e5']);
   const cE6     = ci(['e6']);
   const cLey    = ci(['ley', 'convenio', 'regimen', 'planta', 'categoria']);
+  const cJust   = ci(['justificado']);
 
   for (let i = 1; i < raw.length; i++) {
     const r = raw[i] as any[];
@@ -248,8 +250,9 @@ function parseExcelSiape(fp: string): AgRow[] {
     const dependencia = resolveDepedencia(e5raw, e6raw);
 
     const ley = String(cLey >= 0 ? (r[cLey] ?? '') : '').trim();
+    const justificado = String(cJust >= 0 ? (r[cJust] ?? '') : '').trim().toUpperCase();
     if (!novedad) continue;
-    rows.push({ legajo, dni, nombre, novedad, desde, hasta, dependencia, ley });
+    rows.push({ legajo, dni, nombre, novedad, desde, hasta, dependencia, ley, justificado });
   }
   return rows;
 }
@@ -268,6 +271,7 @@ export interface CompRow {
   novedad_siap: string;
   fecha_desde_siap: string;
   fecha_hasta_siap: string;
+  justificado_siap: string;
   estado: 'COINCIDENTE' | 'NO COINCIDENTE' | 'RANGO_DISTINTO' | 'SOLO_SIAP';
   motivo: string;
 }
@@ -298,6 +302,47 @@ function motivoBecario(ley: string, novedad: string, desde: Date | null, hasta: 
   if (esLicencia29(novedad)) return 'BECARIO_NO_APLICA';
   if (esVacaciones(novedad) && diasEntreFechas(desde, hasta) > 14) return 'BECARIO_NO_APLICA';
   return null;
+}
+
+const NOV_ENF_PENDIENTE = 'E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCION)';
+
+function esMedicaSinJustificar(row: AgRow): boolean {
+  if (String(row.justificado || '').trim().toUpperCase() !== 'NO') return false;
+  const n = normNovedad(row.novedad);
+  return n.startsWith('ENFERMEDAD') ||
+    n.includes('ATENCION FAMILIAR ENFERMO') ||
+    n.includes('ENFERMEDAD DE FAMILIAR');
+}
+
+function novedadSiapParaComparar(row: AgRow): string {
+  return esMedicaSinJustificar(row) ? NOV_ENF_PENDIENTE : row.novedad;
+}
+
+function novedadesConectanRow(equivs: string[], row: AgRow): boolean {
+  return novedadesConectan(equivs, novedadSiapParaComparar(row));
+}
+
+const dia = (d: Date) => Math.floor(toUTCMid(d).getTime() / 86400000);
+
+function rangoCubierto(desde: Date | null, hasta: Date | null, filas: AgRow[]): boolean {
+  if (!desde || !hasta || filas.length === 0) return false;
+  const ini = dia(desde);
+  const fin = dia(hasta);
+  const tramos = filas
+    .map(f => {
+      const d = f.desde;
+      const h = f.hasta ?? f.desde;
+      return d && h ? [Math.max(ini, dia(d)), Math.min(fin, dia(h))] as [number, number] : null;
+    })
+    .filter((x): x is [number, number] => !!x && x[0] <= x[1])
+    .sort((a, b) => a[0] - b[0]);
+  let cubreHasta = ini - 1;
+  for (const [a, b] of tramos) {
+    if (a > cubreHasta + 1) return false;
+    cubreHasta = Math.max(cubreHasta, b);
+    if (cubreHasta >= fin) return true;
+  }
+  return cubreHasta >= fin;
 }
 
 function comparar(ministerio: AgRow[], siap: AgRow[], mapeo: Record<string, string[]>): CompRow[] {
@@ -334,7 +379,7 @@ function comparar(ministerio: AgRow[], siap: AgRow[], mapeo: Record<string, stri
     let bestCand: AgRow | null = null;
 
     const match = candidatos.find(s => {
-      if (!novedadesConectan(equivs, s.novedad)) return false;
+      if (!novedadesConectanRow(equivs, s)) return false;
       vioNovedadMapeada = true;
 
       const sD = s.desde;
@@ -352,12 +397,23 @@ function comparar(ministerio: AgRow[], siap: AgRow[], mapeo: Record<string, stri
       return exact;
     });
 
+    const medicasPendientesCubiertas = !match
+      ? candidatos.filter(s => {
+          if (siapVisto.has(s) || !esMedicaSinJustificar(s) || !novedadesConectanRow(equivs, s)) return false;
+          const sD = s.desde;
+          const sH = s.hasta ?? s.desde;
+          return !!minDesde && !!minHasta && !!sD && !!sH && overlap(minDesde, minHasta, sD, sH);
+        })
+      : [];
+    const cubreMedicaPendiente = rangoCubierto(minDesde, minHasta, medicasPendientesCubiertas);
+
     if (match) siapVisto.add(match);
+    else if (cubreMedicaPendiente) medicasPendientesCubiertas.forEach(s => siapVisto.add(s));
     else if (bestCand) siapVisto.add(bestCand);
 
-    const display = match ?? bestCand;
-    const estado: CompRow['estado'] = match ? 'COINCIDENTE' : vioRangoDist ? 'RANGO_DISTINTO' : 'NO COINCIDENTE';
-    const motivo = match ? '' : vioRangoDist ? 'RANGO_DISTINTO' : vioNovedadMapeada ? 'MAPEO_OK_PERO_SIN_MATCH' : 'SIAP_SIN_NOVEDAD_EQUIVALENTE';
+    const display = match ?? medicasPendientesCubiertas[0] ?? bestCand;
+    const estado: CompRow['estado'] = match || cubreMedicaPendiente ? 'COINCIDENTE' : vioRangoDist ? 'RANGO_DISTINTO' : 'NO COINCIDENTE';
+    const motivo = match ? '' : cubreMedicaPendiente ? 'MEDICA_SIN_JUSTIFICAR_CUBIERTA_POR_PENDIENTE' : vioRangoDist ? 'RANGO_DISTINTO' : vioNovedadMapeada ? 'MAPEO_OK_PERO_SIN_MATCH' : 'SIAP_SIN_NOVEDAD_EQUIVALENTE';
 
     const leyRef = display?.ley ?? candidatos[0]?.ley ?? '';
     resultados.push({
@@ -372,6 +428,7 @@ function comparar(ministerio: AgRow[], siap: AgRow[], mapeo: Record<string, stri
       novedad_siap:       display?.novedad ?? '—',
       fecha_desde_siap:   dateToStr(display?.desde ?? null),
       fecha_hasta_siap:   dateToStr(display?.hasta ?? null),
+      justificado_siap:   display?.justificado ?? '',
       estado,
       motivo,
     });
@@ -399,6 +456,7 @@ function comparar(ministerio: AgRow[], siap: AgRow[], mapeo: Record<string, stri
       novedad_siap:       s.novedad,
       fecha_desde_siap:   dateToStr(s.desde),
       fecha_hasta_siap:   dateToStr(s.hasta),
+      justificado_siap:   s.justificado ?? '',
       estado:             'SOLO_SIAP',
       motivo:             motivoSiap,
     });

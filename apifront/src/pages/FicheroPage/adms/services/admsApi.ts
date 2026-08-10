@@ -68,16 +68,17 @@ export async function getAdmsFichadas(filters: AdmsFichadasFilters, offset = 0):
   return { data: res.data ?? [], total: res.total ?? 0 };
 }
 
-export async function getAdmsPersonas(q: string, offset = 0): Promise<{ data: AdmsPersona[]; total: number }> {
+export async function getAdmsPersonas(q: string, offset = 0, sn = ''): Promise<{ data: AdmsPersona[]; total: number }> {
   const qs = new URLSearchParams();
   qs.set('limit', '50');
   qs.set('offset', String(offset));
   if (q.trim()) qs.set('q', q.trim());
+  if (sn.trim()) qs.set('sn', sn.trim());
 
   const res = await apiFetch<{ ok: boolean; data: AdmsPersona[]; total: number; error?: string }>(
     `/fichero/adms/personas?${qs.toString()}`
   );
-  if (!res?.ok) throw new Error(res?.error ?? 'No se pudieron leer las personas ADMS');
+  if (!res?.ok) throw new Error(res?.error ?? 'No se pudieron leer los usuarios del fichero');
   return { data: res.data ?? [], total: res.total ?? 0 };
 }
 
@@ -270,6 +271,9 @@ export async function getAdmsComunicacion(): Promise<AdmsRuntimeEvent[]> {
 export async function getAdmsHuellas(params: { q?: string; sn?: string } = {}): Promise<{
   data: AdmsFingerprintRow[];
   total: number;
+  fuente?: string;
+  reloj?: { sn: string; alias: string; ip: string };
+  resumen?: { usuarios: number; templates: number; bytesTemplates: number };
   dispositivos: { sn: string; alias: string; fpVersion: string }[];
 }> {
   const qs = new URLSearchParams();
@@ -280,11 +284,21 @@ export async function getAdmsHuellas(params: { q?: string; sn?: string } = {}): 
     ok: boolean;
     data: AdmsFingerprintRow[];
     total: number;
+    fuente?: string;
+    reloj?: { sn: string; alias: string; ip: string };
+    resumen?: { usuarios: number; templates: number; bytesTemplates: number };
     dispositivos: { sn: string; alias: string; fpVersion: string }[];
     error?: string;
   }>(`/fichero/adms/huellas?${qs.toString()}`);
-  if (!res?.ok) throw new Error(res?.error ?? 'No se pudieron leer las huellas ADMS');
-  return { data: res.data ?? [], total: res.total ?? 0, dispositivos: res.dispositivos ?? [] };
+  if (!res?.ok) throw new Error(res?.error ?? 'No se pudo leer la biometria directa del fichero');
+  return {
+    data: res.data ?? [],
+    total: res.total ?? 0,
+    fuente: res.fuente,
+    reloj: res.reloj,
+    resumen: res.resumen,
+    dispositivos: res.dispositivos ?? [],
+  };
 }
 
 export async function getAdmsBiometricStatus(params: {
@@ -425,10 +439,11 @@ export async function getAdmsClockCross(params: {
   return res;
 }
 
-export async function searchAdmsMessageAgents(q: string): Promise<AdmsMessageAgent[]> {
+export async function searchAdmsMessageAgents(q: string, sn?: string): Promise<AdmsMessageAgent[]> {
   const qs = new URLSearchParams();
   qs.set('limit', '50');
   if (q.trim()) qs.set('q', q.trim());
+  if (sn?.trim()) qs.set('sn', sn.trim());
   const res = await apiFetch<{ ok: boolean; data: AdmsMessageAgent[]; error?: string }>(`/fichero/adms/mensajes/agentes?${qs.toString()}`);
   if (!res?.ok) throw new Error(res?.error ?? 'No se pudieron buscar agentes activos');
   return res.data ?? [];

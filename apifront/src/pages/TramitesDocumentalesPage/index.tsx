@@ -1,7 +1,7 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { AlignmentType, BorderStyle, Document, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
 import { Layout } from '../../components/Layout';
-import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
+import { apiFetch, apiFetchBlobWithMeta, apiFetchNdjson } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { AptosTab } from './AptosTab';
 import './styles/TramitesDocumentalesPage.css';
@@ -42,6 +42,12 @@ type AnalysisRow = {
   pageTitles?: string[];
   pageSubOrder?: number[];
 };
+
+type AnalysisStreamEvent =
+  | { type: 'start'; total: number; inputDir?: string; docuBaseDir?: string }
+  | { type: 'row'; row: AnalysisRow; done: number; total: number }
+  | { type: 'done'; rows?: AnalysisRow[]; total: number; detected?: number; needsReview?: number }
+  | { type: 'error'; error: string };
 
 type ManualRow = {
   id: string;
@@ -110,6 +116,7 @@ const CARATULA_DOC_KEY = '__caratula__';
 const RUPA_DOC_KEY = '__rupa__';
 const SAVED_LISTADOS_KEY = 'tramites-documentales:listados-preparados:v1';
 const SAVED_LISTADOS_MIGRATED_KEY = 'tramites-documentales:listados-preparados:migrated-to-api:v1';
+const ANALYSIS_ROWS_KEY = 'tramites-documentales:analysis-rows:v1';
 const CARATULA_EXPECTED_NAMES = [
   'caratulahtal10430.pdf',
   'caratulahtal10471.pdf',
@@ -184,6 +191,22 @@ function storeSavedListados(rows: SavedListado[]) {
 
 // Identidad de un listado: población/trámite/año/programa/dependencia (no fecha ni id).
 // Dos listados con la misma identidad son "el mismo" → se actualiza, no se duplica.
+function loadAnalysisRows(): AnalysisRow[] {
+  try {
+    const raw = window.localStorage.getItem(ANALYSIS_ROWS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((row) => row?.fileName && row?.fileUrl)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function storeAnalysisRows(rows: AnalysisRow[]) {
+  window.localStorage.setItem(ANALYSIS_ROWS_KEY, JSON.stringify(rows));
+}
+
 function listadoIdentity(l: SavedListado): string {
   return [l.poblacion, l.tramite, l.anioBeca, l.programaBeca, l.dependenciaId]
     .map((v) => String(v ?? '').trim().toUpperCase())
@@ -305,7 +328,7 @@ const COMBINED_PAGE_ORDER: Array<{ rank: number; match: (t: string) => boolean }
   { rank: 15, match: (t) => t.includes('acepto designacion') || t.includes('conformidad de designacion') },
 ];
 const RANK_RUPA = 13;
-const RANK_CARATULA = 14;
+const RANK_CARATULA = 0;
 const RANK_UNKNOWN = 12.5; // hojas sin match → antes de rupa/carátula/aceptación
 
 function rankForPageTitle(title: string): number {
@@ -369,7 +392,7 @@ export function TramitesDocumentalesPage() {
   const [manualRows, setManualRows] = useState<ManualRow[]>([newManualRow()]);
   const [savedListados, setSavedListados] = useState<SavedListado[]>(() => loadSavedListados());
   const [selectedListadoId, setSelectedListadoId] = useState('');
-  const [analysisRows, setAnalysisRows] = useState<AnalysisRow[]>([]);
+  const [analysisRows, setAnalysisRows] = useState<AnalysisRow[]>(() => loadAnalysisRows());
   const [reviewFilter, setReviewFilter] = useState<'TODOS' | 'LISTOS' | 'REVISAR' | 'SIN_AGENTE'>('TODOS');
   const [loading, setLoading] = useState(false);
   const [preloading, setPreloading] = useState(false);
@@ -513,9 +536,17 @@ export function TramitesDocumentalesPage() {
   }
 
   useEffect(() => {
+    storeAnalysisRows(analysisRows);
+  }, [analysisRows]);
+
+  useEffect(() => {
     const dnis = Array.from(new Set(
       analysisRows.map((row) => dniFromAnalysis(row)).filter(Boolean)
     ));
+    if (loading) {
+      setExtraStatusLoading(false);
+      return;
+    }
     if (!dnis.length) {
       setExtraDocsByDni({});
       setExtraStatusLoading(false);
@@ -537,7 +568,7 @@ export function TramitesDocumentalesPage() {
       .then((res) => setExtraDocsByDni(res.data.rows || {}))
       .catch(() => setExtraDocsByDni({}))
       .finally(() => setExtraStatusLoading(false));
-  }, [analysisRows, includeCaratula, includeRupa, rupaSourceMode, rupaDir]);
+  }, [analysisRows, includeCaratula, includeRupa, rupaSourceMode, rupaDir, loading]);
 
   const tramiteOptions = (config?.tramites || [])
     .filter((t) => poblacion !== 'INTERINOS_10430' || t.value !== 'NOMBRAMIENTO');
@@ -808,6 +839,52 @@ export function TramitesDocumentalesPage() {
     }
   }
 
+  async function analyzePdfsStreaming() {
+    setLoading(true);
+    setSavedResults([]);
+    let received = 0;
+
+    try {
+      await apiFetchNdjson<AnalysisStreamEvent>('/tramites-documentales/analizar?stream=1', {
+        method: 'POST',
+        body: JSON.stringify({ poblacion, tramite }),
+      }, (event) => {
+        if (event.type === 'row') {
+          received = event.done;
+          const nextRow = {
+            ...event.row,
+            manualDni: event.row.detectedDni ? String(event.row.detectedDni) : '',
+            incluido: event.row.status === 'detectado',
+          };
+          setAnalysisRows((rows) => {
+            const idx = rows.findIndex((row) => row.fileName === nextRow.fileName);
+            if (idx < 0) return [...rows, nextRow];
+            const copy = [...rows];
+            copy[idx] = {
+              ...nextRow,
+              manualDni: copy[idx].manualDni || nextRow.manualDni,
+              incluido: copy[idx].incluido ?? nextRow.incluido,
+            };
+            return copy;
+          });
+        }
+        if (event.type === 'error') {
+          throw new Error(event.error || 'Error al analizar PDFs');
+        }
+      });
+
+      if (received) {
+        toast.ok('Analisis listo', `${received} PDF(s) revisados`);
+      } else {
+        toast.warning('Sin PDFs para analizar', 'No se encontraron PDFs en Descargas ni en sus subcarpetas.');
+      }
+    } catch (e: any) {
+      toast.error('No se pudo analizar PDFs', e?.message || 'Error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function openPdf(row: AnalysisRow, groupKey?: string | null) {
     try {
       const fileUrl = row.fileUrl.replace(/^\/api\/v1(?=\/)/, '');
@@ -930,7 +1007,7 @@ export function TramitesDocumentalesPage() {
 
   function defaultDocKeysForGroup(group: PdfGroup) {
     return [
-      ...(hasCaratulaForGroup(group) ? [CARATULA_DOC_KEY] : []),
+      ...(shouldTryCaratulaForGroup(group) ? [CARATULA_DOC_KEY] : []),
       ...group.rows.map((row) => fileDocKey(row.fileName)),
       ...(hasRupaForGroup(group) ? [RUPA_DOC_KEY] : []),
     ];
@@ -969,6 +1046,10 @@ export function TramitesDocumentalesPage() {
     return group.dni ? extraDocsByDni[group.dni]?.caratula || null : null;
   }
 
+  function shouldTryCaratulaForGroup(group: PdfGroup) {
+    return Boolean(includeCaratula && group.dni);
+  }
+
   function hasCaratulaForGroup(group: PdfGroup) {
     const caratula = caratulaForGroup(group);
     return Boolean(includeCaratula && caratula?.found && Number(caratula.pages || 0) > 0);
@@ -1001,7 +1082,7 @@ export function TramitesDocumentalesPage() {
   }
 
   function hasMergeableExtraForGroup(group: PdfGroup) {
-    return hasCaratulaForGroup(group) || hasRupaForGroup(group);
+    return shouldTryCaratulaForGroup(group) || hasRupaForGroup(group);
   }
 
   function moveDocInGroup(group: PdfGroup, key: string, delta: number) {
@@ -1073,8 +1154,11 @@ export function TramitesDocumentalesPage() {
     const entries: Array<{ key: string; rank: number; sub: number; seq: number }> = [];
     let seq = 0;
 
-    if (hasCaratulaForGroup(group)) {
-      entries.push({ key: combinedPageKey(CARATULA_DOC_KEY, 0), rank: RANK_CARATULA, sub: 0, seq: seq++ });
+    if (shouldTryCaratulaForGroup(group)) {
+      const caratulaPages = Math.max(1, Number(extraDocsByDni[group.dni]?.caratula?.pages || 1));
+      for (let page = 1; page <= caratulaPages; page += 1) {
+        entries.push({ key: combinedPageKey(CARATULA_DOC_KEY, page), rank: RANK_CARATULA, sub: page, seq: seq++ });
+      }
     }
 
     for (const row of group.rows) {
@@ -1147,7 +1231,7 @@ export function TramitesDocumentalesPage() {
 
   function combinedPageLabel(group: PdfGroup, pageKey: string, index: number) {
     const { docKey, page } = parseCombinedPageKey(pageKey);
-    if (docKey === CARATULA_DOC_KEY) return `${index + 1}. Caratula`;
+    if (docKey === CARATULA_DOC_KEY) return `${index + 1}. Caratula${page ? ` hoja ${page}` : ''}`;
     if (docKey === RUPA_DOC_KEY) return `${index + 1}. RUPA${page ? ` hoja ${page}` : ''}`;
     const fileName = fileNameFromDocKey(docKey);
     const rowIndex = group.rows.findIndex((row) => row.fileName === fileName);
@@ -1280,7 +1364,7 @@ export function TramitesDocumentalesPage() {
     }
     const files = filesPayload(group.dni);
     const includeRupaForGroup = hasRupaForGroup(group);
-    const includeCaratulaForGroup = hasCaratulaForGroup(group);
+    const includeCaratulaForGroup = shouldTryCaratulaForGroup(group);
     if (!files.length && !includeCaratulaForGroup && !includeRupaForGroup) {
       toast.warning('Sin PDFs', 'No hay documentos para previsualizar.');
       return;
@@ -1671,7 +1755,7 @@ export function TramitesDocumentalesPage() {
             ))}
           </select>
         </label>
-        <button className="btn primary" type="button" onClick={analyzePdfs} disabled={loading}>
+        <button className="btn primary" type="button" onClick={analyzePdfsStreaming} disabled={loading}>
           {loading ? 'Analizando...' : 'Analizar PDFs'}
         </button>
       </section>
