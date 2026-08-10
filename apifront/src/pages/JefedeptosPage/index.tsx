@@ -41,10 +41,15 @@ interface Jefedepto {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-function addYears(date: string, years: number): string {
-  const d = new Date(date);
-  d.setFullYear(d.getFullYear() + years);
-  return d.toISOString().slice(0, 10);
+function vencimientoPorConcurso(fechaDesde: string): string {
+  const [year, month, day] = fechaDesde.slice(0, 10).split('-').map(Number);
+  const d = new Date(year + 4, month - 1, day);
+  d.setDate(d.getDate() - 1);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 function diasHasta(fecha: string): number {
@@ -311,7 +316,7 @@ export function JefedeptosPage() {
 
   useEffect(() => {
     if (tipoFuncion === 'INTERINO') setFechaHasta('');
-    else if (fechaDesde) setFechaHasta(addYears(fechaDesde, 4));
+    else if (fechaDesde) setFechaHasta(vencimientoPorConcurso(fechaDesde));
   }, [tipoFuncion, fechaDesde]);
 
   // ── Guardar ──
@@ -630,7 +635,7 @@ export function JefedeptosPage() {
                   {tipoFuncion === 'INTERINO'
                     ? '✓ INTERINO — Sin fecha de vencimiento'
                     : fechaDesde
-                      ? `⏳ POR CONCURSO — Vence el ${fmt(fechaHasta)} (4 años desde el ${fmt(fechaDesde)})`
+                      ? `⏳ POR CONCURSO — Vence el ${fmt(fechaHasta)} (4 años menos 1 día desde el ${fmt(fechaDesde)})`
                       : '⏳ POR CONCURSO — Ingresá la fecha desde para calcular el vencimiento'
                   }
                 </div>
@@ -877,7 +882,7 @@ export function JefedeptosPage() {
                   const v = e.target.value as 'INTERINO' | 'POR CONCURSO';
                   setEditTipo(v);
                   if (v === 'INTERINO') setEditFechaHasta('');
-                  else if (editFechaDesde) setEditFechaHasta(addYears(editFechaDesde, 4));
+                  else if (editFechaDesde) setEditFechaHasta(vencimientoPorConcurso(editFechaDesde));
                 }}>
                   <option value="INTERINO">INTERINO</option>
                   <option value="POR CONCURSO">POR CONCURSO</option>
@@ -892,7 +897,7 @@ export function JefedeptosPage() {
                   <label style={lbl}>Fecha desde</label>
                   <input className="input" type="date" value={editFechaDesde} onChange={e => {
                     setEditFechaDesde(e.target.value);
-                    if (editTipo === 'POR CONCURSO' && e.target.value) setEditFechaHasta(addYears(e.target.value, 4));
+                    if (editTipo === 'POR CONCURSO' && e.target.value) setEditFechaHasta(vencimientoPorConcurso(e.target.value));
                   }} required />
                 </div>
                 <div style={{ ...fg, flex: 1 }}>

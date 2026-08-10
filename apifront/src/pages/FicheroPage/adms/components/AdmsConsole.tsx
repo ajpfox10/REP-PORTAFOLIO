@@ -5,7 +5,7 @@ import {
   expireOldAdmsCommands, fetchAdmsAudioBlob, getAdmsAudioConfig, getAdmsAudioEvents,
   getAdmsBiometricStatus, getAdmsClockCross, getAdmsComunicacion, getAdmsHuellas, getAdmsRereadPreview,
   getAdmsDeleteAttlogPreview, getAdmsSyncPreview, getAdmsSyncReglas, getAdmsCruces, getAdmsDeviceHistory, getAdmsStructureConfig, saveAdmsDeviceStructure, pingAdmsDispositivo, pullFichadasDispositivo,
-  getAdmsBiotemplates, previewAdmsMessage, queueAdmsAction,
+  getAdmsBiotemplates, getAdmsCommandStatus, previewAdmsMessage, queueAdmsAction,
   queueAdmsCheck, queueAdmsDeleteFinger, queueAdmsDeleteUser, queueAdmsReboot, queueAdmsSendUser,
   retryOldAdmsCommands, saveAdmsAudioRule, searchAdmsMessageAgents, sendAdmsMessage,
   updateAdmsDispositivo, uploadAdmsAudio, borrarCrucesUserinfo, downloadAdmsBackup,
@@ -25,12 +25,12 @@ type Section = 'fichadas' | 'personas' | 'comandos' | 'cruces' | 'estadoBiometri
 
 const SECTION_LABELS: Record<Section, string> = {
   fichadas: 'Fichadas',
-  personas: 'Personas ADMS',
+  personas: 'Usuarios fichero',
   comandos: 'Comandos',
   cruces: 'Cruces',
-  estadoBiometrico: 'Estado biometrico',
+  estadoBiometrico: 'Biometría',
   estructura: 'Estructura / historial',
-  huellas: 'Huellas',
+  huellas: 'Biometría directa',
   biotemplates: 'Palma / Bio',
   relectura: 'Relectura',
   borrarFichajes: 'Borrar fichajes',
@@ -154,6 +154,8 @@ export function AdmsConsole({ active }: AdmsConsoleProps) {
           pageSize={ad.personasPageSize}
           q={ad.personasQ}
           setQ={ad.setPersonasQ}
+          selectedSn={ad.personasSn}
+          setSelectedSn={ad.setPersonasSn}
           loading={ad.loading}
           onLoad={ad.load}
           onPageChange={ad.goToPersonasPage}
@@ -501,6 +503,8 @@ function PersonasSection(props: {
   pageSize: number;
   q: string;
   setQ: (q: string) => void;
+  selectedSn: string;
+  setSelectedSn: (sn: string) => void;
   loading: boolean;
   onLoad: () => void;
   onPageChange: (offset: number) => void;
@@ -509,9 +513,8 @@ function PersonasSection(props: {
   onDeleteUser: (sn: string, dni: string) => void;
   onDeleteUsers: (sn: string, dnis: string[]) => void;
 }) {
-  const [selectedSn, setSelectedSn] = React.useState('');
   const [selectedDnis, setSelectedDnis] = React.useState<string[]>([]);
-  const targetSn = selectedSn || props.dispositivos[0]?.sn || '';
+  const targetSn = props.selectedSn || props.dispositivos[0]?.sn || '';
   const visibleDnis = React.useMemo(
     () => [...new Set(props.personas.map((p) => p.dni).filter(Boolean))],
     [props.personas]
@@ -544,7 +547,7 @@ function PersonasSection(props: {
   return (
     <>
       <div style={{ ...S.section, paddingBottom: 14 }}>
-        <div style={S.sectionTitle}>Personas ADMS</div>
+        <div style={S.sectionTitle}>Usuarios del fichero</div>
         <div style={S.simpleFilter}>
           <Field label="Buscar por DNI/PIN o nombre" id="adms-personas-q">
             <input id="adms-personas-q" style={S.input} value={props.q}
@@ -554,14 +557,14 @@ function PersonasSection(props: {
           </Field>
           <button className="btn" onClick={props.onLoad} disabled={props.loading} style={{ minHeight: 35 }}>Buscar</button>
           <Field label="Reloj destino" id="adms-personas-target">
-            <select id="adms-personas-target" style={S.input} value={targetSn} onChange={(e) => setSelectedSn(e.target.value)}>
+            <select id="adms-personas-target" style={S.input} value={targetSn} onChange={(e) => props.setSelectedSn(e.target.value)}>
               {props.dispositivos.map((d) => <option key={d.sn} value={d.sn}>{d.alias || d.sn}</option>)}
             </select>
           </Field>
           <button className="btn danger" type="button" disabled={!targetSn || !selectedDnis.length}
             onClick={deleteSelected}>Borrar seleccionados del reloj</button>
         </div>
-        <div style={S.mutedLine}>Mostrando {props.personas.length} de {props.total} personas. Seleccionados: {selectedDnis.length}.</div>
+        <div style={S.mutedLine}>Mostrando {props.personas.length} de {props.total} usuarios del fichero. Seleccionados: {selectedDnis.length}.</div>
         <Pagination offset={props.offset} total={props.total} pageSize={props.pageSize}
           loading={props.loading} onPage={props.onPageChange} />
       </div>
@@ -610,7 +613,7 @@ function PersonasSection(props: {
                 </Td>
               </tr>
             ))}
-            {!props.personas.length && <EmptyRow text="Sin personas para el filtro." cols={9} />}
+            {!props.personas.length && <EmptyRow text="Sin usuarios para el filtro." cols={9} />}
           </tbody>
         </table>
       </div>
@@ -1155,6 +1158,9 @@ function SyncUpdateTable({ rows }: { rows: AdmsSyncPreview['actualizar'] }) {
 
 function HuellasSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) {
   const [rows, setRows] = React.useState<AdmsFingerprintRow[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [resumen, setResumen] = React.useState<{ usuarios: number; templates: number; bytesTemplates: number } | null>(null);
+  const [reloj, setReloj] = React.useState<{ sn: string; alias: string; ip: string } | null>(null);
   const [q, setQ] = React.useState('');
   const [sn, setSn] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -1165,24 +1171,13 @@ function HuellasSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await getAdmsHuellas({ q, sn: sn || undefined });
+      const res = await getAdmsHuellas({ q, sn: targetSn || undefined });
       setRows(res.data);
+      setTotal(res.total);
+      setResumen(res.resumen ?? null);
+      setReloj(res.reloj ?? null);
     } catch (e: any) {
-      setMessage(e?.message ?? 'No se pudieron cargar huellas');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function send(row: AdmsFingerprintRow) {
-    if (!targetSn) return;
-    setLoading(true);
-    setMessage(null);
-    try {
-      const ids = await queueAdmsSendUser(targetSn, row.dni, true);
-      setMessage(`Usuario ${row.dni}: ${ids.length} comando(s) con huellas en cola.`);
-    } catch (e: any) {
-      setMessage(e?.message ?? 'No se pudo encolar huella');
+      setMessage(e?.message ?? 'No se pudo cargar la biometría');
     } finally {
       setLoading(false);
     }
@@ -1193,43 +1188,68 @@ function HuellasSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) {
   return (
     <>
       <div style={{ ...S.section, paddingBottom: 14 }}>
-        <div style={S.sectionTitle}>Huellas ADMS</div>
+        <div style={S.sectionTitle}>Biometría directa del fichero</div>
         <div style={S.simpleFilter}>
           <Field label="Buscar" id="adms-fp-q">
             <input id="adms-fp-q" style={S.input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="dni o nombre" />
           </Field>
-          <Field label="Reloj destino" id="adms-fp-sn">
-            <select id="adms-fp-sn" style={S.input} value={sn} onChange={(e) => setSn(e.target.value)}>
-              <option value="">Primer reloj</option>
+          <Field label="Fichero" id="adms-fp-sn">
+            <select id="adms-fp-sn" style={S.input} value={targetSn} onChange={(e) => setSn(e.target.value)}>
               {dispositivos.map((d) => <option key={d.sn} value={d.sn}>{d.alias || d.sn}</option>)}
             </select>
           </Field>
           <button className="btn" onClick={load} disabled={loading} style={{ minHeight: 35 }}>
-            {loading ? 'Leyendo...' : 'Buscar huellas'}
+            {loading ? 'Leyendo fichero...' : 'Leer fichero'}
           </button>
         </div>
-        <div style={S.mutedLine}>Muestra hasta 200 templates. Para copia masiva usa el sync con huellas.</div>
+        <div style={S.mutedLine}>
+          Leído por TCP directo desde el reloj seleccionado. No usa userinfo, template ni biotemplate de ADMS.
+          {reloj ? ` ${reloj.alias} (${reloj.ip}).` : ''}
+        </div>
+        {resumen && (
+          <div style={{ ...S.mutedLine, marginTop: 6 }}>
+            Usuarios: {resumen.usuarios} · templates directos: {resumen.templates} · bytes: {resumen.bytesTemplates.toLocaleString('es-AR')}
+          </div>
+        )}
       </div>
-      {message && <div style={message.startsWith('Usuario') ? S.infoBox : S.errorBox}>{message}</div>}
+      {message && <div style={S.errorBox}>{message}</div>}
       <div style={{ overflowX: 'auto' }}>
-        <table style={S.table}>
+        <table style={{ ...S.table, minWidth: 900, tableLayout: 'fixed', fontSize: '0.78rem' }}>
+          <colgroup>
+            <col style={{ width: 110 }} />
+            <col style={{ width: 230 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 74 }} />
+            <col style={{ width: 92 }} />
+            <col style={{ width: 210 }} />
+          </colgroup>
           <thead>
             <tr style={S.headRow}>
-              <Th>DNI</Th><Th>Nombre</Th><Th>Dedo</Th><Th>Version</Th><Th>Size</Th><Th>Compatibilidad</Th><Th>Accion</Th>
+              <Th>DNI</Th><Th>Nombre</Th><Th>UID</Th><Th>Slot</Th><Th>Ver.</Th><Th>Bytes</Th><Th>Válido</Th><Th>Fichero</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={`${r.userid}-${r.fingerId}`} style={S.bodyRow}>
-                <Td>{r.dni}</Td><Td>{r.nombre || '-'}</Td><Td>{r.fingerId}</Td><Td>{r.version || '-'}</Td>
+              <tr key={`${r.userid}-${r.tipo}-${r.fingerId}-${r.sn || ''}`} style={S.bodyRow}>
+                <Td>{r.dni}</Td>
+                <Td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nombre || '-'}</Td>
+                <Td>{r.userid}</Td>
+                <Td>{r.fingerId}</Td><Td>{r.version || '-'}</Td>
                 <Td>{r.size}</Td>
-                <Td>{r.compatible.map(cc => `${cc.alias}:${cc.ok ? 'OK' : 'NO'}`).join(' | ') || '-'}</Td>
-                <Td><button className="btn secondary" disabled={!targetSn || loading} onClick={() => send(r)}>Enviar</button></Td>
+                <Td>
+                  <span style={{ ...S.badge, background: r.valid ? '#dcfce7' : '#fee2e2', color: r.valid ? '#15803d' : '#b91c1c' }}>
+                    {r.valid ? 'Sí' : 'No'}
+                  </span>
+                </Td>
+                <Td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.fichero || r.sn || '-'}</Td>
               </tr>
             ))}
-            {!rows.length && <EmptyRow text="Sin huellas para mostrar." cols={7} />}
+            {!rows.length && <EmptyRow text={loading ? 'Leyendo templates del fichero...' : 'Sin templates para mostrar.'} cols={8} />}
           </tbody>
         </table>
+        <div style={S.mutedLine}>Mostrando {rows.length} de {total} templates directos para el filtro.</div>
       </div>
     </>
   );
@@ -1309,17 +1329,37 @@ function EstadoBiometricoSection({ dispositivos }: { dispositivos: AdmsDispositi
   const [cruceSn, setCruceSn] = React.useState('');
   const [c, setC] = React.useState<AdmsCruces | null>(null);
 
-  async function load() {
+  async function load(estadoArg: AdmsBiometricState = estado) {
     setLoading(true);
     setError(null);
     try {
-      setResult(await getAdmsBiometricStatus({ q, sn: sn || undefined, estado }));
+      setResult(await getAdmsBiometricStatus({ q, sn: sn || undefined, estado: estadoArg }));
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo cargar el estado biometrico');
     } finally {
       setLoading(false);
     }
   }
+
+  // Clic en una tarjeta del resumen: fija el estado y recarga la tabla con ese filtro.
+  const pick = (e: AdmsBiometricState) => { setEstado(e); load(e); };
+
+  const bioTableStyle: React.CSSProperties = {
+    ...S.table,
+    minWidth: 1120,
+    tableLayout: 'fixed',
+    fontSize: '0.76rem',
+  };
+  const bioHeadStyle: React.CSSProperties = {
+    ...S.headRow,
+    fontSize: '0.72rem',
+    letterSpacing: 0,
+  };
+  const bioCellClip: React.CSSProperties = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  };
 
   async function exportCsv() {
     setLoading(true);
@@ -1338,9 +1378,9 @@ function EstadoBiometricoSection({ dispositivos }: { dispositivos: AdmsDispositi
   return (
     <>
       <div style={{ ...S.section, paddingBottom: 14 }}>
-        <div style={S.sectionTitle}>Personas por estado biometrico</div>
+        <div style={S.sectionTitle}>Estado biométrico del fichero</div>
         <div style={S.simpleFilter}>
-          <Field label="Alcance" id="bio-status-sn">
+          <Field label="Fichero" id="bio-status-sn">
             <select id="bio-status-sn" style={S.input} value={sn} onChange={(e) => setSn(e.target.value)}>
               <option value="">General - todos los ficheros</option>
               {dispositivos.map(d => <option key={d.sn} value={d.sn}>{d.alias || d.sn}</option>)}
@@ -1348,12 +1388,14 @@ function EstadoBiometricoSection({ dispositivos }: { dispositivos: AdmsDispositi
           </Field>
           <Field label="Estado" id="bio-status-state">
             <select id="bio-status-state" style={S.input} value={estado} onChange={(e) => setEstado(e.target.value as AdmsBiometricState)}>
-              <option value="incompleto">Falta huella o palma</option>
-              <option value="sin_biometria">Sin huella ni palma</option>
-              <option value="no_existe">No existe en fichero</option>
-              <option value="ambas">Con huella y palma</option>
+              <option value="incompleto">Le falta lo que usa el reloj</option>
+              <option value="no_existe">Falta cargar (del plantel)</option>
+              <option value="fuera_estructura">Cargado de más (fuera del plantel)</option>
+              <option value="sin_biometria">Sin biometría (nada)</option>
+              <option value="ambas">Varias biometrías</option>
               <option value="solo_huella">Solo huella</option>
               <option value="solo_palma">Solo palma</option>
+              <option value="solo_cara">Solo rostro</option>
               <option value="todos">Todos</option>
             </select>
           </Field>
@@ -1371,7 +1413,7 @@ function EstadoBiometricoSection({ dispositivos }: { dispositivos: AdmsDispositi
           </div>
         </div>
         <div style={S.mutedLine}>
-          Por fichero se consideran las personas asignadas a ese reloj en ADMS. General incluye todas las personas.
+          La presencia se lee directo del fichero seleccionado. Rostro corresponde a BioType 9.
         </div>
       </div>
       <div style={{ ...S.section, paddingBottom: 14 }}>
@@ -1388,45 +1430,69 @@ function EstadoBiometricoSection({ dispositivos }: { dispositivos: AdmsDispositi
       </div>
 
       {error && <div style={S.errorBox}>{error}</div>}
+      {result?.requeridoLabel && (
+        <div style={S.mutedLine}>
+          Este fichero usa <strong>{result.requeridoLabel}</strong> (la biometría más cargada en el reloj). "Le falta" = agentes del plantel sin esa biometría (o no cargados).
+        </div>
+      )}
       {result && (
         <div style={S.cards}>
-          <NumCard label="Personas" value={result.resumen.total} color="#334155" />
-          <NumCard label="No existe en fichero" value={result.resumen.noExiste} color="#b91c1c" />
-          <NumCard label="Sin huella ni palma" value={result.resumen.sinBiometria} color="#dc2626" />
-          <NumCard label="Huella + palma" value={result.resumen.ambas} color="#059669" />
-          <NumCard label="Solo huella" value={result.resumen.soloHuella} color="#2563eb" />
-          <NumCard label="Solo palma" value={result.resumen.soloPalma} color="#7c3aed" />
+          <NumCard label={result.alcance === 'fichero' ? 'Plantel' : 'Usuarios'} value={result.resumen.total} color="#334155" onClick={() => pick('todos')} active={estado === 'todos'} />
+          <NumCard label={`Le falta${result.requeridoLabel ? ` ${result.requeridoLabel.toLowerCase()}` : ''}`} value={result.resumen.faltaRequerido} color="#ea580c" onClick={() => pick('incompleto')} active={estado === 'incompleto'} />
+          <NumCard label="No cargado" value={result.resumen.noExiste} color="#b91c1c" onClick={() => pick('no_existe')} active={estado === 'no_existe'} />
+          <NumCard label="Fuera plantel" value={result.resumen.fueraEstructura} color="#9333ea" onClick={() => pick('fuera_estructura')} active={estado === 'fuera_estructura'} />
+          <NumCard label="Sin biom." value={result.resumen.sinBiometria} color="#dc2626" onClick={() => pick('sin_biometria')} active={estado === 'sin_biometria'} />
+          <NumCard label="Solo huella" value={result.resumen.soloHuella} color="#2563eb" onClick={() => pick('solo_huella')} active={estado === 'solo_huella'} />
+          <NumCard label="Solo palma" value={result.resumen.soloPalma} color="#7c3aed" onClick={() => pick('solo_palma')} active={estado === 'solo_palma'} />
+          <NumCard label="Solo rostro" value={result.resumen.soloCara} color="#0891b2" onClick={() => pick('solo_cara')} active={estado === 'solo_cara'} />
+          <NumCard label="Varias" value={result.resumen.ambas} color="#059669" onClick={() => pick('ambas')} active={estado === 'ambas'} />
         </div>
       )}
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={S.table}>
-          <thead><tr style={S.headRow}><Th>DNI</Th><Th>Nombre</Th><Th>Existe en fichero</Th><Th>Fichero / reloj</Th><Th>Huellas</Th><Th>Palmas</Th><Th>Estado</Th></tr></thead>
+        <table style={bioTableStyle}>
+          <colgroup>
+            <col style={{ width: 105 }} />
+            <col style={{ width: 300 }} />
+            <col style={{ width: 84 }} />
+            <col style={{ width: 82 }} />
+            <col style={{ width: 190 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 143 }} />
+          </colgroup>
+          <thead><tr style={bioHeadStyle}><Th>DNI</Th><Th>Nombre</Th><Th>Plantel</Th><Th>Reloj</Th><Th>Fichero</Th><Th>Huella</Th><Th>Palma</Th><Th>Rostro</Th><Th>Estado</Th></tr></thead>
           <tbody>
             {result?.data.map(row => {
               const device = dispositivos.find(d => d.sn === row.sn);
-              const label = !row.existe ? 'No existe en fichero'
-                : row.huellas > 0 && row.palmas > 0 ? 'Huella + palma'
+              const tipos = (row.huellas > 0 ? 1 : 0) + (row.palmas > 0 ? 1 : 0) + (row.caras > 0 ? 1 : 0);
+              const label = (!row.enEstructura && row.existe) ? 'Fuera de estructura'
+                : !row.existe ? 'Falta cargar'
+                : tipos >= 2 ? 'Varias'
                 : row.huellas > 0 ? 'Solo huella'
                 : row.palmas > 0 ? 'Solo palma'
-                : 'Sin huella ni palma';
-              const color = !row.existe ? { background: '#fecaca', color: '#991b1b' }
-                : row.huellas > 0 && row.palmas > 0 ? { background: '#dcfce7', color: '#15803d' }
-                : row.huellas === 0 && row.palmas === 0 ? { background: '#fee2e2', color: '#b91c1c' }
+              : row.caras > 0 ? 'Solo rostro'
+                : 'Sin biometría';
+              const color = (!row.enEstructura && row.existe) ? { background: '#f3e8ff', color: '#7e22ce' }
+                : !row.existe ? { background: '#fecaca', color: '#991b1b' }
+                : tipos >= 2 ? { background: '#dcfce7', color: '#15803d' }
+                : tipos === 0 ? { background: '#fee2e2', color: '#b91c1c' }
                 : { background: '#fef3c7', color: '#92400e' };
               return (
                 <tr key={row.dni} style={S.bodyRow}>
-                  <Td>{row.dni}</Td><Td>{row.nombre || '-'}</Td>
+                  <Td style={bioCellClip}>{row.dni}</Td><Td style={bioCellClip}>{row.nombre || '-'}</Td>
+                  <Td><span style={{ ...S.badge, background: row.enEstructura ? '#dcfce7' : '#f3e8ff', color: row.enEstructura ? '#15803d' : '#7e22ce' }}>{row.enEstructura ? 'Sí' : 'No'}</span></Td>
                   <Td><span style={{ ...S.badge, background: row.existe ? '#dcfce7' : '#fee2e2', color: row.existe ? '#15803d' : '#b91c1c' }}>{row.existe ? 'Sí' : 'No'}</span></Td>
-                  <Td>{device?.alias || row.sn || 'Sin asignar'}</Td>
-                  <Td>{row.huellas}</Td><Td>{row.palmas}</Td><Td><span style={{ ...S.badge, ...color }}>{label}</span></Td>
+                  <Td style={bioCellClip}>{device?.alias || row.sn || '-'}</Td>
+                  <Td>{row.huellas}</Td><Td>{row.palmas}</Td><Td>{row.caras}</Td><Td><span style={{ ...S.badge, ...color }}>{label}</span></Td>
                 </tr>
               );
             })}
-            {!result?.data.length && <EmptyRow text={loading ? 'Calculando...' : 'Sin personas para este filtro.'} cols={7} />}
+            {!result?.data.length && <EmptyRow text={loading ? 'Calculando...' : 'Sin usuarios para este filtro.'} cols={9} />}
           </tbody>
         </table>
-        {result && <div style={S.mutedLine}>Mostrando {result.data.length} de {result.total} personas para el filtro elegido.</div>}
+        {result && <div style={S.mutedLine}>Mostrando {result.data.length} de {result.total} usuarios para el filtro elegido.</div>}
       </div>
     </>
   );
@@ -1901,11 +1967,14 @@ function ClockCrossTable({ title, rows, mode }: { title: string; rows: AdmsClock
 
 const MESSAGE_TEMPLATES = [
   'MIRA DUNE',
+  'MIRA DUNE LP',
   'Hola {nombre}, fichada registrada {fecha} {hora}',
   '{nombre}: {tipo} registrada en {reloj} a las {hora}',
   'Recordatorio {nombre}: verificar salida del dia {fecha}',
   '{nombre} - presentarse en Personal. Servicio: {servicio}',
 ];
+
+type MessageCommandStatus = Awaited<ReturnType<typeof getAdmsCommandStatus>>[number];
 
 function MensajesSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) {
   const [sn, setSn] = React.useState('');
@@ -1917,18 +1986,21 @@ function MensajesSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) 
   const [minutos, setMinutos] = React.useState(60);
   const [plantilla, setPlantilla] = React.useState(MESSAGE_TEMPLATES[0]);
   const [preview, setPreview] = React.useState<AdmsMessagePreview | null>(null);
+  const [commandStatuses, setCommandStatuses] = React.useState<MessageCommandStatus[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
   const targetSn = sn || dispositivos[0]?.sn || '';
+  const targetDevice = dispositivos.find(d => d.sn === targetSn) || null;
   const agent = agents.find(a => String(a.dni) === selectedDni) || null;
 
   async function search() {
     setLoading(true); setMessage(null);
     try {
-      const rows = (await searchAdmsMessageAgents(q)).map(a => ({ ...a, dni: String(a.dni) }));
+      const rows = (await searchAdmsMessageAgents(q, targetSn)).map(a => ({ ...a, dni: String(a.dni) }));
       setAgents(rows);
       setSelectedDni(prev => rows.some(a => String(a.dni) === prev) ? prev : String(rows[0]?.dni || ''));
       setPreview(null);
+      setCommandStatuses([]);
     } catch (e: any) {
       setMessage(e?.message ?? 'No se pudieron buscar agentes');
     } finally { setLoading(false); }
@@ -1943,19 +2015,42 @@ function MensajesSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) 
     const p = payload();
     if (!p) { setMessage('Elegi reloj y agente activo.'); return; }
     setLoading(true); setMessage(null);
+    setCommandStatuses([]);
     try { setPreview(await previewAdmsMessage(p)); }
     catch (e: any) { setMessage(e?.message ?? 'No se pudo previsualizar'); }
     finally { setLoading(false); }
+  }
+
+  async function pollStatuses(ids: number[]) {
+    let latest: MessageCommandStatus[] = [];
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      latest = await getAdmsCommandStatus(ids);
+      setCommandStatuses(latest);
+      if (latest.length && latest.every(s => s.estado === 'OK' || s.estado === 'ERROR')) return latest;
+      await new Promise(resolve => window.setTimeout(resolve, 2500));
+    }
+    return latest;
   }
 
   async function send() {
     const p = payload();
     if (!p) return;
     setLoading(true); setMessage(null);
+    setCommandStatuses([]);
     try {
       const res = await sendAdmsMessage(p);
       setPreview(res);
-      setMessage(`Mensaje en cola: ${res.ids.length} comando(s).`);
+      setMessage(`Mensaje en cola: ${res.ids.length} comando(s). Verificando reloj...`);
+      const statuses = await pollStatuses(res.ids);
+      const errors = statuses.filter(s => s.estado === 'ERROR');
+      const ok = statuses.filter(s => s.estado === 'OK');
+      if (errors.length) {
+        setMessage(`Mensaje con error: ${errors.map(s => `#${s.id} retorno ${s.retorno ?? '-'}`).join(', ')}`);
+      } else if (ok.length === res.ids.length) {
+        setMessage(`Mensaje aceptado por el reloj: ${ok.length}/${res.ids.length} comando(s) OK.`);
+      } else {
+        setMessage(`Mensaje sigue pendiente/enviado: ${statuses.length}/${res.ids.length} comando(s) sin cierre.`);
+      }
     } catch (e: any) {
       setMessage(e?.message ?? 'No se pudo enviar mensaje');
     } finally { setLoading(false); }
@@ -1972,6 +2067,7 @@ function MensajesSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) 
             <select id="adms-msg-sn" style={S.input} value={targetSn} onChange={(e) => setSn(e.target.value)}>
               {dispositivos.map((d) => <option key={d.sn} value={d.sn}>{d.alias || d.sn}</option>)}
             </select>
+            {targetDevice && <div style={S.mutedLine}>{targetDevice.estado} {targetDevice.ip ? `- ${targetDevice.ip}` : ''}</div>}
           </Field>
           <Field label="Buscar activo" id="adms-msg-q">
             <input id="adms-msg-q" style={S.input} value={q} onChange={(e) => setQ(e.target.value)}
@@ -2013,7 +2109,7 @@ function MensajesSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) 
             <input id="adms-msg-custom" style={S.input} value={plantilla} onChange={(e) => setPlantilla(e.target.value)} />
           </Field>
           <button className="btn secondary" disabled={loading || !agent} onClick={makePreview}>Preview</button>
-          <button className="btn danger" disabled={loading || !agent} onClick={send}>Enviar prueba</button>
+          <button className="btn danger" disabled={loading || !agent} onClick={send}>Enviar y verificar</button>
         </div>
         <div style={S.mutedLine}>Variables: {'{nombre}'} {'{dni}'} {'{fecha}'} {'{hora}'} {'{reloj}'} {'{tipo}'} {'{servicio}'} {'{legajo}'}</div>
       </div>
@@ -2024,6 +2120,7 @@ function MensajesSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) 
             <InfoCard label="Agente" value={`${preview.agente.dni} - ${preview.agente.nombre}`} />
             <InfoCard label="Reloj" value={preview.reloj.alias} />
             <InfoCard label="Registrado ADMS" value={preview.agente.registradoAdms ? 'si' : 'no'} />
+            <InfoCard label="En fichero" value={(preview.agente as any).registradoFichero ? `si (${(preview.agente as any).uidFichero ?? '-'})` : 'no'} />
             <InfoCard label="Formato" value={preview.formato} />
           </div>
           <div style={S.infoBox}>{preview.mensaje}</div>
@@ -2040,6 +2137,25 @@ function MensajesSection({ dispositivos }: { dispositivos: AdmsDispositivo[] }) 
               </tbody>
             </table>
           </div>
+          {commandStatuses.length > 0 && (
+            <div style={{ overflowX: 'auto', marginTop: 12 }}>
+              <table style={S.table}>
+                <thead><tr style={S.headRow}><Th>ID</Th><Th>Estado</Th><Th>Retorno</Th><Th>Enviado</Th><Th>Finalizado</Th><Th>Comando</Th></tr></thead>
+                <tbody>
+                  {commandStatuses.map((row) => (
+                    <tr style={S.bodyRow} key={row.id}>
+                      <Td>{row.id}</Td>
+                      <Td>{row.estado}</Td>
+                      <Td>{row.retorno ?? '-'}</Td>
+                      <Td>{row.enviado ? String(row.enviado) : '-'}</Td>
+                      <Td>{row.finalizado ? String(row.finalizado) : '-'}</Td>
+                      <Td style={{ fontFamily: 'monospace', fontSize: '0.76rem' }}>{row.comando}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </>
@@ -2444,9 +2560,18 @@ function commandStateStyle(estado: AdmsComando['estado']): React.CSSProperties {
   return { background: '#fef3c7', color: '#92400e' };
 }
 
-function NumCard({ label, value, color }: { label: string; value: number; color: string }) {
+function NumCard({ label, value, color, onClick, active }: { label: string; value: number; color: string; onClick?: () => void; active?: boolean }) {
   return (
-    <div style={S.card}>
+    <div
+      style={{
+        ...S.card,
+        ...(onClick ? { cursor: 'pointer' } : {}),
+        ...(active ? { borderColor: color, boxShadow: `0 0 0 1px ${color}` } : {}),
+      }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      title={onClick ? `Filtrar: ${label}` : undefined}
+    >
       <span style={S.cardLabel}>{label}</span>
       <span style={{ fontSize: '1.6rem', fontWeight: 700, color }}>{value}</span>
     </div>

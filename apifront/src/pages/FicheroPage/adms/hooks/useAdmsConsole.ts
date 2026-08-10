@@ -33,6 +33,7 @@ export function useAdmsConsole(active: boolean) {
   const [filters, setFiltersRaw] = useState<AdmsFichadasFilters>({ desde: hoy, hasta: hoy, dni: '', sn: '', tipo: '' });
   const [personasQ, setPersonasQ] = useState('');
   const [comandosFilters, setComandosFiltersRaw] = useState<AdmsComandosFilters>({ sn: '', estado: 'pendientes' });
+  const [personasSn, setPersonasSnRaw] = useState('');
   const [fichadasOffset, setFichadasOffset] = useState(0);
   const [personasOffset, setPersonasOffset] = useState(0);
   const [comandosOffset, setComandosOffset] = useState(0);
@@ -43,6 +44,7 @@ export function useAdmsConsole(active: boolean) {
   // Refs to always have the latest values available in imperative calls
   const filtersRef = useRef(filters);
   const personasQRef = useRef(personasQ);
+  const personasSnRef = useRef(personasSn);
   const comandosFiltersRef = useRef(comandosFilters);
   const fichadasOffsetRef = useRef(fichadasOffset);
   const personasOffsetRef = useRef(personasOffset);
@@ -50,6 +52,7 @@ export function useAdmsConsole(active: boolean) {
 
   filtersRef.current = filters;
   personasQRef.current = personasQ;
+  personasSnRef.current = personasSn;
   comandosFiltersRef.current = comandosFilters;
   fichadasOffsetRef.current = fichadasOffset;
   personasOffsetRef.current = personasOffset;
@@ -87,6 +90,7 @@ export function useAdmsConsole(active: boolean) {
     const f = filtersRef.current;
     const pq = personasQRef.current;
     const cf = comandosFiltersRef.current;
+    const psn = personasSnRef.current;
 
     if (!overrides?.silent) setLoading(true);
     setError(null);
@@ -95,7 +99,7 @@ export function useAdmsConsole(active: boolean) {
         getAdmsStatus(),
         getAdmsDispositivos(),
         getAdmsFichadas(f, fOff),
-        getAdmsPersonas(pq, pOff),
+        getAdmsPersonas(pq, pOff, psn),
         getAdmsComandos(cf, cOff),
         getAdmsCruces(),
       ]);
@@ -130,6 +134,12 @@ export function useAdmsConsole(active: boolean) {
     loadImmediate({ personasOffset: offset });
   }
 
+  function setPersonasSn(sn: string) {
+    setPersonasOffset(0);
+    personasOffsetRef.current = 0;
+    setPersonasSnRaw(sn);
+  }
+
   function goToComandosPage(offset: number) {
     setComandosOffset(offset);
     comandosOffsetRef.current = offset;
@@ -146,7 +156,7 @@ export function useAdmsConsole(active: boolean) {
     if (!status) return;
     loadImmediate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, personasQ, comandosFilters]);
+  }, [filters, personasQ, personasSn, comandosFilters]);
 
   // Auto-refresh every 30s
   useEffect(() => {
@@ -176,7 +186,9 @@ export function useAdmsConsole(active: boolean) {
     filters,
     setFilters,
     personasQ,
+    personasSn,
     setPersonasQ: (q: string) => { setPersonasOffset(0); personasOffsetRef.current = 0; setPersonasQ(q); },
+    setPersonasSn,
     comandosFilters,
     setComandosFilters,
     goToFichadasPage,

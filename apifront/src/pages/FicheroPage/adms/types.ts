@@ -195,22 +195,30 @@ export interface AdmsFingerprintRow {
   userid: number;
   dni: string;
   nombre: string;
+  tipo: 'huella' | 'palma' | 'rostro' | 'template';
+  tipoLabel: string;
   fingerId: number;
+  sn: string | null;
+  fichero: string | null;
   version: string;
   size: number;
+  valid?: number;
+  fuente?: 'tcp_fichero' | string;
   compatible: { sn: string; alias: string; fpVersion: string; ok: boolean }[];
 }
 
-export type AdmsBiometricState = 'todos' | 'incompleto' | 'no_existe' | 'sin_biometria' | 'solo_huella' | 'solo_palma' | 'ambas';
+export type AdmsBiometricState = 'todos' | 'incompleto' | 'no_existe' | 'fuera_estructura' | 'sin_biometria' | 'solo_huella' | 'solo_palma' | 'solo_cara' | 'ambas';
 
 export interface AdmsBiometricStatusRow {
   userid: number | null;
   dni: string;
   nombre: string;
   sn: string | null;
+  enEstructura: boolean;
   existe: boolean;
   huellas: number;
   palmas: number;
+  caras: number;
   estado: Exclude<AdmsBiometricState, 'todos' | 'incompleto'>;
 }
 
@@ -218,16 +226,25 @@ export interface AdmsBiometricStatusResult {
   alcance: 'general' | 'fichero';
   sn: string | null;
   estado: AdmsBiometricState;
+  requerido: 'huella' | 'palma' | 'cara' | null;
+  requeridoLabel: string | null;
   total: number;
   limit: number;
   offset: number;
   resumen: {
     total: number;
+    enReloj: number;
     noExiste: number;
+    fueraEstructura: number;
     sinBiometria: number;
     soloHuella: number;
     soloPalma: number;
+    soloCara: number;
     ambas: number;
+    conHuella: number;
+    conPalma: number;
+    conCara: number;
+    faltaRequerido: number;
   };
   data: AdmsBiometricStatusRow[];
 }
@@ -335,8 +352,14 @@ export interface AdmsMessagePreview {
   tipo: string;
   comando: string;
   comandos: string[];
-  agente: AdmsMessageAgent & { registradoAdms: boolean };
-  reloj: { sn: string; alias: string };
+  mensajeUid?: string;
+  agente: AdmsMessageAgent & {
+    registradoAdms: boolean;
+    registradoFichero?: boolean;
+    uidFichero?: number | null;
+    nombreFichero?: string | null;
+  };
+  reloj: { sn: string; alias: string; ip?: string | null };
 }
 
 export interface AdmsAudioFile {

@@ -837,6 +837,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/agentes_ocup_bkp_0702:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_0702
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_0702
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_0702/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_0702 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_0702 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_0702 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_0702 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/agentes_sectores:
     get:
       tags:
@@ -1497,6 +1629,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/alertas_cumpleanos_estado:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List alertas_cumpleanos_estado
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_alertas_cumpleanos_estado"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create alertas_cumpleanos_estado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_alertas_cumpleanos_estado_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/alertas_cumpleanos_estado/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get alertas_cumpleanos_estado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update alertas_cumpleanos_estado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_alertas_cumpleanos_estado"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch alertas_cumpleanos_estado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_alertas_cumpleanos_estado_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete alertas_cumpleanos_estado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/api_keys:
     get:
       tags:
@@ -1882,6 +2146,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete app_runtime_config by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/art_alta_queue:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List art_alta_queue
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_art_alta_queue"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create art_alta_queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_alta_queue_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/art_alta_queue/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get art_alta_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update art_alta_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_alta_queue"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch art_alta_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_alta_queue_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete art_alta_queue by id
       parameters:
         - name: id
           in: path
@@ -2410,6 +2806,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete becarios_art by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/becarios_art_errores:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List becarios_art_errores
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_becarios_art_errores"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create becarios_art_errores
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_becarios_art_errores_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/becarios_art_errores/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get becarios_art_errores by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update becarios_art_errores by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_becarios_art_errores"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch becarios_art_errores by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_becarios_art_errores_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete becarios_art_errores by id
       parameters:
         - name: id
           in: path
@@ -6726,6 +7254,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/historial:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List historial
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_historial"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create historial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/historial/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/historial_estructura:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List historial_estructura
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_historial_estructura"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create historial_estructura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_estructura_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/historial_estructura/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get historial_estructura by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update historial_estructura by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_estructura"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch historial_estructura by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_estructura_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete historial_estructura by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/idempotency_keys:
     get:
       tags:
@@ -9894,6 +10686,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/permiso_salida:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List permiso_salida
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_permiso_salida"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create permiso_salida
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_permiso_salida_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/permiso_salida/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get permiso_salida by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update permiso_salida by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_permiso_salida"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch permiso_salida by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_permiso_salida_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete permiso_salida by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/permisos:
     get:
       tags:
@@ -11742,6 +12666,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/resoluciones_bak_20260713:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List resoluciones_bak_20260713
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_resoluciones_bak_20260713"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create resoluciones_bak_20260713
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_resoluciones_bak_20260713_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/resoluciones_bak_20260713/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get resoluciones_bak_20260713 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update resoluciones_bak_20260713 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_resoluciones_bak_20260713"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch resoluciones_bak_20260713 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_resoluciones_bak_20260713_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete resoluciones_bak_20260713 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/roles:
     get:
       tags:
@@ -13326,6 +14382,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/tareas_livianas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tareas_livianas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tareas_livianas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tareas_livianas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tareas_livianas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tareas_livianas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tareas_livianas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tareas_livianas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tareas_livianas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tareas_livianas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tareas_livianas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tareas_livianas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/tareas_livianas_auditoria:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tareas_livianas_auditoria
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tareas_livianas_auditoria"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tareas_livianas_auditoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tareas_livianas_auditoria_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tareas_livianas_auditoria/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tareas_livianas_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tareas_livianas_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tareas_livianas_auditoria"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tareas_livianas_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tareas_livianas_auditoria_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tareas_livianas_auditoria by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/tareasadquiridias:
     get:
       tags:
@@ -14107,6 +15427,402 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete tipoderesolucion by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/tramites_documentales_agentes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tramites_documentales_agentes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tramites_documentales_agentes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tramites_documentales_agentes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_agentes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tramites_documentales_agentes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tramites_documentales_agentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tramites_documentales_agentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_agentes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tramites_documentales_agentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_agentes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tramites_documentales_agentes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/tramites_documentales_archivos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tramites_documentales_archivos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tramites_documentales_archivos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tramites_documentales_archivos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_archivos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tramites_documentales_archivos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tramites_documentales_archivos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tramites_documentales_archivos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_archivos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tramites_documentales_archivos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_archivos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tramites_documentales_archivos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/tramites_documentales_lotes:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tramites_documentales_lotes
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tramites_documentales_lotes"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tramites_documentales_lotes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_lotes_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tramites_documentales_lotes/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tramites_documentales_lotes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tramites_documentales_lotes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_lotes"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tramites_documentales_lotes by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tramites_documentales_lotes_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tramites_documentales_lotes by id
       parameters:
         - name: id
           in: path
@@ -15787,6 +17503,49 @@ components:
         decreto_designacion:
           type: string
           nullable: true
+    Table_agentes_ocup_bkp_0702:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_agentes_ocup_bkp_0702_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_agentes_ocup_bkp_0702_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_agentes_sectores:
       type: object
       additionalProperties: false
@@ -16338,6 +18097,127 @@ components:
         created_at:
           type: string
           format: date-time
+    Table_alertas_cumpleanos_estado:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        anio:
+          type: number
+        fecha_cumple:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        avisado_por:
+          type: number
+          nullable: true
+        omitido_at:
+          type: string
+          format: date-time
+          nullable: true
+        omitido_por:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dni
+        - anio
+        - fecha_cumple
+    Table_alertas_cumpleanos_estado_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        anio:
+          type: number
+        fecha_cumple:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        avisado_por:
+          type: number
+          nullable: true
+        omitido_at:
+          type: string
+          format: date-time
+          nullable: true
+        omitido_por:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - anio
+        - fecha_cumple
+    Table_alertas_cumpleanos_estado_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        anio:
+          type: number
+        fecha_cumple:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        avisado_at:
+          type: string
+          format: date-time
+          nullable: true
+        avisado_por:
+          type: number
+          nullable: true
+        omitido_at:
+          type: string
+          format: date-time
+          nullable: true
+        omitido_por:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Table_api_keys:
       type: object
       additionalProperties: false
@@ -16539,6 +18419,146 @@ components:
           type: string
         updated_by:
           type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Table_art_alta_queue:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_id:
+          type: number
+        dni:
+          type: number
+        fecha_ingreso_db:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        status:
+          type: string
+        attempts:
+          type: number
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        resultado_art:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - agente_id
+        - dni
+    Table_art_alta_queue_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agente_id:
+          type: number
+        dni:
+          type: number
+        fecha_ingreso_db:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        status:
+          type: string
+        attempts:
+          type: number
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        resultado_art:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - agente_id
+        - dni
+    Table_art_alta_queue_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_id:
+          type: number
+        dni:
+          type: number
+        fecha_ingreso_db:
+          type: string
+          format: date-time
+          nullable: true
+        estado_empleo:
+          type: string
+          nullable: true
+        status:
+          type: string
+        attempts:
+          type: number
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        resultado_art:
+          type: string
           nullable: true
         created_at:
           type: string
@@ -16950,6 +18970,9 @@ components:
           type: number
         pagina:
           type: string
+        origen_art:
+          type: string
+          nullable: true
         creado_por:
           type: number
           nullable: true
@@ -16978,6 +19001,9 @@ components:
           type: number
         pagina:
           type: string
+        origen_art:
+          type: string
+          nullable: true
         creado_por:
           type: number
           nullable: true
@@ -17007,6 +19033,9 @@ components:
           type: number
         pagina:
           type: string
+        origen_art:
+          type: string
+          nullable: true
         creado_por:
           type: number
           nullable: true
@@ -17023,6 +19052,82 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_becarios_art_errores:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        screenshot:
+          type: string
+          nullable: true
+        lote:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+    Table_becarios_art_errores_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        screenshot:
+          type: string
+          nullable: true
+        lote:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+    Table_becarios_art_errores_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        screenshot:
+          type: string
+          nullable: true
+        lote:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Table_bonificaciones:
       type: object
       additionalProperties: false
@@ -18463,6 +20568,9 @@ components:
           type: number
         nombre:
           type: string
+        parent_id:
+          type: number
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -18488,6 +20596,9 @@ components:
       properties:
         nombre:
           type: string
+        parent_id:
+          type: number
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -18514,6 +20625,9 @@ components:
           type: number
         nombre:
           type: string
+        parent_id:
+          type: number
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -20939,6 +23053,328 @@ components:
         deleted_by:
           type: number
           nullable: true
+    Table_historial:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dni
+        - novedad
+    Table_historial_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - novedad
+    Table_historial_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    Table_historial_estructura:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        origen:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        parte:
+          type: string
+          nullable: true
+        plantel:
+          type: string
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dni
+        - dependencia
+    Table_historial_estructura_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        origen:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        parte:
+          type: string
+          nullable: true
+        plantel:
+          type: string
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - dependencia
+    Table_historial_estructura_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        origen:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        parte:
+          type: string
+          nullable: true
+        plantel:
+          type: string
+          nullable: true
+        fecha_baja:
+          type: string
+          format: date-time
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Table_idempotency_keys:
       type: object
       additionalProperties: false
@@ -23885,6 +26321,152 @@ components:
         estado:
           type: string
           nullable: true
+    Table_permiso_salida:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        hora_desde:
+          type: string
+          format: date-time
+          nullable: true
+        hora_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha
+    Table_permiso_salida_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        hora_desde:
+          type: string
+          format: date-time
+          nullable: true
+        hora_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - fecha
+    Table_permiso_salida_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        hora_desde:
+          type: string
+          format: date-time
+          nullable: true
+        hora_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        jefe_nombre:
+          type: string
+          nullable: true
+        sector_id:
+          type: number
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
     Table_permisos:
       type: object
       additionalProperties: false
@@ -25867,6 +28449,127 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_resoluciones_bak_20260713:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        numero:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_resoluciones_bak_20260713_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        numero:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_resoluciones_bak_20260713_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        motivo:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        numero:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_roles:
       type: object
       additionalProperties: false
@@ -26943,6 +29646,292 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_tareas_livianas:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_dni:
+          type: string
+        agente_nombre:
+          type: string
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        turno:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        cantidad_dias:
+          type: number
+          nullable: true
+        junta_medica_doc_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - agente_dni
+        - fecha_desde
+    Table_tareas_livianas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agente_dni:
+          type: string
+        agente_nombre:
+          type: string
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        turno:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        cantidad_dias:
+          type: number
+          nullable: true
+        junta_medica_doc_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - agente_dni
+        - fecha_desde
+    Table_tareas_livianas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_dni:
+          type: string
+        agente_nombre:
+          type: string
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        servicio:
+          type: string
+          nullable: true
+        turno:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        cantidad_dias:
+          type: number
+          nullable: true
+        junta_medica_doc_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: number
+        creado_por_id:
+          type: number
+          nullable: true
+        creado_por_email:
+          type: string
+          nullable: true
+        creado_at:
+          type: string
+          format: date-time
+        modificado_por_id:
+          type: number
+          nullable: true
+        modificado_por_email:
+          type: string
+          nullable: true
+        modificado_at:
+          type: string
+          format: date-time
+          nullable: true
+        eliminado_por_id:
+          type: number
+          nullable: true
+        eliminado_por_email:
+          type: string
+          nullable: true
+        eliminado_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_tareas_livianas_auditoria:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        registro_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - registro_id
+        - accion
+    Table_tareas_livianas_auditoria_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        registro_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - registro_id
+        - accion
+    Table_tareas_livianas_auditoria_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        registro_id:
+          type: number
+        accion:
+          type: string
+        usuario_id:
+          type: number
+          nullable: true
+        usuario_email:
+          type: string
+          nullable: true
+        datos_antes:
+          type: string
+          nullable: true
+        datos_despues:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Table_tareasadquiridias:
       type: object
       additionalProperties: false
@@ -27475,6 +30464,484 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+    Table_tramites_documentales_agentes:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        lote_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        poblacion:
+          type: string
+          nullable: true
+        tramite:
+          type: string
+          nullable: true
+        tipo_beca:
+          type: string
+          nullable: true
+        fecha_ingreso_excel:
+          type: string
+          format: date-time
+          nullable: true
+        anio_designacion:
+          type: number
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        incluido:
+          type: number
+        estado:
+          type: string
+        motivo_exclusion:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_tramites_documentales_agentes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        lote_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        poblacion:
+          type: string
+          nullable: true
+        tramite:
+          type: string
+          nullable: true
+        tipo_beca:
+          type: string
+          nullable: true
+        fecha_ingreso_excel:
+          type: string
+          format: date-time
+          nullable: true
+        anio_designacion:
+          type: number
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        incluido:
+          type: number
+        estado:
+          type: string
+        motivo_exclusion:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_tramites_documentales_agentes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        lote_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        poblacion:
+          type: string
+          nullable: true
+        tramite:
+          type: string
+          nullable: true
+        tipo_beca:
+          type: string
+          nullable: true
+        fecha_ingreso_excel:
+          type: string
+          format: date-time
+          nullable: true
+        anio_designacion:
+          type: number
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        incluido:
+          type: number
+        estado:
+          type: string
+        motivo_exclusion:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_tramites_documentales_archivos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        lote_id:
+          type: number
+          nullable: true
+        agente_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        file_name:
+          type: string
+        source_path:
+          type: string
+          nullable: true
+        target_path:
+          type: string
+          nullable: true
+        combined_path:
+          type: string
+          nullable: true
+        tblarchivo_id:
+          type: number
+          nullable: true
+        pages:
+          type: number
+          nullable: true
+        bytes:
+          type: number
+          nullable: true
+        lectura:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        candidates_json:
+          type: string
+          nullable: true
+        incluido:
+          type: number
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - file_name
+        - status
+    Table_tramites_documentales_archivos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        lote_id:
+          type: number
+          nullable: true
+        agente_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        file_name:
+          type: string
+        source_path:
+          type: string
+          nullable: true
+        target_path:
+          type: string
+          nullable: true
+        combined_path:
+          type: string
+          nullable: true
+        tblarchivo_id:
+          type: number
+          nullable: true
+        pages:
+          type: number
+          nullable: true
+        bytes:
+          type: number
+          nullable: true
+        lectura:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        candidates_json:
+          type: string
+          nullable: true
+        incluido:
+          type: number
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - file_name
+        - status
+    Table_tramites_documentales_archivos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        lote_id:
+          type: number
+          nullable: true
+        agente_id:
+          type: number
+          nullable: true
+        dni:
+          type: number
+          nullable: true
+        file_name:
+          type: string
+        source_path:
+          type: string
+          nullable: true
+        target_path:
+          type: string
+          nullable: true
+        combined_path:
+          type: string
+          nullable: true
+        tblarchivo_id:
+          type: number
+          nullable: true
+        pages:
+          type: number
+          nullable: true
+        bytes:
+          type: number
+          nullable: true
+        lectura:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        candidates_json:
+          type: string
+          nullable: true
+        incluido:
+          type: number
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_tramites_documentales_lotes:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        poblacion:
+          type: string
+        tramite:
+          type: string
+        expediente_modo:
+          type: string
+        expediente:
+          type: string
+          nullable: true
+        rango_anio_desde:
+          type: number
+          nullable: true
+        rango_anio_hasta:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        input_dir:
+          type: string
+          nullable: true
+        docu_base_dir:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - poblacion
+        - tramite
+    Table_tramites_documentales_lotes_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        poblacion:
+          type: string
+        tramite:
+          type: string
+        expediente_modo:
+          type: string
+        expediente:
+          type: string
+          nullable: true
+        rango_anio_desde:
+          type: number
+          nullable: true
+        rango_anio_hasta:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        input_dir:
+          type: string
+          nullable: true
+        docu_base_dir:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - poblacion
+        - tramite
+    Table_tramites_documentales_lotes_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        poblacion:
+          type: string
+        tramite:
+          type: string
+        expediente_modo:
+          type: string
+        expediente:
+          type: string
+          nullable: true
+        rango_anio_desde:
+          type: number
+          nullable: true
+        rango_anio_hasta:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        input_dir:
+          type: string
+          nullable: true
+        docu_base_dir:
+          type: string
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
           nullable: true
     Table_user_scan_music:
       type: object

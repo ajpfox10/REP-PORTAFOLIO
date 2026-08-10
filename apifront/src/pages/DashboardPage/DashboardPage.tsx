@@ -13,6 +13,7 @@ import { JefedeptosAlertaBanner } from '../JefedeptosPage';
 import { FicheroBanner } from '../FicheroPage';
 import { GuarderiaAlertaBanner } from '../GuarderiaPage';
 import { AlertasAgenteDashboardBanner } from '../AlertasAgentePage';
+import { CumpleanosDashboardBanner } from '../AlertasPage/CumpleanosBanner';
 import { ConcursosFuncionesBanner } from '../ConcursosPage/ConcursosFuncionesExamenes';
 import { DashboardAlertSlot, useDashboardAlertsConfig } from './components/DashboardAlertSlot';
 import type { DashboardAlertKey } from './components/DashboardAlertSlot';
@@ -405,6 +406,7 @@ export function DashboardPage() {
       {hasPerm('crud:*:*') && alert('accidentesPunzo', <AccidentesPunzoBanner />)}
       {hasPerm('crud:*:*') && alert('jefaturas', <JefedeptosAlertaBanner />)}
       {hasPerm('crud:*:*') && alert('concursos', <ConcursosFuncionesBanner />)}
+      {canSeeAlertasAgente && alert('cumpleanos', <CumpleanosDashboardBanner />)}
       {canSeeAlertasAgente && alert('alertasAgente', <AlertasAgenteDashboardBanner />)}
 
       <div style={{ marginBottom: 6 }}>

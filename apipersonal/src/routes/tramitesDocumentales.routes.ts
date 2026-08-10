@@ -217,7 +217,7 @@ function listPdfFiles(inputDir: string): string[] {
   const found: string[] = [];
   const stack = [base];
 
-  while (stack.length && found.length < 1000) {
+  while (stack.length) {
     const current = stack.pop();
     if (!current) continue;
 
@@ -1375,6 +1375,31 @@ async function analyzeOnePdf(sequelize: Sequelize, fileName: string): Promise<Pd
   }
 }
 
+function analysisSummary(rows: PdfAnalysisRow[]) {
+  const grouped = rows.reduce<Record<string, PdfAnalysisRow[]>>((acc, row) => {
+    const key = row.detectedDni ? String(row.detectedDni) : 'SIN_AGENTE';
+    (acc[key] ||= []).push(row);
+    return acc;
+  }, {});
+
+  return {
+    rows,
+    grouped,
+    total: rows.length,
+    detected: rows.filter((r) => r.status === 'detectado').length,
+    needsReview: rows.filter((r) => r.status !== 'detectado').length,
+  };
+}
+
+function wantsAnalysisStream(req: Request) {
+  return String(req.query?.stream || '') === '1'
+    || String(req.header('accept') || '').includes('application/x-ndjson');
+}
+
+function writeAnalysisEvent(res: Response, event: Record<string, unknown>) {
+  res.write(`${JSON.stringify(event)}\n`);
+}
+
 export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
   const router = Router();
 
@@ -1481,35 +1506,64 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return res.status(400).json({ ok: false, error: `Carpeta de entrada no existe: ${inputDir || '(sin configurar)'}` });
     }
 
-    const limit = Math.min(Number(req.body?.limit || 250) || 250, 500);
-    const files = listPdfFiles(inputDir).slice(0, limit);
+    const files = listPdfFiles(inputDir);
 
     try {
       const rows: PdfAnalysisRow[] = [];
+
+      if (wantsAnalysisStream(req)) {
+        res.status(200);
+        res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+
+        writeAnalysisEvent(res, {
+          type: 'start',
+          inputDir,
+          docuBaseDir: getDocuBaseDir(),
+          total: files.length,
+        });
+
+        for (const fileName of files) {
+          if (res.destroyed) return;
+          const row = await analyzeOnePdf(sequelize, fileName);
+          rows.push(row);
+          writeAnalysisEvent(res, {
+            type: 'row',
+            row,
+            done: rows.length,
+            total: files.length,
+          });
+        }
+
+        writeAnalysisEvent(res, {
+          type: 'done',
+          inputDir,
+          docuBaseDir: getDocuBaseDir(),
+          ...analysisSummary(rows),
+        });
+        return res.end();
+      }
+
       for (const fileName of files) {
         rows.push(await analyzeOnePdf(sequelize, fileName));
       }
-
-      const grouped = rows.reduce<Record<string, PdfAnalysisRow[]>>((acc, row) => {
-        const key = row.detectedDni ? String(row.detectedDni) : 'SIN_AGENTE';
-        (acc[key] ||= []).push(row);
-        return acc;
-      }, {});
 
       return res.json({
         ok: true,
         data: {
           inputDir,
           docuBaseDir: getDocuBaseDir(),
-          rows,
-          grouped,
-          total: rows.length,
-          detected: rows.filter((r) => r.status === 'detectado').length,
-          needsReview: rows.filter((r) => r.status !== 'detectado').length,
+          ...analysisSummary(rows),
         },
       });
     } catch (err: any) {
       logger.error({ msg: '[tramites] analizar error', error: err?.message });
+      if (wantsAnalysisStream(req) && res.headersSent) {
+        writeAnalysisEvent(res, { type: 'error', error: err?.message || 'Error al analizar PDFs' });
+        return res.end();
+      }
       return res.status(500).json({ ok: false, error: err?.message || 'Error al analizar PDFs' });
     }
   });

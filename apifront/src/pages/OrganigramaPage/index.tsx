@@ -224,8 +224,9 @@ const COLORES = ['#7c3aed','#2563eb','#10b981','#f59e0b','#ec4899','#06b6d4','#a
 
 // ── Card de sector / ocupación (hoja: muestra agentes) ───────────────────────
 
-function SectorCard({ sector, color, mapaPersonal }: {
+function SectorCard({ sector, color, mapaPersonal, detalleTitulo = 'Estado', renderDetalle }: {
   sector: Grupo; color: string; mapaPersonal: Record<number, string>;
+  detalleTitulo?: string; renderDetalle?: (agente: any) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -247,7 +248,7 @@ function SectorCard({ sector, color, mapaPersonal }: {
               <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                 <th style={{ padding: '2px 6px', textAlign: 'left', color: '#94a3b8' }}>DNI</th>
                 <th style={{ padding: '2px 6px', textAlign: 'left', color: '#94a3b8' }}>Apellido y Nombre</th>
-                <th style={{ padding: '2px 6px', textAlign: 'left', color: '#94a3b8' }}>Estado</th>
+                <th style={{ padding: '2px 6px', textAlign: 'left', color: '#94a3b8' }}>{detalleTitulo}</th>
               </tr>
             </thead>
             <tbody>
@@ -255,7 +256,7 @@ function SectorCard({ sector, color, mapaPersonal }: {
                 <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                   <td style={{ padding: '2px 6px' }}>{a.dni}</td>
                   <td style={{ padding: '2px 6px' }}>{mapaPersonal[Number(a.dni)] || '—'}</td>
-                  <td style={{ padding: '2px 6px' }}>{a.estado_empleo || a.estado || '—'}</td>
+                  <td style={{ padding: '2px 6px' }}>{renderDetalle ? renderDetalle(a) : (a.estado_empleo || a.estado || '—')}</td>
                 </tr>
               ))}
               {sector.agentes.length > 100 && (
@@ -273,9 +274,9 @@ function SectorCard({ sector, color, mapaPersonal }: {
 
 // ── Card de servicio (Servicio → Sector) ─────────────────────────────────────
 
-function ServicioCard({ grupo, color, totalGlobal, mapaPersonal, subSingular = 'sector', subPlural = 'sectores' }: {
+function ServicioCard({ grupo, color, totalGlobal, mapaPersonal, mapaReparticiones, subSingular = 'sector', subPlural = 'sectores' }: {
   grupo: GrupoJerarquico; color: string; totalGlobal: number;
-  mapaPersonal: Record<number, string>; subSingular?: string; subPlural?: string;
+  mapaPersonal: Record<number, string>; mapaReparticiones?: Record<number, string>; subSingular?: string; subPlural?: string;
 }) {
   const [open, setOpen] = useState(false);
   const pct = totalGlobal ? Math.round((grupo.count / totalGlobal) * 100) : 0;
@@ -285,7 +286,9 @@ function ServicioCard({ grupo, color, totalGlobal, mapaPersonal, subSingular = '
       DNI: a.dni,
       Apellido_Nombre: mapaPersonal[Number(a.dni)] || '',
       Sector: s.label,
-      Estado: a.estado_empleo || a.estado || '',
+      ...(mapaReparticiones
+        ? { Dependencia: a.dependencia_id != null ? (mapaReparticiones[Number(a.dependencia_id)] ?? `#${a.dependencia_id}`) : '' }
+        : { Estado: a.estado_empleo || a.estado || '' }),
       'Fecha Desde': a.fecha_desde ? new Date(a.fecha_desde).toLocaleDateString('es-AR') : '',
     }))
   );
@@ -320,7 +323,14 @@ function ServicioCard({ grupo, color, totalGlobal, mapaPersonal, subSingular = '
       {open && (
         <div style={{ marginLeft: 24, marginTop: 4 }}>
           {grupo.sectores.map((s, i) => (
-            <SectorCard key={s.id} sector={s} color={COLORES[(i + 1) % COLORES.length]} mapaPersonal={mapaPersonal} />
+            <SectorCard
+              key={s.id}
+              sector={s}
+              color={COLORES[(i + 1) % COLORES.length]}
+              mapaPersonal={mapaPersonal}
+              detalleTitulo="Dependencia"
+              renderDetalle={(a) => a.dependencia_id != null ? (mapaReparticiones?.[Number(a.dependencia_id)] ?? `#${a.dependencia_id}`) : '—'}
+            />
           ))}
         </div>
       )}
@@ -941,7 +951,7 @@ export function OrganigramaPage() {
           {/* Vista: Servicio → Sector */}
           {vista === 'servicio' && gruposJerarquicos.map((g, i) => (
             <ServicioCard key={g.id} grupo={g} color={COLORES[i % COLORES.length]}
-              totalGlobal={totalJerarquico} mapaPersonal={mapaPersonal} />
+              totalGlobal={totalJerarquico} mapaPersonal={mapaPersonal} mapaReparticiones={catalogos.reparticiones} />
           ))}
 
           {/* Vista: Servicio → Ley */}
