@@ -18,3 +18,21 @@ tmp/
 
 .vs/
 **/.vs/
+
+.cache/
+**/.cache/
+coverage/
+**/coverage/
+
+.claude/
+**/.claude/
+CLAUDE.md
+**/CLAUDE.md
+
+# logs/capturas sueltas que no deben subir
+fichadas_log.txt
+**/fichadas_log.txt
+*.png
+**/*.png
+# ...pero conservar imágenes que son assets reales del código (plantilla Word)
+!apipersonal/src/templates/**/*.png
