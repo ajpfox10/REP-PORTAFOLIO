@@ -59,6 +59,7 @@ const patchPersonalSchema = z.object({
   observacionesdireccion: z.string().max(50).optional().nullable(),
   cp:                     z.string().max(50).optional().nullable(),
   localidad_id:           z.number().int().positive().optional().nullable(),
+  provincia_id:           z.string().max(50).optional().nullable(),
   nacionalidad:           z.string().max(50).optional().nullable(),
   observaciones:          z.string().optional().nullable(),
   estado_empleo:          z.enum(['ACTIVO','INACTIVO','BAJA','COMISION','TRAMITE']).optional().nullable(),
@@ -349,6 +350,8 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             p.dni, p.apellido, p.nombre, p.cuil,
             p.fecha_nacimiento, a.fecha_ingreso, a.estado_empleo, a.legajo,
             p.email, p.telefono, p.domicilio, p.foto_path, p.observaciones,
+            p.numerodomicilio, p.piso, p.depto, p.cp, p.observacionesdireccion,
+            p.localidad_id, p.provincia_id, p.nacionalidad,
             p.created_at AS alta_sistema,
 
             s.id   AS sexo_id,    s.nombre  AS sexo_nombre,
@@ -464,7 +467,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       const PERSONAL_COLS = [
         'apellido','nombre','cuil','fecha_nacimiento','sexo_id','email',
         'telefono','domicilio','numerodomicilio','depto','piso',
-        'observacionesdireccion','cp','localidad_id','nacionalidad',
+        'observacionesdireccion','cp','localidad_id','provincia_id','nacionalidad',
         'observaciones',
       ];
       const AGENTE_COLS = [

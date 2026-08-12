@@ -29,7 +29,13 @@ export interface AltaAgenteDto {
   email?: string;
   telefono?: string;
   domicilio?: string;
+  numerodomicilio?: number;
+  piso?: number;
+  depto?: string;
+  cp?: string;
+  observacionesdireccion?: string;
   localidad_id?: number;
+  provincia_id?: string;
   nacionalidad?: string;
   observaciones?: string;
 
@@ -118,9 +124,11 @@ export class AgenteService {
       if (personalExistente.length === 0) {
         await this.sequelize.query(
           `INSERT INTO personal
-           (dni, apellido, nombre, fecha_nacimiento, sexo_id, cuil, email, telefono, domicilio, localidad_id,
+           (dni, apellido, nombre, fecha_nacimiento, sexo_id, cuil, email, telefono, domicilio,
+            numerodomicilio, piso, depto, cp, observacionesdireccion, localidad_id, provincia_id,
             nacionalidad, observaciones, created_by, created_at, updated_at)
-           VALUES (:dni, :apellido, :nombre, :fecha_nacimiento, :sexo_id, :cuil, :email, :telefono, :domicilio, :localidad_id,
+           VALUES (:dni, :apellido, :nombre, :fecha_nacimiento, :sexo_id, :cuil, :email, :telefono, :domicilio,
+                   :numerodomicilio, :piso, :depto, :cp, :observacionesdireccion, :localidad_id, :provincia_id,
                    :nacionalidad, :observaciones, :actor, NOW(), NOW())`,
           {
             replacements: {
@@ -133,7 +141,13 @@ export class AgenteService {
               email: dto.email || null,
               telefono: dto.telefono || null,
               domicilio: dto.domicilio || null,
+              numerodomicilio: dto.numerodomicilio ?? null,
+              piso: dto.piso ?? null,
+              depto: dto.depto || null,
+              cp: dto.cp || null,
+              observacionesdireccion: dto.observacionesdireccion || null,
               localidad_id: dto.localidad_id || null,
+              provincia_id: dto.provincia_id || null,
               nacionalidad: dto.nacionalidad || null,
               observaciones: dto.observaciones || null,
               actor: dto.actor || null,
@@ -145,7 +159,9 @@ export class AgenteService {
         await this.sequelize.query(
           `UPDATE personal SET apellido = :apellido, nombre = :nombre, fecha_nacimiento = :fecha_nacimiento,
              sexo_id = :sexo_id, cuil = :cuil, email = :email, telefono = :telefono,
-             domicilio = :domicilio, localidad_id = :localidad_id, nacionalidad = :nacionalidad,
+             domicilio = :domicilio, numerodomicilio = :numerodomicilio, piso = :piso, depto = :depto,
+             cp = :cp, observacionesdireccion = :observacionesdireccion,
+             localidad_id = :localidad_id, provincia_id = :provincia_id, nacionalidad = :nacionalidad,
              observaciones = :observaciones, updated_by = :actor, updated_at = NOW()
            WHERE dni = :dni AND deleted_at IS NULL`,
           {
@@ -159,7 +175,13 @@ export class AgenteService {
               email: dto.email || null,
               telefono: dto.telefono || null,
               domicilio: dto.domicilio || null,
+              numerodomicilio: dto.numerodomicilio ?? null,
+              piso: dto.piso ?? null,
+              depto: dto.depto || null,
+              cp: dto.cp || null,
+              observacionesdireccion: dto.observacionesdireccion || null,
               localidad_id: dto.localidad_id || null,
+              provincia_id: dto.provincia_id || null,
               nacionalidad: dto.nacionalidad || null,
               observaciones: dto.observaciones || null,
               actor: dto.actor || null,

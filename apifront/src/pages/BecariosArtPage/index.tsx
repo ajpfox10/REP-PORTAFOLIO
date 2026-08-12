@@ -21,6 +21,15 @@ interface Candidato {
   fecha_nacimiento: string | null;
   establecimiento:  string | null;
   direccion:        string | null;
+  // Validación de dirección para ART (calculada en el backend)
+  art_listo?:            boolean;
+  art_faltan?:           string[];
+  art_fuente_direccion?: 'personal' | 'excel' | null;
+  // Estado de la cola de alta automática en ART
+  art_status?:    'PENDING' | 'PROCESSING' | 'DONE' | 'ERROR' | 'SKIPPED' | null;
+  art_error?:     string | null;
+  art_resultado?: string | null;
+  art_attempts?:  number | null;
 }
 
 interface Direccion {
@@ -63,6 +72,45 @@ interface ErrorArt {
   cuil:       string | null;
   legajo:     number | null;
   ley_nombre: string | null;
+}
+
+// ─── badges de estado ART por candidato ──────────────────────────────────────
+function ArtBadges({ cand }: { cand: Candidato }) {
+  const chip = (bg: string, color: string, text: string, title?: string) => (
+    <span title={title} style={{ background: bg, color, borderRadius: 4, padding: '2px 8px',
+      fontSize: '0.7rem', fontWeight: 600, whiteSpace: 'nowrap' as const }}>{text}</span>
+  );
+  const st = cand.art_status;
+  const estado =
+    st === 'DONE'       ? chip('rgba(34,197,94,0.15)',  '#4ade80', '✅ Cargado en ART') :
+    st === 'ERROR'      ? chip('rgba(239,68,68,0.15)',  '#f87171', '❌ Error en ART', cand.art_error || undefined) :
+    st === 'PROCESSING' ? chip('rgba(59,130,246,0.15)', '#93c5fd', '⏳ Procesando') :
+    st === 'PENDING'    ? chip('rgba(148,163,184,0.15)','#cbd5e1', '🕓 En cola') :
+    st === 'SKIPPED'    ? chip('rgba(148,163,184,0.15)','#cbd5e1', '⤼ Omitido') :
+    null;
+
+  const validacion =
+    cand.art_listo === false
+      ? chip('rgba(239,68,68,0.15)', '#f87171', `⚠ Faltan: ${(cand.art_faltan || []).join(', ')}`)
+      : cand.art_listo === true
+        ? chip('rgba(34,197,94,0.12)', '#4ade80', '✓ Datos completos')
+        : null;
+
+  const fuente = cand.art_fuente_direccion
+    ? <span style={{ fontSize: '0.66rem', color: '#64748b' }}>dir: {cand.art_fuente_direccion}</span>
+    : null;
+
+  if (!estado && !validacion) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, alignItems: 'center' }}>
+      {estado}
+      {validacion}
+      {fuente}
+      {st === 'ERROR' && cand.art_error && (
+        <span style={{ fontSize: '0.68rem', color: '#fca5a5', width: '100%' }}>{cand.art_error}</span>
+      )}
+    </div>
+  );
 }
 
 // ─── estilos ─────────────────────────────────────────────────────────────────
@@ -289,14 +337,20 @@ export function BecariosArtPage() {
     }
   }, [loadCandidatos, loadRegistrados]);
 
+  // "Cargar": encola el alta ART para ese DNI. NO corre el navegador en el server (headless
+  // bajo pm2 falla el menú): lo procesa el worker de escritorio con Chrome visible. El error
+  // se quita solo cuando el worker completa el alta (refrescar la lista para verlo).
   const handleResolverError = useCallback(async (err: ErrorArt) => {
     setResolviendo(prev => ({ ...prev, [err.dni]: true }));
     try {
-      await apiFetch(`/becarios-art/errores/${err.dni}`, { method: 'DELETE' });
-      toast.ok('Resuelto', `Error de ${err.apellido ?? err.dni} quitado de la lista`);
-      setErrores(prev => prev.filter(e => e.dni !== err.dni));
+      const res = await apiFetch<any>(`/becarios-art/errores/${err.dni}/reintentar`, { method: 'POST' });
+      if (res?.ok) {
+        toast.ok('Encolado', `${err.apellido ?? err.dni} quedó en cola. Lo procesa el worker (Chrome visible).`);
+      } else {
+        toast.error('No se encoló', res?.error ?? 'No se pudo encolar');
+      }
     } catch (e: any) {
-      toast.error('Error', e?.message ?? 'No se pudo quitar');
+      toast.error('Error', e?.message ?? 'No se pudo encolar la carga');
     } finally {
       setResolviendo(prev => ({ ...prev, [err.dni]: false }));
     }
@@ -339,16 +393,16 @@ export function BecariosArtPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <Layout title="Becarios ART">
+    <Layout title="Carga de ART">
       <div style={{ padding: '24px 20px', maxWidth: 1400, margin: '0 auto' }}>
 
         {/* Encabezado */}
         <div style={{ marginBottom: 22 }}>
           <h1 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
-            Alta en ART — Agentes Becarios
+            Carga de ART
           </h1>
           <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', margin: '4px 0 0' }}>
-            Seleccioná cualquier becario activo, registralo y dejá asentado quién hizo la carga.
+            Alta de agentes en ART: pendientes, registrados y errores de la carga automática.
           </p>
         </div>
 
@@ -418,12 +472,12 @@ export function BecariosArtPage() {
                       </td>
                       <td style={{ ...S.td, textAlign: 'right' as const }}>
                         <button
-                          style={{ ...S.btn, padding: '3px 10px', background: '#166534', color: '#4ade80', fontSize: '0.72rem', opacity: resolviendo[err.dni] ? 0.6 : 1 }}
+                          style={{ ...S.btn, padding: '3px 10px', background: '#166534', color: '#4ade80', fontSize: '0.72rem', opacity: resolviendo[err.dni] ? 0.6 : 1, whiteSpace: 'nowrap' as const }}
                           onClick={() => handleResolverError(err)}
                           disabled={resolviendo[err.dni]}
-                          title="Quitar de la lista (ya corregido)"
+                          title="Reintentar la carga en ART (abre el navegador, ~30-60s). Si sale OK, se quita solo."
                         >
-                          {resolviendo[err.dni] ? '…' : 'Resuelto ✓'}
+                          {resolviendo[err.dni] ? 'Cargando…' : 'Cargar ⟳'}
                         </button>
                       </td>
                     </tr>
@@ -494,6 +548,8 @@ export function BecariosArtPage() {
                         <CopyChip label="Establecimiento" value={cand.establecimiento}  toast={toast} />
                         <CopyChip label="Dirección"       value={cand.direccion}         toast={toast} />
                       </div>
+                      {/* Estado de carga en ART + validación de dirección */}
+                      <ArtBadges cand={cand} />
                     </div>
                   );
                 })}

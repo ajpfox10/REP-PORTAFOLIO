@@ -21,7 +21,13 @@ const altaAgenteSchema = z.object({
   email:           z.string().email().optional().or(z.literal('')),
   telefono:        z.string().max(30).optional(),
   domicilio:       z.string().max(200).optional(),
+  numerodomicilio: z.number().int().nonnegative().optional(),
+  piso:            z.number().int().nonnegative().optional(),
+  depto:           z.string().max(50).optional(),
+  cp:              z.string().max(50).optional(),
+  observacionesdireccion: z.string().max(50).optional(),
   localidad_id:    z.number().int().positive().optional(),
+  provincia_id:    z.string().max(50).optional(),
   nacionalidad:    z.string().max(50).optional(),
   observaciones:   z.string().optional(),
   // Datos laborales (opcionales)

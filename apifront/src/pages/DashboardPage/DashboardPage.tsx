@@ -432,7 +432,7 @@ export function DashboardPage() {
             <Tile to="/app/resoluciones" title="📋 Resoluciones" desc="Resoluciones, expedientes y archivos escaneados por agente." accent="#0d9488" />
           )}
           <Tile to="/app/guarderia" title="🧒 Guardería" desc="Registro de agentes con hijos en edad de guardería, alertas de cumpleaños de 45 días y seguimiento de trámites." accent="#f59e0b" />
-          <Tile to="/app/becarios-art" title="🩺 Becarios ART" desc="Alta de becarios en ART. Panel de pendientes y registro de los ya ingresados con usuario de carga y número de página ART." accent="#06b6d4" />
+          <Tile to="/app/becarios-art" title="🩺 Carga de ART" desc="Carga de agentes en ART. Pendientes, registrados y errores de la carga automática para corregir." accent="#06b6d4" />
         </div>
       </div>
 

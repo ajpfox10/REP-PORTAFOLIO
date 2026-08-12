@@ -1,5 +1,5 @@
 // src/pages/CargaAgentePage/index.tsx
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { useNavigate } from 'react-router-dom';
 import { useCargaAgente, ESTADO_EMPLEO_OPTS } from './hooks/useCargaAgente';
@@ -40,6 +40,51 @@ function StepIndicator({ current, done, onGo }: { current: number; done: Set<num
 
 // ─── Step 1: Datos Personales ─────────────────────────────────────────────────
 function StepPersonal({ form, setField, errors, cats, editMode, reentryMode, editLoading, onDniBlur }: any) {
+  const localidades: any[] = cats.localidad || [];
+
+  // Provincias únicas derivadas de las localidades ya cargadas.
+  const provincias = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const l of localidades) {
+      if (l.provincia_id) m.set(String(l.provincia_id), l.provincia_nombre || String(l.provincia_id));
+    }
+    return [...m.entries()]
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [localidades]);
+
+  // Municipios de la provincia elegida.
+  const municipios = useMemo(() => {
+    if (!form.provincia_id) return [];
+    const m = new Map<string, string>();
+    for (const l of localidades) {
+      if (String(l.provincia_id) === String(form.provincia_id) && l.municipio_id) {
+        m.set(String(l.municipio_id), l.municipio_nombre || String(l.municipio_id));
+      }
+    }
+    return [...m.entries()]
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [localidades, form.provincia_id]);
+
+  // Localidades filtradas por provincia (+ municipio si está elegido).
+  const localidadesFiltradas = useMemo(() => {
+    if (!form.provincia_id) return [];
+    return localidades
+      .filter((l) => String(l.provincia_id) === String(form.provincia_id))
+      .filter((l) => !form.municipio_id || String(l.municipio_id) === String(form.municipio_id))
+      .map((l) => ({ id: l.id, nombre: l.nombre }));
+  }, [localidades, form.provincia_id, form.municipio_id]);
+
+  // Autocompletar provincia/municipio a partir de la localidad (registros viejos con provincia NULL).
+  useEffect(() => {
+    if (!form.localidad_id || localidades.length === 0) return;
+    const loc = localidades.find((l) => String(l.id) === String(form.localidad_id));
+    if (!loc) return;
+    if (!form.provincia_id && loc.provincia_id) setField('provincia_id', String(loc.provincia_id));
+    if (!form.municipio_id && loc.municipio_id) setField('municipio_id', String(loc.municipio_id));
+  }, [form.localidad_id, localidades]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="ca-card">
       <div className="ca-section-title">
@@ -136,14 +181,68 @@ function StepPersonal({ form, setField, errors, cats, editMode, reentryMode, edi
         </div>
 
         <div className="ca-field full">
-          <label htmlFor="ca-dom" className="ca-label">Domicilio</label>
+          <label htmlFor="ca-dom" className="ca-label">Calle</label>
           <input id="ca-dom" name="domicilio" className="ca-input" value={form.domicilio}
-            onChange={e => setField('domicilio', e.target.value)} placeholder="Calle 123, Piso 2" />
+            onChange={e => setField('domicilio', e.target.value)} placeholder="Calle / Av." maxLength={200} />
+        </div>
+
+        <div className="ca-field">
+          <label htmlFor="ca-nrodom" className="ca-label">Número</label>
+          <input id="ca-nrodom" name="numerodomicilio" className="ca-input" inputMode="numeric" value={form.numerodomicilio}
+            onChange={e => setField('numerodomicilio', e.target.value.replace(/\D/g, ''))} placeholder="1234" maxLength={6} />
+        </div>
+
+        <div className="ca-field">
+          <label htmlFor="ca-piso" className="ca-label">Piso</label>
+          <input id="ca-piso" name="piso" className="ca-input" inputMode="numeric" value={form.piso}
+            onChange={e => setField('piso', e.target.value.replace(/\D/g, ''))} placeholder="0" maxLength={3} />
+        </div>
+
+        <div className="ca-field">
+          <label htmlFor="ca-depto" className="ca-label">Depto</label>
+          <input id="ca-depto" name="depto" className="ca-input" value={form.depto}
+            onChange={e => setField('depto', e.target.value)} placeholder="A" maxLength={50} />
+        </div>
+
+        <div className="ca-field">
+          <label htmlFor="ca-cp" className="ca-label">Código Postal</label>
+          <input id="ca-cp" name="cp" className="ca-input" value={form.cp}
+            onChange={e => setField('cp', e.target.value)} placeholder="1900" maxLength={50} />
+        </div>
+
+        <div className="ca-field">
+          <label htmlFor="ca-provincia" className="ca-label">Provincia</label>
+          <SearchableSelect id="ca-provincia" value={form.provincia_id} options={provincias}
+            onChange={v => { setField('provincia_id', v); setField('municipio_id', ''); setField('localidad_id', ''); }} />
+        </div>
+
+        <div className="ca-field">
+          <label htmlFor="ca-municipio" className="ca-label">Municipio</label>
+          <SearchableSelect id="ca-municipio" value={form.municipio_id} options={municipios} disabled={!form.provincia_id}
+            onChange={v => { setField('municipio_id', v); setField('localidad_id', ''); }} />
         </div>
 
         <div className="ca-field">
           <label htmlFor="ca-localidad" className="ca-label">Localidad</label>
-          <SearchableSelect id="ca-localidad" value={form.localidad_id} onChange={v => setField('localidad_id', v)} options={cats.localidad} />
+          <SearchableSelect id="ca-localidad" value={form.localidad_id} options={localidadesFiltradas} disabled={!form.provincia_id}
+            onChange={v => {
+              setField('localidad_id', v);
+              const loc = localidades.find((l: any) => String(l.id) === String(v));
+              if (loc?.provincia_id) setField('provincia_id', String(loc.provincia_id));
+              if (loc?.municipio_id) setField('municipio_id', String(loc.municipio_id));
+            }} />
+        </div>
+
+        <div className="ca-field">
+          <label htmlFor="ca-nacionalidad" className="ca-label">Nacionalidad</label>
+          <input id="ca-nacionalidad" name="nacionalidad" className="ca-input" value={form.nacionalidad}
+            onChange={e => setField('nacionalidad', e.target.value)} placeholder="Argentina" maxLength={50} />
+        </div>
+
+        <div className="ca-field full">
+          <label htmlFor="ca-obsdir" className="ca-label">Observaciones de dirección</label>
+          <input id="ca-obsdir" name="observaciones_direccion" className="ca-input" value={form.observaciones_direccion}
+            onChange={e => setField('observaciones_direccion', e.target.value)} placeholder="Entre calles, referencia…" maxLength={50} />
         </div>
       </div>
     </div>
