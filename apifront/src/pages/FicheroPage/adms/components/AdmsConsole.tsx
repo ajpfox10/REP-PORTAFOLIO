@@ -1404,7 +1404,7 @@ function EstadoBiometricoSection({ dispositivos }: { dispositivos: AdmsDispositi
               onKeyDown={(e) => e.key === 'Enter' && load()} placeholder="opcional" />
           </Field>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn" onClick={load} disabled={loading} style={{ minHeight: 35 }}>
+            <button className="btn" onClick={() => load()} disabled={loading} style={{ minHeight: 35 }}>
               {loading ? 'Procesando...' : 'Consultar'}
             </button>
             <button className="btn secondary" onClick={exportCsv} disabled={loading} style={{ minHeight: 35 }}>

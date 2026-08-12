@@ -21,6 +21,7 @@ const LABELS: Record<DashboardAlertKey, { title: string; description: string }> 
   jefaturas: { title: 'Jefaturas', description: 'Vencimientos proximos de cargos.' },
   concursos: { title: 'Concursos', description: 'Examenes proximos de concursos.' },
   alertasAgente: { title: 'Alertas por agente', description: 'Alertas manuales activas.' },
+  cumpleanos: { title: 'Cumpleaños', description: 'Cumpleaños de agentes del dia.' },
 };
 
 const KEYS = Object.keys(LABELS) as DashboardAlertKey[];

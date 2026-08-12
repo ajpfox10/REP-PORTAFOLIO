@@ -1,5 +1,5 @@
 // src/pages/GestionPage/index.tsx
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
@@ -395,7 +395,7 @@ const CATALOG_DEFS = [
 const PATCH_PERSONAL_COLS = [
   'apellido','nombre','cuil','fecha_nacimiento','sexo_id',
   'email','telefono','domicilio','numerodomicilio','depto','piso',
-  'observacionesdireccion','cp','localidad_id','nacionalidad','observaciones',
+  'observacionesdireccion','cp','localidad_id','provincia_id','nacionalidad','observaciones',
 ];
 const PATCH_AGENTE_COLS = [
   'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
@@ -422,7 +422,7 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
     const STATIC_DEFS = CATALOG_DEFS.filter(cf => cf.key !== 'sector_id');
     Promise.all(
       STATIC_DEFS.map(cf =>
-        apiFetch<any>(`${cf.endpoint}?limit=2000`)
+        apiFetch<any>(`${cf.endpoint}?limit=${cf.endpoint === '/localidades' ? 5000 : 2000}`)
           .then(res => {
             let raw: any[] = [];
             if (Array.isArray(res)) raw = res;
@@ -492,6 +492,39 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
     return next;
   });
 
+  // ── Cascada Provincia → Municipio → Localidad (derivada del catálogo de localidades) ──
+  const localidadRaw = catalogs.localidad_id || [];
+
+  const provinciasOpts = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of localidadRaw) {
+      const pid = (o as any).raw?.provincia_id;
+      if (pid != null && pid !== '') m.set(String(pid), (o as any).raw?.provincia_nombre || String(pid));
+    }
+    return [...m.entries()].map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [catalogs.localidad_id]);
+
+  const municipiosOpts = useMemo(() => {
+    if (!form.provincia_id) return [];
+    const m = new Map<string, string>();
+    for (const o of localidadRaw) {
+      const r = (o as any).raw;
+      if (r && String(r.provincia_id) === String(form.provincia_id) && r.municipio_id != null) {
+        m.set(String(r.municipio_id), r.municipio_nombre || String(r.municipio_id));
+      }
+    }
+    return [...m.entries()].map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [catalogs.localidad_id, form.provincia_id]);
+
+  // Autocompletar provincia/municipio a partir de la localidad (registros con provincia_id NULL).
+  useEffect(() => {
+    if (!form.localidad_id || localidadRaw.length === 0) return;
+    const loc: any = localidadRaw.find((o: any) => String(o.id) === String(form.localidad_id));
+    if (!loc) return;
+    if (!form.provincia_id && loc.raw?.provincia_id != null) set('provincia_id', String(loc.raw.provincia_id));
+    if (!form.municipio_id && loc.raw?.municipio_id != null) set('municipio_id', String(loc.raw.municipio_id));
+  }, [form.localidad_id, catalogs.localidad_id]); // eslint-disable-line
+
   const save = async () => {
     if (form.fecha_egreso && (!form.estado_empleo || form.estado_empleo === 'ACTIVO')) {
       toast.error(
@@ -506,11 +539,13 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
       const payload: any = {};
       const INT_FIELDS    = new Set(['numerodomicilio','piso','legajo']);
       const FLOAT_FIELDS  = new Set(['salario_mensual']);
+      const STRING_FIELDS = new Set(['provincia_id']); // provincia_id es VARCHAR, no numérico
       const SKIP_IF_EMPTY = new Set(['cuil','apellido','nombre']);
       ALL_PATCH_COLS.forEach(k => {
         if (form[k] === undefined) return;
         const v = form[k];
         if (SKIP_IF_EMPTY.has(k)) { if (v === '' || v === null) return; payload[k] = v; return; }
+        if (STRING_FIELDS.has(k)) { payload[k] = (v === '' || v === null) ? null : String(v); return; }
         if (k.endsWith('_id') || INT_FIELDS.has(k)) {
           payload[k] = (v === '' || v === null) ? null : Number(v) || null;
         } else if (FLOAT_FIELDS.has(k)) {
@@ -647,7 +682,43 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
               <input id="gp-edit-obsdir" name="observacionesdireccion" className="input" value={form.observacionesdireccion || ''} style={fieldStyle}
                 onChange={e => set('observacionesdireccion', e.target.value)} />
             </div>
-            {renderCatalogSelect('localidad_id', 'LOCALIDAD')}
+            <div style={{ minWidth: 0 }}>
+              <label style={labelStyle}>PROVINCIA</label>
+              <SearchableSelect
+                value={String(form.provincia_id ?? '')}
+                options={provinciasOpts}
+                placeholder="— sin asignar —"
+                onChange={v => { set('provincia_id', v); set('municipio_id', ''); set('localidad_id', ''); }}
+              />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <label style={labelStyle}>MUNICIPIO</label>
+              <SearchableSelect
+                value={String(form.municipio_id ?? '')}
+                options={municipiosOpts}
+                placeholder="— sin asignar —"
+                disabled={!form.provincia_id}
+                onChange={v => { set('municipio_id', v); set('localidad_id', ''); }}
+              />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <label style={labelStyle}>LOCALIDAD</label>
+              <SearchableSelect
+                value={String(form.localidad_id ?? '')}
+                options={localidadRaw
+                  .filter((o: any) => !form.provincia_id || String(o.raw?.provincia_id) === String(form.provincia_id))
+                  .filter((o: any) => !form.municipio_id || String(o.raw?.municipio_id) === String(form.municipio_id))
+                  .map((o: any) => ({ id: o.id, nombre: o.label }))}
+                placeholder="— sin asignar —"
+                disabled={!form.provincia_id}
+                onChange={v => {
+                  const loc: any = localidadRaw.find((o: any) => String(o.id) === String(v));
+                  set('localidad_id', v);
+                  if (loc?.raw?.provincia_id != null) set('provincia_id', String(loc.raw.provincia_id));
+                  if (loc?.raw?.municipio_id != null) set('municipio_id', String(loc.raw.municipio_id));
+                }}
+              />
+            </div>
             <div>
               <label htmlFor="gp-edit-estado-empleo" style={labelStyle}>ESTADO EMPLEO</label>
               <select id="gp-edit-estado-empleo" name="estado_empleo" className="input" value={form.estado_empleo || ''} style={fieldStyle}

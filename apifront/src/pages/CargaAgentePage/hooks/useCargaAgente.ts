@@ -6,6 +6,14 @@ import type { CapturedPhoto } from './useCamera';
 
 export type CatalogItem = { id: number | string; nombre: string };
 
+// Localidad enriquecida: conserva provincia y municipio para la cascada del form.
+export type LocalidadItem = CatalogItem & {
+  provincia_id?: string;
+  provincia_nombre?: string;
+  municipio_id?: string;
+  municipio_nombre?: string;
+};
+
 export type PersonalForm = {
   // Personal (tabla: personal)
   dni: string;
@@ -17,6 +25,13 @@ export type PersonalForm = {
   email: string;
   telefono: string;
   domicilio: string;
+  numerodomicilio: string;
+  piso: string;
+  depto: string;
+  cp: string;
+  observaciones_direccion: string;
+  provincia_id: string;
+  municipio_id: string; // solo UI (cascada) — no se guarda en personal
   localidad_id: string;
   nacionalidad: string;
   observaciones: string;
@@ -43,8 +58,10 @@ export type PersonalForm = {
 
 export const EMPTY_FORM: PersonalForm = {
   dni: '', apellido: '', nombre: '', cuil: '', fecha_nacimiento: '',
-  sexo_id: '', email: '', telefono: '', domicilio: '', localidad_id: '',
-  nacionalidad: '', observaciones: '',
+  sexo_id: '', email: '', telefono: '', domicilio: '',
+  numerodomicilio: '', piso: '', depto: '', cp: '', observaciones_direccion: '',
+  provincia_id: '', municipio_id: '',
+  localidad_id: '', nacionalidad: '', observaciones: '',
   fecha_ingreso: '', fecha_egreso: '', fecha_baja: '', estado_empleo: 'ACTIVO', legajo: '',
   ley_id: '', planta_id: '', categoria_id: '', ocupacion_id: '',
   regimen_horario_id: '', jefatura_id: '', funcion_id: '',
@@ -63,7 +80,7 @@ export type CatalogSet = {
   funcion: CatalogItem[];
   categoria: CatalogItem[];
   dependencia: CatalogItem[];
-  localidad: CatalogItem[];
+  localidad: LocalidadItem[];
   ley: CatalogItem[];
   ocupacion: CatalogItem[];
   regimenHorario: CatalogItem[];
@@ -116,6 +133,12 @@ export function useCargaAgente() {
         nombre: table === 'localidades'
           ? [r.localidad_nombre, r.municipio_nombre].filter(Boolean).join(' — ')
           : extractNombre(r),
+        ...(table === 'localidades' ? {
+          provincia_id:     r.provincia_id != null ? String(r.provincia_id) : '',
+          provincia_nombre: r.provincia_nombre || '',
+          municipio_id:     r.municipio_id != null ? String(r.municipio_id) : '',
+          municipio_nombre: r.municipio_nombre || '',
+        } : {}),
       }));
     } catch {
       return [];
@@ -167,6 +190,15 @@ export function useCargaAgente() {
           email:              d.email     || '',
           telefono:           d.telefono  || '',
           domicilio:          d.domicilio || '',
+          numerodomicilio:    toStr(d.numerodomicilio),
+          piso:               toStr(d.piso),
+          depto:              d.depto || '',
+          cp:                 d.cp || '',
+          observaciones_direccion: d.observacionesdireccion || '',
+          provincia_id:       toStr(d.provincia_id),
+          municipio_id:       '', // se autocompleta desde la localidad (efecto en el form)
+          localidad_id:       toStr(d.localidad_id),
+          nacionalidad:       d.nacionalidad || '',
           observaciones:      d.observaciones || '',
           estado_empleo:      hasActive ? (d.estado_empleo || 'ACTIVO') : 'ACTIVO',
           legajo:             hasActive ? toStr(d.legajo) : '',
@@ -255,7 +287,13 @@ export function useCargaAgente() {
           ...(form.email             ? { email:              form.email }                         : {}),
           ...(form.telefono          ? { telefono:           form.telefono }                      : {}),
           ...(form.domicilio         ? { domicilio:          form.domicilio }                     : {}),
+          ...(form.numerodomicilio   ? { numerodomicilio:    Number(form.numerodomicilio) }       : {}),
+          ...(form.piso              ? { piso:               Number(form.piso) }                  : {}),
+          ...(form.depto             ? { depto:              form.depto }                         : {}),
+          ...(form.cp                ? { cp:                 form.cp }                            : {}),
+          ...(form.observaciones_direccion ? { observacionesdireccion: form.observaciones_direccion } : {}),
           ...(form.localidad_id      ? { localidad_id:       Number(form.localidad_id) }          : {}),
+          ...(form.provincia_id      ? { provincia_id:       form.provincia_id }                  : {}),
           ...(form.nacionalidad      ? { nacionalidad:       form.nacionalidad }                  : {}),
           ...(form.observaciones     ? { observaciones:      form.observaciones }                 : {}),
           // campos agente
@@ -300,7 +338,13 @@ export function useCargaAgente() {
             ...(form.email ? { email: form.email } : {}),
             ...(form.telefono ? { telefono: form.telefono } : {}),
             ...(form.domicilio ? { domicilio: form.domicilio } : {}),
+            ...(form.numerodomicilio ? { numerodomicilio: Number(form.numerodomicilio) } : {}),
+            ...(form.piso ? { piso: Number(form.piso) } : {}),
+            ...(form.depto ? { depto: form.depto } : {}),
+            ...(form.cp ? { cp: form.cp } : {}),
+            ...(form.observaciones_direccion ? { observacionesdireccion: form.observaciones_direccion } : {}),
             ...(form.localidad_id ? { localidad_id: Number(form.localidad_id) } : {}),
+            ...(form.provincia_id ? { provincia_id: form.provincia_id } : {}),
             ...(form.nacionalidad ? { nacionalidad: form.nacionalidad } : {}),
             ...(form.observaciones ? { observaciones: form.observaciones } : {}),
             ...(form.fecha_ingreso ? { fecha_ingreso: form.fecha_ingreso } : {}),
@@ -354,7 +398,13 @@ export function useCargaAgente() {
           ...(form.email            ? { email:            form.email }                 : {}),
           ...(form.telefono         ? { telefono:         form.telefono }              : {}),
           ...(form.domicilio        ? { domicilio:        form.domicilio }             : {}),
+          ...(form.numerodomicilio  ? { numerodomicilio:  Number(form.numerodomicilio) } : {}),
+          ...(form.piso             ? { piso:             Number(form.piso) }          : {}),
+          ...(form.depto            ? { depto:            form.depto }                 : {}),
+          ...(form.cp               ? { cp:               form.cp }                    : {}),
+          ...(form.observaciones_direccion ? { observacionesdireccion: form.observaciones_direccion } : {}),
           ...(form.localidad_id     ? { localidad_id:     Number(form.localidad_id) }  : {}),
+          ...(form.provincia_id     ? { provincia_id:     form.provincia_id }          : {}),
           ...(form.nacionalidad     ? { nacionalidad:     form.nacionalidad }          : {}),
           ...(form.observaciones    ? { observaciones:    form.observaciones }         : {}),
           estado_empleo: form.estado_empleo || 'ACTIVO',
