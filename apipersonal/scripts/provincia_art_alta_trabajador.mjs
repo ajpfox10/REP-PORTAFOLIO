@@ -88,6 +88,9 @@ function normalizePhone(value) {
   if (digits.startsWith('54') && digits.length > 10) digits = digits.slice(2);
   digits = digits.replace(/^0+/, '');
   if (digits.length > 10) digits = digits.slice(-10);
+  // El "15" es el prefijo local de celular y ART lo rechaza. Para BsAs el numero
+  // correcto es 11 + los 8 digitos: reemplazamos el "15" inicial por "11".
+  if (digits.startsWith('15')) digits = '11' + digits.slice(2);
   return digits;
 }
 
@@ -207,6 +210,8 @@ async function loadQueueItem(conn, queueId, dniArg) {
        p.cp,
        sx.nombre AS sexo_nombre,
        loc.localidad_nombre AS localidad_nombre,
+       loc.provincia_nombre AS provincia_nombre,
+       loc.provincia_id AS provincia_id,
        sec.nombre AS sector_nombre,
        srv.nombre AS servicio_nombre
      FROM art_alta_queue q
@@ -261,6 +266,8 @@ async function loadQueueItem(conn, queueId, dniArg) {
          p.cp,
          sx.nombre AS sexo_nombre,
          loc.localidad_nombre AS localidad_nombre,
+       loc.provincia_nombre AS provincia_nombre,
+       loc.provincia_id AS provincia_id,
          sec.nombre AS sector_nombre,
          srv.nombre AS servicio_nombre
        FROM agentes a
@@ -294,9 +301,13 @@ async function loadQueueItem(conn, queueId, dniArg) {
   return rows[0];
 }
 
-async function loadBecariosArtPendientes(conn, limit = null) {
+async function loadBecariosArtPendientes(conn, limit = null, opts = {}) {
   const limitSql = limit ? 'LIMIT ?' : '';
   const values = limit ? [Number(limit)] : [];
+  // Filtro opcional: solo los que fallaron por establecimiento (para re-correr esa tanda).
+  const estabSql = opts.establecimientoOnly
+    ? "AND EXISTS (SELECT 1 FROM becarios_art_errores e WHERE e.dni = p.dni AND e.motivo LIKE '%establecimiento%')"
+    : '';
   const [rows] = await conn.query(
     `SELECT
        NULL AS queue_id,
@@ -324,6 +335,8 @@ async function loadBecariosArtPendientes(conn, limit = null) {
        p.cp,
        sx.nombre AS sexo_nombre,
        loc.localidad_nombre AS localidad_nombre,
+       loc.provincia_nombre AS provincia_nombre,
+       loc.provincia_id AS provincia_id,
        sec.nombre AS sector_nombre,
        srv.nombre AS servicio_nombre
      FROM personal p
@@ -352,6 +365,7 @@ async function loadBecariosArtPendientes(conn, limit = null) {
          SELECT 1 FROM becarios_art b
          WHERE b.dni = p.dni AND b.deleted_at IS NULL
        )
+       ${estabSql}
      ORDER BY p.apellido ASC, p.nombre ASC
      ${limitSql}`,
     values
@@ -371,12 +385,87 @@ async function setQueueStatus(conn, queueId, status, fields = {}) {
   await conn.query(`UPDATE art_alta_queue SET ${parts.join(', ')} WHERE id = ?`, values);
 }
 
-function buildPayload(row, dir) {
+// Quita tildes/diacríticos para comparar texto de forma robusta.
+function stripAccents(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Detecta si el domicilio es de CABA a partir de las variantes que guarda la base.
+// Insensible a tildes: en la base la provincia es "Ciudad Autónoma de Buenos Aires".
+function isCaba(...vals) {
+  const s = stripAccents(vals.map((v) => String(v || '').toUpperCase()).join(' | '));
+  return /\bC\.?\s*A\.?\s*B\.?\s*A\.?\b/.test(s)
+      || s.includes('CAPITAL FEDERAL')
+      || s.includes('CIUDAD AUTONOMA')
+      || s.includes('CIUDAD DE BUENOS AIRES')
+      || s.includes('AUTONOMA DE BUENOS AIRES');
+}
+
+// CP de CABA: rango 1000–1499 (Capital Federal).
+function cpIsCaba(cp) {
+  const n = parseInt(String(cp || '').replace(/\D/g, '').slice(0, 4), 10);
+  return Number.isFinite(n) && n >= 1000 && n <= 1499;
+}
+
+// provincia_id canónico de CABA en la tabla localidades.
+const PROVINCIA_ID_CABA = '2';
+
+// Resuelve el provincia_id: de la tabla si el agente tiene localidad_id;
+// si la dirección viene del Excel (sin localidad_id), busca el nombre de la
+// localidad en `localidades` (prefiriendo la coincidencia de CABA). Devuelve string|null.
+async function resolveProvinciaId(conn, row, dir) {
+  if (row?.provincia_id != null && String(row.provincia_id) !== '') {
+    return String(row.provincia_id);
+  }
+  const locName = dir?.localidad;
+  if (!locName) return null;
+  try {
+    const [rows] = await conn.query(
+      `SELECT provincia_id
+         FROM localidades
+        WHERE UPPER(localidad_nombre) = UPPER(?)
+          AND deleted_at IS NULL
+        ORDER BY (provincia_id = '${PROVINCIA_ID_CABA}') DESC
+        LIMIT 1`,
+      [String(locName).trim()]
+    );
+    return rows?.[0]?.provincia_id != null ? String(rows[0].provincia_id) : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildPayload(row, dir, provinciaId = null) {
   const ingresoArt = artIngresoDate(row.fecha_ingreso);
   const email = row.email || dir?.email || '';
   const telefono = normalizePhone(row.telefono || dir?.telefonos || '');
-  const calle = dir?.calle || row.domicilio || '';
-  const numero = dir?.numero || row.numerodomicilio || '';
+  // Domicilio DB-first: para agentes nuevos los datos vienen correctos de la base
+  // (calle en domicilio, numero en numerodomicilio). La planilla Excel queda de fallback.
+  let calle = String(row.domicilio || dir?.calle || '').trim();
+  let numero = String(row.numerodomicilio || dir?.numero || '').trim();
+  // Si no vino el numero por separado pero la calle termina en digitos, los separamos
+  // ("JUAN CRUZ VARELA 4893" -> calle="JUAN CRUZ VARELA", numero="4893").
+  if (!numero) {
+    const m = calle.match(/^(.*?)[\s,]+(\d+)\s*$/);
+    if (m) { calle = m[1].trim(); numero = m[2]; }
+  }
+  // CABA: la base guarda variantes (CABA / "Ciudad Autonoma de Buenos Aires" / etc.) que NO
+  // matchean el combo de ART. ART usa "CAPITAL FEDERAL" tanto en Provincia como en Localidad,
+  // y como los combos son encadenados hay que setear las DOS.
+  let provincia = row.provincia_nombre || optEnv('ART_PROVINCIA_TEXT', 'Buenos Aires');
+  let localidad = row.localidad_nombre || dir?.localidad || optEnv('ART_LOCALIDAD_DEFAULT_TEXT', '');
+  const cpRaw = normalizeCP(row.cp || dir?.codigo_postal || '');
+  // CABA: ART usa "CAPITAL FEDERAL" en Provincia y Localidad (los combos son encadenados).
+  // Se detecta por (1) provincia_id=2 resuelto de la tabla o por nombre de localidad,
+  // (2) texto que diga CABA (insensible a tildes), o (3) refuerzo por CP 1000–1499 si el nombre no resolvió.
+  const esCaba =
+    String(provinciaId ?? '') === PROVINCIA_ID_CABA
+      || isCaba(provincia, localidad)
+      || (!provinciaId && cpIsCaba(cpRaw));
+  if (esCaba) {
+    provincia = optEnv('ART_CABA_PROVINCIA_TEXT', 'CAPITAL FEDERAL');
+    localidad = optEnv('ART_CABA_LOCALIDAD_TEXT', 'CAPITAL FEDERAL');
+  }
   return {
     dni: Number(row.dni),
     agenteId: Number(row.agente_id),
@@ -395,13 +484,13 @@ function buildPayload(row, dir) {
     sector: row.sector_nombre || row.servicio_nombre || optEnv('ART_SECTOR_FALLBACK_TEXT', ''),
     tarea: row.ocupacion_nombre || optEnv('ART_TAREA_FALLBACK_TEXT', ''),
     ciuo: row.ocupacion_codigo || row.ocupacion_nombre || optEnv('ART_CIUO_FALLBACK_TEXT', ''),
-    provincia: optEnv('ART_PROVINCIA_TEXT', 'Buenos Aires'),
-    localidad: dir?.localidad || row.localidad_nombre || optEnv('ART_LOCALIDAD_DEFAULT_TEXT', ''),
-    codigoPostal: normalizeCP(dir?.codigo_postal || row.cp || ''),
+    provincia,
+    localidad,
+    codigoPostal: cpRaw,
     calle,
     numero,
-    piso: dir?.piso || row.piso || '',
-    departamento: dir?.departamento || row.depto || '',
+    piso: row.piso || dir?.piso || '',
+    departamento: row.depto || dir?.departamento || '',
     telefono,
     tipoTelefono: optEnv('ART_TIPO_TELEFONO_TEXT', 'Celular'),
     establecimientoBusqueda: optEnv('ART_ESTABLECIMIENTO_BUSQUEDA', '32'),
@@ -521,21 +610,43 @@ async function chooseAutocompleteById(page, id, value) {
   await input.press('Enter');
 }
 
+// Cierra el modal de ART (#myModal, ej "Ingresá la altura de la direccion") si esta bloqueando.
+async function dismissModal(page) {
+  const modal = page.locator('#myModal');
+  if (await modal.isVisible({ timeout: 800 }).catch(() => false)) {
+    const btn = modal.locator('button:has-text("ACEPTAR"), input[value="ACEPTAR"], button:has-text("Aceptar")').first();
+    const ok = await btn.click({ timeout: 2500 }).then(() => true).catch(() => false);
+    if (!ok) await modal.locator('.close, [class*="close"]').first().click({ timeout: 1500 }).catch(() => undefined);
+    await page.waitForTimeout(400);
+  }
+}
+
 async function fillStreet(page, value) {
   if (!value) return;
+  await dismissModal(page);
   const street = page.locator('#txtDireccion');
   const tagName = await street.evaluate((el) => el.tagName.toLowerCase()).catch(() => '');
   if (tagName === 'select') {
-    await page.locator('#btnNoFoundStreet').click({ timeout: 10000 });
+    await page.locator('#btnNoFoundStreet').click({ timeout: 10000 }).catch(() => undefined);
+    await dismissModal(page);
     await page.waitForTimeout(700);
     const manualInput = page.locator('xpath=//*[normalize-space(.)="Calle"]/following::input[not(@type="hidden")][1]');
-    await manualInput.fill(String(value), { timeout: 10000 });
+    await manualInput.fill(String(value), { timeout: 10000 }).catch(() => undefined);
     return;
   }
-  await street.fill(String(value));
+  await street.fill(String(value)).catch(() => undefined);
 }
 
 async function fillTelefonoPrincipal(page, payload) {
+  // ART exige teléfono de EXACTAMENTE 10 dígitos. Si el dato no es válido (vacío, "NO POSEE",
+  // 9 dígitos, etc.) NO abrimos la edición: cargar un número inválido ART lo rechaza y lo deja
+  // "sin guardar", lo que BLOQUEA todo el alta. Mejor avanzar sin teléfono.
+  const digits = String(payload.telefono || '').replace(/\D/g, '');
+  if (digits.length !== 10) {
+    console.log(JSON.stringify({ warn: 'telefono invalido, se omite', dni: payload.dni, telefono: payload.telefono, digitos: digits.length }));
+    return;
+  }
+
   await page.locator('#iframeTelefonos').scrollIntoViewIfNeeded();
   const frame = page.frame({ name: 'iframeTelefonos' });
   if (!frame) throw new Error('No encontre iframeTelefonos');
@@ -548,13 +659,29 @@ async function fillTelefonoPrincipal(page, payload) {
   const tipo = frame.locator('#tipoTelefono_1');
   await tipo.selectOption({ index: 1 }).catch(() => tipo.selectOption({ index: 0 }));
 
-  await frame.locator('#numero_1').fill(payload.telefono);
+  await frame.locator('#numero_1').fill(digits);
   await frame.locator('#btnGuardarTelefono_1').click({ timeout: 10000 });
   await page.waitForTimeout(700);
 }
 
 async function navigateToAltaTrabajador(page) {
-  await page.goto(optEnv('ART_LOGIN_URL', 'https://www.provinciart.com.ar/acceso-exclusivo-usuarios-registrados'), { waitUntil: 'domcontentloaded' });
+  const loginUrl = optEnv('ART_LOGIN_URL', 'https://www.provinciart.com.ar/acceso-exclusivo-usuarios-registrados');
+  // Bajo pm2/headless la primera carga a veces tarda mas que los 30s por defecto y Playwright
+  // corta con "page.goto Timeout". Reintentamos con timeout mas holgado (ART_NAV_TIMEOUT_MS)
+  // antes de rendirnos. OJO: si el proceso pm2 NO tiene salida a internet, esto igual falla.
+  const navTimeout = Number(process.env.ART_NAV_TIMEOUT_MS || 90000);
+  let navErr = null;
+  for (let intento = 1; intento <= 3; intento += 1) {
+    try {
+      await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: navTimeout });
+      navErr = null;
+      break;
+    } catch (err) {
+      navErr = err;
+      await page.waitForTimeout(2000);
+    }
+  }
+  if (navErr) throw navErr;
   // Solo login si REALMENTE estamos en la pagina de login (sesion caida).
   // Si la sesion sigue viva, ART redirige y el boton de login no aparece:
   // en ese caso NO tocamos el form (antes agarraba #avatar y fallaba 15s -> cascada).
@@ -571,9 +698,26 @@ async function navigateToAltaTrabajador(page) {
   }
   await page.waitForTimeout(1500);
 
-  await page.locator('#menu_21').click({ timeout: 15000 });
-  await page.waitForTimeout(800);
-  await page.locator('#linkSubmenu_422').click({ timeout: 15000 });
+  // Menu de ART: el item (#menu_21) y su submenu (#linkSubmenu_422) estan en el DOM pero
+  // quedan "ocultos" cuando corremos headless (viewport chico / dropdown cerrado), y Playwright
+  // se niega a clickear algo no visible ("element is not visible"). En vez de depender de la
+  // visibilidad, disparamos el click via DOM (equivale al click real, ejecuta el onclick del
+  // sitio sin el chequeo de visibilidad). Si aun asi el submenu no navega, vamos por su href.
+  await page.locator('#menu_21').waitFor({ state: 'attached', timeout: 15000 });
+  await page.evaluate(() => document.querySelector('#menu_21')?.click());
+  await page.waitForTimeout(600);
+
+  const submenu = page.locator('#linkSubmenu_422');
+  await submenu.waitFor({ state: 'attached', timeout: 15000 });
+  const submenuHref = await submenu.getAttribute('href').catch(() => null);
+  const submenuClicked = await page.evaluate(() => {
+    const el = document.querySelector('#linkSubmenu_422');
+    if (el) { el.click(); return true; }
+    return false;
+  }).catch(() => false);
+  if (!submenuClicked && submenuHref) {
+    await page.goto(new URL(submenuHref, page.url()).href, { waitUntil: 'domcontentloaded' });
+  }
   await page.waitForURL('**/trabajadores', { timeout: 45000 }).catch(() => undefined);
   await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => undefined);
   await page.waitForTimeout(1200);
@@ -604,42 +748,42 @@ async function addEstablecimiento(page, busqueda) {
 
 async function addEstablecimientoMapped(page, busqueda) {
   const addButton = page.locator('#altaEstablecimientos').or(page.getByText('AGREGAR ESTABLECIMIENTO', { exact: false })).or(page.getByText('Agregar establecimiento', { exact: false })).first();
-  await addButton.click({ timeout: 10000 });
-  const dialog = page.locator('#dialogEstablecimiento');
-  await dialog.waitFor({ state: 'visible', timeout: 15000 });
-  await dialog.locator('#nombre').fill(String(busqueda));
-  await dialog.locator('input[type="submit"][value="BUSCAR"]').click({ timeout: 10000 });
-  await page.waitForTimeout(1200);
+  // Best-effort: intentamos cargar el establecimiento pero NUNCA cortamos aca.
+  // Siempre seguimos a GUARDAR; si el establecimiento no quedo, ART lo avisara al guardar
+  // (y lo capturamos), pero al menos el alta se intenta.
+  try {
+    await addButton.click({ timeout: 10000 });
+    const dialog = page.locator('#dialogEstablecimiento');
+    await dialog.waitFor({ state: 'visible', timeout: 15000 });
+    await dialog.locator('#nombre').fill(String(busqueda));
+    await dialog.locator('input[type="submit"][value="BUSCAR"]').click({ timeout: 10000 });
 
-  const selectButton = page.locator('.ui-dialog input.btnSeleccionar, #divContentGrid input.btnSeleccionar, input[id^="grid_col"][type="button"]').last();
-  await clickVisibleCenter(page, selectButton, 'tilde seleccionar establecimiento');
-  await page.waitForTimeout(1800);
-
-  const acceptButton = page.locator('button:has-text("ACEPTAR"), input[type="button"][value="ACEPTAR"]').last();
-  if (await acceptButton.isVisible().catch(() => false)) {
-    await clickVisibleCenter(page, acceptButton, 'Aceptar establecimiento guardado');
-    await page.waitForTimeout(1200);
-  }
-
-  const selected = await page.evaluate(() => {
-    const label = document.querySelector('#labelEstablecimientos')?.textContent?.trim() || '';
-    const iframe = document.querySelector('#iframeEstablecimientos');
-    let frameText = '';
-    try {
-      frameText = iframe?.contentDocument?.body?.innerText?.trim() || '';
-    } catch {
-      frameText = '';
+    // Esperamos un resultado seleccionable (en vez de un waitForTimeout fijo que se adelantaba).
+    const selectButton = dialog.locator('input.btnSeleccionar, #divContentGrid input.btnSeleccionar, input[id^="grid_col"][type="button"]').last();
+    const hayResultado = await selectButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false);
+    if (hayResultado) {
+      await clickVisibleCenter(page, selectButton, 'tilde seleccionar establecimiento');
+      // Esperamos el ACEPTAR de confirmacion (si aparece) y lo clickeamos.
+      const acceptButton = page.locator('button:has-text("ACEPTAR"), input[type="button"][value="ACEPTAR"]').last();
+      if (await acceptButton.waitFor({ state: 'visible', timeout: 6000 }).then(() => true).catch(() => false)) {
+        await clickVisibleCenter(page, acceptButton, 'Aceptar establecimiento guardado');
+      }
+      await page.waitForTimeout(1000);
+    } else {
+      // No cargaron resultados: cerramos el dialog para poder guardar igual.
+      await page.keyboard.press('Escape').catch(() => undefined);
     }
-    return Boolean(label || /HOSPITAL|ESTABLECIMIENTO|G\.?CATAN|KM\.?32/i.test(frameText));
-  });
-  if (!selected) throw new Error('No pude confirmar el establecimiento despues de tocar el tilde');
+  } catch (err) {
+    // No frenamos por el establecimiento: seguimos a GUARDAR de todas formas.
+    await page.keyboard.press('Escape').catch(() => undefined);
+  }
 }
 
 // Lee los mensajes de validacion/error visibles del form (ej "El C.U.I.L. ingresado es invalido").
 // Lee los mensajes de validacion/error visibles en la pagina Y en sus iframes
 // (ej el error del CP en el form, o "debe tener 10 digitos" dentro del iframe de telefonos).
 async function collectPageErrors(page) {
-  const rxSrc = 'inv[aá]lid|no corresponde|debe (tener [0-9]|cargar)|sin guardar|no coincide|ya (existe|se encuentra)|es incorrect|no es v[aá]lid|hay \\d+ error';
+  const rxSrc = 'inv[aá]lid|no corresponde|debe tener [0-9]|es campo obligatorio|domicilio vac[ií]o|sin guardar|no coincide|ya (existe|se encuentra)|es incorrect|no es v[aá]lid|hay \\d+ error';
   const out = [];
   const seen = new Set();
   for (const frame of page.frames()) {
@@ -684,6 +828,15 @@ async function ensureBecariosArtErroresTable(conn) {
   `);
 }
 
+// Resume un error largo de ART en un motivo corto y categorizable para la pagina.
+function resumenMotivo(msg) {
+  const s = String(msg || '');
+  if (/tel[eé]fono|debe tener 10 d[ií]gitos/i.test(s)) return 'Teléfono inválido (ART pide 10 dígitos)';
+  if (/localidad|domicilio|\bcalle\b|c[oó]digo postal/i.test(s)) return 'Domicilio/localidad';
+  if (/c\.?u\.?i\.?l/i.test(s)) return 'CUIL inválido';
+  return (s.split(/\r?\n/)[0].replace(/\s*\|\s*/g, ' · ').slice(0, 200)) || 'La carga falló';
+}
+
 async function saveBecarioArtError(conn, dni, motivo, detalle, screenshot, lote) {
   await conn.query(
     `INSERT INTO becarios_art_errores (dni, motivo, detalle, screenshot, lote)
@@ -699,6 +852,16 @@ async function clearBecarioArtError(conn, dni) {
   await conn.query('DELETE FROM becarios_art_errores WHERE dni = ?', [dni]);
 }
 
+// Clickea el boton "No sé mi CP" (es un boton, no checkbox); si no lo encuentra, tilda el checkbox.
+async function clickNoSeMiCP(page) {
+  const btn = page.locator('button:has-text("No sé mi CP"), button:has-text("No se mi CP"), input[type="button"][value*="No s"], #btnNoSeCP').first();
+  const clicked = await btn.click({ timeout: 4000 }).then(() => true).catch(() => false);
+  if (!clicked) {
+    await page.locator('#chkNoSeCP, input[type="checkbox"]').last().check({ force: true }).catch(() => undefined);
+  }
+  await page.waitForTimeout(500);
+}
+
 async function submitAndConfirm(page) {
   if (!envFlag('ART_SUBMIT_ENABLED', false)) {
     throw new Error('ART_SUBMIT_ENABLED no esta activo; no se envia el formulario');
@@ -711,6 +874,7 @@ async function submitAndConfirm(page) {
   const success = page.getByText(successText, { exact: false }).or(page.getByText(/correctamente|exitosamente/i)).last();
   const timeoutMs = Number(process.env.ART_SUCCESS_TIMEOUT_MS || 30000);
   const graceMs = 2500;
+  let triedNoCP = false;
   const start = Date.now();
 
   // Carrera: confirmacion de exito vs error de validacion visible (incluye iframes).
@@ -729,6 +893,14 @@ async function submitAndConfirm(page) {
     if (Date.now() - start > graceMs) {
       const errs = await collectPageErrors(page);
       if (errs.length) {
+        // Si el problema es el CP, clickeamos "No sé mi CP" y reintentamos guardar (una vez).
+        if (!triedNoCP && errs.some((e) => /c[oó]digo postal/i.test(e))) {
+          triedNoCP = true;
+          await clickNoSeMiCP(page);
+          await submit.click({ timeout: 10000 }).catch(() => undefined);
+          await page.waitForTimeout(800);
+          continue;
+        }
         throw new Error('ART rechazo el alta: ' + errs.join(' | '));
       }
     }
@@ -837,15 +1009,21 @@ async function fillAltaTrabajadorMapped(page, payload) {
   await _timed('ciuo', dni, () => chooseAutocompleteById(page, 'autocompleteCIUO', payload.ciuo));
   await _timed('provincia-localidad', dni, async () => {
     await selectById(page, 'cbProvincia', payload.provincia);
+    // El combo Localidad se puebla por AJAX DESPUES de elegir Provincia. Si lo seleccionamos
+    // de una, todavia no esta la opcion y no toma. Esperamos a que se recargue.
+    await page.waitForTimeout(1000);
     await selectById(page, 'cbLocalidad', payload.localidad);
   });
   await _timed('direccion', dni, async () => {
-    if (payload.codigoPostal) await fillById(page, 'txtCPostal', payload.codigoPostal);
-    else await page.locator('#chkNoSeCP, input[type="checkbox"]').last().check({ force: true }).catch(() => undefined);
-    await fillStreet(page, payload.calle);
+    // Numero (altura) primero: ART pide la altura antes de dejar avanzar con la calle.
     await fillById(page, 'txtAltura', payload.numero);
     await fillById(page, 'txtPiso', payload.piso);
     await fillById(page, 'txtDpto', payload.departamento);
+    await fillStreet(page, payload.calle);
+    await dismissModal(page);
+    if (payload.codigoPostal) await fillById(page, 'txtCPostal', payload.codigoPostal);
+    else await clickNoSeMiCP(page);
+    await dismissModal(page);
   });
   await _timed('telefono', dni, () => fillTelefonoPrincipal(page, payload));
   await _timed('establecimiento', dni, () => addEstablecimientoMapped(page, payload.establecimientoBusqueda));
@@ -927,7 +1105,8 @@ async function runBecariosArtBatch(conn, rows) {
       const dni = Number(row.dni);
       try {
         const dirXlsx = await loadDireccionFromXlsx(dni);
-        const payload = buildPayload(row, dirXlsx);
+        const provinciaId = await resolveProvinciaId(conn, row, dirXlsx);
+        const payload = buildPayload(row, dirXlsx, provinciaId);
         assertPayload(payload);
 
         console.log(`[${idx + 1}/${rows.length}] Cargando DNI ${dni} - ${payload.nombreApellido}`);
@@ -986,12 +1165,13 @@ async function main() {
   const becariosPendientes = hasArg('--becarios-pendientes');
   const limitArg = argValue('--limit') ? Number(argValue('--limit')) : null;
   const dryRun = hasArg('--dry-run') || envFlag('ART_DRY_RUN', false);
+  const soloEstablecimiento = hasArg('--solo-establecimiento');
   if (!becariosPendientes && !queueId && !dniArg) throw new Error('Usa --queue-id <id>, --dni <dni> o --becarios-pendientes');
 
   const conn = await mysql.createConnection(dbConfig());
   try {
     if (becariosPendientes) {
-      const rows = await loadBecariosArtPendientes(conn, limitArg);
+      const rows = await loadBecariosArtPendientes(conn, limitArg, { establecimientoOnly: soloEstablecimiento });
       if (dryRun) {
         console.log(JSON.stringify({ ok: true, dryRun: true, total: rows.length, dnis: rows.map((r) => r.dni) }, null, 2));
         return;
@@ -1006,7 +1186,8 @@ async function main() {
       await setQueueStatus(conn, queueId, 'PROCESSING', { locked_at: new Date(), started_at: new Date() });
     }
     const dir = await loadDireccionFromXlsx(row.dni);
-    const payload = buildPayload(row, dir);
+    const provinciaId = await resolveProvinciaId(conn, row, dir);
+    const payload = buildPayload(row, dir, provinciaId);
     assertPayload(payload);
 
     if (dryRun) {
@@ -1021,14 +1202,26 @@ async function main() {
       locked_at: null,
       resultado_art: `Alta ART confirmada para DNI ${payload.dni}`,
     });
+    // Alta OK → sacamos la fila de la lista de errores de la pagina "Carga de ART" (si estaba).
+    await conn.query('DELETE FROM becarios_art_errores WHERE dni = ?', [payload.dni]).catch(() => undefined);
     console.log(JSON.stringify({ ok: true, queueId: row.queue_id, dni: payload.dni }));
   } catch (err) {
+    const fullMsg = String(err?.message || err);
     if (queueId) {
       await setQueueStatus(conn, queueId, 'ERROR', {
         finished_at: new Date(),
         locked_at: null,
-        last_error: String(err?.message || err).slice(0, 60000),
+        last_error: fullMsg.slice(0, 60000),
       }).catch(() => undefined);
+    }
+    // Actualizar la pagina "Carga de ART" con el motivo del ULTIMO intento (no dejar el viejo).
+    let dniErr = dniArg || null;
+    if (!dniErr && queueId) {
+      const [qr] = await conn.query('SELECT dni FROM art_alta_queue WHERE id = ?', [queueId]).catch(() => [[]]);
+      dniErr = qr?.[0]?.dni || null;
+    }
+    if (dniErr) {
+      await saveBecarioArtError(conn, dniErr, resumenMotivo(fullMsg), fullMsg, null, null).catch(() => undefined);
     }
     throw err;
   } finally {

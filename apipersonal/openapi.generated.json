@@ -41882,6 +41882,10 @@
             "type": "number",
             "nullable": true
           },
+          "provincia_id": {
+            "type": "string",
+            "nullable": true
+          },
           "cuil": {
             "type": "string",
             "nullable": true
@@ -41986,6 +41990,10 @@
             "type": "number",
             "nullable": true
           },
+          "provincia_id": {
+            "type": "string",
+            "nullable": true
+          },
           "cuil": {
             "type": "string",
             "nullable": true
@@ -42088,6 +42096,10 @@
           },
           "localidad_id": {
             "type": "number",
+            "nullable": true
+          },
+          "provincia_id": {
+            "type": "string",
             "nullable": true
           },
           "cuil": {

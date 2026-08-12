@@ -44,10 +44,23 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
           p.dni, p.apellido, p.nombre, p.cuil, p.telefono,
           DATE_FORMAT(p.fecha_nacimiento, '%d/%m/%Y') AS fecha_nacimiento,
           a.legajo, l.nombre AS ley_nombre,
-          COALESCE(rep.reparticion_nombre, dep.nombre) AS establecimiento
+          COALESCE(rep.reparticion_nombre, dep.nombre) AS establecimiento,
+          -- Dirección desde la tabla personal (fuente real que usa el script de ART)
+          p.domicilio, p.numerodomicilio, p.cp, p.localidad_id,
+          loc.localidad_nombre, loc.provincia_nombre,
+          -- Estado de la cola de alta automática en ART
+          q.status        AS art_status,
+          q.last_error    AS art_error,
+          q.resultado_art AS art_resultado,
+          q.attempts      AS art_attempts,
+          q.finished_at   AS art_finished_at
         FROM personal p
         JOIN agentes a   ON a.dni = p.dni AND a.deleted_at IS NULL
         JOIN ley l       ON l.id  = a.ley_id
+        LEFT JOIN localidades loc ON loc.id = p.localidad_id
+        LEFT JOIN art_alta_queue q ON q.id = (
+          SELECT MAX(q2.id) FROM art_alta_queue q2 WHERE q2.dni = p.dni
+        )
         LEFT JOIN (
           SELECT s1.dni, s1.servicio_id, s1.dependencia_id
           FROM agentes_servicios s1
@@ -73,16 +86,38 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
       `, { replacements: { becariosLeyIds: BECARIOS_LEY_IDS }, type: QueryTypes.SELECT });
 
       const data = rows.map((r: any) => {
-        const dir = getDireccion(Number(r.dni));
-        let direccion: string | null = null;
-        if (dir) {
-          const partes: string[] = [];
-          if (dir.calle) partes.push(dir.calle + (dir.numero ? ' ' + dir.numero : ''));
-          if (dir.piso)  partes.push('Piso ' + dir.piso + (dir.departamento ? ' Dpto ' + dir.departamento : ''));
-          if (dir.localidad) partes.push(dir.localidad + (dir.codigo_postal ? ' (' + dir.codigo_postal + ')' : ''));
-          direccion = partes.join(', ') || null;
-        }
-        return { ...r, direccion };
+        const dir = getDireccion(Number(r.dni)); // fallback: Excel Direcciones Intranet
+        const norm = (v: any) => (v == null ? '' : String(v).trim());
+
+        // Dirección con prioridad tabla personal → fallback Excel (igual que el script de ART).
+        const calle     = norm(r.domicilio)        || norm(dir?.calle);
+        const numero     = norm(r.numerodomicilio) || norm(dir?.numero);
+        const localidad = norm(r.localidad_nombre) || norm(dir?.localidad);
+        const provincia = norm(r.provincia_nombre);
+        const cp         = norm(r.cp)              || norm(dir?.codigo_postal);
+
+        const partes: string[] = [];
+        if (calle)     partes.push(calle + (numero ? ' ' + numero : ''));
+        if (localidad) partes.push(localidad + (cp ? ' (' + cp + ')' : ''));
+        const direccion = partes.join(', ') || null;
+
+        // ¿Está lista la dirección para ART? (lo que el alta necesita sí o sí)
+        const faltan: string[] = [];
+        if (!calle)                     faltan.push('calle');
+        if (!numero)                    faltan.push('número');
+        if (!localidad && !provincia)   faltan.push('localidad');
+        if (!cp)                        faltan.push('CP');
+
+        // Fuente efectiva de la dirección: personal si hay dato propio, si no Excel.
+        const fuente = (norm(r.domicilio) || r.localidad_id) ? 'personal' : (dir ? 'excel' : null);
+
+        return {
+          ...r,
+          direccion,
+          art_listo: faltan.length === 0,
+          art_faltan: faltan,
+          art_fuente_direccion: fuente,
+        };
       });
       return res.json({ ok: true, data, total: data.length });
     } catch (err: any) {
@@ -128,6 +163,46 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
       }
       logger.error({ msg: '[becariosArt] errores delete error', err: err?.message });
       return res.status(500).json({ ok: false, error: 'Error al resolver error ART' });
+    }
+  });
+
+  // ── POST /errores/:dni/reintentar — encola el alta ART para ese DNI ──
+  // NO corre el navegador aca: bajo pm2 seria headless (sin escritorio) y el menu de ART
+  // falla ("element is not visible"). En su lugar dejamos el item PENDING en art_alta_queue;
+  // lo procesa el worker de escritorio (scripts/artAltaWorker.mjs) con Chrome VISIBLE.
+  // El script, al completar el alta OK, borra la fila de becarios_art_errores.
+  router.post('/errores/:dni/reintentar', requirePermission('api:access'), async (req: Request, res: Response) => {
+    const dni = parseInt(req.params.dni, 10);
+    if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+
+    try {
+      // 1) Verificar que el agente existe (NO usar affectedRows del upsert para esto: con
+      //    ON DUPLICATE KEY UPDATE, si la fila de la cola ya existía y queda igual, MySQL
+      //    devuelve affectedRows=0 aunque el agente exista → falso "no encontré agente").
+      const agentes = await sequelize.query<{ id: number; dni: number; fecha_ingreso: any; estado_empleo: any }>(
+        `SELECT id, dni, fecha_ingreso, estado_empleo FROM agentes WHERE dni = :dni LIMIT 1`,
+        { replacements: { dni }, type: QueryTypes.SELECT }
+      );
+      if (!agentes.length) {
+        return res.json({ ok: false, error: 'No encontré un agente con ese DNI para encolar' });
+      }
+      const ag = agentes[0];
+
+      // 2) Encolar / resetear a PENDING (UNIQUE KEY en agente_id → si ya existe, la reusa).
+      await sequelize.query(
+        `INSERT INTO art_alta_queue
+           (agente_id, dni, fecha_ingreso_db, estado_empleo, status, attempts, created_at, updated_at)
+         VALUES (:id, :dni, :fi, :ee, 'PENDING', 0, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+           status='PENDING', attempts=0, locked_at=NULL, last_error=NULL,
+           resultado_art=NULL, updated_at=NOW()`,
+        { replacements: { id: ag.id, dni: ag.dni, fi: ag.fecha_ingreso ?? null, ee: ag.estado_empleo ?? null } }
+      );
+      trackAction('becario_art_reintento_encolado', { dni });
+      return res.json({ ok: true, queued: true });
+    } catch (err: any) {
+      logger.error({ msg: '[becariosArt] reintento encolar error', dni, err: err?.message });
+      return res.json({ ok: false, error: (err?.message || 'No se pudo encolar').slice(0, 400) });
     }
   });
 

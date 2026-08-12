@@ -3,7 +3,8 @@ import { spawn } from 'child_process';
 import { QueryTypes, Sequelize } from 'sequelize';
 import { logger } from '../logging/logger';
 
-const TRIGGER_NAME = 'trg_art_alta_queue_agentes_ai';
+const TRIGGER_AI = 'trg_art_alta_queue_agentes_ai'; // AFTER INSERT (alta directa en ACTIVO)
+const TRIGGER_AU = 'trg_art_alta_queue_agentes_au'; // AFTER UPDATE (transición a ACTIVO)
 let workerStarted = false;
 let workerBusy = false;
 
@@ -42,28 +43,62 @@ export async function ensureArtAltaQueue(sequelize: Sequelize): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // El trigger AFTER UPDATE (TRIGGER_AU) es la marca de "infra ya migrada a regla ACTIVO".
+  // Si existe, no recreamos nada.
   const existing = await sequelize.query<{ TRIGGER_NAME: string }>(
     `SELECT TRIGGER_NAME
        FROM information_schema.TRIGGERS
       WHERE TRIGGER_SCHEMA = DATABASE()
         AND TRIGGER_NAME = :triggerName
       LIMIT 1`,
-    { replacements: { triggerName: TRIGGER_NAME }, type: QueryTypes.SELECT }
+    { replacements: { triggerName: TRIGGER_AU }, type: QueryTypes.SELECT }
   );
 
   if (existing.length > 0) return;
 
+  // Regla: encolar cuando el agente PASA A ACTIVO (transición) o se da de alta ya en ACTIVO.
+  // Recreamos ambos triggers para migrar desde el AFTER INSERT viejo (que encolaba siempre).
+  await sequelize.query(`DROP TRIGGER IF EXISTS ${TRIGGER_AI}`);
+  await sequelize.query(`DROP TRIGGER IF EXISTS ${TRIGGER_AU}`);
+
   await sequelize.query(`
-    CREATE TRIGGER ${TRIGGER_NAME}
+    CREATE TRIGGER ${TRIGGER_AI}
     AFTER INSERT ON agentes
     FOR EACH ROW
-    INSERT IGNORE INTO art_alta_queue
-      (agente_id, dni, fecha_ingreso_db, estado_empleo, status, created_at, updated_at)
-    VALUES
-      (NEW.id, NEW.dni, NEW.fecha_ingreso, NEW.estado_empleo, 'PENDING', NOW(), NOW())
+    BEGIN
+      IF NEW.estado_empleo = 'ACTIVO' THEN
+        INSERT INTO art_alta_queue
+          (agente_id, dni, fecha_ingreso_db, estado_empleo, status, created_at, updated_at)
+        VALUES
+          (NEW.id, NEW.dni, NEW.fecha_ingreso, NEW.estado_empleo, 'PENDING', NOW(), NOW())
+        ON DUPLICATE KEY UPDATE estado_empleo = NEW.estado_empleo, updated_at = NOW();
+      END IF;
+    END
   `);
 
-  logger.info({ msg: '[artAltaQueue] trigger creado', trigger: TRIGGER_NAME });
+  await sequelize.query(`
+    CREATE TRIGGER ${TRIGGER_AU}
+    AFTER UPDATE ON agentes
+    FOR EACH ROW
+    BEGIN
+      IF NEW.estado_empleo = 'ACTIVO'
+         AND (OLD.estado_empleo IS NULL OR OLD.estado_empleo <> 'ACTIVO') THEN
+        INSERT INTO art_alta_queue
+          (agente_id, dni, fecha_ingreso_db, estado_empleo, status, created_at, updated_at)
+        VALUES
+          (NEW.id, NEW.dni, NEW.fecha_ingreso, NEW.estado_empleo, 'PENDING', NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+          estado_empleo = NEW.estado_empleo,
+          status     = IF(art_alta_queue.status IN ('DONE','PROCESSING'), art_alta_queue.status, 'PENDING'),
+          attempts   = IF(art_alta_queue.status IN ('DONE','PROCESSING'), art_alta_queue.attempts, 0),
+          last_error = IF(art_alta_queue.status IN ('DONE','PROCESSING'), art_alta_queue.last_error, NULL),
+          locked_at  = NULL,
+          updated_at = NOW();
+      END IF;
+    END
+  `);
+
+  logger.info({ msg: '[artAltaQueue] triggers ACTIVO creados', triggers: [TRIGGER_AI, TRIGGER_AU] });
 }
 
 async function takeNextQueueItem(sequelize: Sequelize, maxAttempts: number): Promise<number | null> {
