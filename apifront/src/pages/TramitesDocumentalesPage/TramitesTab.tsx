@@ -174,6 +174,13 @@ export function TramitesTab() {
   const [tandas, setTandas] = useState<string[]>([]);
   const [selectedTanda, setSelectedTanda] = useState('');
   const [savingTanda, setSavingTanda] = useState(false);
+  const [creandoSub, setCreandoSub] = useState(false);
+  // Errores del último análisis de subcarpetas (dni -> motivo) y a qué tanda pertenecen,
+  // para marcar en rojo al agente en la lista y mostrar el motivo al pasar el cursor.
+  const [subErrores, setSubErrores] = useState<Map<number, string>>(new Map());
+  const [subErroresTanda, setSubErroresTanda] = useState('');
+  const [ordenando, setOrdenando] = useState(false);
+  const [ordenProg, setOrdenProg] = useState<{ done: number; total: number } | null>(null);
 
   // Detalle de agente (carpeta DOCU + visor)
   const [agente, setAgente] = useState<TandaAgente | null>(null);
@@ -314,6 +321,105 @@ export function TramitesTab() {
       setAgente((a) => (a && a.id === row.id ? { ...a, estado } : a));
     } catch (e: any) {
       toast.error('No se pudo cambiar el estado', e?.message || 'Error');
+    }
+  }
+
+  // Crea en DOCU\<dni> las subcarpetas por documento (nombre = documento del orden)
+  // para todos los agentes de la tanda elegida. Analiza primero (dry-run) y confirma.
+  async function crearSubcarpetas() {
+    if (!selectedTanda) {
+      toast.warning('Elegí una tanda', 'Seleccioná una tanda arriba.');
+      return;
+    }
+    setCreandoSub(true);
+    try {
+      type Persona = { dni: number; nombre: string };
+      type Resp = { ok: boolean; data: {
+        totales: { agentes: number; creadas: number; existentes: number; sinLey: number; sinCarpeta: number };
+        sinLey: Persona[]; sinCarpeta: Persona[];
+      } };
+      // Marca en rojo (en la lista) a los agentes que no se pudieron procesar.
+      const marcarErrores = (data: Resp['data']) => {
+        const m = new Map<number, string>();
+        for (const p of data.sinCarpeta || []) m.set(p.dni, 'No existe la carpeta del agente en DOCU');
+        for (const p of data.sinLey || []) m.set(p.dni, 'Sin ley 10430/10471 detectada');
+        setSubErrores(m);
+        setSubErroresTanda(selectedTanda);
+      };
+
+      const prev = await apiFetch<Resp>('/tramites-documentales/tandas/crear-subcarpetas', {
+        method: 'POST',
+        body: JSON.stringify({ tanda: selectedTanda, dryRun: true }),
+      });
+      marcarErrores(prev.data); // ya deja marcados los problemáticos aunque canceles
+      const t = prev.data.totales;
+      if (!t.creadas) {
+        toast.ok('Nada para crear', `Todas las subcarpetas ya existen (${t.existentes} en ${t.agentes} agentes).`
+          + (t.sinLey || t.sinCarpeta ? ` ${t.sinLey + t.sinCarpeta} con problemas (en rojo).` : ''));
+        return;
+      }
+      const aviso = `Tanda "${selectedTanda}": se crearán ${t.creadas} subcarpeta(s) en ${t.agentes} agente(s).`
+        + `\n${t.existentes} ya existen y se saltean.`
+        + (t.sinLey ? `\n${t.sinLey} sin ley detectada (se omiten, en rojo).` : '')
+        + (t.sinCarpeta ? `\n${t.sinCarpeta} sin carpeta en DOCU (se omiten, en rojo).` : '')
+        + `\n\n¿Confirmás la creación?`;
+      if (!window.confirm(aviso)) return;
+
+      const real = await apiFetch<Resp>('/tramites-documentales/tandas/crear-subcarpetas', {
+        method: 'POST',
+        body: JSON.stringify({ tanda: selectedTanda, dryRun: false }),
+      });
+      marcarErrores(real.data);
+      const r = real.data.totales;
+      toast.ok('Subcarpetas creadas', `${r.creadas} creada(s), ${r.existentes} ya existían.`
+        + (r.sinLey || r.sinCarpeta ? ` Omitidos: ${r.sinLey} sin ley, ${r.sinCarpeta} sin carpeta (en rojo).` : ''));
+      if (agente) void loadDocu(agente.dni);
+    } catch (e: any) {
+      toast.error('No se pudieron crear las subcarpetas', e?.message || 'Error');
+    } finally {
+      setCreandoSub(false);
+    }
+  }
+
+  // Clasifica y MUEVE los archivos sueltos de cada agente de la tanda a sus
+  // subcarpetas (DNI/CUIL/Título/Matrícula/Ético). Va agente por agente (OCR lento)
+  // mostrando progreso y marcando en rojo a los que fallan.
+  async function ordenarArchivos() {
+    if (!selectedTanda) { toast.warning('Elegí una tanda', 'Seleccioná una tanda arriba.'); return; }
+    const agentes = tandaRows.filter((r) => r.tanda === selectedTanda);
+    if (!agentes.length) { toast.warning('Tanda vacía', 'No hay agentes en la tanda.'); return; }
+    if (!window.confirm(
+      `Voy a clasificar y MOVER los archivos de ${agentes.length} agente(s) de "${selectedTanda}" a sus subcarpetas `
+      + `(DNI / CUIL / Título / Matrícula / Ético).\nEs lento por el OCR y mueve archivos. ¿Confirmás?`
+    )) return;
+
+    setOrdenando(true);
+    setOrdenProg({ done: 0, total: agentes.length });
+    const errores = new Map<number, string>();
+    let totMovidos = 0;
+    try {
+      for (let i = 0; i < agentes.length; i += 1) {
+        const a = agentes[i];
+        try {
+          const res = await apiFetch<{ ok: boolean; data: { movidos: number; sinCarpeta?: boolean } }>(
+            '/tramites-documentales/ordenar-archivos-agente',
+            { method: 'POST', body: JSON.stringify({ dni: a.dni, dryRun: false }) }
+          );
+          totMovidos += res.data.movidos || 0;
+          if (res.data.sinCarpeta) errores.set(a.dni, 'No existe la carpeta del agente en DOCU');
+        } catch (e: any) {
+          errores.set(a.dni, e?.message || 'Error al ordenar archivos');
+        }
+        setOrdenProg({ done: i + 1, total: agentes.length });
+        setSubErrores(new Map(errores));
+        setSubErroresTanda(selectedTanda);
+      }
+      toast.ok('Archivos ordenados', `${totMovidos} archivo(s) movido(s).`
+        + (errores.size ? ` ${errores.size} agente(s) con problema (en rojo).` : ''));
+      if (agente) void loadDocu(agente.dni);
+    } finally {
+      setOrdenando(false);
+      setOrdenProg(null);
     }
   }
 
@@ -509,19 +615,37 @@ export function TramitesTab() {
             <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Todavía no hay tandas. Consultá arriba y agregá agentes.</div>
           )}
 
+          {selectedTanda ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button type="button" onClick={() => void crearSubcarpetas()} disabled={creandoSub || ordenando}
+                title="Crea en DOCU\<dni> una subcarpeta por cada documento del orden (según la ley del agente), sin duplicar"
+                style={{ ...primaryBtn, background: creandoSub ? 'rgba(255,255,255,0.08)' : ACCENT, cursor: creandoSub || ordenando ? 'default' : 'pointer', fontSize: '0.78rem', padding: '8px 12px' }}>
+                {creandoSub ? 'Analizando…' : `📁 Crear subcarpetas en "${selectedTanda}"`}
+              </button>
+              <button type="button" onClick={() => void ordenarArchivos()} disabled={ordenando || creandoSub}
+                title="Clasifica los archivos sueltos de cada agente (nombre + OCR) y los mueve a la subcarpeta DNI/CUIL/Título/Matrícula/Ético"
+                style={{ ...primaryBtn, background: ordenando ? 'rgba(255,255,255,0.08)' : '#0f766e', cursor: ordenando || creandoSub ? 'default' : 'pointer', fontSize: '0.78rem', padding: '8px 12px' }}>
+                {ordenando && ordenProg ? `Ordenando ${ordenProg.done}/${ordenProg.total}…` : `🗂️ Ordenar archivos de "${selectedTanda}"`}
+              </button>
+            </div>
+          ) : null}
+
           <div style={{ flex: 1, overflow: 'auto', border: BORDER, borderRadius: 8 }}>
-            {agentesTandaActual.map((a) => (
+            {agentesTandaActual.map((a) => {
+              const err = subErroresTanda === selectedTanda ? subErrores.get(a.dni) : undefined;
+              return (
               <div key={a.id}
                 onClick={() => abrirAgente(a)}
+                title={err || undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer',
                   borderBottom: BORDER,
-                  background: agente?.id === a.id ? 'rgba(124,58,237,0.22)' : 'transparent',
-                  borderLeft: `3px solid ${ESTADO_COLOR[a.estado] || 'transparent'}`,
+                  background: agente?.id === a.id ? 'rgba(124,58,237,0.22)' : err ? 'rgba(239,68,68,0.12)' : 'transparent',
+                  borderLeft: `3px solid ${err ? '#ef4444' : ESTADO_COLOR[a.estado] || 'transparent'}`,
                 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: '#e2e8f0', fontSize: '0.82rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {a.apellidoNombre || `DNI ${a.dni}`}
+                  <div style={{ color: err ? '#fca5a5' : '#e2e8f0', fontSize: '0.82rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {err ? '⚠ ' : ''}{a.apellidoNombre || `DNI ${a.dni}`}
                   </div>
                   <div style={{ color: '#64748b', fontSize: '0.72rem' }}>DNI {a.dni}</div>
                 </div>
@@ -536,7 +660,8 @@ export function TramitesTab() {
                   onClick={(e) => { e.stopPropagation(); void quitarDeTanda(a.tanda, a.dni); }}
                   style={xBtn}>✕</button>
               </div>
-            ))}
+              );
+            })}
             {selectedTanda && !agentesTandaActual.length ? (
               <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>Tanda vacía.</div>
             ) : null}

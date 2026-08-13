@@ -153,6 +153,7 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
              WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL
              ORDER BY ags.id DESC LIMIT 1) AS sector_nombre
          FROM personal p
+         JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL AND a.estado_empleo = 'ACTIVO'
          WHERE p.deleted_at IS NULL
            AND p.fecha_nacimiento IS NOT NULL`,
         { type: QueryTypes.SELECT },
