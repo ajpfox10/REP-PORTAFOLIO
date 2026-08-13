@@ -361,8 +361,10 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             fn.id  AS funcion_id, fn.nombre AS funcion_nombre,
             oc.id  AS ocupacion_id, oc.nombre AS ocupacion_nombre,
             rh.id  AS regimen_horario_id, rh.nombre AS regimen_horario_nombre,
-            dep.id AS dependencia_id, dep.nombre AS dependencia_nombre,
-            rep.id AS reparticion_id,  rep.reparticion_nombre,
+            (SELECT COALESCE(r_dep.dependencia_id, ags.dependencia_id) FROM agentes_servicios ags LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL LEFT JOIN reparticiones r_dep ON r_dep.id = srv.reparticion_id AND r_dep.deleted_at IS NULL WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS dependencia_id,
+            (SELECT dep2.nombre FROM agentes_servicios ags LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL LEFT JOIN reparticiones r_dep ON r_dep.id = srv.reparticion_id AND r_dep.deleted_at IS NULL LEFT JOIN dependencias dep2 ON dep2.id = COALESCE(r_dep.dependencia_id, ags.dependencia_id) AND dep2.deleted_at IS NULL WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS dependencia_nombre,
+            (SELECT srv.reparticion_id FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS reparticion_id,
+            (SELECT rep2.reparticion_nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id JOIN reparticiones rep2 ON rep2.id = srv.reparticion_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS reparticion_nombre,
 
             (SELECT ags.servicio_id FROM agentes_servicios ags WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_id,
             (SELECT srv.nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_nombre,
@@ -389,8 +391,6 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           LEFT JOIN funciones fn            ON fn.id  = a.funcion_id     AND fn.deleted_at IS NULL
           LEFT JOIN ocupaciones oc          ON oc.id  = a.ocupacion_id   AND oc.deleted_at IS NULL
           LEFT JOIN regimenes_horarios rh   ON rh.id  = a.regimen_horario_id AND rh.deleted_at IS NULL
-          LEFT JOIN dependencias dep        ON dep.id = a.dependencia_id
-          LEFT JOIN reparticiones rep       ON rep.id = a.reparticion_id
           WHERE p.dni = :dni AND p.deleted_at IS NULL
           LIMIT 1
         `, { replacements: { dni }, type: QueryTypes.SELECT });
@@ -472,12 +472,14 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       ];
       const AGENTE_COLS = [
         'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
-        'regimen_horario_id','dependencia_id','reparticion_id',
+        'regimen_horario_id',
         'fecha_ingreso','fecha_egreso',
         'legajo','salario_mensual','estado_empleo',
         'decreto_designacion',
       ];
-      // servicio_id y sector_id viven en agentes_servicios, NO en agentes
+      // servicio_id y sector_id viven en agentes_servicios, NO en agentes.
+      // dependencia_id / reparticion_id ya no existen en agentes: la dependencia
+      // se deriva del servicio vigente (servicios.reparticion_id -> reparticiones.dependencia_id).
       const newServicioId = (data as any).servicio_id;
       const newSectorId   = (data as any).sector_id;
       let fechaCierreVinculacion: string | null = null;

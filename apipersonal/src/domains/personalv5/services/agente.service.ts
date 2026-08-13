@@ -195,10 +195,10 @@ export class AgenteService {
       const [agenteResult]: any = await this.sequelize.query(
         `INSERT INTO agentes
          (dni, ley_id, planta_id, categoria_id, funcion_id, ocupacion_id, regimen_horario_id,
-          jefatura_id, dependencia_id, reparticion_id, fecha_ingreso, fecha_egreso,
+          jefatura_id, fecha_ingreso, fecha_egreso,
           estado_empleo, legajo, salario_mensual, decreto_designacion, created_by, created_at, updated_at)
          VALUES (:dni, :ley_id, :planta_id, :categoria_id, :funcion_id, :ocupacion_id, :regimen_horario_id,
-                 :jefatura_id, :dependencia_id, :reparticion_id, :fecha_ingreso, :fecha_egreso,
+                 :jefatura_id, :fecha_ingreso, :fecha_egreso,
                  :estado_empleo, :legajo, :salario_mensual, :decreto_designacion, :actor, NOW(), NOW())`,
         {
           replacements: {
@@ -210,8 +210,6 @@ export class AgenteService {
             ocupacion_id: dto.ocupacion_id || null,
             regimen_horario_id: dto.regimen_horario_id || null,
             jefatura_id: dto.jefatura_id || null,
-            dependencia_id: dto.dependencia_id || null,
-            reparticion_id: dto.reparticion_id || null,
             fecha_ingreso: dto.fecha_ingreso || null,
             fecha_egreso: dto.fecha_egreso || null,
             estado_empleo: dto.estado_empleo || 'ACTIVO',
@@ -285,7 +283,7 @@ export class AgenteService {
       }
 
       // Actualizar agentes si hay campos laborales
-      const agenteFields = ['ley_id', 'planta_id', 'categoria_id', 'funcion_id', 'ocupacion_id', 'regimen_horario_id', 'jefatura_id', 'dependencia_id', 'fecha_ingreso'];
+      const agenteFields = ['ley_id', 'planta_id', 'categoria_id', 'funcion_id', 'ocupacion_id', 'regimen_horario_id', 'jefatura_id', 'fecha_ingreso'];
       const agenteUpdate = Object.fromEntries(
         Object.entries(dto).filter(([k]) => agenteFields.includes(k))
       );
@@ -325,7 +323,13 @@ export class AgenteService {
     const rows = await this.sequelize.query(
       `SELECT p.*, a.ley_id, a.planta_id, a.categoria_id, a.funcion_id,
               a.ocupacion_id, a.regimen_horario_id, a.jefatura_id,
-              a.dependencia_id, a.fecha_ingreso
+              (SELECT COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id)
+                 FROM agentes_servicios ags_dep
+                 LEFT JOIN servicios s_dep ON s_dep.id = ags_dep.servicio_id AND s_dep.deleted_at IS NULL
+                 LEFT JOIN reparticiones r_dep ON r_dep.id = s_dep.reparticion_id AND r_dep.deleted_at IS NULL
+                WHERE ags_dep.dni = p.dni AND ags_dep.deleted_at IS NULL AND ags_dep.fecha_hasta IS NULL
+                ORDER BY ags_dep.id DESC LIMIT 1) AS dependencia_id,
+              a.fecha_ingreso
        FROM personal p
        LEFT JOIN agentes a ON a.id = (
          SELECT ax.id FROM agentes ax

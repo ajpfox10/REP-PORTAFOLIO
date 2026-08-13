@@ -88,8 +88,8 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
            LEFT JOIN categorias       cat ON cat.ID  = a.categoria_id
            LEFT JOIN plantas          pla ON pla.id  = a.planta_id
            LEFT JOIN regimenes_horarios rh ON rh.id  = a.regimen_horario_id
-           LEFT JOIN dependencias     dep ON dep.id  = a.dependencia_id
-           LEFT JOIN reparticiones    rep ON rep.id  = a.reparticion_id
+           LEFT JOIN reparticiones    rep ON rep.id  = se.reparticion_id AND rep.deleted_at IS NULL
+           LEFT JOIN dependencias     dep ON dep.id  = COALESCE(rep.dependencia_id, ags_leg.dependencia_id) AND dep.deleted_at IS NULL
            WHERE a.dni = :dni AND a.deleted_at IS NULL
            ORDER BY a.fecha_ingreso DESC`,
           { replacements: { dni }, type: QueryTypes.SELECT }

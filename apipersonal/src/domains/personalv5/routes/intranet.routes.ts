@@ -370,10 +370,17 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
         `SELECT p.dni,
                 CONCAT(p.apellido, ', ', p.nombre) AS nombre,
                 MAX(CASE WHEN a.estado_empleo = 'ACTIVO' THEN 1 ELSE 0 END) AS activo,
-                MAX(CASE WHEN a.estado_empleo = 'ACTIVO' THEN d.nombre END) AS dep_nombre
+                MAX(CASE WHEN a.estado_empleo = 'ACTIVO' THEN (
+                  SELECT dep_serv.nombre
+                  FROM agentes_servicios ags_dep
+                  LEFT JOIN servicios s_dep ON s_dep.id = ags_dep.servicio_id AND s_dep.deleted_at IS NULL
+                  LEFT JOIN reparticiones r_dep ON r_dep.id = s_dep.reparticion_id AND r_dep.deleted_at IS NULL
+                  LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id) AND dep_serv.deleted_at IS NULL
+                  WHERE ags_dep.dni = p.dni AND ags_dep.deleted_at IS NULL AND ags_dep.fecha_hasta IS NULL
+                  ORDER BY ags_dep.fecha_desde DESC, ags_dep.id DESC LIMIT 1
+                ) END) AS dep_nombre
            FROM personal p
            LEFT JOIN agentes a      ON a.dni = p.dni AND a.deleted_at IS NULL
-           LEFT JOIN dependencias d ON d.id = a.dependencia_id
           WHERE p.deleted_at IS NULL
           GROUP BY p.dni, p.apellido, p.nombre
           ORDER BY p.apellido, p.nombre`,
