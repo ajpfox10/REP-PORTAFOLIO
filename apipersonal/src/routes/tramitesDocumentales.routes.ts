@@ -1425,6 +1425,68 @@ function resolveDocuAgentDir(dni: number): string {
   return target;
 }
 
+// ── Clasificador de archivos sueltos → subcarpeta por documento ──────────────
+// Solo 5 tipos: DNI, CUIL, Titulo, Matricula, Etico. Método: nombre primero;
+// si no alcanza, OCR/capa de texto con frases ancla fuertes (no rótulos de campo).
+const _normClasif = (s: string) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+// Veta familiares (no es el documento del agente).
+const CLASIF_VETO_FAMILIAR = /conyug|esposa|esposo|\bhij[oa]s?\b|madre|padre|conviviente/;
+// Veta otros tipos de documento cuyo título los delata (aunque mencionen "dni"/"cuil").
+const CLASIF_VETO_TEXTO = /toma de posesion|situaciones de violencia|registro de situaciones|comunico a usted que mi domicilio|declaro que mi domicilio|nota de solicitud|nombramiento|incompatibilidad|declaracion jurada|apto (fisico|psico)|acta de matrimonio|certificado de antecedentes|libre de deuda|constancia de aceptacion|nota de toma/;
+const CLASIF_REGLAS_NOMBRE: Array<{ key: string; re: RegExp; not?: RegExp }> = [
+  { key: 'CUIL', re: /(^|[^a-z])cuil([^a-z]|$)/ },
+  { key: 'DNI', re: /(^|[^a-z])dni([^a-z]|$)/ },
+  { key: 'Matricula', re: /matricula/ },
+  { key: 'Etico', re: /(^|[^a-z])etic[oa]([^a-z]|$)/ },
+  { key: 'Titulo', re: /titulo|analitico|(^|[^a-z])secundario|(^|[^a-z])primario/ },
+];
+const CLASIF_REGLAS_TEXTO: Array<{ key: string; re: RegExp }> = [
+  { key: 'CUIL', re: /constancia de c\.?\s?u\.?\s?i\.?\s?l|codigo unico de identificacion laboral|constancia de cuil/ },
+  { key: 'DNI', re: /documento nacional de identidad|ministerio del interior.*identidad|registro nacional de las personas/ },
+  { key: 'Matricula', re: /matricula (profesional|n[ro°º]|nacional)|colegio de (medicos|enfermer|profesionales|bioquimic|kinesi)|habilitacion profesional/ },
+  { key: 'Etico', re: /codigo de etica|certificado de (etica|ejercicio etico)|ejercicio etico de la profesion/ },
+  { key: 'Titulo', re: /(titulo|diploma) (de|profesional|secundario|intermedio)|analitico de calificaciones|bachiller|direccion general de cultura y educacion|ministerio de educacion|tecnico (en|superior)|nivel secundario/ },
+];
+function clasifPorNombre(nombre: string): { key: string | null; veto: string | null } {
+  const t = _normClasif(path.basename(nombre, path.extname(nombre)));
+  if (CLASIF_VETO_FAMILIAR.test(t)) return { key: null, veto: 'familiar' };
+  for (const r of CLASIF_REGLAS_NOMBRE) if (r.re.test(t) && !(r.not && r.not.test(t))) return { key: r.key, veto: null };
+  return { key: null, veto: null };
+}
+function clasifPorTexto(txt: string): { key: string | null; veto: string | null } {
+  const t = _normClasif(txt);
+  if (CLASIF_VETO_FAMILIAR.test(t)) return { key: null, veto: 'familiar' };
+  if (CLASIF_VETO_TEXTO.test(t)) return { key: null, veto: 'otro documento' };
+  for (const r of CLASIF_REGLAS_TEXTO) if (r.re.test(t)) return { key: r.key, veto: null };
+  return { key: null, veto: null };
+}
+// Subcarpeta destino existente del agente para una clave.
+function subcarpetaDestino(subdirs: string[], key: string): string | null {
+  const objetivo: Record<string, RegExp> = { DNI: /^dni$/, CUIL: /^cuil$/, Titulo: /^titulo$/, Matricula: /^matricula/, Etico: /^etic[oa]/ };
+  return subdirs.find((d) => objetivo[key]?.test(_normClasif(d))) || null;
+}
+const CLASIF_ES_IMG = /\.(jpe?g|png|tiff?|bmp|webp)$/i;
+const CLASIF_ES_PDF = /\.pdf$/i;
+const CLASIF_IGNORAR = /\.db$/i;
+// Lee el texto del documento reusando el pipeline de OCR de la ruta.
+async function leerTextoDocumento(fp: string): Promise<string> {
+  try {
+    if (CLASIF_ES_IMG.test(fp)) {
+      return await withTimeout(extractTextFromImage(fp), OCR_TIMEOUT_MS, `OCR img ${path.basename(fp)}`);
+    }
+    if (CLASIF_ES_PDF.test(fp)) {
+      const texts = await extractPdfPageTexts(fp);
+      const joined = texts.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim();
+      if (joined.length > 25) return joined;
+      const ocr = await withTimeout(extractPdfTextWithOcr(fp), OCR_TIMEOUT_MS, `OCR ${path.basename(fp)}`);
+      return ocr.text || '';
+    }
+  } catch (e: any) {
+    logger.warn({ msg: '[tramites] leerTextoDocumento fallo', file: path.basename(fp), error: e?.message });
+  }
+  return '';
+}
+
 // Árbol recursivo (carpetas primero, luego archivos, alfabético). Tope de profundidad por las dudas.
 function buildDocuTree(dir: string, relBase: string, depth = 0): DocuTreeNode[] {
   if (depth > 12) return [];
@@ -1565,6 +1627,38 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       `);
     } catch (e: any) {
       logger.error({ msg: 'tramites_tanda_interinos: error creando tabla', error: e?.message });
+    }
+  })();
+
+  // Orden de documentos por tramite/ley (orden de trabajo "PASE A TRANSITORIA").
+  // Tabla de referencia editable desde la pestana "Orden de documentos". La columna
+  // `activo` permite desactivar un requisito sin borrarlo. Runtime, sin migracion.
+  (async () => {
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS orden_documentos_expediente (
+          id           INT AUTO_INCREMENT PRIMARY KEY,
+          proceso      VARCHAR(80)  NOT NULL,
+          ley          VARCHAR(20)  NOT NULL,
+          orden        INT          NOT NULL,
+          documento    VARCHAR(200) NOT NULL,
+          observacion  TEXT         NULL,
+          activo       TINYINT(1)   NOT NULL DEFAULT 1,
+          UNIQUE KEY uq_proc_ley_orden (proceso, ley, orden),
+          KEY idx_proceso_ley (proceso, ley)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      // Por si la tabla existia sin la columna activo.
+      const [col] = await sequelize.query(
+        "SHOW COLUMNS FROM orden_documentos_expediente LIKE 'activo'"
+      );
+      if (!(col as any[]).length) {
+        await sequelize.query(
+          'ALTER TABLE orden_documentos_expediente ADD COLUMN activo TINYINT(1) NOT NULL DEFAULT 1 AFTER observacion'
+        );
+      }
+    } catch (e: any) {
+      logger.error({ msg: 'orden_documentos_expediente: error creando tabla', error: e?.message });
     }
   })();
 
@@ -2491,6 +2585,219 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return res.json({ ok: true, data: { tanda, dni, estado } });
     } catch (err: any) {
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al actualizar estado' });
+    }
+  });
+
+  // ---- Orden de documentos por tramite/ley (orden de trabajo) ----
+  const ORDEN_PROCESO_DEFAULT = 'PASE A TRANSITORIA';
+
+  // Lista el orden de documentos de un proceso. Opcional ?ley=10430 para filtrar.
+  router.get('/orden-docs', async (req: Request, res: Response) => {
+    try {
+      const proceso = queryString(req.query?.proceso) || ORDEN_PROCESO_DEFAULT;
+      const ley = queryString(req.query?.ley);
+      const rows = await sequelize.query(
+        `SELECT id, proceso, ley, orden, documento, observacion, activo
+           FROM orden_documentos_expediente
+          WHERE proceso = :proceso ${ley ? 'AND ley = :ley' : ''}
+          ORDER BY ley, orden`,
+        { replacements: { proceso, ley }, type: QueryTypes.SELECT }
+      );
+      // Leyes disponibles para el selector.
+      const leyes = await sequelize.query<{ ley: string }>(
+        `SELECT DISTINCT ley FROM orden_documentos_expediente WHERE proceso = :proceso ORDER BY ley`,
+        { replacements: { proceso }, type: QueryTypes.SELECT }
+      );
+      return res.json({ ok: true, data: { rows, leyes: leyes.map((l) => l.ley), proceso } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al listar orden de documentos' });
+    }
+  });
+
+  // Edita un requisito: nombre, observacion y/o estado activo. Solo campos presentes.
+  router.patch('/orden-docs/:id', async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params?.id);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ ok: false, error: 'id invalido' });
+
+      const sets: string[] = [];
+      const repl: Record<string, unknown> = { id };
+      if (typeof req.body?.documento === 'string') {
+        const doc = req.body.documento.trim();
+        if (!doc) return res.status(400).json({ ok: false, error: 'El nombre del documento no puede quedar vacio' });
+        sets.push('documento = :documento'); repl.documento = doc.slice(0, 200);
+      }
+      if ('observacion' in (req.body || {})) {
+        const obs = typeof req.body.observacion === 'string' ? req.body.observacion.trim() : '';
+        sets.push('observacion = :observacion'); repl.observacion = obs || null;
+      }
+      if ('activo' in (req.body || {})) {
+        sets.push('activo = :activo'); repl.activo = req.body.activo ? 1 : 0;
+      }
+      if (!sets.length) return res.status(400).json({ ok: false, error: 'Nada para actualizar' });
+
+      await sequelize.query(
+        `UPDATE orden_documentos_expediente SET ${sets.join(', ')} WHERE id = :id`,
+        { replacements: repl, type: QueryTypes.UPDATE }
+      );
+      return res.json({ ok: true, data: { id } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al actualizar requisito' });
+    }
+  });
+
+  // Reordena: recibe { proceso?, ley, ids: [id1, id2, ...] } en el nuevo orden.
+  // Reescribe la columna `orden` (1..N). Usa un offset temporal para no chocar con la UNIQUE.
+  router.post('/orden-docs/reordenar', async (req: Request, res: Response) => {
+    try {
+      const proceso = queryString(req.body?.proceso) || ORDEN_PROCESO_DEFAULT;
+      const ley = queryString(req.body?.ley);
+      const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x: unknown) => Number(x)) : [];
+      if (!ley) return res.status(400).json({ ok: false, error: 'Falta ley' });
+      if (!ids.length || ids.some((n: number) => !Number.isInteger(n) || n <= 0)) {
+        return res.status(400).json({ ok: false, error: 'Lista de ids invalida' });
+      }
+      // Todos los ids deben pertenecer a ese proceso+ley (evita reordenar filas ajenas).
+      const actuales = await sequelize.query<{ id: number }>(
+        `SELECT id FROM orden_documentos_expediente WHERE proceso = :proceso AND ley = :ley`,
+        { replacements: { proceso, ley }, type: QueryTypes.SELECT }
+      );
+      const setActuales = new Set(actuales.map((r) => r.id));
+      if (ids.length !== setActuales.size || ids.some((id: number) => !setActuales.has(id))) {
+        return res.status(400).json({ ok: false, error: 'Los ids no coinciden con el proceso/ley' });
+      }
+
+      await sequelize.transaction(async (t) => {
+        // Paso 1: correr todos a un rango temporal alto para liberar la UNIQUE (proceso,ley,orden).
+        for (let i = 0; i < ids.length; i += 1) {
+          await sequelize.query(
+            `UPDATE orden_documentos_expediente SET orden = :orden WHERE id = :id`,
+            { replacements: { orden: 100000 + i, id: ids[i] }, type: QueryTypes.UPDATE, transaction: t }
+          );
+        }
+        // Paso 2: asignar 1..N en el orden recibido.
+        for (let i = 0; i < ids.length; i += 1) {
+          await sequelize.query(
+            `UPDATE orden_documentos_expediente SET orden = :orden WHERE id = :id`,
+            { replacements: { orden: i + 1, id: ids[i] }, type: QueryTypes.UPDATE, transaction: t }
+          );
+        }
+      });
+      return res.json({ ok: true, data: { ley, total: ids.length } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al reordenar' });
+    }
+  });
+
+  // Crea, para cada agente de una tanda, las subcarpetas dentro de DOCU\<dni>
+  // con el nombre de cada documento ACTIVO del orden (segun la ley del agente).
+  // No duplica: si la subcarpeta ya existe, la saltea. Con dryRun no crea nada,
+  // solo informa que se crearia. Los DNI sin carpeta o sin ley se reportan aparte.
+  router.post('/tandas/crear-subcarpetas', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      const dryRun = req.body?.dryRun === true || req.body?.dryRun === 'true';
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+
+      const agentes = (await listTandaAgentes(sequelize, tanda)) as any[];
+      if (!agentes.length) return res.status(404).json({ ok: false, error: 'La tanda no tiene agentes' });
+
+      // Documentos activos por ley (nombre de carpeta = documento del orden).
+      const docsRows = await sequelize.query<{ ley: string; documento: string }>(
+        `SELECT ley, documento FROM orden_documentos_expediente
+          WHERE proceso = :proceso AND activo = 1 ORDER BY ley, orden`,
+        { replacements: { proceso: ORDEN_PROCESO_DEFAULT }, type: QueryTypes.SELECT }
+      );
+      const docsPorLey = new Map<string, string[]>();
+      for (const d of docsRows) {
+        const arr = docsPorLey.get(d.ley) || [];
+        arr.push(d.documento);
+        docsPorLey.set(d.ley, arr);
+      }
+
+      let creadas = 0;
+      let existentes = 0;
+      const sinLey: Array<{ dni: number; nombre: string }> = [];
+      const sinCarpeta: Array<{ dni: number; nombre: string }> = [];
+      const detalle: Array<{ dni: number; nombre: string; ley: string; creadas: number; existentes: number }> = [];
+
+      for (const a of agentes) {
+        const dni = Number(a.dni);
+        const nombre = String(a.apellidoNombre || `DNI ${dni}`);
+        const ley = a.ocupacionLey === '10471' ? '10471' : a.ocupacionLey === '10430' ? '10430' : null;
+        if (!ley || !docsPorLey.has(ley)) { sinLey.push({ dni, nombre }); continue; }
+
+        const dir = resolveDocuAgentDir(dni);
+        if (!fs.existsSync(dir)) { sinCarpeta.push({ dni, nombre }); continue; }
+
+        let cAg = 0;
+        let eAg = 0;
+        for (const doc of docsPorLey.get(ley)!) {
+          const target = path.join(dir, safeSegment(doc));
+          if (fs.existsSync(target)) { eAg += 1; continue; }
+          if (!dryRun) fs.mkdirSync(target, { recursive: true });
+          cAg += 1;
+        }
+        creadas += cAg;
+        existentes += eAg;
+        detalle.push({ dni, nombre, ley, creadas: cAg, existentes: eAg });
+      }
+
+      return res.json({
+        ok: true,
+        data: {
+          tanda, dryRun,
+          totales: { agentes: detalle.length, creadas, existentes, sinLey: sinLey.length, sinCarpeta: sinCarpeta.length },
+          sinLey, sinCarpeta, detalle,
+        },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] crear-subcarpetas error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al crear subcarpetas' });
+    }
+  });
+
+  // Ordena los archivos sueltos de UN agente: clasifica (nombre + OCR) y mueve a
+  // la subcarpeta del documento (DNI/CUIL/Titulo/Matricula/Etico). El front lo
+  // llama por cada agente de la tanda para dar progreso (el OCR es lento).
+  router.post('/ordenar-archivos-agente', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      const dryRun = req.body?.dryRun === true || req.body?.dryRun === 'true';
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+
+      const dir = resolveDocuAgentDir(dni);
+      if (!fs.existsSync(dir)) {
+        return res.json({ ok: true, data: { dni, sinCarpeta: true, movidos: 0, detalle: [] } });
+      }
+      const ents = fs.readdirSync(dir, { withFileTypes: true });
+      const subdirs = ents.filter((e) => e.isDirectory()).map((e) => e.name);
+      const files = ents.filter((e) => e.isFile()).map((e) => e.name).filter((n) => !CLASIF_IGNORAR.test(n));
+
+      let movidos = 0;
+      const detalle: Array<{ archivo: string; resultado: string; tipo?: string; via?: string; destino?: string; motivo?: string }> = [];
+      for (const f of files) {
+        const fp = path.join(dir, f);
+        let { key, veto } = clasifPorNombre(f);
+        let via = 'nombre';
+        if (!key && !veto && (CLASIF_ES_IMG.test(f) || CLASIF_ES_PDF.test(f))) {
+          const txt = await leerTextoDocumento(fp);
+          const r = clasifPorTexto(txt);
+          key = r.key; veto = r.veto; via = 'ocr';
+        }
+        if (veto) { detalle.push({ archivo: f, resultado: 'descartado', motivo: veto }); continue; }
+        if (!key) continue; // no es de los 5 tipos → queda quieto
+        const carpeta = subcarpetaDestino(subdirs, key);
+        if (!carpeta) { detalle.push({ archivo: f, resultado: 'sin_subcarpeta', tipo: key }); continue; }
+        const dest = uniqueDest(path.join(dir, carpeta, f));
+        if (!dryRun) fs.renameSync(fp, dest);
+        movidos += 1;
+        detalle.push({ archivo: f, resultado: 'movido', tipo: key, via, destino: `${carpeta}/${path.basename(dest)}` });
+      }
+      return res.json({ ok: true, data: { dni, dryRun, movidos, detalle } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] ordenar-archivos-agente error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al ordenar archivos' });
     }
   });
 
