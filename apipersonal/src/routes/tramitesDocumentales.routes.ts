@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { PDFDocument } from 'pdf-lib';
 import * as XLSX from 'xlsx';
 import { QueryTypes, Sequelize } from 'sequelize';
@@ -117,18 +118,15 @@ type DependenciaOption = {
 };
 
 function dependenciaWhereSql(alias = 'd.id') {
-  return `(
-    a.dependencia_id = ${alias}
-    OR EXISTS (
-      SELECT 1
-      FROM agentes_servicios ags_dep
-      LEFT JOIN servicios s_dep ON s_dep.id = ags_dep.servicio_id AND s_dep.deleted_at IS NULL
-      LEFT JOIN reparticiones r_dep ON r_dep.id = s_dep.reparticion_id AND r_dep.deleted_at IS NULL
-      WHERE ags_dep.dni = p.dni
-        AND ags_dep.deleted_at IS NULL
-        AND (ags_dep.fecha_hasta IS NULL OR ags_dep.fecha_hasta >= CURDATE())
-        AND COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id) = ${alias}
-    )
+  return `EXISTS (
+    SELECT 1
+    FROM agentes_servicios ags_dep
+    LEFT JOIN servicios s_dep ON s_dep.id = ags_dep.servicio_id AND s_dep.deleted_at IS NULL
+    LEFT JOIN reparticiones r_dep ON r_dep.id = s_dep.reparticion_id AND r_dep.deleted_at IS NULL
+    WHERE ags_dep.dni = p.dni
+      AND ags_dep.deleted_at IS NULL
+      AND (ags_dep.fecha_hasta IS NULL OR ags_dep.fecha_hasta >= CURDATE())
+      AND COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id) = ${alias}
   )`;
 }
 
@@ -461,20 +459,17 @@ async function agenteCaratulaInfo(sequelize: Sequelize, dni: number): Promise<Ca
     const rows = await sequelize.query<{ dependenciaNombre: string | null; ocupacionLey: string | null }>(
       `
         SELECT
-          COALESCE(
-            dep_directa.nombre,
-            (
-              SELECT dep_serv.nombre
-              FROM agentes_servicios ags_serv
-              LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
-              LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
-              LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
-              WHERE ags_serv.dni = p.dni
-                AND ags_serv.deleted_at IS NULL
-                AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
-              ORDER BY ags_serv.fecha_desde DESC, ags_serv.id DESC
-              LIMIT 1
-            )
+          (
+            SELECT dep_serv.nombre
+            FROM agentes_servicios ags_serv
+            LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
+            LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
+            LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+            WHERE ags_serv.dni = p.dni
+              AND ags_serv.deleted_at IS NULL
+              AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
+            ORDER BY ags_serv.fecha_desde DESC, ags_serv.id DESC
+            LIMIT 1
           ) AS dependenciaNombre,
           CASE
             WHEN ocl.nombre LIKE '%10471%' THEN '10471'
@@ -485,7 +480,6 @@ async function agenteCaratulaInfo(sequelize: Sequelize, dni: number): Promise<Ca
         JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
         LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
         LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
-        LEFT JOIN dependencias dep_directa ON dep_directa.id = a.dependencia_id AND dep_directa.deleted_at IS NULL
         WHERE p.dni = :dni AND p.deleted_at IS NULL
         LIMIT 1
       `,
@@ -1110,20 +1104,17 @@ async function preloadAgents(
         ELSE NULL
       END AS ocupacionLey,
       CASE WHEN LOWER(COALESCE(l.nombre, '')) LIKE '%beca%' THEN l.nombre ELSE NULL END AS tipoBeca,
-      COALESCE(
-        dep_directa.nombre,
-        (
-          SELECT dep_serv.nombre
-          FROM agentes_servicios ags_serv
-          LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
-          LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
-          LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
-          WHERE ags_serv.dni = p.dni
-            AND ags_serv.deleted_at IS NULL
-            AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
-          ORDER BY ags_serv.fecha_desde DESC, ags_serv.id DESC
-          LIMIT 1
-        )
+      (
+        SELECT dep_serv.nombre
+        FROM agentes_servicios ags_serv
+        LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
+        LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
+        LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+        WHERE ags_serv.dni = p.dni
+          AND ags_serv.deleted_at IS NULL
+          AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
+        ORDER BY ags_serv.fecha_desde DESC, ags_serv.id DESC
+        LIMIT 1
       ) AS dependenciaNombre
     FROM personal p
     JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
@@ -1131,7 +1122,6 @@ async function preloadAgents(
     LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
     LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
     LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
-    LEFT JOIN dependencias dep_directa ON dep_directa.id = a.dependencia_id AND dep_directa.deleted_at IS NULL
   `;
 
   const commonWhere = `
@@ -1164,6 +1154,14 @@ async function preloadAgents(
   }
 
   if (poblacion === 'INTERINOS_10430') {
+    // Filtro por año de fecha_ingreso opcional (solo si viene el rango). El flujo nuevo
+    // (/interinos-10430) siempre lo pasa; el viejo /precargar no lo pasaba → sin cambios.
+    const hasRange = !!opts.anioDesde && !!opts.anioHasta;
+    const anioDesde = hasRange ? Math.min(opts.anioDesde!, opts.anioHasta!) : null;
+    const anioHasta = hasRange ? Math.max(opts.anioDesde!, opts.anioHasta!) : null;
+    const rangeWhere = hasRange
+      ? 'AND a.fecha_ingreso IS NOT NULL AND YEAR(a.fecha_ingreso) BETWEEN :anioDesde AND :anioHasta'
+      : '';
     return sequelize.query<PreloadAgentRow>(
       `
         ${baseSelect}
@@ -1173,10 +1171,11 @@ async function preloadAgents(
             OR REPLACE(COALESCE(l.nombre, ''), '.', '') LIKE '%10430%'
           )
           AND UPPER(COALESCE(pl.nombre, '')) <> 'PERMANENTE'
+          ${rangeWhere}
         ORDER BY apellidoNombre ASC
         LIMIT 1000
       `,
-      { type: QueryTypes.SELECT }
+      { replacements: { anioDesde, anioHasta }, type: QueryTypes.SELECT }
     );
   }
 
@@ -1400,9 +1399,176 @@ function writeAnalysisEvent(res: Response, event: Record<string, unknown>) {
   res.write(`${JSON.stringify(event)}\n`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FLUJO NUEVO (2026-08): tandas de interinos 10430 + explorador de carpeta DOCU
+// ─────────────────────────────────────────────────────────────────────────────
+
+type DocuTreeNode = {
+  name: string;
+  type: 'dir' | 'file';
+  path: string;                 // relativa a la carpeta del agente, con '/'
+  ext?: string;
+  bytes?: number;
+  children?: DocuTreeNode[];
+};
+
+// Carpeta del agente = <DOCU_BASE>\<dni> (mismo criterio que targetFolderFor).
+function resolveDocuAgentDir(dni: number): string {
+  const base = String(getDocuBaseDir() || '').trim();
+  if (!base) throw Object.assign(new Error('TRAMITES_DOCU_BASE_DIR no esta configurado'), { status: 400 });
+  const baseResolved = path.resolve(base);
+  const target = path.resolve(baseResolved, String(dni));
+  const rel = path.relative(baseResolved, target);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw Object.assign(new Error('Carpeta del agente insegura'), { status: 400 });
+  }
+  return target;
+}
+
+// Árbol recursivo (carpetas primero, luego archivos, alfabético). Tope de profundidad por las dudas.
+function buildDocuTree(dir: string, relBase: string, depth = 0): DocuTreeNode[] {
+  if (depth > 12) return [];
+  let entries: Dirent[] = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const nodes: DocuTreeNode[] = entries.map((entry) => {
+    const full = path.join(dir, entry.name);
+    const rel = path.join(relBase, entry.name).replace(/\\/g, '/');
+    if (entry.isDirectory()) {
+      return { name: entry.name, type: 'dir', path: rel, children: buildDocuTree(full, rel, depth + 1) };
+    }
+    let bytes = 0;
+    try { bytes = fs.statSync(full).size; } catch { /* ignora */ }
+    return {
+      name: entry.name,
+      type: 'file',
+      path: rel,
+      ext: path.extname(entry.name).toLowerCase().replace(/^\./, ''),
+      bytes,
+    };
+  });
+  return nodes.sort((a, b) => (
+    a.type === b.type ? a.name.localeCompare(b.name, 'es') : a.type === 'dir' ? -1 : 1
+  ));
+}
+
+// Agentes de una tanda (o de todas si no se pasa), enriquecidos por JOIN a personal/agentes.
+async function listTandaAgentes(sequelize: Sequelize, tanda?: string | null) {
+  const whereTanda = tanda ? 'AND t.tanda = :tanda' : '';
+  return sequelize.query(
+    `
+      SELECT
+        t.id, t.tanda, t.dni, t.estado, t.creado_at AS creadoAt,
+        TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS apellidoNombre,
+        DATE_FORMAT(a.fecha_ingreso, '%Y-%m-%d') AS fechaIngreso,
+        oc.nombre AS ocupacionNombre,
+        CASE
+          WHEN ocl.nombre LIKE '%10471%' THEN '10471'
+          WHEN ocl.nombre LIKE '%10430%' THEN '10430'
+          ELSE NULL
+        END AS ocupacionLey,
+        l.nombre  AS leyNombre,
+        pl.nombre AS plantaNombre,
+        a.estado_empleo AS estadoEmpleo,
+        (
+          SELECT dep_serv.nombre
+          FROM agentes_servicios ags_serv
+          LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
+          LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
+          LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+          WHERE ags_serv.dni = t.dni
+            AND ags_serv.deleted_at IS NULL
+            AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
+          ORDER BY ags_serv.fecha_desde DESC, ags_serv.id DESC
+          LIMIT 1
+        ) AS dependenciaNombre
+      FROM tramites_tanda_interinos t
+      JOIN personal p ON p.dni = t.dni AND p.deleted_at IS NULL
+      LEFT JOIN agentes a ON a.dni = t.dni AND a.deleted_at IS NULL
+      LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
+      LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
+      LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+      LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
+      WHERE 1 = 1 ${whereTanda}
+      ORDER BY t.tanda ASC, apellidoNombre ASC
+    `,
+    { replacements: tanda ? { tanda } : {}, type: QueryTypes.SELECT }
+  );
+}
+
+// Resuelve una ruta (archivo o carpeta) DENTRO de la carpeta del agente. '' => la raíz del agente.
+function resolveInsideDocu(dni: number, relPath: string): string {
+  const dir = resolveDocuAgentDir(dni);
+  const clean = String(relPath || '').replace(/\\/g, '/').trim();
+  if (clean.includes('\0')) throw Object.assign(new Error('Ruta inválida'), { status: 400 });
+  const full = path.resolve(dir, clean);
+  const rel = path.relative(dir, full);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw Object.assign(new Error('Ruta fuera de la carpeta del agente'), { status: 400 });
+  }
+  return full;
+}
+
+// Un único segmento de nombre seguro (sin separadores ni caracteres inválidos de Windows).
+function safeSegment(name: string): string {
+  const base = path.basename(String(name || '').replace(/\\/g, '/'));
+  // Se sacan los caracteres invalidos de Windows y los de control; se conservan
+  // espacios, guiones, acentos y parentesis.
+  const clean = base.replace(/[<>:"/\\|?*]/g, '_').replace(/[\x00-\x1F]/g, '').trim().replace(/\.+$/, '');
+  if (!clean || clean === '.' || clean === '..') {
+    throw Object.assign(new Error('Nombre invalido'), { status: 400 });
+  }
+  return clean;}
+
+// Evita pisar: si ya existe, agrega " (1)", " (2)", ...
+function uniqueDest(dest: string): string {
+  if (!fs.existsSync(dest)) return dest;
+  const dir = path.dirname(dest);
+  const ext = path.extname(dest);
+  const base = path.basename(dest, ext);
+  for (let i = 1; i < 1000; i += 1) {
+    const candidate = path.join(dir, `${base} (${i})${ext}`);
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+  return path.join(dir, `${base}-${Date.now()}${ext}`);
+}
+
+const ESTADOS_TANDA = ['pendiente', 'hecho', 'aprobado'];
+
+// Multer propio para subir a DOCU: en memoria (buffers) y varios archivos.
+const docuUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: env.DOCUMENTS_MAX_BYTES || 25 * 1024 * 1024, files: 20 },
+});
+
 export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
   const router = Router();
 
+  // Tabla de tandas (runtime, sin migracion — patron de este proyecto). Guarda solo dni+tanda;
+  // el resto de los datos del agente sale por JOIN en listTandaAgentes.
+  (async () => {
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS tramites_tanda_interinos (
+          id         INT AUTO_INCREMENT PRIMARY KEY,
+          tanda      VARCHAR(80)  NOT NULL,
+          dni        INT          NOT NULL,
+          estado     VARCHAR(30)  NOT NULL DEFAULT 'pendiente',
+          creado_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_tanda_dni (tanda, dni),
+          KEY idx_tti_dni (dni),
+          CONSTRAINT fk_tti_personal_dni FOREIGN KEY (dni) REFERENCES personal (dni)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch (e: any) {
+      logger.error({ msg: 'tramites_tanda_interinos: error creando tabla', error: e?.message });
+    }
+  })();
+
+  // SIN USO (2026-08): pestaña "Tramites" vieja retirada; reemplazada por flujo de tandas de interinos 10430. No borrar aun.
   router.get('/listados', async (_req: Request, res: Response) => {
     // Colapsa duplicados históricos por identidad (deja el más nuevo de cada uno).
     const rows = dedupSavedListados(readSavedListados()).slice(0, 25);
@@ -1443,6 +1609,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     return res.json({ ok: true, data: { rows, storePath: getListadosStorePath() } });
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.post('/listados', (req: Request, res: Response) => {
     try {
       const actor = Number((req as any).auth?.principalId || 0) || null;
@@ -1462,6 +1629,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.delete('/listados/:id', (req: Request, res: Response) => {
     try {
       const id = String(req.params.id || '');
@@ -1500,6 +1668,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.post('/analizar', async (req: Request, res: Response) => {
     const inputDir = getInputDir();
     if (!inputDir || !fs.existsSync(inputDir)) {
@@ -1568,6 +1737,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.get('/beca-tipos', async (req: Request, res: Response) => {
     try {
       const rows = await listBecaTipos(sequelize, {
@@ -1582,6 +1752,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.get('/dependencias', async (req: Request, res: Response) => {
     try {
       const rows = await listDependenciasFiltro(sequelize, {
@@ -1596,6 +1767,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): endpoint viejo. OJO: la funcion preloadAgents() SI se reutiliza en el flujo nuevo.
   router.post('/precargar', async (req: Request, res: Response) => {
     try {
       const rows = await preloadAgents(sequelize, {
@@ -1618,6 +1790,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.post('/preview', async (req: Request, res: Response) => {
     try {
       const tramite = sanitizeTramite(req.body?.tramite);
@@ -1703,6 +1876,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.post('/extra-status', async (req: Request, res: Response) => {
     try {
       const dnis = Array.isArray(req.body?.dnis)
@@ -1739,6 +1913,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.post('/extra-pdf', async (req: Request, res: Response) => {
     try {
       const kind = String(req.body?.kind || '').toLowerCase();
@@ -1770,6 +1945,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.get('/expedientes', async (req: Request, res: Response) => {
     try {
       const q = String(req.query.q || '').trim();
@@ -1805,6 +1981,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.post('/guardar', async (req: Request, res: Response) => {
     try {
       const tramite = sanitizeTramite(req.body?.tramite);
@@ -2066,6 +2243,7 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
+  // SIN USO (2026-08): reemplazado por flujo de tandas de interinos 10430.
   router.get('/saved-pdf', (req: Request, res: Response) => {
     try {
       const requested = String(req.query.path || '');
@@ -2086,6 +2264,233 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return fs.createReadStream(fullPath).pipe(res);
     } catch (err: any) {
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al abrir combinado' });
+    }
+  });
+
+  // ── FLUJO NUEVO: consulta de interinos 10430 por rango de años ────────────
+  router.get('/interinos-10430', async (req: Request, res: Response) => {
+    try {
+      const anioDesde = parseYear(req.query.anioDesde);
+      const anioHasta = parseYear(req.query.anioHasta);
+      if (!anioDesde || !anioHasta) {
+        return res.status(400).json({ ok: false, error: 'Indica el rango de años (anioDesde, anioHasta)' });
+      }
+      const rows = await preloadAgents(sequelize, {
+        poblacion: 'INTERINOS_10430',
+        anioDesde,
+        anioHasta,
+      });
+      return res.json({ ok: true, data: { rows, total: rows.length } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] interinos-10430 error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al consultar interinos' });
+    }
+  });
+
+  // ── FLUJO NUEVO: tandas ───────────────────────────────────────────────────
+  // Listar (todas las tandas, o una con ?tanda=). Devuelve filas planas + nombres de tanda.
+  router.get('/tandas', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.query.tanda);
+      const rows = await listTandaAgentes(sequelize, tanda);
+      const tandas = Array.from(new Set((rows as any[]).map((r) => r.tanda)));
+      return res.json({ ok: true, data: { rows, tandas } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] tandas GET error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al listar tandas' });
+    }
+  });
+
+  // Agregar DNIs a una tanda (INSERT IGNORE → no duplica por UNIQUE(tanda,dni)).
+  router.post('/tandas', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta el nombre de la tanda' });
+      const dnis = Array.isArray(req.body?.dnis)
+        ? Array.from(new Set(
+            (req.body.dnis as unknown[]).map((d) => parseDni(d as any)).filter((d): d is number => !!d)
+          ))
+        : [];
+      if (!dnis.length) return res.status(400).json({ ok: false, error: 'No hay DNIs válidos para agregar' });
+      await sequelize.query(
+        `INSERT IGNORE INTO tramites_tanda_interinos (tanda, dni) VALUES ${dnis.map(() => '(?, ?)').join(', ')}`,
+        { replacements: dnis.flatMap((dni) => [tanda, dni]), type: QueryTypes.INSERT }
+      );
+      const rows = await listTandaAgentes(sequelize, tanda);
+      return res.json({ ok: true, data: { tanda, rows, agregados: dnis.length } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] tandas POST error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar la tanda' });
+    }
+  });
+
+  // Quitar un agente de una tanda (?tanda=&dni=), o la tanda entera si no se pasa dni.
+  router.delete('/tandas', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.query.tanda) || queryString(req.body?.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const dni = parseDni((req.query.dni ?? req.body?.dni) as any);
+      if (dni) {
+        await sequelize.query(
+          'DELETE FROM tramites_tanda_interinos WHERE tanda = :tanda AND dni = :dni',
+          { replacements: { tanda, dni }, type: QueryTypes.DELETE }
+        );
+      } else {
+        await sequelize.query(
+          'DELETE FROM tramites_tanda_interinos WHERE tanda = :tanda',
+          { replacements: { tanda }, type: QueryTypes.DELETE }
+        );
+      }
+      return res.json({ ok: true, data: { tanda, dni: dni || null } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] tandas DELETE error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al borrar de la tanda' });
+    }
+  });
+
+  // ── FLUJO NUEVO: explorador de la carpeta DOCU del agente ─────────────────
+  // Árbol de D:\G\DOCU\<dni> (carpetas + archivos, con tamaño y extensión).
+  router.get('/docu-tree', (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.query.dni as any);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const dir = resolveDocuAgentDir(dni);
+      if (!fs.existsSync(dir)) {
+        return res.json({ ok: true, data: { dni, dir, exists: false, tree: [] } });
+      }
+      const tree = buildDocuTree(dir, '');
+      return res.json({ ok: true, data: { dni, dir, exists: true, tree } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al leer la carpeta DOCU' });
+    }
+  });
+
+  // Sirve un archivo puntual de la carpeta del agente para el visor (?dni=&path=<relativa>).
+  router.get('/docu-file', (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.query.dni as any);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const dir = resolveDocuAgentDir(dni);
+      const relPath = String(req.query.path || '').replace(/\\/g, '/').trim();
+      if (!relPath || relPath.includes('\0')) return res.status(400).json({ ok: false, error: 'Ruta inválida' });
+      const full = path.resolve(dir, relPath);
+      const rel = path.relative(dir, full);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        return res.status(400).json({ ok: false, error: 'Archivo fuera de la carpeta del agente' });
+      }
+      if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+        return res.status(404).json({ ok: false, error: 'Archivo no encontrado' });
+      }
+      const ext = path.extname(full).toLowerCase();
+      const types: Record<string, string> = {
+        '.pdf': 'application/pdf',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.bmp': 'image/bmp',
+        '.tif': 'image/tiff',
+        '.tiff': 'image/tiff',
+        '.txt': 'text/plain; charset=utf-8',
+      };
+      res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(full).replace(/"/g, '_')}"`);
+      return fs.createReadStream(full).pipe(res);
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al abrir el archivo' });
+    }
+  });
+
+  // ── FLUJO NUEVO: operaciones de archivos dentro de DOCU\<dni> ─────────────
+  // Crear carpeta: { dni, path (carpeta padre relativa, '' = raíz), name }
+  router.post('/docu-mkdir', (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const name = safeSegment(req.body?.name);
+      const parent = resolveInsideDocu(dni, String(req.body?.path || ''));
+      const target = path.join(parent, name);
+      if (fs.existsSync(target)) return res.status(409).json({ ok: false, error: 'Ya existe una carpeta con ese nombre' });
+      fs.mkdirSync(target, { recursive: true });
+      return res.json({ ok: true, data: { name } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al crear la carpeta' });
+    }
+  });
+
+  // Mover archivo/carpeta a otra carpeta del mismo agente: { dni, from (relativa), to (carpeta relativa, '' = raíz) }
+  router.post('/docu-move', (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const from = resolveInsideDocu(dni, String(req.body?.from || ''));
+      if (!String(req.body?.from || '').trim()) return res.status(400).json({ ok: false, error: 'Falta el origen' });
+      if (!fs.existsSync(from)) return res.status(404).json({ ok: false, error: 'El origen no existe' });
+      const toFolder = resolveInsideDocu(dni, String(req.body?.to || ''));
+      if (fs.existsSync(toFolder) && !fs.statSync(toFolder).isDirectory()) {
+        return res.status(400).json({ ok: false, error: 'El destino no es una carpeta' });
+      }
+      // No permitir mover una carpeta dentro de sí misma o de un descendiente.
+      const fromIsDir = fs.statSync(from).isDirectory();
+      if (fromIsDir) {
+        const relInto = path.relative(from, toFolder);
+        if (relInto === '' || (!relInto.startsWith('..') && !path.isAbsolute(relInto))) {
+          return res.status(400).json({ ok: false, error: 'No se puede mover una carpeta dentro de sí misma' });
+        }
+      }
+      fs.mkdirSync(toFolder, { recursive: true });
+      const dest = path.join(toFolder, path.basename(from));
+      if (path.resolve(dest) === path.resolve(from)) {
+        return res.json({ ok: true, data: { moved: false, reason: 'mismo lugar' } });
+      }
+      if (fs.existsSync(dest)) return res.status(409).json({ ok: false, error: 'Ya existe un archivo/carpeta con ese nombre en el destino' });
+      fs.renameSync(from, dest);
+      return res.json({ ok: true, data: { moved: true } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al mover' });
+    }
+  });
+
+  // Subir archivos: multipart con campos { dni, path (carpeta destino relativa) } y files[].
+  router.post('/docu-upload', docuUpload.array('files', 20), (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const folder = resolveInsideDocu(dni, String(req.body?.path || ''));
+      const files = (req.files as Express.Multer.File[]) || [];
+      if (!files.length) return res.status(400).json({ ok: false, error: 'No se recibieron archivos' });
+      fs.mkdirSync(folder, { recursive: true });
+      const saved: string[] = [];
+      for (const file of files) {
+        const name = safeSegment(file.originalname);
+        const dest = uniqueDest(path.join(folder, name));
+        fs.writeFileSync(dest, file.buffer);
+        saved.push(path.basename(dest));
+      }
+      return res.json({ ok: true, data: { saved, total: saved.length } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al subir archivos' });
+    }
+  });
+
+  // Estado de un agente en una tanda: { tanda, dni, estado } (pendiente|hecho|aprobado).
+  router.post('/tandas/estado', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.body?.tanda);
+      const dni = parseDni(req.body?.dni);
+      const estado = String(req.body?.estado || '').trim().toLowerCase();
+      if (!tanda || !dni) return res.status(400).json({ ok: false, error: 'Falta tanda o dni' });
+      if (!ESTADOS_TANDA.includes(estado)) {
+        return res.status(400).json({ ok: false, error: `Estado inválido (${ESTADOS_TANDA.join(', ')})` });
+      }
+      await sequelize.query(
+        'UPDATE tramites_tanda_interinos SET estado = :estado WHERE tanda = :tanda AND dni = :dni',
+        { replacements: { estado, tanda, dni }, type: QueryTypes.UPDATE }
+      );
+      return res.json({ ok: true, data: { tanda, dni, estado } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al actualizar estado' });
     }
   });
 
