@@ -392,7 +392,7 @@ export function ComparadorSiapePage() {
     const s = new Set<string>();
     for (const r of data.resultado) {
       [r.novedad_ministerio, r.novedad_siap]
-        .forEach(n => { if (n && n !== '—"') s.add(n); });
+        .forEach(n => { if (n && n !== 'â€"') s.add(n); });
     }
     return [...s].sort((a, b) => a.localeCompare(b, 'es'));
   }, [data]);

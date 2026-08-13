@@ -418,9 +418,9 @@ export function SamoPage() {
 
   const practicasRows = practicasFiltradas.map(r => ({
     ...r,
-    apellido:   personalMap[String(r.dni)]?.apellido || '—',
-    nombre:     personalMap[String(r.dni)]?.nombre   || '—',
-    sector:     sectoresMap[Number(r.sector_id)]     || '—',
+    apellido:   personalMap[String(r.dni)]?.apellido || 'â€”',
+    nombre:     personalMap[String(r.dni)]?.nombre   || 'â€”',
+    sector:     sectoresMap[Number(r.sector_id)]     || 'â€”',
     fecha:      fmt(r.fecha_desde),
   }));
 
@@ -429,14 +429,14 @@ export function SamoPage() {
     { key: 'apellido',      label: 'Apellido' },
     { key: 'nombre',        label: 'Nombre' },
     { key: 'fecha',         label: 'Desde',    mono: true },
-    { key: 'dias',          label: 'Días',     mono: true },
+    { key: 'dias',          label: 'DÃ­as',     mono: true },
     { key: 'motivo',        label: 'Motivo' },
     { key: 'jefe_nombre',   label: 'Jefe' },
     { key: 'sector',        label: 'Sector' },
     { key: 'estado',        label: 'Estado',
       badge: (v: string) => {
         const MAP: Record<string, string> = { PENDIENTE: '#fbbf24', APROBADO: '#22c55e', RECHAZADO: '#ef4444', ANULADO: '#64748b' };
-        return { text: v || '—', color: MAP[v] || '#94a3b8' };
+        return { text: v || 'â€”', color: MAP[v] || '#94a3b8' };
       }
     },
   ];
@@ -774,7 +774,7 @@ export function SamoPage() {
                     ))}
                   </select>
                   <span className="muted" style={{ fontSize: '0.72rem' }}>
-                    {practicasFiltradas.length} registro{practicasFiltradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]} — Prácticas profesionales
+                    {practicasFiltradas.length} registro{practicasFiltradas.length !== 1 ? 's' : ''} en {MESES[mesFiltro - 1]} â€” Prácticas profesionales
                   </span>
                 </div>
                 <Busqueda value={busqueda} onChange={setBusqueda} />

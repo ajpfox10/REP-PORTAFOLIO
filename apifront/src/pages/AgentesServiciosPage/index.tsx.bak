@@ -1,5 +1,5 @@
-// src/pages/AgentesServiciosPage/index.tsx
-// Página: Agentes por Servicio
+﻿// src/pages/AgentesServiciosPage/index.tsx
+// PÃ¡gina: Agentes por Servicio
 // - Filtros: sector, servicio, agente (DNI/nombre)
 // - Tabla paginada de pases (agentes_servicios)
 // - Historial de pases por agente (modal)
@@ -13,15 +13,15 @@ import { apiFetch, apiFetchBlob } from '../../api/http';
 import { searchPersonal, getAllPersonal } from '../../api/searchPersonal';
 import './styles/AgentesServiciosPage.css';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function fmtDate(dt?: string | null) {
-  if (!dt) return '—';
+  if (!dt) return 'â€”';
   try {
     return new Date(dt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch { return dt; }
 }
 function fmtDateTime(dt?: string | null) {
-  if (!dt) return '—';
+  if (!dt) return 'â€”';
   try {
     return new Date(dt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
   } catch { return dt; }
@@ -55,7 +55,7 @@ function findCatalogIdByText(items: any[], query: string, fallbackPrefix: string
   return found?.id != null ? String(found.id) : '';
 }
 
-// ─── Modal historial de pases ─────────────────────────────────────────────────
+// â”€â”€â”€ Modal historial de pases â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface PasesModalProps {
   dni: number | string;
   nombre: string;
@@ -77,14 +77,14 @@ function PasesModal({ dni, nombre, onClose }: PasesModalProps) {
       <div className="asv-modal" onClick={e => e.stopPropagation()}>
         <div className="asv-modal-header">
           <div>
-            <div className="asv-modal-title">📋 Historial de Pases</div>
-            <div className="asv-modal-sub">{nombre} · DNI {dni}</div>
+            <div className="asv-modal-title">ðŸ“‹ Historial de Pases</div>
+            <div className="asv-modal-sub">{nombre} Â· DNI {dni}</div>
           </div>
-          <button className="btn" onClick={onClose} type="button">✕ Cerrar</button>
+          <button className="btn" onClick={onClose} type="button">âœ• Cerrar</button>
         </div>
 
         {loading ? (
-          <div className="asv-loading">🔄 Cargando historial…</div>
+          <div className="asv-loading">ðŸ”„ Cargando historialâ€¦</div>
         ) : pases.length === 0 ? (
           <div className="asv-empty">Sin pases registrados</div>
         ) : (
@@ -99,7 +99,7 @@ function PasesModal({ dni, nombre, onClose }: PasesModalProps) {
                       <div className="asv-timeline-head">
                         <span className="asv-timeline-servicio">{p.nombre || p.servicio_nombre || `Servicio #${p.servicio_id ?? '?'}`}</span>
                         <span className={`badge ${abierto ? 'asv-badge-open' : 'asv-badge-closed'}`}>
-                          {abierto ? '🟢 ACTIVO' : '⬜ Cerrado'}
+                          {abierto ? 'ðŸŸ¢ ACTIVO' : 'â¬œ Cerrado'}
                         </span>
                       </div>
                       <div className="asv-timeline-dates">
@@ -123,7 +123,7 @@ function PasesModal({ dni, nombre, onClose }: PasesModalProps) {
   );
 }
 
-// ─── Modal nuevo pase ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Modal nuevo pase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface NuevoPaseModalProps {
   agente: any; // { dni, apellido, nombre }
   servicios: any[];
@@ -146,8 +146,8 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const guardar = async () => {
-    if (!form.servicio_id) { toast.error('Seleccioná un servicio'); return; }
-    if (!form.fecha_desde) { toast.error('Ingresá fecha de inicio'); return; }
+    if (!form.servicio_id) { toast.error('SeleccionÃ¡ un servicio'); return; }
+    if (!form.fecha_desde) { toast.error('IngresÃ¡ fecha de inicio'); return; }
     setSaving(true);
     try {
       await apiFetch<any>('/agentes_servicios', {
@@ -177,17 +177,17 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
       <div className="asv-modal asv-modal-form" onClick={e => e.stopPropagation()}>
         <div className="asv-modal-header">
           <div>
-            <div className="asv-modal-title">➕ Nuevo Pase</div>
-            <div className="asv-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+            <div className="asv-modal-title">âž• Nuevo Pase</div>
+            <div className="asv-modal-sub">{agente.apellido}, {agente.nombre} Â· DNI {agente.dni}</div>
           </div>
-          <button className="btn" onClick={onClose} type="button">✕</button>
+          <button className="btn" onClick={onClose} type="button">âœ•</button>
         </div>
         <div className="asv-modal-body">
           <div className="asv-form-grid">
             <div className="asv-field">
               <label htmlFor="asv-srv" className="asv-label">Servicio *</label>
               <select id="asv-srv" name="servicio_id" className="input" value={form.servicio_id} onChange={e => set('servicio_id', e.target.value)}>
-                <option value="">— Seleccioná —</option>
+                <option value="">â€” SeleccionÃ¡ â€”</option>
                 {servicios.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
                 ))}
@@ -196,7 +196,7 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
             <div className="asv-field">
               <label htmlFor="asv-dep" className="asv-label">Dependencia</label>
               <select id="asv-dep" name="dependencia_id" className="input" value={form.dependencia_id} onChange={e => set('dependencia_id', e.target.value)}>
-                <option value="">— Ninguna —</option>
+                <option value="">â€” Ninguna â€”</option>
                 {dependencias.map((d: any) => (
                   <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
                 ))}
@@ -212,17 +212,17 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
             </div>
             <div className="asv-field asv-field-full">
               <label htmlFor="asv-motivo" className="asv-label">Motivo del pase</label>
-              <input id="asv-motivo" name="motivo" type="text" className="input" value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicación, etc." />
+              <input id="asv-motivo" name="motivo" type="text" className="input" value={form.motivo} onChange={e => set('motivo', e.target.value)} placeholder="Ej: Traslado, reubicaciÃ³n, etc." />
             </div>
             <div className="asv-field asv-field-full">
               <label htmlFor="asv-obs" className="asv-label">Observaciones</label>
-              <textarea id="asv-obs" name="observaciones" className="input" rows={2} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} placeholder="Observaciones adicionales…" />
+              <textarea id="asv-obs" name="observaciones" className="input" rows={2} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} placeholder="Observaciones adicionalesâ€¦" />
             </div>
           </div>
           <div className="asv-modal-actions">
             <button className="btn" onClick={onClose} type="button" disabled={saving}>Cancelar</button>
             <button className="btn asv-btn-save" onClick={guardar} disabled={saving} type="button">
-              {saving ? '⏳ Guardando…' : '💾 Guardar Pase'}
+              {saving ? 'â³ Guardandoâ€¦' : 'ðŸ’¾ Guardar Pase'}
             </button>
           </div>
         </div>
@@ -231,7 +231,7 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
   );
 }
 
-// ─── Modal cerrar pase ────────────────────────────────────────────────────────
+// â”€â”€â”€ Modal cerrar pase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface CerrarPaseModalProps {
   pase: any;
   onClose: () => void;
@@ -243,7 +243,7 @@ function CerrarPaseModal({ pase, onClose, onSaved }: CerrarPaseModalProps) {
   const [saving, setSaving] = useState(false);
 
   const cerrar = async () => {
-    if (!fechaHasta) { toast.error('Ingresá fecha de cierre'); return; }
+    if (!fechaHasta) { toast.error('IngresÃ¡ fecha de cierre'); return; }
     setSaving(true);
     try {
       await apiFetch<any>(`/agentes_servicios/${pase.id}`, {
@@ -264,8 +264,8 @@ function CerrarPaseModal({ pase, onClose, onSaved }: CerrarPaseModalProps) {
     <div className="asv-modal-overlay" onClick={onClose}>
       <div className="asv-modal asv-modal-sm" onClick={e => e.stopPropagation()}>
         <div className="asv-modal-header">
-          <div className="asv-modal-title">🔒 Cerrar Pase Activo</div>
-          <button className="btn" onClick={onClose} type="button">✕</button>
+          <div className="asv-modal-title">ðŸ”’ Cerrar Pase Activo</div>
+          <button className="btn" onClick={onClose} type="button">âœ•</button>
         </div>
         <div className="asv-modal-body">
           <div className="asv-info-row"><b>DNI:</b> {pase.dni}</div>
@@ -278,7 +278,7 @@ function CerrarPaseModal({ pase, onClose, onSaved }: CerrarPaseModalProps) {
           <div className="asv-modal-actions asv-mt-12">
             <button className="btn" onClick={onClose} disabled={saving}>Cancelar</button>
             <button className="btn asv-btn-danger" onClick={cerrar} disabled={saving}>
-              {saving ? '⏳…' : '🔒 Cerrar Pase'}
+              {saving ? 'â³â€¦' : 'ðŸ”’ Cerrar Pase'}
             </button>
           </div>
         </div>
@@ -287,7 +287,7 @@ function CerrarPaseModal({ pase, onClose, onSaved }: CerrarPaseModalProps) {
   );
 }
 
-// ─── Modal exportar antigüedad ────────────────────────────────────────────────
+// â”€â”€â”€ Modal exportar antigÃ¼edad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface ExportarAntiguedadModalProps {
   servicios: any[];
   dependencias: any[];
@@ -330,7 +330,7 @@ function ExportarAntiguedadModal({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.ok('Excel generado', 'El archivo se descargó correctamente');
+      toast.ok('Excel generado', 'El archivo se descargÃ³ correctamente');
       onClose();
     } catch (e: any) {
       toast.error('Error al exportar', e?.message || 'Error');
@@ -344,10 +344,10 @@ function ExportarAntiguedadModal({
       <div className="asv-modal asv-modal-form" onClick={e => e.stopPropagation()}>
         <div className="asv-modal-header">
           <div>
-            <div className="asv-modal-title">📊 Exportar Antigüedad a Excel</div>
-            <div className="asv-modal-sub">Reporte por servicio y sector con antigüedad y ley</div>
+            <div className="asv-modal-title">ðŸ“Š Exportar AntigÃ¼edad a Excel</div>
+            <div className="asv-modal-sub">Reporte por servicio y sector con antigÃ¼edad y ley</div>
           </div>
-          <button className="btn" onClick={onClose} type="button">✕</button>
+          <button className="btn" onClick={onClose} type="button">âœ•</button>
         </div>
         <div className="asv-modal-body">
           <div className="asv-form-grid">
@@ -361,14 +361,14 @@ function ExportarAntiguedadModal({
                   className={`asv-estado-btn${soloActivos ? ' active' : ''}`}
                   onClick={() => setSoloActivos(true)}
                 >
-                  🟢 Solo activos (sin cierre)
+                  ðŸŸ¢ Solo activos (sin cierre)
                 </button>
                 <button
                   type="button"
                   className={`asv-estado-btn${!soloActivos ? ' active' : ''}`}
                   onClick={() => setSoloActivos(false)}
                 >
-                  📋 Todos (activos + cerrados)
+                  ðŸ“‹ Todos (activos + cerrados)
                 </button>
               </div>
             </div>
@@ -377,7 +377,7 @@ function ExportarAntiguedadModal({
             <div className="asv-field">
               <label htmlFor="exp-srv" className="asv-label">Filtrar por Servicio (opcional)</label>
               <select id="exp-srv" className="input" value={servicioId} onChange={e => setServicioId(e.target.value)}>
-                <option value="">— Todos los servicios —</option>
+                <option value="">â€” Todos los servicios â€”</option>
                 {servicios.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre || `#${s.id}`}</option>
                 ))}
@@ -388,7 +388,7 @@ function ExportarAntiguedadModal({
             <div className="asv-field">
               <label htmlFor="exp-dep" className="asv-label">Filtrar por Sector (opcional)</label>
               <select id="exp-dep" className="input" value={dependenciaId} onChange={e => setDependenciaId(e.target.value)}>
-                <option value="">— Todos los sectores —</option>
+                <option value="">â€” Todos los sectores â€”</option>
                 {dependencias.map((d: any) => (
                   <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
                 ))}
@@ -399,7 +399,7 @@ function ExportarAntiguedadModal({
             <div className="asv-field">
               <label htmlFor="exp-ley" className="asv-label">Filtrar por Ley (opcional)</label>
               <select id="exp-ley" className="input" value={leyId} onChange={e => setLeyId(e.target.value)}>
-                <option value="">— Todas las leyes —</option>
+                <option value="">â€” Todas las leyes â€”</option>
                 {leyes.map((l: any) => (
                   <option key={l.id} value={l.id}>{l.nombre || `Ley #${l.id}`}</option>
                 ))}
@@ -408,7 +408,7 @@ function ExportarAntiguedadModal({
 
             <div className="asv-field asv-field-full asv-export-info">
               <span className="asv-export-hint">
-                ℹ El Excel incluye una hoja de detalle (agrupada por servicio y sector) y una hoja de resumen con totales y promedios de antigüedad.
+                â„¹ El Excel incluye una hoja de detalle (agrupada por servicio y sector) y una hoja de resumen con totales y promedios de antigÃ¼edad.
               </span>
             </div>
           </div>
@@ -416,7 +416,7 @@ function ExportarAntiguedadModal({
           <div className="asv-modal-actions">
             <button className="btn" onClick={onClose} type="button" disabled={exporting}>Cancelar</button>
             <button className="btn asv-btn-export" onClick={exportar} disabled={exporting} type="button">
-              {exporting ? '⏳ Generando Excel…' : '⬇ Descargar Excel'}
+              {exporting ? 'â³ Generando Excelâ€¦' : 'â¬‡ Descargar Excel'}
             </button>
           </div>
         </div>
@@ -425,7 +425,7 @@ function ExportarAntiguedadModal({
   );
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+// â”€â”€â”€ Componente principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function AgentesServiciosPage() {
   const toast = useToast();
 
@@ -449,7 +449,7 @@ export function AgentesServiciosPage() {
   const [page,       setPage]       = useState(1);
   const [loading,    setLoading]    = useState(false);
 
-  // Búsqueda por nombre (matches)
+  // BÃºsqueda por nombre (matches)
   const [matches,    setMatches]    = useState<any[]>([]);
   const [loadingNom, setLoadingNom] = useState(false);
 
@@ -459,19 +459,19 @@ export function AgentesServiciosPage() {
   const [modalCerrar,     setModalCerrar]     = useState<any>(null); // pase obj
   const [modalExportar,   setModalExportar]   = useState(false);
 
-  // Mapa DNI → { apellido, nombre } (cargado una vez, usa cache global de personal)
+  // Mapa DNI â†’ { apellido, nombre } (cargado una vez, usa cache global de personal)
   const [personalMap, setPersonalMap] = useState<Record<string, { apellido: string; nombre: string }>>({});
 
   // Agente seleccionado para nuevo pase
   const [agenteSeleccionado, setAgenteSeleccionado] = useState<any>(null);
   const [checkandoPase, setCheckandoPase] = useState(false);
 
-  // ── Cargar maestros ───────────────────────────────────────────────────────
+  // â”€â”€ Cargar maestros â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     Promise.allSettled([
       apiFetch<any>('/servicios?limit=500').then(r => setServicios(Array.isArray(r?.data) ? r.data : [])),
       apiFetch<any>('/reparticiones?limit=500').then(r => setDependencias(Array.isArray(r?.data) ? r.data : [])),
-      // Cargar mapa DNI→nombre de personal (usa cache global)
+      // Cargar mapa DNIâ†’nombre de personal (usa cache global)
       getAllPersonal().then(all => {
         const map: Record<string, { apellido: string; nombre: string }> = {};
         for (const p of all) {
@@ -482,7 +482,7 @@ export function AgentesServiciosPage() {
     ]).finally(() => setLoadingMaestros(false));
   }, []);
 
-  // ── Cargar tabla ──────────────────────────────────────────────────────────
+  // â”€â”€ Cargar tabla â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const nombreServicio = useCallback((row: any) =>
     row.servicio_nombre || servicios.find((s: any) => s.id === row.servicio_id)?.nombre || row.nombre || `#${row.servicio_id ?? '?'}`,
   [servicios]);
@@ -491,7 +491,7 @@ export function AgentesServiciosPage() {
     row.dependencia_nombre ||
     dependencias.find((d: any) => d.id === row.dependencia_id)?.reparticion_nombre ||
     dependencias.find((d: any) => d.id === row.dependencia_id)?.nombre ||
-    '—',
+    'Ã¢â‚¬â€',
   [dependencias]);
 
   const cargarTabla = useCallback(async (pageNum = 1) => {
@@ -513,7 +513,7 @@ export function AgentesServiciosPage() {
       if (filtroDni.trim())           params.set('dni', filtroDni.trim());
       if (servicioIdExacto)           params.set('servicio_id', servicioIdExacto);
       if (dependenciaIdExacta)        params.set('dependencia_id', dependenciaIdExacta);
-      // estado activo/cerrado → filtro client-side (el backend no soporta fecha_hasta=null)
+      // estado activo/cerrado â†’ filtro client-side (el backend no soporta fecha_hasta=null)
 
       const res = await apiFetch<any>(`/agentes_servicios?${params.toString()}`);
       let data: any[] = Array.isArray(res?.data) ? res.data : [];
@@ -553,7 +553,7 @@ export function AgentesServiciosPage() {
 
   useEffect(() => { cargarTabla(1); }, [cargarTabla]);
 
-  // ── Buscar por nombre ─────────────────────────────────────────────────────
+  // â”€â”€ Buscar por nombre â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const buscarPorNombre = useCallback(async () => {
     const q = filtroNombre.trim();
     if (!q) return;
@@ -562,7 +562,7 @@ export function AgentesServiciosPage() {
     try {
       const res = await searchPersonal(q);
       setMatches(res);
-      if (!res.length) toast.error('Sin resultados', `No se encontró "${q}"`);
+      if (!res.length) toast.error('Sin resultados', `No se encontrÃ³ "${q}"`);
     } catch (e: any) {
       toast.error('Error', e?.message || 'Error');
     } finally {
@@ -576,7 +576,7 @@ export function AgentesServiciosPage() {
     setMatches([]);
   }, []);
 
-  // ── Verificar pase abierto antes de abrir modal nuevo pase ────────────────
+  // â”€â”€ Verificar pase abierto antes de abrir modal nuevo pase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const abrirNuevoPase = useCallback(async (agente: any) => {
     setCheckandoPase(true);
     try {
@@ -585,7 +585,7 @@ export function AgentesServiciosPage() {
       const abierto = pases.find((p: any) => !p.fecha_hasta);
       if (abierto) {
         toast.error(
-          '⛔ Pase activo sin cerrar',
+          'â›” Pase activo sin cerrar',
           `El agente tiene un pase abierto en "${abierto.nombre || `Servicio #${abierto.servicio_id}`}" (desde ${fmtDate(abierto.fecha_desde)}). Cerralo antes de cargar uno nuevo.`
         );
         return;
@@ -611,9 +611,9 @@ export function AgentesServiciosPage() {
     <Layout title="Agentes por Servicio" showBack>
       <div className="asv-layout">
 
-        {/* ── PANEL DE FILTROS ── */}
+        {/* â”€â”€ PANEL DE FILTROS â”€â”€ */}
         <div className="card asv-filters-card">
-          <div className="asv-filters-title">🔍 Filtros</div>
+          <div className="asv-filters-title">ðŸ” Filtros</div>
           <div className="asv-filters-grid">
 
             {/* DNI */}
@@ -626,7 +626,7 @@ export function AgentesServiciosPage() {
                 value={filtroDni}
                 onChange={e => setFiltroDni(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={e => e.key === 'Enter' && cargarTabla(1)}
-                placeholder="Número de DNI"
+                placeholder="NÃºmero de DNI"
               />
             </div>
 
@@ -645,7 +645,7 @@ export function AgentesServiciosPage() {
                   style={{ flex: 1 }}
                 />
                 <button className="btn" onClick={buscarPorNombre} disabled={loadingNom || !filtroNombre.trim()} type="button">
-                  {loadingNom ? '…' : '🔍'}
+                  {loadingNom ? 'â€¦' : 'ðŸ”'}
                 </button>
               </div>
             </div>
@@ -713,16 +713,16 @@ export function AgentesServiciosPage() {
                     className={`asv-estado-btn${filtroEstado === e ? ' active' : ''}`}
                     onClick={() => setFiltroEstado(e)}
                   >
-                    {e === 'todos' ? '📋 Todos' : e === 'activo' ? '🟢 Activos' : '⬜ Cerrados'}
+                    {e === 'todos' ? 'ðŸ“‹ Todos' : e === 'activo' ? 'ðŸŸ¢ Activos' : 'â¬œ Cerrados'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Botón buscar */}
+            {/* BotÃ³n buscar */}
             <div className="asv-field asv-field-action">
               <button className="btn asv-btn-buscar" onClick={() => cargarTabla(1)} disabled={loading} type="button">
-                {loading ? '🔄 Buscando…' : '🔍 Buscar'}
+                {loading ? 'ðŸ”„ Buscandoâ€¦' : 'ðŸ” Buscar'}
               </button>
               <button
                 className="btn"
@@ -733,7 +733,7 @@ export function AgentesServiciosPage() {
                 }}
                 type="button"
               >
-                ✕ Limpiar
+                âœ• Limpiar
               </button>
             </div>
           </div>
@@ -741,7 +741,7 @@ export function AgentesServiciosPage() {
           {/* Matches por nombre */}
           {matches.length > 0 && (
             <div className="asv-matches">
-              <div className="asv-label asv-mt-8">Resultados ({matches.length}) — hacé clic para filtrar:</div>
+              <div className="asv-label asv-mt-8">Resultados ({matches.length}) â€” hacÃ© clic para filtrar:</div>
               <div className="asv-matches-list">
                 {matches.map((m: any) => (
                   <button key={m.dni} className="asv-match-item" onClick={() => seleccionarMatch(m)} type="button">
@@ -754,30 +754,30 @@ export function AgentesServiciosPage() {
           )}
         </div>
 
-        {/* ── TABLA ── */}
+        {/* â”€â”€ TABLA â”€â”€ */}
         <div className="card asv-table-card">
           <div className="asv-table-header">
             <div className="asv-table-title">
-              📋 Registros
+              ðŸ“‹ Registros
               {!loading && <span className="asv-total-badge">{total} total</span>}
             </div>
             <div className="asv-table-pag">
               <button
                 className="btn asv-btn-export-xl"
                 type="button"
-                title="Exportar reporte de antigüedad por servicio y sector"
+                title="Exportar reporte de antigÃ¼edad por servicio y sector"
                 onClick={() => setModalExportar(true)}
               >
-                📊 Antigüedad Excel
+                ðŸ“Š AntigÃ¼edad Excel
               </button>
-              <button className="btn" onClick={() => cargarTabla(page - 1)} disabled={page <= 1 || loading} type="button">‹ Anterior</button>
-              <span className="asv-pag-info">Pág. {page} / {totalPages}</span>
-              <button className="btn" onClick={() => cargarTabla(page + 1)} disabled={page >= totalPages || loading} type="button">Siguiente ›</button>
+              <button className="btn" onClick={() => cargarTabla(page - 1)} disabled={page <= 1 || loading} type="button">â€¹ Anterior</button>
+              <span className="asv-pag-info">PÃ¡g. {page} / {totalPages}</span>
+              <button className="btn" onClick={() => cargarTabla(page + 1)} disabled={page >= totalPages || loading} type="button">Siguiente â€º</button>
             </div>
           </div>
 
           {loading ? (
-            <div className="asv-loading">🔄 Cargando registros…</div>
+            <div className="asv-loading">ðŸ”„ Cargando registrosâ€¦</div>
           ) : rows.length === 0 ? (
             <div className="asv-empty">Sin registros para los filtros seleccionados</div>
           ) : (
@@ -809,10 +809,10 @@ export function AgentesServiciosPage() {
                         <td className="asv-td-fecha">{row.fecha_hasta ? fmtDate(row.fecha_hasta) : <span className="asv-abierto-label">Sin cierre</span>}</td>
                         <td>
                           <span className={`badge ${abierto ? 'asv-badge-open' : 'asv-badge-closed'}`}>
-                            {abierto ? '🟢 Activo' : '⬜ Cerrado'}
+                            {abierto ? 'ðŸŸ¢ Activo' : 'â¬œ Cerrado'}
                           </span>
                         </td>
-                        <td className="asv-td-motivo">{row.motivo || '—'}</td>
+                        <td className="asv-td-motivo">{row.motivo || 'â€”'}</td>
                         <td className="asv-td-actions">
                           {/* Historial */}
                           <button
@@ -824,7 +824,7 @@ export function AgentesServiciosPage() {
                               nombre: nombreAgente(row),
                             })}
                           >
-                            🕑 Historial
+                            ðŸ•‘ Historial
                           </button>
 
                           {/* Cerrar pase activo */}
@@ -835,7 +835,7 @@ export function AgentesServiciosPage() {
                               title="Cerrar este pase"
                               onClick={() => setModalCerrar(row)}
                             >
-                              🔒 Cerrar
+                              ðŸ”’ Cerrar
                             </button>
                           )}
 
@@ -855,7 +855,7 @@ export function AgentesServiciosPage() {
                                 });
                               }}
                             >
-                              ➕ Nuevo
+                              âž• Nuevo
                             </button>
                           )}
                         </td>
@@ -867,18 +867,18 @@ export function AgentesServiciosPage() {
             </div>
           )}
 
-          {/* Paginación inferior */}
+          {/* PaginaciÃ³n inferior */}
           {!loading && totalPages > 1 && (
             <div className="asv-pag-bottom">
-              <button className="btn" onClick={() => cargarTabla(page - 1)} disabled={page <= 1}>‹ Anterior</button>
-              <span className="asv-pag-info">Pág. {page} / {totalPages}</span>
-              <button className="btn" onClick={() => cargarTabla(page + 1)} disabled={page >= totalPages}>Siguiente ›</button>
+              <button className="btn" onClick={() => cargarTabla(page - 1)} disabled={page <= 1}>â€¹ Anterior</button>
+              <span className="asv-pag-info">PÃ¡g. {page} / {totalPages}</span>
+              <button className="btn" onClick={() => cargarTabla(page + 1)} disabled={page >= totalPages}>Siguiente â€º</button>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Modales ── */}
+      {/* â”€â”€ Modales â”€â”€ */}
       {modalHistorial && (
         <PasesModal
           dni={modalHistorial.dni}

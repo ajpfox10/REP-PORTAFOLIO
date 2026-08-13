@@ -26971,6 +26971,231 @@
         }
       }
     },
+    "/api/v1/tramites_tanda_interinos": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List tramites_tanda_interinos",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_tramites_tanda_interinos"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create tramites_tanda_interinos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tramites_tanda_interinos_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/tramites_tanda_interinos/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get tramites_tanda_interinos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update tramites_tanda_interinos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tramites_tanda_interinos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch tramites_tanda_interinos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_tramites_tanda_interinos_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete tramites_tanda_interinos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/user_scan_music": {
       "get": {
         "tags": [
@@ -29349,14 +29574,6 @@
             "type": "number",
             "nullable": true
           },
-          "dependencia_id": {
-            "type": "number",
-            "nullable": true
-          },
-          "reparticion_id": {
-            "type": "number",
-            "nullable": true
-          },
           "funcion_id": {
             "type": "number",
             "nullable": true
@@ -29458,14 +29675,6 @@
             "nullable": true
           },
           "estado": {
-            "type": "number",
-            "nullable": true
-          },
-          "dependencia_id": {
-            "type": "number",
-            "nullable": true
-          },
-          "reparticion_id": {
             "type": "number",
             "nullable": true
           },
@@ -29572,14 +29781,6 @@
             "nullable": true
           },
           "estado": {
-            "type": "number",
-            "nullable": true
-          },
-          "dependencia_id": {
-            "type": "number",
-            "nullable": true
-          },
-          "reparticion_id": {
             "type": "number",
             "nullable": true
           },
@@ -41857,6 +42058,10 @@
           "nombre": {
             "type": "string"
           },
+          "mp": {
+            "type": "string",
+            "nullable": true
+          },
           "fecha_nacimiento": {
             "type": "string",
             "format": "date-time",
@@ -41965,6 +42170,10 @@
           "nombre": {
             "type": "string"
           },
+          "mp": {
+            "type": "string",
+            "nullable": true
+          },
           "fecha_nacimiento": {
             "type": "string",
             "format": "date-time",
@@ -42072,6 +42281,10 @@
           },
           "nombre": {
             "type": "string"
+          },
+          "mp": {
+            "type": "string",
+            "nullable": true
           },
           "fecha_nacimiento": {
             "type": "string",
@@ -47806,6 +48019,78 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          }
+        }
+      },
+      "Table_tramites_tanda_interinos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "tanda": {
+            "type": "string"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tanda",
+          "dni"
+        ]
+      },
+      "Table_tramites_tanda_interinos_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tanda": {
+            "type": "string"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "tanda",
+          "dni"
+        ]
+      },
+      "Table_tramites_tanda_interinos_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "tanda": {
+            "type": "string"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

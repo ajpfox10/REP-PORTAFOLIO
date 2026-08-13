@@ -401,8 +401,6 @@ async function queryPersonalDesignacionBecario(sequelize: Sequelize, dni: number
                          ags.id DESC
                 LIMIT 1
               ),
-              dep_age.nombre,
-              rep_age.reparticion_nombre,
               pd.dependencia
             ) AS dependencia,
             COALESCE(pd.ocupacion, o.nombre) AS ocupacion,
@@ -414,8 +412,6 @@ async function queryPersonalDesignacionBecario(sequelize: Sequelize, dni: number
      LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
      LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id AND o.deleted_at IS NULL
      LEFT JOIN regimenes_horarios rh ON rh.id = a.regimen_horario_id AND rh.deleted_at IS NULL
-     LEFT JOIN dependencias dep_age ON dep_age.id = a.dependencia_id AND dep_age.deleted_at IS NULL
-     LEFT JOIN reparticiones rep_age ON rep_age.id = a.reparticion_id
      WHERE pd.dni = :dni LIMIT 1`,
     { replacements: { dni }, type: QueryTypes.SELECT }
   );
@@ -1385,8 +1381,6 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
               COALESCE(
                 rep_srv.reparticion_nombre,
                 dep_srv.nombre,
-                dep_age.nombre,
-                rep_age.reparticion_nombre,
                 pd.dependencia
               ) AS dependencia,
               pd.ley, pd.ley_id, pd.estado_empleo, pd.sexo,
@@ -1405,9 +1399,6 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
        LEFT JOIN servicios srv       ON srv.id  = ags_act.servicio_id   AND srv.deleted_at IS NULL
        LEFT JOIN reparticiones rep_srv ON rep_srv.id = srv.reparticion_id
        LEFT JOIN dependencias  dep_srv ON dep_srv.id = ags_act.dependencia_id AND dep_srv.deleted_at IS NULL
-       /* fallback: dependencia/reparticion directa del agente */
-       LEFT JOIN dependencias  dep_age ON dep_age.id = a.dependencia_id  AND dep_age.deleted_at IS NULL
-       LEFT JOIN reparticiones rep_age ON rep_age.id = a.reparticion_id
        WHERE pd.dni = :dni LIMIT 1`,
       { replacements: { dni }, type: QueryTypes.SELECT }
     );

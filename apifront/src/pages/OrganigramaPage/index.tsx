@@ -597,6 +597,7 @@ export function OrganigramaPage() {
   }>({ ley: {}, jefaturas: {}, reparticiones: {}, planta: {}, regimen: {}, servicios: {}, sectores: {}, sexos: {}, ocupaciones: {}, dependencias: {}, depParent: {} });
   const [vista, setVista] = useState<Vista>('servicio');
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('todos');
+  const [mostrarTodosGrupos, setMostrarTodosGrupos] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -924,7 +925,7 @@ export function OrganigramaPage() {
         <div className="card" style={{ padding: 16 }}>
           {/* Resumen visual de totales */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-            {resumenGrupos.slice(0, 12).map((g, i) => (
+            {resumenGrupos.slice(0, mostrarTodosGrupos ? resumenGrupos.length : 12).map((g, i) => (
               <div key={g.id} style={{
                 background: COLORES[i % COLORES.length] + '22',
                 border: `1px solid ${COLORES[i % COLORES.length]}44`,
@@ -935,9 +936,17 @@ export function OrganigramaPage() {
               </div>
             ))}
             {cantGrupos > 12 && (
-              <div className="muted" style={{ fontSize: '0.74rem', alignSelf: 'center' }}>
-                + {cantGrupos - 12} grupos más
-              </div>
+              <button
+                type="button"
+                onClick={() => setMostrarTodosGrupos(v => !v)}
+                style={{
+                  background: 'transparent', border: '1px dashed var(--ca-border, #64748b66)',
+                  borderRadius: 8, padding: '4px 12px', fontSize: '0.74rem', cursor: 'pointer',
+                  color: 'var(--ca-text2, #94a3b8)', alignSelf: 'center',
+                }}
+              >
+                {mostrarTodosGrupos ? '− mostrar menos' : `+ ${cantGrupos - 12} grupos más`}
+              </button>
             )}
           </div>
 

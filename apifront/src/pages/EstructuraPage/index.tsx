@@ -1,6 +1,6 @@
-﻿// src/pages/EstructuraPage/index.tsx
-// GestiÃ³n de estructura organizacional: Dependencias â†’ Reparticiones â†’ Servicios â†’ Sectores
-// CRUD completo con inline-edit, filtros y exportaciÃ³n a Excel.
+// src/pages/EstructuraPage/index.tsx
+// Gestión de estructura organizacional: Dependencias → Reparticiones → Servicios → Sectores
+// CRUD completo con inline-edit, filtros y exportación a Excel.
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Layout } from '../../components/Layout';
@@ -8,7 +8,7 @@ import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
 import { exportToExcel } from '../../utils/export';
 
-// â”€â”€â”€ Tipos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 interface Dependencia  { id: number; nombre: string; }
 interface Reparticion  { id: number; reparticion_nombre: string; dependencia_id: number | null; }
 interface Servicio     { id: number; nombre: string; reparticion_id: number | null; }
@@ -16,7 +16,7 @@ interface Sector       { id: number; nombre: string; servicio_id: number | null;
 
 type Tab = 'dependencias' | 'reparticiones' | 'servicios' | 'sectores';
 
-// â”€â”€â”€ Estilos base â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Estilos base ────────────────────────────────────────────────────────────
 const card: React.CSSProperties = {
   background: 'rgba(255,255,255,0.04)',
   border: '1px solid rgba(255,255,255,0.10)',
@@ -40,22 +40,22 @@ const btnSm = (bg = '#3b4252'): React.CSSProperties => ({
   fontWeight: 600,
 });
 
-// â”€â”€â”€ ConfirmaciÃ³n de borrado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Confirmación de borrado ──────────────────────────────────────────────────
 function ConfirmDelete({ nombre, onConfirm, onCancel }: {
   nombre: string; onConfirm: () => void; onCancel: () => void;
 }) {
   return (
     <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
-      <span style={{ fontSize: '0.75rem', color: '#fca5a5' }}>Â¿Eliminar Â«{nombre}Â»?</span>
-      <button style={btnSm('#dc2626')} onClick={onConfirm}>SÃ­</button>
+      <span style={{ fontSize: '0.75rem', color: '#fca5a5' }}>¿Eliminar «{nombre}»?</span>
+      <button style={btnSm('#dc2626')} onClick={onConfirm}>Sí</button>
       <button style={btnSm()} onClick={onCancel}>No</button>
     </span>
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // TAB: DEPENDENCIAS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 function DepTab({ onChanged }: { onChanged: () => void }) {
   const toast = useToast();
   const [rows, setRows] = useState<Dependencia[]>([]);
@@ -83,7 +83,7 @@ function DepTab({ onChanged }: { onChanged: () => void }) {
     [rows, filtro]);
 
   const guardar = async () => {
-    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacÃ­o');
+    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacío');
     setSaving(true);
     try {
       if (editId === 'new') {
@@ -117,10 +117,10 @@ function DepTab({ onChanged }: { onChanged: () => void }) {
     <div>
       {/* Barra superior */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input style={inputSt} placeholder="Buscar dependenciaâ€¦" value={filtro} onChange={e => setFiltro(e.target.value)} />
+        <input style={inputSt} placeholder="Buscar dependencia…" value={filtro} onChange={e => setFiltro(e.target.value)} />
         <button style={btnSm('#2563eb')} onClick={() => { setEditId('new'); setEditNombre(''); }}>+ Nueva dependencia</button>
-        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('dependencias', exportRows)}>ðŸ“Š Excel</button>
-        <button style={btnSm()} onClick={cargar}>ðŸ”„</button>
+        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('dependencias', exportRows)}>📊 Excel</button>
+        <button style={btnSm()} onClick={cargar}>🔄</button>
         <span style={{ fontSize: '0.73rem', color: '#64748b' }}>{filtradas.length} registros</span>
       </div>
 
@@ -128,16 +128,16 @@ function DepTab({ onChanged }: { onChanged: () => void }) {
       {editId === 'new' && (
         <div style={{ ...card, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
           <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nueva dependencia:</span>
-          <input autoFocus style={inputSt} placeholder="Nombreâ€¦" value={editNombre}
+          <input autoFocus style={inputSt} placeholder="Nombre…" value={editNombre}
             onChange={e => setEditNombre(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') guardar(); if (e.key === 'Escape') setEditId(null); }} />
-          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-          <button style={btnSm()} onClick={() => setEditId(null)}>âœ• Cancelar</button>
+          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+          <button style={btnSm()} onClick={() => setEditId(null)}>✕ Cancelar</button>
         </div>
       )}
 
       {/* Tabla */}
-      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargandoâ€¦</div> : (
+      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargando…</div> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -159,13 +159,13 @@ function DepTab({ onChanged }: { onChanged: () => void }) {
                       <ConfirmDelete nombre={dep.nombre} onConfirm={() => eliminar(dep.id)} onCancel={() => setConfirmDel(null)} />
                     ) : editId === dep.id ? (
                       <span style={{ display: 'inline-flex', gap: 5 }}>
-                        <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-                        <button style={btnSm()} onClick={() => setEditId(null)}>âœ•</button>
+                        <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+                        <button style={btnSm()} onClick={() => setEditId(null)}>✕</button>
                       </span>
                     ) : (
                       <span style={{ display: 'inline-flex', gap: 5 }}>
-                        <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(dep.id); setEditNombre(dep.nombre); }}>âœŽ Editar</button>
-                        <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(dep.id)}>ðŸ—‘</button>
+                        <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(dep.id); setEditNombre(dep.nombre); }}>✎ Editar</button>
+                        <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(dep.id)}>🗑</button>
                       </span>
                     )}
                   </td>
@@ -182,9 +182,9 @@ function DepTab({ onChanged }: { onChanged: () => void }) {
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // TAB: REPARTICIONES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 function RepTab({ dependencias, onChanged }: { dependencias: Dependencia[]; onChanged: () => void }) {
   const toast = useToast();
   const [rows, setRows] = useState<Reparticion[]>([]);
@@ -217,7 +217,7 @@ function RepTab({ dependencias, onChanged }: { dependencias: Dependencia[]; onCh
   }).sort((a, b) => a.reparticion_nombre.localeCompare(b.reparticion_nombre, 'es')), [rows, filtroTexto, filtroDep]);
 
   const guardar = async () => {
-    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacÃ­o');
+    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacío');
     if (!editDepId) return toast.error('Selecciona la dependencia padre');
     const body = { reparticion_nombre: editNombre.trim(), dependencia_id: Number(editDepId) };
     setSaving(true);
@@ -225,7 +225,7 @@ function RepTab({ dependencias, onChanged }: { dependencias: Dependencia[]; onCh
       if (editId === 'new') {
         const r = await apiFetch<any>('/reparticiones', { method: 'POST', body: JSON.stringify(body) });
         setRows(prev => [...prev, r?.data ?? r]);
-        toast.ok('ReparticiÃ³n creada');
+        toast.ok('Repartición creada');
       } else {
         await apiFetch(`/reparticiones/${editId}`, { method: 'PATCH', body: JSON.stringify(body) });
         setRows(prev => prev.map(d => d.id === editId ? { ...d, ...body } : d));
@@ -245,44 +245,44 @@ function RepTab({ dependencias, onChanged }: { dependencias: Dependencia[]; onCh
     } catch (e: any) { toast.error('Error al eliminar', e?.message); }
   };
 
-  const exportRows = filtradas.map(r => ({ ID: r.id, 'Reparticion': r.reparticion_nombre, Dependencia: depMap[r.dependencia_id!] || 'â€”' }));
+  const exportRows = filtradas.map(r => ({ ID: r.id, 'Reparticion': r.reparticion_nombre, Dependencia: depMap[r.dependencia_id!] || '—' }));
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input style={inputSt} placeholder="Buscar reparticiÃ³nâ€¦" value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)} />
+        <input style={inputSt} placeholder="Buscar repartición…" value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)} />
         <select style={selectSt} value={filtroDep} onChange={e => setFiltroDep(e.target.value)}>
           <option value="">Todas las dependencias</option>
           {dependencias.map(d => <option key={d.id} value={String(d.id)}>{d.nombre}</option>)}
         </select>
-        <button style={btnSm('#2563eb')} onClick={() => { setEditId('new'); setEditNombre(''); setEditDepId(filtroDep); }}>+ Nueva reparticiÃ³n</button>
-        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('reparticiones', exportRows)}>ðŸ“Š Excel</button>
-        <button style={btnSm()} onClick={cargar}>ðŸ”„</button>
+        <button style={btnSm('#2563eb')} onClick={() => { setEditId('new'); setEditNombre(''); setEditDepId(filtroDep); }}>+ Nueva repartición</button>
+        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('reparticiones', exportRows)}>📊 Excel</button>
+        <button style={btnSm()} onClick={cargar}>🔄</button>
         <span style={{ fontSize: '0.73rem', color: '#64748b' }}>{filtradas.length} registros</span>
       </div>
 
       {editId === 'new' && (
         <div style={{ ...card, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
-          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nueva reparticiÃ³n:</span>
-          <input autoFocus style={inputSt} placeholder="Nombreâ€¦" value={editNombre}
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nueva repartición:</span>
+          <input autoFocus style={inputSt} placeholder="Nombre…" value={editNombre}
             onChange={e => setEditNombre(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') setEditId(null); }} />
           <select style={selectSt} value={editDepId} onChange={e => setEditDepId(e.target.value)}>
             <option value="">Elegi dependencia padre</option>
             {dependencias.map(d => <option key={d.id} value={String(d.id)}>{d.nombre}</option>)}
           </select>
-          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-          <button style={btnSm()} onClick={() => setEditId(null)}>âœ• Cancelar</button>
+          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+          <button style={btnSm()} onClick={() => setEditId(null)}>✕ Cancelar</button>
         </div>
       )}
 
-      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargandoâ€¦</div> : (
+      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargando…</div> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <th style={thSt}>ID</th>
-                <th style={thSt}>ReparticiÃ³n</th>
+                <th style={thSt}>Repartición</th>
                 <th style={thSt}>Dependencia</th>
                 <th style={thSt}>Acciones</th>
               </tr>
@@ -304,7 +304,7 @@ function RepTab({ dependencias, onChanged }: { dependencias: Dependencia[]; onCh
                       </select>
                     ) : (
                       <span style={{ color: rep.dependencia_id ? 'inherit' : '#64748b' }}>
-                        {rep.dependencia_id ? (depMap[rep.dependencia_id] || `#${rep.dependencia_id}`) : 'â€”'}
+                        {rep.dependencia_id ? (depMap[rep.dependencia_id] || `#${rep.dependencia_id}`) : '—'}
                       </span>
                     )}
                   </td>
@@ -313,13 +313,13 @@ function RepTab({ dependencias, onChanged }: { dependencias: Dependencia[]; onCh
                       <ConfirmDelete nombre={rep.reparticion_nombre} onConfirm={() => eliminar(rep.id)} onCancel={() => setConfirmDel(null)} />
                     ) : editId === rep.id ? (
                       <span style={{ display: 'inline-flex', gap: 5 }}>
-                        <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-                        <button style={btnSm()} onClick={() => setEditId(null)}>âœ•</button>
+                        <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+                        <button style={btnSm()} onClick={() => setEditId(null)}>✕</button>
                       </span>
                     ) : (
                       <span style={{ display: 'inline-flex', gap: 5 }}>
-                        <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(rep.id); setEditNombre(rep.reparticion_nombre); setEditDepId(String(rep.dependencia_id ?? '')); }}>âœŽ Editar</button>
-                        <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(rep.id)}>ðŸ—‘</button>
+                        <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(rep.id); setEditNombre(rep.reparticion_nombre); setEditDepId(String(rep.dependencia_id ?? '')); }}>✎ Editar</button>
+                        <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(rep.id)}>🗑</button>
                       </span>
                     )}
                   </td>
@@ -336,9 +336,9 @@ function RepTab({ dependencias, onChanged }: { dependencias: Dependencia[]; onCh
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // TAB: SERVICIOS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 function SvcTab({ reparticiones, dependencias, onChanged }: { reparticiones: Reparticion[]; dependencias: Dependencia[]; onChanged: () => void }) {
   const toast = useToast();
   const [rows, setRows] = useState<Servicio[]>([]);
@@ -393,7 +393,7 @@ function SvcTab({ reparticiones, dependencias, onChanged }: { reparticiones: Rep
   }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')), [rows, filtroTexto, filtroRep, filtroDep, depDeRep]);
 
   const guardar = async () => {
-    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacÃ­o');
+    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacío');
     if (!editRepId) return toast.error('Selecciona la reparticion padre');
     const body = { nombre: editNombre.trim(), reparticion_id: Number(editRepId) };
     setSaving(true);
@@ -426,15 +426,15 @@ function SvcTab({ reparticiones, dependencias, onChanged }: { reparticiones: Rep
     return {
       ID: s.id,
       Servicio: s.nombre,
-      'Reparticion': s.reparticion_id ? (repMap[s.reparticion_id] || `#${s.reparticion_id}`) : 'â€”',
-      Dependencia: depId ? (depMap[depId] || `#${depId}`) : 'â€”',
+      'Reparticion': s.reparticion_id ? (repMap[s.reparticion_id] || `#${s.reparticion_id}`) : '—',
+      Dependencia: depId ? (depMap[depId] || `#${depId}`) : '—',
     };
   });
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input style={inputSt} placeholder="Buscar servicioâ€¦" value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)} />
+        <input style={inputSt} placeholder="Buscar servicio…" value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)} />
         <select style={selectSt} value={filtroDep} onChange={e => { setFiltroDep(e.target.value); setFiltroRep(''); }}>
           <option value="">Todas las dependencias</option>
           {dependencias.map(d => <option key={d.id} value={String(d.id)}>{d.nombre}</option>)}
@@ -444,15 +444,15 @@ function SvcTab({ reparticiones, dependencias, onChanged }: { reparticiones: Rep
           {repsFiltradas.map(r => <option key={r.id} value={String(r.id)}>{r.reparticion_nombre}</option>)}
         </select>
         <button style={btnSm('#2563eb')} onClick={() => { setEditId('new'); setEditNombre(''); setEditDepId(filtroDep); setEditRepId(filtroRep); }}>+ Nuevo servicio</button>
-        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('servicios', exportRows)}>ðŸ“Š Excel</button>
-        <button style={btnSm()} onClick={cargar}>ðŸ”„</button>
+        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('servicios', exportRows)}>📊 Excel</button>
+        <button style={btnSm()} onClick={cargar}>🔄</button>
         <span style={{ fontSize: '0.73rem', color: '#64748b' }}>{filtradas.length} registros</span>
       </div>
 
       {editId === 'new' && (
         <div style={{ ...card, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
           <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nuevo servicio:</span>
-          <input autoFocus style={inputSt} placeholder="Nombreâ€¦" value={editNombre}
+          <input autoFocus style={inputSt} placeholder="Nombre…" value={editNombre}
             onChange={e => setEditNombre(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') setEditId(null); }} />
           <select style={selectSt} value={editDepId} onChange={e => { setEditDepId(e.target.value); setEditRepId(''); }}>
@@ -463,19 +463,19 @@ function SvcTab({ reparticiones, dependencias, onChanged }: { reparticiones: Rep
             <option value="">Elegi reparticion padre</option>
             {editRepsFiltradas.map(r => <option key={r.id} value={String(r.id)}>{r.reparticion_nombre}</option>)}
           </select>
-          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-          <button style={btnSm()} onClick={() => setEditId(null)}>âœ• Cancelar</button>
+          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+          <button style={btnSm()} onClick={() => setEditId(null)}>✕ Cancelar</button>
         </div>
       )}
 
-      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargandoâ€¦</div> : (
+      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargando…</div> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <th style={thSt}>ID</th>
                 <th style={thSt}>Servicio</th>
-                <th style={thSt}>ReparticiÃ³n</th>
+                <th style={thSt}>Repartición</th>
                 <th style={thSt}>Dependencia</th>
                 <th style={thSt}>Acciones</th>
               </tr>
@@ -505,25 +505,25 @@ function SvcTab({ reparticiones, dependencias, onChanged }: { reparticiones: Rep
                         </span>
                       ) : (
                         <span style={{ color: svc.reparticion_id ? 'inherit' : '#64748b' }}>
-                          {svc.reparticion_id ? (repMap[svc.reparticion_id] || `#${svc.reparticion_id}`) : 'â€”'}
+                          {svc.reparticion_id ? (repMap[svc.reparticion_id] || `#${svc.reparticion_id}`) : '—'}
                         </span>
                       )}
                     </td>
                     <td style={{ ...tdSt, color: '#94a3b8', fontSize: '0.76rem' }}>
-                      {depId ? (depMap[depId] || `#${depId}`) : 'â€”'}
+                      {depId ? (depMap[depId] || `#${depId}`) : '—'}
                     </td>
                     <td style={{ ...tdSt, width: 220 }}>
                       {confirmDel === svc.id ? (
                         <ConfirmDelete nombre={svc.nombre} onConfirm={() => eliminar(svc.id)} onCancel={() => setConfirmDel(null)} />
                       ) : editId === svc.id ? (
                         <span style={{ display: 'inline-flex', gap: 5 }}>
-                          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-                          <button style={btnSm()} onClick={() => setEditId(null)}>âœ•</button>
+                          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+                          <button style={btnSm()} onClick={() => setEditId(null)}>✕</button>
                         </span>
                       ) : (
                         <span style={{ display: 'inline-flex', gap: 5 }}>
-                          <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(svc.id); setEditNombre(svc.nombre); setEditDepId(String(depDeRep(svc.reparticion_id) ?? '')); setEditRepId(String(svc.reparticion_id ?? '')); }}>âœŽ Editar</button>
-                          <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(svc.id)}>ðŸ—‘</button>
+                          <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(svc.id); setEditNombre(svc.nombre); setEditDepId(String(depDeRep(svc.reparticion_id) ?? '')); setEditRepId(String(svc.reparticion_id ?? '')); }}>✎ Editar</button>
+                          <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(svc.id)}>🗑</button>
                         </span>
                       )}
                     </td>
@@ -541,9 +541,9 @@ function SvcTab({ reparticiones, dependencias, onChanged }: { reparticiones: Rep
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // TAB: SECTORES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servicios: Servicio[]; reparticiones: Reparticion[]; dependencias: Dependencia[]; onChanged: () => void }) {
   const toast = useToast();
   const [rows, setRows] = useState<Sector[]>([]);
@@ -622,7 +622,7 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
   }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')), [rows, filtroTexto, filtroSvc, filtroRep, filtroDep, repIdDeServicio, depIdDeServicio]);
 
   const guardar = async () => {
-    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacÃ­o');
+    if (!editNombre.trim()) return toast.error('El nombre no puede estar vacío');
     if (!editSvcId) return toast.error('Selecciona el servicio padre');
     const body = { nombre: editNombre.trim(), servicio_id: Number(editSvcId) };
     setSaving(true);
@@ -654,15 +654,15 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
     const { rep, dep } = getRepDep(s.servicio_id);
     return {
       ID: s.id, Sector: s.nombre,
-      Servicio: s.servicio_id ? (svcMap[s.servicio_id] || `#${s.servicio_id}`) : 'â€”',
-      'Reparticion': rep || 'â€”', Dependencia: dep || 'â€”',
+      Servicio: s.servicio_id ? (svcMap[s.servicio_id] || `#${s.servicio_id}`) : '—',
+      'Reparticion': rep || '—', Dependencia: dep || '—',
     };
   });
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input style={inputSt} placeholder="Buscar sectorâ€¦" value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)} />
+        <input style={inputSt} placeholder="Buscar sector…" value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)} />
         <select style={selectSt} value={filtroDep} onChange={e => { setFiltroDep(e.target.value); setFiltroRep(''); setFiltroSvc(''); }}>
           <option value="">Todas las dependencias</option>
           {dependencias.map(d => <option key={d.id} value={String(d.id)}>{d.nombre}</option>)}
@@ -676,15 +676,15 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
           {serviciosFiltro.map(s => <option key={s.id} value={String(s.id)}>{s.nombre}</option>)}
         </select>
         <button style={btnSm('#2563eb')} onClick={() => { setEditId('new'); setEditNombre(''); setEditDepId(filtroDep); setEditRepId(filtroRep); setEditSvcId(filtroSvc); }}>+ Nuevo sector</button>
-        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('sectores', exportRows)}>ðŸ“Š Excel</button>
-        <button style={btnSm()} onClick={cargar}>ðŸ”„</button>
+        <button style={{ ...btnSm('#16a34a'), marginLeft: 'auto' }} onClick={() => exportToExcel('sectores', exportRows)}>📊 Excel</button>
+        <button style={btnSm()} onClick={cargar}>🔄</button>
         <span style={{ fontSize: '0.73rem', color: '#64748b' }}>{filtradas.length} registros</span>
       </div>
 
       {editId === 'new' && (
         <div style={{ ...card, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
           <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nuevo sector:</span>
-          <input autoFocus style={inputSt} placeholder="Nombreâ€¦" value={editNombre}
+          <input autoFocus style={inputSt} placeholder="Nombre…" value={editNombre}
             onChange={e => setEditNombre(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') setEditId(null); }} />
           <select style={selectSt} value={editDepId} onChange={e => { setEditDepId(e.target.value); setEditRepId(''); setEditSvcId(''); }}>
@@ -699,12 +699,12 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
             <option value="">Elegi servicio padre</option>
             {editServiciosFiltro.map(s => <option key={s.id} value={String(s.id)}>{s.nombre}</option>)}
           </select>
-          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-          <button style={btnSm()} onClick={() => setEditId(null)}>âœ• Cancelar</button>
+          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+          <button style={btnSm()} onClick={() => setEditId(null)}>✕ Cancelar</button>
         </div>
       )}
 
-      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargandoâ€¦</div> : (
+      {loading ? <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Cargando…</div> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -712,7 +712,7 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
                 <th style={thSt}>ID</th>
                 <th style={thSt}>Sector</th>
                 <th style={thSt}>Servicio</th>
-                <th style={thSt}>ReparticiÃ³n</th>
+                <th style={thSt}>Repartición</th>
                 <th style={thSt}>Dependencia</th>
                 <th style={thSt}>Acciones</th>
               </tr>
@@ -746,24 +746,24 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
                         </span>
                       ) : (
                         <span style={{ color: sec.servicio_id ? 'inherit' : '#64748b' }}>
-                          {sec.servicio_id ? (svcMap[sec.servicio_id] || `#${sec.servicio_id}`) : 'â€”'}
+                          {sec.servicio_id ? (svcMap[sec.servicio_id] || `#${sec.servicio_id}`) : '—'}
                         </span>
                       )}
                     </td>
-                    <td style={{ ...tdSt, color: '#94a3b8', fontSize: '0.76rem' }}>{rep || 'â€”'}</td>
-                    <td style={{ ...tdSt, color: '#64748b', fontSize: '0.74rem' }}>{dep || 'â€”'}</td>
+                    <td style={{ ...tdSt, color: '#94a3b8', fontSize: '0.76rem' }}>{rep || '—'}</td>
+                    <td style={{ ...tdSt, color: '#64748b', fontSize: '0.74rem' }}>{dep || '—'}</td>
                     <td style={{ ...tdSt, width: 220 }}>
                       {confirmDel === sec.id ? (
                         <ConfirmDelete nombre={sec.nombre} onConfirm={() => eliminar(sec.id)} onCancel={() => setConfirmDel(null)} />
                       ) : editId === sec.id ? (
                         <span style={{ display: 'inline-flex', gap: 5 }}>
-                          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? 'â€¦' : 'âœ” Guardar'}</button>
-                          <button style={btnSm()} onClick={() => setEditId(null)}>âœ•</button>
+                          <button style={btnSm('#16a34a')} onClick={guardar} disabled={saving}>{saving ? '…' : '✔ Guardar'}</button>
+                          <button style={btnSm()} onClick={() => setEditId(null)}>✕</button>
                         </span>
                       ) : (
                         <span style={{ display: 'inline-flex', gap: 5 }}>
-                          <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(sec.id); setEditNombre(sec.nombre); setEditDepId(String(depIdDeServicio(sec.servicio_id) ?? '')); setEditRepId(String(repIdDeServicio(sec.servicio_id) ?? '')); setEditSvcId(String(sec.servicio_id ?? '')); }}>âœŽ Editar</button>
-                          <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(sec.id)}>ðŸ—‘</button>
+                          <button style={btnSm('#1d4ed8')} onClick={() => { setEditId(sec.id); setEditNombre(sec.nombre); setEditDepId(String(depIdDeServicio(sec.servicio_id) ?? '')); setEditRepId(String(repIdDeServicio(sec.servicio_id) ?? '')); setEditSvcId(String(sec.servicio_id ?? '')); }}>✎ Editar</button>
+                          <button style={btnSm('#991b1b')} onClick={() => setConfirmDel(sec.id)}>🗑</button>
                         </span>
                       )}
                     </td>
@@ -781,14 +781,14 @@ function SecTab({ servicios, reparticiones, dependencias, onChanged }: { servici
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// PÃGINA PRINCIPAL
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
+// PÁGINA PRINCIPAL
+// ─────────────────────────────────────────────────────────────────────────────
 export function EstructuraPage() {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('dependencias');
 
-  // CatÃ¡logos compartidos entre tabs (cargados una sola vez)
+  // Catálogos compartidos entre tabs (cargados una sola vez)
   const [dependencias, setDependencias] = useState<Dependencia[]>([]);
   const [reparticiones, setReparticiones] = useState<Reparticion[]>([]);
   const [servicios, setServicios] = useState<Servicio[]>([]);
@@ -815,10 +815,10 @@ export function EstructuraPage() {
   useEffect(() => { cargarCatalogos(); }, [cargarCatalogos]);
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'dependencias',  label: 'ðŸ›ï¸ Dependencias',  count: dependencias.length },
-    { key: 'reparticiones', label: 'ðŸ—‚ Reparticiones', count: reparticiones.length },
-    { key: 'servicios',     label: 'ðŸ¢ Servicios',      count: servicios.length },
-    { key: 'sectores',      label: 'ðŸ“ Sectores' },
+    { key: 'dependencias',  label: '🏛️ Dependencias',  count: dependencias.length },
+    { key: 'reparticiones', label: '🗂 Reparticiones', count: reparticiones.length },
+    { key: 'servicios',     label: '🏢 Servicios',      count: servicios.length },
+    { key: 'sectores',      label: '📁 Sectores' },
   ];
 
   return (
@@ -828,29 +828,29 @@ export function EstructuraPage() {
         {/* Header */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>
-            ðŸ—ï¸ Estructura organizacional
+            🏗️ Estructura organizacional
           </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-            JerarquÃ­a: <strong>Dependencia</strong> â†’ <strong>ReparticiÃ³n</strong> â†’ <strong>Servicio</strong> â†’ <strong>Sector</strong>
-            {' Â· '}HacÃ© clic en cualquier nivel para administrarlo.
+            Jerarquía: <strong>Dependencia</strong> → <strong>Repartición</strong> → <strong>Servicio</strong> → <strong>Sector</strong>
+            {' · '}Hacé clic en cualquier nivel para administrarlo.
           </div>
         </div>
 
-        {/* Diagrama de jerarquÃ­a */}
+        {/* Diagrama de jerarquía */}
         <div style={{ ...card, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18, padding: '12px 18px' }}>
           {[
             { label: 'Dependencias', count: dependencias.length, color: '#7c3aed' },
-            { label: 'â†’', count: null, color: '#64748b' },
+            { label: '→', count: null, color: '#64748b' },
             { label: 'Reparticiones', count: reparticiones.length, color: '#2563eb' },
-            { label: 'â†’', count: null, color: '#64748b' },
+            { label: '→', count: null, color: '#64748b' },
             { label: 'Servicios', count: servicios.length, color: '#10b981' },
-            { label: 'â†’', count: null, color: '#64748b' },
+            { label: '→', count: null, color: '#64748b' },
             { label: 'Sectores', count: null, color: '#f59e0b' },
           ].map((item, i) => (
             item.count !== null ? (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <span style={{ fontSize: '1.3rem', fontWeight: 800, color: item.color, lineHeight: 1 }}>
-                  {loadingCat ? 'â€¦' : item.count}
+                  {loadingCat ? '…' : item.count}
                 </span>
                 <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>{item.label}</span>
               </div>
@@ -884,7 +884,7 @@ export function EstructuraPage() {
                   marginLeft: 6, fontSize: '0.68rem', background: 'rgba(255,255,255,0.1)',
                   padding: '1px 6px', borderRadius: 10, color: '#94a3b8',
                 }}>
-                  {loadingCat ? 'â€¦' : t.count}
+                  {loadingCat ? '…' : t.count}
                 </span>
               )}
             </button>
