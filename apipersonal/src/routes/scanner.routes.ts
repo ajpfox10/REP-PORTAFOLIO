@@ -164,8 +164,9 @@ function buildResolucionFileBase(tipo: string, numero: string, year: number): st
   return [tipo || 'RESO', String(year), numero].filter(Boolean).join('-');
 }
 
-function getScannerBaseUrl(): string {
+function getScannerBaseUrl(override?: string | null): string {
   const raw =
+    (override && String(override).trim()) ||
     process.env.SCANNER_API_URL ||
     process.env.SCANNER_BASE_URL ||
     'http://localhost:3002';
@@ -173,8 +174,26 @@ function getScannerBaseUrl(): string {
   return String(raw).replace(/\/+$/, '');
 }
 
-function buildScannerFileUrl(storageKey: string): string {
-  const base = getScannerBaseUrl();
+/**
+ * El scanner indica en document-ready desde qué URL bajar el archivo (files_base_url).
+ * Solo se confía si apunta a loopback (mismo host que api_personal): así el guardado
+ * no depende del puerto fijo del .env y no se desincroniza entre dev/prod, sin abrir
+ * un SSRF hacia hosts externos.
+ */
+function safeScannerBaseOverride(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const u = new URL(value.trim());
+    const host = u.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') return null;
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return null;
+  }
+}
+
+function buildScannerFileUrl(storageKey: string, baseOverride?: string | null): string {
+  const base = getScannerBaseUrl(baseOverride);
   const encodedKey = storageKey
     .split('/')
     .map(part => encodeURIComponent(part))
@@ -182,8 +201,8 @@ function buildScannerFileUrl(storageKey: string): string {
   return `${base}/v1/documents/files/${encodedKey}`;
 }
 
-async function downloadScannerFile(storageKey: string): Promise<Buffer> {
-  const url = buildScannerFileUrl(storageKey);
+async function downloadScannerFile(storageKey: string, baseOverride?: string | null): Promise<Buffer> {
+  const url = buildScannerFileUrl(storageKey, baseOverride);
   const token = process.env.SCANNER_API_TOKEN || '';
 
   const res = await axios.get<ArrayBuffer>(url, {
@@ -230,6 +249,7 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
         escaneado_por,
         page_index,
         page_total,
+        files_base_url,
       } = req.body || {};
 
       if (!personal_dni || !scanner_document_id) {
@@ -339,7 +359,7 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
 
       // 4. Descargar físicamente el archivo desde scanner API y escribirlo en disco
       try {
-        const fileBuffer = await downloadScannerFile(String(storage_key));
+        const fileBuffer = await downloadScannerFile(String(storage_key), safeScannerBaseOverride(files_base_url));
         fs.writeFileSync(rutaAbsoluta, fileBuffer);
         logger.info({
           msg: '[scanner] archivo descargado y guardado',

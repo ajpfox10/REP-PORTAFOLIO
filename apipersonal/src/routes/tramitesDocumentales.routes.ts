@@ -605,6 +605,120 @@ async function appendPdfToMerged(merged: PDFDocument, sourcePath: string, pageOr
   pages.forEach((page) => merged.addPage(page));
 }
 
+// ── Combinación de PDF por agente (pestaña "Combinación de PDF") ─────────────
+// Junta los archivos (PDF + jpg/png) de las subcarpetas del agente, en el orden
+// de la pestaña "Orden de documentos" (documentos activos, por `orden`, según ley).
+const COMBINAR_PDF = /\.pdf$/i;
+const COMBINAR_JPG = /\.jpe?g$/i;
+const COMBINAR_PNG = /\.png$/i;
+const COMBINAR_TIFF = /\.tiff?$/i;
+const COMBINAR_NOMBRE_SALIDA = 'Tramite de nombramiento';
+
+// Decodifica un TIFF (posiblemente multipágina) a un array de PNG (uno por página),
+// para poder embeberlo en el PDF (pdf-lib no soporta TIFF). Usa utif + @napi-rs/canvas.
+function decodeTiffToPngPages(fp: string): Buffer[] {
+  const UTIF = require('utif');
+  const { createCanvas, ImageData } = require('@napi-rs/canvas');
+  const buf = fs.readFileSync(fp);
+  const ifds = UTIF.decode(buf);
+  const out: Buffer[] = [];
+  for (const ifd of ifds) {
+    UTIF.decodeImage(buf, ifd);
+    const rgba = UTIF.toRGBA8(ifd);
+    const w = ifd.width;
+    const h = ifd.height;
+    if (!w || !h) continue;
+    const canvas = createCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(rgba), w, h), 0, 0);
+    out.push(canvas.encodeSync('png'));
+  }
+  return out;
+}
+
+async function leyDeAgente(sequelize: Sequelize, dni: number): Promise<string | null> {
+  const rows = await sequelize.query<{ ley: string | null }>(
+    `SELECT CASE WHEN ocl.nombre LIKE '%10471%' THEN '10471'
+                 WHEN ocl.nombre LIKE '%10430%' THEN '10430' ELSE NULL END AS ley
+     FROM personal p
+     LEFT JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
+     LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
+     LEFT JOIN ley ocl ON ocl.id = oc.ley_id AND ocl.deleted_at IS NULL
+     WHERE p.dni = :dni AND p.deleted_at IS NULL LIMIT 1`,
+    { replacements: { dni }, type: QueryTypes.SELECT }
+  );
+  const l = rows[0]?.ley;
+  return l === '10471' ? '10471' : l === '10430' ? '10430' : null;
+}
+
+// Fuentes ordenadas: por cada documento activo (en orden), los archivos combinables
+// de su subcarpeta. `rel` es la ruta relativa dentro de DOCU\<dni>.
+async function fuentesCombinar(sequelize: Sequelize, dni: number): Promise<Array<{ doc: string; rel: string; fp: string; archivo: string }>> {
+  const ley = await leyDeAgente(sequelize, dni);
+  if (!ley) throw Object.assign(new Error('No se pudo determinar la ley del agente (10430/10471)'), { status: 400 });
+  const docs = await sequelize.query<{ documento: string }>(
+    `SELECT documento FROM orden_documentos_expediente
+      WHERE proceso = :proceso AND ley = :ley AND activo = 1 ORDER BY orden`,
+    { replacements: { proceso: 'PASE A TRANSITORIA', ley }, type: QueryTypes.SELECT }
+  );
+  const dir = resolveDocuAgentDir(dni);
+  const refs: Array<{ doc: string; rel: string; fp: string; archivo: string }> = [];
+  for (const d of docs) {
+    const carpeta = safeSegment(d.documento);
+    const sub = path.join(dir, carpeta);
+    if (!fs.existsSync(sub)) continue;
+    const files = fs.readdirSync(sub, { withFileTypes: true })
+      .filter((e) => e.isFile() && (COMBINAR_PDF.test(e.name) || COMBINAR_JPG.test(e.name) || COMBINAR_PNG.test(e.name) || COMBINAR_TIFF.test(e.name)))
+      .map((e) => e.name)
+      .sort((a, b) => a.localeCompare(b, 'es'));
+    for (const f of files) refs.push({ doc: d.documento, rel: `${carpeta}/${f}`.replace(/\\/g, '/'), fp: path.join(sub, f), archivo: f });
+  }
+  return refs;
+}
+
+// Agrega una página puntual (o todas, si page===null) de un archivo al merged.
+// Devuelve cuántas páginas agregó. Usa cache de PDFs ya cargados.
+async function appendPaginasAlMerged(
+  merged: PDFDocument,
+  fp: string,
+  page: number | null,
+  cache: Map<string, any>
+): Promise<number> {
+  if (COMBINAR_PDF.test(fp)) {
+    let src: PDFDocument | undefined = cache.get(fp);
+    if (!src) { src = await PDFDocument.load(fs.readFileSync(fp), { ignoreEncryption: true }); cache.set(fp, src); }
+    const total = src.getPageCount();
+    const idxs = page === null ? src.getPageIndices() : (page >= 0 && page < total ? [page] : []);
+    if (!idxs.length) return 0;
+    const copied = await merged.copyPages(src, idxs);
+    copied.forEach((p) => merged.addPage(p));
+    return copied.length;
+  }
+  if (COMBINAR_TIFF.test(fp)) {
+    // Un TIFF puede ser multipágina → cada página se embebe como PNG.
+    let pngs: Buffer[] | undefined = cache.get(fp);
+    if (!pngs) { pngs = decodeTiffToPngPages(fp); cache.set(fp, pngs); }
+    const idxs = page === null ? pngs.map((_, i) => i) : (page >= 0 && page < pngs.length ? [page] : []);
+    let n = 0;
+    for (const i of idxs) {
+      const img = await merged.embedPng(pngs[i]);
+      const p = merged.addPage([img.width, img.height]);
+      p.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+      n += 1;
+    }
+    return n;
+  }
+  if (COMBINAR_JPG.test(fp) || COMBINAR_PNG.test(fp)) {
+    if (page !== null && page !== 0) return 0;
+    const bytes = fs.readFileSync(fp);
+    const img = COMBINAR_PNG.test(fp) ? await merged.embedPng(bytes) : await merged.embedJpg(bytes);
+    const p = merged.addPage([img.width, img.height]);
+    p.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+    return 1;
+  }
+  return 0;
+}
+
 function parseDocumentOrder(raw: unknown): DocumentOrderInput[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -2798,6 +2912,167 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[tramites] ordenar-archivos-agente error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al ordenar archivos' });
+    }
+  });
+
+  // Documentación incompleta: por cada agente de la tanda, lista los documentos
+  // (activos, según su ley) cuya subcarpeta está vacía o no existe (sin pdf/tiff/jpg…).
+  // Devuelve SOLO los agentes incompletos, con el detalle de qué falta.
+  const FALTANTES_ARCHIVO = /\.(pdf|tiff?|jpe?g|png|bmp)$/i;
+  router.get('/faltantes', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.query.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+
+      const agentes = (await listTandaAgentes(sequelize, tanda)) as any[];
+      const docsRows = await sequelize.query<{ ley: string; documento: string }>(
+        `SELECT ley, documento FROM orden_documentos_expediente
+          WHERE proceso = :proceso AND activo = 1 ORDER BY ley, orden`,
+        { replacements: { proceso: ORDEN_PROCESO_DEFAULT }, type: QueryTypes.SELECT }
+      );
+      const docsPorLey = new Map<string, string[]>();
+      for (const d of docsRows) { const a = docsPorLey.get(d.ley) || []; a.push(d.documento); docsPorLey.set(d.ley, a); }
+
+      const incompletos: Array<{ dni: number; nombre: string; ley: string; sinCarpeta: boolean; faltan: string[]; completos: number; total: number }> = [];
+      const sinLey: Array<{ dni: number; nombre: string }> = [];
+
+      for (const a of agentes) {
+        const dni = Number(a.dni);
+        const nombre = String(a.apellidoNombre || `DNI ${dni}`);
+        const ley = a.ocupacionLey === '10471' ? '10471' : a.ocupacionLey === '10430' ? '10430' : null;
+        if (!ley || !docsPorLey.has(ley)) { sinLey.push({ dni, nombre }); continue; }
+        const docs = docsPorLey.get(ley)!;
+        const dir = resolveDocuAgentDir(dni);
+        if (!fs.existsSync(dir)) {
+          incompletos.push({ dni, nombre, ley, sinCarpeta: true, faltan: [...docs], completos: 0, total: docs.length });
+          continue;
+        }
+        const faltan: string[] = [];
+        for (const doc of docs) {
+          const sub = path.join(dir, safeSegment(doc));
+          const tiene = fs.existsSync(sub) && fs.readdirSync(sub).some((f) => FALTANTES_ARCHIVO.test(f));
+          if (!tiene) faltan.push(doc);
+        }
+        if (faltan.length) incompletos.push({ dni, nombre, ley, sinCarpeta: false, faltan, completos: docs.length - faltan.length, total: docs.length });
+      }
+
+      // Orden: más faltantes primero.
+      incompletos.sort((a, b) => b.faltan.length - a.faltan.length);
+      return res.json({
+        ok: true,
+        data: { tanda, totalAgentes: agentes.length, incompletos, sinLey, completos: agentes.length - incompletos.length - sinLey.length },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] faltantes error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al analizar faltantes' });
+    }
+  });
+
+  // Combina los archivos (PDF + jpg/png) de las subcarpetas del agente en el orden
+  // de la pestaña "Orden de documentos". Devuelve el PDF (base64) + manifiesto de
+  // páginas (cada una sabe de qué archivo/página salió, para poder reordenar y guardar).
+  router.post('/combinar-agente', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+
+      const refs = await fuentesCombinar(sequelize, dni);
+      if (!refs.length) {
+        return res.status(400).json({ ok: false, error: 'El agente no tiene archivos combinables en las subcarpetas del orden' });
+      }
+
+      const merged = await PDFDocument.create();
+      const cache = new Map<string, any>();
+      const pages: Array<{ id: string; doc: string; rel: string; page: number; archivo: string }> = [];
+      const saltados: Array<{ rel: string; motivo: string }> = [];
+      for (const ref of refs) {
+        try {
+          const added = await appendPaginasAlMerged(merged, ref.fp, null, cache);
+          for (let p = 0; p < added; p += 1) {
+            pages.push({ id: `${ref.rel}#${p}`, doc: ref.doc, rel: ref.rel, page: p, archivo: ref.archivo });
+          }
+          if (!added) saltados.push({ rel: ref.rel, motivo: 'sin páginas o formato no soportado' });
+        } catch (e: any) {
+          saltados.push({ rel: ref.rel, motivo: e?.message || 'error al leer' });
+        }
+      }
+      if (!pages.length) {
+        return res.status(400).json({ ok: false, error: 'No se pudo combinar ningún archivo' });
+      }
+      const bytes = await merged.save();
+      return res.json({
+        ok: true,
+        data: { dni, totalPages: pages.length, pages, saltados, pdfBase64: Buffer.from(bytes).toString('base64') },
+      });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinar-agente error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al combinar' });
+    }
+  });
+
+  // Guarda el combinado en el orden de páginas elegido en:
+  // DOCU\<dni>\Tramite de nombramiento\Tramite de nombramiento.pdf (pisa si existe).
+  router.post('/combinar-guardar', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const pagesRaw = Array.isArray(req.body?.pages) ? req.body.pages : [];
+      const pages = pagesRaw
+        .map((p: any) => ({ rel: String(p?.rel || '').replace(/\\/g, '/').trim(), page: Number(p?.page) }))
+        .filter((p: any) => p.rel && Number.isInteger(p.page) && p.page >= 0);
+      if (!pages.length) return res.status(400).json({ ok: false, error: 'Falta el orden de páginas' });
+
+      const merged = await PDFDocument.create();
+      const cache = new Map<string, any>();
+      let armadas = 0;
+      for (const pg of pages) {
+        const fp = resolveInsideDocu(dni, pg.rel); // valida que quede dentro de la carpeta del agente
+        if (!fs.existsSync(fp)) continue;
+        armadas += await appendPaginasAlMerged(merged, fp, pg.page, cache);
+      }
+      if (!armadas) return res.status(400).json({ ok: false, error: 'No se armó ninguna página' });
+
+      const destDir = path.join(resolveDocuAgentDir(dni), COMBINAR_NOMBRE_SALIDA);
+      fs.mkdirSync(destDir, { recursive: true });
+      const destPath = path.join(destDir, `${COMBINAR_NOMBRE_SALIDA}.pdf`);
+      fs.writeFileSync(destPath, Buffer.from(await merged.save()));
+      return res.json({ ok: true, data: { dni, paginas: armadas, ruta: `${COMBINAR_NOMBRE_SALIDA}/${COMBINAR_NOMBRE_SALIDA}.pdf` } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] combinar-guardar error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar el combinado' });
+    }
+  });
+
+  // Prepara la carpeta del agente / subcarpeta del documento y devuelve la ruta de
+  // RED (UNC) para que el front la copie al portapapeles. El Explorador NO se puede
+  // abrir desde el servidor (la API vive en la Sesión 0, aislada del escritorio, y
+  // menos aún en una PC remota): el usuario pega la ruta en su propio Explorador.
+  // Crea la subcarpeta si falta (en Faltantes suele no existir) para poder soltar ahí el archivo.
+  router.post('/abrir-carpeta', async (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+
+      const agentDir = resolveDocuAgentDir(dni);
+      const doc = String(req.body?.doc || '').trim();
+      const seg = doc ? safeSegment(doc) : '';
+      // Con doc → subcarpeta del documento (safeSegment evita traversal); sin doc → carpeta del agente.
+      const target = seg ? path.join(agentDir, seg) : agentDir;
+
+      // Crea lo que falte (agentDir incluido). En Faltantes la subcarpeta suele no existir.
+      const creada = !fs.existsSync(target);
+      fs.mkdirSync(target, { recursive: true });
+
+      // Ruta relativa al share (lo que va despues de \\host\). Por defecto, DOCU sin la unidad.
+      const uncBaseRel = (String(env.TRAMITES_DOCU_UNC || '').trim()
+        || getDocuBaseDir().replace(/^[a-zA-Z]:[\\/]/, ''))
+        .replace(/[\\/]+$/, '').replace(/\//g, '\\');
+      const uncRel = [uncBaseRel, String(dni), ...(seg ? [seg] : [])].join('\\');
+
+      return res.json({ ok: true, data: { dni, doc: doc || null, ruta: target, uncRel, creada } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] abrir-carpeta error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'No se pudo preparar la carpeta' });
     }
   });
 
