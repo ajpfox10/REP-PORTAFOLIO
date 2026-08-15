@@ -290,6 +290,10 @@ const schema = z.object({
   // Trámites documentales: entrada de PDFs descargados y base final por DNI/trámite.
   TRAMITES_PDF_INPUT_DIR: strish(""),
   TRAMITES_DOCU_BASE_DIR: strish(""),
+  // Ruta de la carpeta DOCU relativa al share de red (lo que va despues de \\host\).
+  // Sirve para armar la ruta UNC que el front copia al portapapeles para abrir en el Explorador.
+  // Si esta vacio se deriva de TRAMITES_DOCU_BASE_DIR sacandole la letra de unidad (D:\G\DOCU -> G\DOCU).
+  TRAMITES_DOCU_UNC: strish(""),
   TRAMITES_PDF_OCR_ENABLE: boolish.default(true),
   TRAMITES_PDF_OCR_MAX_PAGES: intish(20),
   TRAMITES_PDF_OCR_SCALE: intish(2),
