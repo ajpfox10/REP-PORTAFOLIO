@@ -1,0 +1,135 @@
+# OT-131: Monthly restore drill in CI.
+# Downloads the latest RDS backup dump from S3, restores into an ephemeral MySQL
+# container, and runs schema/data integrity checks.
+#
+# Runs:
+#   - Monthly on the 1st at 04:00 UTC (automated)
+#   - On demand via workflow_dispatch
+#
+# Required secrets:
+#   BACKUP_S3_BUCKET   — S3 bucket where mysqldump files are stored
+#   BACKUP_S3_PREFIX   — Key prefix, e.g. "rds-backups/"
+#   AWS_ACCESS_KEY_ID  — IAM read-only on the backup bucket
+#   AWS_SECRET_ACCESS_KEY
+#   AWS_REGION
+
+name: Backup Restore Verify
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'   # Monthly — 1st of each month at 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      backup_key:
+        description: 'S3 key of the backup to restore (leave blank for latest)'
+        required: false
+        default: ''
+
+jobs:
+  restore-drill:
+    name: RDS restore drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: drill_root_password
+          MYSQL_DATABASE: vetmanager_drill
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u root -pdrill_root_password"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Resolve backup key
+        id: resolve
+        run: |
+          if [ -n "${{ github.event.inputs.backup_key }}" ]; then
+            KEY="${{ github.event.inputs.backup_key }}"
+          else
+            # Find the most recent .sql.gz in the backup prefix
+            KEY=$(aws s3 ls "s3://${{ secrets.BACKUP_S3_BUCKET }}/${{ secrets.BACKUP_S3_PREFIX }}" \
+              --recursive \
+              | grep '\.sql\.gz$' \
+              | sort | tail -1 | awk '{print $4}')
+          fi
+          if [ -z "$KEY" ]; then
+            echo "::error::No backup file found in s3://${{ secrets.BACKUP_S3_BUCKET }}/${{ secrets.BACKUP_S3_PREFIX }}"
+            exit 1
+          fi
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "Using backup: $KEY"
+
+      - name: Download backup
+        run: |
+          aws s3 cp \
+            "s3://${{ secrets.BACKUP_S3_BUCKET }}/${{ steps.resolve.outputs.key }}" \
+            /tmp/backup.sql.gz
+
+      - name: Restore backup
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: drill_root_password
+          RESTORE_DB_NAME: vetmanager_drill
+        run: |
+          if [ ! -f scripts/backup/restore-drill.sh ]; then
+            echo "ERROR: scripts/backup/restore-drill.sh not found" >&2
+            exit 1
+          fi
+          chmod +x scripts/backup/restore-drill.sh
+          scripts/backup/restore-drill.sh /tmp/backup.sql.gz
+
+      - name: Verify restore integrity
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: drill_root_password
+          DB_NAME: vetmanager_drill
+        run: |
+          chmod +x scripts/backup/verify-restore.sh
+          scripts/backup/verify-restore.sh
+
+      - name: Check row counts are non-zero
+        env:
+          MYSQL_PWD: drill_root_password
+        run: |
+          USERS=$(mysql -N -B -h 127.0.0.1 -u root vetmanager_drill -e "SELECT COUNT(*) FROM users;")
+          PATIENTS=$(mysql -N -B -h 127.0.0.1 -u root vetmanager_drill -e "SELECT COUNT(*) FROM patients;")
+          echo "users=$USERS patients=$PATIENTS"
+          if [ "$USERS" -eq 0 ] || [ "$PATIENTS" -eq 0 ]; then
+            echo "::error::Restore drill failed: zero rows in users or patients"
+            exit 1
+          fi
+          echo "Drill passed: users=$USERS patients=$PATIENTS"
+
+      - name: Cleanup
+        if: always()
+        env:
+          MYSQL_PWD: drill_root_password
+        run: |
+          mysql -h 127.0.0.1 -u root -e "DROP DATABASE IF EXISTS \`vetmanager_drill\`;" || true
+          rm -f /tmp/backup.sql.gz
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Restore drill FAILED — check backup integrity immediately"
+          # Add webhook/Slack notification here if USAGE_ALERT_WEBHOOK_URL is configured

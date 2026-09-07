@@ -1,0 +1,19 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+watchPatterns = [
+  "/andromeda-front/src/**",
+  "/andromeda-front/public/**",
+  "/andromeda-front/package.json",
+  "/andromeda-front/package-lock.json",
+  "/andromeda-front/vite.config.js",
+  "/andromeda-front/index.html",
+  "/andromeda-front/Dockerfile",
+  "/andromeda-front/nginx.conf",
+]
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

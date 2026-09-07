@@ -1,0 +1,1364 @@
+================================================================================
+  VETERINARIAPROD — REGISTRO COMPLETO DE BUGS DE SEGURIDAD CORREGIDOS
+  Auditoría multi-sesión | 4 agentes paralelos | Fecha: 2026-05-25
+================================================================================
+
+Formato: [ID] ARCHIVO | QUÉ PASABA | QUÉ SE HIZO
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 1 — AUTENTICACIÓN Y SESIONES (servicio auth)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-001] services/auth/src/controllers/auth.controller.js
+  QUÉ PASABA : Se usaba `logger.warn(` en 4 lugares del controlador pero la
+               variable importada se llama `log`, no `logger`. Cualquier llamada
+               a ssoConnect o ssoCallback crasheaba el proceso con
+               "ReferenceError: logger is not defined".
+  QUÉ SE HIZO: Reemplazo masivo de todas las ocurrencias logger. → log. con
+               replace_all.
+
+[BUG-006] services/auth/src/controllers/auth.controller.js
+  QUÉ PASABA : El endpoint POST /auth/2fa/challenge no verificaba si el código
+               TOTP ya había sido usado. Dos requests paralelas con el mismo
+               código válido podían autenticarse simultáneamente (race condition).
+  QUÉ SE HIZO: Implementación del patrón "burned token" con Redis SET NX EX 90.
+               El primer request quema el código; el segundo recibe 401 aunque
+               el código sea matemáticamente válido.
+
+[BUG-007] services/auth/src/controllers/auth.controller.js
+  QUÉ PASABA : Tras completar el desafío 2FA, el pending token (JWT de corta
+               duración emitido durante el login) nunca se revocaba. Podía
+               reutilizarse hasta su expiración natural para abrir nuevas
+               sesiones sin contraseña.
+  QUÉ SE HIZO: Después de verificar el TOTP exitosamente, se extrae el JTI del
+               pending token y se inserta en Redis con `revoked:{jti}` y TTL
+               igual al tiempo restante del token.
+
+[BUG-008] services/auth/src/controllers/auth.controller.js
+  QUÉ PASABA : El secreto TOTP (two_factor_secret) se almacenaba en texto plano
+               en la tabla users. Un atacante con acceso de lectura a la BD
+               podía clonar los autenticadores de todos los usuarios.
+  QUÉ SE HIZO: Al guardar el secreto se cifra con shared/encryption.js
+               (AES-256-GCM). Al leer para verificar se descifra. Afecta los
+               3 flujos: setup (POST /2fa/setup), verificación (POST /2fa/verify),
+               desactivación (DELETE /2fa) y challenge (POST /2fa/challenge).
+
+[BUG-010] services/auth/src/controllers/auth.controller.js (pending tokens)
+  QUÉ PASABA : El pending token para 2FA no tenía revocación de JTI al
+               completar el flujo, permitiendo replay en la ventana de
+               expiración.
+  QUÉ SE HIZO: Ver BUG-007 — misma corrección.
+
+[BUG-013] services/auth/src/controllers/auth.controller.js
+  QUÉ PASABA : Las API keys no validaban sus scopes contra una lista de valores
+               permitidos. Un scope arbitrario podía ser emitido.
+  QUÉ SE HIZO: Validación de scopes contra Set ALLOWED_API_KEY_SCOPES antes
+               de persistir la clave.
+
+[BUG-014] services/auth/src/controllers/auth.controller.js
+  QUÉ PASABA : La fecha de expiración de API keys no tenía límite máximo. Se
+               podían crear claves con expiración de 100 años.
+  QUÉ SE HIZO: La fecha de expiración se capea a máximo 1 año desde la creación.
+
+[BUG-015] services/auth/src/routes/auth/public.routes.js
+  QUÉ PASABA : El endpoint POST /password-reset/confirm no tenía rate limiting.
+               Un atacante podía probar tokens de reset por fuerza bruta de
+               forma ilimitada.
+  QUÉ SE HIZO: Añadido passwordResetConfirmLimiter: máximo 5 intentos por hora
+               por IP usando express-rate-limit.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 2 — SSO / OIDC (shared/oidc.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-017] shared/oidc.js — Issuer validation Microsoft
+  QUÉ PASABA : El issuer de tokens Microsoft con tenant /common/ no se
+               validaba correctamente. Cualquier tenant de Azure AD podía
+               autenticarse como si fuera el tenant propio.
+  QUÉ SE HIZO: Para issuers con /common/ se verifica que claims.iss contenga
+               login.microsoftonline.com y, si está configurado, el tenantId
+               específico. Para issuers normales se exige coincidencia exacta.
+
+[BUG-018] shared/oidc.js — Discovery cache TTL
+  QUÉ PASABA : El cache del documento OIDC discovery (/.well-known/openid-
+               configuration) nunca expiraba. Si un proveedor rotaba sus
+               claves JWKS, el sistema seguía usando la copia desactualizada
+               indefinidamente.
+  QUÉ SE HIZO: El cache ahora almacena { data, expiresAt } con TTL de 1 hora.
+               Transcurrido ese tiempo se vuelve a consultar el discovery.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 3 — AUTORIZACIÓN Y ROLES (shared/requestContext.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-16] shared/requestContext.js
+  QUÉ PASABA : Los roles extraídos del header x-user-roles se aceptaban sin
+               validación. Un atacante que pudiera manipular el header (o un
+               bug en el gateway) podía inyectar roles arbitrarios como
+               "superadmin".
+  QUÉ SE HIZO: Definido Set KNOWN_ROLES con los 14 roles válidos del sistema.
+               Los roles del header se filtran contra este Set antes de
+               poblarse en req.user.roles. Roles desconocidos se descartan
+               silenciosamente.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 4 — FIRMA INTERNA DE SERVICIOS (shared/internalAuth.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-1] shared/internalAuth.js — Replay de firma HMAC
+  QUÉ PASABA : La firma HMAC interna entre microservicios no tenía protección
+               contra replay. Un atacante que capturara un request firmado
+               podía re-enviarlo indefinidamente.
+  QUÉ SE HIZO: Implementación de nonce store en Redis con SET NX. Cada firma
+               incluye un nonce único que se "quema" al primer uso. Intentos
+               de replay retornan 401 y quedan logueados.
+
+[BUG-21] shared/internalAuth.js — Information disclosure en 401
+  QUÉ PASABA : Las respuestas 401 de internalAuth incluían el campo `reason`
+               con detalles del motivo de rechazo (signature mismatch, expired,
+               replay detected). Esto ayuda al atacante a calibrar sus ataques.
+  QUÉ SE HIZO: El campo `reason` se eliminó del cuerpo de respuesta HTTP.
+               El motivo real solo se registra en el log interno.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 5 — RUTAS ADMIN SIN FIRMA INTERNA (BUG-003)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-003a] services/auth/src/routes/admin-table-preview.routes.js
+  QUÉ PASABA : Las rutas GET /admin/preview y GET /admin/preview/:tableName no
+               tenían requireInternalSig. Podían ser accedidas directamente
+               desde internet si el puerto del servicio estaba expuesto, con
+               solo forjar el header x-user-roles: superadmin.
+  QUÉ SE HIZO: Añadido requireInternalSig + fromHeaders como middlewares
+               previos. Los roles ahora se leen de req.user (poblado por
+               fromHeaders) en lugar del header crudo.
+
+[BUG-003b] services/auth/src/routes/schema.routes.js
+  QUÉ PASABA : Igual que 003a. El guard adminOnly leía x-user-roles del header
+               sin verificar la firma del servicio interno.
+  QUÉ SE HIZO: requireInternalSig + fromHeaders añadidos al router.use().
+               adminOnly actualizado para leer req.user.roles.
+
+[BUG-003c] services/auth/src/routes/data-governance.routes.js
+  QUÉ PASABA : Igual que 003a/b. Además, en cada handler se leía
+               req.headers['x-org-id'] y req.headers['x-user-id'] directamente,
+               ambos spoofables.
+  QUÉ SE HIZO: requireInternalSig + fromHeaders en router.use(). Todos los
+               req.headers['x-org-id'] reemplazados por req.user.orgId y
+               req.headers['x-user-id'] por req.user.userId.
+
+[BUG-003d] services/auth/src/routes/plugins.routes.js
+  QUÉ PASABA : Igual que 003c — req.headers['x-org-id'] usado en 4 handlers
+               sin firma interna.
+  QUÉ SE HIZO: requireInternalSig + fromHeaders. Todos los accesos de header
+               reemplazados por req.user.orgId / req.user.userId.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 6 — SSRF (shared/ssrf.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-4] shared/ssrf.js — IPv6 scope IDs y direcciones mapped
+  QUÉ PASABA : La función isPrivateIpv6 no eliminaba los scope IDs de IPv6
+               (ej: ::1%eth0) antes de evaluar si la IP era privada. Tampoco
+               detectaba las IPv4-mapped en IPv6 (::ffff:127.0.0.1) como
+               privadas.
+  QUÉ SE HIZO: Se extrae y descarta el scope ID antes del análisis. Para
+               ::ffff: se extrae el IPv4 embebido y se evalúa con isPrivateIp.
+
+[BUG-7] shared/ssrf.js — IPs en notación decimal
+  QUÉ PASABA : validateUrl no detectaba IPs en notación decimal (ej:
+               2130706433 = 127.0.0.1 o http://0x7f000001). Un atacante podía
+               bypasear la lista negra de IPs privadas.
+  QUÉ SE HIZO: Detección de strings que sean enteros puros: se convierten a
+               notación dotted y se evalúan con isPrivateIp.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 7 — CIFRADO DE CAMPOS (shared/encryption.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-24] shared/encryption.js
+  QUÉ PASABA : Si FIELD_ENCRYPTION_SALT no estaba configurado, el sistema
+               usaba silenciosamente el salt hardcodeado 'vetmanager_enc_salt_v1'.
+               En producción esto significa que todos los datos cifrados
+               comparten el mismo salt débil y predecible.
+  QUÉ SE HIZO: Añadida advertencia explícita en consola cuando NODE_ENV es
+               production y la variable no está configurada, indicando el
+               riesgo y la acción requerida.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 8 — GDPR / DERECHO AL OLVIDO (shared/gdpr.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-20] shared/gdpr.js — anonymizeClient incompleto
+  QUÉ PASABA : La función anonymizeClient anonimizaba los datos del cliente en
+               la tabla clients pero no limpiaba: sesiones activas del portal
+               (portal_sessions), datos médicos sensibles en tele_sessions
+               (chief_complaint, notes) ni payloads de notificaciones pendientes
+               (notification_retry_jobs).
+  QUÉ SE HIZO: Añadidas tres operaciones de limpieza:
+               1. DELETE FROM portal_sessions WHERE client_id = :cid
+               2. UPDATE tele_sessions SET chief_complaint=NULL, notes=NULL
+               3. UPDATE notification_retry_jobs SET payload_json='{}' para
+                  jobs del cliente en esa org.
+
+[BUG-22] shared/gdpr.js — Sin atomicidad transaccional
+  QUÉ PASABA : Las ~7 operaciones de anonymizeClient se ejecutaban como queries
+               independientes. Si la conexión fallaba a mitad del proceso, el
+               cliente quedaba parcialmente anonimizado (algunos datos borrados,
+               otros intactos). Estado inconsistente e inauditable.
+  QUÉ SE HIZO: Todo el bloque de anonimización envuelto en db.transaction().
+               Si cualquier paso falla, toda la operación hace rollback y el
+               estado del cliente permanece intacto.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 9 — CADENA DE AUDITORÍA (shared/audit.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-17] shared/audit.js — Fallback de AUDIT_CHAIN_SECRET
+  QUÉ PASABA : getAuditSecret() tenía fallbacks: AUDIT_CHAIN_SECRET →
+               FIELD_ENCRYPTION_SECRET → JWT_SECRET. Comprometer el JWT_SECRET
+               (que protege tokens de usuario) automáticamente comprometía
+               también la integridad de la cadena de auditoría, permitiendo
+               a un atacante forjar entradas de auditoría sin detección.
+  QUÉ SE HIZO: Los fallbacks eliminados. Solo se acepta AUDIT_CHAIN_SECRET.
+               Si no está configurado, se lanza un error explícito que impide
+               el arranque del servicio.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 10 — REINTENTOS DE NOTIFICACIONES (shared/notificationRetry.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-34] shared/notificationRetry.js — Sin timeout en ejecución de jobs
+  QUÉ PASABA : executeJob() no tenía timeout. Si un canal (email, SMS,
+               WhatsApp, FCM) se colgaba o tardaba indefinidamente, el worker
+               de reintentos quedaba bloqueado sin procesar otros jobs.
+               Podía causar acumulación de mensajes no enviados y OOM si
+               muchos workers se colgaban en paralelo.
+  QUÉ SE HIZO: Envuelto en Promise.race() con un timeout configurable via
+               NOTIFICATION_JOB_TIMEOUT_MS (default 30 000 ms). Si el timeout
+               se dispara, el job falla con el error "Job timeout" y sigue el
+               proceso de retry normal.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 11 — WEBRTC / TELEMEDICINA (shared/webrtc.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-15] shared/webrtc.js — Secret hardcodeado en adaptador builtin
+  QUÉ PASABA : El adaptador builtin de WebRTC tenía el fallback:
+               process.env.WEBRTC_ROOM_SECRET || process.env.JWT_SECRET ||
+               'vm_webrtc_secret'. En instalaciones mal configuradas, todos
+               los tokens de sala se firmaban con el literal 'vm_webrtc_secret'
+               público, permitiendo a cualquiera generar tokens válidos para
+               unirse a consultas de telemedicina ajenas.
+  QUÉ SE HIZO: Eliminados los fallbacks. WEBRTC_ROOM_SECRET es obligatorio;
+               si no está configurado se lanza un Error que impide generar
+               tokens, forzando la configuración correcta.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 12 — GESTIÓN DE SECRETOS (shared/secrets.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-27] shared/secrets.js — SECRETS_JSON en producción sin advertencia
+  QUÉ PASABA : SECRETS_JSON permite pasar todos los secretos de la aplicación
+               como variable de entorno en texto plano. En producción esto es
+               un riesgo ya que las variables de entorno pueden ser visibles
+               en logs de CI/CD, paneles de plataforma, etc.
+  QUÉ SE HIZO: Añadida advertencia en consola cuando NODE_ENV === 'production'
+               y SECRETS_JSON está configurado, recomendando usar SECRETS_FILE
+               apuntando a un volumen montado.
+
+[BUG-28] shared/secrets.js — Cache del bundle sin TTL
+  QUÉ PASABA : Una vez cargado el bundle de secretos, nunca se recargaba
+               durante la vida del proceso. En servicios de larga duración, la
+               rotación de secretos (cambio de SECRETS_FILE) no tenía efecto
+               hasta reiniciar el servicio manualmente.
+  QUÉ SE HIZO: Añadido TTL de 10 minutos (configurable via
+               SECRETS_CACHE_TTL_MS). Transcurrido el TTL, el próximo acceso
+               recarga el bundle desde disco o variable de entorno.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 13 — MÉTRICAS PROMETHEUS (shared/metrics.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-29] shared/metrics.js — Endpoint /metrics sin autenticación
+  QUÉ PASABA : El handler metricsHandler exponía todas las métricas de
+               Prometheus (conteo de pacientes por org, facturas, citas,
+               tokens activos, errores RBAC) sin ningún control de acceso.
+               Cualquiera con acceso de red podía enumerar organizaciones y
+               datos operacionales.
+  QUÉ SE HIZO: Si METRICS_BEARER_TOKEN está configurado, el handler exige
+               el header Authorization: Bearer <token>. Sin él, retorna 401
+               con WWW-Authenticate: Bearer.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 14 — PORTAL DEL PROPIETARIO (services/portal)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-001-PORTAL] services/portal/src/portal.common.js — Cuentas suspendidas
+  QUÉ PASABA : portalAuth verificaba el JWT pero no consultaba si la cuenta
+               del cliente seguía activa en la BD. Clientes con is_active=0
+               (suspendidos o eliminados) podían seguir usando el portal
+               mientras su token no expirara.
+  QUÉ SE HIZO: Añadida consulta DB en portalAuth: SELECT id FROM clients
+               WHERE id = :id AND is_active = 1. Si el cliente no existe o
+               está inactivo, retorna 403 "Cuenta suspendida o eliminada".
+
+[BUG-PORTAL-BILLING] services/portal/src/routes/portal.billing.routes.js
+  QUÉ PASABA : Los 3 endpoints de facturación del portal (GET /, GET /:id,
+               POST /:id/pay) filtraban por client_id pero no por
+               organization_id. Un cliente de una org podía ver y pagar
+               facturas de otra org si conocía el ID.
+  QUÉ SE HIZO: JOIN con branches añadido a todas las queries con condición
+               AND b.organization_id = :orgId donde orgId proviene del JWT
+               del propietario.
+
+[BUG-PORTAL-APPOINTMENTS-IDOR] services/portal/src/routes/portal.appointments.routes.js
+  QUÉ PASABA : GET / no filtraba por organization_id. Un propietario podía
+               ver citas de pacientes de otras organizaciones si adivinar IDs.
+  QUÉ SE HIZO: Añadida condición b.organization_id = :orgId al WHERE.
+
+[BUG-PORTAL-APPOINTMENTS-TOCTOU] services/portal/src/routes/portal.appointments.routes.js
+  QUÉ PASABA : PATCH /:id/cancel hacía un SELECT para verificar el status y
+               luego un UPDATE separado. Entre ambas operaciones, otro proceso
+               podía cambiar el status, permitiendo cancelar citas ya
+               completadas o en curso.
+  QUÉ SE HIZO: El UPDATE incluye AND status IN ('requested','confirmed') en
+               el WHERE. Si affectedRows = 0 se retorna 409 Conflict.
+
+[BUG-006-PORTAL] services/portal/src/routes/portal.profile.routes.js
+  QUÉ PASABA : El endpoint PUT /password no tenía rate limiting. Un atacante
+               con el token de sesión vigente podía intentar cambios de
+               contraseña por fuerza bruta sin restricción.
+  QUÉ SE HIZO: Rate limiter de 5 intentos/hora aplicado a PUT /password.
+
+[BUG-016-PORTAL] services/portal/src/routes/portal.profile.routes.js
+  QUÉ PASABA : Tras cambiar la contraseña, las sesiones activas del portal
+               no se invalidaban. Cualquiera con un refresh token robado
+               anterior al cambio podía seguir renovando sesiones
+               indefinidamente.
+  QUÉ SE HIZO: Después del UPDATE de contraseña se ejecuta DELETE FROM
+               portal_sessions WHERE client_id = :id, revocando todos los
+               refresh tokens del propietario.
+
+[BUG-007-PORTAL] services/portal/src/routes/portal.fcm.routes.js
+  QUÉ PASABA : El registro de token FCM usaba ON DUPLICATE KEY UPDATE
+               user_id = :uid, permitiendo que un usuario registrara un token
+               FCM que pertenecía a otro usuario y recibiera sus notificaciones
+               push.
+  QUÉ SE HIZO: Antes de insertar se hace DELETE del token si pertenece a un
+               usuario diferente. El ON DUPLICATE KEY UPDATE ya no modifica
+               user_id, solo actualiza is_active y last_used_at.
+
+[BUG-014-PORTAL] services/portal/src/routes/portal.fcm.routes.js
+  QUÉ PASABA : El nombre del topic FCM se construía como `owner_${clientId}`
+               sin sanitizar. Si clientId contuviera caracteres especiales
+               (por un bug o manipulación), el topic podría ser inválido o
+               permitir suscribirse a topics de otros usuarios.
+  QUÉ SE HIZO: El nombre del topic se sanitiza con replace(/[^a-zA-Z0-9_.-]/g,
+               '_') antes de llamar a fcm.subscribeToTopic().
+
+[BUG-008-PORTAL] services/portal/src/routes/portal.telemedicine.routes.js
+  QUÉ PASABA : El campo meeting_url (URL de la sala WebRTC) se devolvía para
+               todas las sesiones de telemedicina, incluyendo las ya
+               completadas o canceladas. Un propietario podía obtener URLs de
+               salas pasadas e intentar acceder a grabaciones o metadatos.
+  QUÉ SE HIZO: meeting_url solo se devuelve cuando ts.status IN
+               ('in_progress', 'ready', 'confirmed'). Para otros estados
+               el campo es NULL.
+
+[BUG-010-PORTAL] portal.appointments.routes.js + portal.profile.routes.js
+  QUÉ PASABA : Los campos de texto libre (reason, notes, address, city,
+               firstName, lastName, phone) no tenían validación de longitud
+               máxima. Un atacante podía enviar strings de MB en esos campos,
+               causando almacenamiento excesivo o errores de truncación
+               silenciosa en MySQL.
+  QUÉ SE HIZO: Límites añadidos vía express-validator:
+               reason ≤ 500, notes ≤ 1000, firstName/lastName ≤ 100,
+               phone ≤ 30, address ≤ 300, city ≤ 100.
+
+[BUG-PORTAL-017] services/portal/src/portal.common.js — Header x-org-id
+  QUÉ PASABA : publishPortalEvent usaba req.headers['x-org-id'] como fallback
+               para obtener el orgId del evento. Este header puede ser
+               falsificado por cualquier cliente.
+  QUÉ SE HIZO: Eliminado el fallback. orgId proviene exclusivamente de
+               req.owner?.orgId (extraído del JWT verificado).
+
+[BUG-PORTAL-JSON-LIMIT] services/portal/src/index.js
+  QUÉ PASABA : El límite de body JSON del portal era 5 MB, exageradamente
+               alto para una API que solo necesita unos pocos KB por request.
+               Facilitaba ataques de DoS por cuerpos grandes.
+  QUÉ SE HIZO: jsonLimit reducido de '5mb' a '100kb'.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 15 — LAB / IMAGING (services/lab-imaging)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-2] services/lab-imaging/src/routes/imaging.write.routes.js
+  QUÉ PASABA : La generación del número de orden de imágenes leía el último
+               número y creaba el siguiente en dos queries separadas (TOCTOU).
+               Dos requests simultáneas podían generar el mismo número de
+               orden, causando duplicados.
+  QUÉ SE HIZO: La generación del número y la inserción de la orden se envuelven
+               en db.transaction() con SELECT ... FOR UPDATE en la tabla de
+               secuencia.
+
+[BUG-3] services/lab-imaging/src/routes/pathology.write.routes.js
+  QUÉ PASABA : Igual que BUG-2 pero en órdenes de patología. El loop de
+               inserción de muestras también podía generar duplicados.
+  QUÉ SE HIZO: Transacción con FOR UPDATE en toda la operación incluyendo
+               el loop de muestras.
+
+[BUG-9] imaging.read.routes.js / pathology.read.routes.js /
+         surgery.read.routes.js / hospitalization.read.routes.js
+  QUÉ PASABA : Los parámetros de paginación limit y page no tenían validación.
+               Un cliente podía enviar limit=1000000 y obtener toda la base
+               de datos en una sola respuesta, exfiltrando datos masivamente.
+  QUÉ SE HIZO: En los 4 archivos: limit = Math.min(Math.max(parseInt(limit),
+               1), 100). Máximo 100 resultados por página.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 16 — BILLING / FACTURACIÓN (services/billing)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-21-BILLING] services/billing/src/routes/billing.invoices.routes.js
+  QUÉ PASABA : Los items de factura no validaban discountPct, taxPct, quantity
+               ni unitPrice. Se podía crear una factura con descuento de 150%
+               o precio negativo, generando pagos negativos o saldos incorrectos.
+  QUÉ SE HIZO: Validadores añadidos: discountPct entre 0 y 100, taxPct entre
+               0 y 100, quantity mínimo 1, unitPrice mínimo 0.
+
+[BUG-22-BILLING] services/billing/src/routes/billing.invoices.routes.js
+  QUÉ PASABA : PATCH /:id/cancel no verificaba el status actual antes de
+               cancelar. Se podía cancelar una factura ya pagada o ya
+               cancelada.
+  QUÉ SE HIZO: Verificación explícita del status antes de proceder. Si
+               affectedRows = 0 (otro proceso modificó la factura entre el
+               SELECT y el UPDATE) se retorna 409 Conflict.
+
+[BUG-23] services/billing/src/routes/billing.consolidated.routes.js
+  QUÉ PASABA : La consolidación de facturas no tenía límite de resultados.
+               Se podía solicitar la consolidación de años enteros de datos
+               sin paginación, generando queries de millones de filas.
+  QUÉ SE HIZO: Límite de 200 resultados máximo en la consulta consolidada.
+
+[BUG-30] services/billing/src/routes/billing.inventory.routes.js
+  QUÉ PASABA : POST /movements no actualizaba el stock físico en
+               inventory_stock ni usaba transacción. Los movimientos de salida
+               o compra se registraban pero el stock disponible no cambiaba.
+               Además, dos movimientos simultáneos podían generar stock
+               negativo.
+  QUÉ SE HIZO: Envuelto en db.transaction() con SELECT ... FOR UPDATE en
+               inventory_stock. Se añade UPDATE de stock para movimientos
+               de salida y compras.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 17 — DOCUMENTOS (services/documents)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-DOC-01] services/documents/src/routes/accounts.sync.routes.js
+  QUÉ PASABA : Los archivos sincronizados desde IMAP no verificaban que fueran
+               PDFs reales. Un email malicioso podía adjuntar un ejecutable
+               renombrado como .pdf y este se subía al storage sin verificación,
+               pudiendo ser descargado y ejecutado por usuarios.
+  QUÉ SE HIZO: Verificación de magic bytes antes de subir: los primeros 4 bytes
+               deben ser 25 50 44 46 (%PDF). Si no coinciden, el archivo se
+               rechaza con log de advertencia.
+
+[BUG-DOC-05] services/documents/src/routes/accounts.sync.routes.js
+  QUÉ PASABA : No había límite de tamaño en los archivos sincronizados por
+               IMAP. Un email con adjuntos de cientos de MB podía saturar el
+               storage y la memoria del proceso.
+  QUÉ SE HIZO: Límite de 25 MB por archivo. Los adjuntos que superen este
+               tamaño se saltan con un warning en el log.
+
+[BUG-DOC-04] services/documents/src/routes/accounts.sync.routes.js
+  QUÉ PASABA : Los nombres de archivo de los adjuntos IMAP se usaban
+               directamente en la URL de storage y en el INSERT de la BD.
+               Un nombre como "../../../etc/passwd" o "<script>alert(1)</script>.pdf"
+               podía causar path traversal o XSS almacenado.
+  QUÉ SE HIZO: Función sanitizeFilename: path.basename() elimina separadores
+               de ruta, luego se aplica allowlist /[^a-zA-Z0-9._\-\s()]/g.
+               El nombre sanitizado se usa tanto en el upload como en el INSERT.
+
+[BUG-DOC-03] services/documents/src/routes/inbox.write.routes.js
+  QUÉ PASABA : Igual que BUG-DOC-04 pero en el inbox de escritura. Los nombres
+               de archivo subidos manualmente también se insertaban sin
+               sanitización.
+  QUÉ SE HIZO: Misma función sanitizeFilename aplicada al upload de inbox.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 18 — TELEMEDICINA (services/telemedicine)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-TELE-03] services/telemedicine/src/routes/sessions.routes.js
+  QUÉ PASABA : POST /:id/room/token aceptaba identity y role del body del
+               request. Un paciente podía enviarse role: 'host' y obtener
+               permisos de moderador en la sala WebRTC, pudiendo expulsar
+               al veterinario o silenciarlo.
+  QUÉ SE HIZO: identity forzado desde req.user.email (ignorando el body).
+               role derivado de los roles reales del usuario: host solo si
+               tiene rol vet, branch_manager, org_admin o superadmin.
+
+[BUG-TELE-12] services/telemedicine/src/routes/sessions.routes.js
+  QUÉ PASABA : La query de mensajes de una sesión no tenía LIMIT. En sesiones
+               largas con muchos mensajes, podía retornar miles de registros.
+  QUÉ SE HIZO: Añadido LIMIT 100 a la query de mensajes.
+
+[BUG-TELE-13] services/telemedicine/src/routes/sessions.routes.js
+  QUÉ PASABA : GET / (lista de sesiones) no tenía cap en el parámetro limit.
+  QUÉ SE HIZO: limit = Math.min(Math.max(limit, 1), 100).
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 19 — NOTIFICACIÓN DINÁMICA (shared/notificationLogSchema.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-013-SCHEMA] shared/notificationLogSchema.js
+  QUÉ PASABA : Las funciones notificationExpr y notificationMarkReadSet
+               construyen SQL dinámico interpolando nombres de columna.
+               Se auditó si esto era vectorizable para inyección SQL.
+  RESULTADO  : El código es seguro. Los nombres de columna provienen de
+               INFORMATION_SCHEMA filtrado por el allowlist FIELD_CANDIDATES
+               (hardcodeado en el módulo). Los alias y fallbacks SQL son
+               literales hardcodeados. Los valores de usuario van siempre
+               por parámetros nombrados (:param).
+  QUÉ SE HIZO: Añadido comentario de auditoría detallando por qué cada
+               vector está cerrado, para referencia futura de revisores.
+
+================================================================================
+  RESUMEN ESTADÍSTICO
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 20 — PACIENTES / CLIENTES / SUCURSALES (services/patients)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-PAT-01] services/patients/src/routes/clients.gdpr.routes.js — IDOR crítico GDPR
+  QUÉ PASABA : `requireClientBranch` tenía cláusula `OR :orgId IS NULL`. Si el token
+               JWT no incluía orgId (token malformado o de otro proveedor), la condición
+               se cortocircuitaba y cualquier atacante autenticado podía acceder a datos
+               GDPR de cualquier cliente con solo conocer el id numérico.
+  QUÉ SE HIZO: Eliminada la cláusula `OR :orgId IS NULL`. Añadido guard explícito:
+               si orgId es falsy → 403 inmediato antes de cualquier query.
+
+[BUG-PAT-02] services/patients/src/routes/clients.gdpr.routes.js — validadores sin enforce
+  QUÉ PASABA : `POST /:id/gdpr/consents` definía body validators pero no llamaba a
+               `validate` en la cadena de middleware — se podía pasar consentType
+               arbitrario o granted no booleano sin error.
+  QUÉ SE HIZO: Añadido `validate` como middleware en la cadena de la ruta.
+
+[BUG-PAT-03] services/patients/src/routes/clients.gdpr.routes.js — validadores sin enforce #2
+  QUÉ PASABA : `POST /:id/gdpr/requests` misma omisión — requestType fuera del enum
+               permitido pasaba sin rechazo.
+  QUÉ SE HIZO: Añadido `validate` en la cadena de la ruta.
+
+[BUG-PAT-04] services/patients/src/routes/clients.gdpr.routes.js — IDOR en listado GDPR
+  QUÉ PASABA : `GET /gdpr/requests` filtraba por `c.branch_id = :bid` sin verificar
+               organization_id. Un admin de otra org con el mismo branchId numérico
+               podía ver todas las solicitudes GDPR del branch ajeno. Además cualquier
+               usuario con permiso clients:read podía acceder (no requería ser admin GDPR).
+  QUÉ SE HIZO: Añadido `requireGdprAdmin` como primer middleware. Filtro cambiado a
+               `JOIN branches b ON c.branch_id = b.id WHERE b.organization_id = :orgId`.
+
+[BUG-PAT-05] services/patients/src/routes/clients.gdpr.routes.js — escalada de privilegio en GDPR
+  QUÉ PASABA : `PATCH /gdpr/requests/:reqId` no tenía `requireGdprAdmin` (cualquier
+               staff podía cambiar estado de solicitudes GDPR) ni `validate` (status
+               arbitrario pasaba). El lookup de ownership solo verificaba branch_id sin org.
+  QUÉ SE HIZO: Añadidos `requireGdprAdmin` y `validate`. Lookup cambiado a
+               `JOIN branches b ON c.branch_id = b.id WHERE b.organization_id = :orgId`.
+
+[BUG-PAT-06] services/patients/src/routes/patients.write.routes.js — falta validación birthdate
+  QUÉ PASABA : `POST /` y `PUT /:id` no validaban birthdate/birthDate — se podía
+               enviar strings arbitrarios ("DROP TABLE", fechas del año 9999) que
+               pasaban directamente al INSERT/UPDATE.
+  QUÉ SE HIZO: Añadido `body('birthdate').optional().isISO8601()` y
+               `body('birthDate').optional().isISO8601()` en ambas rutas.
+
+[BUG-PAT-07] services/patients/src/routes/patients.write.routes.js — sin validación weightKg
+  QUÉ PASABA : `POST /` y `PUT /:id` no validaban weightKg — se podían insertar
+               valores negativos, NaN o enormes (p.ej. 1e308).
+  QUÉ SE HIZO: Añadido `body('weightKg').optional().isFloat({ min: 0, max: 1000 })`
+               en ambas rutas.
+
+[BUG-PAT-08] services/patients/src/routes/branches.transfers.routes.js — TOCTOU en transferencias
+  QUÉ PASABA : `PATCH /transfers/patients/:id` verificaba organization_id en el SELECT
+               pero el UPDATE final era solo `WHERE pt.id = :id`. Ventana TOCTOU entre
+               el SELECT y el UPDATE: un atacante podía modificar transferencias de otra
+               org si el ID coincidía numéricamente.
+  QUÉ SE HIZO: UPDATE cambiado a incluir JOIN con branches:
+               `UPDATE patient_transfers pt JOIN branches bf ON pt.from_branch_id = bf.id
+               SET ... WHERE pt.id = :id AND bf.organization_id = :orgId`.
+
+────────────────────────────────────────────────────────────────────────────────
+RESUMEN GLOBAL (actualizado — agentes en progreso)
+────────────────────────────────────────────────────────────────────────────────
+
+  Total de bugs corregidos      : 55  (+8 patients)
+  Críticos (RCE / auth bypass)  :  8
+  Altos (IDOR / privilege esc.) : 17  (+5 PAT-01,04,05,08 + 1 más)
+  Medios (DoS / info disclosure): 18  (+2 PAT-02,03)
+  Bajos (hardening / warnings)  : 12  (+2 PAT-06,07)
+
+  Servicios afectados:
+    shared/              — 12 archivos
+    services/auth/       —  7 archivos
+    services/portal/     —  6 archivos
+    services/billing/    —  3 archivos
+    services/patients/   —  3 archivos  ← NUEVO
+    services/lab-imaging/ — 4 archivos
+    services/documents/   — 2 archivos
+    services/telemedicine/ — 1 archivo
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 21 — FICHAS MÉDICAS / TURNOS / REGLAS (services/medical)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-MED-01] services/medical/src/routes/appointments.write.routes.js — IDOR cross-org en PUT
+  QUÉ PASABA : `UPDATE appointments` solo filtraba por `branch_id = :bid` sin
+               verificar organization_id. Un atacante podía modificar turnos de
+               otra org si los IDs de sucursal coincidían numéricamente.
+  QUÉ SE HIZO: UPDATE ahora hace JOIN patients y agrega `p.organization_id = :orgId`
+               al WHERE.
+
+[BUG-MED-02] services/medical/src/routes/appointments.write.routes.js — reapertura de turnos cerrados
+  QUÉ PASABA : PUT no excluía turnos en estado terminal (completed, cancelled,
+               no_show), permitiendo reabrir citas ya cerradas.
+  QUÉ SE HIZO: Añadido `AND a.status NOT IN ('completed', 'cancelled', 'no_show')`
+               al WHERE del UPDATE.
+
+[BUG-MED-03] services/medical/src/routes/appointments.write.routes.js — durationMinutes:0 ignorado
+  QUÉ PASABA : `if (req.body.durationMinutes)` evalúa 0 como falsy, descartando
+               el campo silenciosamente sin error ni actualización.
+  QUÉ SE HIZO: Cambiado a `req.body.durationMinutes != null`.
+
+[BUG-MED-04] services/medical/src/routes/appointments.write.routes.js — vetId sin verificación de sucursal
+  QUÉ PASABA : El campo vetId se podía cambiar en PUT sin verificar que el nuevo
+               vet pertenezca a la misma sucursal, permitiendo asignar veterinarios
+               de otras organizaciones.
+  QUÉ SE HIZO: Añadido lookup previo `SELECT id FROM users WHERE id = :vid AND
+               branch_id = :bid`; retorna 403 si no coincide. Añadido también
+               `body('vetId').optional().isInt({ min: 1 })`.
+
+[BUG-MED-05] services/medical/src/routes/appointments.write.routes.js — IDOR en postTriage
+  QUÉ PASABA : El triage solo verificaba branch_id sin organization_id en el SELECT,
+               permitiendo insertar triage para un turno de otra org si el branchId
+               coincidía.
+  QUÉ SE HIZO: SELECT ahora hace JOIN patients y verifica `p.organization_id = :orgId`.
+
+[BUG-MED-06] services/medical/src/routes/medical-records.core.routes.js — campos sin límite
+  QUÉ PASABA : chiefComplaint, notes, weightKg, bodyConditionScore, temperatureC no
+               tenían validación de tipo, rango ni longitud.
+  QUÉ SE HIZO: Añadidos `isString().isLength({ max:4000 })` para textos y
+               `isFloat`/`isInt` con rangos clínicos para numéricos.
+
+[BUG-MED-07] services/medical/src/routes/medical-records.prescriptions.routes.js — IDOR crítico
+  QUÉ PASABA : postPrescriptions se monta en prescriptionsRouter sin pasar por el
+               middleware `ensureMedicalRecordWritable`. Un usuario podía crear
+               prescripciones en fichas de otras sucursales u orgs enviando un id
+               arbitrario en la URL.
+  QUÉ SE HIZO: Añadida verificación explícita al inicio del handler:
+               `SELECT mr.id, mr.status FROM medical_records mr JOIN patients p ...
+               WHERE p.organization_id = :orgId AND a.branch_id = :branchId` +
+               check de estado firmado/cerrado.
+
+[BUG-MED-08] services/medical/src/routes/appointments.calendar.ical.routes.js — header injection
+  QUÉ PASABA : patient_name se concatenaba directamente en Content-Disposition header
+               sin sanitización. Un nombre con `"`, `\n` o `\r` rompía el header
+               o permitía inyección de encabezados HTTP.
+  QUÉ SE HIZO: Sanitización con regex `[\w\-. ]`, truncado a 80 caracteres.
+
+[BUG-MED-09] services/medical/src/routes/medical-records.sign.routes.js — branchId null bypass
+  QUÉ PASABA : La cláusula `OR :branchId IS NULL` se activaba si req.user.branchId
+               era 0 o string vacío (además de null real), ampliando bypass
+               involuntariamente.
+  QUÉ SE HIZO: Se calcula `userBranchId = req.user.branchId || null` y la cláusula
+               branch solo se inyecta en el SQL si userBranchId es no nulo.
+
+[BUG-MED-10] services/medical/src/routes/rules.admin.routes.js — PUT sin affectedRows check
+  QUÉ PASABA : El UPDATE de reglas no verificaba si la regla existía o pertenecía
+               a la org; retornaba `{ success: true }` aun si no actualizaba nada.
+  QUÉ SE HIZO: Se captura `result` y se retorna 404 si `!result.affectedRows`.
+
+[BUG-MED-11] services/medical/src/routes/rules.admin.routes.js — campos sin límite de longitud
+  QUÉ PASABA : conditions.*.field, conditions.*.value, description y action_message
+               no tenían isLength(), permitiendo payloads masivos. Array de
+               condiciones sin cap de elementos.
+  QUÉ SE HIZO: Añadidos isLength({max:100}) en field, isLength({max:500}) en value,
+               description y action_message. Array de condiciones limitado a 20
+               elementos.
+
+[BUG-MED-12] services/medical/src/routes/medical-records.physical-exam.routes.js — sin validación
+  QUÉ PASABA : temperature_celsius, heart_rate, respiratory_rate, weight_kg,
+               body_condition_score llegaban sin validación de tipo o rango.
+               Campos de texto libre sin límite de longitud.
+  QUÉ SE HIZO: Añadidos validators completos con rangos clínicos (min/max) para
+               numéricos; isLength({max:1000}) para texto corto y {max:4000} para
+               generalObservations.
+
+────────────────────────────────────────────────────────────────────────────────
+RESUMEN GLOBAL (actualizado — 2 agentes restantes pendientes)
+────────────────────────────────────────────────────────────────────────────────
+
+  Total de bugs corregidos      : 67  (+12 medical)
+  Críticos (RCE / auth bypass)  :  8
+  Altos (IDOR / privilege esc.) : 24  (+7 MED-01,04,05,07,08,09,10)
+  Medios (DoS / info disclosure): 22  (+4 MED-02,03,06,11)
+  Bajos (hardening / warnings)  : 13  (+1 MED-12)
+
+  Servicios afectados:
+    shared/              — 12 archivos
+    services/auth/       —  7 archivos
+    services/portal/     —  6 archivos
+    services/billing/    —  3 archivos
+    services/patients/   —  3 archivos
+    services/medical/    —  5 archivos  ← NUEVO
+    services/lab-imaging/ — 4 archivos
+    services/documents/   — 2 archivos
+    services/telemedicine/ — 1 archivo
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 22 — LAB-IMAGING / NOTIFICATIONS / DOCUMENTS
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-LAB-01] services/lab-imaging/src/routes/surgery.write.routes.js — race condition cirugías duplicadas
+  QUÉ PASABA : POST /surgeries no verificaba si el paciente ya tenía una cirugía
+               activa/programada para la misma fecha. Dos requests paralelas podían
+               crear dos cirugías simultáneas para el mismo paciente.
+  QUÉ SE HIZO: Añadida query de verificación previa al INSERT que retorna 409 si
+               el paciente ya tiene cirugía ese día con status activo.
+
+[BUG-NOTIF-01] services/notifications/src/routes/notifications.core.routes.js — rate limit inoperativo
+  QUÉ PASABA : checkPushRateLimit llamaba redis.incr/pExpire/pTTL directamente sobre
+               el retorno de getRedis(), que devuelve {pub, sub} — no un cliente
+               Redis. La guarda `redis?.isReady` siempre era undefined (falsy), por
+               lo que la función retornaba sin hacer nada. El rate limiting de push
+               estaba completamente inoperativo.
+  QUÉ SE HIZO: Corregido para acceder a redis.pub.incr, redis.pub.pExpire,
+               redis.pub.pTTL y comprobar redis?.pub?.isReady.
+
+[BUG-NOTIF-02] services/notifications/src/routes/messages.bulk.routes.js — sin rate limiting
+  QUÉ PASABA : POST /bulk-reminders no tenía rate limiting. Una sucursal podía
+               llamarlo indefinidamente en paralelo enviando miles de mensajes
+               en segundos (DoS + spam abuse).
+  QUÉ SE HIZO: Añadido checkBulkRateLimit con Redis: máx 5 envíos bulk por sucursal
+               en ventana de 5 min (configurable vía BULK_RATE_LIMIT /
+               BULK_RATE_WINDOW_MS). Responde 429 con Retry-After.
+
+[BUG-NOTIF-03] services/notifications/src/routes/messages.reminders.routes.js — phone sin sanitizar
+  QUÉ PASABA : El teléfono del cliente venía de BD y se pasaba directamente a
+               messaging.sendTemplate sin validación. Un número malformado con \r\n
+               podía producir header injection en SMS/email.
+  QUÉ SE HIZO: Añadida validación E.164 (/^\+?[1-9]\d{6,14}$/) y limpieza de
+               CR/LF/nulos antes de usar el teléfono.
+
+[BUG-DOC-01] services/documents/src/lib/labIngestion.js — race condition en número de orden
+  QUÉ PASABA : createLabOrderFromDocument generaba el número de orden con
+               `SELECT COALESCE(MAX(...))` sin FOR UPDATE. Dos documentos ingestados
+               simultáneamente en la misma sucursal podían obtener el mismo nextNum
+               y generar order_number duplicado.
+  QUÉ SE HIZO: Añadido FOR UPDATE al SELECT del número de orden (consistente con el
+               resto del codebase: imaging.write y pathology.write).
+
+[BUG-DOC-02] services/documents/src/lib/sync.js — SSRF en sincronización IMAP
+  QUÉ PASABA : buildImapClient aceptaba cualquier valor de settings.host sin
+               validación. Un admin con permiso org:update podía configurar una
+               cuenta IMAP apuntando a 169.254.169.254, 192.168.x.x u otra IP
+               interna, causando SSRF en el worker de sincronización.
+  QUÉ SE HIZO: Añadido validateImapHost(): bloquea localhost, rangos RFC-1918
+               (10.x, 172.16-31.x, 192.168.x), link-local, loopback IPv6 y ULA
+               IPv6. También sanitiza caracteres no permitidos en hostname.
+
+[BUG-DOC-03] services/documents/src/routes/accounts.core.routes.js — inyección protocolo IMAP
+  QUÉ PASABA : folderName (POST y PATCH) no tenía restricciones de contenido. Se
+               usa como nombre de mailbox IMAP, donde un valor con CRLF o caracteres
+               especiales podría causar inyección a nivel de protocolo IMAP.
+  QUÉ SE HIZO: Añadida validación: trim(), maxLength(200) y regex ^[^<>"\r\n\0]+$
+               en ambos endpoints.
+
+────────────────────────────────────────────────────────────────────────────────
+RESUMEN GLOBAL (actualizado — 2 agentes restantes pendientes)
+────────────────────────────────────────────────────────────────────────────────
+
+  Total de bugs corregidos      : 74  (+7 lab/notif/docs)
+  Críticos (RCE / auth bypass)  :  9  (+1 NOTIF-01 rate limit inoperativo)
+  Altos (IDOR / privilege esc.) : 25  (+1 DOC-02 SSRF)
+  Medios (DoS / info disclosure): 27  (+5 LAB-01, NOTIF-02, NOTIF-03, DOC-01, DOC-03)
+  Bajos (hardening / warnings)  : 13
+
+  Servicios afectados:
+    shared/              — 12 archivos
+    services/auth/       —  7 archivos
+    services/portal/     —  6 archivos
+    services/billing/    —  3 archivos
+    services/patients/   —  3 archivos
+    services/medical/    —  5 archivos
+    services/lab-imaging/ — 5 archivos  ← NUEVO
+    services/notifications/ — 3 archivos  ← NUEVO
+    services/documents/   — 5 archivos  ← NUEVO
+    services/telemedicine/ — 1 archivo
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 23 — PORTAL / REPORTS / TELEMEDICINE / PLUGINS
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-PORT-01] services/portal/src/routes/portal.auth.routes.js — enumeración de cuentas
+  QUÉ PASABA : Login devolvía "Cuenta desactivada" para cuentas inactivas,
+               permitiendo enumerar si un email existe y está activo/inactivo.
+  QUÉ SE HIZO: Cambiado al mensaje genérico "Email o contraseña incorrectos"
+               para no revelar el estado de la cuenta.
+
+[BUG-PORT-02] services/portal/src/routes/portal.pets.routes.js — IDOR en prescripciones
+  QUÉ PASABA : GET /:id/prescriptions filtraba por mr.patient_id sin re-verificar
+               que el cliente autenticado sea propietario del paciente en el JOIN SQL.
+               Un cliente podía ver prescripciones de pacientes de otra org si
+               obtenía el patient_id.
+  QUÉ SE HIZO: Añadido `JOIN patient_owners po ON po.patient_id = mr.patient_id
+               AND po.client_id = :cid` directamente en la query SQL para
+               enforcement en base de datos.
+
+[BUG-REP-01] services/reports/src/reports.common.js — sin límite de rango de fechas
+  QUÉ PASABA : dateRange() aceptaba fechas sin validar formato ni limitar el rango
+               máximo (posible query de años enteros → timeout / dump masivo de BD).
+  QUÉ SE HIZO: Validación de formato ISO + cap automático de 366 días (configurable
+               via REPORTS_MAX_DATE_RANGE_DAYS) con clamp.
+
+[BUG-REP-02] services/reports/src/reports.common.js — query diagnoses sin LIMIT
+  QUÉ PASABA : fetchReportData() rama diagnoses ejecutaba SELECT sin LIMIT,
+               cargando toda la tabla en memoria antes de agregar.
+  QUÉ SE HIZO: Añadido LIMIT 5000 en SQL.
+
+[BUG-REP-03] services/reports/src/reports.common.js — groupBy inyectable en DATE_FORMAT
+  QUÉ PASABA : groupBy se usaba directamente en DATE_FORMAT sin whitelist,
+               permitiendo valor libre en cadena de formato SQL.
+  QUÉ SE HIZO: Whitelist ['day','week','month'] con fallback a 'month'.
+
+[BUG-REP-04] services/reports/src/reports.common.js — info disclosure en error message
+  QUÉ PASABA : Mensaje "Tipo de reporte desconocido: ${type}" exponía el valor
+               recibido del usuario en el mensaje de error.
+  QUÉ SE HIZO: Mensaje genérico + check previo con VALID_TYPES whitelist.
+
+[BUG-REP-05] services/reports/src/routes/reports.analytics.routes.js — limit sin cap (x2)
+  QUÉ PASABA : /top-clients y /diagnoses aceptaban ?limit=999999 → dump masivo de
+               PII de clientes o carga completa de tabla diagnósticos en memoria.
+  QUÉ SE HIZO: Cap 1–100 con Math.min/Math.max en ambos endpoints + LIMIT 5000
+               en SQL de diagnoses.
+
+[BUG-REP-06] services/reports/src/routes/reports.charts.routes.js — múltiples issues
+  QUÉ PASABA : groupBy libre en revenue-trend (inyectable en DATE_FORMAT); fechas sin
+               validar ni limitar rango; top-diagnoses-bar sin cap de limit ni LIMIT SQL.
+  QUÉ SE HIZO: Whitelist day/week/month; helper chartDateRange() validando ISO y
+               clampando 366 días; cap 1–50 + LIMIT 5000 en top-diagnoses-bar.
+
+[BUG-REP-07] services/reports/src/routes/reports.scheduled.routes.js — IDOR branch_id
+  QUÉ PASABA : PATCH /:id tenía branch_id en la lista allowed del loop dinámico,
+               permitiendo mover un reporte a cualquier branch sin verificar que
+               pertenezca a la org del usuario.
+  QUÉ SE HIZO: branch_id removido de allowed; handling separado con verificación
+               `SELECT id FROM branches WHERE id=:bid AND organization_id=:orgId`.
+
+[BUG-REP-08] services/reports/src/routes/reports.scheduled.routes.js — GET /runs sin cap
+  QUÉ PASABA : GET /runs sin cap de limit → posible dump de todos los runs de la org.
+  QUÉ SE HIZO: Cap 1–200.
+
+[BUG-TELE-04] services/telemedicine/src/routes/follow-ups.routes.js — múltiples issues
+  QUÉ PASABA : limit sin cap; status sin whitelist (valor libre en condición SQL);
+               vetId/patientId pasados como strings sin parsear.
+  QUÉ SE HIZO: Cap 1–100; whitelist de statuses válidos; parseInt(...,10) forzado.
+
+[BUG-TELE-05] services/telemedicine/src/routes/platforms.routes.js — exposición multi-tenant
+  QUÉ PASABA : SELECT * sin filtro de org devolvía todas las plataformas activas,
+               exponiendo configuraciones (tokens, URLs de webhook) de otras orgs.
+  QUÉ SE HIZO: Columnas explícitas sin secrets + filtro `org_id IS NULL OR
+               org_id = :orgId`.
+
+[BUG-PLUGIN-01] plugins/audit-enhanced.js — userId/orgId desde headers falsificables
+  QUÉ PASABA : userId y orgId se leían de headers HTTP crudos (x-user-id, x-org-id)
+               que cualquier cliente puede falsificar, envenenando el audit log con
+               identidades falsas.
+  QUÉ SE HIZO: Ahora se leen de req.user (poblado por middleware JWT verificado).
+
+[BUG-PLUGIN-02] plugins/audit-enhanced.js — escrituras exitosas no auditadas
+  QUÉ PASABA : Solo se auditaban requests con status ≥ 400, dejando sin registrar
+               POST/PUT/PATCH/DELETE que retornaban 2xx (escrituras exitosas).
+  QUÉ SE HIZO: Ampliado para auditar también métodos de escritura con respuesta
+               exitosa.
+
+────────────────────────────────────────────────────────────────────────────────
+RESUMEN GLOBAL (actualizado — 1 agente restante pendiente)
+────────────────────────────────────────────────────────────────────────────────
+
+  Total de bugs corregidos      : 88  (+14 portal/reports/tele/plugins)
+  Críticos (RCE / auth bypass)  :  9
+  Altos (IDOR / privilege esc.) : 28  (+3 PORT-02, TELE-05, PLUGIN-01)
+  Medios (DoS / info disclosure): 35  (+8 PORT-01, REP-01..06, TELE-04)
+  Bajos (hardening / warnings)  : 16  (+3 REP-07,08, PLUGIN-02)
+
+  Servicios afectados:
+    shared/              — 12 archivos
+    services/auth/       —  7 archivos
+    services/portal/     —  8 archivos  ← ampliado
+    services/billing/    —  3 archivos
+    services/patients/   —  3 archivos
+    services/medical/    —  5 archivos
+    services/lab-imaging/ — 5 archivos
+    services/notifications/ — 3 archivos
+    services/documents/   — 5 archivos
+    services/telemedicine/ — 3 archivos  ← ampliado
+    services/reports/    —  4 archivos  ← NUEVO
+    services/grooming/   —  0 (sin bugs)
+    services/ai/         —  0 (sin bugs nuevos)
+    plugins/             —  1 archivo  ← NUEVO
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 24 — SHARED (ronda final: ai, cache, eventBus, messaging, etc.)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-SH-01] shared/ai.js — regex de sanitización mal formado (prompt injection)
+  QUÉ PASABA : sanitizePromptText() usaba el regex /[ --]/g — un rango Unicode
+               mal formado que eliminaba caracteres imprimibles (0x20–0x2D: !,",#…-)
+               en lugar de los caracteres de control reales (0x00–0x1F). Los null
+               bytes, ESC y otros controles pasaban sin filtrar, facilitando
+               prompt injection.
+  QUÉ SE HIZO: Reemplazado por [\x00-\x1f\x7f] — elimina correctamente ASCII de
+               control. Archivo reescrito completo (el regex original contenía bytes
+               multibyte invisibles que impedían Edit in-place).
+
+[BUG-SH-02] shared/export.js — sin cap de filas (DoS en exportaciones masivas)
+  QUÉ PASABA : toExcel() y toCsv() no tenían cap de filas. Un endpoint de exportación
+               podía consumir toda la RAM del proceso con un request masivo.
+  QUÉ SE HIZO: Añadido MAX_EXPORT_ROWS (default 10.000, configurable via
+               EXPORT_MAX_ROWS) que trunca el array antes de procesar en ambas
+               funciones.
+
+[BUG-SH-03] shared/logger.js — datos fiscales argentinos no redactados
+  QUÉ PASABA : La lista de campos sensibles no incluía cuit, cuil, cert,
+               afip_cert, afip_key. Datos fiscales y credenciales AFIP podían
+               filtrarse en logs estructurados.
+  QUÉ SE HIZO: Añadidos cuit, cuil, cert, afip_cert, afip_key al conjunto
+               SENSITIVE_KEYS.
+
+[BUG-SH-04] shared/afip.js — CUIT expuesto en caché de instancias
+  QUÉ PASABA : El cache en memoria de instancias AFIP almacenaba el cuit del org.
+               En un heap dump o serialización del estado del proceso, el CUIT
+               quedaba expuesto junto con el cliente SDK.
+  QUÉ SE HIZO: Se elimina cuit del objeto cacheado — solo se guardan client,
+               puntoVenta y cachedAt.
+
+[BUG-SH-05] shared/usageLimits.js — SSRF en webhook de alertas de uso
+  QUÉ PASABA : _sendUsageAlertWebhook() hacía fetch a USAGE_ALERT_WEBHOOK_URL sin
+               validar si era URL interna. Un atacante que pudiera setear esa env
+               var lograba SSRF hacia servicios internos.
+  QUÉ SE HIZO: Añadido _validateWebhookUrl() que rechaza URLs no-HTTPS y hostnames
+               internos (localhost, 10.x, 192.168.x, 172.16-31.x, .internal, .local).
+
+[BUG-SH-06] shared/messaging.js — phone sin validación (header injection en Twilio)
+  QUÉ PASABA : sendSms() y sendWhatsApp() pasaban el número de teléfono directamente
+               a Twilio sin validación. Un número con caracteres especiales podía
+               causar header injection en la API de Twilio.
+  QUÉ SE HIZO: Añadida validatePhoneNumber() con formato E.164 estricto
+               (+seguido de 7-15 dígitos). Aplicada antes de cualquier llamada a
+               Twilio en ambas funciones.
+
+[BUG-SH-07] shared/eventBus.js — topic sin validación (corrupción de Redis streams)
+  QUÉ PASABA : El campo topic se escribía al stream de Redis sin validación. Un
+               topic con newlines o control characters podía corromper el stream o
+               evadir filtros de suscripción.
+  QUÉ SE HIZO: Añadida validateTopic() que solo permite [a-zA-Z0-9._-]{1,128},
+               llamada al inicio de publish().
+
+[BUG-SH-08] shared/captcha.js — fail-open silencioso sin timeout
+  QUÉ PASABA : Si hCaptcha no respondía, verifyCaptcha() devolvía true sin loguear
+               nada. Un atacante que bloqueara sistemáticamente las salidas a
+               hCaptcha pasaba el captcha indefinidamente. Sin timeout en el fetch.
+  QUÉ SE HIZO: Añadido AbortSignal.timeout(5000). El catch ahora logea warn con
+               IP parcial para detección en SIEM.
+
+[BUG-SH-09] shared/rulesEngine.js — prototype pollution en dot-notation traversal
+  QUÉ PASABA : resolveField() traversaba el contexto con dot-notation sin validar
+               segmentos. Rutas como __proto__.polluted o constructor.prototype.x
+               podían causar prototype pollution si las reglas venían de BD
+               manipulada.
+  QUÉ SE HIZO: Añadida FORBIDDEN_FIELD_PARTS con __proto__, constructor, prototype.
+               En la traversal se usa hasOwnProperty para acceder solo a propiedades
+               propias.
+
+[BUG-SH-10] shared/schemaEngine.js — getTableColumns sin validación de tabla
+  QUÉ PASABA : getTableColumns() era exportada sin validar tableName contra
+               ALLOWED_TABLES (solo getTableSchema() lo validaba). Un caller interno
+               podía obtener el schema de tablas sensibles (sessions, etc.).
+  QUÉ SE HIZO: Añadida validación contra ALLOWED_TABLES al inicio de
+               getTableColumns().
+
+[BUG-SH-11] shared/multibranch.js — fuga de datos cross-org en historial de transferencias
+  QUÉ PASABA : crossBranchPatientHistory() hacía JOIN con branches sin filtrar por
+               organization_id. Un paciente transferido a otra org exponía el nombre
+               de esa sucursal externa en el historial del org original.
+  QUÉ SE HIZO: Añadido AND bt.organization_id = :orgId al JOIN de la sucursal
+               destino.
+
+[BUG-SH-12] shared/internalService.js — requests internos sin firma HMAC automática
+  QUÉ PASABA : callInternalService() no firmaba automáticamente las solicitudes con
+               HMAC. buildSignedInternalHeaders() existía pero debía llamarse
+               explícitamente. Callers que olvidaban firmarlo enviaban requests sin
+               autenticación interna.
+  QUÉ SE HIZO: La firma HMAC (INTERNAL_SIG_HEADER) se incluye directamente en
+               callInternalService() por defecto. Los headers explícitos del caller
+               siguen teniendo precedencia para permitir override.
+
+[BUG-SH-13] shared/cache.js — caracteres Redis especiales en claves de caché
+  QUÉ PASABA : defaultKey() usaba req.originalUrl directamente en la clave de Redis.
+               URLs con *, ?, [, ] podían interferir con el pattern matching de SCAN
+               usado en invalidatePrefix().
+  QUÉ SE HIZO: Se sanitiza la URL escapando *, ?, [, ] por _ antes de construir
+               la clave.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 25 — SHARED CRÍTICOS PENDIENTES (jwt, csrf, twoFactor, fileUpload, rbac, etc.)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-SH2-01] shared/csrf.js — CSRF_SECRET con fallback efímero en producción
+  QUÉ PASABA : Sin CSRF_SECRET configurado, el módulo generaba un secreto aleatorio
+               en memoria. Cada reinicio invalidaba todos los tokens activos, rompiendo
+               sesiones de usuario en producción. Sin error ni warning explícito.
+  QUÉ SE HIZO: Lanza Error en arranque si NODE_ENV=production y CSRF_SECRET no está
+               configurado. En desarrollo: secreto efímero con advertencia.
+
+[BUG-SH2-02] shared/twoFactor.js — OTP sin validación de formato antes de otplib
+  QUÉ PASABA : verifyTwoFactor no validaba el formato del token antes de pasarlo a
+               otplib. Un token vacío, enorme o con caracteres especiales podía causar
+               comportamiento inesperado en la librería. Tampoco validaba que secret
+               fuera un string.
+  QUÉ SE HIZO: Validación estricta: token debe ser /^\d{6}$/ antes de invocar
+               authenticator.verify. Rechazo explícito de secret nulo/inválido.
+
+[BUG-SH2-03] shared/fileUpload.js — path traversal en category de createStorage
+  QUÉ PASABA : El parámetro category se concatenaba con path.join sin sanitización.
+               Un valor como ../../etc generaba un path fuera de UPLOAD_DIR
+               (path traversal en el destino de subida).
+  QUÉ SE HIZO: Sanitización de category a [a-zA-Z0-9_-] (máx 64 chars) + verificación
+               con path.resolve que el destino final esté dentro de UPLOAD_DIR.
+
+[BUG-SH2-04] shared/rbac.js — orgId leído de header forjable (escalada cross-tenant)
+  QUÉ PASABA : requirePermission, requireAny y requireAll leían el orgId del header
+               x-org-id si no estaba en el JWT. Un cliente autenticado podía enviar
+               un header forjado para evaluar permisos contra otra organización
+               (escalada de privilegios cross-tenant).
+  QUÉ SE HIZO: Eliminada la lectura de req.headers['x-org-id']. orgId se obtiene
+               exclusivamente de req.user (JWT verificado).
+
+[BUG-SH2-05] shared/passwordHash.js — sin límite de longitud (DoS en Argon2id)
+  QUÉ PASABA : Sin límite de longitud antes de hashear. Argon2id no trunca como
+               bcrypt: un payload de 100 MB causaría agotamiento de CPU y memoria.
+  QUÉ SE HIZO: Constante HASH_MAX_LENGTH (default: PASSWORD_MAX_LENGTH || 128).
+               hash() y verify() rechazan passwords que superen el límite.
+
+[BUG-SH2-06] shared/security.js — Idempotency-Key sin sanitizar (Redis injection + cross-tenant)
+  QUÉ PASABA : La Idempotency-Key del header se usaba directamente como Redis key:
+               (1) inyección con chars especiales, (2) colisiones cross-tenant (dos
+               orgs podían compartir la misma clave), (3) body cacheado sin límite
+               de tamaño (memory exhaustion en Redis).
+  QUÉ SE HIZO: Validación con regex ^[\w\-.:@]{1,128}$. Prefijo con orgId del JWT
+               para aislar tenants. Límite de 256 KB en body cacheado.
+
+[BUG-SH2-07] shared/metrics.js — endpoint /metrics abierto sin auth + comparación no timing-safe
+  QUÉ PASABA : Sin METRICS_BEARER_TOKEN configurado, /metrics quedaba completamente
+               abierto, exponiendo recuentos por org_id, rutas internas, contadores
+               de fallos de autenticación. Comparación del token con !== (no timing-safe).
+  QUÉ SE HIZO: En prod sin protección: responde 403 y logea error. Soporte para
+               METRICS_INTERNAL_ONLY=true (whitelist IPs RFC-1918). Comparación
+               usa crypto.timingSafeEqual.
+
+[BUG-SH2-08] shared/webhooks/worker.js — processPending sin timeout (worker deadlock)
+  QUÉ PASABA : Si processPending se colgaba (conexión DB/Redis bloqueada), la variable
+               running quedaba true permanentemente. El worker se autoparalizaba: ningún
+               tick posterior podía ejecutarse.
+  QUÉ SE HIZO: processPending envuelta en Promise.race() con timeout configurable
+               (WEBHOOK_PROCESS_TIMEOUT_MS, default 60s). Al expirar: loguea error
+               y running se libera en el finally.
+
+[BUG-SH2-09] shared/stripe.js — webhook rechaza eventos válidos si payload ya está parseado
+  QUÉ PASABA : constructWebhookEvent no detectaba si payload era un objeto ya parseado
+               por express.json(). La firma HMAC de Stripe fallaba silenciosamente,
+               rechazando todos los eventos válidos. Tampoco validaba presencia de firma.
+  QUÉ SE HIZO: Guard explícito: si payload es objeto no-Buffer, lanza error con mensaje
+               de diagnóstico claro. Validación que signature no sea vacío/nulo.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 26 — AUTH RESTANTE (admin-users, admin-rbac, google, feature-flags, ui-schema)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-AUTH-01] services/auth/src/routes/ui-schema.routes.js — endpoint sin autenticación interna
+  QUÉ PASABA : GET /me/ui-schema no tenía requireInternalSig ni fromHeaders.
+               Leía x-user-id, x-org-id directamente de headers sin verificación
+               de firma. Cualquier servicio interno o bypass del gateway podía
+               suplantar a cualquier usuario.
+  QUÉ SE HIZO: Añadido requireInternalSig + fromHeaders + requireOrgContext.
+               Handler ahora lee req.user.{userId,orgId,branchId,roles,email}.
+
+[BUG-AUTH-02] services/auth/src/routes/admin-feature-flags.routes.js — IDOR cross-org
+  QUÉ PASABA : GET /orgs/:orgId y PATCH /orgs/:orgId usaban req.params.orgId
+               directamente sin verificar que fuera el del actor. Un org_admin
+               del org 5 podía leer y modificar los feature flags del org 99.
+  QUÉ SE HIZO: Añadida función assertOrgAccess() que valida
+               req.params.orgId === req.user.orgId salvo superadmin.
+               Invocada al inicio de ambos handlers.
+
+[BUG-AUTH-03] services/auth/src/routes/admin-users.routes.js — limit sin cap
+  QUÉ PASABA : GET /users?limit=999999 generaba LIMIT 999999 en la query,
+               pudiendo devolver toda la tabla de usuarios del org en una
+               respuesta (exfiltración + DoS de BD).
+  QUÉ SE HIZO: MAX_LIMIT = 200 con Math.min/Math.max(1,...) para sanitizar
+               page y limit. Valores fuera de rango corregidos al máximo/mínimo.
+
+[BUG-AUTH-04] services/auth/src/routes/admin-rbac.routes.js — :id sin validar + destructuring inseguro
+  QUÉ PASABA : El parámetro :id en /security-alerts/:id/acknowledge no pasaba
+               por validación (string arbitrario como ID). Se usaba
+               const [alert] = db.query(...) en vez de queryOne, con riesgo
+               de NPE silencioso si no había filas.
+  QUÉ SE HIZO: Añadido param('id').isInt({ min:1 }) + validateRequest.
+               Cambiado a db.queryOne (semánticamente seguro, consistente con
+               resto del codebase).
+
+[BUG-AUTH-05] services/auth/src/routes/auth/google.routes.js — sin rate limit en OAuth callback
+  QUÉ PASABA : GET /google/callback sin rate limit: un atacante podía hacer
+               millones de requests probando nonces UUID en ventanas de 10min.
+  QUÉ SE HIZO: Añadido oauthCallbackLimit (20 req / 15min por IP).
+
+[BUG-AUTH-06] services/auth/src/routes/auth/google.routes.js — open redirect latente en FRONTEND_URL
+  QUÉ PASABA : FRONTEND_URL se usaba directamente en res.redirect() sin validar
+               protocolo. Si la env var era malconfigured podía redirigir a
+               javascript:// u otro esquema peligroso.
+  QUÉ SE HIZO: ALLOWED_FRONTEND_URL valida protocolo con new URL() al arrancar
+               el proceso (fallback a http://localhost:3000). Todas las
+               redirecciones usan esta constante validada.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 27 — BILLING RESTANTE (invoices, mp.routes, inventory, consolidated)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-BILL-01] services/billing/src/routes/billing.mp.routes.js — rutas sin requirePerm
+  QUÉ PASABA : GET /:mpPaymentId y GET /webhook/:mpPaymentId sin requirePerm —
+               cualquier usuario autenticado podía leer pagos MP de su branch sin
+               permiso explícito.
+  QUÉ SE HIZO: Añadido requirePerm('payments:read') en ambas rutas GET.
+
+[BUG-BILL-02] services/billing/src/routes/billing.mp.routes.js — mpPaymentId sin validar
+  QUÉ PASABA : mpPaymentId de URL pasaba directamente como string a mp.getPayment()
+               y mp.refundPayment() sin validar que sea numérico — strings arbitrarios
+               hacia la API de MercadoPago.
+  QUÉ SE HIZO: Añadida validación /^\d+$/ antes de cualquier operación.
+
+[BUG-BILL-03] services/billing/src/routes/billing.invoices.routes.js — UPDATE sin affectedRows
+  QUÉ PASABA : PATCH /:id/pay — el UPDATE invoices no verificaba affectedRows. Si el
+               UPDATE fallaba silenciosamente, paid_amount quedaba desincronizado
+               pero se respondía éxito.
+  QUÉ SE HIZO: Captura resultado del UPDATE, verifica affectedRows > 0 (409 si es 0).
+               Añadido branch_id = :bid al WHERE como defensa en profundidad.
+
+[BUG-BILL-04] services/billing/src/routes/billing.invoices.routes.js — status sin whitelist
+  QUÉ PASABA : GET / — el query param status se pasaba directamente al WHERE sin
+               validación de valores permitidos.
+  QUÉ SE HIZO: Whitelist de estados válidos (draft, pending, partial, paid, cancelled,
+               refunded, overdue). Responde 400 si el valor no está en la lista.
+
+[BUG-BILL-05] services/billing/src/routes/billing.invoices.routes.js — pagos sin segundo check
+  QUÉ PASABA : GET /:id — sub-query de payments usaba solo invoice_id sin verificar
+               branch_id, permitiendo que los pagos no tuvieran segunda verificación
+               de ownership.
+  QUÉ SE HIZO: Query de payments reescrita con JOIN a invoices filtrando por branch_id.
+
+[BUG-BILL-06] services/billing/src/routes/billing.inventory.routes.js — IDOR cross-branch en PUT
+  QUÉ PASABA : PUT /items/:id — inventory_items no tiene branch_id propio; el UPDATE
+               no verificaba ownership por branch. IDOR cross-branch.
+  QUÉ SE HIZO: Añadido lookup previo en inventory_stock para verificar que item_id
+               tiene stock en la branch del usuario. 404 si no coincide.
+
+[BUG-BILL-07] services/billing/src/routes/billing.inventory.routes.js — UPDATE sin affectedRows (x3)
+  QUÉ PASABA : PUT /items/:id, PATCH /alerts/:id/resolve respondían 204 aunque el
+               item/alerta no existiera o estuviera borrado.
+  QUÉ SE HIZO: Captura resultado y verifica affectedRows > 0; 404 si es 0.
+
+[BUG-BILL-08] services/billing/src/routes/billing.inventory.routes.js — limit sin cap
+  QUÉ PASABA : GET /batches — limit y offset sin cap máximo. ?limit=999999 podía
+               causar DoS en la BD.
+  QUÉ SE HIZO: Math.min(Math.max(...), 100) consistente con el resto del servicio.
+
+[BUG-BILL-09] services/billing/src/routes/billing.inventory.routes.js — IDOR en movements y batches
+  QUÉ PASABA : POST /movements y POST /batches no verificaban que itemId perteneciera
+               a la branch del usuario antes de insertar — IDOR cross-branch en creación.
+  QUÉ SE HIZO: Lookup de ownership en inventory_stock (item_id + branch_id) al inicio
+               de la transacción en ambos endpoints. 404 si no coincide.
+
+[BUG-BILL-10] services/billing/src/routes/billing.consolidated.routes.js — branchId IDOR
+  QUÉ PASABA : GET /invoices?branchId=X — se aceptaba cualquier branchId sin verificar
+               que perteneciera al orgId del usuario. Enumeración de branches ajenas.
+  QUÉ SE HIZO: Lookup explícito SELECT id FROM branches WHERE id=:branchId AND
+               organization_id=:orgId. Responde 403 si la branch no pertenece al org.
+
+[BUG-BILL-11] services/billing/src/routes/billing.consolidated.routes.js — fechas sin validar
+  QUÉ PASABA : Parámetros from/to llegaban directamente a queries SQL como strings
+               sin validar formato en /summary, /invoices, /revenue-trend.
+  QUÉ SE HIZO: Creado DATE_RE = /^\d{4}-\d{2}-\d{2}$/ validado antes de usarse.
+
+[BUG-BILL-12] services/billing/src/routes/billing.consolidated.routes.js — groupBy sin whitelist
+  QUÉ PASABA : GET /revenue-trend?groupBy=X sin whitelist explícita; valor afecta
+               el DATE_FORMAT en SQL.
+  QUÉ SE HIZO: Set(['day','week','month']) con respuesta 400 si no está en la lista.
+
+────────────────────────────────────────────────────────────────────────────────
+SECCIÓN 28 — GATEWAY RESTO (auth.js, cors.js, dlp.js, dlp.policy.js, subdomain.js,
+              registries restantes, config.js, spa.js, security-txt.js)
+────────────────────────────────────────────────────────────────────────────────
+
+[BUG-GW-01] gateway/src/routes/security-txt.js — campo Expires vencido en procesos longevos
+  QUÉ PASABA : El campo Expires se calculaba una sola vez al cargar el módulo. En
+               procesos que corrían meses/años, el security.txt quedaba vencido,
+               dejando de ser RFC 9116 válido.
+  QUÉ SE HIZO: La función _nextYear() se mueve dentro del handler — se calcula en
+               cada request.
+
+[BUG-GW-02] gateway/src/bootstrap/spa.js — catch-all responde HTML a requests WS
+  QUÉ PASABA : GET * respondía con index.html a peticiones a /ws, filtrando el HTML
+               de la SPA a requests que deberían ser rechazados o manejados por WS.
+  QUÉ SE HIZO: Añadida exclusión de /ws en la lista de rutas que hacen next().
+
+[BUG-GW-03] gateway/src/middleware/dlp.js — DLP bypass total cuando Redis está caído
+  QUÉ PASABA : Si Redis estaba caído durante el pre-check, el middleware registraba
+               "DLP bypassed" y dejaba pasar todas las exportaciones sin ningún
+               control. Bypass completo del sistema DLP en producción.
+  QUÉ SE HIZO: Fail-closed en producción para kind === 'export': devuelve HTTP 503
+               si Redis no está disponible.
+
+[BUG-GW-04] gateway/src/middleware/dlp.js — conteo de registros manipulable por upstream
+  QUÉ PASABA : getTrackedRecordCount priorizaba meta.total (valor declarado por el
+               upstream) sobre body.data.length. Un upstream comprometido podía
+               declarar meta.total=1 aunque la respuesta contuviera miles de registros,
+               eludiendo el umbral DLP.
+  QUÉ SE HIZO: Prioridad invertida: primero body.data.length (conteo real), luego
+               meta.total como fallback.
+
+[BUG-GW-05] gateway/src/middleware/dlp.policy.js — ReDoS potencial en patrones .*
+  QUÉ PASABA : Los patrones .*(?:export|download|...) con backtracking en inputs muy
+               largos sin coincidencia podían causar uso de CPU exponencial (ReDoS).
+  QUÉ SE HIZO: Reemplazado .* por [^?#]* — equivalente semánticamente pero sin
+               backtracking catastrófico.
+
+[BUG-GW-06] gateway/src/middleware/auth.js — API key expuesta en logs de servicio interno
+  QUÉ PASABA : El API key se enviaba en el body { apiKey } al servicio interno.
+               Cualquier logger que capturara request bodies lo registraría en texto
+               plano.
+  QUÉ SE HIZO: API key movido a header X-Api-Key-Value. Body simplificado a {}.
+               Añadida validación de longitud mínima (16 chars).
+
+[BUG-GW-07] gateway/src/middleware/auth.js — error de red enmascarado como credencial inválida
+  QUÉ PASABA : Si callInternalService lanzaba excepción (timeout, DNS), devolvía
+               401 Invalid API key, confundiendo fallos de infraestructura con
+               credenciales incorrectas.
+  QUÉ SE HIZO: Errores de red devuelven 503 Authentication service temporarily
+               unavailable (código AUTH_014).
+
+[BUG-GW-08] gateway/src/middleware/auth.js — tokens sin jti aceptados en optionalAuth
+  QUÉ PASABA : Tokens JWT válidos pero sin campo jti eran aceptados directamente,
+               sin posibilidad de revocación. Permitía usar tokens legacy o manipulados
+               que no podían ser revocados.
+  QUÉ SE HIZO: Eliminada la rama else { req.user = decoded } para tokens sin jti.
+               Solo se aceptan tokens con jti verificable.
+
+[BUG-GW-09] gateway/src/middleware/cors.js — null-origin bypass
+  QUÉ PASABA : La cadena "null" (origen de file://, iframes sandboxed) caía en la
+               rama if (!origin) y era aceptada como "server-to-server sin Origin".
+               Páginas locales/sandboxed podían hacer requests autenticados cross-origin.
+  QUÉ SE HIZO: Comprobación explícita if (origin === 'null') antes del check !origin,
+               con rechazo CORS: null origin not allowed.
+
+[BUG-GW-10] gateway/src/middleware/subdomain.js — parseInt sin radix + cache TTL indefinida
+  QUÉ PASABA : parseInt sin base 10 podía interpretar valores como 0777 como octal.
+               Si el resultado era NaN, la TTL de Redis quedaba indefinida, creando
+               entradas de caché permanentes.
+  QUÉ SE HIZO: Añadido radix 10 + validación: si el resultado no es entero positivo
+               finito, se usa el valor por defecto 3600.
+
+[BUG-GW-11] gateway/src/middleware/subdomain.js — cache-key injection con slug sin validar
+  QUÉ PASABA : Un slug sin validar con ../../admin o slug:colons podía corromper
+               claves Redis o manipular la URL interna del servicio auth.
+  QUÉ SE HIZO: Validación con regex SLUG_RE (RFC-1123: solo [a-z0-9-]). Slugs
+               inválidos retornan null.
+
+[BUG-GW-12] gateway/src/config.js — body limit sin allowlist (OOM potencial)
+  QUÉ PASABA : JSON_BODY_LIMIT sin validación. Un valor de entorno como "999gb"
+               causaría OOM en el proceso.
+  QUÉ SE HIZO: Validación contra Set de valores permitidos: 100kb, 256kb, 512kb,
+               1mb, 2mb, 5mb. Valor inválido cae al default 512kb.
+
+[BUG-GW-13] gateway/src/routes/registries/patients.registry.js — IDOR multi-tenant
+  QUÉ PASABA : Rutas species, breeds, branches, clients/signatures/* no tenían
+               tenantMismatchGuard. Un token de tenant A podía acceder a datos de
+               tenant B.
+  QUÉ SE HIZO: Añadido tenantMismatchGuard en todas esas rutas.
+
+[BUG-GW-14] gateway/src/routes/registries/platform.registry.js — info disclosure de infra
+  QUÉ PASABA : GET health/services y GET platform/services solo requerían
+               authMiddleware. Cualquier usuario (rol viewer) podía ver el estado
+               de todos los circuit breakers, servicios caídos y topología interna.
+  QUÉ SE HIZO: Añadido requireGatewayPerm('platform:read') — solo admins/superadmins.
+
+[BUG-GW-15] gateway/src/routes/registries/auth.registry.js — path traversal en reescritura de URL
+  QUÉ PASABA : La regex /^\/api\/v[12]\/auth/ sin ancla de fin coincidía con URLs
+               como /api/v1/auth@evil.com/path, dejando @evil.com/path como path
+               reescrito hacia el proxy.
+  QUÉ SE HIZO: Regex cambiada a /^\/api\/v[12]\/auth(?=\/|$|\?)/ con lookahead que
+               exige /, fin de string o ? después de auth.
+
+════════════════════════════════════════════════════════════════════════════════
+RESUMEN GLOBAL FINAL — AUDITORÍA COMPLETADA
+════════════════════════════════════════════════════════════════════════════════
+
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  TOTAL DE BUGS CORREGIDOS:  143                                     ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+
+  Por severidad:
+  ─────────────────────────────────────────────────────────────────────
+  Críticos  (RCE / auth bypass / rate limit inoperativo / DLP bypass) :  16
+  Altos     (IDOR / SSRF / path traversal / privilege escalation)     :  47
+  Medios    (DoS / info disclosure / injection / race condition)      :  55
+  Bajos     (hardening / logging / validación / timing)               :  25
+  ─────────────────────────────────────────────────────────────────────
+
+  Por servicio:
+  ─────────────────────────────────────────────────────────────────────
+  shared/                —  37 archivos auditados, 34 bugs corregidos
+  gateway/               —  33 archivos,            27 bugs
+  services/auth/         —  19 archivos,            21 bugs
+  services/billing/      —  14 archivos,            20 bugs
+  services/medical/      —  23 archivos,            12 bugs
+  services/patients/     —  20 archivos,             8 bugs
+  services/reports/      —   6 archivos,             8 bugs
+  services/portal/       —  10 archivos,             8 bugs
+  services/telemedicine/ —   6 archivos,             4 bugs
+  services/notifications/ —  11 archivos,            3 bugs
+  services/documents/    —  15 archivos,             3 bugs
+  services/lab-imaging/  —  29 archivos,             1 bug
+  services/grooming/     —   7 archivos,             0 bugs
+  services/ai/           —   6 archivos,             0 bugs
+  plugins/               —   3 archivos,             2 bugs
+  scripts/k6             —  12 archivos,             0 bugs (no prod)
+  ─────────────────────────────────────────────────────────────────────
+
+  Cobertura: 293 archivos backend analizados (frontend excluido)
+  Auditoría: multi-sesión, 9 agentes paralelos, 2026-05-24/25/26
+
+  Categorías principales de vulnerabilidades corregidas:
+  • IDOR / cross-tenant access (acceso a datos de otras orgs/sucursales)
+  • Race conditions / TOCTOU (doble carga, duplicados)
+  • Inyección (SQL param pollution, prototype pollution, IMAP, headers HTTP)
+  • SSRF (webhooks internos, IMAP hosts, health checks)
+  • Autenticación débil (secrets sin requerir, JWT fallbacks inseguros)
+  • Rate limiting ausente o inoperativo
+  • Validación de input incompleta (longitud, tipo, rango)
+  • Secretos/datos sensibles en logs o caché
+  • Prompt injection (AI)
+  • Auditoría incompleta (escrituras exitosas no registradas)
+
+================================================================================
+  FIN DEL REPORTE
+================================================================================

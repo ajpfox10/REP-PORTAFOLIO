@@ -1,0 +1,51 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Request Rate by Service",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum by (service) (rate(http_requests_total[5m]))", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "5xx Rate by Service",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum by (service) (rate(http_requests_total{status_code=~\"5..\"}[5m]))", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 Latency by Service",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Dependency Degradations",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [{ "expr": "sum by (dependency, outcome) (rate(dependency_degradations_total[5m]))", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Event Bus Outcomes",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [{ "expr": "sum by (topic, direction, result) (rate(event_bus_messages_total[5m]))", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Service Registry Outcomes",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [{ "expr": "sum by (operation, result) (rate(service_registry_operations_total[5m]))", "refId": "A" }]
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["vetmanager", "saas", "backend"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Backend SaaS Overview",
+  "uid": "backend-saas-overview",
+  "version": 1
+}

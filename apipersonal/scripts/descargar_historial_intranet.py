@@ -128,7 +128,7 @@ def login(page, password, dependencia="HOSPITAL"):
         page.fill("#username", USUARIO)
         page.fill("#password", password)
         page.wait_for_timeout(500)
-        page.click("button:has-text('Iniciar')")
+        page.click("form button[type=submit]")
         try:
             page.wait_for_load_state("networkidle", timeout=20000)
         except Exception:

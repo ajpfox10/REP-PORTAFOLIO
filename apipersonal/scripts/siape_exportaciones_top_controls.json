@@ -1,0 +1,1398 @@
+[
+  {
+    "depth": 6,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 0,
+    "y": 79,
+    "w": 1280,
+    "h": 641,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 6,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 0,
+    "y": 79,
+    "w": 0,
+    "h": 641,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 7,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 0,
+    "y": 79,
+    "w": 1280,
+    "h": 641,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 10,
+    "role": "internal frame",
+    "name": "Gestor de Exportaciones",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "activo"
+    ],
+    "x": 0,
+    "y": 79,
+    "w": 1453,
+    "h": 824,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 10,
+    "role": "internal frame",
+    "name": "Novedades de Ausentismo",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 0,
+    "y": 79,
+    "w": 1006,
+    "h": 624,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 10,
+    "role": "internal frame",
+    "name": "Ficheros",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 0,
+    "y": 79,
+    "w": 1006,
+    "h": 624,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 10,
+    "role": "internal frame",
+    "name": "Ficheros",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 0,
+    "y": 79,
+    "w": 1006,
+    "h": 624,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 11,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 1447,
+    "h": 800,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 11,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 11,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 11,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 1447,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 0,
+    "h": 800,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 1447,
+    "h": 800,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 0,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 0,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 0,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 12,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 597,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 13,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 1447,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 13,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 13,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 13,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 14,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 1467,
+    "h": 800,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 14,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 14,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 14,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 15,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 1467,
+    "h": 800,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 15,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 15,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 15,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 17,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 100,
+    "w": 1467,
+    "h": 800,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 17,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 13,
+    "y": 162,
+    "w": 980,
+    "h": 345,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 17,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 17,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 17,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 3,
+    "y": 103,
+    "w": 1000,
+    "h": 600,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 70,
+    "y": 191,
+    "w": 620,
+    "h": 21,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 776,
+    "y": 140,
+    "w": 200,
+    "h": 21,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 70,
+    "y": 133,
+    "w": 586,
+    "h": 22,
+    "text": "MINISTERIO DE SALUD",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "...",
+    "desc": "...",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 670,
+    "y": 133,
+    "w": 20,
+    "h": 22,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 180,
+    "w": 400,
+    "h": 19,
+    "text": "ORGANISMO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 236,
+    "w": 400,
+    "h": 19,
+    "text": "APELLIDO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 199,
+    "w": 613,
+    "h": 37,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO y NOMBRE",
+    "desc": "APELLIDO y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 156,
+    "y": 116,
+    "w": 368,
+    "h": 24,
+    "text": "RIBEIRO JONATHAN NATALINO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "...",
+    "desc": "...",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 528,
+    "y": 116,
+    "w": 24,
+    "h": 24,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO",
+    "desc": "LEGAJO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 660,
+    "y": 116,
+    "w": 94,
+    "h": 24,
+    "text": "616415",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "...",
+    "desc": "...",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 758,
+    "y": 116,
+    "w": 24,
+    "h": 24,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 930,
+    "y": 116,
+    "w": 18,
+    "h": 23,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 158,
+    "y": 135,
+    "w": 426,
+    "h": 27,
+    "text": "RIBEIRO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 784,
+    "y": 115,
+    "w": 200,
+    "h": 21,
+    "text": "RIBEIRO JONATHAN NATALINO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 158,
+    "y": 178,
+    "w": 400,
+    "h": 26,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "...",
+    "desc": "...",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 559,
+    "y": 178,
+    "w": 27,
+    "h": 26,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 158,
+    "y": 216,
+    "w": 120,
+    "h": 19,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "FILTRAR",
+    "desc": "FILTRAR",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 618,
+    "y": 135,
+    "w": 120,
+    "h": 27,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "HISTORICOS",
+    "desc": "HISTORICOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 616,
+    "y": 178,
+    "w": 120,
+    "h": 26,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 831,
+    "y": 138,
+    "w": 115,
+    "h": 112,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 158,
+    "y": 135,
+    "w": 426,
+    "h": 27,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 784,
+    "y": 115,
+    "w": 200,
+    "h": 21,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 158,
+    "y": 178,
+    "w": 400,
+    "h": 26,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "...",
+    "desc": "...",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 559,
+    "y": 178,
+    "w": 27,
+    "h": 26,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 158,
+    "y": 216,
+    "w": 120,
+    "h": 19,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "FILTRAR",
+    "desc": "FILTRAR",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 618,
+    "y": 135,
+    "w": 120,
+    "h": 27,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "HISTORICOS",
+    "desc": "HISTORICOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 616,
+    "y": 178,
+    "w": 120,
+    "h": 26,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 831,
+    "y": 138,
+    "w": 115,
+    "h": 112,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 199,
+    "w": 613,
+    "h": 37,
+    "text": "Organismo / Jurisdicción",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 13,
+    "y": 162,
+    "w": 987,
+    "h": 373,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "check box",
+    "name": "FAMILIAR A CARGO",
+    "desc": "FAMILIAR A CARGO",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 930,
+    "y": 117,
+    "w": 17,
+    "h": 20,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 19,
+    "role": "check box",
+    "name": "SOLO CONSULTA",
+    "desc": "SOLO CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 158,
+    "y": 216,
+    "w": 113,
+    "h": 19,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 19,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 833,
+    "y": 140,
+    "w": 111,
+    "h": 108,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "check box",
+    "name": "SOLO CONSULTA",
+    "desc": "SOLO CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 158,
+    "y": 216,
+    "w": 113,
+    "h": 19,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 19,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 833,
+    "y": 140,
+    "w": 111,
+    "h": 108,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "combo box",
+    "name": "LACTANCIA tab page LACTANCIA tab page LACTANCIA tab page Licencia-Permiso",
+    "desc": "Licencia-Permiso",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 42,
+    "y": 209,
+    "w": 264,
+    "h": 24,
+    "text": "",
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "panel",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 325,
+    "y": 210,
+    "w": 100,
+    "h": 24,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 21,
+    "role": "check box",
+    "name": "JUSTIFICADO.",
+    "desc": "JUSTIFICADO.",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "x": 325,
+    "y": 212,
+    "w": 92,
+    "h": 20,
+    "text": "",
+    "action": true
+  }
+]

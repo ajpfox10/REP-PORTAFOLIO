@@ -1,0 +1,361 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Billing Service
+  version: '1.0.0'
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /health/deep:
+    get:
+      responses:
+        '200':
+          description: OK
+  /invoices:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /invoices/aging:
+    get:
+      responses:
+        '200':
+          description: OK
+  /invoices/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /invoices/{id}/pay:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /invoices/{id}/cancel:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /invoices/{id}/authorize:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /invoices/{id}/pdf:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /payments:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /payments/mp/preference:
+    post:
+      responses:
+        '200':
+          description: OK
+  /payments/mp/{mpPaymentId}:
+    get:
+      parameters:
+        - in: path
+          name: mpPaymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /payments/mp/{mpPaymentId}/refund:
+    post:
+      parameters:
+        - in: path
+          name: mpPaymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /payments/mp/webhook:
+    post:
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Invalid signature
+  /payments/mp/webhook/preference:
+    post:
+      responses:
+        '200':
+          description: OK
+  /payments/mp/webhook/{mpPaymentId}:
+    get:
+      parameters:
+        - in: path
+          name: mpPaymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /payments/mp/webhook/{mpPaymentId}/refund:
+    post:
+      parameters:
+        - in: path
+          name: mpPaymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /price-lists:
+    get:
+      responses:
+        '200':
+          description: OK
+  /price-lists/{id}/items:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /inventory:
+    get:
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: itemType
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: stockStatus
+          required: false
+          schema:
+            type: string
+            enum: [all, low, zero]
+      responses:
+        '200':
+          description: OK
+  /inventory/items:
+    post:
+      responses:
+        '201':
+          description: Created
+  /inventory/items/{id}:
+    put:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /inventory/batches:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /inventory/alerts:
+    get:
+      responses:
+        '200':
+          description: OK
+  /inventory/alerts/{id}/resolve:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /inventory/alerts/check:
+    post:
+      responses:
+        '200':
+          description: OK
+  /inventory/movements:
+    post:
+      responses:
+        '201':
+          description: Created
+  /suppliers:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /suppliers/{id}:
+    put:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+    delete:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /purchase-orders:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /purchase-orders/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /purchase-orders/{id}/send:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /purchase-orders/{id}/receive:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /purchase-orders/{id}/cancel:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /billing/consolidated/summary:
+    get:
+      responses:
+        '200':
+          description: OK
+  /billing/consolidated/invoices:
+    get:
+      responses:
+        '200':
+          description: OK
+  /billing/consolidated/revenue-trend:
+    get:
+      responses:
+        '200':
+          description: OK
+  /billing/consolidated/outstanding:
+    get:
+      responses:
+        '200':
+          description: OK
+  /billing/subscriptions:
+    post:
+      responses:
+        '201':
+          description: Created
+    delete:
+      responses:
+        '200':
+          description: OK
+  /billing/subscriptions/current:
+    get:
+      responses:
+        '200':
+          description: OK
+  /billing/subscriptions/portal:
+    get:
+      responses:
+        '200':
+          description: OK

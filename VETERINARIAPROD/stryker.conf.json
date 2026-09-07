@@ -1,0 +1,19 @@
+{
+  "$schema": "https://stryker-mutator.io/schema/stryker-schema.json",
+  "testRunner": "jest",
+  "coverageAnalysis": "off",
+  "mutate": [
+    "shared/**/*.js",
+    "services/**/*.js",
+    "!**/*.test.js"
+  ],
+  "jest": {
+    "projectType": "custom",
+    "configFile": "jest.config.js"
+  },
+  "thresholds": {
+    "high": 80,
+    "low": 65,
+    "break": 60
+  }
+}

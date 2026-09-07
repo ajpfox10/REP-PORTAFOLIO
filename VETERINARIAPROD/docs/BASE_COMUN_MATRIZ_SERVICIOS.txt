@@ -1,0 +1,171 @@
+BASE COMUN - MATRIZ DE SERVICIOS
+================================
+
+Objetivo
+--------
+Definir que significa "base comun" en este backend y medir, servicio por servicio,
+cuanto ya converge y que falta migrar.
+
+Base comun oficial
+------------------
+La base comun actual vive principalmente en:
+
+- shared/serviceBase.js
+- shared/requestContext.js
+- shared/errors.js
+- shared/response.js
+- shared/security.js
+- shared/validation.js
+- shared/internalAuth.js
+
+Una adopcion completa de base comun implica usar una forma unica y oficial para:
+
+- requestId / traceId / contexto de request
+- firma interna entre servicios
+- validacion OpenAPI
+- health/live/ready/deep
+- envelope de error
+- guards de permisos y writes
+- startup, heartbeat y graceful shutdown
+
+Servicios alineados con base comun
+----------------------------------
+Estos servicios ya usan el patron esperado con buildApp(...) + startService(...):
+
+- services/medical
+- services/patients
+- services/billing
+- services/grooming
+- services/reports
+- services/telemedicine
+- services/lab-imaging
+- services/documents
+- services/portal
+- services/notifications
+- services/ai
+- services/auth
+
+En estos casos la convergencia es alta y no requieren un refactor estructural de bootstrap.
+
+Matriz por servicio
+-------------------
+
+1. auth
+Estado: Alineado
+Archivos principales:
+- services/auth/src/index.js
+
+Ya usa base comun:
+- buildApp(...)
+- startService(...)
+- trustProxy, middlewares de borde y rutas publicas definidos como opciones oficiales de serviceBase
+- scanner de seguridad colgado a hooks oficiales de lifecycle
+
+Mantiene solo particularidades legitimas del servicio:
+- cookies
+- rutas publicas de login/refresh/reset/sso
+- endpoint JWKS
+- scanner de suspicious access patterns
+
+Brecha exacta:
+- no mantiene bootstrap paralelo
+- la deuda restante es funcional del dominio auth, no de infraestructura transversal
+
+Migracion recomendada:
+- mantener las excepciones publicas/cookies como configuracion de serviceBase, no como bootstrap manual local
+
+2. portal
+Estado: Alineado
+Archivos principales:
+- services/portal/src/index.js
+- services/portal/src/portal.common.js
+
+Ya usa base comun:
+- buildApp(...)
+- startService(...)
+
+Mantiene solo helpers de dominio:
+- validate(...)
+- portalAuth
+- authLimiter
+- buildOwnerToken/buildOwnerRefresh
+- publishPortalEvent
+
+Brecha exacta:
+- no mantiene bootstrap paralelo
+- la deuda restante ya es de dominio, no de infraestructura transversal
+
+Migracion recomendada:
+- mantener portal.common.js solo como modulo de dominio portal
+
+3. notifications
+Estado: Alineado
+Archivos principales:
+- services/notifications/src/index.js
+- services/notifications/src/bootstrap/runtime.js
+- services/notifications/src/notifications.common.js
+
+Ya usa base comun:
+- buildApp(...)
+- startService(...)
+
+Mantiene solo runtime de dominio:
+- startRuntime(...)
+- suscripcion al event bus del servicio
+- retry worker del dominio notifications
+
+Brecha exacta:
+- no mantiene bootstrap paralelo
+- la deuda restante esta en el runtime funcional del servicio, no en la infraestructura transversal
+
+Migracion recomendada:
+- mantener startRuntime(...) como runtime de dominio, colgado desde hooks oficiales de startService(...)
+
+4. ai
+Estado: Alineado
+Archivos principales:
+- services/ai/src/index.js
+- services/ai/src/ai.common.js
+
+Ya usa base comun:
+- buildApp(...)
+- startService(...)
+- requirePerm shared
+- requestContext shared
+- validation shared
+
+Brecha exacta:
+- no mantiene bootstrap paralelo
+- la deuda restante es solo de dominio IA
+
+Migracion recomendada:
+- mantener ai.common.js solo como modulo de dominio IA
+
+Lectura ejecutiva
+-----------------
+Convergencia alta:
+- medical
+- patients
+- billing
+- grooming
+- reports
+- telemedicine
+- lab-imaging
+- documents
+- portal
+- notifications
+- ai
+- auth
+
+Orden recomendado de unificacion
+--------------------------------
+Sin servicios grandes pendientes en este frente.
+
+Criterio de cierre
+------------------
+Un servicio se considera "en base comun" cuando:
+
+- construye la app con buildApp(...) o una variante oficial derivada de shared/serviceBase.js
+- arranca con startService(...) o una extension oficial del mismo
+- no mantiene una mini-base local para concerns transversales
+- deja fuera de shared solo la logica de dominio propia del servicio

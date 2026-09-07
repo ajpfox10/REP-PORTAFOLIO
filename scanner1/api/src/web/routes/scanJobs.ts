@@ -207,7 +207,10 @@ r.post("/:id/pages/:pageNumber/rotate", asyncRoute(async (req, res) => {
     item.page_number === page_number ? rotatedPage.key : item.storage_key
   )
   const pageBuffers = await Promise.all(pageKeys.map((key) => storage().get(key)))
-  const finalOutput = await buildStoredOutput(tenant_id, job_id, page.output_format, pageBuffers)
+  // JPG multipágina no es válido para el doc principal del job (es transitorio): se arma
+  // como PDF. El "1 JPG por página" definitivo se genera al consolidar la sesión.
+  const rebuildFormat = (page.output_format === "jpg" && pageBuffers.length > 1) ? "pdf" : page.output_format
+  const finalOutput = await buildStoredOutput(tenant_id, job_id, rebuildFormat, pageBuffers)
 
   const [updatedPage] = await pool.query(
     "UPDATE document_pages SET storage_key=? WHERE tenant_id=? AND document_id=? AND page_number=?",
@@ -252,6 +255,7 @@ r.post("/consolidate", asyncRoute(async (req, res) => {
   }
   const job_ids = [...new Set((body.job_ids || []).map(Number).filter(Number.isFinite))]
   const page_keys = (body.page_keys || []).map(String).filter(Boolean)
+  const operadorId = Number((req as any).auth?.user_id) || null
 
   if (!job_ids.length || !page_keys.length) throw new ApiError(400, "empty_scan_session")
   if (!body.personal_dni) throw new ApiError(400, "missing_personal_dni")
@@ -285,9 +289,6 @@ r.post("/consolidate", asyncRoute(async (req, res) => {
   const ALLOWED_FORMATS = new Set(["pdf", "pdf_a", "tiff", "jpg"])
   const requestedFormat = String(body.output_format || canonical.job_output_format || "pdf").toLowerCase()
   let effectiveFormat = ALLOWED_FORMATS.has(requestedFormat) ? requestedFormat : "pdf"
-  // JPG no soporta multipágina: degradar a PDF
-  if (effectiveFormat === "jpg" && page_keys.length > 1) effectiveFormat = "pdf"
-
   // Leer los buffers de cada página — si alguno no existe en disco, error amigable
   let pageBuffers: Buffer[]
   try {
@@ -304,9 +305,121 @@ r.post("/consolidate", asyncRoute(async (req, res) => {
     )
   }
 
-  const finalOutput = await buildStoredOutput(tenant_id, canonical.scan_job_id, effectiveFormat, pageBuffers)
   const personal_ref = body.personal_ref || body.doc_class || "documento_escaneado"
   const doc_class = body.doc_class || body.personal_ref || "documento_escaneado"
+
+  // ── JPG multipágina → 1 archivo JPG por página ──────────────────────────────
+  // En vez de degradar a PDF, generamos N JPG (1 por página) y registramos N
+  // documentos en el legajo (cada uno se previsualiza inline). Si alguna página no
+  // es una imagen rasterizable (p. ej. proviene de un PDF), caemos al camino único.
+  if (effectiveFormat === "jpg" && page_keys.length > 1) {
+    let jpgOutputs: { storage_key: string; mime_type: string }[] | null = null
+    try {
+      jpgOutputs = await Promise.all(
+        pageBuffers.map((buf) => buildStoredOutput(tenant_id, canonical.scan_job_id, "jpg", [buf]))
+      )
+    } catch {
+      jpgOutputs = null // alguna página no es raster → fallback a PDF único abajo
+    }
+
+    if (jpgOutputs) {
+      const jpgKeys = jpgOutputs.map((o) => o.storage_key)
+      const connection = await pool.getConnection()
+      try {
+        await connection.beginTransaction()
+        // El documento canónico pasa a representar el JPG de la página 1
+        await connection.query(
+          `UPDATE documents
+              SET storage_key=?, mime_type=?, page_count=?, doc_class=?,
+                  personal_dni=?, personal_ref=?, search_text=?, updated_at=now()
+            WHERE tenant_id=? AND id=?`,
+          [
+            jpgOutputs[0].storage_key,
+            "image/jpeg",
+            page_keys.length,
+            doc_class,
+            body.personal_dni,
+            personal_ref,
+            `${personal_ref} ${doc_class}`.trim(),
+            tenant_id,
+            canonical.document_id,
+          ]
+        )
+        await connection.query(
+          "DELETE FROM document_pages WHERE tenant_id=? AND document_id=?",
+          [tenant_id, canonical.document_id]
+        )
+        for (let i = 0; i < jpgKeys.length; i++) {
+          await connection.query(
+            "INSERT INTO document_pages (tenant_id,document_id,page_number,storage_key,created_at) VALUES (?,?,?,?,now())",
+            [tenant_id, canonical.document_id, i + 1, jpgKeys[i]]
+          )
+        }
+        await connection.query(
+          "UPDATE scan_jobs SET personal_dni=?, personal_ref=?, output_format='jpg', page_count=?, updated_at=now() WHERE tenant_id=? AND id=?",
+          [body.personal_dni, personal_ref, page_keys.length, tenant_id, canonical.scan_job_id]
+        )
+        const extraDocs = docs.slice(1).map((doc) => doc.document_id)
+        if (extraDocs.length) {
+          await connection.query(
+            `UPDATE documents SET deleted_at=now(), updated_at=now()
+              WHERE tenant_id=? AND id IN (${extraDocs.map(() => "?").join(",")})`,
+            [tenant_id, ...extraDocs]
+          )
+        }
+        await connection.commit()
+      } catch (e) {
+        await connection.rollback()
+        await Promise.all(jpgKeys.map((key) => storage().del(key).catch(() => {})))
+        throw e
+      } finally {
+        connection.release()
+      }
+
+      // Notificar a personal: un documento (un JPG) por cada página
+      const total = jpgOutputs.length
+      const results = await Promise.all(
+        jpgOutputs.map((out, i) =>
+          notifyPersonalApi(tenant_id, {
+            personal_dni: body.personal_dni!,
+            personal_ref,
+            document_id: canonical.document_id,
+            scan_job_id: canonical.scan_job_id,
+            doc_class,
+            page_count: 1,
+            storage_key: out.storage_key,
+            escaneado_por: operadorId,
+            page_index: i + 1,
+            page_total: total,
+          })
+        )
+      )
+      if (results.some((ok) => !ok)) throw new ApiError(502, "personal_sync_failed")
+
+      // Limpieza: borrar documentos viejos y las páginas crudas (ya superadas por los JPG)
+      await Promise.all(
+        [...docs.map((doc) => String(doc.document_storage_key)), ...page_keys]
+          .filter((key) => key && !jpgKeys.includes(key))
+          .map((key) => storage().del(key).catch(() => {}))
+      )
+
+      return res.json({
+        ok: true,
+        document_id: canonical.document_id,
+        scan_job_id: canonical.scan_job_id,
+        page_count: page_keys.length,
+        documents: total,
+        storage_key: jpgOutputs[0].storage_key,
+        output_format: "jpg",
+        mime_type: "image/jpeg",
+      })
+    }
+
+    // Fallback: alguna página no era raster → guardar como PDF único
+    effectiveFormat = "pdf"
+  }
+
+  const finalOutput = await buildStoredOutput(tenant_id, canonical.scan_job_id, effectiveFormat, pageBuffers)
   const connection = await pool.getConnection()
 
   try {
@@ -368,6 +481,7 @@ r.post("/consolidate", asyncRoute(async (req, res) => {
     doc_class,
     page_count: page_keys.length,
     storage_key: finalOutput.storage_key,
+    escaneado_por: operadorId,
   })
   if (!ok) throw new ApiError(502, "personal_sync_failed")
 
@@ -383,6 +497,7 @@ r.post("/consolidate", asyncRoute(async (req, res) => {
     document_id: canonical.document_id,
     scan_job_id: canonical.scan_job_id,
     page_count: page_keys.length,
+    documents: 1,
     storage_key: finalOutput.storage_key,
     output_format: effectiveFormat,
     mime_type: finalOutput.mime_type,

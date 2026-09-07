@@ -1,0 +1,99 @@
+{
+  "auditedAt": "2026-05-14T19:06:52.636Z",
+  "baseUrl": "https://veterinaria-production-cb0d.up.railway.app",
+  "adminUser": "admin@andromeda-vet.com",
+  "fixtures": {
+    "_sources": {
+      "userId": "login",
+      "branchId": "login",
+      "speciesId": "list",
+      "patientId": "list",
+      "clientId": "patient_owner",
+      "appointmentTypeId": "list",
+      "appointmentId": "created",
+      "role": "list",
+      "tableName": "list",
+      "secondaryClientId": "list",
+      "invoiceId": "fallback",
+      "purchaseOrderId": "fallback",
+      "reminderId": "fallback",
+      "mailAccountId": "fallback",
+      "documentId": "fallback",
+      "teleSessionId": "fallback",
+      "labOrderId": "fallback",
+      "imagingOrderId": "fallback",
+      "pathologyOrderId": "fallback",
+      "surgeryId": "fallback",
+      "hospitalizationId": "fallback"
+    },
+    "userId": 1,
+    "branchId": 1,
+    "speciesId": 5,
+    "patientId": 22,
+    "clientId": 27,
+    "appointmentTypeId": 3,
+    "appointmentId": 34,
+    "role": "superadmin",
+    "tableName": "patients",
+    "secondaryClientId": 28,
+    "invoiceId": 1,
+    "purchaseOrderId": 1,
+    "reminderId": 1,
+    "mailAccountId": 1,
+    "documentId": 1,
+    "teleSessionId": 1,
+    "labOrderId": 1,
+    "imagingOrderId": 1,
+    "pathologyOrderId": 1,
+    "surgeryId": 1,
+    "hospitalizationId": 1
+  },
+  "counts": {
+    "total": 3,
+    "byStatus": {
+      "200": 1,
+      "500": 2
+    },
+    "byClass": {
+      "server_error": 2,
+      "ok": 1
+    }
+  },
+  "diagnosisCounts": {
+    "backend_error": 2
+  },
+  "failures": [
+    {
+      "method": "GET",
+      "path": "/patients/{id}/timeline",
+      "resolvedPath": "/api/v1/patients/22/timeline",
+      "summary": "Historial cronológico completo del paciente",
+      "status": 500,
+      "classification": "server_error",
+      "message": "Internal server error",
+      "diagnosis": "backend_error"
+    },
+    {
+      "method": "POST",
+      "path": "/prescriptions/{id}",
+      "resolvedPath": "/api/v1/prescriptions/1",
+      "summary": "Crear prescripción para una historia clínica",
+      "status": 500,
+      "classification": "server_error",
+      "message": "Internal server error",
+      "diagnosis": "backend_error"
+    }
+  ],
+  "sampleSuccesses": [
+    {
+      "method": "GET",
+      "path": "/prescriptions/{id}",
+      "resolvedPath": "/api/v1/prescriptions/1",
+      "summary": "Obtener prescripciones asociadas a una historia clínica",
+      "status": 200,
+      "classification": "ok",
+      "message": "{\"success\":true,\"data\":[{\"id\":1,\"medical_record_id\":1,\"prescribed_by\":1,\"status\":\"active\",\"notes\":null,\"refills_allowed\":0,\"refills_used\":0,\"valid_until\":null,\"",
+      "diagnosis": null
+    }
+  ]
+}

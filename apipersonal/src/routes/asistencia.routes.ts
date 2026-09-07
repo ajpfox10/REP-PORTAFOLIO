@@ -3137,6 +3137,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
                  oc.nombre AS ocupacion_nombre,
                  srv.id    AS servicio_id,
                  srv.nombre AS servicio_nombre,
+                 rep.id    AS reparticion_id,
+                 rep.reparticion_nombre AS reparticion_nombre,
                  dep.id    AS dependencia_id,
                  dep.nombre AS dependencia_nombre
           FROM personal p
@@ -3145,7 +3147,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
           LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
           LEFT JOIN (
-            SELECT ags1.dni, ags1.servicio_id, ags1.dependencia_id
+            SELECT ags1.dni, ags1.servicio_id
             FROM agentes_servicios ags1
             JOIN (
               SELECT dni, MAX(id) AS max_id
@@ -3155,7 +3157,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             ) ult ON ult.max_id = ags1.id
           ) vig ON vig.dni = p.dni
           LEFT JOIN servicios srv ON srv.id = vig.servicio_id AND srv.deleted_at IS NULL
-          LEFT JOIN dependencias dep ON dep.id = vig.dependencia_id AND dep.deleted_at IS NULL
+          LEFT JOIN reparticiones rep ON rep.id = srv.reparticion_id AND rep.deleted_at IS NULL
+          LEFT JOIN dependencias dep ON dep.id = rep.dependencia_id AND dep.deleted_at IS NULL
           WHERE p.deleted_at IS NULL AND p.dni IN (:dnis)
         `, { type: QueryTypes.SELECT, replacements: { dnis: dniNums } });
         for (const r of dbRows) dbMap[normDni(r.dni)] = r;
@@ -3176,6 +3179,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           ocupacion_nombre: db?.ocupacion_nombre ?? null,
           servicio_id: db?.servicio_id ?? null,
           servicio_nombre: db?.servicio_nombre ?? null,
+          reparticion_id: db?.reparticion_id ?? null,
+          reparticion_nombre: db?.reparticion_nombre ?? null,
           dependencia_id: db?.dependencia_id ?? null,
           dependencia_nombre: db?.dependencia_nombre ?? null,
         };

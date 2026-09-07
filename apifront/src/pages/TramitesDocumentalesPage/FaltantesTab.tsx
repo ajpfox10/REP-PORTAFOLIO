@@ -6,6 +6,8 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { exportToExcel } from '../../utils/export';
+import { abrirCarpetaEnExplorador } from '../../utils/abrirCarpeta';
+import { DocuBrowser } from './DocuBrowser';
 
 type Incompleto = { dni: number; nombre: string; ley: string; sinCarpeta: boolean; faltan: string[]; completos: number; total: number };
 type Data = { tanda: string; totalAgentes: number; incompletos: Incompleto[]; sinLey: { dni: number; nombre: string }[]; completos: number };
@@ -17,6 +19,35 @@ export function FaltantesTab() {
   const [selectedTanda, setSelectedTanda] = useState('');
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(false);
+  // Agente cuya carpeta DOCU está desplegada (uno por vez) y a qué subcarpeta saltar.
+  const [expandedDni, setExpandedDni] = useState<number | null>(null);
+  const [targetDoc, setTargetDoc] = useState<string | null>(null);
+  // Se incrementa en cada click de chip: sin esto, volver a tocar el MISMO chip no
+  // renavega (el estado no cambia y el efecto del visor no se vuelve a disparar).
+  const [targetNonce, setTargetNonce] = useState(0);
+
+  // Click en el DNI: abre/cierra el visor in-app del agente (desde la raíz).
+  function toggleAgente(dni: number) {
+    setExpandedDni((cur) => (cur === dni ? null : dni));
+    setTargetDoc(null);
+  }
+  // Click en un chip de documento: entra a esa subcarpeta en el visor y además la
+  // abre en el Explorador de Windows, para poder soltar ahí el archivo que falta.
+  function abrirDocEnVisor(dni: number, doc: string) {
+    setExpandedDni(dni);
+    setTargetDoc(doc);
+    setTargetNonce((n) => n + 1);
+    void (async () => {
+      try {
+        // Como `doc`: en esta pestaña el documento falta, así que el backend crea
+        // la subcarpeta para poder soltar el archivo ahí.
+        const { unc, copiado } = await abrirCarpetaEnExplorador(dni, { doc });
+        toast.ok(copiado ? 'Abriendo carpeta (ruta copiada por las dudas)' : 'Abriendo carpeta', unc);
+      } catch (e: any) {
+        toast.error('No se pudo abrir la carpeta', e?.message || 'Error');
+      }
+    })();
+  }
 
   useEffect(() => {
     (async () => {
@@ -32,57 +63,13 @@ export function FaltantesTab() {
   }, []);
 
   async function analizar(tanda: string) {
-    setSelectedTanda(tanda); setData(null); setLoading(true);
+    setSelectedTanda(tanda); setData(null); setExpandedDni(null); setTargetDoc(null); setLoading(true);
     try {
       const res = await apiFetch<{ ok: boolean; data: Data }>(`/tramites-documentales/faltantes?tanda=${encodeURIComponent(tanda)}`);
       setData(res.data);
     } catch (e: any) {
       toast.error('No se pudo analizar', e?.message || 'Error');
     } finally { setLoading(false); }
-  }
-
-  // Prepara la subcarpeta del documento (o la del agente) en DOCU y copia la ruta de RED
-  // (UNC) al portapapeles. El Explorador no se puede abrir desde el servidor (la API vive
-  // aislada del escritorio), así que el usuario pega la ruta en su propio Explorador (Win+E, Ctrl+V).
-  async function abrirCarpeta(dni: number, doc?: string) {
-    try {
-      const res = await apiFetch<{ ok: boolean; data: { uncRel: string; ruta: string; creada: boolean } }>('/tramites-documentales/abrir-carpeta', {
-        method: 'POST',
-        body: JSON.stringify(doc ? { dni, doc } : { dni }),
-      });
-      // La ruta de red usa el host por el que estás entrando (así anda en cualquier red).
-      const unc = `\\\\${window.location.hostname}\\${res.data.uncRel}`;
-
-      // 1) Intento abrir solo, vía el handler "p5abrir:" instalado en la PC (ver
-      //    carpeta abrir-carpeta-handler). Si no está instalado, no pasa nada.
-      try {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = `p5abrir:${encodeURIComponent(unc)}`;
-        document.body.appendChild(iframe);
-        window.setTimeout(() => { try { document.body.removeChild(iframe); } catch { /* noop */ } }, 1500);
-      } catch { /* noop */ }
-
-      // 2) Igual copio la ruta al portapapeles, como respaldo (si el handler no está instalado).
-      let copiado = false;
-      try {
-        await navigator.clipboard.writeText(unc);
-        copiado = true;
-      } catch {
-        // Fallback si el navegador bloquea el portapapeles (contexto no seguro, etc.).
-        const ta = document.createElement('textarea');
-        ta.value = unc; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.focus(); ta.select();
-        try { copiado = document.execCommand('copy'); } catch { copiado = false; }
-        document.body.removeChild(ta);
-      }
-      toast.ok(
-        copiado ? 'Abriendo carpeta… (si no abre sola, la ruta ya está copiada: Ctrl+V en el Explorador)' : 'Copiá esta ruta en el Explorador',
-        unc,
-      );
-    } catch (e: any) {
-      toast.error('No se pudo preparar la carpeta', e?.message || 'Error');
-    }
   }
 
   function exportar() {
@@ -137,7 +124,7 @@ export function FaltantesTab() {
               <div key={a.dni} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                   <strong style={{ color: '#e2e8f0', fontSize: '0.85rem' }}>{a.nombre}</strong>
-                  <button type="button" onClick={() => void abrirCarpeta(a.dni)} title="Copiar la ruta de la carpeta del agente (pegar en el Explorador)"
+                  <button type="button" onClick={() => toggleAgente(a.dni)} title="Ver la carpeta del agente acá mismo"
                     style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#7dd3fc', fontSize: '0.75rem', textDecoration: 'underline' }}>
                     DNI {a.dni}
                   </button>
@@ -145,16 +132,22 @@ export function FaltantesTab() {
                   {a.sinCarpeta
                     ? <span style={{ color: '#f87171', fontSize: '0.72rem', fontWeight: 700 }}>SIN CARPETA EN DOCU</span>
                     : <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>{a.completos}/{a.total} · faltan {a.faltan.length}</span>}
+                  <button type="button" onClick={() => setExpandedDni((cur) => (cur === a.dni ? null : a.dni))}
+                    title="Ver la carpeta del agente acá mismo"
+                    style={{ marginLeft: 'auto', background: expandedDni === a.dni ? '#7c3aed' : 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '3px 10px', fontSize: '0.72rem', color: expandedDni === a.dni ? '#fff' : '#cbd5e1', cursor: 'pointer' }}>
+                    {expandedDni === a.dni ? '▾ Cerrar carpeta' : '📂 Ver carpeta'}
+                  </button>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {a.faltan.map((d) => (
-                    <button key={d} type="button" onClick={() => void abrirCarpeta(a.dni, d)}
-                      title={`Copiar la ruta de la subcarpeta "${d}" (pegar en el Explorador)`}
+                    <button key={d} type="button" onClick={() => abrirDocEnVisor(a.dni, d)}
+                      title={`Ver la subcarpeta "${d}" en el visor`}
                       style={{ ...docChip, cursor: 'pointer', fontFamily: 'inherit' }}>
                       {d}
                     </button>
                   ))}
                 </div>
+                {expandedDni === a.dni && <DocuBrowser dni={a.dni} target={targetDoc} targetNonce={targetNonce} />}
               </div>
             ))}
             {!data.incompletos.length && <div style={{ color: '#34d399', fontSize: '0.85rem', padding: 20 }}>✅ Todos los agentes de la tanda tienen su documentación completa.</div>}

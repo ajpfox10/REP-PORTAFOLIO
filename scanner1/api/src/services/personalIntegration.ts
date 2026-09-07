@@ -52,6 +52,18 @@ function personalUrl(baseUrl: string, path: string): string {
   return `${base}${path}`
 }
 
+/**
+ * URL pública desde la que ESTE scanner sirve los archivos (/v1/documents/files/...).
+ * Se envía en el aviso document-ready para que api_personal baje el documento de acá
+ * y no dependa de un puerto fijo en su .env (que se desincroniza entre dev/prod).
+ * Cada entorno conoce su propio PORT, así que la URL siempre apunta al scanner correcto.
+ */
+function selfFilesBaseUrl(): string {
+  const explicit = process.env.SCANNER_PUBLIC_URL || process.env.SCANNER_SELF_URL
+  if (explicit && explicit.trim()) return explicit.trim().replace(/\/+$/, "")
+  return `http://127.0.0.1:${process.env.PORT || 3001}`
+}
+
 export async function fetchPersonalPendingTramites(
   tenant_id: number,
   dni: number | string
@@ -100,6 +112,10 @@ type NotifyPersonalApiOptions = {
   page_count?: number | null
   storage_key: string
   ocr_text?: string
+  escaneado_por?: number | null
+  // 1 JPG por página: identifica cada página para nombrar/rutar distinto en el legajo
+  page_index?: number
+  page_total?: number
 }
 
 export async function notifyPersonalApi(
@@ -128,8 +144,12 @@ export async function notifyPersonalApi(
  	 scan_job_id: opts.scan_job_id,
 	  doc_class: opts.doc_class || "general",
 	  page_count: opts.page_count ?? null,
+	  page_index: opts.page_index,
+	  page_total: opts.page_total,
 	  storage_key: opts.storage_key,
+	  files_base_url: selfFilesBaseUrl(),
 	  ocr_text: opts.ocr_text || undefined,
+	  escaneado_por: opts.escaneado_por ?? undefined,
   }
 
   try {

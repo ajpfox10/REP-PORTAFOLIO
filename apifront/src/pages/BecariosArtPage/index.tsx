@@ -74,6 +74,23 @@ interface ErrorArt {
   ley_nombre: string | null;
 }
 
+// Fila de la cola de alta automática (art_alta_queue). Trae el error REAL del script,
+// incluidos los crashes que nunca llegan a becarios_art_errores.
+interface ColaItem {
+  id:            number;
+  dni:           number;
+  status:        'PENDING' | 'PROCESSING' | 'DONE' | 'ERROR' | 'SKIPPED';
+  attempts:      number | null;
+  last_error:    string | null;
+  resultado_art: string | null;
+  created_at:    string;
+  updated_at:    string;
+  apellido:      string | null;
+  nombre:        string | null;
+  legajo:        number | null;
+  ley_nombre:    string | null;
+}
+
 // ─── badges de estado ART por candidato ──────────────────────────────────────
 function ArtBadges({ cand }: { cand: Candidato }) {
   const chip = (bg: string, color: string, text: string, title?: string) => (
@@ -249,6 +266,11 @@ export function BecariosArtPage() {
   const [resolviendo, setResolviendo]   = useState<Record<number, boolean>>({});
   const [filtroErr, setFiltroErr]       = useState<string>('todos');
 
+  // cola de alta automática (art_alta_queue): estado + error real por agente
+  const [cola, setCola]                 = useState<ColaItem[]>([]);
+  const [colaResumen, setColaResumen]   = useState<Record<string, number>>({});
+  const [reencolando, setReencolando]   = useState<Record<number, boolean>>({});
+
   // ── carga ─────────────────────────────────────────────────────────────────
 
   const loadCandidatos = useCallback(async () => {
@@ -288,11 +310,24 @@ export function BecariosArtPage() {
     }
   }, []);
 
+  const loadCola = useCallback(async () => {
+    try {
+      const res = await apiFetch<any>('/becarios-art/cola');
+      setCola(Array.isArray(res?.data) ? res.data : []);
+      setColaResumen(res?.resumen && typeof res.resumen === 'object' ? res.resumen : {});
+    } catch {
+      // sin toast: la tabla puede no existir aún
+      setCola([]);
+      setColaResumen({});
+    }
+  }, []);
+
   useEffect(() => {
     loadCandidatos();
     loadRegistrados();
     loadErrores();
-  }, [loadCandidatos, loadRegistrados, loadErrores]);
+    loadCola();
+  }, [loadCandidatos, loadRegistrados, loadErrores, loadCola]);
 
   // ── acciones ──────────────────────────────────────────────────────────────
 
@@ -356,6 +391,25 @@ export function BecariosArtPage() {
     }
   }, [toast]);
 
+  // Reencolar una fila de la cola (resetea a PENDING vía el mismo endpoint que "Cargar").
+  const handleReencolarCola = useCallback(async (item: ColaItem) => {
+    setReencolando(prev => ({ ...prev, [item.dni]: true }));
+    try {
+      const res = await apiFetch<any>(`/becarios-art/errores/${item.dni}/reintentar`, { method: 'POST' });
+      if (res?.ok) {
+        const quien = item.apellido ? `${item.apellido}, ${item.nombre ?? ''}` : String(item.dni);
+        toast.ok('Reencolado', `${quien} quedó en cola. El worker lo reintenta en el próximo ciclo.`);
+        await loadCola();
+      } else {
+        toast.error('No se reencoló', res?.error ?? 'No se pudo reencolar');
+      }
+    } catch (e: any) {
+      toast.error('Error', e?.message ?? 'No se pudo reencolar');
+    } finally {
+      setReencolando(prev => ({ ...prev, [item.dni]: false }));
+    }
+  }, [toast, loadCola]);
+
   // ── filtros ───────────────────────────────────────────────────────────────
 
   const candFiltrados = candidatos.filter(c => {
@@ -405,6 +459,100 @@ export function BecariosArtPage() {
             Alta de agentes en ART: pendientes, registrados y errores de la carga automática.
           </p>
         </div>
+
+        {/* ── Estado de la cola de carga automática (art_alta_queue) ─────────── */}
+        {(cola.length > 0 || Object.keys(colaResumen).length > 0) && (
+          <div style={{ ...S.panel, marginBottom: 20 }}>
+            <div style={{ ...S.panelTitle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Carga automática en ART (cola)</span>
+              <button style={{ ...S.btn, background: '#334155', color: '#94a3b8', padding: '4px 10px' }} onClick={loadCola} title="Recargar">
+                ↺
+              </button>
+            </div>
+
+            {/* Resumen por estado */}
+            <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginBottom: cola.length > 0 ? 14 : 0 }}>
+              {([
+                ['DONE',       'Cargados',   'rgba(34,197,94,0.15)',  '#4ade80'],
+                ['PENDING',    'En cola',    'rgba(148,163,184,0.15)','#cbd5e1'],
+                ['PROCESSING', 'Procesando', 'rgba(59,130,246,0.15)', '#93c5fd'],
+                ['ERROR',      'Con error',  'rgba(239,68,68,0.15)',  '#f87171'],
+                ['SKIPPED',    'Omitidos',   'rgba(148,163,184,0.12)','#cbd5e1'],
+              ] as const).map(([key, label, bg, color]) => (
+                <span key={key} style={{ background: bg, color, borderRadius: 6, padding: '4px 10px', fontSize: '0.74rem', fontWeight: 600 }}>
+                  {label}: {colaResumen[key] ?? 0}
+                </span>
+              ))}
+            </div>
+
+            {cola.length === 0 ? (
+              <div style={{ ...S.empty, padding: '10px 0' }}>Sin agentes pendientes ni con error en la cola.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' as const }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' as const }}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>Apellido y nombre</th>
+                      <th style={S.th}>DNI</th>
+                      <th style={S.th}>Ley</th>
+                      <th style={S.th}>Estado</th>
+                      <th style={S.th}>Intentos</th>
+                      <th style={S.th}>Error informado</th>
+                      <th style={S.th}>Actualizado</th>
+                      <th style={S.th}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cola.map(item => {
+                      const st = item.status;
+                      const stChip =
+                        st === 'ERROR'      ? ['rgba(239,68,68,0.15)',  '#f87171', '❌ Error'] :
+                        st === 'PROCESSING' ? ['rgba(59,130,246,0.15)', '#93c5fd', '⏳ Procesando'] :
+                        st === 'PENDING'    ? ['rgba(148,163,184,0.15)','#cbd5e1', '🕓 En cola'] :
+                        st === 'SKIPPED'    ? ['rgba(148,163,184,0.12)','#cbd5e1', '⤼ Omitido'] :
+                                              ['rgba(34,197,94,0.15)',  '#4ade80', '✅ Cargado'];
+                      return (
+                        <tr key={item.id}>
+                          <td style={{ ...S.td, fontWeight: 600 }}>
+                            {item.apellido ? `${item.apellido}, ${item.nombre ?? ''}` : '—'}
+                          </td>
+                          <td style={S.td}><CopyChip label="DNI" value={String(item.dni)} toast={toast} /></td>
+                          <td style={{ ...S.td, fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)' }}>{item.ley_nombre ?? '—'}</td>
+                          <td style={S.td}>
+                            <span style={{ background: stChip[0], color: stChip[1], borderRadius: 4, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                              {stChip[2]}
+                            </span>
+                          </td>
+                          <td style={{ ...S.td, textAlign: 'center' as const, color: (item.attempts ?? 0) >= 3 ? '#f87171' : undefined }}>
+                            {item.attempts ?? 0}
+                          </td>
+                          <td style={{ ...S.td, color: item.last_error ? '#fca5a5' : 'rgba(255,255,255,0.3)', maxWidth: 460, fontSize: '0.74rem', whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const }} title={item.last_error ?? undefined}>
+                            {item.last_error ? item.last_error.slice(0, 300) : (st === 'DONE' ? (item.resultado_art ?? '—') : '—')}
+                          </td>
+                          <td style={{ ...S.td, fontSize: '0.72rem', whiteSpace: 'nowrap' as const, color: 'rgba(255,255,255,0.4)' }}>
+                            {fmt(item.updated_at)}
+                          </td>
+                          <td style={{ ...S.td, textAlign: 'right' as const }}>
+                            {st !== 'PROCESSING' && (
+                              <button
+                                style={{ ...S.btn, padding: '3px 10px', background: '#166534', color: '#4ade80', fontSize: '0.72rem', opacity: reencolando[item.dni] ? 0.6 : 1, whiteSpace: 'nowrap' as const }}
+                                onClick={() => handleReencolarCola(item)}
+                                disabled={reencolando[item.dni]}
+                                title="Volver a poner en cola (PENDING). El worker lo reintenta en el próximo ciclo."
+                              >
+                                {reencolando[item.dni] ? 'Reencolando…' : 'Reencolar ⟳'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Errores de la carga automática (para corregir) ─────────────────── */}
         {errores.length > 0 && (

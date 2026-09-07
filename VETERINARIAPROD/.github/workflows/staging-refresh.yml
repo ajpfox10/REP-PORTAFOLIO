@@ -1,0 +1,109 @@
+# OT-134: Weekly staging environment refresh with sanitized production data.
+#
+# 1. Downloads the latest production RDS backup from S3
+# 2. Sanitizes PII (emails, phones, documents, passwords)
+# 3. Uploads the sanitized dump back to S3 (staging prefix)
+# 4. Triggers a kubectl rollout to reload the staging namespace
+#
+# Required secrets:
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
+#   BACKUP_S3_BUCKET          — production backup bucket
+#   BACKUP_S3_PREFIX          — production backup prefix (e.g. rds-backups/)
+#   STAGING_S3_PREFIX         — staging dump destination (e.g. staging-db/)
+#   STAGING_KUBE_CONFIG       — kubeconfig with access to the staging namespace
+#   STAGING_DB_HOST / STAGING_DB_USER / STAGING_DB_PASSWORD
+#
+name: Staging Refresh
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'   # Every Monday 05:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sanitize-and-load:
+    name: Sanitize production dump → staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: sanitize_root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u root -psanitize_root"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Download latest production backup
+        run: |
+          KEY=$(aws s3 ls "s3://${{ secrets.BACKUP_S3_BUCKET }}/${{ secrets.BACKUP_S3_PREFIX }}" \
+            --recursive \
+            | grep '\.sql\.gz$' \
+            | sort | tail -1 | awk '{print $4}')
+          echo "Using production backup: $KEY"
+          aws s3 cp "s3://${{ secrets.BACKUP_S3_BUCKET }}/$KEY" /tmp/prod-backup.sql.gz
+
+      - name: Sanitize PII
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: sanitize_root
+          STAGING_DB: vetmanager_staging_sanitize
+        run: |
+          chmod +x scripts/staging/sanitize-db.sh
+          scripts/staging/sanitize-db.sh /tmp/prod-backup.sql.gz /tmp/staging-sanitized.sql.gz
+
+      - name: Upload sanitized dump to S3
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
+          DEST="s3://${{ secrets.BACKUP_S3_BUCKET }}/${{ secrets.STAGING_S3_PREFIX }}staging-${TIMESTAMP}.sql.gz"
+          aws s3 cp /tmp/staging-sanitized.sql.gz "$DEST"
+          echo "Uploaded sanitized dump to: $DEST"
+
+      - name: Load sanitized dump into staging RDS
+        env:
+          MYSQL_PWD: ${{ secrets.STAGING_DB_PASSWORD }}
+        run: |
+          # Restore into staging database
+          set -o pipefail
+          gzip -dc /tmp/staging-sanitized.sql.gz | \
+            mysql -h "${{ secrets.STAGING_DB_HOST }}" \
+                  -u "${{ secrets.STAGING_DB_USER }}" \
+                  --one-transaction \
+                  vetmanager
+
+      - name: Trigger staging rollout
+        env:
+          KUBECONFIG_DATA: ${{ secrets.STAGING_KUBE_CONFIG }}
+        run: |
+          echo "$KUBECONFIG_DATA" | base64 -d > /tmp/kube.config
+          export KUBECONFIG=/tmp/kube.config
+          kubectl rollout restart deployment \
+            --selector app.kubernetes.io/part-of=vetmanager \
+            --namespace staging
+          kubectl rollout status deployment \
+            --selector app.kubernetes.io/part-of=vetmanager \
+            --namespace staging \
+            --timeout=120s
+          rm /tmp/kube.config
+
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/prod-backup.sql.gz /tmp/staging-sanitized.sql.gz

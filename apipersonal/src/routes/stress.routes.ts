@@ -70,6 +70,60 @@ function parseDateStr(val: unknown): Date | null {
 export function buildStressRouter(sequelize: Sequelize) {
   const router = Router();
 
+  // GET /api/v1/stress/carga-estado
+  //   Estado de la carga automática de ANUAL COMPLEMENTARIA en SIAPE (tabla cola_carga_stress).
+  //   Devuelve conteos por estado + última corrida, para el banner de la página.
+  router.get(
+    '/carga-estado',
+    requirePermission('crud:*:*'),
+    async (_req: Request, res: Response) => {
+      try {
+        const anio = new Date().getFullYear() - 1; // "año anterior al en curso"
+        const [rows] = await sequelize.query(
+          `SELECT estado, COUNT(*) AS c FROM cola_carga_stress WHERE anio = :anio GROUP BY estado`,
+          { replacements: { anio } }
+        );
+        const [[meta]] = (await sequelize.query(
+          `SELECT MAX(actualizado_at) AS ultima, COUNT(*) AS total FROM cola_carga_stress WHERE anio = :anio`,
+          { replacements: { anio } }
+        )) as any;
+        const [pend] = await sequelize.query(
+          `SELECT dni, apellido, dias, licencia FROM cola_carga_stress WHERE anio = :anio AND estado = 'pendiente' ORDER BY dias_transcurridos DESC`,
+          { replacements: { anio } }
+        );
+        const [errs] = await sequelize.query(
+          `SELECT dni, apellido, motivo FROM cola_carga_stress WHERE anio = :anio AND estado = 'error' ORDER BY dni`,
+          { replacements: { anio } }
+        );
+        const conteo: Record<string, number> = { cargado: 0, error: 0, omitido: 0, pendiente: 0 };
+        for (const r of rows as { estado: string; c: number }[]) conteo[r.estado] = Number(r.c);
+
+        // Estado de la última descarga del Excel "Tiempo Acumulado" (Discoverer)
+        let descarga: unknown = null;
+        try {
+          const [[d]] = (await sequelize.query(
+            `SELECT estado, motivo, filas, actualizado_at FROM descarga_tiempo_acumulado ORDER BY id DESC LIMIT 1`
+          )) as any;
+          descarga = d ?? null;
+        } catch { /* tabla puede no existir aún */ }
+
+        return res.json({
+          ok: true,
+          anio,
+          total: Number(meta?.total ?? 0),
+          ultima: meta?.ultima ?? null,
+          conteo,
+          pendientes: pend,
+          errores: errs,
+          descarga,
+        });
+      } catch (err: unknown) {
+        logger.error({ msg: 'Error stress carga-estado', err });
+        return res.status(500).json({ ok: false, error: 'Error consultando estado de carga' });
+      }
+    }
+  );
+
   // GET /api/v1/stress/alertas
   router.get(
     '/alertas',
@@ -121,40 +175,42 @@ export function buildStressRouter(sequelize: Sequelize) {
           return res.json({ ok: true, data: [], total: 0 });
         }
 
-        // ── 2. historial.xlsx ────────────────────────────────────────────────
-        const xlsxPath = path.join(dir, 'historial.xlsx');
-        if (!fs.existsSync(xlsxPath)) {
-          return res.status(404).json({ ok: false, error: `Archivo no encontrado: ${xlsxPath}` });
-        }
-
-        const wbHist = XLSX.readFile(xlsxPath, { cellDates: true, raw: false });
-        const wsHist = wbHist.Sheets[wbHist.SheetNames[0]];
-        // Fila 0 = headers; fila 1+ = datos
-        // Col 4=NRO_DOCUMENTO, 11=NOVEDAD, 12=FECHA_DESDE, 13=FECHA_HASTA
-        const rowsHist: unknown[][] = XLSX.utils.sheet_to_json(wsHist, { header: 1, raw: false });
+        // ── 2. Tabla historial (SIAPE) ───────────────────────────────────────
+        // Antes se leía de historial.xlsx; ahora el histórico vive en la tabla
+        // `historial` (mig 032). Equivalencias de columna:
+        //   NRO_DOCUMENTO→dni · NOVEDAD→novedad · FECHA_HASTA→fecha_hasta · apellido/nombre
+        const dnisZero = [...dniAtZero];
 
         const tieneComplementaria = new Set<number>();
         const ultimoAnual = new Map<number, Date>();
         const dniNombreHist = new Map<number, string>();
 
-        for (let i = 1; i < rowsHist.length; i++) {
-          const row = rowsHist[i] as unknown[];
-          if (!row || row[4] == null) continue;
-          const dni = parseInt(String(row[4]).replace(/\D/g, ''));
-          if (!dni || !dniAtZero.has(dni)) continue;
+        if (dnisZero.length > 0) {
+          const [histRows] = await sequelize.query(
+            `SELECT dni, apellido, nombre, novedad, fecha_hasta
+               FROM historial
+              WHERE dni IN (:dnis)
+                AND (UPPER(novedad) LIKE '%ANUAL COMPLEMENTARIA%' OR UPPER(TRIM(novedad)) = 'ANUAL')`,
+            { replacements: { dnis: dnisZero } }
+          );
 
-          const novedad = String(row[11] ?? '').trim().toUpperCase();
-          const fechaHasta = parseDateStr(row[13]);
+          for (const row of histRows as Record<string, unknown>[]) {
+            const dni = parseInt(String(row.dni).replace(/\D/g, ''));
+            if (!dni || !dniAtZero.has(dni)) continue;
 
-          if (!dniNombreHist.has(dni)) {
-            dniNombreHist.set(dni, `${row[1] ?? ''} ${row[2] ?? ''}`.trim());
-          }
+            const novedad = String(row.novedad ?? '').trim().toUpperCase();
+            const fechaHasta = parseDateStr(row.fecha_hasta);
 
-          if (novedad.includes('ANUAL COMPLEMENTARIA')) {
-            tieneComplementaria.add(dni);
-          } else if (novedad === 'ANUAL' && fechaHasta) {
-            const cur = ultimoAnual.get(dni);
-            if (!cur || fechaHasta > cur) ultimoAnual.set(dni, fechaHasta);
+            if (!dniNombreHist.has(dni)) {
+              dniNombreHist.set(dni, `${row.apellido ?? ''} ${row.nombre ?? ''}`.trim());
+            }
+
+            if (novedad.includes('ANUAL COMPLEMENTARIA')) {
+              tieneComplementaria.add(dni);
+            } else if (novedad === 'ANUAL' && fechaHasta) {
+              const cur = ultimoAnual.get(dni);
+              if (!cur || fechaHasta > cur) ultimoAnual.set(dni, fechaHasta);
+            }
           }
         }
 

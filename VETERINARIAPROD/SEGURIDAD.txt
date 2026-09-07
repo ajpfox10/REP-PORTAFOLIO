@@ -1,0 +1,1116 @@
+═══════════════════════════════════════════════════════════════════════════════
+ VETMANAGER PRO — DOCUMENTACIÓN DE SEGURIDAD DEL SISTEMA
+ (Cómo está protegido el proyecto, capa por capa y archivo por archivo)
+═══════════════════════════════════════════════════════════════════════════════
+
+Última revisión: 2026-06. Documento vivo: actualizar al agregar servicios/rutas.
+Audiencia: cualquier dev que toque el código. Si leés esto entero, entendés
+qué hace cada pieza y POR QUÉ está como está. No hay secretos reales acá.
+
+
+───────────────────────────────────────────────────────────────────────────────
+0. CÓMO LEER ESTE DOCUMENTO
+───────────────────────────────────────────────────────────────────────────────
+
+- Sección 1: el mapa mental (5 min).
+- Sección 2: las 11 capas de defensa. Es el corazón. Si entendés esto, entendés todo.
+- Sección 3: el viaje de UNA request, de punta a punta.
+- Secciones 5–8: archivo por archivo (shared, gateway, servicios, front).
+- Sección 9: reglas de la base de datos.
+- Sección 10: CHECKLIST para agregar una ruta nueva sin abrir un agujero.
+- Sección 11: anti-patrones (qué NO hacer).
+- Sección 12: secretos y respuesta a incidentes.
+
+CONVENCIÓN CLAVE: muchos archivos se repiten en patrón. En vez de listar 271
+archivos, se explica el PATRÓN una vez y se marcan las EXCEPCIONES. Si un archivo
+no está nombrado pero termina en `.read.routes.js`, `.write.routes.js`,
+`.common.js` o `.routes.js`, mirá el patrón de su grupo.
+
+
+───────────────────────────────────────────────────────────────────────────────
+1. ARQUITECTURA EN UNA PÁGINA
+───────────────────────────────────────────────────────────────────────────────
+
+  Navegador (Vue SPA, andromeda-front)
+        │  HTTPS  (JWT en Authorization: Bearer)
+        ▼
+  ┌─────────────────────────────────────────────┐
+  │ GATEWAY (único expuesto a internet)          │
+  │  - Autentica el JWT (RS256)                   │
+  │  - Inyecta identidad en headers X-User-*      │
+  │  - FIRMA cada request interna (HMAC)          │
+  │  - Rate limit, WAF, CORS, CSRF, OpenAPI       │
+  │  - Gate de permisos por ruta (defense-in-depth)│
+  └─────────────────────────────────────────────┘
+        │  red interna (Railway)  + firma HMAC interna
+        ▼
+  ┌──────── 13 MICROSERVICIOS (Node/Express) ─────────┐
+  │ auth · patients · medical · billing · lab-imaging  │
+  │ notifications · telemedicine · grooming · reports  │
+  │ documents · ai · portal · (gateway)                │
+  │                                                    │
+  │ Cada uno: valida la firma interna, re-chequea      │
+  │ permisos (requirePerm/guardWrite), y aísla datos   │
+  │ por organización + sucursal.                       │
+  └────────────────────────────────────────────────────┘
+        │
+        ▼
+  MySQL (AWS RDS)  ·  Redis (sesiones/rate-limit/cache)  ·  S3/MinIO (archivos)
+
+PRINCIPIOS:
+  1. ZERO-TRUST INTERNO: los servicios NO confían en quien los llama. Exigen la
+     firma HMAC del gateway. Aunque alguien entre a la red interna, sin la firma
+     no puede llamar nada.
+  2. DEFENSE IN DEPTH: la misma regla se aplica en varias capas (gateway + servicio
+     + base de datos). Si una falla, otra contiene.
+  3. MULTI-TENANT POR DISEÑO: TODA query filtra por organization_id y/o branch_id.
+     Un usuario NUNCA ve datos de otra clínica.
+  4. FAIL-CLOSED: ante la duda, se deniega (no se abre).
+  5. MENOS PRIVILEGIO: cada rol tiene solo los permisos que necesita.
+
+
+───────────────────────────────────────────────────────────────────────────────
+2. LAS 11 CAPAS DE DEFENSA  (el corazón del modelo)
+───────────────────────────────────────────────────────────────────────────────
+
+CAPA 1 — AUTENTICACIÓN (¿quién sos?)
+  • Staff (veterinarios, recepción, admins): login con email+password → JWT RS256
+    de acceso (15 min) + refresh (7 días). El JWT lo FIRMA el gateway con la clave
+    privada (JWT_PRIVATE_KEY) y lo VERIFICA con la pública (JWT_PUBLIC_KEY).
+  • Passwords: hasheadas con algoritmo fuerte (shared/passwordHash — bcrypt/argon).
+    NUNCA se guardan en texto plano. NUNCA se devuelven en respuestas.
+  • 2FA opcional/forzado por organización (TOTP de 6 dígitos). El "challenge" de 2FA
+    está protegido por firma interna + rate-limit por usuario (no por header
+    manipulable, para que nadie bloquee a otro).
+  • Dueños de mascotas (portal): login SEPARADO. JWT con role='owner' y clientId.
+    Nunca pueden tocar endpoints de staff (se valida role !== 'owner' → 403).
+  • Login anti-enumeración: mismo mensaje genérico para email inexistente, password
+    incorrecta o cuenta inactiva. No se filtra si una cuenta existe.
+
+CAPA 2 — AUTORIZACIÓN / RBAC (¿qué podés hacer?)
+  • Roles reales (shared/rbac.js → ROLE_PERMISSIONS):
+      superadmin     → '*'  (todo)
+      org_admin      → 'branches:*','users:*','patients:*','billing:*', ... (su org)
+      branch_manager → como org_admin pero sin crear/borrar sucursales
+      veterinarian   → patients, medical_records, lab, imaging, surgery, telemedicine...
+      vet_technician, receptionist, groomer, grooming_manager, tele_vet,
+      pharmacist, accountant, lab_technician, imaging_tech, surgeon
+  • Permisos con formato `recurso:accion` (ej: patients:read, invoices:create).
+    Soporta wildcards: 'clients:*' incluye clients:read, clients:create, clients:pii…
+  • DOS puntos de control (defense in depth):
+      - GATEWAY: gate por ruta sensible (gateway/src/middleware/auth.js + registries).
+      - SERVICIO: requirePerm('x:read') al montar + guardWrite('x') que mapea
+        POST→x:create, PUT/PATCH→x:update, DELETE→x:delete.
+  • ABAC / scope: requestAllowsPermissionScope ata el permiso al contexto (org/branch).
+  • Overrides por organización: org_role_overrides permite a un org_admin ajustar
+    permisos de un rol DENTRO de su org. Los wildcards ('*') requieren superadmin
+    (un org_admin no se puede auto-dar todo). Todo cambio queda auditado.
+
+CAPA 3 — AISLAMIENTO MULTI-TENANT (org + sucursal)
+  • shared/tenantScope.js: buildOrgScope / buildBranchScope / scopeParams generan
+    los filtros WHERE organization_id=:orgId / branch_id=:branchId.
+  • REGLA DE ORO: toda query de lectura/escritura incluye el filtro de org y/o branch.
+    Los IDs vienen del JWT (req.user.orgId/branchId), NUNCA del body/query del cliente.
+  • IDOR: antes de operar sobre un :id, se verifica que pertenezca a la org/branch del
+    usuario (ej: ensurePatientVisible, ensureMedicalRecordInScope, branch ownership
+    checks). Si no pertenece → 404/403.
+
+CAPA 4 — FIRMA INTERNA HMAC (zero-trust entre servicios)
+  • shared/internalAuth.js: requireInternalSig. El gateway firma cada request a un
+    servicio con INTERNAL_SECRET (HMAC) + nonce + TTL corto. El servicio rechaza
+    cualquier request sin firma válida.
+  • Esto es lo que evita que, si alguien alcanza un servicio directo (SSRF, red
+    interna), pueda spoofear los headers X-User-Roles/X-Org-Id. Sin firma, esos
+    headers no se confían.
+  • La firma LIGA la identidad (no es una firma genérica): incluye los headers de
+    usuario, así no se pueden reusar/alterar.
+
+CAPA 5 — CIFRADO EN REPOSO (PII y secretos)
+  • shared/encryption.js: AES-256-GCM por campo. getMasterKey deriva la clave con
+    PBKDF2 desde FIELD_ENCRYPTION_SECRET + salt.
+  • Campos cifrados (PII_FIELDS): document_number (DNI), notas clínicas, diagnósticos,
+    tratamientos, recetas, anamnesis, etc. Las credenciales de cuentas de correo
+    (IMAP/Gmail: password, tokens) también se cifran.
+  • BLIND INDEX: como no se puede hacer LIKE sobre datos cifrados, se guarda un HMAC
+    de búsqueda (document_number_hash = hashForSearch(valor)). Permite búsqueda EXACTA
+    (no por substring) sin exponer el valor. NO se busca nunca por la columna en claro.
+  • Enmascarado: a quien no tiene permiso 'clients:pii' (ni rol admin) se le devuelve
+    email/teléfono/DNI enmascarados (j***@dominio, ****1234, ****).
+
+CAPA 6 — VALIDACIÓN DE ENTRADA
+  • express-validator en cada ruta: tipos, longitudes máximas, enums (whitelists),
+    rangos numéricos. Ej: discountPct 0–100, quantity>0, fechas no futuras, etc.
+  • OpenAPI validation en el gateway (express-openapi-validator) valida forma de la
+    request contra el spec.
+  • Sanitización: control-chars removidos (anti prompt-injection en AI), CRLF/NUL
+    removidos (anti header-injection en SMS/email), filenames saneados (anti path
+    traversal), triple-stache {{{ }}} removido (anti XSS en templates Handlebars).
+
+CAPA 7 — CSRF / WAF / CORS / RATE LIMIT / CAPTCHA
+  • CSRF: tokens firmados (CSRF_SECRET). Rutas públicas de auth excluidas (CSRF_EXCLUDE_PATHS).
+  • WAF: filtros de patrones maliciosos a nivel gateway.
+  • CORS: ALLOWED_ORIGINS / CORS_ORIGINS — solo el dominio del front.
+  • Rate limiting: global + por endpoint sensible (login, refresh, 2FA, password reset,
+    push, bulk, creación de sesiones tele). Backend en Redis (multi-instancia) con
+    fallback a memoria.
+  • Captcha (hCaptcha) en login / registro / password reset.
+
+CAPA 8 — WEBHOOKS Y PAGOS (dinero)
+  • MercadoPago / Stripe webhooks: VERIFICAN FIRMA del proveedor antes de procesar.
+    Stripe usa el raw body (no JSON parseado) para validar el HMAC.
+  • IDEMPOTENCIA: cada webhook se procesa una sola vez (INSERT IGNORE / chequeo de
+    pago existente por id). Evita doble-cobro si el webhook llega 2 veces.
+  • Validación de monto/moneda, sin sobrepago, refunds acotados. Todo dentro de
+    transacciones con FOR UPDATE sobre la factura. Mismatch de tenant → se ignora.
+  • Numeración de facturas atómica (secuencia por sucursal con FOR UPDATE).
+  • Facturas con CAE de AFIP no se cancelan directo (se anulan con nota de crédito).
+
+CAPA 9 — SSRF (server-side request forgery)
+  • Webhooks salientes: resuelven DNS y bloquean IPs privadas/loopback/metadata.
+  • IMAP (cuentas de correo): allowlist de puertos (143/993) + bloqueo de hosts
+    privados.
+  • Análisis de imágenes con IA: allowlist de hosts (AI_ALLOWED_IMAGE_HOSTS, p.ej.
+    S3/GCS) — no se acepta cualquier URL.
+
+CAPA 10 — AUDITORÍA Y DETECCIÓN
+  • shared/audit.js: audit_logs de acciones. Fuente "immutable" (cadena con
+    AUDIT_CHAIN_SECRET) accesible solo a owner/superadmin. Export CSV/JSON/NDJSON.
+  • permission_change_audit: todo cambio de rol/permiso/flag queda registrado (actor,
+    target, antes/después, IP).
+  • shared/securityAlerts.js + shared/dlp.js: detección de patrones sospechosos
+    (acceso masivo, exfiltración) y alertas. DLP threshold para exports grandes.
+
+CAPA 11 — PRIVACIDAD / GDPR (Ley 25.326 AR + GDPR)
+  • shared/gdpr.js: export de datos del titular (Art. 15/20), anonimización /
+    derecho al olvido (Art. 17), políticas de retención, consentimientos, reporte
+    de brechas (Art. 33, 72hs).
+  • La anonimización borra PII Y el blind index (para que no se pueda re-identificar
+    por fuerza bruta del DNI). Historias médicas/facturas se conservan por obligación
+    legal pero se desvinculan del titular.
+  • El export entrega la PII descifrada SOLO a quien tiene 'clients:pii'.
+
+
+───────────────────────────────────────────────────────────────────────────────
+3. EL VIAJE DE UNA REQUEST (paso a paso)
+───────────────────────────────────────────────────────────────────────────────
+
+Ejemplo: un veterinario crea una receta.
+  POST /medical-records/123/prescriptions   (con JWT en el header)
+
+ 1. GATEWAY recibe la request.
+ 2. authMiddleware verifica el JWT (RS256). Si vence/inválido → 401.
+ 3. Extrae del token: userId, orgId, branchId, roles, permissions.
+ 4. tenantMismatchGuard: el subdominio/tenant del token coincide con el host.
+ 5. Gate de permiso (si la ruta está en el registry): el usuario tiene el permiso base.
+ 6. rateLimiter por tenant.
+ 7. proxy.factory reenvía al servicio `medical`, INYECTANDO:
+      X-User-Id, X-Org-Id, X-Branch-Id, X-User-Roles, X-User-Permissions
+      + X-Internal-Signature (HMAC con INTERNAL_SECRET + nonce + ts)
+ 8. SERVICIO medical:
+      a. requireInternalSig: valida la firma. Sin firma → 401. (zero-trust)
+      b. fromHeaders: puebla req.user desde los headers YA confiables.
+      c. requirePerm('medical_records:read') + guardWrite('medical_records')
+         → POST exige medical_records:create/update.
+      d. Validación express-validator del body (items array, etc.).
+      e. Chequeo de ROL específico (solo veterinarian/tele_vet/surgeon/... prescriben).
+      f. SCOPE: ensureMedicalRecordInScope(123) → la historia 123 pertenece a la org
+         (y branch) del usuario. Si no → 404. (anti-IDOR)
+      g. Cifra campos sensibles (medicación, instrucciones) con encryption.js.
+      h. INSERT parametrizado (named placeholders, nunca concatenación).
+ 9. Respuesta normalizada (shared/response.js).
+10. audit_logs registra la acción.
+
+Si CUALQUIER paso falla, se corta con el código correcto (401/403/404/422). Fail-closed.
+
+
+───────────────────────────────────────────────────────────────────────────────
+4. SECRETOS Y CONFIGURACIÓN (.env)  — qué protege cada uno
+───────────────────────────────────────────────────────────────────────────────
+
+CRÍTICOS (si se filtran, comprometen TODO — rotar de inmediato):
+  JWT_PRIVATE_KEY / JWT_PUBLIC_KEY  → firmar/verificar tokens. Filtrar la privada =
+                                       forjar tokens de cualquier usuario. Rotar
+                                       invalida sesiones (re-login).
+  INTERNAL_SECRET                    → firma HMAC interna (zero-trust). Filtrar =
+                                       llamar servicios salteando el gateway.
+  FIELD_ENCRYPTION_SECRET            → deriva la clave de cifrado de PII y el blind
+                                       index. Filtrar = descifrar toda la PII. ¡OJO!:
+                                       rotarla EXIGE re-cifrar todos los datos.
+  MYSQL_* / RDS_HOST                 → acceso a la base. (Nota: en este equipo, vars
+                                       del SO pueden tapar MYSQL_USER/PASSWORD; para
+                                       scripts parsear el .env directo.)
+  MINIO_ACCESS_KEY / MINIO_SECRET_KEY→ acceso a S3 (fotos, documentos, grabaciones).
+  REDIS_URL                          → sesiones, rate-limit, lista de revocación.
+
+IMPORTANTES:
+  AUDIT_CHAIN_SECRET → integridad de la cadena de auditoría inmutable.
+  CSRF_SECRET        → tokens CSRF.
+  METRICS_TOKEN      → endpoint de métricas.
+  SMTP_*             → envío de mail (welcome, reset, reportes).
+  GOOGLE_CLIENT_*    → OAuth (calendario / login).
+  HCAPTCHA_SECRET    → validación de captcha.
+  MP_* / STRIPE_*    → cobros.
+  PRESCRIPTION_SIGNING_SECRET → firma HMAC de recetas digitales (telemedicina).
+
+FLAGS:
+  CAPTCHA_ENABLED, DEVICE_FINGERPRINT_ENABLED, OPENAPI_VALIDATE,
+  PORTAL_ALLOW_SELF_REGISTRATION (en prod: el registro de portal exige invitación),
+  RATE_LIMIT_*, DLP_EXPORT_THRESHOLD, CIRCUIT_* (circuit breaker).
+
+REGLA: ningún secreto se loguea ni se devuelve en respuestas. Los logs redactan
+campos sensibles (shared/logger.js: password, token, ssn, tax_id, dni, cuit…).
+
+
+───────────────────────────────────────────────────────────────────────────────
+5. shared/  — LA BASE DE SEGURIDAD (archivo por archivo)
+───────────────────────────────────────────────────────────────────────────────
+
+Esta carpeta es el cimiento. Todos los servicios la importan. Si tocás algo acá,
+afecta a todo el sistema.
+
+  db.js                → pool MySQL (mysql2/promise). query/queryOne/transaction/
+                         callProc. SIEMPRE named placeholders (:param) → sin SQL
+                         injection. transaction() para atomicidad; FOR UPDATE para
+                         locks pesimistas.
+  jwt.js               → firma/verifica JWT RS256 (signAccess/verifyAccess/refresh).
+                         hashToken (para tokens opacos de reset/activación),
+                         generateOpaqueToken.
+  internalAuth.js      → requireInternalSig: valida la firma HMAC del gateway.
+                         EL guardia zero-trust. Liga identidad + nonce + TTL.
+  rbac.js              → ROLE_PERMISSIONS (mapa rol→permisos), hasPermissionDynamic
+                         (con overrides por org desde Redis/DB), getEffectivePermissions,
+                         setRoleOverride, wildcard expansion. checkRowTenantAccess.
+  tenantScope.js       → buildOrgScope/buildBranchScope/scopeParams/
+                         requestAllowsPermissionScope. El aislamiento multi-tenant.
+  requestContext.js    → fromHeaders (puebla req.user desde X-User-* TRAS la firma),
+                         requireOrgContext, KNOWN_ROLES.
+  serviceBase.js       → buildApp (arma cada microservicio con todas las capas),
+                         requirePerm, guardWrite (POST→create/PUT→update/DELETE→delete),
+                         startService, withOpenApiValidation, preJsonMiddlewares.
+  encryption.js        → AES-256-GCM por campo: encrypt/decrypt, encryptFields/
+                         decryptFields/decryptRows, hashForSearch (blind index),
+                         getMasterKey (PBKDF2). PII_FIELDS por tabla. *_FIELDS por
+                         sección clínica.
+  response.js          → respuestas normalizadas: ok/created/noContent/badRequest/
+                         unauthorized/forbidden/notFound/conflict/tooMany/paginated/
+                         error. Códigos consistentes (no se filtran stack traces).
+  passwordHash.js      → hash/verify de contraseñas (algoritmo fuerte, con sal).
+  logger.js            → logging estructurado JSON con REDACCIÓN de campos sensibles.
+  redis.js / cache.js  → getRedisSingleton, cache con TTL, httpCacheHeaders. Usado
+                         para rate-limit, nonces OAuth, revocación de JTI, cache de
+                         schema/RBAC/UI.
+  csrf.js              → generación/validación de tokens CSRF.
+  captcha.js           → verificación hCaptcha + config pública.
+  waf.js               → filtros de patrones de ataque a nivel borde.
+  audit.js             → writeAuditLog, exportAuditLogs (json/csv/ndjson), cadena
+                         inmutable (AUDIT_CHAIN_SECRET).
+  securityAlerts.js    → scanSuspiciousAccessPatterns → genera security_alerts.
+  dlp.js               → data loss prevention: getAlerts/acknowledgeAlert, umbral de
+                         export.
+  gdpr.js              → exportPersonalData, anonymizeClient (borra PII + blind index),
+                         consents, retención, reportBreach.
+  multibranch.js       → transferPatient/transferStock (entre sucursales, con checks
+                         de org, transacciones, FOR UPDATE), crossBranchPatientHistory,
+                         consolidatedFinancials. Errores tipados (CROSS_ORG_DENIED,
+                         INSUFFICIENT_STOCK…).
+  webhooks/dispatcher  → enqueue de eventos a webhooks de clientes, con anti-SSRF
+                         (resuelve DNS, bloquea IP privada) y firma.
+  eventBus.js          → bus de eventos interno (publish con meta org/branch).
+  usageLimits.js       → requireUsageLimit/requireUserUsageLimit (cuotas por plan y
+                         por usuario; anti-abuso/costo, sobre todo IA).
+  digitalSignature.js  → firma/verificación de documentos (clave del servidor).
+  ai.js                → adaptadores LLM (complete/analyzeImage/embedText), circuit
+                         breaker, validateImageUrl (allowlist SSRF), sanitizePromptText.
+  calendar.js          → OAuth Google Calendar (getAuthUrl/exchangeCode/listEvents…).
+  afip.js              → integración WSFE AFIP (authorizeVoucher, CAE, recovery key).
+  mercadopago.js / stripe.js → pasarelas de pago (preferencias, webhooks, firma).
+  fcm.js               → push notifications (topics, sendToMultiple, subscribe).
+  messaging.js / email.js → SMS/WhatsApp (Twilio) y email (SMTP). sendTemplate con
+                         allowlist de templates.
+  schemaEngine.js      → introspección de schema con allowlist de tablas (sin
+                         interpolar nombres arbitrarios).
+  featureFlags.js, pluginRegistry.js, uiSchema.js, locale.js, secrets.js,
+  deviceFingerprint.js, oidc.js, fileUpload.js, notificationRetry.js,
+  notificationLogSchema.js → utilidades de soporte; cada una con su validación.
+
+PATRÓN DE SEGURIDAD DE shared/: nada confía en input crudo; todo se valida, scopea
+y parametriza. Si extendés un helper, mantené named placeholders y el scope por tenant.
+
+
+───────────────────────────────────────────────────────────────────────────────
+6. gateway/  — EL PERÍMETRO (lo único expuesto a internet)
+───────────────────────────────────────────────────────────────────────────────
+
+  src/middleware/auth.js     → authMiddleware (verifica JWT, puebla req.user) +
+                               requireGatewayPermission (OT-103: gate por ruta,
+                               defense-in-depth antes de proxyear).
+  src/middleware/rateLimiter → tenantLimiter (rate limit por tenant).
+  src/middleware/subdomain   → tenantMismatchGuard (el token no sirve para otro tenant
+                               accediendo por IP/host directo).
+  src/routes/proxy.factory   → makeServiceProxy: reenvía al microservicio inyectando
+                               headers X-User-* + X-Internal-Signature (HMAC). Lista
+                               blanca de headers de identidad.
+  src/routes/registries/*    → por servicio (auth, patients, billing, medical, lab,
+                               ai, engagement, platform, portal): qué prefijos se
+                               proxyean y qué gates de permiso aplican.
+  src/bootstrap/docs.js      → OpenAPI validator (validateRequests, allowUnknownQuery
+                               Parameters, ignoreUndocumented).
+  docs/openapi.yaml          → contrato de la API (forma de requests).
+
+NOTA: el gateway BLOQUEA el acceso externo a rutas /internal/* y /auth internas
+(esas solo se llaman servicio-a-servicio con firma).
+
+
+───────────────────────────────────────────────────────────────────────────────
+7. SERVICIOS  (qué hace y qué protege cada uno)
+───────────────────────────────────────────────────────────────────────────────
+
+ESTRUCTURA COMÚN DE TODO SERVICIO:
+  src/index.js            → buildApp(...) y MONTA cada router con
+                            requirePerm('x:read') + guardWrite('x'). ACÁ se define
+                            quién puede entrar a cada árbol de rutas. (Si una ruta no
+                            está acá, no existe.)
+  src/routes/X.common.js  → helpers compartidos del módulo: db, R, validate, log, y
+                            los CHECK DE SCOPE (ensureX, resolveX). Acá vive el
+                            anti-IDOR del módulo.
+  src/routes/X.read.routes.js   → SELECTs. Patrón: SIEMPRE WHERE branch_id/org. Límite
+                                  de paginación capeado. Parametrizado.
+  src/routes/X.write.routes.js  → INSERT/UPDATE/DELETE. Patrón: chequeo de scope del
+                                  recurso → validación → transacción/FOR UPDATE si hay
+                                  invariantes → audit.
+  src/routes/X.routes.js        → agregador (router.use de los sub-routers).
+
+──────────── auth/ ────────────  (identidad, RBAC, 2FA, gobernanza)
+  Todas las rutas admin/protected exigen requireInternalSig + fromHeaders + rol.
+  routes/auth/public.routes      → /login (captcha+rate-limit), /refresh, /logout,
+                                   /password-reset (request+confirm, rate-limit),
+                                   /sso, /captcha/config. PÚBLICAS (pero firmadas por
+                                   gateway).
+  routes/auth/internal.routes    → /internal/* (validate-api-key, org by-slug). SOLO
+                                   firma interna.
+  routes/auth/two-factor.routes  → 2FA setup/verify/disable/challenge (rate-limit por
+                                   userId, no por header manipulable).
+  routes/auth/protected.routes   → me, logout-all, change-password, sessions, api-keys.
+  routes/auth/google.routes      → OAuth: nonce one-time en Redis + verifica que el
+                                   email de Google coincida (anti account-linking).
+  admin-users.routes             → alta/baja/rol de staff. canAssignRole (solo
+                                   superadmin asigna superadmin), no editar superadmin
+                                   siendo org_admin, revoca sesiones, audita.
+  admin-rbac.routes              → overrides de permisos por org. Wildcard '*' exige
+                                   superadmin. assertOrgAccess (org_admin solo su org).
+  admin-feature-flags / plugins / schema / ui-schema / admin-table-preview
+                                 → todos router.use(requireInternalSig, fromHeaders,
+                                   adminOnly). table-preview usa WHITELIST de tablas y
+                                   EXCLUYE columnas sensibles (password_hash, IVs,
+                                   secretos, blobs). schemaEngine valida nombres.
+  data-governance.routes         → retención GDPR. /enforce scopeado por org, columnas
+                                   hardcodeadas validadas contra schema, retención
+                                   mínima 30d, LIMIT por lote, NO borra historias/lab.
+  audit-export.routes            → /export (immutable solo owner), /alerts, /alerts/scan.
+                                   TODAS con requireInternalSig.
+
+──────────── patients/ ────────────  (clientes, mascotas, sucursales)
+  clients.common.js              → hasPiiAccess (clients:pii o rol admin), maskEmail/
+                                   maskPhone, getClientSchema.
+  clients.core.routes            → CRUD de clientes. document_number CIFRADO; búsqueda
+                                   por blind index (document_number_hash); PII
+                                   enmascarada sin permiso. Branch+org scoped.
+  clients.gdpr.routes            → consents/export/erase/requests/retention. El EXPORT
+                                   exige 'clients:pii' (entrega PII descifrada).
+  clients.signatures.routes      → verificación de firma de documentos (límite de
+                                   tamaño anti-DoS); clave pública es pública.
+  patients.common.js             → ensurePatientVisible (org O branch vía dueño),
+                                   sanitizeFilename, upload (magic-bytes + tamaño),
+                                   getPatientSchema.
+  patients.read/write/related/catalog → CRUD de pacientes, dueños, alergias, etc.
+                                   Cada ruta llama ensurePatientVisible (anti-IDOR).
+                                   Fotos validadas por magic-bytes.
+  branches.* (admin/access/transfers/inventory/search/history)
+                                 → gestión de sucursales. POST /access y transfers
+                                   exigen branches:create (admin). transferPatient/
+                                   Stock vía multibranch (transacción, CROSS_ORG_DENIED).
+                                   search por blind index, PII enmascarada.
+
+──────────── medical/ ────────────  (historias clínicas, turnos, reglas)
+  medical.common.js              → ensureMedicalRecordWritable (org/branch + bloqueo
+                                   si está firmada/cerrada/cancelada).
+  medical-records.sections.common→ ensureMedicalRecordInScope (anti-IDOR de secciones).
+  medical-records.core/sections/anamnesis/physical-exam/diagnoses/treatments/
+   prescriptions/sign
+                                 → cada sección CIFRA su PII clínica. prescriptions
+                                   exige rol veterinario + scope. sign: solo autor o
+                                   admin, lockea el registro.
+  appointments.write             → alta de turno con anti-doble-reserva (conflicto de
+                                   vet y de paciente por solapamiento, FOR UPDATE).
+  appointments.calendar.* (ical/google) → ICS saliente (sin SSRF); Google con nonce
+                                   CSRF; sync scopeado por org/branch.
+  rules.* (admin/evaluate)       → motor de reglas. evaluate con límite de tamaño y
+                                   profundidad (anti-DoS); admin con whitelists y tope
+                                   de reglas por org.
+
+──────────── billing/ ────────────  (facturas, pagos, inventario, AFIP) — DINERO
+  Validación anti-inflación (discount/tax 0–100, qty>0), numeración atómica
+  (FOR UPDATE), scope branch/org, IDOR de proveedor/items chequeado.
+  invoices.routes                → CRUD + /pay (transacción, no sobrepago) + /cancel
+                                   (bloqueo si tiene CAE AFIP).
+  afip.routes                    → autorización electrónica (IVA dinámico, CAE).
+  mp.webhook / stripe.routes     → webhooks con FIRMA + IDEMPOTENCIA + validación de
+                                   monto/moneda + refunds acotados. raw body en Stripe.
+  inventory.routes               → movimientos con FOR UPDATE, sin stock negativo,
+                                   IDOR por branch. Lotes y alertas.
+  purchase-orders / suppliers / price-lists / consolidated
+                                 → compras y proveedores (org-scoped, IDOR chequeado),
+                                   listas de precio (IDOR), consolidado (validación de
+                                   fechas, IDOR de branch, whitelist groupBy).
+
+──────────── lab-imaging/ ────────────  (lab, imágenes, cirugía, patología,
+                                          hospitalización, vacunas)
+  lib/clinicalContext.js         → resolveMedicalRecordId: valida que el MR pertenezca
+                                   al paciente Y al branch (anti-IDOR), 403 si no.
+  *.write.routes                 → scope del paciente (org+branch vía dueño), numeración
+                                   con FOR UPDATE, transiciones de estado válidas,
+                                   anti-race (jaula ocupada, cirugía mismo día),
+                                   resultados con item scope.
+  *.read.routes                  → branch-scoped, paginados, parametrizados.
+  *.catalog                      → datos de referencia globales (tests, vacunas).
+  vacunas/desparasitación        → fechas validadas (no futuras, tope a futuro).
+
+──────────── notifications/ ────────────  (mail, SMS, WhatsApp, push)
+  messages.send/template/bulk    → E.164, anti header-injection (CR/LF/NUL), cap de
+                                   longitud, WHITELIST de templates, sanitizeVars
+                                   (anti XSS triple-stache), rate-limit, cola de retry.
+  notifications.core/fcm         → push con requirePerm, rate-limit Redis, verificación
+                                   de pertenencia a org de cada destinatario,
+                                   autorización de topic (solo org/branch/role propios),
+                                   anti topic-injection.
+
+──────────── telemedicine/ ────────────  (videoconsulta)
+  sessions.routes                → token WebRTC autoriza SOLO la identidad propia
+                                   (anti-impersonación) + rol host; prescripción con
+                                   firma HMAC; rate-limit en creación; todo branch-scoped.
+  follow-ups/platforms/stats     → branch/org-scoped; platforms NO hace SELECT * (oculta
+                                   secretos de integración).
+
+──────────── ai/ ────────────  (asistente clínico LLM)
+  chat/diagnosis/images/risk     → requirePerm('ai:use') + LÍMITES DE USO por org y por
+                                   usuario (anti-costo/abuso). Sanitización anti
+                                   prompt-injection. analyzeImage con allowlist SSRF.
+                                   Scope por org/paciente. Historia descifrada solo de
+                                   la propia org.
+
+──────────── documents/ ────────────  (bandeja de correo / OCR)
+  accounts.* (core/common/sync)  → cuentas IMAP/Gmail. Credenciales CIFRADAS en reposo,
+                                   enmascaradas en respuestas, folderName anti-CRLF/
+                                   traversal. Sync IMAP con anti-SSRF.
+  inbox.* (read/write/ingest)    → PDFs validados por magic-bytes, filename saneado,
+                                   dedup por checksum, org-scoped, presigned URL con
+                                   scope de storage (no cross-org). ingest idempotente.
+  lib/pdfOcr.js                  → OCR con mutex + cola (anti-DoS), pdfjs sin eval,
+                                   page cap.
+
+──────────── reports/ ────────────  (analítica)
+  analytics/charts/scheduled/export → branch/org-scoped, :fmt parametrizado desde
+                                   WHITELIST (groupBy), clamp de rango de fechas,
+                                   límites capeados, IDOR de branch chequeado.
+
+──────────── portal/ ────────────  (dueños de mascotas — cliente final)
+  portal.common.js               → portalAuth: valida JWT role='owner' + cuenta ACTIVA
+                                   en cada request; rate-limit Redis; eventos sin
+                                   headers spoofeables.
+  portal.auth.routes             → login anti-enumeración, política de password (min 10
+                                   + complejidad), activación con token, reset con FOR
+                                   UPDATE, refresh con re-chequeo de cuenta.
+  portal.pets/billing/appointments/telemedicine/profile/notifications/fcm
+                                 → TODO scopeado por clientId del dueño (JOIN
+                                   patient_owners). Un dueño solo ve SUS mascotas,
+                                   facturas, recetas, turnos. TOCTOU corregido en
+                                   cancelar; meeting_url solo cuando la sesión está
+                                   activa; password change con rate-limit + invalida
+                                   sesiones.
+
+
+───────────────────────────────────────────────────────────────────────────────
+8. FRONTEND (andromeda-front, Vue 3)
+───────────────────────────────────────────────────────────────────────────────
+
+  src/stores/auth.js   → guarda el JWT, arma el menú según permisos/roles.
+  src/router/index.js  → meta.requiresRole por ruta (ej: admin → org_admin/superadmin).
+  src/views/*.vue      → pantallas. Llaman a la API (que es la que realmente autoriza).
+  src/assets/main.css  → clases globales (.autocomplete, .field, .form-grid). OJO:
+                         <style scoped> NO aplica a componentes hijos.
+
+REGLAS DE FRONT:
+  - NO se usa v-html (Vue auto-escapa {{ }} → sin XSS).
+  - Los chequeos de rol del front son COSMÉTICOS (mostrar/ocultar). La seguridad real
+    está en el backend. Nunca confiar solo en el front.
+  - VET_ROLES y similares usan los nombres REALES ('veterinarian', no 'vet').
+  - window.open de links externos usa 'noopener,noreferrer' (anti-tabnabbing).
+
+
+───────────────────────────────────────────────────────────────────────────────
+9. BASE DE DATOS — convenciones de seguridad
+───────────────────────────────────────────────────────────────────────────────
+
+  - Named placeholders SIEMPRE (:param). Nunca concatenar input en SQL. Nombres de
+    tabla/columna nunca vienen de input (whitelist).
+  - organization_id / branch_id en (casi) toda tabla de negocio → filtro multi-tenant.
+  - document_number CIFRADO + document_number_hash (blind index). La columna legacy
+    `dni` (texto plano) está EN DESUSO y vacía — no leer/escribir.
+  - Soft delete (deleted_at / is_active) donde aplica; las queries filtran borrados.
+  - Transacciones + FOR UPDATE para invariantes (stock, numeración, pagos, jaulas).
+  - Tablas de auditoría: audit_logs, permission_change_audit, gdpr_audit_trail,
+    security_alerts, login_history.
+  - Schema-drift tolerante: el código consulta INFORMATION_SCHEMA y arma columnas
+    condicionalmente (cols.has('x')) → no rompe si falta una columna.
+
+
+───────────────────────────────────────────────────────────────────────────────
+10. CHECKLIST — cómo agregar una RUTA nueva sin abrir un agujero
+───────────────────────────────────────────────────────────────────────────────
+
+  [ ] 1. Montarla en el index.js del servicio con requirePerm('recurso:read') +
+         guardWrite('recurso'). (Si no, queda sin RBAC.)
+  [ ] 2. Si es ruta de gateway sensible, agregar el gate en el registry correspondiente.
+  [ ] 3. Validar TODO el input con express-validator (tipos, longitudes, enums, rangos).
+  [ ] 4. SCOPE: filtrar por req.user.orgId / req.user.branchId. Los IDs salen del
+         token, NUNCA del body/query.
+  [ ] 5. Para operar sobre un :id ajeno (paciente, historia, factura), verificar que
+         pertenece a la org/branch ANTES (ensureX / queryOne con WHERE org/branch).
+  [ ] 6. Queries con named placeholders. Nombres de tabla/columna nunca desde input.
+  [ ] 7. Si hay invariante (stock, saldo, numeración, no-duplicado): transacción +
+         FOR UPDATE + chequeo de affectedRows.
+  [ ] 8. PII: cifrar al guardar (encryption.js), descifrar al leer, enmascarar si no
+         hay permiso. Mantener el blind index sincronizado.
+  [ ] 9. Paginación con límite CAPEADO (Math.min(limit, 100)).
+  [ ] 10. No devolver secretos ni stack traces. Usar shared/response.js.
+  [ ] 11. Si manda mail/SMS/push o llama a un tercero: sanitizar, rate-limit, y
+          (webhooks salientes) pasar por el dispatcher con anti-SSRF.
+  [ ] 12. Acción sensible → auditar (writeAuditLog).
+  [ ] 13. Correr lint + tests antes de commitear.
+
+
+───────────────────────────────────────────────────────────────────────────────
+11. ANTI-PATRONES — qué NO hacer NUNCA
+───────────────────────────────────────────────────────────────────────────────
+
+  ✗ Concatenar input en SQL (`WHERE x = '${v}'`).            → named placeholders.
+  ✗ Confiar en X-User-* sin requireInternalSig.              → siempre la firma primero.
+  ✗ Leer orgId/branchId del body o query.                    → del token (req.user).
+  ✗ SELECT * en tablas con secretos/PII.                     → columnas explícitas.
+  ✗ Buscar PII por la columna en claro (LIKE sobre dni).     → blind index.
+  ✗ Montar un router sin requirePerm/guardWrite.             → siempre gatear.
+  ✗ Devolver PII descifrada sin chequear 'clients:pii'.      → enmascarar.
+  ✗ v-html con datos del usuario.                            → {{ }} (auto-escape).
+  ✗ Procesar un webhook sin verificar firma e idempotencia.  → ambas, siempre.
+  ✗ Loguear/echo de secretos o del body con PII.             → redactar.
+  ✗ Chequear roles con nombres legacy ('vet','admin').       → 'veterinarian','org_admin'.
+  ✗ Borrar/actualizar sin filtrar por org/branch.            → IDOR cross-tenant.
+
+
+───────────────────────────────────────────────────────────────────────────────
+12. SECRETOS, ROTACIÓN E INCIDENTES
+───────────────────────────────────────────────────────────────────────────────
+
+SI UN SECRETO SE FILTRA (se pegó en un chat/log/captura):
+  - JWT_PRIVATE_KEY    → rotar (genera nuevo par RSA). Invalida sesiones → re-login.
+  - INTERNAL_SECRET    → rotar y redeployar TODOS los servicios a la vez.
+  - MYSQL_PASSWORD     → rotar en RDS + actualizar env.
+  - MINIO/AWS keys     → rotar en IAM.
+  - REDIS_URL pass     → rotar en Redis + env.
+  - CSRF/AUDIT/METRICS → rotar (impacto bajo).
+  - SMTP/Google/MP/Stripe/hCaptcha → rotar en cada proveedor.
+  - FIELD_ENCRYPTION_SECRET → CUIDADO: rotarla sin re-cifrar deja ilegible toda la
+    PII. Procedimiento: descifrar con la vieja → re-cifrar con la nueva (migración),
+    regenerar los blind index. Hacerlo en ventana controlada y con backup.
+
+DESPUÉS DE UN FIX DE SEGURIDAD:
+  - Commit + push al remoto (andromedavet/master = repo de Railway).
+  - Redeployar el/los servicio(s) afectado(s) en Railway.
+  - Verificar contra la app.
+
+HISTORIAL DE HARDENING (marcadores en el código):
+  - BUG-xxx / OT-xxx / B-x / T-x / FIX → cada uno documenta una corrección de
+    seguridad o robustez ya aplicada. Buscalos para entender el "por qué" de un check.
+
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  PARTE II — ANEXOS OPERATIVOS                                                  ║
+║  (referencia, runbooks y procedimientos. La PARTE I explica el "cómo funciona";║
+║   esta parte es el "cómo se opera y se mantiene seguro".)                      ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+───────────────────────────────────────────────────────────────────────────────
+13. MATRIZ COMPLETA DE ROLES × PERMISOS  (fuente: shared/rbac.js)
+───────────────────────────────────────────────────────────────────────────────
+
+'*' = todos en ese recurso (wildcard). Vacío = sin acceso. (R=read, C=create,
+U=update, D=delete). Los permisos efectivos pueden ampliarse/recortarse por
+org_role_overrides (solo superadmin puede dar wildcards).
+
+  ROL              | alcance principal
+  -----------------+------------------------------------------------------------
+  superadmin       | '*'  → TODO, en CUALQUIER organización (soporte/plataforma)
+  org_admin        | TODO dentro de SU org: branches:* users:* settings:* ai:*
+                   | patients:* clients:* appointments:* medical_records:* lab:*
+                   | imaging:* surgery:* hospitalization:* vaccinations:* deworming:*
+                   | invoices:* payments:* inventory:* billing:* telemedicine:*
+                   | grooming:* notifications:* reports:* audit:read
+  branch_manager   | como org_admin PERO branches:read+update (no crea/borra
+                   | sucursales) · users:read+create+update · reports:read
+  veterinarian     | patients:read+update clients:read ai:* appointments:*
+                   | medical_records:* lab:* imaging:* surgery:* hospitalization:*
+                   | vaccinations:* deworming:* telemedicine:read+create+update
+                   | invoices:read+create notifications:send reports:read
+  vet_technician   | patients:read+update clients:read appointments:read+update
+                   | medical_records:read+create lab:read+create imaging:read+create
+                   | hospitalization:read+update vaccinations:* deworming:*
+  receptionist     | patients:read+create clients:read+create+update appointments:*
+                   | invoices:read+create payments:read+create notifications:send
+  groomer          | patients:read clients:read grooming:read+create+update
+  grooming_manager | patients:read clients:read grooming:* reports:read
+  tele_vet         | patients:read clients:read ai:* telemedicine:*
+                   | medical_records:read+create
+  pharmacist       | patients:read medical_records:read inventory:* invoices:read
+  accountant       | invoices:* payments:* billing:read reports:read clients:read
+  lab_technician   | patients:read lab:* medical_records:read
+  imaging_tech     | patients:read imaging:* medical_records:read
+  surgeon          | patients:read+update clients:read + (quirúrgico)
+
+  PERMISO ESPECIAL: 'clients:pii' → ver PII de clientes SIN enmascarar (DNI, email,
+  teléfono, tax_id) y exportar datos GDPR. Lo tienen quienes tengan 'clients:*'
+  (org_admin, branch_manager) o el permiso explícito. NO lo tiene recepción/vet por
+  defecto (ven PII enmascarada).
+
+  NOTA: para saber si un rol puede hacer algo, mirá el permiso que exige la ruta en
+  el index.js del servicio (requirePerm/guardWrite) y cruzalo con esta tabla.
+
+
+───────────────────────────────────────────────────────────────────────────────
+14. INVENTARIO DE DATOS SENSIBLES  (fuente: encryption.js PII_FIELDS + DB)
+───────────────────────────────────────────────────────────────────────────────
+
+CIFRADO EN REPOSO (AES-256-GCM con FIELD_ENCRYPTION_SECRET):
+  clients         → dni(legacy/vacío), email*, phone*, address, document_number
+                    (+ document_number_hash = blind index para búsqueda exacta)
+  users           → email*, phone*
+  tele_sessions   → chief_complaint, notes
+  medical_records → chief_complaint, notes + ANAMNESIS + PHYSICAL_EXAM
+  anamnesis       → historia de enfermedad, vacunación, desparasitación, cirugías
+                    previas, medicación actual, alimentación, viajes, observaciones
+  physical_exam   → mucosas, hidratación, ganglios, piel, ojos, oídos, cardiovascular,
+                    respiratorio, abdomen, neurológico, urogenital, dolor, etc.
+  diagnoses       → diagnosis_name, diagnosis_code, notes
+  treatments      → description, notes
+  prescriptions   → notes, medication_name, instructions
+  mail_accounts   → password, clientSecret, refreshToken, accessToken (IMAP/Gmail)
+
+  (*) email/phone se guardan utilizables para enviar mail/SMS pero se ENMASCARAN al
+  devolverlos a usuarios sin 'clients:pii'.
+
+ENMASCARADO EN RESPUESTA (sin permiso clients:pii):
+  email → j***@dominio · phone → ****1234 · document_number → **** · tax_id → ****
+
+HASHEADO (irreversible):
+  passwords (clients.portal_password_hash, users.password_hash) → passwordHash
+  tokens de reset/activación → jwt.hashToken (se guarda el hash, no el token)
+  document_number_hash → HMAC (blind index, no reversible sin la clave)
+
+NUNCA SE GUARDA / NUNCA SE DEVUELVE:
+  contraseñas en claro · datos de tarjeta (los maneja MP/Stripe, no nosotros) ·
+  secretos de integración en respuestas (se enmascaran como ********)
+
+CLASIFICACIÓN FORMAL: existe la tabla data_classification_registry (consultable vía
+auth /admin/data-governance/classification) que etiqueta tabla/campo por nivel.
+
+
+───────────────────────────────────────────────────────────────────────────────
+15. MODELO DE AMENAZAS  (quién ataca, qué protege)
+───────────────────────────────────────────────────────────────────────────────
+
+  ADVERSARIO 1 — Atacante externo (sin cuenta)
+    Quiere: entrar, robar datos, tumbar el servicio.
+    Frenos: solo el gateway expuesto · JWT obligatorio · WAF · rate-limit con
+            lockout · captcha en auth · CSRF · helmet · validación OpenAPI ·
+            HTTPS · ipGuard/dnsRebindingGuard.
+
+  ADVERSARIO 2 — Tenant malicioso (clínica B quiere datos de clínica A)
+    Quiere: leer/escribir datos de otra organización (cross-tenant).
+    Frenos: TODA query filtra organization_id/branch_id (del token, no del input) ·
+            checks de IDOR antes de tocar cualquier :id · tenantMismatchGuard ·
+            firma interna que liga la identidad.
+
+  ADVERSARIO 3 — Insider curioso (staff espiando pacientes/clientes ajenos)
+    Quiere: ver PII/PHI que no le corresponde, exfiltrar.
+    Frenos: RBAC por rol · enmascarado de PII sin 'clients:pii' · scope por sucursal ·
+            DLP (umbral de export) · auditoría completa · security_alerts.
+
+  ADVERSARIO 4 — Cuenta comprometida (password robada)
+    Quiere: usar una sesión válida para hacer daño.
+    Frenos: 2FA opcional/forzado · tokens cortos (15 min) · revocación de sesiones
+            (JTI en Redis) · aviso de login desde dispositivo nuevo · rate-limits ·
+            menos privilegio (el daño se limita al rol) · auditoría.
+
+  ADVERSARIO 5 — Servicio/red interna comprometida (SSRF, lateral movement)
+    Quiere: llamar microservicios directo salteando el gateway.
+    Frenos: firma HMAC interna obligatoria en cada servicio (zero-trust) ·
+            servicios no expuestos a internet · anti-SSRF en webhooks/IMAP/IA.
+
+  FUERA DEL MODELO (riesgos aceptados/externos): compromiso del proveedor cloud,
+  robo físico de la clave maestra, ataque a MP/Stripe. Mitigación: backups,
+  rotación, y respaldo separado de FIELD_ENCRYPTION_SECRET.
+
+
+───────────────────────────────────────────────────────────────────────────────
+16. RUNBOOKS OPERATIVOS  (procedimientos paso a paso)
+───────────────────────────────────────────────────────────────────────────────
+
+16.1 — ROTAR UN SECRETO (general)
+  1. Generar el nuevo valor.
+  2. Cargarlo en Railway (Variables del servicio), NO en código.
+  3. Redeployar los servicios que lo usan.
+  4. Verificar funcionamiento; revocar el viejo en el proveedor si aplica.
+
+16.2 — ROTAR JWT_PRIVATE_KEY/PUBLIC_KEY
+  - Genera nuevo par RSA → cargá ambos → redeploy gateway (y servicios que verifican).
+  - Efecto: invalida todos los access tokens vigentes → los usuarios re-loguean. OK.
+
+16.3 — ROTAR INTERNAL_SECRET
+  - Cargá el nuevo → redeployá TODOS los servicios + gateway A LA VEZ (si quedan
+    desincronizados, las llamadas internas fallan con 401 hasta terminar el deploy).
+
+16.4 — ROTAR FIELD_ENCRYPTION_SECRET  (PELIGROSO — requiere migración)
+  - NO se puede cambiar solo. La clave vieja descifra; la nueva cifra.
+  - Procedimiento: (a) backup completo de la DB. (b) Script que recorre cada columna
+    de PII_FIELDS: descifra con la vieja → re-cifra con la nueva → regenera los blind
+    index (document_number_hash). (c) Recién entonces, swap de la env. (d) Verificar.
+  - Si se cambia sin re-cifrar: TODA la PII queda ilegible (pérdida efectiva de datos).
+
+16.5 — DAR DE BAJA A UN EMPLEADO (offboarding)
+  - PATCH /admin/users/:id/deactivate → desactiva la cuenta Y revoca sus sesiones
+    (DB + Redis revoked:JTI). Auditado. El usuario no puede volver a entrar ni con un
+    token vigente.
+
+16.6 — "UN CLIENTE PIDE BORRAR SUS DATOS" (derecho al olvido, Art. 17)
+  - DELETE /clients/:id/gdpr/erase (requiere clients:delete). Anonimiza PII + borra
+    blind index + sesiones de portal + tokens FCM + consentimientos. Conserva
+    historias/facturas (obligación legal) pero desvinculadas. Queda en gdpr_audit_trail.
+  - Si el cliente quiere una COPIA antes: GET /clients/:id/gdpr/export (clients:pii).
+
+16.7 — INVESTIGAR UN ACCESO SOSPECHOSO
+  - GET /auth/audit/export (rango de fechas, recurso, usuario) → quién hizo qué.
+  - GET /auth/audit/alerts → alertas generadas. POST /auth/audit/alerts/scan → forzar
+    un escaneo. Fuente immutable (owner/superadmin) para evidencia no manipulable.
+
+
+───────────────────────────────────────────────────────────────────────────────
+17. HARDENING DE INFRA Y STACK DE MIDDLEWARE DEL GATEWAY
+───────────────────────────────────────────────────────────────────────────────
+
+INFRA (Railway):
+  - SOLO el gateway tiene dominio público. Los 12 servicios escuchan en localhost
+    (puertos 405x) y solo se alcanzan por la red interna (SERVICE_* en .env).
+  - Variables de entorno SIEMPRE en Railway, NUNCA commiteadas. El .env local es solo
+    para desarrollo y NO debe subirse (ver §29).
+  - RDS con SSL. Redis interno (redis.railway.internal). S3/MinIO con credenciales IAM.
+  - 'trust proxy' = 1 (detrás del proxy de Railway, para IP real y rate-limit correcto).
+
+PIPELINE DE MIDDLEWARE DEL GATEWAY (orden, en bootstrap/middleware.js):
+  CORE:  helmet (headers de seguridad) → compression → correlationId → requestId →
+         ipGuard → dnsRebindingGuard → sanitizeIncomingHeaders → subdomain →
+         cookieParser → CORS
+  API:   (raw body solo para stripe webhook) → json/urlencoded con límite →
+         hpp (anti HTTP Parameter Pollution) → sanitize (anti XSS/NoSQL-injection) →
+         contentTypeGuard → cacheHeaders → WAF → versión → apiLimiter (rate-limit con
+         lockout por niveles) → idempotency → métricas → audit → CSRF → DLP
+  /metrics → protegido por METRICS_TOKEN (403 en prod si no está seteado).
+  /.well-known/security.txt → contacto para disclosure responsable.
+
+HEADERS DE SEGURIDAD: los aplica helmet en el gateway (HSTS, X-Content-Type-Options,
+X-Frame-Options, Referrer-Policy, etc.). Config concreta en shared/security.js →
+helmetMiddleware. (Revisar ahí si se quiere endurecer CSP.)
+
+
+───────────────────────────────────────────────────────────────────────────────
+18. DEUDA DE SEGURIDAD CONOCIDA / FUERA DE SCOPE  (honestidad)
+───────────────────────────────────────────────────────────────────────────────
+
+  - SECRETOS EXPUESTOS EN CHAT (jun-2026): se pegó el .env de prod en una conversación.
+    PENDIENTE: rotar todo (ver §12 y §16). Es lo #1.
+  - ROTACIÓN DE CLAVES y CAPTCHA: quedaron explícitamente fuera de un ciclo de fixes
+    por decisión del dueño. Revisar.
+  - SSRF de IMAP: valida el host LITERAL (bloquea IPs privadas/loopback) pero NO
+    resuelve DNS, así que un hostname que resuelva a IP interna podría pasar. Impacto
+    bajo (protocolo IMAP, no HTTP; lo configura un usuario autenticado). Mejora:
+    resolver DNS y validar la IP final (como hace el dispatcher de webhooks).
+  - branch_manager NO puede iniciar transfers de stock/pacientes (exigen branches:create
+    = solo org_admin). Es fail-closed (seguro), pero CONFIRMAR si el flujo esperado es
+    que el manager los inicie; si sí, dar branches:create a branch_manager (decisión de
+    producto, no la tomé yo para no ampliar permisos).
+  - Columna legacy `clients.dni` (texto plano) sigue existiendo aunque vacía y en
+    desuso. Opcional: dropearla (limpiar también las refs en gdpr.js export/erasure).
+
+  Mantené esta sección actualizada: cada deuda saldada se borra; cada nueva se anota.
+
+
+───────────────────────────────────────────────────────────────────────────────
+19. CICLO DE VIDA DEL TOKEN (sesiones)
+───────────────────────────────────────────────────────────────────────────────
+
+  LOGIN → access token (RS256, 15 min, con jti+userId+orgId+branchId+roles) +
+          refresh token (7 días).
+  USO   → el front manda el access en Authorization: Bearer. El gateway lo verifica
+          en cada request y expande permisos.
+  REFRESH → POST /auth/refresh (rate-limit 60/min): valida el refresh, emite un access
+          nuevo. (Rotación de refresh según implementación.)
+  REVOCACIÓN → al desactivar usuario / cambiar rol / logout-all:
+          sp_revoke_user_sessions + se marca revoked:<jti> en Redis (TTL ~15 min) +
+          un sync periódico como respaldo si Redis está degradado.
+  EXPIRACIÓN → el access muere a los 15 min aunque no se revoque (ventana chica).
+  PORTAL → tokens propios con role='owner'; portalAuth revalida que la cuenta siga
+          activa en CADA request (no alcanza con tener un token).
+
+
+───────────────────────────────────────────────────────────────────────────────
+20. CÓMO TESTEAR LA SEGURIDAD
+───────────────────────────────────────────────────────────────────────────────
+
+AUTOMÁTICO:
+  - tests/unit/security.test.js (47 casos: cifrado, PII_FIELDS, GDPR, etc.).
+    Correr: `npx jest tests/unit/security.test.js`
+  - Lint + suite completa antes de cada deploy.
+
+MANUAL / SMOKE TEST DE AUTORIZACIÓN (hacelo tras cambios de RBAC/scope):
+  1. Cross-tenant: con un token de org A, pedí un :id de org B → debe dar 404/403.
+  2. Escalada: con rol bajo (groomer/recepción), pegá a un endpoint admin → 403.
+  3. PII: con rol sin clients:pii, GET /clients/:id → email/DNI ENMASCARADOS.
+  4. IDOR: pedí /medical-records/<id-de-otra-org>/prescriptions → 404.
+  5. Zero-trust: pegá directo a un servicio (sin el gateway) sin firma → 401.
+  6. Rate-limit: 11 logins fallidos → bloqueo.
+  7. Portal: con token owner del cliente X, pedí mascotas → solo las de X.
+
+VERIFICACIÓN CONTRA DB (read-only): ver memoria/db-verification-access (parsear .env
+directo, usar RDS_HOST; las vars del SO tapan MYSQL_USER/PASSWORD).
+
+
+───────────────────────────────────────────────────────────────────────────────
+21. CUMPLIMIENTO NORMATIVO Y RETENCIÓN
+───────────────────────────────────────────────────────────────────────────────
+
+  - Ley 25.326 (Protección de Datos Personales, Argentina) + GDPR (Art. 15/17/20/33).
+  - Datos veterinarios: Ley 17.132 + resoluciones SENASA (recetas, trazabilidad).
+  - Fiscal: Código de Comercio (facturas) + AFIP (CAE electrónico).
+
+  POLÍTICAS DE RETENCIÓN (gdpr.js getRetentionPolicies / data-governance DEFAULT_RETENTION):
+    facturas .............. 10 años (archive)   — fiscal
+    historias médicas ..... 10 años (archive)   — legal/SENASA
+    lab_results ........... 10 años
+    prescriptions .........  5 años
+    client_pii ............  5 años → anonimizar
+    audit_logs ............  1–3 años → borrar
+    message_logs ..........  1 año
+    session_tokens ........ 30 días
+
+  El enforcement de retención es manual/configurable por org (auth /admin/
+  data-governance), nunca borra historias/lab automáticamente, y todo queda auditado.
+  Brechas: reportBreach calcula el deadline de notificación de 72 hs (Art. 33).
+
+
+───────────────────────────────────────────────────────────────────────────────
+22. GLOSARIO
+───────────────────────────────────────────────────────────────────────────────
+
+  Zero-trust   → no confiar en quien llama por estar "adentro"; exigir prueba (firma).
+  Multi-tenant → varias organizaciones (clínicas) en la misma base, aisladas por org_id.
+  RBAC / ABAC  → control de acceso por Rol / por Atributos (org, branch, dueño).
+  IDOR         → acceder a un recurso ajeno cambiando un id en la URL. Se previene
+                 verificando pertenencia antes de operar.
+  SSRF         → forzar al servidor a pedir una URL interna/maliciosa. Se previene con
+                 allowlists y bloqueo de IPs privadas.
+  TOCTOU       → "time-of-check/time-of-use": condición de carrera entre verificar y
+                 actuar. Se previene re-verificando en el WHERE del UPDATE / FOR UPDATE.
+  Blind index  → HMAC de un dato cifrado para poder buscarlo por igualdad exacta sin
+                 descifrarlo.
+  PII / PHI    → datos personales / datos de salud (acá, de las mascotas y dueños).
+  CSRF         → forzar a un navegador autenticado a enviar una acción no deseada.
+  HMAC         → firma con clave secreta que da integridad + autenticidad.
+  JTI          → id único de un token JWT (para poder revocarlo).
+  CAE          → código de autorización electrónica de una factura AFIP.
+  Fail-closed  → ante la duda, denegar.
+
+
+───────────────────────────────────────────────────────────────────────────────
+23. TOPOLOGÍA DE RED / DESPLIEGUE
+───────────────────────────────────────────────────────────────────────────────
+
+  PÚBLICO (internet):   solo el GATEWAY (dominio Railway / *.up.railway.app).
+  INTERNO (localhost):  auth:4051 patients:4052 medical:4053 lab:4054 billing:4055
+                        telemedicine:4056 grooming:4057 reports:4058 notifications:4059
+                        portal:4060 ai:4061 documents:4062  (ver SERVICE_* en .env)
+  DATOS:                RDS (MySQL, SSL) · Redis (interno) · S3/MinIO (archivos)
+  REGLA: ningún servicio salvo el gateway debe ser alcanzable desde afuera. Si Railway
+         expone otro, es un agujero (el zero-trust lo mitiga, pero no debe pasar).
+
+
+───────────────────────────────────────────────────────────────────────────────
+24. LOGGING Y RETENCIÓN DE LOGS
+───────────────────────────────────────────────────────────────────────────────
+
+  - Formato JSON estructurado (shared/logger.js), con correlationId/requestId/traceId
+    para seguir una request entre servicios.
+  - REDACCIÓN automática: password, token, secret, ssn, tax_id, dni, cuit, cuil… nunca
+    aparecen en los logs.
+  - NO loguear: bodies con PII/adjuntos grandes (varios handlers ya lo evitan), ni
+    secretos, ni el contenido cifrado.
+  - Errores: stack solo en logs internos; al cliente, mensaje + código genérico (nunca
+    el stack ni el SQL).
+  - auditMiddleware registra las acciones a nivel gateway; los servicios auditan las
+    sensibles (cambios de permisos, GDPR, etc.).
+
+
+───────────────────────────────────────────────────────────────────────────────
+25. TABLA DE RATE-LIMITS  (valores por defecto; configurables por env)
+───────────────────────────────────────────────────────────────────────────────
+
+  Endpoint / acción                | Límite              | Clave
+  ---------------------------------+---------------------+----------------------
+  API global (/api)                | RATE_LIMIT_MAX 100/min | por tenant/IP
+  Auth (login)                     | RATE_LIMIT_AUTH_MAX 10 + lockout | IP + captcha
+  /auth/refresh                    | 60 / min            | IP
+  /auth/2fa/challenge              | 5 / 15 min          | userId (o IP)
+  /auth/password-reset/confirm     | 5 / hora            | IP
+  telemedicine crear sesión        | 20 / hora           | branch
+  notifications push               | 20 / 60s            | org
+  notifications bulk               | 5 / 5 min           | branch
+  portal auth (login/registro/fp)  | 10 / 15 min         | IP (RedisStore)
+  portal cambio de password        | 5 / hora            | usuario
+
+  Backend: Redis (multi-instancia) con fallback a memoria. El de auth tiene lockout
+  progresivo. Respuesta 429 con Retry-After.
+
+
+───────────────────────────────────────────────────────────────────────────────
+26. WEBHOOKS — ENTRANTES vs SALIENTES
+───────────────────────────────────────────────────────────────────────────────
+
+  ENTRANTES (terceros nos llaman; rutas PÚBLICAS, validadas por firma):
+    POST /payments/stripe/webhook → firma Stripe sobre RAW body + idempotencia
+                                     (subscription_events INSERT IGNORE).
+    POST /payments/mp/webhook      → firma MercadoPago (x-signature) + idempotencia
+                                     (pago existente por mp_payment_id) + validación de
+                                     monto/moneda + mismatch de tenant + FOR UPDATE.
+    Regla: SIEMPRE verificar firma ANTES de procesar; SIEMPRE idempotente; nunca
+    confiar en el monto del body (re-consultar al proveedor).
+
+  SALIENTES (nosotros notificamos a clientes):
+    shared/webhooks/dispatcher (enqueue) → firma el payload + ANTI-SSRF (resuelve DNS,
+    bloquea IPs privadas/loopback/metadata) + reintentos. Eventos: patient.transferred,
+    invoice.authorized, payment.approved/refunded, etc.
+
+
+───────────────────────────────────────────────────────────────────────────────
+27. API KEYS  (auth de máquina a máquina)
+───────────────────────────────────────────────────────────────────────────────
+
+  - Gestión: /auth/api-keys (list/create/delete) — el usuario crea sus propias keys.
+  - Validación interna: /auth/internal/validate-api-key (solo con firma interna).
+  - Se guardan HASHEADAS (api_key_hash), nunca en claro.
+  - RESTRICCIÓN: los endpoints de administración (admin-users, etc.) RECHAZAN auth por
+    api_key (requireAdmin exige sesión interactiva) → una key robada no administra.
+  - Al dar de baja un usuario, revisar/revocar sus keys.
+
+
+───────────────────────────────────────────────────────────────────────────────
+28. BACKUPS Y RECUPERACIÓN (DR)
+───────────────────────────────────────────────────────────────────────────────
+
+  - DB: snapshots automáticos de RDS (configurar retención en AWS). Probar el RESTORE
+    periódicamente (un backup sin restore probado no es un backup).
+  - ARCHIVOS: versionado/backup del bucket S3.
+  - ⚠️ CLAVE DE CIFRADO: FIELD_ENCRYPTION_SECRET debe respaldarse SEPARADO de la DB y
+    en lugar seguro. Si se pierde la clave, el backup de la DB es INÚTIL (toda la PII
+    queda ilegible). Mismo cuidado con JWT_PRIVATE_KEY e INTERNAL_SECRET.
+  - Documentar RTO/RPO objetivo (cuánto downtime y cuánta pérdida de datos se tolera).
+
+
+───────────────────────────────────────────────────────────────────────────────
+29. SUPPLY CHAIN / DEPENDENCIAS Y SECRETOS EN GIT
+───────────────────────────────────────────────────────────────────────────────
+
+  - `npm audit` periódico; actualizar dependencias con CVE. Lockfile commiteado.
+  - .gitignore DEBE incluir .env / *.env (verificar). Nunca commitear secretos.
+  - Recomendado: hook pre-commit con secret-scanning (gitleaks/trufflehog) para que no
+    se vuelva a filtrar un .env. Si ya se filtró: rotar (no alcanza con borrar el commit,
+    queda en el historial).
+  - pdfjs se usa con isEvalSupported:false y disableWorker (parsing de PDF seguro).
+
+
+───────────────────────────────────────────────────────────────────────────────
+30. VALIDACIÓN DE ARCHIVOS SUBIDOS  (qué acepta cada vía)
+───────────────────────────────────────────────────────────────────────────────
+
+  Endpoint                          | Tipos            | Tamaño | Validación
+  ----------------------------------+------------------+--------+----------------------
+  patients /:id/photo               | jpg png webp pdf | 20 MB  | magic-bytes + ext +
+                                    |                  |        | sanitizeFilename
+  documents /inbox/upload           | PDF              | 25 MB  | magic-bytes (%PDF) +
+                                    | (hasta 10)       |        | filename + dedup checksum
+  documents IMAP/Gmail sync         | PDF              | 25 MB  | magic-bytes + filename
+  clients /signatures/verify        | texto+firma      | 64 KB /| cap anti-DoS
+                                    |                  | 4 KB   |
+  ai /images/analyze (base64)       | imagen           | 8 MB   | prefijo data:image/ +
+                                    |                  |        | (URL: allowlist SSRF)
+
+  Regla: validar SIEMPRE por magic-bytes (no por extensión ni Content-Type, que se
+  falsifican), sanear el nombre (anti path-traversal) y capear el tamaño.
+
+
+───────────────────────────────────────────────────────────────────────────────
+31. PLAN DE RESPUESTA A INCIDENTES (IR)
+───────────────────────────────────────────────────────────────────────────────
+
+  1. DETECTAR   → alertas (security_alerts/DLP), reporte vía security.txt, o aviso.
+  2. CONTENER   → desactivar cuenta(s) comprometida(s) (revoca sesiones), rotar el/los
+                  secreto(s) afectado(s), bloquear IPs si aplica.
+  3. ERRADICAR  → cerrar la vulnerabilidad (fix + deploy), invalidar tokens.
+  4. RECUPERAR  → restaurar desde backup si hubo daño de datos; verificar integridad
+                  (cadena de auditoría immutable).
+  5. NOTIFICAR  → si hubo brecha de datos personales: reportBreach + notificar a la
+                  autoridad dentro de 72 hs (Art. 33 / Ley 25.326) y a los afectados.
+  6. POST-MORTEM→ documentar causa raíz, agregar el check al código y a §10/§18, y un
+                  test de regresión.
+
+  Disclosure responsable: /.well-known/security.txt expone el contacto de seguridad.
+
+
+───────────────────────────────────────────────────────────────────────────────
+32. CHECKLIST DE CODE-REVIEW DE SEGURIDAD + ONBOARDING
+───────────────────────────────────────────────────────────────────────────────
+
+  AL REVISAR UN PR, preguntar:
+  [ ] ¿Toda query nueva filtra por org/branch del TOKEN (no del body)?
+  [ ] ¿Se verifica pertenencia antes de tocar un :id ajeno (IDOR)?
+  [ ] ¿La ruta está montada con requirePerm/guardWrite correcto?
+  [ ] ¿Input validado (tipos, longitudes, enums) y SQL parametrizado?
+  [ ] ¿PII cifrada/enmascarada según permiso? ¿blind index sincronizado?
+  [ ] ¿Invariantes (stock/saldo/numeración) en transacción + FOR UPDATE?
+  [ ] ¿No se loguean/devuelven secretos ni stacks?
+  [ ] ¿Webhook/tercero con firma + idempotencia + anti-SSRF?
+  [ ] ¿Se agregó auditoría a la acción sensible?
+  [ ] ¿Hay test (incluido el caso de denegación)?
+
+  ONBOARDING DE UN DEV NUEVO:
+  1. Leer este documento entero (PARTE I y II).
+  2. Acceso de menor privilegio (no dar prod/secretos sin necesidad).
+  3. Primer cambio: que pase por el checklist de §10 y este de §32.
+  4. Nunca pegar .env/secretos en chats, tickets o capturas.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ RESUMEN EN UNA FRASE
+═══════════════════════════════════════════════════════════════════════════════
+ Gateway autentica y firma → servicios re-verifican firma + permisos + scope de
+ org/branch → la base se accede parametrizada y multi-tenant → la PII viaja cifrada
+ y enmascarada → todo se valida, se limita y se audita. Defensa en profundidad,
+ fail-closed, menos privilegio.
+═══════════════════════════════════════════════════════════════════════════════

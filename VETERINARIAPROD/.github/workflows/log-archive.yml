@@ -1,0 +1,26 @@
+name: Log Archive Maintenance
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.MYSQL_HOST != '' && secrets.MYSQL_DATABASE != '' && secrets.MYSQL_USER != '' && secrets.MYSQL_PASSWORD != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --prefer-offline
+      - run: npm run logs:archive
+        timeout-minutes: 15
+        env:
+          MYSQL_HOST: ${{ secrets.MYSQL_HOST }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          MYSQL_PORT: ${{ secrets.MYSQL_PORT }}

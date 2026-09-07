@@ -3,11 +3,17 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Layout } from '../../components/Layout';
 import { useAdminUsers, type UserRow, type Role, type Permission } from './hooks/useAdminUsers';
 import { apiFetch } from '../../api/http';
+import { useAuth } from '../../auth/AuthProvider';
 import { usePendingRequests } from './hooks/usePendingRequests';
 import { SolicitudesTab } from './components/SolicitudesTab';
 import { CatalogosTab } from './components/CatalogosTab';
 import { DashboardAlertsTab } from './components/DashboardAlertsTab';
 import './styles/AdminPage.css';
+
+// Desde el lunes 24/08/2026 la pestaña Catálogos queda solo para quien tenga
+// el permiso 'admin:catalogos' (el backend la bloquea igual, ver /catalogos en
+// apiGateway). Antes de esa fecha se ve como hasta ahora.
+const CATALOGOS_DESDE = Date.parse('2026-08-24T00:00:00-03:00');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function StatusPill({ estado }: { estado: string }) {
@@ -484,6 +490,8 @@ function RolesTab({ roles, permissions, onRefresh }: {
 // ─── Page principal ───────────────────────────────────────────────────────────
 export function AdminPage() {
   const admin = useAdminUsers();
+  const { hasPerm } = useAuth();
+  const verCatalogos = Date.now() < CATALOGOS_DESDE || hasPerm('admin:catalogos');
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'users' | 'roles' | 'solicitudes' | 'catalogos' | 'banners'>('users');
   const pending = usePendingRequests(admin.roles);
@@ -564,9 +572,11 @@ export function AdminPage() {
           <button className={`tab-btn${tab === 'solicitudes' ? ' active' : ''}`} onClick={() => setTab('solicitudes')}>
             📬 Solicitudes{pendingCount > 0 ? ` (${pendingCount})` : ''}
           </button>
-          <button className={`tab-btn${tab === 'catalogos' ? ' active' : ''}`} onClick={() => setTab('catalogos')}>
-            🗂️ Catálogos
-          </button>
+          {verCatalogos && (
+            <button className={`tab-btn${tab === 'catalogos' ? ' active' : ''}`} onClick={() => setTab('catalogos')}>
+              🗂️ Catálogos
+            </button>
+          )}
           <button className={`tab-btn${tab === 'banners' ? ' active' : ''}`} onClick={() => setTab('banners')}>
             Banners del dashboard
           </button>
@@ -658,7 +668,7 @@ export function AdminPage() {
         )}
 
         {/* ── TAB CATÁLOGOS ── */}
-        {tab === 'catalogos' && <CatalogosTab />}
+        {tab === 'catalogos' && verCatalogos && <CatalogosTab />}
 
         {tab === 'banners' && <DashboardAlertsTab />}
 

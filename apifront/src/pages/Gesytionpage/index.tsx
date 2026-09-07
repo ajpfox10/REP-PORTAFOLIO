@@ -9,6 +9,7 @@ import { loadSession } from '../../auth/session';
 import { atenderCitacion } from '../../api/citaciones';
 
 import { useAgenteSearch } from './hooks/useAgenteSearch';
+import { useDnisRelacionados, fetchRowsByDnis } from './hooks/useDnisRelacionados';
 import { useModules, type ModuleKey } from './hooks/useModules';
 import { usePedidos } from './hooks/usePedidos';
 import { useDocumentos } from './hooks/useDocumentos';
@@ -45,11 +46,14 @@ function fmtDateTime(dt?: string | null) {
 // ─── Modal de citaciones ──────────────────────────────────────────────────────
 interface CitacionesModalProps {
   row: any;
+  dnis?: string[];
   onClose: () => void;
   onCountChange: (n: number) => void;
 }
-function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) {
+function CitacionesModal({ row, dnis, onClose, onCountChange }: CitacionesModalProps) {
   const toast = useToast();
+  // DNIs a consultar: el del agente + los anteriores por cambio de DNI.
+  const dnisConsulta = (dnis && dnis.length) ? dnis : (row?.dni ? [String(row.dni)] : []);
 
   const [citaciones,   setCitaciones]   = useState<any[]>([]);
   const [loadingCit,   setLoadingCit]   = useState(false);
@@ -63,11 +67,10 @@ function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) 
   const [savingCerrar, setSavingCerrar] = useState(false);
 
   const cargar = useCallback(async () => {
-    if (!row?.dni) return;
+    if (!dnisConsulta.length) return;
     setLoadingCit(true);
     try {
-      const res = await apiFetch<any>(`/citaciones?dni=${row.dni}&limit=100&sort=-created_at`);
-      const data = Array.isArray(res?.data) ? res.data : [];
+      const data = await fetchRowsByDnis('/citaciones', dnisConsulta, { extraQuery: 'sort=-created_at', limit: 100 });
       setCitaciones(data);
       onCountChange(data.filter((c: any) => c.citacion_activa).length);
     } catch {
@@ -75,7 +78,7 @@ function CitacionesModal({ row, onClose, onCountChange }: CitacionesModalProps) 
     } finally {
       setLoadingCit(false);
     }
-  }, [row?.dni]);
+  }, [dnisConsulta.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -395,11 +398,14 @@ const CATALOG_DEFS = [
 const PATCH_PERSONAL_COLS = [
   'apellido','nombre','cuil','fecha_nacimiento','sexo_id',
   'email','telefono','domicilio','numerodomicilio','depto','piso',
-  'observacionesdireccion','cp','localidad_id','provincia_id','nacionalidad','observaciones',
+  'observacionesdireccion','cp','localidad_id','provincia_id','nacionalidad','mp','observaciones',
 ];
+// dependencia_id NO se manda: la dependencia se deriva del servicio
+// (servicios.reparticion_id -> reparticiones.dependencia_id). El combo sigue
+// en pantalla solo para filtrar las reparticiones.
 const PATCH_AGENTE_COLS = [
   'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
-  'regimen_horario_id','dependencia_id','reparticion_id','servicio_id','sector_id',
+  'regimen_horario_id','reparticion_id','servicio_id','sector_id',
   'fecha_ingreso','fecha_egreso',
   'legajo','salario_mensual','estado_empleo',
 ];
@@ -668,6 +674,7 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
             {renderText('fecha_nacimiento', 'F. NACIMIENTO', 'date')}
             {renderCatalogSelect('sexo_id', 'SEXO')}
             {renderText('nacionalidad', 'NACIONALIDAD')}
+            {renderText('mp', 'MATRÍCULA (MP)')}
             <div style={{ gridColumn: '1 / -1' }}>
               <label htmlFor="gp-edit-domicilio" style={labelStyle}>CALLE (DOMICILIO)</label>
               <input id="gp-edit-domicilio" name="domicilio" className="input" value={form.domicilio || ''} style={fieldStyle}
@@ -811,8 +818,13 @@ export function GestionPage() {
   const agenteSearch = useAgenteSearch();
   const debouncedDni = useDebounce(agenteSearch.dni, 500);
 
+  // DNIs relacionados por cambio de DNI: el histórico del agente puede estar
+  // colgado de un DNI viejo. Se resuelve una vez y lo reusan todas las búsquedas.
+  const { dnis, relacionados } = useDnisRelacionados(agenteSearch.cleanDni);
+  const dnisKey = dnis.join(',');
+
   const { modules, loadModule, closeModule, setSelectedIndex, setTablePage, setTablePageSize, getSelectedRow } =
-    useModules(agenteSearch.cleanDni);
+    useModules(agenteSearch.cleanDni, dnis);
 
   const pedidos    = usePedidos(agenteSearch.cleanDni, modules.pedidos);
   const documentos = useDocumentos(agenteSearch.cleanDni);
@@ -833,31 +845,38 @@ export function GestionPage() {
   useEffect(() => { setRow(agenteSearch.row); }, [agenteSearch.row]);
   useEffect(() => { setLoading(agenteSearch.loading); }, [agenteSearch.loading]);
 
-  // Reset citaciones al cambiar agente
+  // Reset citaciones al cambiar agente (incluye DNIs anteriores por cambio de DNI)
   useEffect(() => {
     setCitacionesActivas(0);
     setModalCitaciones(false);
-    if (!agenteSearch.cleanDni) return;
-    apiFetch<any>(`/citaciones?dni=${agenteSearch.cleanDni}&citacion_activa=1&limit=100`)
-      .then(r => setCitacionesActivas(Array.isArray(r?.data) ? r.data.length : 0))
+    if (!dnis.length) return;
+    fetchRowsByDnis('/citaciones', dnis, { extraQuery: 'citacion_activa=1', limit: 100 })
+      .then(rows => setCitacionesActivas(rows.length))
       .catch(() => setCitacionesActivas(0));
-  }, [agenteSearch.cleanDni]);
+  }, [dnisKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset expedientes al cambiar agente
+  // Reset expedientes al cambiar agente (incluye DNIs anteriores por cambio de DNI)
   useEffect(() => {
     setExpedientesCount(0);
     setModalExpedientes(false);
-    if (!agenteSearch.cleanDni) return;
-    apiFetch<any>(`/expedientes?dni=${agenteSearch.cleanDni}&limit=200`)
-      .then(r => setExpedientesCount(Array.isArray(r?.data) ? r.data.length : 0))
+    if (!dnis.length) return;
+    fetchRowsByDnis('/expedientes', dnis, { limit: 200 })
+      .then(rows => setExpedientesCount(rows.length))
       .catch(() => setExpedientesCount(0));
-  }, [agenteSearch.cleanDni]);
+  }, [dnisKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Foto: la del DNI nuevo puede estar vacía; si falla, probamos los DNIs anteriores.
   useEffect(() => {
-    const dni = agenteSearch.cleanDni;
-    if (!dni) { documentos.revokeLastObjectUrl?.(); return; }
-    documentos.fetchFotoPrivada?.(dni).catch(() => {});
-  }, [agenteSearch.cleanDni]);
+    if (!dnis.length) { documentos.revokeLastObjectUrl?.(); return; }
+    let cancelled = false;
+    (async () => {
+      for (const dni of dnis) {
+        if (cancelled) return;
+        try { await documentos.fetchFotoPrivada?.(dni); return; } catch { /* probar el siguiente */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [dnisKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const d = String(debouncedDni || '');
@@ -964,6 +983,17 @@ export function GestionPage() {
 
             <AgenteInfoCard row={row} />
 
+            {row?.dni && relacionados.length > 0 && (
+              <div className="card gp-card-14" style={{
+                borderColor: 'rgba(245,158,11,0.35)',
+                background: 'rgba(245,158,11,0.08)',
+                fontSize: '0.8rem', color: '#fbbf24',
+              }}>
+                🔗 Este agente tuvo cambio de DNI. Los datos incluyen también el/los DNI anterior{relacionados.length > 1 ? 'es' : ''}:{' '}
+                <strong style={{ fontFamily: 'monospace' }}>{relacionados.join(', ')}</strong>
+              </div>
+            )}
+
             <AlertaBannerAgenteConMensaje dni={row?.dni} />
 
             {row?.dni && (
@@ -1065,6 +1095,7 @@ export function GestionPage() {
       {modalCitaciones && row && (
         <CitacionesModal
           row={row}
+          dnis={dnis}
           onClose={() => setModalCitaciones(false)}
           onCountChange={n => setCitacionesActivas(n)}
         />
@@ -1074,6 +1105,7 @@ export function GestionPage() {
       {modalExpedientes && row && (
         <ExpedientesModal
           row={row}
+          dnis={dnis}
           onClose={() => setModalExpedientes(false)}
           onCountChange={n => setExpedientesCount(n)}
         />

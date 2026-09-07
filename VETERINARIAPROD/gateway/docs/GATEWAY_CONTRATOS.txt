@@ -1,0 +1,53 @@
+GATEWAY CONTRATOS
+
+Headers internos inyectados a downstream:
+- X-User-Id
+- X-Org-Id
+- X-Branch-Id
+- X-User-Roles
+- X-User-Email
+- X-JTI
+- X-Request-Id
+- X-Trace-Id
+- X-Forwarded-For
+- X-Internal-Sig
+
+Contexto de request:
+- X-Request-Id identifica la request funcional en logs y respuestas.
+- X-Trace-Id sigue el trayecto entre gateway y servicios downstream.
+
+Reglas de rutas:
+- auth publica: login, refresh, register, password-reset, google, sso, .well-known, internal
+- auth protegida: resto de /auth con JWT + tenantMismatchGuard + tenantLimiter
+- portal/auth publica
+- portal privada validada internamente por el servicio portal
+- webhook publico actual: /payments/mp/webhook
+
+WebSocket notifications payload:
+- type: string requerido
+- targetUserIds: string[] opcional
+- targetRoles: string[] opcional
+- orgId: string opcional
+- branchId: string opcional
+- data: object opcional
+- ts: ISO string opcional
+
+Semantica de scoping WS:
+- targetUserIds filtra por usuario
+- targetRoles filtra por roles del socket
+- orgId filtra por organizacion del socket
+- branchId filtra por sucursal del socket
+- si no hay scope, es broadcast global
+
+Firma interna:
+- X-Internal-Sig firma method + upstream path + orgId
+- la valida requireInternalSig en servicios internos
+
+Permisos y roles:
+- `requirePerm` usa el esquema `recurso:accion`.
+- `guardWrite` agrega `create/update/delete` sobre el mismo recurso.
+- `requireAdminRole` acepta `superadmin` y `org_admin`.
+
+DLP declarativo:
+- solo aplica a politicas declaradas en src/middleware/dlp.policy.js
+- distingue kind=list y kind=export para evolucion futura

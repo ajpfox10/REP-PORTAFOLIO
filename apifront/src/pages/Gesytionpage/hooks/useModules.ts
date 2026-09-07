@@ -16,9 +16,15 @@ export type ModuleState = {
   tablePageSize: number;
 };
 
-export function useModules(cleanDni: string) {
+export function useModules(cleanDni: string, dnisRelacionados?: string[]) {
   const toast = useToast();
   const prevDniRef = useRef('');
+
+  // Lista de DNIs a consultar: el principal + los que quedaron de cambios de DNI.
+  // Si aún no se resolvió la cadena, cae al principal.
+  const dnis = (dnisRelacionados && dnisRelacionados.length)
+    ? dnisRelacionados
+    : (cleanDni ? [cleanDni] : []);
 
   const emptyState = () => ({
     consultas:  { open: false, rows: [], selectedIndex: 0, loading: false, scanned: null, tablePage: 1, tablePageSize: 50 },
@@ -64,31 +70,33 @@ export function useModules(cleanDni: string) {
       const limit = 200;
 
       // ANTES: usaba ?q= que el back no soporta + loop de 5 páginas en frontend
-      // AHORA: filtro exacto ?dni= directo, el back devuelve solo los del agente
+      // AHORA: filtro exacto ?dni= directo, el back devuelve solo los del agente.
+      // Si el agente cambió de DNI, consultamos también los DNIs viejos y fusionamos.
+      const dnisConsulta = dnis.length ? dnis : [cleanDni];
       let allRows: any[] = [];
-      let page = 1;
-      let total = 0;
-      let totalPages = 1;
 
-      while (true) {
-        const res = await apiFetch<any>(`${endpoint}?dni=${cleanDni}&limit=${limit}&page=${page}`);
-        const rows: any[] = res?.data || [];
-        const meta = res?.meta;
+      for (const dni of dnisConsulta) {
+        let page = 1;
+        let totalPages = 1;
+        while (true) {
+          const res = await apiFetch<any>(`${endpoint}?dni=${dni}&limit=${limit}&page=${page}`);
+          const rows: any[] = res?.data || [];
+          const meta = res?.meta;
+          if (meta) totalPages = Math.max(1, Math.ceil((Number(meta.total) || rows.length) / limit));
 
-        if (meta) {
-          total = Number(meta.total) || rows.length;
-          totalPages = Math.max(1, Math.ceil(total / limit));
+          allRows = [...allRows, ...rows];
+
+          if (!rows.length || rows.length < limit || page >= totalPages) break;
+          page++;
+          if (allRows.length >= 2000) break; // Guardia de rendimiento
         }
-
-        allRows = [...allRows, ...rows];
-
-        // Cortar si ya trajimos todo o si la página es la última
-        if (!rows.length || rows.length < limit || page >= totalPages) break;
-        page++;
-
-        // Guardia: no más de 2000 registros en UI (rendimiento)
         if (allRows.length >= 2000) break;
       }
+
+      const dniViejos = dnisConsulta.slice(1);
+      const filasViejas = dniViejos.length
+        ? allRows.filter(r => dniViejos.includes(String(r?.dni))).length
+        : 0;
 
       setModules(prev => ({
         ...prev,
@@ -96,12 +104,14 @@ export function useModules(cleanDni: string) {
           ...prev[table],
           loading: false,
           rows: allRows,
-          scanned: { pages: page, totalPages, total }
+          scanned: { pages: 1, totalPages: 1, total: allRows.length }
         }
       }));
 
       if (!allRows.length) {
         toast.ok("Sin resultados", `No hay ${table} para DNI ${cleanDni}`);
+      } else if (filasViejas > 0) {
+        toast.ok("Listo", `${table}: ${allRows.length} registro/s (incluye ${filasViejas} de DNI anterior: ${dniViejos.join(', ')})`);
       } else {
         toast.ok("Listo", `${table}: ${allRows.length} registro/s`);
       }
@@ -110,7 +120,7 @@ export function useModules(cleanDni: string) {
       setModules(prev => ({ ...prev, [table]: { ...prev[table], loading: false } }));
       toast.error("No se pudo cargar módulo", e?.message || "Error");
     }
-  }, [cleanDni, modules, toast]);
+  }, [cleanDni, dnis.join(','), modules, toast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeModule = useCallback((table: ModuleKey) => {
     trackAction('gestion_module_close', { module: table, dni: cleanDni });

@@ -1,0 +1,120 @@
+# OT-130: MinIO → S3 backup via mc mirror CronJob.
+#
+# Runs nightly at 01:00 UTC. Mirrors all MinIO buckets to an S3 prefix.
+# Uses --remove to reflect deletions; remove that flag if you want append-only.
+#
+# Prerequisites:
+#   vetmanager-secrets must contain:
+#     MINIO_ACCESS_KEY      — MinIO root user
+#     MINIO_SECRET_KEY      — MinIO root password
+#     MINIO_BACKUP_S3_URL   — e.g. https://s3.us-east-1.amazonaws.com
+#     MINIO_BACKUP_S3_BUCKET — e.g. vetmanager-minio-backups
+#     MINIO_BACKUP_AWS_KEY  — IAM access key with s3:PutObject/GetObject/ListBucket
+#     MINIO_BACKUP_AWS_SECRET
+#
+# Adjust MINIO_ENDPOINT if MinIO runs as a K8s service or external endpoint.
+#
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vetmanager-minio-backup
+spec:
+  schedule: "0 1 * * *"     # 01:00 UTC daily
+  concurrencyPolicy: Forbid  # skip if previous run still active
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+          serviceAccountName: vetmanager-minio-backup
+          containers:
+            - name: mc
+              image: minio/mc:RELEASE.2024-07-15T17-46-06Z
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop: ["ALL"]
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  # Configure MinIO source alias
+                  mc alias set minio \
+                    "${MINIO_ENDPOINT}" \
+                    "${MINIO_ACCESS_KEY}" \
+                    "${MINIO_SECRET_KEY}" \
+                    --insecure
+
+                  # Configure S3 destination alias
+                  mc alias set s3backup \
+                    "${MINIO_BACKUP_S3_URL}" \
+                    "${MINIO_BACKUP_AWS_KEY}" \
+                    "${MINIO_BACKUP_AWS_SECRET}"
+
+                  # Mirror all buckets to S3 prefix
+                  # --remove syncs deletions; remove for append-only retention
+                  mc mirror \
+                    --remove \
+                    --preserve \
+                    minio/ \
+                    "s3backup/${MINIO_BACKUP_S3_BUCKET}/"
+
+                  echo "MinIO backup completed at $(date -u)"
+              env:
+                - name: MINIO_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: vetmanager-secrets
+                      key: MINIO_ENDPOINT
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: vetmanager-secrets
+                      key: MINIO_ACCESS_KEY
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: vetmanager-secrets
+                      key: MINIO_SECRET_KEY
+                - name: MINIO_BACKUP_S3_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: vetmanager-secrets
+                      key: MINIO_BACKUP_S3_URL
+                - name: MINIO_BACKUP_S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: vetmanager-secrets
+                      key: MINIO_BACKUP_S3_BUCKET
+                - name: MINIO_BACKUP_AWS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: vetmanager-secrets
+                      key: MINIO_BACKUP_AWS_KEY
+                - name: MINIO_BACKUP_AWS_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: vetmanager-secrets
+                      key: MINIO_BACKUP_AWS_SECRET
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "256Mi"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vetmanager-minio-backup
+automountServiceAccountToken: false

@@ -17,6 +17,7 @@ import { errorHandler } from "./web/errorHandler.js"
 import { metricsRouter } from "./web/metrics.js"
 import { requestId } from "./web/requestId.js"
 import { migrate } from "./db/migrate.js"
+import { pool } from "./db/mysql.js"
 
 const app = express()
 
@@ -69,6 +70,26 @@ app.use(errorHandler)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const port = Number(process.env.PORT || 3001)
+const scanInProgressTimeoutMinutes = Math.max(1, Number(process.env.SCAN_IN_PROGRESS_TIMEOUT_MINUTES || 3))
+
+async function failStaleScanJobs() {
+  try {
+    const [result] = await pool.query(
+      `UPDATE scan_jobs
+          SET status='failed',
+              error_message=?,
+              completed_at=now(),
+              updated_at=now()
+        WHERE status='in_progress'
+          AND started_at < DATE_SUB(now(), INTERVAL ? MINUTE)`,
+      [`agent_timeout: escaneo sin respuesta por más de ${scanInProgressTimeoutMinutes} minutos`, scanInProgressTimeoutMinutes]
+    )
+    const changed = Number((result as any).affectedRows || 0)
+    if (changed) console.warn(`[api] ${changed} scan job(s) in_progress expirados cerrados`)
+  } catch (e: any) {
+    console.warn("[api] stale scan cleanup failed:", e?.message || e)
+  }
+}
 
 async function start() {
   if (process.env.AUTO_MIGRATE === "true") {
@@ -80,6 +101,8 @@ async function start() {
     console.log(`[api] scanner-api v3 listening on :${port}`)
     console.log(`[api] health: http://localhost:${port}/health`)
   })
+  await failStaleScanJobs()
+  setInterval(failStaleScanJobs, 60_000)
 }
 
 start().catch(e => { console.error("[api] startup error", e); process.exit(1) })

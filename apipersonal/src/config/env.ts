@@ -287,6 +287,11 @@ const schema = z.object({
   // Si está definido, el servicio de documentos busca aquí cuando no encuentra en DOCUMENTS_BASE_DIR.
   DOCUMENTS_SCAN_DIR: strish(""),
 
+  // Jubilación: carpetas del servidor desde donde se puede leer un PDF por ruta
+  // (listado de servicios de ANSES). Si queda vacío se usa la carpeta padre de las
+  // bases de documentos (ej: D:\G), que es donde el escáner deja estos PDFs.
+  JUBILACION_PDF_DIRS: listish([]),
+
   // Trámites documentales: entrada de PDFs descargados y base final por DNI/trámite.
   TRAMITES_PDF_INPUT_DIR: strish(""),
   TRAMITES_DOCU_BASE_DIR: strish(""),

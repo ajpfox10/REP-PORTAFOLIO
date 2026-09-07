@@ -1,0 +1,1 @@
+UPDATE agentes SET ley_id=NULL WHERE id IN (4945,4956,5004,5256);

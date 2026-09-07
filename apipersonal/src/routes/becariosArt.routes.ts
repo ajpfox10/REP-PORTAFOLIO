@@ -62,7 +62,7 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
           SELECT MAX(q2.id) FROM art_alta_queue q2 WHERE q2.dni = p.dni
         )
         LEFT JOIN (
-          SELECT s1.dni, s1.servicio_id, s1.dependencia_id
+          SELECT s1.dni, s1.servicio_id
           FROM agentes_servicios s1
           JOIN (
             SELECT dni, MAX(id) AS id
@@ -73,8 +73,8 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
           ) ult ON ult.id = s1.id
         ) ags ON ags.dni = p.dni
         LEFT JOIN servicios srv      ON srv.id  = ags.servicio_id   AND srv.deleted_at IS NULL
-        LEFT JOIN reparticiones rep  ON rep.id  = srv.reparticion_id
-        LEFT JOIN dependencias  dep  ON dep.id  = ags.dependencia_id AND dep.deleted_at IS NULL
+        LEFT JOIN reparticiones rep  ON rep.id  = srv.reparticion_id AND rep.deleted_at IS NULL
+        LEFT JOIN dependencias  dep  ON dep.id  = rep.dependencia_id AND dep.deleted_at IS NULL
         WHERE a.estado_empleo = 'ACTIVO'
           AND p.deleted_at IS NULL
           AND a.ley_id IN (:becariosLeyIds)
@@ -203,6 +203,43 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[becariosArt] reintento encolar error', dni, err: err?.message });
       return res.json({ ok: false, error: (err?.message || 'No se pudo encolar').slice(0, 400) });
+    }
+  });
+
+  // ── GET /cola — estado de la cola de alta automática (art_alta_queue) ──────
+  // Fuente de verdad de la carga desatendida: acá se ve el error REAL de cada agente
+  // (incluye crashes del script que NO llegan a becarios_art_errores, p.ej. SQL rotos).
+  // DEBE ir antes de /:dni. Si la tabla no existe todavía, devolvemos vacío.
+  router.get('/cola', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      const resumenRows = await sequelize.query<{ status: string; cant: number }>(
+        `SELECT status, COUNT(*) AS cant FROM art_alta_queue GROUP BY status`,
+        { type: QueryTypes.SELECT }
+      );
+      const resumen: Record<string, number> = {};
+      for (const r of resumenRows) resumen[r.status] = Number(r.cant);
+
+      // Filas que requieren atención (todo lo que no está DONE), error primero.
+      const rows = await sequelize.query<Record<string, any>>(`
+        SELECT
+          q.id, q.dni, q.status, q.attempts, q.last_error, q.resultado_art,
+          q.created_at, q.updated_at, q.started_at, q.finished_at,
+          p.apellido, p.nombre, a.legajo, l.nombre AS ley_nombre
+        FROM art_alta_queue q
+        LEFT JOIN personal p ON p.dni = q.dni AND p.deleted_at IS NULL
+        LEFT JOIN agentes  a ON a.id  = q.agente_id
+        LEFT JOIN ley      l ON l.id  = a.ley_id
+        WHERE q.status <> 'DONE'
+        ORDER BY FIELD(q.status, 'ERROR', 'PROCESSING', 'PENDING', 'SKIPPED'), q.updated_at DESC
+      `, { type: QueryTypes.SELECT });
+
+      return res.json({ ok: true, data: rows, resumen, total: rows.length });
+    } catch (err: any) {
+      if (err?.parent?.code === 'ER_NO_SUCH_TABLE' || /ER_NO_SUCH_TABLE|doesn't exist/i.test(err?.message || '')) {
+        return res.json({ ok: true, data: [], resumen: {}, total: 0 });
+      }
+      logger.error({ msg: '[becariosArt] cola error', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'Error al obtener la cola ART' });
     }
   });
 

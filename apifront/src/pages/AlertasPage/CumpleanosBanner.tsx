@@ -88,7 +88,7 @@ export function CumpleanosDashboardBanner() {
       <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>🎂</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 800, color: '#f9a8d4', marginBottom: 6 }}>
-          Cumpleanos de hoy sin avisar: {rows.length}
+          Cumpleanos pendientes de avisar: {rows.length}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {mostradas.map(row => {
@@ -97,7 +97,7 @@ export function CumpleanosDashboardBanner() {
               <div key={id} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto auto', gap: 8, alignItems: 'center', fontSize: '0.82rem' }}>
                 <div style={{ minWidth: 0 }}>
                   <span style={{ fontWeight: 800 }}>{cumpleNombre(row)}</span>
-                  <span className="muted"> · DNI {row.dni} · {fmtCumpleFecha(row.fecha_cumple)} · {row.dias === 0 ? 'hoy' : `en ${row.dias} dias`}</span>
+                  <span className="muted"> · DNI {row.dni} · {fmtCumpleFecha(row.fecha_cumple)} · {row.dias === 0 ? 'hoy' : row.dias < 0 ? `hace ${Math.abs(row.dias)} dias` : `en ${row.dias} dias`}</span>
                   {row.email && <span style={{ color: '#fbcfe8' }}> · {row.email}</span>}
                 </div>
                 <button className="btn" style={{ padding: '4px 10px', fontSize: '0.74rem', background: '#16a34a', color: '#fff' }} disabled={loadingId === id} onClick={() => cambiar(row, 'avisar')}>
@@ -109,7 +109,7 @@ export function CumpleanosDashboardBanner() {
               </div>
             );
           })}
-          {restantes > 0 && <div style={{ fontSize: '0.78rem', color: '#fbcfe8' }}>+{restantes} cumpleanos de hoy mas.</div>}
+          {restantes > 0 && <div style={{ fontSize: '0.78rem', color: '#fbcfe8' }}>+{restantes} pendientes mas.</div>}
         </div>
         <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#fbcfe8' }}>
           Ver detalle en <Link to="/app/alertas" style={{ color: '#f9a8d4', fontWeight: 800 }}>Alertas</Link>.

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vetmanager-gateway
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: vetmanager-gateway
+  template:
+    metadata:
+      labels:
+        app: vetmanager-gateway
+    spec:
+      serviceAccountName: vetmanager-gateway  # OT-116
+      securityContext:                         # OT-112: pod-level
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: gateway
+          image: ghcr.io/ajpfox10/veterinaria-gateway:81c52c17
+          securityContext:                     # OT-112: container-level
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: vetmanager-config
+            - secretRef:
+                name: vetmanager-secrets
+          env:
+            - name: SERVICE_DISCOVERY_MODE
+              value: env
+            - name: SERVICE_AUTH
+              value: http://vetmanager-auth:3001
+            - name: SERVICE_PATIENTS
+              value: http://vetmanager-patients:3002
+            - name: SERVICE_MEDICAL
+              value: http://vetmanager-medical:3003
+            - name: SERVICE_LAB
+              value: http://vetmanager-lab-imaging:3004
+            - name: SERVICE_BILLING
+              value: http://vetmanager-billing:3005
+            - name: SERVICE_TELEMEDICINE
+              value: http://vetmanager-telemedicine:3006
+            - name: SERVICE_GROOMING
+              value: http://vetmanager-grooming:3007
+            - name: SERVICE_REPORTS
+              value: http://vetmanager-reports:3008
+            - name: SERVICE_NOTIFICATIONS
+              value: http://vetmanager-notifications:3009
+            - name: SERVICE_PORTAL
+              value: http://vetmanager-portal:3010
+            - name: SERVICE_AI
+              value: http://vetmanager-ai:4061
+            - name: SERVICE_DOCUMENTS
+              value: http://vetmanager-documents:3012
+          ports:
+            - containerPort: 4050
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "2000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 4050
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 4050
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-gateway
+spec:
+  selector:
+    app: vetmanager-gateway
+  ports:
+    - port: 80
+      targetPort: 4050

@@ -630,7 +630,7 @@ export function buildHerramientasRouter(sequelize: Sequelize): Router {
           ) AS servicio_nombre,
           (
             SELECT sec.nombre
-            FROM agentes_servicios ags
+            FROM agentes_sectores ags
             JOIN sectores sec ON sec.id = ags.sector_id
             WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL
             ORDER BY ags.id DESC
@@ -729,7 +729,7 @@ export function buildHerramientasRouter(sequelize: Sequelize): Router {
           ) AS servicio_nombre,
           (
             SELECT sec.nombre
-            FROM agentes_servicios ags
+            FROM agentes_sectores ags
             JOIN sectores sec ON sec.id = ags.sector_id
             WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL
             ORDER BY ags.id DESC

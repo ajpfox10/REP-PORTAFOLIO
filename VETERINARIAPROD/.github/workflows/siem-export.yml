@@ -1,0 +1,21 @@
+name: SIEM Export
+
+on:
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SIEM_ENDPOINT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --prefer-offline
+      - run: node scripts/audit/export-siem.js
+        env:
+          SIEM_ENDPOINT: ${{ secrets.SIEM_ENDPOINT }}

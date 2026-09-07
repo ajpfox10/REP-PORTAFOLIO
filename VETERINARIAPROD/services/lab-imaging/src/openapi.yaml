@@ -1,0 +1,304 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Lab Imaging Service
+  version: '1.0.0'
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /health/deep:
+    get:
+      responses:
+        '200':
+          description: OK
+  /lab/orders:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /lab/orders/pending:
+    get:
+      responses:
+        '200':
+          description: OK
+  /lab/orders/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /lab/orders/{id}/results:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /lab/tests:
+    get:
+      responses:
+        '200':
+          description: OK
+  /lab/panels:
+    get:
+      responses:
+        '200':
+          description: OK
+  /imaging/orders:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /imaging/orders/pending-report:
+    get:
+      responses:
+        '200':
+          description: OK
+  /imaging/orders/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /imaging/orders/{id}/studies:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /imaging/orders/{id}/report:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /imaging/types:
+    get:
+      responses:
+        '200':
+          description: OK
+  /pathology/orders:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /pathology/orders/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /pathology/orders/{id}/result:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /pathology/types:
+    get:
+      responses:
+        '200':
+          description: OK
+  /surgeries:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /surgeries/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /surgeries/{id}/status:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /surgeries/{id}/anesthesia:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /surgeries/types/all:
+    get:
+      responses:
+        '200':
+          description: OK
+  /hospitalizations:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /hospitalizations/board:
+    get:
+      responses:
+        '200':
+          description: OK
+  /hospitalizations/wards/availability:
+    get:
+      responses:
+        '200':
+          description: OK
+  /hospitalizations/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /hospitalizations/{id}/monitoring:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /hospitalizations/{id}/medications:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /hospitalizations/{id}/discharge:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /vaccinations:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /vaccinations/alerts:
+    get:
+      responses:
+        '200':
+          description: OK
+  /vaccinations/vaccines:
+    get:
+      responses:
+        '200':
+          description: OK
+  /vaccinations/deworming:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /deworming:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /vaccinations/deworming/alerts:
+    get:
+      responses:
+        '200':
+          description: OK
+  /deworming/alerts:
+    get:
+      responses:
+        '200':
+          description: OK
+  /vaccinations/deworming/products:
+    get:
+      responses:
+        '200':
+          description: OK
+  /deworming/products:
+    get:
+      responses:
+        '200':
+          description: OK

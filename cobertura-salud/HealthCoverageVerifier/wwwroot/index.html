@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificación de Cobertura de Salud</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Login Overlay -->
+  <div id="login-screen" class="login-overlay">
+    <div class="login-card">
+      <div class="login-logo">🏥</div>
+      <h1>Verificación de Cobertura</h1>
+      <p class="login-sub">Ingresá tus credenciales para continuar</p>
+      <form id="login-form">
+        <div class="form-group">
+          <label>Usuario</label>
+          <input type="text" id="login-user" placeholder="admin" required>
+        </div>
+        <div class="form-group">
+          <label>Contraseña</label>
+          <input type="password" id="login-pass" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
+        <div id="login-error" class="alert alert-danger hidden"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- App Layout -->
+  <div id="app-layout" class="app-layout hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">🏥</span>
+        <span class="brand-text">Cobertura Salud</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#dashboard" class="nav-link active" data-view="dashboard">
+          <span class="nav-icon">📊</span> Dashboard
+        </a>
+        <a href="#consultas" class="nav-link" data-view="consultas">
+          <span class="nav-icon">🔍</span> Consultas
+        </a>
+        <a href="#sss" class="nav-link" data-view="sss">
+          <span class="nav-icon">🌐</span> SSS Asistido
+        </a>
+        <a href="#captcha" class="nav-link" data-view="captcha">
+          <span class="nav-icon">🧩</span> OCR Captcha
+        </a>
+        <a href="#usuarios" class="nav-link hidden" data-view="usuarios" id="nav-usuarios">
+          <span class="nav-icon">👥</span> Usuarios
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-pill">
+          <span id="user-name">—</span>
+          <span id="user-role" class="badge">—</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">🚪 Salir</button>
+      </div>
+    </aside>
+
+    <!-- Mobile overlay -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+        <h2 id="page-title">Dashboard</h2>
+        <div class="topbar-actions">
+          <span class="env-badge" id="env-badge">dev</span>
+        </div>
+      </header>
+
+      <div class="content" id="content">
+
+        <!-- DASHBOARD -->
+        <section id="view-dashboard" class="view">
+          <div class="grid grid-4">
+            <div class="stat-card">
+              <div class="stat-value" id="dash-total">—</div>
+              <div class="stat-label">Total Consultas</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value text-success" id="dash-completas">—</div>
+              <div class="stat-label">Completas</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value text-warning" id="dash-revision">—</div>
+              <div class="stat-label">En Revisión</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value text-danger" id="dash-error">—</div>
+              <div class="stat-label">Con Error</div>
+            </div>
+          </div>
+          <div class="grid grid-2 mt-3">
+            <div class="panel">
+              <h3>📈 Últimas Consultas</h3>
+              <div class="table-wrap">
+                <table class="table">
+                  <thead><tr><th>ID</th><th>Entrada</th><th>Estado</th><th>Fecha</th></tr></thead>
+                  <tbody id="dash-consultas"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>⚡ Acceso Rápido</h3>
+              <div class="quick-actions">
+                <button class="btn btn-primary" onclick="navigate('consultas')">+ Nueva Consulta</button>
+                <button class="btn btn-secondary" onclick="navigate('sss')">🌐 Consultar SSS</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CONSULTAS -->
+        <section id="view-consultas" class="view hidden">
+          <div class="panel">
+            <div class="panel-header">
+              <h3>🔍 Consultas de Cobertura</h3>
+              <button class="btn btn-primary" onclick="showModal('modal-nueva-consulta')">+ Nueva Consulta</button>
+            </div>
+            <div class="table-toolbar">
+              <input type="text" id="filter-consultas" placeholder="Buscar por DNI, CUIL o apellido..." class="input-search">
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr><th>ID</th><th>Entrada</th><th>DNI</th><th>CUIL</th><th>Apellido</th><th>Estado</th><th>Decisión</th><th>Creado</th><th>Acciones</th></tr>
+                </thead>
+                <tbody id="lista-consultas"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- DETALLE CONSULTA -->
+        <section id="view-detalle" class="view hidden">
+          <button class="btn btn-ghost mb-2" onclick="navigate('consultas')">← Volver</button>
+          <div class="grid grid-2">
+            <div class="panel">
+              <h3>👤 Paciente</h3>
+              <div class="info-grid" id="detalle-paciente"></div>
+            </div>
+            <div class="panel">
+              <h3>📋 Resumen</h3>
+              <div id="detalle-resumen" class="resumen-box"></div>
+              <div id="detalle-decision-box" class="mt-2">
+                <button class="btn btn-success" onclick="showModal('modal-decision')">✅ Cerrar Decisión</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel mt-3">
+            <h3>🔄 Pasos del Workflow</h3>
+            <div class="timeline" id="detalle-pasos"></div>
+          </div>
+        </section>
+
+        <!-- SSS ASISTIDO -->
+        <section id="view-sss" class="view hidden">
+          <div class="panel panel-center" style="max-width:520px">
+            <h3>🌐 SSS - Padrón de Beneficiarios</h3>
+            <p class="text-muted">El operador resuelve el captcha visualmente. El sistema envía el formulario y extrae el resultado.</p>
+
+            <div id="sss-step1">
+              <div class="form-group">
+                <label>DNI / CUIL</label>
+                <input type="text" id="sss-entrada" placeholder="20-12345678-9 o 12345678">
+              </div>
+              <div class="form-group">
+                <label>Apellido (opcional)</label>
+                <input type="text" id="sss-apellido" placeholder="García">
+              </div>
+              <button class="btn btn-primary btn-block" onclick="sssIniciar()">Abrir Sesión SSS</button>
+            </div>
+
+            <div id="sss-step2" class="hidden">
+              <div class="alert alert-info">Completá el código que ves en la imagen y presioná Resolver.</div>
+              <div class="captcha-box">
+                <img id="sss-captcha-img" src="" alt="Captcha SSS">
+              </div>
+              <div class="form-group">
+                <label>Código del Captcha</label>
+                <input type="text" id="sss-code" placeholder="ABCD12" autocomplete="off">
+              </div>
+              <button class="btn btn-primary btn-block" onclick="sssResolver()">Resolver y Consultar</button>
+              <button class="btn btn-ghost btn-block" onclick="sssReset()">Cancelar</button>
+            </div>
+
+            <div id="sss-result" class="hidden mt-3"></div>
+          </div>
+        </section>
+
+        <!-- OCR CAPTCHA -->
+        <section id="view-captcha" class="view hidden">
+          <div class="panel panel-center" style="max-width:520px">
+            <h3>🧩 Resolver Captcha por OCR</h3>
+            <p class="text-muted">Subí una imagen de captcha para intentar leerla automáticamente con Tesseract.</p>
+            <div class="dropzone" id="dropzone">
+              <div class="dropzone-icon">📤</div>
+              <p>Arrastrá una imagen o hacé clic para seleccionar</p>
+              <input type="file" id="captcha-file" accept="image/*" hidden>
+            </div>
+            <div id="captcha-preview-box" class="hidden mt-2">
+              <img id="captcha-preview" class="preview-img">
+            </div>
+            <button class="btn btn-primary btn-block mt-2" id="btn-solve-captcha" onclick="solveCaptcha()" disabled>Procesar OCR</button>
+            <div id="captcha-result" class="hidden mt-3"></div>
+          </div>
+        </section>
+
+        <!-- USUARIOS -->
+        <section id="view-usuarios" class="view hidden">
+          <div class="panel">
+            <div class="panel-header">
+              <h3>👥 Gestión de Usuarios</h3>
+              <button class="btn btn-primary" onclick="showModal('modal-nuevo-usuario')">+ Nuevo Usuario</button>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Activo</th><th>Creado</th><th>Acciones</th></tr></thead>
+                <tbody id="lista-usuarios"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: Nueva Consulta -->
+  <div class="modal" id="modal-nueva-consulta">
+    <div class="modal-backdrop" onclick="hideModal('modal-nueva-consulta')"></div>
+    <div class="modal-card">
+      <h3>+ Nueva Consulta</h3>
+      <form id="form-nueva-consulta" onsubmit="crearConsulta(event)">
+        <div class="form-group">
+          <label>DNI / CUIL</label>
+          <input type="text" name="entrada" placeholder="20-12345678-9 o 12345678" required>
+        </div>
+        <div class="form-group">
+          <label>Apellido</label>
+          <input type="text" name="apellido" placeholder="García">
+        </div>
+        <div class="form-group">
+          <label>Fecha de Prestación</label>
+          <input type="date" name="fechaPrestacion">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="hideModal('modal-nueva-consulta')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Iniciar Consulta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Cerrar Decisión -->
+  <div class="modal" id="modal-decision">
+    <div class="modal-backdrop" onclick="hideModal('modal-decision')"></div>
+    <div class="modal-card">
+      <h3>✅ Cerrar Decisión</h3>
+      <form id="form-decision" onsubmit="cerrarDecision(event)">
+        <div class="form-group">
+          <label>Decisión Final</label>
+          <input type="text" name="decisionFinal" placeholder="Cobertura confirmada / Sin cobertura">
+        </div>
+        <div class="form-group">
+          <label>Cobertura Recomendada</label>
+          <input type="text" name="coberturaRecomendada" placeholder="OSDE / PAMI / IOMA / etc">
+        </div>
+        <div class="form-group">
+          <label>Observaciones</label>
+          <textarea name="observaciones" rows="3" placeholder="Notas adicionales..."></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="hideModal('modal-decision')">Cancelar</button>
+          <button type="submit" class="btn btn-success">Guardar Decisión</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Nuevo Usuario -->
+  <div class="modal" id="modal-nuevo-usuario">
+    <div class="modal-backdrop" onclick="hideModal('modal-nuevo-usuario')"></div>
+    <div class="modal-card">
+      <h3>+ Nuevo Usuario</h3>
+      <form id="form-nuevo-usuario" onsubmit="crearUsuario(event)">
+        <div class="form-group">
+          <label>Usuario</label>
+          <input type="text" name="username" minlength="3" required>
+        </div>
+        <div class="form-group">
+          <label>Contraseña</label>
+          <input type="password" name="password" minlength="8" required>
+        </div>
+        <div class="form-group">
+          <label>Rol</label>
+          <select name="role" required>
+            <option value="user">Usuario</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="hideModal('modal-nuevo-usuario')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

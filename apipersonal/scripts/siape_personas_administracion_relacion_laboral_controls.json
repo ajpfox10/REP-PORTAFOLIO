@@ -1,0 +1,690 @@
+[
+  {
+    "role": "scroll pane",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 3,
+      "y": 103,
+      "height": 566,
+      "width": 999
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "DATOS PERSONALES",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 14,
+      "y": 199,
+      "height": 23,
+      "width": 155
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "DOMICILIOS - CONTACTOS",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 166,
+      "y": 199,
+      "height": 23,
+      "width": 183
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "FAMILIARES",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 346,
+      "y": 199,
+      "height": 23,
+      "width": 121
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "ESTUDIOS",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 464,
+      "y": 199,
+      "height": 23,
+      "width": 121
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "CAPACITACIONES",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 582,
+      "y": 199,
+      "height": 23,
+      "width": 131
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "RELACION LABORAL",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable",
+      "seleccionado"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 710,
+      "y": 199,
+      "height": 23,
+      "width": 147
+    }
+  },
+  {
+    "role": "scroll pane",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 17,
+      "y": 225,
+      "height": 435,
+      "width": 974
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Cargos y Carrera Administrativa",
+    "description": "Cargos y Carrera Administrativa",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 54,
+      "y": 277,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Contratos y Convenios",
+    "description": "Contratos y Convenios",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 54,
+      "y": 330,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Puestos",
+    "description": "Puestos",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 54,
+      "y": 384,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "ART",
+    "description": "ART",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 281,
+      "y": 277,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Obras Sociales",
+    "description": "Obras Sociales",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 281,
+      "y": 384,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Antigüedad",
+    "description": "Antigüedad",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 281,
+      "y": 437,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Menciones",
+    "description": "Menciones",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 508,
+      "y": 437,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Gremios",
+    "description": "Gremios",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 281,
+      "y": 330,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Sanciones",
+    "description": "Sanciones",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 508,
+      "y": 277,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Sumarios",
+    "description": "Sumarios",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 508,
+      "y": 330,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Aptitud Psico-Física",
+    "description": "Aptitud Psico-Física",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 508,
+      "y": 384,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Situación de Revista",
+    "description": "Situación de Revista",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 734,
+      "y": 277,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Certificado de Trabajo",
+    "description": "Certificado de Trabajo",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 734,
+      "y": 330,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "DDJJ de  Cargos y Actividades",
+    "description": "DDJJ de  Cargos y Actividades",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 734,
+      "y": 384,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Salud",
+    "description": "Salud",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 54,
+      "y": 490,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "CURRICULUM VITAE",
+    "description": "CURRICULUM VITAE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 734,
+      "y": 437,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Tallas - Medidas",
+    "description": "Tallas - Medidas",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 281,
+      "y": 490,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Antecedentes Laborales",
+    "description": "Antecedentes Laborales",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 734,
+      "y": 490,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Defunción",
+    "description": "Defunción",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 508,
+      "y": 490,
+      "height": 34,
+      "width": 200
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Datos Extranjero",
+    "description": "Datos Extranjero",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 54,
+      "y": 437,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "LEGAJO DIGITAL",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 854,
+      "y": 199,
+      "height": 23,
+      "width": 121
+    }
+  },
+  {
+    "role": "scroll pane",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 3,
+      "y": 102,
+      "height": 572,
+      "width": 1001
+    }
+  },
+  {
+    "role": "push button",
+    "name": "BUSCAR",
+    "description": "BUSCAR",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 840,
+      "y": 146,
+      "height": 27,
+      "width": 120
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Editar",
+    "description": "Editar",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 750,
+      "y": 149,
+      "height": 20,
+      "width": 46
+    }
+  },
+  {
+    "role": "text",
+    "name": "APELLIDO",
+    "description": "APELLIDO",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 34,
+      "y": 146,
+      "height": 27,
+      "width": 314
+    }
+  },
+  {
+    "role": "text",
+    "name": "NOMBRE",
+    "description": "NOMBRE",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 355,
+      "y": 146,
+      "height": 27,
+      "width": 251
+    }
+  },
+  {
+    "role": "text",
+    "name": "CUIL-CUIT-CDI",
+    "description": "CUIL-CUIT-CDI",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 614,
+      "y": 146,
+      "height": 27,
+      "width": 106
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Continuar ALT C",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "enfocado"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 734,
+      "y": 441,
+      "height": 27,
+      "width": 111
+    }
+  }
+]

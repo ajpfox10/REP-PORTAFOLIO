@@ -1,0 +1,6 @@
+Pendientes externos o que requieren infraestructura/acceso real
+
+- service mesh real.
+- Storage realmente inmutable fuera de MySQL para auditoría.
+- Sandboxes reales always-on en CI.
+- Restore de backups validado en operación real continua.

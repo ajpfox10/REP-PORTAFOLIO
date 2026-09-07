@@ -1,0 +1,94 @@
+MATRIZ DE DECISIONES DE PERMISOS Y ROLES
+Fecha: 2026-05-09
+
+Objetivo
+- Cerrar que decide cada capa para evitar checks duplicados, divergentes o fail-open sin rastro.
+
+Principio general
+- El frontend decide UX y visibilidad.
+- El gateway decide autenticacion, integridad de contexto y politicas transversales.
+- Cada servicio decide autorizacion efectiva sobre su dominio y sus datos.
+- Ninguna decision de seguridad depende solo del frontend.
+
+Frontend
+- Decide:
+  - que vistas, tabs, botones y acciones se muestran
+  - mensajes de UI para forbidden, expired session, validation error y degraded upstream
+  - cuando incluir `requestId` en el mensaje visible al usuario
+- No decide:
+  - acceso real a datos
+  - si una operacion esta autorizada
+  - scoping final por organizacion o sucursal
+- Fuente de verdad local:
+  - `auth.user.roles`
+  - `auth.user.permissions`
+  - `auth.can(permission)`
+- Regla:
+  - si falta contexto o la respuesta backend contradice la UI, prevalece backend y la UI debe mostrar el error sin degradar a lista vacia silenciosa.
+
+Gateway
+- Decide:
+  - autenticacion JWT o API key
+  - inyeccion de `X-User-*`, `X-Request-Id`, `X-Trace-Id`
+  - sanitizacion de headers confiables
+  - tenant mismatch cross-service, rate limiting, CSRF, DLP y controles de borde
+  - firma interna a downstream
+- No decide:
+  - reglas RBAC de negocio por recurso concreto
+  - ownership funcional de entidades del dominio
+- Contrato:
+  - si rechaza una request debe responder envelope estandar con `success:false`, `error.code`, `error.message` y, cuando exista, `error.requestId` y `error.traceId`.
+
+Servicios
+- Deciden:
+  - permisos `recurso:accion`
+  - validacion semantica del dominio
+  - scoping real de org/sucursal/owner sobre filas y agregados
+  - reglas admin de su dominio
+- No deciden:
+  - reconstruir identidad desde headers arbitrarios del browser
+  - confiar en flags visuales enviados por frontend
+- Reglas:
+  - leer contexto con `shared/requestContext.js`
+  - usar `requirePerm`, `guardWrite`, `requireAdminRole`, `requireOrgContext`, `requireBranchContext` segun corresponda
+  - toda denegacion debe dejar codigo estable y contexto trazable
+
+Roles vs permisos
+- Roles:
+  - sirven para bootstrap de sesion, menu y atajos operativos
+  - pueden habilitar checks coarse-grained como `requireAdminRole`
+- Permisos:
+  - son la capa canonica para autorizacion por recurso
+  - formato estable `recurso:accion`
+- Regla de cierre:
+  - frontend puede apoyarse en roles para UX rapida
+  - gateway propaga roles y contexto
+  - servicios cierran la autorizacion final con permisos
+
+Matriz resumida
+- Mostrar boton:
+  - frontend
+- Permitir navegar a pantalla:
+  - frontend
+- Aceptar token y sesion:
+  - gateway
+- Resolver orgId/branchId confiables:
+  - gateway
+- Validar permiso `patients:update`:
+  - servicio owner del recurso
+- Validar que el registro pertenece a la org/sucursal correcta:
+  - servicio owner del recurso
+- Definir mensaje tecnico con referencia trazable:
+  - backend produce `requestId/traceId`, frontend lo presenta cuando aporta soporte
+
+Criterios para checks duplicados
+- Duplicar solo si reduce latencia UX o evita llamadas obvias.
+- Nunca asumir que un check duplicado en frontend reemplaza al servicio.
+- Si el gateway bloquea algo transversal, el servicio no necesita volver a implementar la misma politica de borde salvo que cambie el riesgo.
+
+Fail-open intencional
+- Solo se mantiene en helpers compartidos de infraestructura cuando:
+  - bloquear romperia disponibilidad sin mejorar seguridad real
+  - exista `warn` con suficiente contexto
+  - el comportamiento degradado este explicitado en docs o comentario corto
+- No aplica a auth, permisos, firma interna ni tenant context.

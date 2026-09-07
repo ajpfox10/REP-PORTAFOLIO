@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.5.0
+    command: -host 0.0.0.0
+    ports:
+      - "8474:8474"
+    networks:
+      - vetnet
+
+  toxiproxy-bootstrap:
+    image: curlimages/curl:8.7.1
+    depends_on:
+      - toxiproxy
+      - redis
+      - auth
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sleep 5
+        curl -s -X POST http://toxiproxy:8474/proxies -H 'Content-Type: application/json' -d '{"name":"redis","listen":"0.0.0.0:26379","upstream":"redis:6379"}' || true
+        curl -s -X POST http://toxiproxy:8474/proxies -H 'Content-Type: application/json' -d '{"name":"auth","listen":"0.0.0.0:24051","upstream":"auth:4051"}' || true
+        sleep infinity
+    networks:
+      - vetnet

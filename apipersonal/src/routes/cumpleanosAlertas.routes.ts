@@ -149,7 +149,7 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
            (SELECT srv.nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id
              WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL
              ORDER BY ags.id DESC LIMIT 1) AS servicio_nombre,
-           (SELECT sec.nombre FROM agentes_servicios ags JOIN sectores sec ON sec.id = ags.sector_id
+           (SELECT sec.nombre FROM agentes_sectores ags JOIN sectores sec ON sec.id = ags.sector_id
              WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL
              ORDER BY ags.id DESC LIMIT 1) AS sector_nombre
          FROM personal p
@@ -176,6 +176,52 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
         }).filter(Boolean);
       });
 
+      // El sembrado de los cumpleanos del dia lo hace un EVENT diario de MySQL
+      // (ev_sembrar_cumpleanos_diario) — NO depende de que la app se abra.
+      // Aca solo se listan.
+
+      // Backlog: cumpleanos ya pasados que quedaron sembrados en PENDIENTE y
+      // todavia no se marcaron. Se siguen listando (independiente de `dias`)
+      // hasta que alguien los avise u omita.
+      let backlogItems: any[] = [];
+      if (estadoFiltro === 'pendientes' || estadoFiltro === 'todos') {
+        const backlog = await sequelize.query<any>(
+          `SELECT e.dni, e.anio, e.fecha_cumple,
+                  p.apellido, p.nombre, p.fecha_nacimiento, p.email, p.telefono,
+                  (SELECT srv.nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id
+                    WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL
+                    ORDER BY ags.id DESC LIMIT 1) AS servicio_nombre,
+                  (SELECT sec.nombre FROM agentes_sectores ags JOIN sectores sec ON sec.id = ags.sector_id
+                    WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL
+                    ORDER BY ags.id DESC LIMIT 1) AS sector_nombre
+           FROM alertas_cumpleanos_estado e
+           JOIN personal p ON p.dni = e.dni AND p.deleted_at IS NULL
+           JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL AND a.estado_empleo = 'ACTIVO'
+           WHERE e.estado = 'PENDIENTE' AND e.fecha_cumple < :today`,
+          { replacements: { today: dateOnly(today) }, type: QueryTypes.SELECT },
+        );
+        backlogItems = backlog.map((b: any) => {
+          const fc = parseDbDate(b.fecha_cumple);
+          return {
+            dni: b.dni,
+            apellido: b.apellido,
+            nombre: b.nombre,
+            fecha_nacimiento: b.fecha_nacimiento,
+            email: b.email,
+            telefono: b.telefono,
+            servicio_nombre: b.servicio_nombre,
+            sector_nombre: b.sector_nombre,
+            anio: b.anio,
+            fecha_cumple: fc ? dateOnly(fc) : String(b.fecha_cumple).slice(0, 10),
+            dias: fc ? Math.round((fc.getTime() - today.getTime()) / 86400000) : 0,
+            estado_aviso: 'PENDIENTE',
+            avisado_at: null,
+            avisado_por: null,
+            avisado_por_nombre: null,
+          };
+        });
+      }
+
       const estadoRows = await sequelize.query<any>(
         `SELECT e.*, COALESCE(NULLIF(u.nombre, ''), u.email) AS avisado_por_nombre
          FROM alertas_cumpleanos_estado e
@@ -185,17 +231,19 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
       );
       const estadoMap = new Map(estadoRows.map((e) => [`${e.dni}-${e.anio}`, e]));
 
-      const data = items
-        .map((item: any) => {
-          const estado = estadoMap.get(`${item.dni}-${item.anio}`);
-          return {
-            ...item,
-            estado_aviso: estado?.estado || 'PENDIENTE',
-            avisado_at: estado?.avisado_at || null,
-            avisado_por: estado?.avisado_por || null,
-            avisado_por_nombre: estado?.avisado_por_nombre || null,
-          };
-        })
+      const windowData = items.map((item: any) => {
+        const estado = estadoMap.get(`${item.dni}-${item.anio}`);
+        return {
+          ...item,
+          estado_aviso: estado?.estado || 'PENDIENTE',
+          avisado_at: estado?.avisado_at || null,
+          avisado_por: estado?.avisado_por || null,
+          avisado_por_nombre: estado?.avisado_por_nombre || null,
+        };
+      });
+
+      // backlog (cumple < hoy) y windowData (cumple >= hoy) son disjuntos por fecha
+      const data = [...backlogItems, ...windowData]
         .filter((item: any) => {
           if (estadoFiltro === 'todos') return true;
           if (estadoFiltro === 'avisados') return item.estado_aviso === 'AVISADO';

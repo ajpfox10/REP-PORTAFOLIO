@@ -69,15 +69,31 @@ export async function searchPersonal(
 
   const all = await loadAll();
 
+  // Si el query es puramente num\u00e9rico, buscar por DNI
+  const qDigits = q.replace(/\D/g, '');
+  const esDni = qDigits.length > 0 && qDigits === q.replace(/\s/g, '');
+
   const results = all.filter(p => {
+    if (esDni) {
+      const dni = String(p.dni ?? '').replace(/\D/g, '');
+      return dni.startsWith(qDigits) || dni.includes(qDigits);
+    }
     const ape = (p.apellido ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const nom = (p.nombre ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const full = `${ape} ${nom}`;
     return ape.startsWith(q) || ape.includes(q) || full.includes(q);
   });
 
-  // Ordenar: primero los que empiezan con el query
+  // Ordenar
   results.sort((a, b) => {
+    if (esDni) {
+      const aD = String(a.dni ?? '').replace(/\D/g, '');
+      const bD = String(b.dni ?? '').replace(/\D/g, '');
+      const aStarts = aD.startsWith(qDigits) ? 0 : 1;
+      const bStarts = bD.startsWith(qDigits) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return aD.localeCompare(bD);
+    }
     const aA = (a.apellido ?? '').toLowerCase();
     const bA = (b.apellido ?? '').toLowerCase();
     const aStarts = aA.startsWith(q) ? 0 : 1;

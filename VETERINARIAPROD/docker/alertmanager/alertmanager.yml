@@ -1,0 +1,32 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 2h
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: critical
+    - matchers:
+        - severity="high"
+      receiver: high
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: http://host.docker.internal:19093/alerts/default
+        send_resolved: true
+
+  - name: critical
+    webhook_configs:
+      - url: http://host.docker.internal:19093/alerts/critical
+        send_resolved: true
+
+  - name: high
+    webhook_configs:
+      - url: http://host.docker.internal:19093/alerts/high
+        send_resolved: true
