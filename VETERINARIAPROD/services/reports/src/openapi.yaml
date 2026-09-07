@@ -1,0 +1,191 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Reports Service
+  version: '1.0.0'
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /health/deep:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/dashboard:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/kpis:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/revenue:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/revenue-by-service:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/top-clients:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/appointments:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/new-patients:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/diagnoses:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/vaccination-compliance:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/hospitalization-occupancy:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/lab-turnaround:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/telemedicine:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/grooming:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/security:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/executive:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/{type}/export:
+    post:
+      parameters:
+        - in: path
+          name: type
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /reports/runs:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/charts/revenue-trend:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/charts/appointments-heatmap:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/charts/species-distribution:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/charts/top-diagnoses-bar:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/charts/payment-methods:
+    get:
+      responses:
+        '200':
+          description: OK
+  /reports/scheduled:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /reports/scheduled/runs:
+    get:
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: OK
+  /reports/scheduled/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+    delete:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /reports/scheduled/{id}/run:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '202':
+          description: Accepted

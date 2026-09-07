@@ -1,0 +1,251 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Telemedicine Service
+  version: '1.0.0'
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /health/deep:
+    get:
+      responses:
+        '200':
+          description: OK
+  /tele/sessions:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /tele/sessions/today:
+    get:
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}/status:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /tele/sessions/webrtc-config:
+    get:
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}/pre-anamnesis:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tele/sessions/{id}/messages:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tele/sessions/{id}/prescription:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tele/sessions/{id}/rating:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tele/sessions/{id}/room:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+    delete:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /tele/sessions/{id}/room/token:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}/room/recording/start:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tele/sessions/{id}/room/recording/stop:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}/recordings:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}/waiting-room:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}/waiting-room/join:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /tele/sessions/{id}/waiting-room/{wId}/admit:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: wId
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /tele/sessions/{id}/waiting-room/{wId}/reject:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: wId
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /tele/sessions/{id}/room/participants:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /tele/sessions/{id}/room/participants/{identity}/leave:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: identity
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: No content
+  /tele/stats:
+    get:
+      responses:
+        '200':
+          description: OK
+  /tele/platforms:
+    get:
+      responses:
+        '200':
+          description: OK
+  /tele/webrtc/config:
+    get:
+      responses:
+        '200':
+          description: OK

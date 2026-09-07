@@ -11,6 +11,7 @@ const INTRANET_SCRIPT_FILES = [
   'segunda_pasada_intranet.py',
   'descargar_historial_intranet.py',
   'cargar_ausentes_intranet.py',
+  'cargar_francos_siape.py',
 ];
 
 function hasIntranetScripts(dir: string): boolean {
@@ -35,6 +36,7 @@ const SCRIPT_PATH           = path.join(SCRIPT_DIR, 'cargar_vacaciones_intranet.
 const SCRIPT_SEGUNDA_PATH   = path.join(SCRIPT_DIR, 'segunda_pasada_intranet.py');
 const SCRIPT_HISTORIAL_PATH = path.join(SCRIPT_DIR, 'descargar_historial_intranet.py');
 const SCRIPT_AUSENTES_PATH  = path.join(SCRIPT_DIR, 'cargar_ausentes_intranet.py');
+const SCRIPT_FRANCOS_SIAPE_PATH = path.join(SCRIPT_DIR, 'cargar_francos_siape.py');
 const PYTHON              = 'python';
 
 const HISTORIAL_DIR = 'D:\\G\\HISTORIAL ESTRUCTURA';
@@ -323,6 +325,27 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
     }
   });
 
+  // POST /intranet/cargar-francos-siape — abre SiAPe y carga reconocimientos pendientes como francos
+  router.post('/cargar-francos-siape', (req: Request, res: Response) => {
+    const user = process.env.SIAPE_USER?.trim();
+    const pass = process.env.SIAPE_PASS?.trim();
+    if (!user) { res.status(500).json({ error: 'SIAPE_USER no configurado' }); return; }
+    if (!pass) { res.status(500).json({ error: 'SIAPE_PASS no configurado' }); return; }
+
+    const args: string[] = [];
+    const id = req.body?.id;
+    const limit = req.body?.limit;
+    if (id !== undefined && id !== null && String(id).trim()) args.push('--id', String(id));
+    if (limit !== undefined && limit !== null && String(limit).trim()) args.push('--limit', String(limit));
+
+    try {
+      lanzarCMD('Carga Francos SiAPe', SCRIPT_FRANCOS_SIAPE_PATH, args);
+      res.json({ ok: true, msg: 'Carga de francos en SiAPe iniciada', script: SCRIPT_FRANCOS_SIAPE_PATH });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e?.message });
+    }
+  });
+
   // POST /intranet/cargar-ausentes: lee directo D:\G\comparacion\SIAPE\SIAPE.xlsx y abre CMD visible
   router.post('/cargar-ausentes', (req: Request, res: Response) => {
     const pass = process.env.INTRANET_PASS;
@@ -375,7 +398,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
                   FROM agentes_servicios ags_dep
                   LEFT JOIN servicios s_dep ON s_dep.id = ags_dep.servicio_id AND s_dep.deleted_at IS NULL
                   LEFT JOIN reparticiones r_dep ON r_dep.id = s_dep.reparticion_id AND r_dep.deleted_at IS NULL
-                  LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id) AND dep_serv.deleted_at IS NULL
+                  LEFT JOIN dependencias dep_serv ON dep_serv.id = r_dep.dependencia_id AND dep_serv.deleted_at IS NULL
                   WHERE ags_dep.dni = p.dni AND ags_dep.deleted_at IS NULL AND ags_dep.fecha_hasta IS NULL
                   ORDER BY ags_dep.fecha_desde DESC, ags_dep.id DESC LIMIT 1
                 ) END) AS dep_nombre

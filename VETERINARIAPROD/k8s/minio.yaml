@@ -1,0 +1,107 @@
+# OT-123: MinIO — staging/dev K8s only.
+#
+# PRODUCTION NOTE: In production, MINIO_ENDPOINT should point to AWS S3 or
+# a managed object-storage endpoint. Do NOT deploy this manifest in production.
+# Use a Namespace-level label or Kustomize overlay to restrict this to staging:
+#   kubectl apply -f k8s/minio.yaml -n staging
+#
+# Prerequisites:
+#   - vetmanager-secrets must contain MINIO_ACCESS_KEY and MINIO_SECRET_KEY
+#   - StorageClass must support ReadWriteOnce (any standard cloud or local-path SC)
+#
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vetmanager-minio
+  labels:
+    app: vetmanager-minio
+    environment: staging   # reminder: not for production
+spec:
+  serviceName: vetmanager-minio
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vetmanager-minio
+  template:
+    metadata:
+      labels:
+        app: vetmanager-minio
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: minio
+          image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":9001"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vetmanager-secrets
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vetmanager-secrets
+                  key: MINIO_SECRET_KEY
+          ports:
+            - containerPort: 9000
+              name: api
+            - containerPort: 9001
+              name: console
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+            limits:
+              cpu: "1000m"
+              memory: 1024Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-minio
+spec:
+  selector:
+    app: vetmanager-minio
+  ports:
+    - port: 9000
+      targetPort: 9000
+      name: api
+    # Console port intentionally not exposed externally — use kubectl port-forward
+    # kubectl port-forward svc/vetmanager-minio 9001:9001 -n staging

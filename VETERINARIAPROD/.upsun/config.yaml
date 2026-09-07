@@ -1,0 +1,96 @@
+###############################################################################
+# Upsun configuration — VetManager Pro
+# Single-app deployment: all microservices managed by PM2
+# Gateway exposes port 8888 to the web; internal services on localhost ports.
+###############################################################################
+
+applications:
+
+  app:
+    source:
+      root: "/"
+    type: "nodejs:20"
+
+    build:
+      flavor: none
+
+    dependencies:
+      nodejs:
+        npm: "*"
+
+    hooks:
+      build: |
+        npm install --omit=dev
+        # Install PM2 globally for process management
+        npm install -g pm2
+
+      deploy: |
+        # Run DB migrations if migration script exists
+        if [ -f scripts/migrate.js ]; then
+          node scripts/migrate.js || true
+        fi
+
+    # Expose gateway on the web port
+    web:
+      commands:
+        start: |
+          pm2 start ecosystem.config.js --env production --no-daemon
+      upstream:
+        socket_family: tcp
+        protocol: http
+
+    mounts:
+      "/logs":
+        source: local
+        source_path: app-logs
+      "/tmp/uploads":
+        source: local
+        source_path: uploads
+
+    variables:
+      env:
+        NODE_ENV: production
+        PORT: "8888"
+        API_VERSION: v1
+        WEBHOOK_WORKER: "false"
+        OPENAPI_VALIDATE: "true"
+        # Internal service URLs (localhost within the same container)
+        SERVICE_AUTH: "http://localhost:4051"
+        SERVICE_PATIENTS: "http://localhost:4052"
+        SERVICE_MEDICAL: "http://localhost:4053"
+        SERVICE_LAB: "http://localhost:4054"
+        SERVICE_BILLING: "http://localhost:4055"
+        SERVICE_TELEMEDICINE: "http://localhost:4056"
+        SERVICE_GROOMING: "http://localhost:4057"
+        SERVICE_REPORTS: "http://localhost:4058"
+        SERVICE_NOTIFICATIONS: "http://localhost:4059"
+        SERVICE_PORTAL: "http://localhost:4060"
+        SERVICE_AI: "http://localhost:4061"
+
+    relationships:
+      mysql: "db:mysql"
+      redis: "cache:redis"
+
+###############################################################################
+# Services
+###############################################################################
+
+services:
+  db:
+    type: mariadb:10.11
+
+  cache:
+    type: redis:7.2
+
+###############################################################################
+# Routes
+###############################################################################
+
+routes:
+  "https://{default}/":
+    type: upstream
+    upstream: "app:http"
+
+  "https://www.{default}/":
+    type: redirect
+    to: "https://{default}/"

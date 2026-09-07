@@ -21,6 +21,17 @@ interface StressAlerta {
   dias_stress:           number | null;
 }
 
+interface CargaEstado {
+  ok:      boolean;
+  anio:    number;
+  total:   number;
+  ultima:  string | null;
+  conteo:  { cargado: number; error: number; omitido: number; pendiente: number };
+  pendientes: { dni: number; apellido: string; dias: number; licencia: string }[];
+  errores:    { dni: number; apellido: string; motivo: string }[];
+  descarga:   { estado: string; motivo: string | null; filas: number | null; actualizado_at: string } | null;
+}
+
 // ── Estilos (misma paleta que HerramientasPage) ───────────────────────────────
 const S: Record<string, React.CSSProperties> = {
   card:     { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: 20, marginBottom: 16 },
@@ -60,6 +71,14 @@ export function StressAlertasContent() {
   const [cargado,   setCargado]   = useState(false);
   const [busqueda,  setBusqueda]  = useState('');
   const [soloSinLey, setSoloSinLey] = useState(false);
+  const [carga,     setCarga]     = useState<CargaEstado | null>(null);
+
+  // Estado de la carga automática en SIAPE (banner)
+  useEffect(() => {
+    apiFetch<any>('/stress/carga-estado')
+      .then(r => { if (r?.ok) setCarga(r as CargaEstado); })
+      .catch(() => {});
+  }, []);
 
   // Cargar al montar
   const cargar = useCallback(async () => {
@@ -124,6 +143,52 @@ export function StressAlertasContent() {
   return (
     <>
       <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 40 }}>
+
+        {/* ─ Banner: estado de la carga automática en SIAPE ─ */}
+        {carga && (
+          <div style={{
+            background: carga.conteo.pendiente > 0 ? 'rgba(251,146,60,0.12)' : 'rgba(34,197,94,0.12)',
+            border: `1px solid ${carga.conteo.pendiente > 0 ? 'rgba(251,146,60,0.4)' : 'rgba(34,197,94,0.4)'}`,
+            borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: '0.85rem',
+          }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+              <strong style={{ fontSize: '0.9rem' }}>
+                🤖 Carga automática SIAPE {carga.anio}
+              </strong>
+              <span style={S.tagGreen}>{carga.conteo.cargado} cargados</span>
+              {carga.conteo.error > 0 && <span style={S.tagBlue}>{carga.conteo.error} ya existían</span>}
+              {carga.conteo.pendiente > 0
+                ? <span style={S.tagOrange}>{carga.conteo.pendiente} pendientes</span>
+                : <span style={S.tagGreen}>0 pendientes ✓</span>}
+              {carga.conteo.omitido > 0 && <span style={{ color: '#fca5a5' }}>{carga.conteo.omitido} a revisar</span>}
+              <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: '0.78rem' }}>
+                Última corrida: {carga.ultima ? fmtFecha(carga.ultima) + ' ' + carga.ultima.slice(11, 16) : '—'}
+              </span>
+            </div>
+            {carga.conteo.pendiente > 0 && (
+              <div style={{ marginTop: 8, color: '#94a3b8', fontSize: '0.78rem' }}>
+                Pendientes de cargar: {carga.pendientes.map(p => p.apellido).slice(0, 8).join(' · ')}
+                {carga.pendientes.length > 8 ? ` … (+${carga.pendientes.length - 8})` : ''}
+              </div>
+            )}
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.78rem', color: '#94a3b8', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span>📥 <strong>Descarga Tiempo Acumulado:</strong></span>
+              {carga.descarga
+                ? (<>
+                    {carga.descarga.estado === 'ok'
+                      ? <span style={S.tagGreen}>OK{carga.descarga.filas != null ? ` · ${carga.descarga.filas} filas` : ''}</span>
+                      : <span style={S.tagRed}>ERROR</span>}
+                    <span style={{ color: '#64748b' }}>
+                      {fmtFecha(carga.descarga.actualizado_at)} {carga.descarga.actualizado_at.slice(11, 16)}
+                    </span>
+                    {carga.descarga.estado !== 'ok' && carga.descarga.motivo && (
+                      <span style={{ color: '#fca5a5' }}>{carga.descarga.motivo}</span>
+                    )}
+                  </>)
+                : <span style={{ color: '#64748b' }}>sin datos aún</span>}
+            </div>
+          </div>
+        )}
 
         {/* ─ Encabezado ─ */}
         <div style={{ marginBottom: 24 }}>

@@ -1,0 +1,111 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Documents Service
+  version: '1.0.0'
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /documents/providers:
+    get:
+      responses:
+        '200':
+          description: OK
+  /documents/mail-accounts:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /documents/mail-accounts/{id}:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /documents/mail-accounts/{id}/sync:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '202':
+          description: Accepted
+  /documents/inbox:
+    get:
+      responses:
+        '200':
+          description: OK
+  /documents/inbox/manual:
+    post:
+      responses:
+        '201':
+          description: Created
+  /documents/inbox/upload:
+    post:
+      responses:
+        '201':
+          description: Created
+  /documents/inbox/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /documents/inbox/{id}/download-url:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /documents/inbox/{id}/associate:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /documents/inbox/{id}/ingest:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /documents/inbox/patients/{patientId}:
+    get:
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK

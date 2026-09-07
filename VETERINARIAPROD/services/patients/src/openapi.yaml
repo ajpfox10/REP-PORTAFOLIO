@@ -1,0 +1,952 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Patients Service
+  version: '1.0.0'
+  description: Patients, clients, species, breeds and branches management
+
+servers:
+  - url: /
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+            code:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+
+    PaginatedMeta:
+      type: object
+      required: [total, page, limit]
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    PatientListItem:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        species:
+          type: string
+          nullable: true
+        primary_owner:
+          type: string
+          nullable: true
+        is_active:
+          type: integer
+
+    PatientDetail:
+      type: object
+      required: [id, name, owners, allergies, chronicConditions]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        species_name:
+          type: string
+          nullable: true
+        breed_name:
+          type: string
+          nullable: true
+        sex:
+          type: string
+          nullable: true
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        is_active:
+          type: integer
+        owners:
+          type: array
+          items:
+            type: object
+        allergies:
+          type: array
+          items:
+            type: object
+        chronicConditions:
+          type: array
+          items:
+            type: object
+
+    CreatePatientRequest:
+      type: object
+      required: [name, speciesId, primaryOwnerId, sex]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        speciesId:
+          type: integer
+        breedId:
+          type: integer
+        primaryOwnerId:
+          type: integer
+        sex:
+          type: string
+          enum: [male, female, unknown]
+        dateOfBirth:
+          type: string
+          format: date
+        microchip:
+          type: string
+        notes:
+          type: string
+
+paths:
+  /patients:
+    get:
+      summary: List patients (paginated)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+            default: '1'
+        - name: limit
+          in: query
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+            default: '20'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: speciesId
+          in: query
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+        - name: species
+          in: query
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          schema:
+            oneOf:
+              - type: string
+                enum: ['true', 'false', 'all']
+              - type: integer
+                enum: [0, 1]
+        - name: is_active
+          in: query
+          schema:
+            oneOf:
+              - type: string
+                enum: ['true', 'false', 'all']
+              - type: integer
+                enum: [0, 1]
+      responses:
+        '200':
+          description: Paginated list of patients
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, meta]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PatientListItem'
+                  meta:
+                    $ref: '#/components/schemas/PaginatedMeta'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Create a new patient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePatientRequest'
+      responses:
+        '201':
+          description: Patient created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patients/{id}:
+    get:
+      summary: Get patient detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Patient detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/PatientDetail'
+        '404':
+          description: Patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                speciesId:
+                  type: integer
+                breedId:
+                  type: integer
+                sex:
+                  type: string
+                  enum: [male, female, unknown]
+                birthdate:
+                  type: string
+                  format: date
+                birthDate:
+                  type: string
+                  format: date
+                chipNumber:
+                  type: string
+                microchip:
+                  type: string
+                microchipNumber:
+                  type: string
+                notes:
+                  type: string
+                is_active:
+                  type: integer
+                  enum: [0, 1]
+      responses:
+        '200':
+          description: Patient updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Deactivate patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patients/{id}/timeline:
+    get:
+      summary: Get patient timeline
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Patient timeline
+
+  /patients/{id}/owners:
+    get:
+      summary: List patient owners
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Patient owners
+    post:
+      summary: Add patient owner
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Owner added
+
+  /patients/{id}/photo:
+    post:
+      summary: Upload patient photo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Photo uploaded
+
+  /patients/{id}/allergies:
+    post:
+      summary: Add patient allergy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Allergy added
+
+  /patients/{id}/chronic-conditions:
+    post:
+      summary: Add chronic condition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Chronic condition added
+
+  /patients/{id}/allergies/{aid}:
+    delete:
+      summary: Remove patient allergy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: aid
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Allergy removed
+
+  /patients/{id}/chronic-conditions/{cid}:
+    delete:
+      summary: Remove chronic condition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: cid
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Chronic condition removed
+
+  /patients/species/all:
+    get:
+      summary: List all species (reference data)
+      responses:
+        '200':
+          description: Species list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, common_name]
+                      properties:
+                        id:
+                          type: integer
+                        common_name:
+                          type: string
+                        scientific_name:
+                          type: string
+                        category:
+                          type: string
+
+  /species/all:
+    get:
+      summary: List all species (public alias)
+      responses:
+        '200':
+          description: Species list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, common_name]
+                      properties:
+                        id:
+                          type: integer
+                        common_name:
+                          type: string
+                        scientific_name:
+                          type: string
+                        category:
+                          type: string
+
+  /patients/breeds/all:
+    get:
+      summary: List all breeds (reference data)
+      parameters:
+        - name: speciesId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Breeds list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /patients/breeds:
+    get:
+      summary: List breeds (legacy alias)
+      parameters:
+        - name: speciesId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Breeds list
+
+  /breeds/all:
+    get:
+      summary: List all breeds (public alias)
+      parameters:
+        - name: speciesId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Breeds list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /breeds:
+    get:
+      summary: List breeds (public alias)
+      parameters:
+        - name: speciesId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Breeds list
+
+  /clients:
+    get:
+      summary: List clients
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Paginated clients list
+    post:
+      summary: Create client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, phone]
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+      responses:
+        '201':
+          description: Client created
+
+  /clients/{id}:
+    get:
+      summary: Get client detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Client detail
+    put:
+      summary: Update client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Updated
+    delete:
+      summary: Deactivate client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Deactivated
+
+  /clients/{id}/gdpr/consents:
+    get:
+      summary: List client consents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Consent list
+    post:
+      summary: Record consent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Consent stored
+    delete:
+      summary: Withdraw all consents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Consents withdrawn
+
+  /clients/{id}/gdpr/export:
+    get:
+      summary: Export personal data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Export payload
+
+  /clients/{id}/gdpr/requests:
+    post:
+      summary: Create data request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Request created
+
+  /gdpr/requests:
+    get:
+      summary: List GDPR requests
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Requests list
+
+  /gdpr/requests/{reqId}:
+    patch:
+      summary: Update GDPR request status
+      parameters:
+        - name: reqId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Request updated
+
+  /clients/{id}/gdpr/erase:
+    delete:
+      summary: Anonymize client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Client anonymized
+
+  /gdpr/retention:
+    get:
+      summary: List retention candidates
+      responses:
+        '200':
+          description: Retention candidates
+
+  /clients/signatures/public-key:
+    get:
+      summary: Get digital signature public key
+      responses:
+        '200':
+          description: Public key
+
+  /clients/signatures/verify:
+    post:
+      summary: Verify client signature
+      responses:
+        '200':
+          description: Signature verified
+
+  /branches:
+    get:
+      summary: List branches
+      responses:
+        '200':
+          description: Branch list
+
+  /branches/{id}:
+    get:
+      summary: Get branch detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Branch detail
+
+  /branches/{id}/settings:
+    patch:
+      summary: Update branch settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Settings updated
+
+  /branches/search/patients:
+    get:
+      summary: Search patients across org
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Patient search results
+
+  /branches/search/clients:
+    get:
+      summary: Search clients across org
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Client search results
+
+  /branches/patients/{id}/history:
+    get:
+      summary: Get cross-branch patient history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Cross-branch history
+
+  /branches/transfers/patients:
+    get:
+      summary: List patient transfers
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: fromBranch
+          in: query
+          schema: { type: integer }
+        - name: toBranch
+          in: query
+          schema: { type: integer }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Transfer list
+    post:
+      summary: Request patient transfer
+      responses:
+        '201':
+          description: Transfer created
+
+  /branches/transfers/patients/{id}:
+    patch:
+      summary: Update patient transfer status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Transfer updated
+
+  /branches/transfers/stock:
+    get:
+      summary: List stock transfers
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Stock transfer list
+    post:
+      summary: Transfer stock
+      responses:
+        '201':
+          description: Stock transfer created
+
+  /branches/access:
+    get:
+      summary: List temporary branch access
+      responses:
+        '200':
+          description: Access list
+    post:
+      summary: Grant temporary access
+      responses:
+        '201':
+          description: Access granted
+
+  /branches/access/{id}:
+    delete:
+      summary: Revoke temporary access
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Access revoked
+
+  /branches/inventory/overview:
+    get:
+      summary: Inventory overview by branch
+      responses:
+        '200':
+          description: Inventory overview
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object

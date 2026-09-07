@@ -1,0 +1,501 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging, develop]
+  pull_request:
+    branches: [main, staging]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ── Lint ────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      - name: ESLint
+        run: npm run lint --if-present
+
+  # ── Security audit ──────────────────────────────────────────────────────────
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci --prefer-offline
+
+      # Fail on critical or high CVEs
+      - name: npm audit
+        run: npm audit --audit-level=high
+
+  # ── Unit + integration tests ─────────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: vetmanager_test
+          MYSQL_USER: vetapp
+          MYSQL_PASSWORD: testpass
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+
+    env:
+      NODE_ENV: test
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: vetmanager_test
+      MYSQL_USER: vetapp
+      MYSQL_PASSWORD: testpass
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      # Secrets must be stored in GitHub repository secrets (Settings → Secrets and variables → Actions)
+      # Required: CI_INTERNAL_SECRET (min 64 hex chars)
+      INTERNAL_SECRET: ${{ secrets.CI_INTERNAL_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Run migrations
+        run: npm run migrate
+
+      - name: Run tests
+        run: npm test -- --forceExit --runInBand --coverage
+
+      - name: Run contract tests
+        run: npm run test:contract -- --runInBand
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  # ── OT-111: TypeScript type-check (frontend) ─────────────────────────────────
+  typecheck:
+    name: TypeScript check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: andromeda-front/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: andromeda-front
+        run: npm ci --prefer-offline
+
+      - name: Type check (tsc --noEmit)
+        working-directory: andromeda-front
+        run: npm run typecheck
+
+  # ── Docker build (no push — validates Dockerfile) ────────────────────────────
+  docker-build:
+    name: Docker build check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    strategy:
+      matrix:
+        include:
+          - image: gateway
+            context: .
+            file: gateway/Dockerfile
+          - image: auth
+            context: .
+            file: services/auth/Dockerfile
+          - image: patients
+            context: .
+            file: services/patients/Dockerfile
+          - image: medical
+            context: .
+            file: services/medical/Dockerfile
+          - image: lab-imaging
+            context: .
+            file: services/lab-imaging/Dockerfile
+          - image: billing
+            context: .
+            file: services/billing/Dockerfile
+          - image: grooming
+            context: .
+            file: services/grooming/Dockerfile
+          - image: reports
+            context: .
+            file: services/reports/Dockerfile
+          - image: notifications
+            context: .
+            file: services/notifications/Dockerfile
+          - image: portal
+            context: .
+            file: services/portal/Dockerfile
+          - image: telemedicine
+            context: .
+            file: services/telemedicine/Dockerfile
+          - image: ai
+            context: .
+            file: services/ai/Dockerfile
+          - image: documents
+            context: .
+            file: services/documents/Dockerfile
+          - image: frontend
+            context: andromeda-front
+            file: andromeda-front/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.image }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          load: true
+          tags: vetmanager/${{ matrix.image }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan ${{ matrix.image }} image with Trivy
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: vetmanager/${{ matrix.image }}:ci
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  frontend-e2e:
+    name: Frontend E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: andromeda-front/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: andromeda-front
+        run: npm ci --prefer-offline
+
+      - name: Install Playwright Chromium
+        working-directory: andromeda-front
+        run: npx playwright install --with-deps chromium
+
+      - name: Run frontend E2E
+        working-directory: andromeda-front
+        run: npm run e2e
+
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --prefer-offline
+      - run: npm run test:mutation
+
+  sandbox-integrations:
+    name: Sandbox integrations
+    runs-on: ubuntu-latest
+    if: ${{ secrets.STRIPE_TEST_WEBHOOK_SECRET != '' || secrets.MP_WEBHOOK_SECRET != '' || secrets.AFIP_CUIT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --prefer-offline
+      - name: Run sandbox integration probes
+        env:
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_TEST_WEBHOOK_SECRET }}
+          MP_WEBHOOK_SECRET: ${{ secrets.MP_WEBHOOK_SECRET }}
+          AFIP_CUIT: ${{ secrets.AFIP_CUIT }}
+        run: npm test -- --runInBand tests/unit/mercadopago.test.js tests/unit/afip.test.js
+
+  # ── Deploy to staging (only on push to staging branch) ──────────────────────
+  deploy-staging:
+    name: Deploy to staging
+    needs: [lint, audit, test, docker-build, frontend-e2e]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        if: ${{ secrets.STAGING_HOST != '' && secrets.STAGING_USER != '' && secrets.STAGING_SSH_KEY != '' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            set -e
+            APP_DIR="${{ secrets.STAGING_APP_DIR }}"
+            if [ -z "$APP_DIR" ]; then APP_DIR="/opt/vetmanager-api"; fi
+            cd "$APP_DIR"
+            git fetch origin staging
+            git checkout staging
+            git reset --hard origin/staging
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+
+      - name: Skip deploy when staging secrets are absent
+        if: ${{ !(secrets.STAGING_HOST != '' && secrets.STAGING_USER != '' && secrets.STAGING_SSH_KEY != '') }}
+        run: echo "Staging deploy skipped because SSH secrets are not configured."
+
+  # ── OT-108: Docker push to GHCR ─────────────────────────────────────────────
+  # Runs only on pushes to main or staging after all quality gates pass.
+  docker-push:
+    name: Docker push
+    needs: [lint, audit, test, docker-build, frontend-e2e, typecheck]
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: gateway
+            context: .
+            file: gateway/Dockerfile
+          - image: auth
+            context: .
+            file: services/auth/Dockerfile
+          - image: patients
+            context: .
+            file: services/patients/Dockerfile
+          - image: medical
+            context: .
+            file: services/medical/Dockerfile
+          - image: lab-imaging
+            context: .
+            file: services/lab-imaging/Dockerfile
+          - image: billing
+            context: .
+            file: services/billing/Dockerfile
+          - image: grooming
+            context: .
+            file: services/grooming/Dockerfile
+          - image: reports
+            context: .
+            file: services/reports/Dockerfile
+          - image: notifications
+            context: .
+            file: services/notifications/Dockerfile
+          - image: portal
+            context: .
+            file: services/portal/Dockerfile
+          - image: telemedicine
+            context: .
+            file: services/telemedicine/Dockerfile
+          - image: ai
+            context: .
+            file: services/ai/Dockerfile
+          - image: documents
+            context: .
+            file: services/documents/Dockerfile
+          - image: frontend
+            context: andromeda-front
+            file: andromeda-front/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:8}"
+          BRANCH="${GITHUB_REF_NAME}"
+          BRANCH_TAG=$([ "$BRANCH" = "main" ] && echo "latest" || echo "$BRANCH")
+          REPO_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          BASE="ghcr.io/${REPO_LC}/vetmanager-${{ matrix.image }}"
+          echo "sha_tag=${BASE}:${SHORT_SHA}"  >> "$GITHUB_OUTPUT"
+          echo "branch_tag=${BASE}:${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push ${{ matrix.image }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.sha_tag }}
+            ${{ steps.tags.outputs.branch_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+  # ── OT-109: K8s deploy to staging ───────────────────────────────────────────
+  # Automatically applies K8s manifests to the staging cluster after docker-push.
+  # Requires STAGING_KUBE_CONFIG secret (base64-encoded kubeconfig).
+  deploy-k8s-staging:
+    name: K8s deploy (staging)
+    needs: [docker-push]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        if: ${{ secrets.STAGING_KUBE_CONFIG != '' }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.STAGING_KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Update image tags and apply
+        if: ${{ secrets.STAGING_KUBE_CONFIG != '' }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:8}"
+          REPO_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          NS=vetmanager-staging
+          DEPLOY_FAILED=0
+          for SVC in gateway auth patients medical lab-imaging billing grooming reports notifications portal telemedicine ai documents; do
+            kubectl set image deployment/vetmanager-${SVC} \
+              ${SVC}=ghcr.io/${REPO_LC}/vetmanager-${SVC}:${SHORT_SHA} \
+              --namespace="${NS}" || DEPLOY_FAILED=1
+          done
+          # Apply any manifest changes (new resources, config maps, etc.)
+          kubectl apply -f k8s/ --namespace="${NS}"
+          # Wait for all deployments to roll out
+          for SVC in gateway auth patients medical lab-imaging billing grooming reports notifications portal telemedicine ai documents; do
+            kubectl rollout status deployment/vetmanager-${SVC} \
+              --namespace="${NS}" --timeout=300s || DEPLOY_FAILED=1
+          done
+          exit $DEPLOY_FAILED
+
+      - name: Skip K8s staging deploy (kubeconfig not configured)
+        if: ${{ secrets.STAGING_KUBE_CONFIG == '' }}
+        run: echo "K8s staging deploy skipped — STAGING_KUBE_CONFIG secret not configured."
+
+  # ── OT-110: Deploy to production (manual approval gate) ─────────────────────
+  # Requires the 'production' GitHub environment to have required reviewers set up
+  # (Settings → Environments → production → Required reviewers).
+  # This acts as the manual approval gate — the job will wait until approved.
+  deploy-production:
+    name: Deploy to production
+    needs: [docker-push]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        if: ${{ secrets.PROD_KUBE_CONFIG != '' }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.PROD_KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Update images and apply to production
+        if: ${{ secrets.PROD_KUBE_CONFIG != '' }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:8}"
+          REPO_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          NS=vetmanager
+          for SVC in gateway auth patients medical lab-imaging billing grooming reports notifications portal telemedicine ai documents; do
+            kubectl set image deployment/vetmanager-${SVC} \
+              ${SVC}=ghcr.io/${REPO_LC}/vetmanager-${SVC}:${SHORT_SHA} \
+              --namespace="${NS}"
+          done
+          kubectl apply -f k8s/ --namespace="${NS}"
+          for SVC in gateway auth patients medical lab-imaging billing grooming reports notifications portal telemedicine ai documents; do
+            kubectl rollout status deployment/vetmanager-${SVC} \
+              --namespace="${NS}" --timeout=300s
+          done
+
+      - name: Tag production release
+        if: ${{ secrets.PROD_KUBE_CONFIG != '' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "release-$(date -u +%Y%m%d-%H%M)-${GITHUB_SHA:0:8}" \
+            -m "Production deploy ${{ github.sha }}"
+          git push origin --tags || echo "Warning: tag push failed (non-fatal)"
+
+      - name: Skip production deploy (kubeconfig not configured)
+        if: ${{ secrets.PROD_KUBE_CONFIG == '' }}
+        run: echo "Production deploy skipped — PROD_KUBE_CONFIG secret not configured."

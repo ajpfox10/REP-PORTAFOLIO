@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Archivo Pasivo - opciones post login</title>
+    <style>
+      :root {
+        --ink: #18202f;
+        --muted: #667085;
+        --line: #d9dee8;
+        --panel: #ffffff;
+        --bg: #f3f6fa;
+        --nav: #172234;
+        --nav-2: #203149;
+        --blue: #2f5f9f;
+        --green: #1f6b5f;
+        --amber: #9a661f;
+        --danger: #a43a3a;
+        font-family: Inter, Segoe UI, Arial, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      .page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .intro {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+
+      .intro h1 {
+        margin: 0;
+        font-size: 26px;
+      }
+
+      .intro p {
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      .badge {
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .options {
+        display: grid;
+        gap: 22px;
+      }
+
+      .option {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: 0 16px 48px rgba(31, 42, 62, 0.08);
+      }
+
+      .option-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .option-head h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .option-head p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .preview {
+        height: 520px;
+        background: #eef2f7;
+      }
+
+      .topbar {
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .user {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .avatar {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        background: var(--green);
+        font-weight: 800;
+      }
+
+      .btn {
+        min-height: 34px;
+        border: 0;
+        border-radius: 6px;
+        padding: 0 12px;
+        color: #fff;
+        background: var(--blue);
+        font-weight: 700;
+      }
+
+      .btn.secondary {
+        border: 1px solid var(--line);
+        color: var(--ink);
+        background: #fff;
+      }
+
+      .classic,
+      .hybrid {
+        display: grid;
+        grid-template-columns: 244px 1fr;
+        height: 100%;
+      }
+
+      .side {
+        padding: 18px 14px;
+        color: #dfe8f4;
+        background: linear-gradient(180deg, var(--nav), var(--nav-2));
+      }
+
+      .brand {
+        margin-bottom: 24px;
+        padding: 0 8px;
+        font-weight: 800;
+        color: #fff;
+      }
+
+      .nav-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 4px 0;
+        padding: 10px 11px;
+        border-radius: 7px;
+        color: #c9d4e4;
+        font-size: 14px;
+      }
+
+      .nav-item.active {
+        color: #fff;
+        background: rgba(255,255,255,0.12);
+      }
+
+      .count {
+        min-width: 24px;
+        text-align: center;
+        padding: 2px 6px;
+        border-radius: 999px;
+        color: #122;
+        background: #d9f3eb;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .main {
+        min-width: 0;
+        background: #f6f8fb;
+      }
+
+      .content {
+        padding: 20px;
+      }
+
+      .title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+
+      .title-row h3 {
+        margin: 0;
+        font-size: 21px;
+      }
+
+      .title-row span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .stat,
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .stat {
+        padding: 14px;
+      }
+
+      .stat strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 26px;
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table th,
+      .table td {
+        padding: 12px;
+        border-bottom: 1px solid #edf0f5;
+        text-align: left;
+        font-size: 14px;
+      }
+
+      .table th {
+        color: #5d687a;
+        background: #f8fafc;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .pill {
+        display: inline-flex;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .pill.ok { color: #155e52; background: #dff7ee; }
+      .pill.wait { color: #7a4d0b; background: #fff3d8; }
+      .pill.lock { color: #7b2f2f; background: #ffe1e1; }
+
+      .cards-only {
+        height: 100%;
+        padding: 20px;
+        background: #f6f8fb;
+      }
+
+      .cards-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .module-card {
+        min-height: 145px;
+        display: grid;
+        align-content: space-between;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .module-card h4 {
+        margin: 0 0 8px;
+        font-size: 17px;
+      }
+
+      .module-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.45;
+        font-size: 14px;
+      }
+
+      .accent {
+        width: 36px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--green);
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .tab {
+        padding: 9px 12px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: #344054;
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      .tab.active {
+        color: #fff;
+        border-color: var(--green);
+        background: var(--green);
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+        gap: 14px;
+      }
+
+      .form-panel {
+        padding: 16px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 12px;
+        color: #344054;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .input {
+        min-height: 38px;
+        border: 1px solid #cbd3df;
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      @media (max-width: 980px) {
+        .classic,
+        .hybrid { grid-template-columns: 1fr; }
+        .side { display: none; }
+        .stats,
+        .cards-grid,
+        .split { grid-template-columns: 1fr; }
+        .preview { height: auto; min-height: 520px; }
+        .intro { align-items: start; flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="intro">
+        <div>
+          <h1>Archivo Pasivo - ejemplos de pantalla despues del login</h1>
+          <p>Son maquetas visuales. Elegi una direccion y despues la implementamos en React.</p>
+        </div>
+        <div class="badge">Usuario: admin | Perfil: ADMIN</div>
+      </header>
+
+      <main class="options">
+        <section class="option">
+          <div class="option-head">
+            <div>
+              <h2>Opcion 1 - Panel administrativo clasico</h2>
+              <p>Sidebar fija, tabla central, alta de usuarios visible para administracion.</p>
+            </div>
+            <button class="btn secondary">Mas directo</button>
+          </div>
+          <div class="preview classic">
+            <aside class="side">
+              <div class="brand">Archivo Pasivo</div>
+              <div class="nav-item active">Inicio</div>
+              <div class="nav-item">Usuarios</div>
+              <div class="nav-item">Roles y permisos</div>
+              <div class="nav-item">Solicitudes <span class="count">3</span></div>
+              <div class="nav-item">Auditoria</div>
+              <div class="nav-item">Modulos futuros</div>
+            </aside>
+            <section class="main">
+              <div class="topbar">
+                <strong>Panel administrativo</strong>
+                <div class="user"><span>Administrador</span><span class="avatar">A</span><button class="btn">Salir</button></div>
+              </div>
+              <div class="content">
+                <div class="title-row">
+                  <div><h3>Usuarios del sistema</h3><span>Alta, baja, rol unico y estado de acceso.</span></div>
+                  <button class="btn">Nuevo usuario</button>
+                </div>
+                <div class="stats">
+                  <div class="stat"><span>Usuarios activos</span><strong>24</strong></div>
+                  <div class="stat"><span>Solicitudes pendientes</span><strong>3</strong></div>
+                  <div class="stat"><span>Permisos definidos</span><strong>14</strong></div>
+                </div>
+                <div class="card">
+                  <table class="table">
+                    <thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>2FA</th></tr></thead>
+                    <tbody>
+                      <tr><td>admin</td><td>ADMIN</td><td><span class="pill ok">Activo</span></td><td>Opcional</td></tr>
+                      <tr><td>mesa.entrada</td><td>OPERADOR</td><td><span class="pill ok">Activo</span></td><td>No</td></tr>
+                      <tr><td>consulta.archivo</td><td>LECTOR</td><td><span class="pill lock">Bloqueado</span></td><td>No</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="option">
+          <div class="option-head">
+            <div>
+              <h2>Opcion 2 - Dashboard por tarjetas</h2>
+              <p>Inicio simple por modulos. Bueno al principio, menos comodo cuando crezca.</p>
+            </div>
+            <button class="btn secondary">Mas visual</button>
+          </div>
+          <div class="preview cards-only">
+            <div class="topbar">
+              <strong>Archivo Pasivo</strong>
+              <div class="user"><span>Administrador</span><span class="avatar">A</span><button class="btn">Salir</button></div>
+            </div>
+            <div class="content">
+              <div class="title-row">
+                <div><h3>Inicio</h3><span>Accesos disponibles segun permisos.</span></div>
+              </div>
+              <div class="cards-grid">
+                <article class="module-card"><div><h4>Usuarios</h4><p>Alta, reset de contrasena, estado y rol.</p></div><div class="accent"></div></article>
+                <article class="module-card"><div><h4>Roles y permisos</h4><p>Perfiles ADMIN, OPERADOR, LECTOR y permisos finos.</p></div><div class="accent"></div></article>
+                <article class="module-card"><div><h4>Solicitudes</h4><p>Pedidos de usuarios pendientes de revision.</p></div><div class="accent"></div></article>
+                <article class="module-card"><div><h4>Archivo Pasivo</h4><p>Modulo futuro para expedientes, cajas y ubicaciones.</p></div><div class="accent"></div></article>
+                <article class="module-card"><div><h4>Auditoria</h4><p>Registro de accesos, cambios y movimientos.</p></div><div class="accent"></div></article>
+                <article class="module-card"><div><h4>Configuracion</h4><p>Parametros generales y seguridad.</p></div><div class="accent"></div></article>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="option">
+          <div class="option-head">
+            <div>
+              <h2>Opcion 3 - Hibrido profesional recomendado</h2>
+              <p>Sidebar compacta, resumen inicial y administracion con tabs. Escala mejor.</p>
+            </div>
+            <button class="btn">Recomendado</button>
+          </div>
+          <div class="preview hybrid">
+            <aside class="side">
+              <div class="brand">Archivo Pasivo</div>
+              <div class="nav-item active">Inicio</div>
+              <div class="nav-item">Archivo Pasivo</div>
+              <div class="nav-item">Administracion</div>
+              <div class="nav-item">Auditoria</div>
+            </aside>
+            <section class="main">
+              <div class="topbar">
+                <strong>Administracion</strong>
+                <div class="user"><span>admin</span><span class="avatar">A</span><button class="btn">Salir</button></div>
+              </div>
+              <div class="content">
+                <div class="title-row">
+                  <div><h3>Gestion de acceso</h3><span>Usuarios, roles, permisos y solicitudes en una sola seccion.</span></div>
+                  <button class="btn">Nuevo usuario</button>
+                </div>
+                <div class="tabs">
+                  <div class="tab active">Usuarios</div>
+                  <div class="tab">Roles</div>
+                  <div class="tab">Permisos</div>
+                  <div class="tab">Solicitudes</div>
+                </div>
+                <div class="split">
+                  <div class="card">
+                    <table class="table">
+                      <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th></tr></thead>
+                      <tbody>
+                        <tr><td>admin</td><td>Administrador</td><td>ADMIN</td><td><span class="pill ok">Activo</span></td></tr>
+                        <tr><td>archivo.mesa</td><td>Mesa de entradas</td><td>OPERADOR</td><td><span class="pill ok">Activo</span></td></tr>
+                        <tr><td>consulta</td><td>Consulta interna</td><td>LECTOR</td><td><span class="pill wait">Revision</span></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card form-panel">
+                    <h3 style="margin:0 0 14px">Alta rapida</h3>
+                    <label class="field">Usuario<div class="input"></div></label>
+                    <label class="field">Nombre<div class="input"></div></label>
+                    <label class="field">Rol<div class="input"></div></label>
+                    <button class="btn" style="width:100%">Crear usuario</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

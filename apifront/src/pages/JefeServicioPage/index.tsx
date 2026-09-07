@@ -84,7 +84,11 @@ function fmtDateTime(dt?: string | null): string {
 const esTitularSiape = (a: any): boolean => {
   const ley = String(a?.ley_nombre || '').toLowerCase();
   const planta = String(a?.planta_nombre || '').toUpperCase();
-  return ley.includes('10430') || (ley.includes('10471') && planta === 'PERMANENTE');
+  // Planta explícitamente temporal → NO titular (aunque sea 10430)
+  const plantaTemporal = planta.includes('TEMPORARI') || planta.includes('INTERIN') || planta.includes('BECA');
+  if (ley.includes('10471')) return planta === 'PERMANENTE';
+  if (ley.includes('10430')) return !plantaTemporal; // 10430 permanente o sin dato = titular; temporario/interino/beca = no titular
+  return false;
 };
 
 const revistaTag = (a: any): string => {

@@ -9,6 +9,8 @@ node_modules/
 logs/
 *.log
 **/*.log
+*.err
+**/*.err
 
 dist/
 **/dist/
@@ -29,10 +31,27 @@ coverage/
 CLAUDE.md
 **/CLAUDE.md
 
+# notas internas de auditoría con credenciales/secretos en texto
+reformas.txt
+**/reformas.txt
+PENDIENTES.txt
+**/PENDIENTES.txt
+
 # logs/capturas sueltas que no deben subir
 fichadas_log.txt
 **/fichadas_log.txt
+# cualquier log de fichadas con otro nombre (fichadas_2026.txt, attlog.txt, etc.)
+*fichad*.txt
+**/*fichad*.txt
+attlog*.txt
+**/attlog*.txt
 *.png
 **/*.png
+*.jpg
+**/*.jpg
+*.jpeg
+**/*.jpeg
 # ...pero conservar imágenes que son assets reales del código (plantilla Word)
 !apipersonal/src/templates/**/*.png
+!apipersonal/src/templates/**/*.jpg
+!apipersonal/src/templates/**/*.jpeg

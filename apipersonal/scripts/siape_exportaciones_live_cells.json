@@ -1,0 +1,6148 @@
+[
+  {
+    "depth": 8,
+    "role": "scroll bar",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "horizontal"
+    ],
+    "x": 0,
+    "y": 705,
+    "w": 1265,
+    "h": 15,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll bar",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "x": 692,
+    "y": 263,
+    "w": 19,
+    "h": 502,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "enfocado",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 260,
+    "w": 40,
+    "h": 25,
+    "char_count": 3,
+    "text": "123",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 285,
+    "w": 40,
+    "h": 26,
+    "char_count": 2,
+    "text": "76",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 311,
+    "w": 40,
+    "h": 25,
+    "char_count": 2,
+    "text": "71",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 336,
+    "w": 40,
+    "h": 25,
+    "char_count": 2,
+    "text": "82",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 361,
+    "w": 40,
+    "h": 26,
+    "char_count": 2,
+    "text": "77",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 387,
+    "w": 40,
+    "h": 25,
+    "char_count": 1,
+    "text": "4",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 412,
+    "w": 40,
+    "h": 25,
+    "char_count": 2,
+    "text": "79",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 437,
+    "w": 40,
+    "h": 26,
+    "char_count": 1,
+    "text": "1",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 463,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 488,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 513,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 539,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 564,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 589,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 615,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 640,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 665,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 691,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 716,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NRO. DE\nCONSULTA",
+    "desc": "NRO. DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 741,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 260,
+    "w": 347,
+    "h": 25,
+    "char_count": 23,
+    "text": " Examenes Médicos Salud",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 285,
+    "w": 347,
+    "h": 26,
+    "char_count": 32,
+    "text": " Horario Administrativo a un dia",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 311,
+    "w": 347,
+    "h": 25,
+    "char_count": 50,
+    "text": " Horario Administrativo Consolidado de los Agentes",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 336,
+    "w": 347,
+    "h": 25,
+    "char_count": 31,
+    "text": " Horario Guardia Salud a un dia",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 361,
+    "w": 347,
+    "h": 26,
+    "char_count": 37,
+    "text": " Novedades Pendientes de Autorización",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 387,
+    "w": 347,
+    "h": 25,
+    "char_count": 22,
+    "text": " Novedades Por Periodo",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 412,
+    "w": 347,
+    "h": 25,
+    "char_count": 21,
+    "text": " Novedades Rechazadas",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 437,
+    "w": 347,
+    "h": 26,
+    "char_count": 17,
+    "text": " Plantel Nominado",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 463,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 488,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 513,
+    "w": 347,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 539,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 564,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 589,
+    "w": 347,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 615,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 640,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 665,
+    "w": 347,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 691,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 716,
+    "w": 347,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "NOMBRE DE LA CONSULTA",
+    "desc": "NOMBRE DE LA CONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 56,
+    "y": 741,
+    "w": 347,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 260,
+    "w": 127,
+    "h": 25,
+    "char_count": 16,
+    "text": "20/08/2026 13:31",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 285,
+    "w": 127,
+    "h": 26,
+    "char_count": 16,
+    "text": "09/08/2026 14:58",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 311,
+    "w": 127,
+    "h": 25,
+    "char_count": 16,
+    "text": "09/08/2026 14:58",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 336,
+    "w": 127,
+    "h": 25,
+    "char_count": 16,
+    "text": "05/01/2026 10:43",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 361,
+    "w": 127,
+    "h": 26,
+    "char_count": 16,
+    "text": "19/08/2026 10:52",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 387,
+    "w": 127,
+    "h": 25,
+    "char_count": 16,
+    "text": "20/08/2026 13:33",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 412,
+    "w": 127,
+    "h": 25,
+    "char_count": 16,
+    "text": "02/07/2026 09:19",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 437,
+    "w": 127,
+    "h": 26,
+    "char_count": 16,
+    "text": "20/04/2026 10:14",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 463,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 488,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 513,
+    "w": 127,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 539,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 564,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 589,
+    "w": 127,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 615,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 640,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 665,
+    "w": 127,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 691,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 716,
+    "w": 127,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ULTIMA\nEXPORTACIÓN",
+    "desc": "ULTIMA\nEXPORTACIÓN",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 496,
+    "y": 741,
+    "w": 127,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 16,
+    "y": 793,
+    "w": 694,
+    "h": 86,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 260,
+    "w": 40,
+    "h": 25,
+    "char_count": 1,
+    "text": "7",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 285,
+    "w": 40,
+    "h": 26,
+    "char_count": 1,
+    "text": "7",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 311,
+    "w": 40,
+    "h": 25,
+    "char_count": 1,
+    "text": "5",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 336,
+    "w": 40,
+    "h": 25,
+    "char_count": 1,
+    "text": "4",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 361,
+    "w": 40,
+    "h": 26,
+    "char_count": 2,
+    "text": "30",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 387,
+    "w": 40,
+    "h": 25,
+    "char_count": 2,
+    "text": "58",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 412,
+    "w": 40,
+    "h": 25,
+    "char_count": 2,
+    "text": "10",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 437,
+    "w": 40,
+    "h": 26,
+    "char_count": 1,
+    "text": "7",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 463,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 488,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 513,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 539,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 564,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 589,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 615,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 640,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 665,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 691,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 716,
+    "w": 40,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ACCESOS",
+    "desc": "ACCESOS",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 623,
+    "y": 741,
+    "w": 40,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 260,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 285,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 311,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 336,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 361,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 387,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 412,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 437,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 463,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 488,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 513,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 539,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 564,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 589,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 615,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 640,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 665,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 691,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 716,
+    "w": 27,
+    "h": 25,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 664,
+    "y": 741,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Exportar",
+    "desc": "Exportar",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 708,
+    "y": 769,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 736,
+    "y": 793,
+    "w": 694,
+    "h": 86,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 260,
+    "w": 93,
+    "h": 25,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 285,
+    "w": 93,
+    "h": 26,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 311,
+    "w": 93,
+    "h": 25,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 336,
+    "w": 93,
+    "h": 25,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 361,
+    "w": 93,
+    "h": 26,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 387,
+    "w": 93,
+    "h": 25,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 412,
+    "w": 93,
+    "h": 25,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 437,
+    "w": 93,
+    "h": 26,
+    "char_count": 8,
+    "text": "Nominada",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 463,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 488,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 513,
+    "w": 93,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 539,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 564,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 589,
+    "w": 93,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 615,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 640,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 665,
+    "w": 93,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 691,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 716,
+    "w": 93,
+    "h": 25,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "TIPO DE\nCONSULTA",
+    "desc": "TIPO DE\nCONSULTA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 403,
+    "y": 741,
+    "w": 93,
+    "h": 26,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 292,
+    "w": 400,
+    "h": 19,
+    "char_count": 6,
+    "text": "NOMBRE",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 348,
+    "w": 400,
+    "h": 19,
+    "char_count": 17,
+    "text": "TIPO DE DOCUMENTO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 404,
+    "w": 400,
+    "h": 19,
+    "char_count": 19,
+    "text": "NÚMERO DE DOCUMENTO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 460,
+    "w": 400,
+    "h": 19,
+    "char_count": 13,
+    "text": "CUIT/CUIL/CDI",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 516,
+    "w": 400,
+    "h": 19,
+    "char_count": 13,
+    "text": "CÓDIGO EXÁMEN",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 572,
+    "w": 400,
+    "h": 19,
+    "char_count": 16,
+    "text": "FECHA DEL EXAMEN",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 628,
+    "w": 400,
+    "h": 19,
+    "char_count": 14,
+    "text": "TIPO DE EXÁMEN",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 756,
+    "y": 684,
+    "w": 400,
+    "h": 19,
+    "char_count": 23,
+    "text": "MODALIDAD EXÁMEN MÉDICO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 255,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 311,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 367,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 423,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 479,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 535,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 591,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 647,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 763,
+    "y": 703,
+    "w": 613,
+    "h": 37,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Volver a Ficheros Alt V",
+    "desc": "Volver a Ficheros Alt V",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 856,
+    "y": 650,
+    "w": 120,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Volver a Bandeja Alt B",
+    "desc": "Volver a Bandeja Alt B",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 723,
+    "y": 650,
+    "w": 120,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Ver Ficha Alt F",
+    "desc": "Ver Ficha Alt F",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 590,
+    "y": 650,
+    "w": 120,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "Editor de Texto",
+    "desc": "Editor de Texto",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 352,
+    "y": 630,
+    "w": 27,
+    "h": 26,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 535,
+    "y": 571,
+    "w": 413,
+    "h": 13,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 43,
+    "y": 556,
+    "w": 400,
+    "h": 14,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 43,
+    "y": 602,
+    "w": 905,
+    "h": 13,
+    "char_count": 107,
+    "text": "Destino: (42035) DIRECCIÓN EJECUTIVA HTAL - DEPARTAMENTO ADMINISTRATIVO CONTABLE GESTION SAMO E INFORMACION",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 43,
+    "y": 587,
+    "w": 905,
+    "h": 13,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 16,
+    "y": 630,
+    "w": 334,
+    "h": 26,
+    "char_count": 31,
+    "text": "ANTIGUEDAD A-M-D :    0 | 0 | 0",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 43,
+    "y": 571,
+    "w": 400,
+    "h": 13,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 535,
+    "y": 556,
+    "w": 197,
+    "h": 14,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll bar",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "x": 970,
+    "y": 278,
+    "w": 20,
+    "h": 306,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "NOVEDADES Alt N",
+    "desc": "NOVEDADES Alt N",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 868,
+    "y": 655,
+    "w": 120,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "SOLICITUDES Alt B",
+    "desc": "SOLICITUDES Alt B",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 599,
+    "y": 655,
+    "w": 120,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "JUSTIFICACION Alt B",
+    "desc": "JUSTIFICACION Alt B",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 732,
+    "y": 655,
+    "w": 120,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 276,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 304,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 332,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 360,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 388,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 416,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 444,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 472,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 500,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 528,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 556,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 276,
+    "w": 64,
+    "h": 27,
+    "char_count": 6,
+    "text": "616415",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 304,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 332,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 360,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 388,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 416,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 444,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 472,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 500,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 528,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 556,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 275,
+    "w": 248,
+    "h": 27,
+    "char_count": 25,
+    "text": "RIBEIRO JONATHAN NATALINO",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 303,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 331,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 359,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 387,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 415,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 443,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 471,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 499,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 527,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 555,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 275,
+    "w": 107,
+    "h": 27,
+    "char_count": 5,
+    "text": "42035",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 303,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 331,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 359,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 387,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 415,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 443,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 471,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 499,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 527,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 555,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 275,
+    "w": 506,
+    "h": 27,
+    "char_count": 56,
+    "text": "DPTO. ADMINISTRATIVO CONTABLE GESTION SAMO E INFORMACION",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 303,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 331,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 359,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 387,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 415,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 443,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 471,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 499,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 527,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 555,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 14,
+    "y": 599,
+    "w": 969,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll bar",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "x": 970,
+    "y": 278,
+    "w": 20,
+    "h": 306,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "NOVEDADES Alt N",
+    "desc": "NOVEDADES Alt N",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 868,
+    "y": 655,
+    "w": 120,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "SOLICITUDES Alt B",
+    "desc": "SOLICITUDES Alt B",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 599,
+    "y": 655,
+    "w": 120,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "push button",
+    "name": "JUSTIFICACION Alt B",
+    "desc": "JUSTIFICACION Alt B",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 732,
+    "y": 655,
+    "w": 120,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 276,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 304,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 332,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 360,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 388,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 416,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 444,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 472,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 500,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 528,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 15,
+    "y": 556,
+    "w": 16,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 276,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 304,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 332,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 360,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 388,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 416,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 444,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 472,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 500,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 528,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "LEGAJO Necesario",
+    "desc": "LEGAJO Necesario",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 32,
+    "y": 556,
+    "w": 64,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 275,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 303,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 331,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 359,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 387,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 415,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 443,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 471,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 499,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 527,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "APELLIDO Y NOMBRE",
+    "desc": "APELLIDO Y NOMBRE",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 99,
+    "y": 555,
+    "w": 248,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 275,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 303,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 331,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 359,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 387,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 415,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 443,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 471,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 499,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 527,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "DESTINO",
+    "desc": "DESTINO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 351,
+    "y": 555,
+    "w": 107,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 275,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 303,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 331,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 359,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 387,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 415,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 443,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 471,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 499,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 527,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "text",
+    "name": "ESTRUCTURA",
+    "desc": "ESTRUCTURA",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 458,
+    "y": 555,
+    "w": 506,
+    "h": 27,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 18,
+    "role": "scroll pane",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "x": 14,
+    "y": 599,
+    "w": 969,
+    "h": 27,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "DESCRIPCION DE LA CONSULTA Varias Líneas",
+    "desc": "DESCRIPCION DE LA CONSULTA Varias Líneas",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 18,
+    "y": 795,
+    "w": 675,
+    "h": 82,
+    "char_count": 129,
+    "text": "Examenes Médicos para Mrio de Salud. \nSe exportan todos los examenes médicos, independientemente cual sea su estado y resolución.",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "scroll bar",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "x": 693,
+    "y": 795,
+    "w": 15,
+    "h": 82,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "EXCEPCIONES Varias Líneas",
+    "desc": "EXCEPCIONES Varias Líneas",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 738,
+    "y": 795,
+    "w": 675,
+    "h": 82,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "scroll bar",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "x": 1413,
+    "y": 795,
+    "w": 15,
+    "h": 82,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 255,
+    "w": 613,
+    "h": 37,
+    "char_count": 22,
+    "text": "Apellido de la Persona",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 311,
+    "w": 613,
+    "h": 37,
+    "char_count": 20,
+    "text": "Nombre de la Persona",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 367,
+    "w": 613,
+    "h": 37,
+    "char_count": 31,
+    "text": "Tipo de Documento de la Persona",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 423,
+    "w": 613,
+    "h": 37,
+    "char_count": 33,
+    "text": "Número de Documento de la Persona",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 479,
+    "w": 613,
+    "h": 37,
+    "char_count": 27,
+    "text": "Cuit/Cuil/Cdi de la Persona",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 535,
+    "w": 613,
+    "h": 37,
+    "char_count": 23,
+    "text": "Código de Exámen Médico",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 591,
+    "w": 613,
+    "h": 37,
+    "char_count": 16,
+    "text": "Fecha del Examen",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 647,
+    "w": 613,
+    "h": 37,
+    "char_count": 21,
+    "text": "Tipo de Exámen Médico",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "x": 763,
+    "y": 703,
+    "w": 613,
+    "h": 37,
+    "char_count": 32,
+    "text": "Modalidad: Digital o Presencial.",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea múltiple"
+    ],
+    "x": 16,
+    "y": 601,
+    "w": 965,
+    "h": 23,
+    "char_count": 98,
+    "text": "(42035) DIRECCIÓN EJECUTIVA HTAL - DEPARTAMENTO ADMINISTRATIVO CONTABLE GESTION SAMO E INFORMACION",
+    "action": false
+  },
+  {
+    "depth": 19,
+    "role": "text",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea múltiple"
+    ],
+    "x": 16,
+    "y": 601,
+    "w": 965,
+    "h": 23,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "scroll bar",
+    "name": "",
+    "desc": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "x": 368,
+    "y": 287,
+    "w": 18,
+    "h": 99,
+    "char_count": null,
+    "text": null,
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Año",
+    "desc": "Año",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 48,
+    "y": 289,
+    "w": 56,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Año",
+    "desc": "Año",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 48,
+    "y": 313,
+    "w": 56,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Año",
+    "desc": "Año",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 48,
+    "y": 337,
+    "w": 56,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Año",
+    "desc": "Año",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 48,
+    "y": 361,
+    "w": 56,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Desde",
+    "desc": "Desde",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 112,
+    "y": 289,
+    "w": 89,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Desde",
+    "desc": "Desde",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 112,
+    "y": 313,
+    "w": 89,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Desde",
+    "desc": "Desde",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 112,
+    "y": 337,
+    "w": 89,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Desde",
+    "desc": "Desde",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 112,
+    "y": 361,
+    "w": 89,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 206,
+    "y": 289,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 206,
+    "y": 313,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 206,
+    "y": 337,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 206,
+    "y": 361,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Hasta",
+    "desc": "Hasta",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "x": 238,
+    "y": 289,
+    "w": 90,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Hasta",
+    "desc": "Hasta",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 238,
+    "y": 313,
+    "w": 90,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Hasta",
+    "desc": "Hasta",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 238,
+    "y": 337,
+    "w": 90,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "text",
+    "name": "Hasta",
+    "desc": "Hasta",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "x": 238,
+    "y": 361,
+    "w": 90,
+    "h": 24,
+    "char_count": 0,
+    "text": "",
+    "action": false
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 333,
+    "y": 289,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 333,
+    "y": 313,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 333,
+    "y": 337,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  },
+  {
+    "depth": 20,
+    "role": "push button",
+    "name": "CALENDARIO",
+    "desc": "CALENDARIO",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "x": 333,
+    "y": 361,
+    "w": 24,
+    "h": 24,
+    "char_count": null,
+    "text": null,
+    "action": true
+  }
+]

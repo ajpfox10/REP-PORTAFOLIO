@@ -1,0 +1,58 @@
+BACKEND - GAP A 10/10
+Fecha: 2026-05-09
+
+Objetivo
+- Separar con precision lo que ya puede resolverse en este repo de lo que requiere infraestructura, operacion o producto para hablar de un backend 10/10 real.
+
+Lo ya resuelto en codigo
+- Contratos base de gateway y permisos por capa documentados.
+- Error envelopes consistentes con `success`, `error.code`, `error.message`, `requestId`, `traceId`.
+- Shared fuerte para request context, validacion, admin guards, RBAC y service base.
+- OpenAPI por servicio con tests de cobertura de rutas criticas.
+- Trazabilidad mejorada en degradaciones intencionales.
+
+Para considerar el backend 10/10 dentro del repo
+1. Unificar por completo entrypoints especiales
+- Llevar auth, ai, notifications y portal a una base todavia mas homogenea con `shared/serviceBase.js` o equivalente formalizado.
+- Evitar middleware/error/health/shutdown duplicados por servicio salvo necesidad real.
+
+2. Cerrar naming de permisos y recursos residuales
+- Mantener una sola taxonomia estable para `recurso:accion`.
+- Eliminar cualquier divergencia tipo singular/plural o naming historico entre servicios.
+
+3. Completar test matrix de regresion de borde
+- Agregar mas tests sobre:
+  - envelopes de error por servicio
+  - requestId/traceId en rutas no felices
+  - guards de permisos por dominio
+  - degradaciones fail-open intencionales
+
+4. Formalizar contratos operativos
+- SLI/SLO por servicio
+- convenciones minimas de logs estructurados
+- checklist de readiness/liveness/deep health por servicio
+
+Para considerar el backend 10/10 real fuera del repo
+1. Service discovery real
+- Hoy hay heartbeat y registro liviano, no discovery fuerte.
+
+2. Broker/event bus dedicado
+- Redis/pubsub y colas puntuales ayudan, pero no reemplazan un bus de eventos maduro.
+
+3. Observabilidad distribuida real
+- Falta tracing distribuido end-to-end con backend y dependencias externas.
+
+4. Hardening operativo
+- deploy rollback verificado por ambiente
+- chaos/failure drills
+- dashboards y alertas por SLO
+- runbooks ligados a alertas reales
+
+5. Pruebas sistémicas
+- contract tests cross-service mas amplios
+- pruebas de carga y resiliencia automatizadas por dominio critico
+- E2E de journeys clinicos y administrativos
+
+Definicion honesta
+- 10/10 de codigo de repo: alcanzable con mas estandarizacion y cobertura.
+- 10/10 de backend de plataforma: requiere tambien decisiones de infraestructura y operacion, no solo refactor de Node.

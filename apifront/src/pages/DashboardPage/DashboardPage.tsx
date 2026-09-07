@@ -63,6 +63,8 @@ function GroupTab({ to, children, tooltip }: {
 }
 
 function AsistenciaTile() {
+  const { hasPerm } = useAuth();
+  const esAdmin = hasPerm('crud:*:*');
   return (
     <div className="tile dash-group-tile" style={{ borderLeftColor: '#6366f1', borderLeftWidth: 3 }}>
       <Link className="dash-group-main" to="/app/asistencia">
@@ -100,11 +102,25 @@ function AsistenciaTile() {
         >
           Presentes por Turno
         </GroupTab>
+        {esAdmin && (
+          <GroupTab
+            to="/app/ausentismo"
+            tooltip="Nivel de ausentismo por dependencia, servicio y sector, abierto por régimen horario (guardia +12 hs vs planta). Separa ausencia no programada (enfermedad, familiar enfermo, ausente) de la programada. Exporta a Excel."
+          >
+            Ausentismo
+          </GroupTab>
+        )}
         <GroupTab
           to="/app/comparador-siape"
           tooltip="Compara los PDFs de licencias ANUAL del Ministerio contra las Novedades Intranet del Hospital. Detecta quién no tiene código 08."
         >
           SIAPE vs Novedades
+        </GroupTab>
+        <GroupTab
+          to="/app/carga-siape"
+          tooltip="Abre SiAPe y carga los reconocimientos médicos pendientes por el flujo de compensatorios."
+        >
+          Carga SiAPe
         </GroupTab>
       </div>
     </div>
@@ -207,6 +223,9 @@ export function DashboardPage() {
   const canSeeResidentes = hasPerm('app:residentes:access') || hasPerm('crud:*:*');
   const canSeeSamo = hasPerm('app:samo:access') || hasPerm('crud:*:*');
   const canSeeAlertasAgente = hasPerm('api:access');
+  const canSeeLicenciasConsultorio = hasPerm('app:licencias-consultorio:access') || hasPerm('crud:*:*');
+  const isJefeConsultorio =
+    hasPerm('app:licencias-consultorio:access') && !hasPerm('crud:*:*');
 
   const isSaludLaboral =
     canSeeSaludLaboral &&
@@ -287,6 +306,35 @@ export function DashboardPage() {
               accent="#10b981"
             />
             )}
+            <Tile
+              to="/app/mi-cuenta"
+              title="👤 Mi cuenta"
+              desc="Perfil, permisos y cambio de contraseña."
+              accent="#0ea5e9"
+            />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (isJefeConsultorio) {
+    return (
+      <Layout title="Panel">
+        <div style={{ marginBottom: 6 }}>
+          <div
+            className="muted"
+            style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}
+          >
+            Salud Laboral
+          </div>
+          <div className="grid">
+            <Tile
+              to="/app/licencias-consultorio"
+              title="🩺 Licencias de Consultorio"
+              desc="Licencias de médicos (Ley 10471 y becados médicos) según SIAPE."
+              accent="#14b8a6"
+            />
             <Tile
               to="/app/mi-cuenta"
               title="👤 Mi cuenta"
@@ -474,10 +522,11 @@ export function DashboardPage() {
           <Tile to="/app/escaneo" title="🖨️ Escaneo" desc="Escaneo de documentos, dispositivos, bandejas y cola de trabajos en tiempo real." accent="#0891b2" />
           <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
           <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP y alerta de red caída." accent="#f59e0b" />
+          <Tile to="/app/fichero-biometria-lab" title="Prueba fichero lógica nueva" desc="Transferencia y pruebas ADMS de usuario, huellas, rostro/cara, palma y mensajes entre relojes." accent="#0f766e" />
         </div>
       </div>
 
-      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeSamo || canSeeExamenIngreso || canSeeInfectologia) && (
+      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeSamo || canSeeExamenIngreso || canSeeInfectologia || canSeeLicenciasConsultorio) && (
         <div style={{ marginTop: 24, marginBottom: 6 }}>
           <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
             Salud Laboral
@@ -485,6 +534,9 @@ export function DashboardPage() {
           <div className="grid">
             {canSeeSaludLaboral && (
               <Tile to="/app/salud-laboral" title="🏥 Salud Laboral" desc="Reconocimientos médicos y exámenes anuales del personal." accent="#14b8a6" />
+            )}
+            {canSeeLicenciasConsultorio && (
+              <Tile to="/app/licencias-consultorio" title="🩺 Licencias de Consultorio" desc="Licencias de médicos (Ley 10471 y becados médicos) según SIAPE." accent="#0d9488" />
             )}
             {canSeeSamo && (
               <Tile to="/app/samo" title="🏥 SAMO" desc="Gestión y seguimiento de licencias médicas del personal." accent="#0d9488" />

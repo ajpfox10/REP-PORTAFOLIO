@@ -1,0 +1,651 @@
+<body class="d-flex flex-column h-100" marginwidth="0" marginheight="0">
+        
+        <header class="container">
+    <!--  START NAVBAR   -->
+    <nav class="navbar fixed-top navbar-offcanvas navbar-ms">
+        <div class="row w-100 flex-nowrap">
+            <button class="navbar-toggler mr-1 border-0" type="button" id="navToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="col-9 pl-0 pl-md-2 intranet-logo">
+                <span class="fst-line">INTRANET</span>
+                <span class="snd-line">MINISTERIO DE SALUD</span>
+            </div>
+            <div class="col-3 d-flex justify-content-end align-items-center">
+                <div class="dropdown">
+                    <button class="btn btn-user font-weight-medium dropdown-toggle" type="button" id="dropdownMenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-user-circle fa-lg fa-fw"></i>
+                        <span class="username"> Choques Paula Graciela </span>
+                    </button>
+                    <div class="dropdown-user dropdown-menu pt-4" aria-labelledby="dropdownMenu">
+                        <div class="dropdown-item text-center text-secondary mb-2 pt-2" type="button">
+                            <svg style="width:5rem;height:5rem;color:#ccc" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle" viewBox="0 0 16 16">
+                                <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path>
+                                <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"></path>
+                            </svg>
+                            <div class="font-weight-bold text-no-wrap mt-2">
+                                Choques Paula Graciela
+                            </div>
+                            <div class="text-muted">
+                                @choquesp
+                            </div>
+                            <div class="text-muted text-center mt-3">
+                                <span class="badge badge-pill badge-light border border-dark px-5 py-2">
+                                    Perfil Administrador
+                                </span>
+                            </div>
+                        </div>
+                        <div class="dropdown-divider mt-4"></div>
+                        <div class="dropdown-item text-secondary text-center py-3" type="button">
+                            Hospital Interzonal General De Agudos Simplemente Evita De  Gonzales Catan Km 32
+                        </div>
+                        <div class="dropdown-divider mb-2"></div>
+                        <div class="dropdown-item text-center" type="button">
+                            <a id="closeSession" class="btn btn-danger close-session w-50" href="/farmaciams/logout" data-url="/farmaciams/logout">Salir</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>        
+                
+                                                                                    
+                                                                                    <div class="sidebar-nav navbar-collapse offcanvas-collapse">
+    <label style="padding: .85rem 0;margin-bottom:1px;color: #606060;letter-spacing: 1px;opacity:.3;">Menú de navegación </label>
+    <ul class="metismenu side-menu" id="side-menu">
+                <li>
+            <a id="home" href="/farmaciams/home"><i class="fas fa-home"></i> Inicio </a>
+        </li>
+        
+                    <li>
+                <a href="/farmaciams/sector/"><i class="fas fa-hospital"></i> Sectores </a>
+            </li>
+
+            <li>
+                <a href="/farmaciams/servicio/"><i class="fas fa-hospital"></i> Servicios / Salas </a>
+            </li>
+
+            <li>
+                <a href="/farmaciams/recuentoInicial/"><i class="fas fa-clipboard-list"></i> Recuento Inicial </a>
+            </li>
+        
+                
+
+                <li>
+            <a class="has-arrow" href="#" aria-expanded="false">
+                <i class="fas fa-sign-in-alt"></i> Ingresos 
+            </a>            
+            <ul class="sub-menu mm-collapse">
+                <li>
+                    <a href="/farmaciams/ingresos/sobranteOL/">Listado de Ingresos</a>
+                </li>
+                                    <li>
+                        <a href="/farmaciams/ingresos/ordencompra/new">Ordenes de compra Sipach </a>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/ingresos/compra-menor/new">Compras Menores</a>
+                    </li>
+                                <li>
+                    <a href="/farmaciams/ingresos/otros/new">Otros Ingresos</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/devolucion-servicios/new">Devolución de Servicios / Salas</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/donacion/new">Donaciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/otraInstitucion/new">Entrega de Otra Institución</a>
+                </li>
+
+                <li>
+                    <a href="/farmaciams/ingresos/prestamo/new">Préstamos</a>
+                </li>  
+                <li>
+                    <a href="/farmaciams/ingresos/devolucion-institucion/new">Devolución de Otras Instituciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/proveedor/new">Entrega de Proveedores</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/devolucion/dispensa-vencidos/new">Devolución de Dispensación (vencidos)</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/desdeOL/new">Ingresos desde OL</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/otroSector/new">Entrega de Otro Sector</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/sobranteOL/new">Ingresos sobrantes de OL</a>
+                </li>
+            </ul>
+        </li>
+
+        
+        <li>
+            <a class="has-arrow" href="#" aria-expanded="false">
+                <i class="fas fa-sign-out-alt"></i> Egresos
+            </a>
+            <ul class="sub-menu mm-collapse">
+                <li>
+                    <a href="/farmaciams/egresos/pacientes/new">Dispensa a paciente nominalizado (ambulatorio o internado)</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/servicios/new">Entrega a Servicios / Salas</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/vencidos/new">Insumos / Medicamentos Vencidos</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/devolucion-hospitales/new">Devoluciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/prestamos/new">Préstamos a Otras Instituciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/otras-instituciones/new">Entrega a Otras Instituciones</a>
+                </li>
+                                <li>
+                    <a href="/farmaciams/egresos/pacientes-resumido/new">A pacientes ambulatorios (resumido)</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/otros/new">Otros Egresos</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/otrosector/new">Entrega a Otro Sector</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/descarte/new">Descartes</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/faltanteOL/new">Faltante de OL</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/requerimiento/new">Requerimientos de Otro Sector</a>
+                </li>
+                            
+                <li>
+                    <a href="/farmaciams/egresos/">Listado de Egresos</a>
+                </li>
+            </ul>
+        </li>
+        
+                <li>
+            <a class="has-arrow" href="#" aria-expanded="false">
+                <i class="fas fa-file-excel"></i> Reportes
+            </a>
+            <ul class="sub-menu mm-collapse">             
+                <li>
+                    <a href="/farmaciams/reportes/stock">Consulta de Stock</a>
+                </li>
+                                <li>
+                    <a href="/farmaciams/reportes/reporteStockCritico">Artículos con Stock Crítico</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/reporteStockPorRubro">Stock por Rubro</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/ingresos/detalles">Ingresos Detallados</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/egresos/detalles">Egresos Detallados</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/movimientosArticulo">Consulta movimiento de un artículo</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/consumos">Consulta Consumos</a>
+                </li>
+                                    <li>
+                        <a href="/farmaciams/reportes/stockAdmin">Consulta de Stock por Establecimiento</a>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/reportes/psicotropicos">Libro Recetario</a>
+                    </li>
+                                <li>
+                    <a href="/farmaciams/reportes/consumoComparativoMensual">Consumo Comparativo mensual</a>
+                </li>                
+                                <li>
+                    <a class="has-arrow" href="#">Consulta Sipach: </a>
+                    <ul class="sub-menu mm-collapse">
+                        <li><a href="/farmaciams/reportes/articulosProcesoCompra">Artículos en Proceso de compra</a></li>
+                        <li><a href="/farmaciams/reportes/compras">Artículos Pendientes de Ingreso</a></li> 
+                    </ul>
+                </li>
+                                <li>
+                    <a>Orden de distribución de RS</a>
+                </li>             
+                <li>
+                    <a href="/farmaciams/reportes/vencidosYPorVencer">Artículos Vencidos y Próximos a Vencer</a>
+                </li>
+                            </ul>
+        </li> 
+        
+                            <li>
+                <a class="has-arrow" href="#" aria-expanded="false">
+                    <i class="fas fa-plus"></i> Otras Operaciones
+                </a>
+                <ul class="sub-menu mm-collapse">             
+                                        <li>
+                        <a href="/farmaciams/stock/">Stock Crítico</a>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/vademecum/">Habilitar / Deshabilitar códigos vademecum</a>
+                    </li>
+                    <li>
+                        <a class="has-arrow" href="#" aria-expanded="false">
+                            Fórmulas Magistrales
+                        </a>
+                        <ul class="sub-menu mm-collapse"> 
+                            <li>
+                                <a href="/farmaciams/fmagistrales/">Listado</a>
+                            </li>
+                            <li>
+                                <a href="/farmaciams/fmagistrales/new">Registrar</a>
+                            </li>
+                            <li>
+                                <a href="/farmaciams/ingresos/fmagistral/new">Ingresar Stock</a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/plantilla/">Gestión de plantillas</a>
+                    </li>
+                </ul>
+            </li>
+                
+                        
+        <li>
+            <a href="/farmaciams/requerimiento/despacho/"><i class="fas fa-clipboard-list"></i> Requerimiento a Otro Sector</a>
+        </li>
+    </ul>
+</div>
+                                                                                                                                            
+                                
+                        </nav>
+</header>            <nav aria-label="breadcrumb" class="breadcrumbs">
+        <div class="row m-1 justify-content-end">
+                    <div class="col-md-6 d-grid ">
+                <span class="badge badge-secondary border border-dark px-5 spanuser" style="font-size: 1.1rem">
+                    FARMACIA UNIFICADA
+                </span>
+            </div>
+                        <div class="col-md-2">
+                <button id="change-sector" type="button" class="btn btn-info btn-sector" data-url_sectores="/farmaciams/jx-sectores-usuario" data-url_change="/farmaciams/jx-change-sector">
+                    <i class="fa fa-exchange" aria-hidden="true"></i>
+                    Cambiar Sector
+                </button>
+            </div>
+                                </div>
+    </nav>
+
+<script type="text/javascript" src="/farmaciams/assets/sweet/sweetalert2.all.min.js?1.0.0"></script>
+<script type="text/javascript" src="/farmaciams/app/js/general.js?1.0.0"></script>
+
+<style>
+
+    .swal2-select{
+        border-radius: 0;
+        box-shadow: none;
+        width: 100%;
+        height: calc(1.5em + .75rem + 2px);
+        font-weight: 400;
+        line-height: 1.5;
+        color: #495057;
+        border: 1px solid #ced4da;
+        background-color: #fff;
+        background-clip: padding-box;
+        transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    }
+    .breadcrumbs{
+        background-color: #0c5460;
+    }
+
+    .badge-secondary{
+        padding: 0.5em;
+        width: 100%;
+        height: 100%;
+    }
+
+    .d-grid{
+        display: grid;
+        justify-items: end;
+    }
+    .spanuser{
+        width: fit-content;
+    }
+    .btn-sector{
+        width: 100%;
+    }
+</style>        
+            <div class="container-fluid container-lg py-3 mb-5">
+        <div style="margin-bottom:20px;">
+            <h3 class="font-weight-bold text-muted text-uppercase mb-0">Stock Crítico</h3>
+                                </div>
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="alert alert-danger alert-dismissible d-none" role="alert" id="mass-count-error">
+    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+    Debe seleccionar al menos un item
+</div>
+    <div class="paginador-container py-3 mb-5">
+						<div id="listado">
+		    <form action="" method="POST" id="form-6a790f2e0ee6f" novalidate="novalidate">
+		    			    									            			            			            	<div id="filtros-form-6a790f2e0ee6f">
+	<div class="row">
+					<div class="col-sm-3" style="margin-bottom: 10px;">
+				<input type="text" id="desarrollobundle_paginadoformtype_filtros_codArticulo" name="desarrollobundle_paginadoformtype[filtros][codArticulo]" required="required" class="form-control upper" placeholder="Código Artículo">
+			</div>
+				<div class="col-sm-3">
+			<button class="btn btn-ba" id="buscar-form-6a790f2e0ee6f" type="button" title="Buscar">
+	            Buscar
+	        </button>
+	        <button class="btn btn-secondary" id="limpiar-form-6a790f2e0ee6f" type="button" title="Limpiar">
+	            Limpiar
+	        </button>
+		</div>
+	</div>
+</div>
+									        			        <div class="row">
+			            <div class="col-12 panel-group">
+			                    <div class="col-sm-12 text-right">
+        <button type="button" class="btn btn-outline-success download" data-url="/farmaciams/stock/excel/descargarStockCritico">
+            <i class="fas fa-file-excel"></i> Descargar
+        </button>
+        <button type="button" class="btn btn-outline-danger download" data-url="/farmaciams/stock/pdf/descargarStockCritico">
+            <i class="fas fa-file-pdf"></i> Descargar
+        </button>
+    </div>
+    <br>
+			            </div>
+			        </div>
+		    					<div id="table-container-form-6a790f2e0ee6f" class=" ">
+		        	<div class="row">
+    <div class="small">
+        <div class="col-12 float-sm-right d-none">
+    <label for="desarrollobundle_paginadoformtype_ordenarPor" class="required">Orden:</label>
+    <select id="desarrollobundle_paginadoformtype_ordenarPor" name="desarrollobundle_paginadoformtype[ordenarPor]" class="btn btn-secondary btn-navbar btn-sm"></select>
+    <select id="desarrollobundle_paginadoformtype_orden" name="desarrollobundle_paginadoformtype[orden]" class="btn btn-secondary btn-navbar btn-sm"><option value="asc" selected="selected">Ascendente</option><option value="desc">Descendente</option></select>
+    <button class="btn btn-secondary btn-navbar btn-sm" id="ordenar" style="cursor:pointer" type="button" title="Ordenar">
+        Ordenar
+    </button>
+</div>
+    </div>
+</div>
+
+		                    <table class="table table-striped mb-4 ">
+        <thead>
+            <tr>
+                                    <th class="text-center">#</th>
+    <th class="text-center">Cod Artículo</th>
+    <th>Descripción</th>
+    <th class="text-center">Stock Mínimo</th>
+    <th class="text-center">Stock Máximo</th>
+    <th class="text-center">Stock Actual</th>
+    <th class="text-center">Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-body-form-6a790f2e0ee6f">
+                                                                                            
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">1</td>
+    <td class="text-center">M2608111</td>    
+    <td>ACENOCUMAROL -  - COMPRIMIDOS - 4 MG</td>    
+    <td class="text-center">800</td>    
+    <td class="text-center">2400</td>    
+    <td class="text-center">0</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu120015" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/120015/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">2</td>
+    <td class="text-center">M4201003</td>    
+    <td>ACICLOVIR -  - COMPRIMIDOS - 800 MG</td>    
+    <td class="text-center">1200</td>    
+    <td class="text-center">3600</td>    
+    <td class="text-center">50</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu120010" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/120010/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">3</td>
+    <td class="text-center">M4208112</td>    
+    <td>ACICLOVIR - FRASCO AMPOLLA - INYECTABLE - 500 MG</td>    
+    <td class="text-center">50</td>    
+    <td class="text-center">150</td>    
+    <td class="text-center">495</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu103338" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/103338/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">4</td>
+    <td class="text-center">M4201035</td>    
+    <td>ACICLOVIR -  - SUSPENSION ORAL - 80MG/ML-120ML</td>    
+    <td class="text-center"> - </td>    
+    <td class="text-center"> - </td>    
+    <td class="text-center">10</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu194328" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/194328/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">5</td>
+    <td class="text-center">M1701085</td>    
+    <td>ACIDO ACETIL SALICILICO -  - COMPRIMIDO - 100 MG</td>    
+    <td class="text-center">4000</td>    
+    <td class="text-center">12000</td>    
+    <td class="text-center">6054</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu106618" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/106618/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">6</td>
+    <td class="text-center">M0501001</td>    
+    <td>ACIDO FOLICO -  - COMPRIMIDO - 1 MG</td>    
+    <td class="text-center">600</td>    
+    <td class="text-center">1800</td>    
+    <td class="text-center">0</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu120013" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/120013/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">7</td>
+    <td class="text-center">M0501002</td>    
+    <td>ACIDO FOLICO -  - COMPRIMIDO - 5 MG</td>    
+    <td class="text-center">1400</td>    
+    <td class="text-center">4200</td>    
+    <td class="text-center">0</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu120012" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/120012/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">8</td>
+    <td class="text-center">M0501008</td>    
+    <td>ACIDO FOLICO -  - GOTAS - 5MG/ML</td>    
+    <td class="text-center"> - </td>    
+    <td class="text-center"> - </td>    
+    <td class="text-center">110</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu120246" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/120246/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">9</td>
+    <td class="text-center">M0502111</td>    
+    <td>ACIDO FOLICO-COMPLEJO B - AMPOLLA - INYECTABLE - 15MG - 2ML</td>    
+    <td class="text-center">40</td>    
+    <td class="text-center">120</td>    
+    <td class="text-center">18</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu106401" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/106401/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                                                                    
+                        <tr class="fila " id="fila-">
+                                                            <td class="text-center">10</td>
+    <td class="text-center">M3801016</td>    
+    <td>ACIDO TIOCTICO -  - COMPRIMIDO - 600 MG</td>    
+    <td class="text-center">600</td>    
+    <td class="text-center">1800</td>    
+    <td class="text-center">3620</td>
+    <td class="text-center">
+        <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="dropdownMenu115946" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    Seleccione
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                    <a class="dropdown-item" href="/farmaciams/stock/115946/editStock"> Modificar</a>
+                </div>
+            </li>
+        </ul>
+    </td>
+                        </tr>
+                                                        </tbody>
+    </table>
+    <i class="fas fa-sync-alt fa-spin table-loader d-none" id="loader-form-6a790f2e0ee6f"></i>
+    		            
+		        </div>
+				<div id="table-footer-form-6a790f2e0ee6f" class="row justify-content-around align-items-center ">
+    <input type="hidden" id="desarrollobundle_paginadoformtype_massIds" name="desarrollobundle_paginadoformtype[massIds]">
+<input type="hidden" id="desarrollobundle_paginadoformtype_massAll" name="desarrollobundle_paginadoformtype[massAll]" value="true">
+<div class="col-12 col-md-3 text-center text-md-left mb-2 order-1 order-md-0">
+    <div class="dropdown">
+                Total de registros: <span id="totalRows-form-6a790f2e0ee6f">437</span>
+    </div>
+</div>
+    <div class="col-12 col-md-5 text-center mb-2">
+    <div class="page-nav">
+        <button class="btn btn-white btn-navbar btn-sm" id="firstPage-form-6a790f2e0ee6f" type="button" title="Primera página" disabled="disabled">
+            <i class="fas fa-angle-double-left"></i>
+        </button>
+        <button class="btn btn-white btn-navbar btn-sm" id="prevPage-form-6a790f2e0ee6f" type="button" title="Página anterior" disabled="disabled">
+            <i class="fas fa-angle-left"></i>
+        </button>
+        <span class="btn btn-pag-middle btn-navbar btn-sm">
+            <span id="actualPage-form-6a790f2e0ee6f">1</span> de <span id="totalPages-form-6a790f2e0ee6f">44</span> <input type="hidden" id="desarrollobundle_paginadoformtype_page" name="desarrollobundle_paginadoformtype[page]" value="1">
+        </span>
+        <button class="btn btn-white btn-navbar btn-sm" id="nextPage-form-6a790f2e0ee6f" type="button" title="Página siguiente">
+            <i class="fas fa-angle-right"></i>
+        </button>
+        <button class="btn btn-white btn-navbar btn-sm" id="lastPage-form-6a790f2e0ee6f" type="button" title="Última página">
+            <i class="fas fa-angle-double-right"></i>
+        </button>
+    </div>
+</div>
+<input type="hidden" id="desarrollobundle_paginadoformtype_limpiar" name="desarrollobundle_paginadoformtype[limpiar]">
+        <div class="col-12 col-sm-6 offest-md-3 col-md-3 mb-2 ml-md-auto ">
+    
+    <select id="desarrollobundle_paginadoformtype_cantResultsPage" name="desarrollobundle_paginadoformtype[cantResultsPage]" class="select2 select2-noSearch" style="width: 100%"><option value="10" selected="selected">Mostrar 10 registros por página</option><option value="20">Mostrar 20 registros por página</option><option value="30">Mostrar 30 registros por página</option><option value="40">Mostrar 40 registros por página</option><option value="50">Mostrar 50 registros por página</option></select>
+    </div>
+</div>
+		        		    </form>
+		</div>
+	</div>
+
+            </div>
+        </div>
+    </div>    
+
+
+        <footer id="footer" class="footer mt-auto py-3">
+    <span>Farmacia Ms</span>
+    <span class="copy"> s.i.g.l.a - versión 1.0.0</span>
+</footer>
+    
+</body>

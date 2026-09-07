@@ -58,7 +58,10 @@ r.get("/", validate(paginationSchema, "query"), async (req, res) => {
     [tenant_id, cursor, limit]
   )
   const rows_ = rows as any[]
-  const items = await Promise.all(rows_.map(async (dev: any) => {
+  // Cap de concurrencia: sin `fast`, cada dispositivo dispara ping + 12 sondas TCP + UDP.
+  // Con Promise.all sobre todos (cientos) se genera una tormenta de I/O que degrada el
+  // proceso. promisePool lo limita a 8 en paralelo y preserva el orden.
+  const items = await promisePool(rows_, 8, async (dev: any) => {
     const caps = parseCapabilitiesJson(dev.capabilities_json)
     const capsOnline = caps?.online === true
     const heartbeatOnline = isOnlineByHeartbeat(dev.last_seen_at, ONLINE_HEARTBEAT_MS)
@@ -75,7 +78,7 @@ r.get("/", validate(paginationSchema, "query"), async (req, res) => {
       escl_port,
       online,
     }
-  }))
+  })
   res.json({ items, next_cursor: items.at(-1)?.id || cursor })
 })
 
@@ -499,7 +502,7 @@ $out | ConvertTo-Json -Compress
     const encoded = Buffer.from(script, "utf16le").toString("base64")
     const { stdout } = await execAsync(
       `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`,
-      { timeout: 4500, maxBuffer: 256 * 1024 }
+      { timeout: 4500, maxBuffer: 256 * 1024, windowsHide: true }
     )
     const parsed = parseJsonObject(stdout)
     if (!parsed?.found) return null
@@ -574,7 +577,7 @@ function pingICMP(ip: string): Promise<boolean> {
   return new Promise((resolve) => {
     const isWin = process.platform === "win32"
     const cmd = isWin ? `ping -n 1 -w 1000 ${ip}` : `ping -c 1 -W 1 ${ip}`
-    const proc = exec(cmd, { timeout: 3000 })
+    const proc = exec(cmd, { timeout: 3000, windowsHide: true })
     let out = ""
     proc.stdout?.on("data", (d: string) => { out += d })
     proc.on("close", (code: number) => {

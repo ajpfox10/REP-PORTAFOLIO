@@ -222,7 +222,7 @@ async function loadQueueItem(conn, queueId, dniArg) {
      LEFT JOIN sexos sx ON sx.id = p.sexo_id
      LEFT JOIN localidades loc ON loc.id = p.localidad_id
      LEFT JOIN (
-       SELECT s1.dni, s1.servicio_id, s1.sector_id
+       SELECT s1.dni, s1.servicio_id
        FROM agentes_servicios s1
        JOIN (
          SELECT dni, MAX(id) AS id
@@ -232,8 +232,19 @@ async function loadQueueItem(conn, queueId, dniArg) {
          GROUP BY dni
        ) ult ON ult.id = s1.id
      ) ags ON ags.dni = a.dni
+     LEFT JOIN (
+       SELECT x1.dni, x1.sector_id
+       FROM agentes_sectores x1
+       JOIN (
+         SELECT dni, MAX(id) AS id
+         FROM agentes_sectores
+         WHERE deleted_at IS NULL
+           AND (fecha_hasta IS NULL OR fecha_hasta >= CURDATE())
+         GROUP BY dni
+       ) ultx ON ultx.id = x1.id
+     ) asec ON asec.dni = a.dni
      LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
-     LEFT JOIN sectores sec ON sec.id = ags.sector_id AND sec.deleted_at IS NULL
+     LEFT JOIN sectores sec ON sec.id = asec.sector_id AND sec.deleted_at IS NULL
      WHERE ${where}
      LIMIT 1`,
     [value]
@@ -277,7 +288,7 @@ async function loadQueueItem(conn, queueId, dniArg) {
        LEFT JOIN sexos sx ON sx.id = p.sexo_id
        LEFT JOIN localidades loc ON loc.id = p.localidad_id
        LEFT JOIN (
-         SELECT s1.dni, s1.servicio_id, s1.sector_id
+         SELECT s1.dni, s1.servicio_id
          FROM agentes_servicios s1
          JOIN (
            SELECT dni, MAX(id) AS id
@@ -287,8 +298,19 @@ async function loadQueueItem(conn, queueId, dniArg) {
            GROUP BY dni
          ) ult ON ult.id = s1.id
        ) ags ON ags.dni = a.dni
+       LEFT JOIN (
+         SELECT x1.dni, x1.sector_id
+         FROM agentes_sectores x1
+         JOIN (
+           SELECT dni, MAX(id) AS id
+           FROM agentes_sectores
+           WHERE deleted_at IS NULL
+             AND (fecha_hasta IS NULL OR fecha_hasta >= CURDATE())
+           GROUP BY dni
+         ) ultx ON ultx.id = x1.id
+       ) asec ON asec.dni = a.dni
        LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
-       LEFT JOIN sectores sec ON sec.id = ags.sector_id AND sec.deleted_at IS NULL
+       LEFT JOIN sectores sec ON sec.id = asec.sector_id AND sec.deleted_at IS NULL
        WHERE a.dni = ?
          AND a.deleted_at IS NULL
        ORDER BY a.id DESC
@@ -346,7 +368,7 @@ async function loadBecariosArtPendientes(conn, limit = null, opts = {}) {
      LEFT JOIN sexos sx ON sx.id = p.sexo_id
      LEFT JOIN localidades loc ON loc.id = p.localidad_id
      LEFT JOIN (
-       SELECT s1.dni, s1.servicio_id, s1.sector_id
+       SELECT s1.dni, s1.servicio_id
        FROM agentes_servicios s1
        JOIN (
          SELECT dni, MAX(id) AS id
@@ -356,8 +378,19 @@ async function loadBecariosArtPendientes(conn, limit = null, opts = {}) {
          GROUP BY dni
        ) ult ON ult.id = s1.id
      ) ags ON ags.dni = p.dni
+     LEFT JOIN (
+       SELECT x1.dni, x1.sector_id
+       FROM agentes_sectores x1
+       JOIN (
+         SELECT dni, MAX(id) AS id
+         FROM agentes_sectores
+         WHERE deleted_at IS NULL
+           AND (fecha_hasta IS NULL OR fecha_hasta >= CURDATE())
+         GROUP BY dni
+       ) ultx ON ultx.id = x1.id
+     ) asec ON asec.dni = p.dni
      LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
-     LEFT JOIN sectores sec ON sec.id = ags.sector_id AND sec.deleted_at IS NULL
+     LEFT JOIN sectores sec ON sec.id = asec.sector_id AND sec.deleted_at IS NULL
      WHERE a.estado_empleo = 'ACTIVO'
        AND p.deleted_at IS NULL
        AND a.ley_id IN (6,7,8,9,10,11,12,13)
@@ -698,34 +731,13 @@ async function navigateToAltaTrabajador(page) {
   }
   await page.waitForTimeout(1500);
 
-  // Menu de ART: el item (#menu_21) y su submenu (#linkSubmenu_422) estan en el DOM pero
-  // quedan "ocultos" cuando corremos headless (viewport chico / dropdown cerrado), y Playwright
-  // se niega a clickear algo no visible ("element is not visible"). En vez de depender de la
-  // visibilidad, disparamos el click via DOM (equivale al click real, ejecuta el onclick del
-  // sitio sin el chequeo de visibilidad). Si aun asi el submenu no navega, vamos por su href.
-  await page.locator('#menu_21').waitFor({ state: 'attached', timeout: 15000 });
-  await page.evaluate(() => document.querySelector('#menu_21')?.click());
-  await page.waitForTimeout(600);
-
-  const submenu = page.locator('#linkSubmenu_422');
-  await submenu.waitFor({ state: 'attached', timeout: 15000 });
-  const submenuHref = await submenu.getAttribute('href').catch(() => null);
-  const submenuClicked = await page.evaluate(() => {
-    const el = document.querySelector('#linkSubmenu_422');
-    if (el) { el.click(); return true; }
-    return false;
-  }).catch(() => false);
-  if (!submenuClicked && submenuHref) {
-    await page.goto(new URL(submenuHref, page.url()).href, { waitUntil: 'domcontentloaded' });
-  }
-  await page.waitForURL('**/trabajadores', { timeout: 45000 }).catch(() => undefined);
-  await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => undefined);
-  await page.waitForTimeout(1200);
-
-  const nominaLinks = page.locator('a[href="/nomina-trabajadores"]');
-  const nominaCount = await nominaLinks.count();
-  if (!nominaCount) throw new Error('No encontre link /nomina-trabajadores');
-  await clickVisibleCenter(page, nominaLinks.nth(nominaCount - 1), 'Consultar nomina de trabajadores');
+  // El portal de ProvinciART se rediseño (2026-09): el menu viejo por iframe (#menu_21 /
+  // #linkSubmenu_422) ya NO existe. Ahora la nomina vive en "Mi contrato -> Gestion de nomina"
+  // = /nomina-trabajadores. Vamos directo por URL (mas robusto que depender del dropdown).
+  // El resto del flujo (boton "ALTA DE TRABAJADOR" -> /nomina-trabajadores/alta-trabajador y
+  // los IDs del formulario) quedo IGUAL que antes: confirmado explorando el portal nuevo.
+  const origin = new URL(loginUrl).origin;
+  await page.goto(`${origin}/nomina-trabajadores`, { waitUntil: 'domcontentloaded', timeout: navTimeout });
   await page.waitForURL('**/nomina-trabajadores', { timeout: 45000 }).catch(() => undefined);
   await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => undefined);
   await page.waitForTimeout(1200);

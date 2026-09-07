@@ -1,0 +1,116 @@
+{
+  "relevado_el": "2026-08-15",
+  "fuentes": [
+    {
+      "id": "sss_beneficiarios",
+      "nombre": "SSS - Padron de beneficiarios (HPGD)",
+      "url": "https://seguro.sssalud.gob.ar/login.php?b_publica=Acceso+Restringido+para+Hospitales&opc=bus650&user=HPGD",
+      "orden": 1,
+      "cuando": "Siempre como primer paso para obras sociales nacionales. Acceso restringido HPGD (sin captcha) con login automatico.",
+      "login": {
+        "user": "_user_name_",
+        "pass": "_pass_word_",
+        "submit": "submitbtn",
+        "credencial": "SSS_USERNAME / SSS_PASSWORD via backend /api/sss/credenciales",
+        "automatico": true
+      },
+      "campos": [
+        { "nombre": "cuil_b", "dato": "cuil", "formato": "XX-XXXXXXXX-X" },
+        { "nombre": "nro_doc", "dato": "dni", "formato": "solo numeros" }
+      ],
+      "accion": "Consultar",
+      "bloqueos": ["login_institucional"],
+      "resultado_a_leer": ["cobertura", "estado", "obra_social", "os_origen", "os_destino"],
+      "siguiente_si_vigente": ["arca_aportes"],
+      "siguiente_si_sin_datos": ["sisa_puco", "ioma_padron", "pami_padron"]
+    },
+    {
+      "id": "arca_aportes",
+      "nombre": "ARCA - Aportes en Linea",
+      "url": "https://serviciossegsoc.afip.gob.ar/MisAportes/app/basica.aspx",
+      "entrada_informativa": "https://www.afip.gob.ar/aportesenlinea/",
+      "orden": 2,
+      "cuando": "Confirmar aportes cuando SSS informa cobertura o hay indicio laboral/monotributo/casas particulares.",
+      "campos": [
+        { "nombre": "rdbTipoConsulta", "dato": "tipo_busqueda", "opciones": ["cuil", "documento_apellido"] },
+        { "nombre": "txtCuil", "dato": "cuil" },
+        { "nombre": "txtDocumento", "dato": "dni" },
+        { "nombre": "txtApellido", "dato": "apellido" }
+      ],
+      "accion": "CONTINUAR",
+      "bloqueos": ["sesion", "javascript"],
+      "resultado_a_leer": ["incluido_en_declaracion_jurada", "aportes_obra_social", "ultimos_12_meses"],
+      "reglas": ["extension_relacion_dependencia_3_meses", "monotributo_3_consecutivos_o_5_no_consecutivos"]
+    },
+    {
+      "id": "anses_codem",
+      "nombre": "ANSES - CODEM",
+      "url": "https://servicioswww.anses.gob.ar/ooss2/",
+      "orden": 3,
+      "cuando": "Verificar comprobante de empadronamiento y derivacion de obra social.",
+      "campos": [
+        { "nombre": "pantalla_vigente", "dato": "cuil_o_dni", "requiere_relevamiento_en_browser": true }
+      ],
+      "bloqueos": ["proteccion_incapsula", "validaciones_del_sitio"],
+      "resultado_a_leer": ["obra_social", "titular_o_familiar", "codem"]
+    },
+    {
+      "id": "sisa_puco",
+      "nombre": "SISA / PUCO",
+      "url": "https://sisa.msal.gov.ar/sisa/#sisa",
+      "orden": 4,
+      "cuando": "Consultar si SSS no arroja cobertura o como respaldo de padrones.",
+      "campos": [
+        { "nombre": "login", "dato": "credenciales_institucionales", "requiere_operador": true },
+        { "nombre": "busqueda", "dato": "dni_o_cuil" }
+      ],
+      "bloqueos": ["login", "aplicacion_gwt"],
+      "resultado_a_leer": ["cobertura", "datos_paciente", "estado"]
+    },
+    {
+      "id": "ioma_padron",
+      "nombre": "IOMA - Padron de afiliados",
+      "url_pdf": "http://sistemasl.ioma.gba.gov.ar/sistemas/consulta_padron_afiliados/consulta_afiliados.php",
+      "entrada_alternativa": "https://sistemas.ioma.gba.gov.ar/sistemas/buscador/buscador.html",
+      "orden": 5,
+      "cuando": "Consultar si declara IOMA, hay indicio provincial o no hay cobertura nacional en SSS.",
+      "campos": [
+        { "nombre": "dni", "dato": "dni" },
+        { "nombre": "sexo", "dato": "sexo", "posible": true },
+        { "nombre": "numero_afiliado", "dato": "numero_afiliado", "posible": true }
+      ],
+      "bloqueos": ["ruta_variable", "sitio_puede_no_responder"],
+      "resultado_a_leer": ["estado_afiliatorio", "numero_afiliado", "tipo_afiliado"]
+    },
+    {
+      "id": "pami_padron",
+      "nombre": "PAMI / INSSJP - Padron de afiliados",
+      "url": "https://prestadores.pami.org.ar/result.php?c=6-2&vm=2",
+      "entrada_general": "https://prestadores.pami.org.ar/",
+      "orden": 6,
+      "cuando": "Consultar en jubilados, pensionados o cuando CODEM/ANSES indique INSSJP/PAMI.",
+      "campos": [
+        { "nombre": "dni", "dato": "dni", "posible": true },
+        { "nombre": "beneficio", "dato": "numero_beneficio", "posible": true },
+        { "nombre": "afiliado", "dato": "numero_afiliado", "posible": true }
+      ],
+      "bloqueos": ["pantalla_dinamica"],
+      "resultado_a_leer": ["estado_afiliacion", "constancia", "ugl"]
+    },
+    {
+      "id": "servicio_domestico",
+      "nombre": "SSS - Pagos de Servicio Domestico",
+      "url": "https://seguro.sssalud.gob.ar/index.php?cat=consultas&page=mono_pagos_sd",
+      "orden": 7,
+      "cuando": "Consultar para regimen de trabajadoras/es de casas particulares.",
+      "campos": [
+        { "nombre": "nro_cuil", "dato": "cuil", "formato": "XX-XXXXXXXX-X" },
+        { "nombre": "code", "dato": "captcha", "requiere_operador": true }
+      ],
+      "accion": "Buscar",
+      "bloqueos": ["captcha"],
+      "resultado_a_leer": ["ultimos_12_periodos", "ultimo_periodo_pago", "monto_aporte"],
+      "reglas": ["pierde_con_un_periodo_impago_o_pago_incompleto"]
+    }
+  ]
+}

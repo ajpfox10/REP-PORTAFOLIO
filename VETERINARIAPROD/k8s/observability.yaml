@@ -1,0 +1,383 @@
+# OT-127: Observability stack — Prometheus, Grafana, Tempo, Alertmanager.
+# All state-bearing workloads use StatefulSets with PVCs.
+# Tempo uses ephemeral storage (traces are short-lived; bump if retention needed).
+
+# ── Prometheus ─────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vetmanager-prometheus
+spec:
+  serviceName: vetmanager-prometheus
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vetmanager-prometheus
+  template:
+    metadata:
+      labels:
+        app: vetmanager-prometheus
+    spec:
+      serviceAccountName: vetmanager-prometheus
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534   # nobody — official Prometheus image
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --web.enable-remote-write-receiver
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=30d
+            - --web.enable-lifecycle
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 9090
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: vetmanager-prometheus-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-prometheus
+spec:
+  selector:
+    app: vetmanager-prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: http
+  # Not exposed externally — access via Grafana datasource or kubectl port-forward
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vetmanager-prometheus
+automountServiceAccountToken: false
+---
+# ── Grafana ────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vetmanager-grafana
+spec:
+  serviceName: vetmanager-grafana
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vetmanager-grafana
+  template:
+    metadata:
+      labels:
+        app: vetmanager-grafana
+    spec:
+      serviceAccountName: vetmanager-grafana
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472    # grafana user in official image
+        runAsGroup: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vetmanager-secrets
+                  key: GRAFANA_PASSWORD
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_INSTALL_PLUGINS
+              value: grafana-clock-panel
+          ports:
+            - containerPort: 3000
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "768Mi"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: dashboards
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: datasources
+          configMap:
+            name: vetmanager-grafana-datasources
+        - name: dashboards
+          configMap:
+            name: vetmanager-grafana-dashboards
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-grafana
+spec:
+  selector:
+    app: vetmanager-grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  # Access via: kubectl port-forward svc/vetmanager-grafana 3000:3000
+  # Or expose via Ingress with auth in production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vetmanager-grafana
+automountServiceAccountToken: false
+---
+# ── Tempo ──────────────────────────────────────────────────────────────────────
+# Ephemeral storage — traces are short-lived. If retention > 24h is needed,
+# add a volumeClaimTemplate and change the storage path in tempo.yml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vetmanager-tempo
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: vetmanager-tempo
+  template:
+    metadata:
+      labels:
+        app: vetmanager-tempo
+    spec:
+      serviceAccountName: vetmanager-tempo
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: tempo
+          image: grafana/tempo:2.5.0
+          args:
+            - -config.file=/etc/tempo/tempo.yml
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 9411
+              name: zipkin
+            - containerPort: 3200
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "768Mi"
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3200
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3200
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: vetmanager-tempo-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-tempo
+spec:
+  selector:
+    app: vetmanager-tempo
+  ports:
+    - port: 9411
+      targetPort: 9411
+      name: zipkin
+    - port: 3200
+      targetPort: 3200
+      name: http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vetmanager-tempo
+automountServiceAccountToken: false
+---
+# ── Alertmanager ───────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vetmanager-alertmanager
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: vetmanager-alertmanager
+  template:
+    metadata:
+      labels:
+        app: vetmanager-alertmanager
+    spec:
+      serviceAccountName: vetmanager-alertmanager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 9093
+              name: http
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: vetmanager-alertmanager-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-alertmanager
+spec:
+  selector:
+    app: vetmanager-alertmanager
+  ports:
+    - port: 9093
+      targetPort: 9093
+      name: http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vetmanager-alertmanager
+automountServiceAccountToken: false

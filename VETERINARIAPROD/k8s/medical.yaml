@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vetmanager-medical
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: vetmanager-medical
+  template:
+    metadata:
+      labels:
+        app: vetmanager-medical
+    spec:
+      serviceAccountName: vetmanager-medical
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: medical
+          image: ghcr.io/ajpfox10/veterinaria-medical:81c52c17
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: vetmanager-config
+            - secretRef:
+                name: vetmanager-secrets
+          ports:
+            - containerPort: 3003
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "768Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3003
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-medical
+spec:
+  selector:
+    app: vetmanager-medical
+  ports:
+    - port: 3003
+      targetPort: 3003

@@ -151,7 +151,7 @@ function resolveDepedencia(e5raw: string, e6raw: string): string {
 
 // ── Parseo de Excel ────────────────────────────────────────────────────────────
 
-interface AgRow {
+export interface AgRow {
   legajo: string;
   dni: string;
   nombre: string;
@@ -163,7 +163,7 @@ interface AgRow {
   justificado: string;
 }
 
-function findExcelInDir(dir: string): string | null {
+export function findExcelInDir(dir: string): string | null {
   if (!fs.existsSync(dir)) return null;
   const files = fs.readdirSync(dir).filter(f =>
     !f.startsWith('~$') && !f.startsWith('.') &&
@@ -209,7 +209,7 @@ function parseExcelMinisterio(fp: string): AgRow[] {
   return rows;
 }
 
-function parseExcelSiape(fp: string): AgRow[] {
+export function parseExcelSiape(fp: string): AgRow[] {
   const wb = XLSX.readFile(fp, { cellDates: false, raw: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });

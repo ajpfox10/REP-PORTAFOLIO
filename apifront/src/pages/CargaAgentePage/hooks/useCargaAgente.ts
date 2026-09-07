@@ -34,6 +34,7 @@ export type PersonalForm = {
   municipio_id: string; // solo UI (cascada) — no se guarda en personal
   localidad_id: string;
   nacionalidad: string;
+  mp: string;
   observaciones: string;
   // Agente (tabla: agentes)
   fecha_ingreso: string;
@@ -61,7 +62,7 @@ export const EMPTY_FORM: PersonalForm = {
   sexo_id: '', email: '', telefono: '', domicilio: '',
   numerodomicilio: '', piso: '', depto: '', cp: '', observaciones_direccion: '',
   provincia_id: '', municipio_id: '',
-  localidad_id: '', nacionalidad: '', observaciones: '',
+  localidad_id: '', nacionalidad: '', mp: '', observaciones: '',
   fecha_ingreso: '', fecha_egreso: '', fecha_baja: '', estado_empleo: 'ACTIVO', legajo: '',
   ley_id: '', planta_id: '', categoria_id: '', ocupacion_id: '',
   regimen_horario_id: '', jefatura_id: '', funcion_id: '',
@@ -124,10 +125,13 @@ export function useCargaAgente() {
 
   const loadCatalog = useCallback(async (table: string): Promise<CatalogItem[]> => {
     try {
-      // localidades: son ~4142 y su nombre está en localidad_nombre (no en un genérico *_nombre,
-      // que agarraría provincia_nombre). Traemos todas y etiquetamos "LOCALIDAD — Municipio".
-      const limit = table === 'localidades' ? 5000 : 500;
-      const res = await apiFetch<any>(`/${table}?limit=${limit}&page=1`);
+      // El combo filtra en el cliente sobre lo que se trae acá: si el catálogo viene
+      // cortado, lo que quedó afuera es imposible de elegir. Por eso se piden todas
+      // (5000 = CRUD_MAX_LIMIT del backend). Hoy el más grande es localidades (~4142)
+      // y le sigue ocupaciones (~924).
+      // localidades además tiene el nombre en localidad_nombre (no en un genérico
+      // *_nombre, que agarraría provincia_nombre): se etiqueta "LOCALIDAD — Municipio".
+      const res = await apiFetch<any>(`/${table}?limit=5000&page=1`);
       return (res?.data || []).map((r: any) => ({
         id: r.id ?? r.ID,   // categorias usa PK "ID" en mayúscula
         nombre: table === 'localidades'
@@ -199,6 +203,7 @@ export function useCargaAgente() {
           municipio_id:       '', // se autocompleta desde la localidad (efecto en el form)
           localidad_id:       toStr(d.localidad_id),
           nacionalidad:       d.nacionalidad || '',
+          mp:                 d.mp || '',
           observaciones:      d.observaciones || '',
           estado_empleo:      hasActive ? (d.estado_empleo || 'ACTIVO') : 'ACTIVO',
           legajo:             hasActive ? toStr(d.legajo) : '',
@@ -266,6 +271,22 @@ export function useCargaAgente() {
   const prevStep = useCallback(() => setStep(s => Math.max(s - 1, 1) as Step), []);
   const goToStep = useCallback((s: Step) => setStep(s), []);
 
+  // El alta hereda servicio y sector del tramo anterior solo si los periodos son
+  // consecutivos (el nuevo arranca el dia siguiente al cierre). Si hay hueco es un
+  // cargo nuevo y el agente queda sin destino: hay que avisarle al operador.
+  const avisarDestino = useCallback((data: any) => {
+    if (!data) return;
+    if (data.continuidad?.heredado) {
+      toast.ok('Destino heredado', 'Se mantuvo el servicio y el sector del periodo anterior');
+    } else if (data.aviso) {
+      toast.error('Falta asignar destino', data.aviso);
+    }
+    // Carpeta del agente en DOCU: solo se avisa si algo falló (el alta ya quedó hecha).
+    if (data.carpetaDocu && data.carpetaDocu.ok === false) {
+      toast.error('No se pudo crear la carpeta en DOCU', data.carpetaDocu.motivo || 'Revisá el acceso a la carpeta de documentos');
+    }
+  }, [toast]);
+
   const save = useCallback(async () => {
     if (!validateStep(1) || !validateStep(2)) {
       toast.error('Completá los datos requeridos');
@@ -295,6 +316,7 @@ export function useCargaAgente() {
           ...(form.localidad_id      ? { localidad_id:       Number(form.localidad_id) }          : {}),
           ...(form.provincia_id      ? { provincia_id:       form.provincia_id }                  : {}),
           ...(form.nacionalidad      ? { nacionalidad:       form.nacionalidad }                  : {}),
+          ...(form.mp                ? { mp:                 form.mp }                            : {}),
           ...(form.observaciones     ? { observaciones:      form.observaciones }                 : {}),
           // campos agente
           estado_empleo: form.estado_empleo || 'ACTIVO',
@@ -304,7 +326,6 @@ export function useCargaAgente() {
           ...(form.categoria_id      ? { categoria_id:       Number(form.categoria_id) }          : {}),
           ...(form.ocupacion_id      ? { ocupacion_id:       Number(form.ocupacion_id) }          : {}),
           ...(form.regimen_horario_id? { regimen_horario_id: Number(form.regimen_horario_id) }    : {}),
-          ...(form.dependencia_id    ? { dependencia_id:     Number(form.dependencia_id) }        : {}),
           ...(form.reparticion_id    ? { reparticion_id:     Number(form.reparticion_id) }        : {}),
           ...(form.servicio_id       ? { servicio_id:        Number(form.servicio_id) }           : {}),
           ...(form.sector_id         ? { sector_id:           Number(form.sector_id) }             : {}),
@@ -346,6 +367,7 @@ export function useCargaAgente() {
             ...(form.localidad_id ? { localidad_id: Number(form.localidad_id) } : {}),
             ...(form.provincia_id ? { provincia_id: form.provincia_id } : {}),
             ...(form.nacionalidad ? { nacionalidad: form.nacionalidad } : {}),
+            ...(form.mp ? { mp: form.mp } : {}),
             ...(form.observaciones ? { observaciones: form.observaciones } : {}),
             ...(form.fecha_ingreso ? { fecha_ingreso: form.fecha_ingreso } : {}),
             ...(form.fecha_egreso ? { fecha_egreso: form.fecha_egreso } : {}),
@@ -356,7 +378,6 @@ export function useCargaAgente() {
             ...(form.funcion_id ? { funcion_id: Number(form.funcion_id) } : {}),
             ...(form.ocupacion_id ? { ocupacion_id: Number(form.ocupacion_id) } : {}),
             ...(form.regimen_horario_id ? { regimen_horario_id: Number(form.regimen_horario_id) } : {}),
-            ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
             ...(form.reparticion_id ? { reparticion_id: Number(form.reparticion_id) } : {}),
             ...(form.decreto_designacion ? { decreto_designacion: form.decreto_designacion } : {}),
             ...(form.salario_mensual ? { salario_mensual: Number(form.salario_mensual) } : {}),
@@ -364,7 +385,6 @@ export function useCargaAgente() {
               servicios: [{
                 servicio_id: Number(form.servicio_id),
                 ...(form.sector_id ? { sector_id: Number(form.sector_id) } : {}),
-                ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
                 ...(form.fecha_ingreso ? { fecha_desde: form.fecha_ingreso } : {}),
               }],
             } : {}),
@@ -374,6 +394,7 @@ export function useCargaAgente() {
             body: JSON.stringify(altaPayload),
           });
           if (!altaRes?.ok) throw new Error(altaRes?.error || 'Error al registrar reingreso');
+          avisarDestino(altaRes?.data);
           setSavedDni(dniNum);
           setSavedMode('reentry');
         } else {
@@ -406,6 +427,7 @@ export function useCargaAgente() {
           ...(form.localidad_id     ? { localidad_id:     Number(form.localidad_id) }  : {}),
           ...(form.provincia_id     ? { provincia_id:     form.provincia_id }          : {}),
           ...(form.nacionalidad     ? { nacionalidad:     form.nacionalidad }          : {}),
+          ...(form.mp               ? { mp:               form.mp }                    : {}),
           ...(form.observaciones    ? { observaciones:    form.observaciones }         : {}),
           estado_empleo: form.estado_empleo || 'ACTIVO',
           ...(form.fecha_ingreso      ? { fecha_ingreso:      form.fecha_ingreso }                : {}),
@@ -418,7 +440,6 @@ export function useCargaAgente() {
           ...(form.funcion_id         ? { funcion_id:         Number(form.funcion_id) }           : {}),
           ...(form.ocupacion_id       ? { ocupacion_id:       Number(form.ocupacion_id) }         : {}),
           ...(form.regimen_horario_id ? { regimen_horario_id: Number(form.regimen_horario_id) }   : {}),
-          ...(form.dependencia_id     ? { dependencia_id:     Number(form.dependencia_id) }       : {}),
           ...(form.reparticion_id     ? { reparticion_id:     Number(form.reparticion_id) }       : {}),
           ...(form.decreto_designacion? { decreto_designacion: form.decreto_designacion }         : {}),
           ...(form.salario_mensual    ? { salario_mensual:    parseFloat(form.salario_mensual) }  : {}),
@@ -426,13 +447,13 @@ export function useCargaAgente() {
             servicios: [{
               servicio_id: Number(form.servicio_id),
               ...(form.sector_id ? { sector_id: Number(form.sector_id) } : {}),
-              ...(form.dependencia_id ? { dependencia_id: Number(form.dependencia_id) } : {}),
               ...(form.fecha_ingreso ? { fecha_desde: form.fecha_ingreso } : {}),
             }],
           } : {}),
         };
         const pRes = await apiFetch<any>('/agentes-v2/alta', { method: 'POST', body: JSON.stringify(personalPayload) });
         if (!pRes?.ok) throw new Error(pRes?.error || 'Error al crear agente');
+        avisarDestino(pRes?.data);
 
         // 2) Crear registro en agentes
         setSavedDni(dniNum);

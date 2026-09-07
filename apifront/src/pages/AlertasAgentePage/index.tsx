@@ -53,6 +53,7 @@ export function AlertasAgenteDashboardBanner() {
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [expandido, setExpandido] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -74,11 +75,23 @@ export function AlertasAgenteDashboardBanner() {
     return () => { alive = false; };
   }, []);
 
+  // Desactivar una alerta directo desde el banner (mismo flujo que la pagina).
+  const desactivar = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('¿Desactivar esta alerta para todos?')) return;
+    try {
+      await apiFetch(`/alertas-agente/${id}`, { method: 'DELETE' });
+      setAlertas(prev => prev.filter(a => a.id !== id));
+    } catch {
+      window.alert('No se pudo desactivar la alerta.');
+    }
+  };
+
   if (!visible || dismissed || !alertas.length) return null;
 
   const urgentes = alertas.filter(a => Number(a.urgente)).length;
-  const mostradas = alertas.slice(0, 5);
-  const restantes = alertas.length - mostradas.length;
+  const mostradas = expandido ? alertas : alertas.slice(0, 5);
+  const restantes = alertas.length - alertas.slice(0, 5).length;
 
   return (
     <div style={{
@@ -98,7 +111,12 @@ export function AlertasAgenteDashboardBanner() {
           Alertas por agente activas: {alertas.length}
           {urgentes > 0 ? ` (${urgentes} urgente${urgentes > 1 ? 's' : ''})` : ''}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          ...(expandido ? { maxHeight: 320, overflowY: 'auto' as const, paddingRight: 4 } : {}),
+        }}>
           {mostradas.map(a => (
             <div key={a.id} style={{ fontSize: '0.84rem', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{
@@ -116,11 +134,29 @@ export function AlertasAgenteDashboardBanner() {
               <span style={{ color: '#fecaca' }}>{a.titulo}</span>
               <span className="muted">-</span>
               <span className="muted">{fmt(a.created_at)}</span>
+              <button
+                onClick={(e) => desactivar(a.id, e)}
+                title="Desactivar alerta"
+                style={{ marginLeft: 'auto', background: '#450a0a', color: '#fca5a5', border: 'none', borderRadius: 6, padding: '2px 9px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+              >
+                Desactivar
+              </button>
             </div>
           ))}
-          {restantes > 0 && (
-            <div style={{ fontSize: '0.78rem', color: '#fca5a5' }}>
-              +{restantes} alerta{restantes > 1 ? 's' : ''} mas.
+          {!expandido && restantes > 0 && (
+            <div
+              onClick={() => setExpandido(true)}
+              style={{ fontSize: '0.78rem', color: '#fca5a5', cursor: 'pointer', textDecoration: 'underline', fontWeight: 700 }}
+            >
+              +{restantes} alerta{restantes > 1 ? 's' : ''} mas — ver todas
+            </div>
+          )}
+          {expandido && alertas.length > 5 && (
+            <div
+              onClick={() => setExpandido(false)}
+              style={{ fontSize: '0.78rem', color: '#fca5a5', cursor: 'pointer', textDecoration: 'underline', fontWeight: 700, marginTop: 2 }}
+            >
+              ver menos
             </div>
           )}
         </div>

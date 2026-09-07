@@ -339,6 +339,12 @@ function StepLaboral({ form, setField, errors, cats }: any) {
         </div>
 
         <div className="ca-field">
+          <label htmlFor="ca-mp" className="ca-label">Matrícula (MP)</label>
+          <input id="ca-mp" name="mp" className="ca-input" value={form.mp}
+            onChange={e => setField('mp', e.target.value)} placeholder="Nº de matrícula profesional" maxLength={30} />
+        </div>
+
+        <div className="ca-field">
           <label htmlFor="ca-decreto" className="ca-label">Decreto de Designación</label>
           <input id="ca-decreto" name="decreto_designacion" className="ca-input" value={form.decreto_designacion}
             onChange={e => setField('decreto_designacion', e.target.value)} placeholder="Ej: 1234/2024" />

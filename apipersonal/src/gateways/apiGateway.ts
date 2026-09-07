@@ -26,7 +26,7 @@ import { Express, Request, Response, NextFunction } from 'express';
 import { Sequelize } from 'sequelize';
 import { SchemaSnapshot } from '../db/schema/types';
 import { authContext } from '../middlewares/authContext';
-import { requirePermission } from '../middlewares/rbacCrud';
+import { requirePermission, requireAny } from '../middlewares/rbacCrud';
 import { buildHealthRouter } from '../routes/health.routes';
 import { buildAuthRouter } from '../routes/auth.routes';
 import { buildCrudRouter } from '../routes/crud.routes';
@@ -41,8 +41,10 @@ import { buildApiKeysRouter } from '../routes/apiKeys.routes';
 import { buildWebhooksRouter } from '../routes/webhooks.routes';
 import { buildAsistenciaRouter } from '../routes/asistencia.routes';
 import { buildSinSalidaRouter }  from '../routes/sinSalida.routes';
+import { buildAusentismoRouter } from '../routes/ausentismo.routes';
 import { buildScannerRouter } from '../routes/scanner.routes';
 import { buildFicheroRouter } from '../routes/fichero.routes';
+import { buildFicheroBiometriaLabRouter } from '../routes/ficheroBiometriaLab.routes';
 import { buildIclockAdmsRouter } from '../routes/iclockAdms.routes';
 import { buildExamenIngresoRouter } from '../routes/examenIngreso.routes';
 import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
@@ -56,6 +58,7 @@ import { buildStressRouter }   from '../routes/stress.routes';
 import { buildAntiguedadRouter } from '../routes/antiguedad.routes';
 import { buildLicenciasRouter } from '../routes/licencias.routes';
 import { buildComparacionSiapeRouter } from '../routes/comparacionSiape.routes';
+import { buildLicenciasConsultorioRouter } from '../routes/licenciasConsultorio.routes';
 import { buildIntranetRouter } from '../domains/personalv5/routes/intranet.routes';
 import { buildResidentesRouter } from '../routes/residentes.routes';
 import { buildFcCertReemplazosRouter } from '../routes/fcCertReemplazos.routes';
@@ -171,7 +174,9 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/webhooks`,  ...protect, buildWebhooksRouter(sequelize));
   app.use(`${apiPrefix}/asistencia`, ...protect, buildAsistenciaRouter(sequelize));
   app.use(`${apiPrefix}/sin-salida`, ...protect, buildSinSalidaRouter(sequelize));
+  app.use(`${apiPrefix}/ausentismo`, ...protect, buildAusentismoRouter(sequelize));
   app.use(`${apiPrefix}/fichero`,          ...protect, buildFicheroRouter());
+  app.use(`${apiPrefix}/fichero-biometria-lab`, ...protect, buildFicheroBiometriaLabRouter(sequelize));
   app.use(`${apiPrefix}/examen-ingreso`,   ...protect, buildExamenIngresoRouter(sequelize));
   app.use(`${apiPrefix}/accidentes-punzo`, ...protect, buildAccidentesPunzoRouter(sequelize));
   app.use(`${apiPrefix}/tareas-livianas`,  ...protect, buildTareasLivianasRouter(sequelize));
@@ -183,6 +188,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
   app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));
   app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter());
+  app.use(`${apiPrefix}/licencias-consultorio`, ...protect, requireAny(['app:licencias-consultorio:access', 'crud:*:*']), buildLicenciasConsultorioRouter(sequelize));
   app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter(sequelize));
   app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
   app.use(`${apiPrefix}/fc-cert-reemplazos`, ...protect, buildFcCertReemplazosRouter(sequelize));
@@ -207,6 +213,17 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
 
   // ── Jefaturas (custom: enriquece con nombre real desde personal) ─────────
   app.use(`${apiPrefix}/jefaturas`, ...protect, buildJefaturasRouter(sequelize));
+
+  // ── Catálogos (pestaña de Admin) ──────────────────────────────────────────
+  // Mismo router CRUD montado bajo /catalogos, pero exigiendo 'admin:catalogos'.
+  // Va por prefijo propio porque /tables y el CRUD genérico los comparten
+  // Reportes y el resto de los módulos: no se les puede pedir este permiso.
+  // Desde CATALOGOS_DESDE (lunes 24/08/2026) el permiso pasa a ser obligatorio.
+  const CATALOGOS_DESDE = Date.parse('2026-08-24T00:00:00-03:00');
+  const guardCatalogos = requirePermission('admin:catalogos');
+  const catalogosGate = (req: any, res: any, next: any) =>
+    Date.now() < CATALOGOS_DESDE ? next() : guardCatalogos(req, res, next);
+  app.use(`${apiPrefix}/catalogos`, ...protect, catalogosGate, buildCrudRouter(sequelize, schema));
 
   // ── CRUD dinamico (genera rutas para TODAS las tablas de la BD) ───────────
   app.use(apiPrefix, ...protect, buildCrudRouter(sequelize, schema));

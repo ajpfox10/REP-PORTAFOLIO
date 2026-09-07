@@ -1,0 +1,96 @@
+# OT-113: NetworkPolicies — start permissive, tighten per service over time.
+#
+# Strategy (incremental):
+#   Phase 1 (this file): Allow all intra-namespace traffic + explicit egress to
+#                        MySQL, Redis, and DNS. Deny traffic from outside the namespace.
+#   Phase 2 (future):    Restrict each service to only the peers it actually needs.
+#
+# NOTE: Requires a CNI that enforces NetworkPolicies (Calico, Cilium, Weave Net, etc.).
+# Flannel alone does NOT enforce NetworkPolicies.
+
+# ── Default deny: block all ingress/egress not explicitly allowed ─────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+# ── Allow intra-namespace communication (all vetmanager pods) ─────────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - podSelector: {}
+
+# ── Allow DNS resolution ──────────────────────────────────────────────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+# ── Allow egress to external services (AFIP, MercadoPago, Stripe, AI APIs, etc.)
+# OT-115 NOTE: inter-service traffic currently uses HTTP. Migration to mTLS
+# (e.g., via cert-manager + Istio/Linkerd) is tracked as a future work item.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+
+# ── Gateway: allow ingress from Ingress controller ────────────────────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app: vetmanager-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 4050
+          protocol: TCP

@@ -1,0 +1,56 @@
+groups:
+  - name: vetmanager-backend
+    rules:
+      - alert: InternalAuthDegraded
+        expr: sum(rate(dependency_degradations_total{dependency="internal_auth",outcome=~"blocked|degraded"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Internal auth degradada"
+          description: "INTERNAL_SECRET o el modo de auth interna esta degradando o bloqueando requests."
+
+      - alert: AuthRevocationBlocked
+        expr: sum(rate(dependency_degradations_total{dependency="auth_revocation",outcome="blocked"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Revocation backend bloqueando"
+          description: "Gateway no puede validar revocacion de tokens en modo strict."
+
+      - alert: UsageLimitsUnavailable
+        expr: sum(rate(dependency_degradations_total{dependency="usage_limits",outcome="blocked"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Usage limits bloqueando features costosas"
+          description: "Redis o el backend de cuotas no esta disponible en modo strict."
+
+      - alert: EventBusDlqGrowing
+        expr: sum(rate(event_bus_messages_total{direction="consume",result="dlq"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: high
+        annotations:
+          summary: "DLQ del event bus creciendo"
+          description: "Hay mensajes fallando y yendo a la DLQ de Tempo/Event Bus."
+
+      - alert: ServiceRegistryFailures
+        expr: sum(rate(service_registry_operations_total{result="failure"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Service registry con fallos"
+          description: "La resolucion o actualizacion del registry esta fallando."
+
+      - alert: BackendHigh5xxRate
+        expr: sum by (service) (rate(http_requests_total{status_code=~"5.."}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Servicio con 5xx sostenidos"
+          description: "La tasa de 5xx supero el umbral permitido."

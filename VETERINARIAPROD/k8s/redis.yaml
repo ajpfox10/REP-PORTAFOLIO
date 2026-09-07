@@ -1,0 +1,289 @@
+# OT-129: Redis HA via Sentinel (1 primary + 2 replicas + 3 sentinel pods).
+# OT-118: TLS enabled on port 6380.
+# OT-112: Non-root securityContext.
+#
+# Architecture:
+#   vetmanager-redis-0  → primary (elected by Sentinel)
+#   vetmanager-redis-1  → replica
+#   vetmanager-redis-2  → replica
+#   vetmanager-redis-sentinel-{0,1,2} → Sentinel quorum (quorum=2)
+#
+# Prerequisites:
+#   1. cert-manager installed with a Certificate populating 'vetmanager-redis-tls'
+#      with tls.crt and tls.key (see OT-118).
+#   2. REDIS_PASSWORD in vetmanager-secrets.
+#   3. A headless Service (below) for stable DNS: vetmanager-redis-0.vetmanager-redis-headless
+#
+# Client REDIS_URL pattern (with Sentinel):
+#   redis+sentinel://:${REDIS_PASSWORD}@vetmanager-redis-sentinel:26379/mymaster/0
+#   → Node.js: use ioredis with sentinels option (see shared/redis.js)
+#
+# NOTE: All services currently use REDIS_URL=redis://:pass@redis:6379 (non-TLS, port 6379).
+# The REDIS_URL in configmap/secrets must be updated to use TLS Sentinel URL before
+# applying this manifest in production. Current transition path:
+#   1. Deploy redis.yaml (this file) → Sentinel cluster comes up
+#   2. Update shared/redis.js to support Sentinel URL via ioredis sentinels[]
+#   3. Roll all services with new REDIS_URL
+#
+---
+# Headless service for stable DNS names inside StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-redis-headless
+spec:
+  selector:
+    app: vetmanager-redis
+  clusterIP: None
+  ports:
+    - port: 6380
+      targetPort: 6380
+      name: tls
+---
+# Client-facing service — points to Sentinel; clients discover master via Sentinel
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-redis
+spec:
+  selector:
+    app: vetmanager-redis
+  ports:
+    - port: 6380
+      targetPort: 6380
+      name: tls
+---
+# Redis StatefulSet (1 primary + 2 replicas — Sentinel promotes on failure)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vetmanager-redis
+spec:
+  serviceName: vetmanager-redis-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vetmanager-redis
+  template:
+    metadata:
+      labels:
+        app: vetmanager-redis
+    spec:
+      securityContext:           # OT-112
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      initContainers:
+        # Determine role: redis-0 starts as primary, others replicate from redis-0.
+        # Sentinel handles promotion if redis-0 fails — this only sets initial state.
+        - name: init-role
+          image: redis:7-alpine
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -c
+            - |
+              # Extract pod ordinal from hostname (e.g., vetmanager-redis-1 → 1)
+              ORDINAL="${HOSTNAME##*-}"
+              if [ "$ORDINAL" = "0" ]; then
+                echo "role=primary" > /init/role.conf
+              else
+                echo "replicaof vetmanager-redis-0.vetmanager-redis-headless.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local 6380" > /init/role.conf
+              fi
+          volumeMounts:
+            - name: init-config
+              mountPath: /init
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          # OT-118: TLS enabled using cert-manager-issued certificate.
+          command:
+            - sh
+            - -c
+            - |
+              ROLE_CONF=$(cat /init/role.conf)
+              exec redis-server \
+                --appendonly yes \
+                --requirepass "${REDIS_PASSWORD}" \
+                --masterauth "${REDIS_PASSWORD}" \
+                --maxmemory 512mb \
+                --maxmemory-policy allkeys-lru \
+                --tls-port 6380 \
+                --port 0 \
+                --tls-cert-file /tls/tls.crt \
+                --tls-key-file /tls/tls.key \
+                --tls-auth-clients no \
+                $ROLE_CONF
+          securityContext:       # OT-112
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vetmanager-secrets
+                  key: REDIS_PASSWORD
+          ports:
+            - containerPort: 6380
+              name: tls
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli --tls --cacert /tls/tls.crt -a "$REDIS_PASSWORD" -p 6380 ping | grep PONG
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli --tls --cacert /tls/tls.crt -a "$REDIS_PASSWORD" -p 6380 ping | grep PONG
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "640Mi"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: init-config
+              mountPath: /init
+      volumes:
+        - name: tls
+          secret:
+            secretName: vetmanager-redis-tls
+        - name: init-config
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+# Sentinel Service (clients query Sentinel to discover the current primary)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-redis-sentinel
+spec:
+  selector:
+    app: vetmanager-redis-sentinel
+  ports:
+    - port: 26379
+      targetPort: 26379
+      name: sentinel
+---
+# Sentinel headless (for stable DNS within Sentinel StatefulSet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetmanager-redis-sentinel-headless
+spec:
+  selector:
+    app: vetmanager-redis-sentinel
+  clusterIP: None
+  ports:
+    - port: 26379
+      targetPort: 26379
+      name: sentinel
+---
+# Sentinel StatefulSet — 3 pods, quorum=2
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vetmanager-redis-sentinel
+spec:
+  serviceName: vetmanager-redis-sentinel-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vetmanager-redis-sentinel
+  template:
+    metadata:
+      labels:
+        app: vetmanager-redis-sentinel
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: sentinel
+          image: redis:7-alpine
+          command:
+            - sh
+            - -c
+            - |
+              # Write sentinel config to writable tmpfs
+              NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+              MASTER_HOST="vetmanager-redis-0.vetmanager-redis-headless.${NAMESPACE}.svc.cluster.local"
+              cat > /tmp/sentinel.conf <<EOF
+              port 26379
+              sentinel monitor mymaster ${MASTER_HOST} 6380 2
+              sentinel auth-pass mymaster $(REDIS_PASSWORD)
+              sentinel down-after-milliseconds mymaster 5000
+              sentinel failover-timeout mymaster 60000
+              sentinel parallel-syncs mymaster 1
+              sentinel resolve-hostnames yes
+              sentinel announce-hostnames yes
+              EOF
+              exec redis-sentinel /tmp/sentinel.conf
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vetmanager-secrets
+                  key: REDIS_PASSWORD
+          ports:
+            - containerPort: 26379
+              name: sentinel
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -p
+                - "26379"
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -p
+                - "26379"
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"

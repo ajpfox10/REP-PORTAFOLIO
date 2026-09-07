@@ -32,7 +32,6 @@ export const agenteSchema = z.object({
   regimen_horario_id:z.number().int().positive().optional(),
   jefatura_id:      z.number().int().positive().optional(),
   sector_id:        z.number().int().positive().optional(),
-  dependencia_id:   z.number().int().positive().optional(),
   fecha_ingreso:    z.string().optional(),
   estado:           z.enum(['activo','inactivo','licencia','baja']).default('activo'),
 });

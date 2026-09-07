@@ -61,6 +61,7 @@ const patchPersonalSchema = z.object({
   localidad_id:           z.number().int().positive().optional().nullable(),
   provincia_id:           z.string().max(50).optional().nullable(),
   nacionalidad:           z.string().max(50).optional().nullable(),
+  mp:                     z.string().max(30).optional().nullable(),
   observaciones:          z.string().optional().nullable(),
   estado_empleo:          z.enum(['ACTIVO','INACTIVO','BAJA','COMISION','TRAMITE']).optional().nullable(),
   // ── tabla: agentes ───────────────────────────────────────────────────────
@@ -70,7 +71,6 @@ const patchPersonalSchema = z.object({
   funcion_id:             z.number().int().positive().optional().nullable(),
   ocupacion_id:           z.number().int().positive().optional().nullable(),
   regimen_horario_id:     z.number().int().positive().optional().nullable(),
-  dependencia_id:         z.number().int().positive().optional().nullable(),
   reparticion_id:         z.number().int().positive().optional().nullable(),
   servicio_id:            z.number().int().positive().optional().nullable(),
   sector_id:              z.number().int().positive().optional().nullable(),
@@ -172,9 +172,12 @@ export function buildPersonalRouter(sequelize: Sequelize) {
                  cat.nombre   AS categoria_nombre,
                  fn.nombre    AS funcion_nombre,
                  oc.nombre    AS ocupacion_nombre,
-                 -- agentes_servicios ya tiene campo 'nombre' directo, no necesita JOIN a servicios
+                 -- agentes_servicios ya tiene campo 'nombre' directo, no necesita JOIN a servicios.
+                 -- Sólo la vinculación vigente: un agente dado de baja no tiene servicio
+                 -- (igual criterio que el detalle del agente y que el resto del sistema).
                  (SELECT ags_sub.nombre FROM agentes_servicios ags_sub
                   WHERE ags_sub.dni = p.dni AND ags_sub.deleted_at IS NULL
+                    AND ags_sub.fecha_hasta IS NULL
                   ORDER BY ags_sub.fecha_desde DESC LIMIT 1) AS servicio_nombre
           FROM personal p
           LEFT JOIN agentes a ON a.id = (
@@ -351,7 +354,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             p.fecha_nacimiento, a.fecha_ingreso, a.estado_empleo, a.legajo,
             p.email, p.telefono, p.domicilio, p.foto_path, p.observaciones,
             p.numerodomicilio, p.piso, p.depto, p.cp, p.observacionesdireccion,
-            p.localidad_id, p.provincia_id, p.nacionalidad,
+            p.localidad_id, p.provincia_id, p.nacionalidad, p.mp,
             p.created_at AS alta_sistema,
 
             s.id   AS sexo_id,    s.nombre  AS sexo_nombre,
@@ -361,15 +364,16 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             fn.id  AS funcion_id, fn.nombre AS funcion_nombre,
             oc.id  AS ocupacion_id, oc.nombre AS ocupacion_nombre,
             rh.id  AS regimen_horario_id, rh.nombre AS regimen_horario_nombre,
-            (SELECT COALESCE(r_dep.dependencia_id, ags.dependencia_id) FROM agentes_servicios ags LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL LEFT JOIN reparticiones r_dep ON r_dep.id = srv.reparticion_id AND r_dep.deleted_at IS NULL WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS dependencia_id,
-            (SELECT dep2.nombre FROM agentes_servicios ags LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL LEFT JOIN reparticiones r_dep ON r_dep.id = srv.reparticion_id AND r_dep.deleted_at IS NULL LEFT JOIN dependencias dep2 ON dep2.id = COALESCE(r_dep.dependencia_id, ags.dependencia_id) AND dep2.deleted_at IS NULL WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS dependencia_nombre,
+            (SELECT r_dep.dependencia_id FROM agentes_servicios ags LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL LEFT JOIN reparticiones r_dep ON r_dep.id = srv.reparticion_id AND r_dep.deleted_at IS NULL WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS dependencia_id,
+            (SELECT dep2.nombre FROM agentes_servicios ags LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL LEFT JOIN reparticiones r_dep ON r_dep.id = srv.reparticion_id AND r_dep.deleted_at IS NULL LEFT JOIN dependencias dep2 ON dep2.id = r_dep.dependencia_id AND dep2.deleted_at IS NULL WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS dependencia_nombre,
             (SELECT srv.reparticion_id FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS reparticion_id,
             (SELECT rep2.reparticion_nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id JOIN reparticiones rep2 ON rep2.id = srv.reparticion_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS reparticion_nombre,
 
             (SELECT ags.servicio_id FROM agentes_servicios ags WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_id,
             (SELECT srv.nombre FROM agentes_servicios ags JOIN servicios srv ON srv.id = ags.servicio_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS servicio_nombre,
-            (SELECT ags.sector_id FROM agentes_servicios ags WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS sector_id,
-            (SELECT sec.nombre FROM agentes_servicios ags JOIN sectores sec ON sec.id = ags.sector_id WHERE ags.dni = p.dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NULL ORDER BY ags.id DESC LIMIT 1) AS sector_nombre,
+            /* el sector vive en agentes_sectores (pases del Jefe de Servicio), no en agentes_servicios */
+            (SELECT asec.sector_id FROM agentes_sectores asec WHERE asec.dni = p.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL ORDER BY asec.id DESC LIMIT 1) AS sector_id,
+            (SELECT sec.nombre FROM agentes_sectores asec JOIN sectores sec ON sec.id = asec.sector_id WHERE asec.dni = p.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL ORDER BY asec.id DESC LIMIT 1) AS sector_nombre,
 
             a.id             AS agente_id,
             a.fecha_ingreso  AS fecha_ingreso_laboral,
@@ -405,10 +409,12 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         const servicios = await sequelize.query(`
           SELECT ags.id, ags.servicio_id, srv.nombre AS servicio_nombre,
                  ags.fecha_desde, ags.fecha_hasta, ags.observaciones,
-                 rep.id AS dependencia_id, rep.reparticion_nombre AS dependencia_nombre
+                 rep.id AS reparticion_id, rep.reparticion_nombre AS reparticion_nombre,
+                 dep.id AS dependencia_id, dep.nombre AS dependencia_nombre
           FROM agentes_servicios ags
           JOIN servicios srv ON srv.id = ags.servicio_id
-          LEFT JOIN reparticiones rep ON rep.id = ags.dependencia_id
+          LEFT JOIN reparticiones rep ON rep.id = srv.reparticion_id AND rep.deleted_at IS NULL
+          LEFT JOIN dependencias  dep ON dep.id = rep.dependencia_id AND dep.deleted_at IS NULL
           WHERE ags.dni = :dni AND ags.deleted_at IS NULL
           ORDER BY ags.fecha_desde DESC
         `, { replacements: { dni }, type: QueryTypes.SELECT });
@@ -468,7 +474,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         'apellido','nombre','cuil','fecha_nacimiento','sexo_id','email',
         'telefono','domicilio','numerodomicilio','depto','piso',
         'observacionesdireccion','cp','localidad_id','provincia_id','nacionalidad',
-        'observaciones',
+        'mp','observaciones',
       ];
       const AGENTE_COLS = [
         'ley_id','planta_id','categoria_id','funcion_id','ocupacion_id',
@@ -477,7 +483,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         'legajo','salario_mensual','estado_empleo',
         'decreto_designacion',
       ];
-      // servicio_id y sector_id viven en agentes_servicios, NO en agentes.
+      // servicio_id vive en agentes_servicios y sector_id en agentes_sectores, NO en agentes.
       // dependencia_id / reparticion_id ya no existen en agentes: la dependencia
       // se deriva del servicio vigente (servicios.reparticion_id -> reparticiones.dependencia_id).
       const newServicioId = (data as any).servicio_id;
@@ -551,7 +557,7 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           );
         }
 
-        // ── servicio_id / sector_id → agentes_servicios (NO van en agentes) ──
+        // ── servicio_id → agentes_servicios / sector_id → agentes_sectores ──
         if (fechaCierreVinculacion) {
           await sequelize.query(
             `UPDATE agentes_servicios
@@ -559,34 +565,66 @@ export function buildPersonalRouter(sequelize: Sequelize) {
              WHERE dni = :dni AND fecha_hasta IS NULL AND deleted_at IS NULL`,
             { replacements: { dni, fecha_hasta: fechaCierreVinculacion }, transaction: t }
           );
+          // El pase de sector vive en agentes_sectores (lo carga Jefe de Servicio) y es
+          // el que usan el organigrama, el fichero y los filtros por sector: si no se
+          // cierra acá, el agente egresado sigue figurando activo en su sector.
+          await sequelize.query(
+            `UPDATE agentes_sectores
+             SET fecha_hasta = :fecha_hasta, updated_at = NOW()
+             WHERE dni = :dni AND fecha_hasta IS NULL AND deleted_at IS NULL`,
+            { replacements: { dni, fecha_hasta: fechaCierreVinculacion }, transaction: t }
+          );
         } else if (newServicioId !== undefined || newSectorId !== undefined) {
           // Buscar el pase abierto actual
           const openPase = (await sequelize.query(
-            `SELECT id, servicio_id, sector_id FROM agentes_servicios
+            `SELECT id, servicio_id FROM agentes_servicios
              WHERE dni = :dni AND fecha_hasta IS NULL AND deleted_at IS NULL
              ORDER BY id DESC LIMIT 1`,
             { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
           )) as any[];
 
-          if (openPase.length > 0) {
-            // Actualizar los campos que cambiaron en el pase abierto
-            const updates: string[] = [];
-            const repl: Record<string, any> = { id: openPase[0].id };
-            if (newServicioId !== undefined) { updates.push('servicio_id = :servicio_id'); repl.servicio_id = newServicioId; }
-            if (newSectorId   !== undefined) { updates.push('sector_id = :sector_id');   repl.sector_id   = newSectorId; }
-            if (updates.length > 0) {
+          // El servicio vive en agentes_servicios...
+          if (newServicioId !== undefined) {
+            if (openPase.length > 0) {
               await sequelize.query(
-                `UPDATE agentes_servicios SET ${updates.join(', ')}, updated_at = NOW() WHERE id = :id`,
-                { replacements: repl, transaction: t }
+                `UPDATE agentes_servicios SET servicio_id = :servicio_id, updated_at = NOW() WHERE id = :id`,
+                { replacements: { id: openPase[0].id, servicio_id: newServicioId }, transaction: t }
+              );
+            } else if (newServicioId) {
+              await sequelize.query(
+                `INSERT INTO agentes_servicios (dni, servicio_id, fecha_desde, created_at, updated_at)
+                 VALUES (:dni, :servicio_id, CURDATE(), NOW(), NOW())`,
+                { replacements: { dni, servicio_id: newServicioId }, transaction: t }
               );
             }
-          } else if (newServicioId) {
-            // Sin pase abierto: crear uno nuevo con el servicio indicado
-            await sequelize.query(
-              `INSERT INTO agentes_servicios (dni, servicio_id, sector_id, fecha_desde, created_at, updated_at)
-               VALUES (:dni, :servicio_id, :sector_id, CURDATE(), NOW(), NOW())`,
-              { replacements: { dni, servicio_id: newServicioId, sector_id: newSectorId ?? null }, transaction: t }
-            );
+          }
+
+          // ...y el sector en agentes_sectores, que es su unica fuente: cambiar de
+          // sector cierra el pase vigente y abre uno nuevo, sin tocar el servicio.
+          if (newSectorId !== undefined) {
+            const openSector = (await sequelize.query(
+              `SELECT id, sector_id FROM agentes_sectores
+               WHERE dni = :dni AND fecha_hasta IS NULL AND deleted_at IS NULL
+               ORDER BY id DESC LIMIT 1`,
+              { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
+            )) as any[];
+
+            if (!openSector.length || Number(openSector[0].sector_id) !== Number(newSectorId)) {
+              if (openSector.length) {
+                await sequelize.query(
+                  `UPDATE agentes_sectores SET fecha_hasta = CURDATE(), updated_at = NOW() WHERE id = :id`,
+                  { replacements: { id: openSector[0].id }, transaction: t }
+                );
+              }
+              if (newSectorId) {
+                await sequelize.query(
+                  `INSERT INTO agentes_sectores (dni, sector_id, servicio_id, fecha_desde, motivo, created_at, updated_at)
+                   VALUES (:dni, :sector_id, :servicio_id, CURDATE(), 'Cambio de sector', NOW(), NOW())`,
+                  { replacements: { dni, sector_id: newSectorId,
+                      servicio_id: newServicioId ?? openPase[0]?.servicio_id ?? null }, transaction: t }
+                );
+              }
+            }
           }
         }
 
@@ -709,13 +747,13 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           `, { replacements: { dni }, type: QueryTypes.SELECT }),
 
           sequelize.query(`
+            /* historial de servicios: el sector tiene su propio historial en
+               agentes_sectores, que es la consulta de abajo */
             SELECT ags.id, ags.fecha_desde, ags.fecha_hasta,
                    ags.jefe_nombre, ags.motivo, ags.observaciones,
-                   srv.nombre AS servicio_nombre,
-                   sec.nombre AS sector_nombre
+                   srv.nombre AS servicio_nombre
             FROM agentes_servicios ags
             LEFT JOIN servicios srv ON srv.id = ags.servicio_id
-            LEFT JOIN sectores  sec ON sec.id = ags.sector_id
             WHERE ags.dni = :dni AND ags.deleted_at IS NULL
             ORDER BY ags.fecha_desde ASC
           `, { replacements: { dni }, type: QueryTypes.SELECT }),

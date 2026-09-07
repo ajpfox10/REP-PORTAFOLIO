@@ -74,6 +74,20 @@ function iconForNode(node: DocuNode) {
   return '📎';
 }
 
+// Hijos directos de la carpeta `path` dentro del árbol ('' = raíz). null si no se encuentra.
+function findFolderChildren(nodes: DocuNode[], path: string): DocuNode[] | null {
+  if (path === '') return nodes;
+  for (const n of nodes) {
+    if (n.type !== 'dir') continue;
+    if (n.path === path) return n.children || [];
+    if (n.children) {
+      const found = findFolderChildren(n.children, path);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 // ── Arbol recursivo de la carpeta DOCU (con drag & drop) ──────────────────────
 type TreeHandlers = {
   selectedPath: string | null;
@@ -190,6 +204,9 @@ export function TramitesTab() {
   const [selectedFolder, setSelectedFolder] = useState('');
   const [rootDragOver, setRootDragOver] = useState(false);
   const [viewer, setViewer] = useState<{ url: string; name: string; ext: string; path: string } | null>(null);
+  // Imagen a pantalla completa (doble click) y panel colapsable de contenido de carpeta.
+  const [zoom, setZoom] = useState<{ url: string; name: string } | null>(null);
+  const [contentsOpen, setContentsOpen] = useState(true);
   const viewerUrlRef = useRef<string | null>(null);
   const dragPathRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -206,6 +223,14 @@ export function TramitesTab() {
     return () => revokeViewer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cerrar la imagen a pantalla completa con Esc.
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setZoom(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoom]);
 
   const agentesPorTanda = useMemo(() => {
     const map = new Map<string, TandaAgente[]>();
@@ -448,19 +473,33 @@ export function TramitesTab() {
     await loadDocu(a.dni);
   }
 
-  async function abrirArchivo(node: DocuNode) {
-    if (!agente) return;
+  // Carga el archivo, lo deja en el visor y devuelve la URL (o null si falló).
+  async function loadFileBlob(node: DocuNode): Promise<string | null> {
+    if (!agente) return null;
     try {
       const { blob } = await apiFetchBlobWithMeta(
         `/tramites-documentales/docu-file?dni=${agente.dni}&path=${encodeURIComponent(node.path)}`
       );
+      setZoom(null);
       revokeViewer();
       const url = URL.createObjectURL(blob);
       viewerUrlRef.current = url;
       setViewer({ url, name: node.name, ext: node.ext || '', path: node.path });
+      return url;
     } catch (e: any) {
       toast.error('No se pudo abrir el archivo', e?.message || 'Error');
+      return null;
     }
+  }
+
+  async function abrirArchivo(node: DocuNode) {
+    await loadFileBlob(node);
+  }
+
+  // Doble click en una imagen: la carga y la abre a pantalla completa (tamaño real).
+  async function abrirArchivoZoom(node: DocuNode) {
+    const url = await loadFileBlob(node);
+    if (url && IMG_EXT.has(node.ext || '')) setZoom({ url, name: node.name });
   }
 
   async function moverArchivo(fromPath: string, toFolder: string) {
@@ -513,6 +552,13 @@ export function TramitesTab() {
 
   const allSelected = consultaRows.length > 0 && selected.size === consultaRows.length;
   const agentesTandaActual = agentesPorTanda.get(selectedTanda) || [];
+  // Contenido plano de la carpeta seleccionada (para el panel de abajo a la izquierda).
+  const folderContentsSorted = useMemo(
+    () => [...(findFolderChildren(docuTree, selectedFolder) || [])].sort((a, b) => (
+      a.type === b.type ? a.name.localeCompare(b.name, 'es') : a.type === 'dir' ? -1 : 1
+    )),
+    [docuTree, selectedFolder]
+  );
   const treeHandlers: TreeHandlers = {
     selectedPath: viewer?.path || null,
     selectedFolder,
@@ -691,38 +737,78 @@ export function TramitesTab() {
               </div>
 
               <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
-                {/* Arbol DOCU */}
-                <div
-                  style={{ width: 300, flexShrink: 0, border: rootDragOver ? `1px dashed ${ACCENT}` : BORDER, borderRadius: 8, overflow: 'auto', padding: 6, background: rootDragOver ? 'rgba(124,58,237,0.08)' : 'transparent' }}
-                  onDragOver={(e) => { e.preventDefault(); setRootDragOver(true); }}
-                  onDragLeave={() => setRootDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault(); setRootDragOver(false);
-                    if (e.dataTransfer.files?.length) void subirArchivos(e.dataTransfer.files, selectedFolder);
-                    else if (dragPathRef.current) void moverArchivo(dragPathRef.current, '');
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <div style={{ ...eyebrowStyle, flex: 1 }}>DOCU\{agente.dni}</div>
-                    <button type="button" title="Subir archivos" onClick={() => fileInputRef.current?.click()} style={miniBtn}>⬆ Subir</button>
-                    <button type="button" title="Nueva carpeta" onClick={crearCarpeta} style={miniBtn}>＋ Carpeta</button>
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 6 }}>
-                    Destino: <b style={{ color: '#94a3b8' }}>{selectedFolder || 'raíz'}</b>
-                    {selectedFolder ? <button type="button" onClick={() => setSelectedFolder('')} style={{ ...xBtn, fontSize: '0.7rem' }}>(raíz)</button> : null}
-                  </div>
-                  <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }}
-                    onChange={(e) => { if (e.target.files?.length) void subirArchivos(e.target.files, selectedFolder); e.target.value = ''; }} />
+                {/* Columna izquierda: arbol DOCU + panel de contenido de la carpeta */}
+                <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+                  {/* Arbol DOCU */}
+                  <div
+                    style={{ flex: 1, minHeight: 120, border: rootDragOver ? `1px dashed ${ACCENT}` : BORDER, borderRadius: 8, overflow: 'auto', padding: 6, background: rootDragOver ? 'rgba(124,58,237,0.08)' : 'transparent' }}
+                    onDragOver={(e) => { e.preventDefault(); setRootDragOver(true); }}
+                    onDragLeave={() => setRootDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault(); setRootDragOver(false);
+                      if (e.dataTransfer.files?.length) void subirArchivos(e.dataTransfer.files, selectedFolder);
+                      else if (dragPathRef.current) void moverArchivo(dragPathRef.current, '');
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <div style={{ ...eyebrowStyle, flex: 1 }}>DOCU\{agente.dni}</div>
+                      <button type="button" title="Subir archivos" onClick={() => fileInputRef.current?.click()} style={miniBtn}>⬆ Subir</button>
+                      <button type="button" title="Nueva carpeta" onClick={crearCarpeta} style={miniBtn}>＋ Carpeta</button>
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 6 }}>
+                      Destino: <b style={{ color: '#94a3b8' }}>{selectedFolder || 'raíz'}</b>
+                      {selectedFolder ? <button type="button" onClick={() => setSelectedFolder('')} style={{ ...xBtn, fontSize: '0.7rem' }}>(raíz)</button> : null}
+                    </div>
+                    <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }}
+                      onChange={(e) => { if (e.target.files?.length) void subirArchivos(e.target.files, selectedFolder); e.target.value = ''; }} />
 
-                  {docuLoading ? (
-                    <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 6 }}>Leyendo carpeta…</div>
-                  ) : !docuExists ? (
-                    <div style={{ color: '#f59e0b', fontSize: '0.8rem', padding: 6 }}>La carpeta no existe todavía. Subí un archivo o creá una carpeta para armarla.</div>
-                  ) : !docuTree.length ? (
-                    <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 6 }}>Carpeta vacía.</div>
-                  ) : (
-                    <TreeView nodes={docuTree} h={treeHandlers} />
-                  )}
+                    {docuLoading ? (
+                      <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 6 }}>Leyendo carpeta…</div>
+                    ) : !docuExists ? (
+                      <div style={{ color: '#f59e0b', fontSize: '0.8rem', padding: 6 }}>La carpeta no existe todavía. Subí un archivo o creá una carpeta para armarla.</div>
+                    ) : !docuTree.length ? (
+                      <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 6 }}>Carpeta vacía.</div>
+                    ) : (
+                      <TreeView nodes={docuTree} h={treeHandlers} />
+                    )}
+                  </div>
+
+                  {/* Panel colapsable: contenido de la carpeta seleccionada */}
+                  <div style={{ flexShrink: 0, border: BORDER, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: contentsOpen ? 240 : 40 }}>
+                    <div
+                      onClick={() => setContentsOpen((v) => !v)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)' }}
+                    >
+                      <span style={{ width: 12, display: 'inline-block', color: '#94a3b8' }}>{contentsOpen ? '▾' : '▸'}</span>
+                      <div style={{ ...eyebrowStyle, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        Contenido: {selectedFolder ? selectedFolder.split('/').pop() : 'raíz'}
+                      </div>
+                      <span style={{ color: '#64748b', fontSize: '0.7rem' }}>{folderContentsSorted.length}</span>
+                    </div>
+                    {contentsOpen ? (
+                      <div style={{ overflow: 'auto', padding: 4 }}>
+                        {!folderContentsSorted.length ? (
+                          <div style={{ color: '#64748b', fontSize: '0.78rem', padding: 6 }}>Carpeta vacía.</div>
+                        ) : folderContentsSorted.map((child) => (
+                          <div
+                            key={child.path}
+                            title={IMG_EXT.has(child.ext || '') ? `${child.name} — doble click para ver en grande` : child.name}
+                            onClick={() => { if (child.type === 'dir') setSelectedFolder(child.path); else void abrirArchivo(child); }}
+                            onDoubleClick={() => { if (child.type === 'file' && IMG_EXT.has(child.ext || '')) void abrirArchivoZoom(child); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', cursor: 'pointer', borderRadius: 6, fontSize: '0.8rem',
+                              background: viewer?.path === child.path ? 'rgba(124,58,237,0.25)' : 'transparent',
+                              color: child.type === 'dir' ? '#cbd5e1' : viewer?.path === child.path ? '#fff' : '#94a3b8',
+                            }}
+                          >
+                            <span>{iconForNode(child)}</span>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: child.type === 'dir' ? 600 : 400 }}>{child.name}</span>
+                            {child.bytes ? <small style={{ color: '#64748b' }}>{bytesLabel(child.bytes)}</small> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
                 {/* Visor */}
@@ -735,7 +821,13 @@ export function TramitesTab() {
                     <iframe title={viewer.name} src={viewer.url} style={{ border: 'none', width: '100%', height: '100%', minHeight: 480 }} />
                   ) : IMG_EXT.has(viewer.ext) ? (
                     <div style={{ overflow: 'auto', padding: 12, textAlign: 'center' }}>
-                      <img src={viewer.url} alt={viewer.name} style={{ maxWidth: '100%' }} />
+                      <img
+                        src={viewer.url}
+                        alt={viewer.name}
+                        title="Doble click para verla en tamaño real"
+                        onDoubleClick={() => setZoom({ url: viewer.url, name: viewer.name })}
+                        style={{ maxWidth: '100%', cursor: 'zoom-in' }}
+                      />
                     </div>
                   ) : (
                     <div style={{ margin: 'auto', textAlign: 'center', color: '#cbd5e1', fontSize: '0.85rem' }}>
@@ -749,6 +841,29 @@ export function TramitesTab() {
           )}
         </div>
       </section>
+
+      {/* Imagen a pantalla completa (doble click en una imagen) */}
+      {zoom ? (
+        <div
+          onClick={() => setZoom(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.88)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: 24, cursor: 'zoom-out',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#cbd5e1', fontSize: '0.85rem', marginBottom: 10 }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70vw' }}>{zoom.name}</span>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setZoom(null); }} style={{ ...miniBtn, fontSize: '0.8rem' }}>✕ Cerrar (Esc)</button>
+          </div>
+          <img
+            src={zoom.url}
+            alt={zoom.name}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '95vw', maxHeight: '85vh', objectFit: 'contain', boxShadow: '0 0 40px rgba(0,0,0,0.6)', borderRadius: 4 }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

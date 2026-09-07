@@ -1,0 +1,135 @@
+# OT-117: PodDisruptionBudgets for all critical services.
+# minAvailable: 1 ensures at least one pod stays running during node drains
+# and voluntary disruptions (rolling updates, cluster upgrades).
+# For services with replicas=1 (single-instance), this prevents full downtime
+# during maintenance windows.
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-auth
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-auth
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-patients
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-patients
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-medical
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-medical
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-lab-imaging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-lab-imaging
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-billing
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-billing
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-grooming
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-grooming
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-reports
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-reports
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-notifications
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-notifications
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-portal
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-portal
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-telemedicine
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-telemedicine
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-ai
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-ai
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-documents
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vetmanager-documents

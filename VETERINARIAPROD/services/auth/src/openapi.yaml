@@ -1,0 +1,860 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Auth Service
+  version: '1.0.0'
+  description: Authentication, sessions, 2FA and API key management
+
+servers:
+  - url: /
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+            code:
+              type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        captchaToken:
+          type: string
+          description: hCaptcha response token when CAPTCHA is enabled
+
+    LoginResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          required: [accessToken, refreshToken, expiresIn, user]
+          properties:
+            accessToken:
+              type: string
+            refreshToken:
+              type: string
+            expiresIn:
+              type: integer
+            user:
+              type: object
+              required: [id, email, roles]
+              properties:
+                id:
+                  type: integer
+                email:
+                  type: string
+                roles:
+                  type: array
+                  items:
+                    type: string
+
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          description: Optional fallback. Preferred source is the httpOnly refreshToken cookie.
+
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        captchaToken:
+          type: string
+          description: hCaptcha response token when CAPTCHA is enabled
+
+    PasswordResetConfirm:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+
+    InternalApiKeyRequest:
+      type: object
+      required: [apiKey]
+      properties:
+        apiKey:
+          type: string
+          minLength: 8
+
+    InternalOrgLookupResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+            slug:
+              type: string
+            name:
+              type: string
+
+paths:
+  /internal/validate-api-key:
+    post:
+      summary: Validate an API key for gateway/internal use
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternalApiKeyRequest'
+      responses:
+        '200':
+          description: API key validated
+        '401':
+          description: Invalid API key
+
+  /internal/orgs/by-slug/{slug}:
+    get:
+      summary: Resolve organization by slug for gateway/subdomain routing
+      security: []
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalOrgLookupResponse'
+        '404':
+          description: Organization not found
+
+  /captcha/config:
+    get:
+      summary: Get public CAPTCHA settings
+      responses:
+        '200':
+          description: Public CAPTCHA configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: object
+                    required: [enabled, siteKey]
+                    properties:
+                      enabled:
+                        type: boolean
+                      siteKey:
+                        type: string
+
+  /login:
+    post:
+      summary: Authenticate user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Account locked or rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /refresh:
+    post:
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [accessToken, refreshToken, expiresIn]
+                    properties:
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+                      expiresIn:
+                        type: integer
+        '400':
+          description: Missing refreshToken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /logout:
+    post:
+      summary: Revoke current session
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /logout-all:
+    post:
+      summary: Revoke all sessions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All sessions revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /me:
+    get:
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /password-reset/request:
+    post:
+      summary: Request password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '200':
+          description: Email sent (always 200 to prevent enumeration)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /password-reset/confirm:
+    post:
+      summary: Set new password using reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+      responses:
+        '200':
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid token or weak password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /change-password:
+    post:
+      summary: Change password (authenticated)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          description: Wrong current password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api-keys:
+    get:
+      summary: List API keys
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+    post:
+      summary: Create API key
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                expiresInDays:
+                  type: integer
+                  minimum: 1
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+
+  /api-keys/{id}:
+    delete:
+      summary: Delete API key
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /sessions:
+    get:
+      summary: List active sessions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sessions list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /sessions/{id}:
+    delete:
+      summary: Revoke a specific session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /2fa/setup:
+    post:
+      summary: Start 2FA setup
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 2FA setup data
+
+  /2fa/verify:
+    post:
+      summary: Verify 2FA token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 2FA verified
+
+  /2fa:
+    delete:
+      summary: Disable 2FA
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 2FA disabled
+
+  /2fa/challenge:
+    post:
+      summary: Validate 2FA challenge
+      security: []
+      responses:
+        '200':
+          description: 2FA challenge accepted
+
+  /google/connect:
+    get:
+      summary: Start Google Calendar OAuth flow
+      security:
+        - bearerAuth: []
+      responses:
+        '302':
+          description: Redirect to Google OAuth
+
+  /google/callback:
+    get:
+      summary: Google OAuth callback
+      security: []
+      responses:
+        '302':
+          description: Redirect back to frontend
+
+  /audit/export:
+    get:
+      summary: Export audit logs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Audit export
+
+  /admin/rbac/roles:
+    get:
+      summary: List roles and permissions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Roles list
+
+  /admin/rbac/orgs/{orgId}/overrides:
+    get:
+      summary: List org role overrides
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Role overrides
+
+  /admin/rbac/orgs/{orgId}/roles/{role}/effective:
+    get:
+      summary: Get effective permissions for an org role
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: role
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Effective permissions
+
+  /admin/rbac/orgs/{orgId}/roles/{role}:
+    put:
+      summary: Set role overrides
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: role
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Overrides saved
+    delete:
+      summary: Clear role overrides
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: role
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Overrides removed
+
+  /admin/rbac/orgs/{orgId}/sync:
+    post:
+      summary: Refresh RBAC cache
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Cache warmed
+
+  /admin/rbac/security-alerts:
+    get:
+      summary: List security alerts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Security alerts
+
+  /admin/rbac/security-alerts/{id}/acknowledge:
+    post:
+      summary: Acknowledge security alert
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Alert acknowledged
+
+  /admin/users:
+    get:
+      summary: List admin users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Users list
+    post:
+      summary: Create admin user
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: User created
+
+  /admin/users/{id}/deactivate:
+    patch:
+      summary: Deactivate admin user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: User deactivated
+
+  /admin/auth/policy:
+    get:
+      summary: Get organization authentication policy
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authentication policy
+    patch:
+      summary: Update organization authentication policy
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authentication policy updated
+
+  /admin/plugins:
+    get:
+      summary: List plugins
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Plugins list
+
+  /admin/plugins/{id}/enable:
+    post:
+      summary: Enable plugin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Plugin enabled
+
+  /admin/plugins/{id}/disable:
+    post:
+      summary: Disable plugin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Plugin disabled
+
+  /admin/plugins/{id}/config:
+    put:
+      summary: Update plugin config
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Config updated
+
+  /me/ui-schema:
+    get:
+      summary: Get current UI schema
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: UI schema
+
+  /.well-known/jwks.json:
+    get:
+      summary: JWKS public key set
+      security: []
+      responses:
+        '200':
+          description: JWKS document
+
+  /schema:
+    get:
+      summary: List database schemas
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Schemas list
+
+  /schema/{table}:
+    get:
+      summary: Get table schema
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: table
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Table schema
+
+  /schema/{table}/typescript:
+    get:
+      summary: Generate TypeScript schema
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: table
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: TypeScript output
+
+  /schema/{table}/zod:
+    get:
+      summary: Generate Zod schema
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: table
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Zod output
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  service:
+                    type: string

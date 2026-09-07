@@ -1,0 +1,263 @@
+SiAPe JAB map - 2026-08-20 16:01:31
+nodes_seen=1056 nodes_saved=260
+
+[frame] name='Sistema Unico Provincial de Administracion de Personal' desc='' states='activado,enfocable,visible,mostrando,activo,redimensionable' bounds=(-8,-8,1296,736) action=False text=False
+  [root pane] name='' desc='' states='activado,enfocable,visible,mostrando,opaco' bounds=(0,23,1280,697) action=False text=False
+    [layered pane] name='' desc='' states='activado,enfocable,visible,mostrando' bounds=(0,23,1280,697) action=False text=False
+      [panel] name='' desc='' states='activado,enfocable,visible,mostrando,opaco' bounds=(0,23,1280,697) action=False text=False
+        [frame] name='' desc='' states='activado,enfocable,visible,mostrando,activo' bounds=(0,23,1280,697) action=False text=False
+            [panel] name='' desc='' states='activado,visible,mostrando' bounds=(0,79,1280,641) action=False text=False
+            [panel] name='' desc='' states='activado,visible,mostrando' bounds=(0,23,1280,56) action=False text=False
+              [scroll pane] name='' desc='' states='activado,visible,mostrando' bounds=(0,79,1280,641) action=False text=False
+              [panel] name='' desc='' states='activado,visible,mostrando' bounds=(0,23,1280,24) action=False text=False
+              [panel] name='' desc='' states='activado,visible,mostrando' bounds=(0,47,1280,32) action=False text=False
+                [viewport] name='' desc='' states='activado,visible,mostrando' bounds=(0,79,1265,641) action=False text=False
+                [scroll bar] name='' desc='' states='activado,visible,mostrando,vertical' bounds=(1265,79,15,641) action=False text=False
+                [panel] name='' desc='' states='activado,visible,mostrando' bounds=(1261,23,19,24) action=False text=False
+                [menu bar] name='' desc='' states='activado,visible,mostrando,opaco,horizontal' bounds=(0,23,1261,24) action=False text=False
+                [text] name='' desc='' states='activado,visible,mostrando,línea única' bounds=(511,54,873,18) action=False text=True
+                [push button] name='Guardar' desc='Guardar' states='activado,enfocable,visible,mostrando' bounds=(4,51,24,24) action=True text=False
+                [push button] name='Imprimir' desc='Imprimir' states='activado,enfocable,visible,mostrando' bounds=(28,51,24,24) action=True text=False
+                [push button] name='Agregar' desc='Agregar' states='activado,enfocable,visible,mostrando' bounds=(59,51,24,24) action=True text=False
+                [push button] name=' Save ' desc=' Save ' states='activado,enfocable,visible,mostrando' bounds=(83,51,24,24) action=True text=False
+                [push button] name='Enter Query' desc='Enter Query' states='enfocable,visible,mostrando' bounds=(113,51,24,24) action=True text=False
+                [push button] name='Re Query' desc='Re Query' states='enfocable,visible,mostrando' bounds=(137,51,24,24) action=True text=False
+                [push button] name='cancel' desc='cancel' states='enfocable,visible,mostrando' bounds=(161,51,24,24) action=True text=False
+                [push button] name='Up' desc='Up' states='activado,enfocable,visible,mostrando' bounds=(192,51,24,24) action=True text=False
+                [push button] name='Down' desc='Down' states='activado,enfocable,visible,mostrando' bounds=(216,51,24,24) action=True text=False
+                [push button] name=' Save ' desc=' Save ' states='activado,enfocable,visible,mostrando' bounds=(240,51,24,24) action=True text=False
+                [push button] name=' Save ' desc=' Save ' states='activado,enfocable,visible,mostrando' bounds=(264,51,24,24) action=True text=False
+                [push button] name='Acerca de' desc='Acerca de' states='activado,enfocable,visible,mostrando' bounds=(295,51,24,24) action=True text=False
+                [push button] name='Calcular diferencia entre Fechas' desc='Calcular diferencia entre Fechas' states='activado,enfocable,visible,mostrando' bounds=(319,51,24,24) action=True text=False
+                [push button] name='Auditoria' desc='Auditoria' states='activado,enfocable,visible,mostrando' bounds=(343,51,24,24) action=True text=False
+                [push button] name='Enviar Solicitud al Administrador' desc='Enviar Solicitud al Administrador' states='activado,enfocable,visible,mostrando' bounds=(371,51,24,24) action=True text=False
+                [push button] name='Salir' desc='Salir' states='activado,enfocable,visible,mostrando' bounds=(400,51,24,24) action=True text=False
+                  [desktop pane] name='' desc='' states='activado,enfocable,visible,mostrando' bounds=(0,79,1265,1225) action=False text=False
+                  [menu item] name='SIAPE ALT S' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(15,23,48,24) action=True text=False
+                  [menu] name='MILegajo ALT M' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(63,23,60,24) action=True text=False
+                  [menu] name='Personas ALT P' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(123,23,64,24) action=True text=False
+                  [menu] name='Estructuras ALT E' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(187,23,73,24) action=True text=False
+                  [menu] name='Hospitales ALT H' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(260,23,70,24) action=True text=False
+                  [menu] name='Cargos ALT C' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(330,23,51,24) action=True text=False
+                  [menu] name='Autorizante ALT A' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(381,23,70,24) action=True text=False
+                  [menu] name='Novedades ALT N' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(451,23,73,24) action=True text=False
+                  [menu] name='Rec. Médicos ALT R' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(524,23,84,24) action=True text=False
+                  [menu] name='Autoseguro ALT A' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(608,23,73,24) action=True text=False
+                  [menu] name='Exportaciones ALT E' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(681,23,88,24) action=True text=False
+                  [menu] name='Jubilación Ejecutiva ALT J' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(769,23,118,24) action=True text=False
+                  [menu] name='Documentos Administrativos ALT D' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(887,23,168,24) action=True text=False
+                  [menu] name='Trámites ALT T' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(1055,23,59,24) action=True text=False
+                  [menu] name='Régimen Disciplinario ALT R' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(1114,23,133,24) action=True text=False
+                  [menu] name='Mantenimiento ALT M' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(1247,23,91,24) action=True text=False
+                  [menu] name='Ayuda ALT A' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(1338,23,43,24) action=True text=False
+                  [menu] name='Generalidades ALT G' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(1381,23,92,24) action=True text=False
+                  [menu item] name='Salir ALT S' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(1473,23,39,24) action=True text=False
+                  [menu] name='Ventana ALT V' desc='' states='activado,visible,mostrando,seleccionable,enfocable' bounds=(1512,23,55,24) action=True text=False
+                    [internal frame] name='Ficheros' desc='' states='activado,enfocable,visible,mostrando,activo' bounds=(0,79,1006,624) action=True text=False
+                    [internal frame] name='.' desc='' states='activado,visible,mostrando' bounds=(1,1279,7,25) action=True text=False
+                    [menu item] name='Legajo Electrónico nemotécnico L' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Agenda Personal nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Trámites Personales nemotécnico T' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Novedades nemotécnico N' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Autorizaciones nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Preferencias nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Mi CV nemotécnico M' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Administración nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Antigüedad nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Historial Licencias nemotécnico H' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Currículum Vitae nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Legajo Personal nemotécnico L' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Transformación nemotécnico T' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Consultas y Listados nemotécnico s' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Situación de Revista nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Asignación y Cambio de Legajo nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Historial de Cargos nemotécnico H' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Asignar Exptes. a un Expediente Principal nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Plan de Retiro Voluntario  nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Renovación - Designación nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Régimen Modular nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Renovación de Planta Temporaria nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Actualización de Contratos. Planta Temporaria nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Confirmación de Cargos. Presupuesto Promulgado nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Consultas y Listados nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Bandeja de Autorizaciones nemotécnico B' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Gestión Integral de Asistencia nemotécnico G' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Parte Diario de Novedades nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Resumen Mensual de Novedades nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Ausencias Eventuales nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Comisiones nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Corte de Licencia Anual nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Corte/Anulación Comisiones nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Licencias y Permisos nemotécnico L' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Carpetas Médicas nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Carpetas Médicas Pendientes nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Permisos x Horario nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Cambios de Horario nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Horario Compensatorio nemotécnico H' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Personas a mi Cargo nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Consultas sobre su Personal nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Biometría nemotécnico B' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Novedades de Ausentismo nemotécnico N' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Solicitud de Carpetas Médicas nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Carpetas Médicas Pedidas y Otorgadas nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Administración de Autorizantes por Estructuras nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Administración de RA / RAP nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Administración de Responsables nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Consulta de Histórico de Autorizantes nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Habilitación de Partes Diarios nemotécnico H' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Informe de Partes Diarios nemotécnico I' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Resumen Mensual de Comisiones Y Bol.Sal.Of. nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Resumen de Envíos de Partes nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Tiempo Acumulado nemotécnico T' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Bajas Preventivas nemotécnico B' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Reintegro Bajas Preventivas nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Licencias por Expediente nemotécnico L' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Horario Administrativo nemotécnico H' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Planillas de Asistencia nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Resumen de Asistencias y Novedades nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Preocupacional nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Examenes Medicos nemotécnico E' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Accidentes nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Consultas a Exportar nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Administración del Hospital nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Proponer agentes nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Nuevo Trámite nemotécnico N' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Afectar agentes a un trámite - Trámite masivo nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Totales nemotécnico T' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Sumarios Administrativos nemotécnico u' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Regimen Disciplinario nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Días de sanción por agente nemotécnico D' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu] name='Regimen Disciplinario nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Manuales y Videos nemotécnico M' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Informe de Destinos nemotécnico I' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Informe de Lic.x Exp/Sanciones nemotécnico I' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Cascada nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Mosaico Horizontal nemotécnico H' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                    [menu item] name='Mosaico Vertical nemotécnico M' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [panel] name='' desc='' states='activado,visible,mostrando' bounds=(3,103,1000,597) action=False text=False
+                      [menu item] name='Solicitud de Licencias nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Solicitudes Pendientes de Resolución nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Permanencia por Reloj nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Novedades de Asistencia nemotécnico N' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Mi Planilla de Asistencia nemotécnico M' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Mi Responsable de Asistencia nemotécnico M' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Personas por Estructura nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Plantel Nominado nemotécnico N' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Plantel Innominado nemotécnico I' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Plantel Nominado por Acto de Nombramiento nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Pantel Temporario Designado nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Plantel Designado Ley 10592 nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Plantel Nominado Reservado nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Agentes por Partido nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Agentes sin Lugar de Prestacion de Servicio nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Bajas Preventivas Sin Acto nemotécnico B' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Cantidad Total Agentes nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Resumen Situación de Organismos nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Estadísticas nemotécnico E' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Planilla de Asistencia nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Fichadas de Agentes a Cargo nemotécnico F' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Gestión del Tiempo nemotécnico G' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Irregularidades nemotécnico I' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Fichadas de Agentes nemotécnico F' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu] name='Administración nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Resumen Diario de Novedades nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Personas con Novedades nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Personas - Cantidad de Ausencias nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Ausentismo nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Listado de Inasistencias nemotécnico L' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Remito de Carpetas Médicas nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Informe de Bajas Preventivas nemotécnico I' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Agentes por Destino nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Destino - Agente nemotécnico D' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Personas que adeudan Prestación de Servicios nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Partes Diarios Enviados nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Pendientes de Justificar nemotécnico P' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Solicitar Turnos nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Sugerir Turno nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Seguimiento nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Accidentes en Trámite nemotécnico A' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Sumarios Por Persona nemotécnico S' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Regimen por Expediente nemotécnico R' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                      [menu item] name='Listado Regimen Disciplinario nemotécnico L' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                        [scroll pane] name='' desc='' states='activado,enfocable,visible,mostrando' bounds=(3,103,1000,597) action=False text=False
+                        [menu item] name='Configuración - Procesamiento nemotécnico C' desc='' states='activado,visible,seleccionable,enfocable' bounds=(-1,-1,-1,-1) action=True text=False
+                          [viewport] name='' desc='' states='activado,visible,mostrando,opaco' bounds=(3,103,1000,597) action=False text=False
+                            [panel] name='' desc='' states='activado,visible,mostrando,opaco' bounds=(3,103,1000,600) action=False text=False
+                            [panel] name='' desc='' states='activado,visible,mostrando,opaco' bounds=(4,1301,784,485) action=False text=False
+                              [scroll pane] name='' desc='' states='activado,enfocable,visible,mostrando' bounds=(3,103,1000,600) action=False text=False
+                              [scroll pane] name='' desc='' states='activado,visible,mostrando' bounds=(4,1301,784,485) action=False text=False
+                                [viewport] name='' desc='' states='activado,visible,mostrando,opaco' bounds=(3,103,1000,600) action=False text=False
+                                [viewport] name='' desc='' states='activado,visible,mostrando,opaco' bounds=(4,1301,784,485) action=False text=False
+                                    [scroll bar] name='' desc='' states='activado,visible,mostrando,vertical' bounds=(970,278,20,306) action=False text=False
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,enfocado,editable,línea única' bounds=(158,135,426,27) action=False text=True
+                                    [text] name='' desc='' states='activado,visible,mostrando,línea única' bounds=(784,115,200,21) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,editable,línea única' bounds=(158,178,400,26) action=False text=True
+                                    [push button] name='...' desc='...' states='activado,enfocable,visible,mostrando' bounds=(559,178,27,26) action=True text=False
+                                    [panel] name='' desc='' states='activado,visible,mostrando,opaco' bounds=(158,216,120,19) action=False text=False
+                                    [push button] name='FILTRAR' desc='FILTRAR' states='activado,enfocable,visible,mostrando' bounds=(618,135,120,27) action=True text=False
+                                    [push button] name='HISTORICOS' desc='HISTORICOS' states='activado,enfocable,visible,mostrando' bounds=(616,178,120,26) action=True text=False
+                                    [push button] name='NOVEDADES Alt N' desc='NOVEDADES Alt N' states='activado,enfocable,visible,mostrando' bounds=(868,655,120,27) action=True text=False
+                                    [push button] name='SOLICITUDES Alt B' desc='SOLICITUDES Alt B' states='activado,enfocable,visible,mostrando' bounds=(599,655,120,27) action=True text=False
+                                    [push button] name='JUSTIFICACION Alt B' desc='JUSTIFICACION Alt B' states='activado,enfocable,visible,mostrando' bounds=(732,655,120,27) action=True text=False
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,276,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,304,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,332,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,360,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,388,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,416,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,444,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,472,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,500,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,528,16,27) action=False text=True
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea única' bounds=(15,556,16,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,276,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,304,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,332,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,360,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,388,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,416,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,444,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,472,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,500,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,528,64,27) action=False text=True
+                                    [text] name='LEGAJO Necesario' desc='LEGAJO Necesario' states='activado,enfocable,visible,mostrando,línea única' bounds=(32,556,64,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,275,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,303,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,331,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,359,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,387,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,415,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,443,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,471,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,499,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,527,248,27) action=False text=True
+                                    [text] name='APELLIDO Y NOMBRE' desc='APELLIDO Y NOMBRE' states='activado,enfocable,visible,mostrando,línea única' bounds=(99,555,248,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,275,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,303,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,331,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,359,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,387,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,415,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,443,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,471,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,499,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,527,107,27) action=False text=True
+                                    [text] name='DESTINO' desc='DESTINO' states='activado,enfocable,visible,mostrando,línea única' bounds=(351,555,107,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,275,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,303,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,331,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,359,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,387,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,415,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,443,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,471,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,499,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,527,506,27) action=False text=True
+                                    [text] name='ESTRUCTURA' desc='ESTRUCTURA' states='activado,enfocable,visible,mostrando,línea única' bounds=(458,555,506,27) action=False text=True
+                                    [scroll pane] name='' desc='' states='activado,visible,mostrando' bounds=(14,599,969,27) action=False text=False
+                                    [scroll pane] name='' desc='' states='activado,visible,mostrando' bounds=(831,138,115,112) action=False text=False
+                                    [text] name='' desc='' states='activado,enfocable,visible,mostrando,editable,línea única' bounds=(4,1301,1,3) action=False text=True
+                                      [check box] name='SOLO CONSULTA' desc='SOLO CONSULTA' states='activado,enfocable,visible,mostrando,opaco' bounds=(158,216,113,19) action=True text=False
+                                      [text] name='' desc='' states='activado,enfocable,visible,mostrando,línea múltiple' bounds=(16,601,965,23) action=False text=True
+                                      [panel] name='' desc='' states='activado,enfocable,visible,mostrando,opaco' bounds=(833,140,111,108) action=False text=False
+                                          [push button] name='' desc='' states='activado,visible,opaco' bounds=(-1,-1,-1,-1) action=True text=False

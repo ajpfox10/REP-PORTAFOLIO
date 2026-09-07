@@ -1,0 +1,31 @@
+BASELINES INDEX
+
+Este archivo centraliza los baselines operativos, de seguridad y de expansion que estan distribuidos en `docs/`.
+Los archivos listados abajo siguen siendo la fuente de verdad de cada tema.
+
+1. Seguridad y secretos
+- [SECRETS_MANAGEMENT_BASELINE.txt](./SECRETS_MANAGEMENT_BASELINE.txt)
+- [ALERT_ROUTING_BASELINE.txt](./ALERT_ROUTING_BASELINE.txt)
+- [SLO_ALERTING_BASELINE.txt](./SLO_ALERTING_BASELINE.txt)
+- [GRAFANA_ALERTING_BASELINE.txt](./GRAFANA_ALERTING_BASELINE.txt)
+
+2. Operacion y resiliencia
+- [CHAOS_SCENARIOS_MATRIX.txt](./CHAOS_SCENARIOS_MATRIX.txt)
+- [RETENTION_AND_COST_POLICY.txt](./RETENTION_AND_COST_POLICY.txt)
+- [BACKEND_GAP_A_10.txt](./BACKEND_GAP_A_10.txt)
+
+3. Arquitectura y expansion
+- [PLAN_DE_EXPANSION.txt](./PLAN_DE_EXPANSION.txt)
+- [BASE_COMUN_MATRIZ_SERVICIOS.txt](./BASE_COMUN_MATRIZ_SERVICIOS.txt)
+- [PERMISOS_CAPAS_MATRIZ.txt](./PERMISOS_CAPAS_MATRIZ.txt)
+- [SHARED_CONVENCIONES_SERVICIOS.txt](./SHARED_CONVENCIONES_SERVICIOS.txt)
+
+4. Contexto relacionado
+- [runbook.md](./runbook.md)
+- [backup-restore.md](./backup-restore.md)
+- [rollback.md](./rollback.md)
+- [architecture.md](./architecture.md)
+
+5. Recomendacion de uso
+- Si necesitas evaluar una dimension, empieza por el baseline correspondiente y usa este indice como mapa.
+- Si agregas un baseline nuevo, registralo aqui para que no vuelva a quedar disperso.

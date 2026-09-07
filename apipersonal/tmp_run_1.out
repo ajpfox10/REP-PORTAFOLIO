@@ -1,0 +1,12 @@
+shard 1/3: 240 archivos
+Error in pixScaleAreaMap: pixd too small
+Error in pixClone: pixs not defined
+Error in pixCopyText: pixd not defined
+Error in pixCopyInputFormat: pixd not defined
+Scaling pix of size 6, 639 by factor 0.056338 made null pix!!
+Bad pix from ImageData!
+Line cannot be recognized!!
+Error in pixReadStream: Unknown format: no pix returned
+Error in pixRead: pix not read
+Image file /input cannot be read!
+FIN shard 1 · movidos 7 · sin clasificar 232 · dni ajeno 0 · errores 1

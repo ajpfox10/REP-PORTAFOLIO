@@ -2083,6 +2083,456 @@
         }
       }
     },
+    "/api/v1/agentes_servicios_dependencia_bkp": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List agentes_servicios_dependencia_bkp",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_agentes_servicios_dependencia_bkp"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create agentes_servicios_dependencia_bkp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_servicios_dependencia_bkp_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/agentes_servicios_dependencia_bkp/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get agentes_servicios_dependencia_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update agentes_servicios_dependencia_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_servicios_dependencia_bkp"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch agentes_servicios_dependencia_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_servicios_dependencia_bkp_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete agentes_servicios_dependencia_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/agentes_servicios_sector_bkp": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List agentes_servicios_sector_bkp",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_agentes_servicios_sector_bkp"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create agentes_servicios_sector_bkp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_servicios_sector_bkp_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/agentes_servicios_sector_bkp/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get agentes_servicios_sector_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update agentes_servicios_sector_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_servicios_sector_bkp"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch agentes_servicios_sector_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_servicios_sector_bkp_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete agentes_servicios_sector_bkp by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/alerta_vistas": {
       "get": {
         "tags": [
@@ -5233,6 +5683,231 @@
         }
       }
     },
+    "/api/v1/cambios_dni": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List cambios_dni",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_cambios_dni"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create cambios_dni",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cambios_dni_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/cambios_dni/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get cambios_dni by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update cambios_dni by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cambios_dni"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch cambios_dni by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cambios_dni_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete cambios_dni by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/categorias": {
       "get": {
         "tags": [
@@ -6583,6 +7258,231 @@
         }
       }
     },
+    "/api/v1/cola_carga_stress": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List cola_carga_stress",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_cola_carga_stress"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create cola_carga_stress",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cola_carga_stress_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/cola_carga_stress/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get cola_carga_stress by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update cola_carga_stress by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cola_carga_stress"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch cola_carga_stress by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_cola_carga_stress_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete cola_carga_stress by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/concursos_funciones_examenes": {
       "get": {
         "tags": [
@@ -7913,6 +8813,231 @@
           }
         ],
         "summary": "Delete dependencias by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/descarga_tiempo_acumulado": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List descarga_tiempo_acumulado",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_descarga_tiempo_acumulado"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create descarga_tiempo_acumulado",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_descarga_tiempo_acumulado_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/descarga_tiempo_acumulado/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get descarga_tiempo_acumulado by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update descarga_tiempo_acumulado by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_descarga_tiempo_acumulado"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch descarga_tiempo_acumulado by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_descarga_tiempo_acumulado_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete descarga_tiempo_acumulado by id",
         "parameters": [
           {
             "name": "id",
@@ -12571,6 +13696,231 @@
         }
       }
     },
+    "/api/v1/historial_bkp_20260828": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List historial_bkp_20260828",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_historial_bkp_20260828"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create historial_bkp_20260828",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_historial_bkp_20260828_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/historial_bkp_20260828/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get historial_bkp_20260828 by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update historial_bkp_20260828 by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_historial_bkp_20260828"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch historial_bkp_20260828 by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_historial_bkp_20260828_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete historial_bkp_20260828 by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/historial_estructura": {
       "get": {
         "tags": [
@@ -13901,6 +15251,231 @@
           }
         ],
         "summary": "Delete jubilacion_calculos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/jubilacion_citas": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List jubilacion_citas",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_jubilacion_citas"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create jubilacion_citas",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_jubilacion_citas_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/jubilacion_citas/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get jubilacion_citas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update jubilacion_citas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_jubilacion_citas"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch jubilacion_citas by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_jubilacion_citas_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete jubilacion_citas by id",
         "parameters": [
           {
             "name": "id",
@@ -24721,6 +26296,231 @@
         }
       }
     },
+    "/api/v1/stress_cargados": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List stress_cargados",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_stress_cargados"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create stress_cargados",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_stress_cargados_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/stress_cargados/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get stress_cargados by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update stress_cargados by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_stress_cargados"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch stress_cargados by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_stress_cargados_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete stress_cargados by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/tareas": {
       "get": {
         "tags": [
@@ -30512,10 +32312,6 @@
           "dni": {
             "type": "number"
           },
-          "dependencia_id": {
-            "type": "number",
-            "nullable": true
-          },
           "nombre": {
             "type": "string",
             "nullable": true
@@ -30566,10 +32362,6 @@
             "nullable": true
           },
           "servicio_id": {
-            "type": "number",
-            "nullable": true
-          },
-          "sector_id": {
             "type": "number",
             "nullable": true
           }
@@ -30586,10 +32378,6 @@
           "dni": {
             "type": "number"
           },
-          "dependencia_id": {
-            "type": "number",
-            "nullable": true
-          },
           "nombre": {
             "type": "string",
             "nullable": true
@@ -30640,10 +32428,6 @@
             "nullable": true
           },
           "servicio_id": {
-            "type": "number",
-            "nullable": true
-          },
-          "sector_id": {
             "type": "number",
             "nullable": true
           }
@@ -30662,10 +32446,6 @@
           "dni": {
             "type": "number"
           },
-          "dependencia_id": {
-            "type": "number",
-            "nullable": true
-          },
           "nombre": {
             "type": "string",
             "nullable": true
@@ -30718,10 +32498,217 @@
           "servicio_id": {
             "type": "number",
             "nullable": true
+          }
+        }
+      },
+      "Table_agentes_servicios_dependencia_bkp": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ags_id": {
+            "type": "number"
           },
-          "sector_id": {
+          "dni": {
             "type": "number",
             "nullable": true
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "dependencia_id_old": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "respaldado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ags_id",
+          "respaldado_at"
+        ]
+      },
+      "Table_agentes_servicios_dependencia_bkp_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ags_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number",
+            "nullable": true
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "dependencia_id_old": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "respaldado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ags_id",
+          "respaldado_at"
+        ]
+      },
+      "Table_agentes_servicios_dependencia_bkp_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ags_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number",
+            "nullable": true
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "dependencia_id_old": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "respaldado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Table_agentes_servicios_sector_bkp": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ags_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number",
+            "nullable": true
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_id_old": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "respaldado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ags_id",
+          "respaldado_at"
+        ]
+      },
+      "Table_agentes_servicios_sector_bkp_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ags_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number",
+            "nullable": true
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_id_old": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "respaldado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ags_id",
+          "respaldado_at"
+        ]
+      },
+      "Table_agentes_servicios_sector_bkp_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ags_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number",
+            "nullable": true
+          },
+          "servicio_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_id_old": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "respaldado_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -32680,6 +34667,156 @@
           }
         }
       },
+      "Table_cambios_dni": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni_viejo": {
+            "type": "string"
+          },
+          "dni_nuevo": {
+            "type": "string"
+          },
+          "fecha_cambio": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "procesado": {
+            "type": "number"
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "carpeta_estado": {
+            "type": "number"
+          },
+          "carpeta_resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "carpeta_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "procesado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "dni_viejo",
+          "dni_nuevo"
+        ]
+      },
+      "Table_cambios_dni_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni_viejo": {
+            "type": "string"
+          },
+          "dni_nuevo": {
+            "type": "string"
+          },
+          "fecha_cambio": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "procesado": {
+            "type": "number"
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "carpeta_estado": {
+            "type": "number"
+          },
+          "carpeta_resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "carpeta_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "procesado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dni_viejo",
+          "dni_nuevo"
+        ]
+      },
+      "Table_cambios_dni_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni_viejo": {
+            "type": "string"
+          },
+          "dni_nuevo": {
+            "type": "string"
+          },
+          "fecha_cambio": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "procesado": {
+            "type": "number"
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "carpeta_estado": {
+            "type": "number"
+          },
+          "carpeta_resultado": {
+            "type": "string",
+            "nullable": true
+          },
+          "carpeta_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "procesado_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
       "Table_categorias": {
         "type": "object",
         "additionalProperties": false,
@@ -33388,6 +35525,162 @@
           "updated_by": {
             "type": "number",
             "nullable": true
+          }
+        }
+      },
+      "Table_cola_carga_stress": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "anio": {
+            "type": "number"
+          },
+          "dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "licencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "ley": {
+            "type": "string",
+            "nullable": true
+          },
+          "dias_transcurridos": {
+            "type": "number",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "anio"
+        ]
+      },
+      "Table_cola_carga_stress_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "anio": {
+            "type": "number"
+          },
+          "dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "licencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "ley": {
+            "type": "string",
+            "nullable": true
+          },
+          "dias_transcurridos": {
+            "type": "number",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "dni",
+          "anio"
+        ]
+      },
+      "Table_cola_carga_stress_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "anio": {
+            "type": "number"
+          },
+          "dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "licencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "ley": {
+            "type": "string",
+            "nullable": true
+          },
+          "dias_transcurridos": {
+            "type": "number",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizado_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -34497,6 +36790,94 @@
           "updated_by": {
             "type": "number",
             "nullable": true
+          }
+        }
+      },
+      "Table_descarga_tiempo_acumulado": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "filas": {
+            "type": "number",
+            "nullable": true
+          },
+          "archivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "actualizado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "estado"
+        ]
+      },
+      "Table_descarga_tiempo_acumulado_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "estado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "filas": {
+            "type": "number",
+            "nullable": true
+          },
+          "archivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "actualizado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "estado"
+        ]
+      },
+      "Table_descarga_tiempo_acumulado_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "filas": {
+            "type": "number",
+            "nullable": true
+          },
+          "archivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "actualizado_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -38005,6 +40386,243 @@
           }
         }
       },
+      "Table_historial_bkp_20260828": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "legajo": {
+            "type": "string",
+            "nullable": true
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "sexo": {
+            "type": "string",
+            "nullable": true
+          },
+          "regimen_estatutario": {
+            "type": "string",
+            "nullable": true
+          },
+          "planta": {
+            "type": "string",
+            "nullable": true
+          },
+          "agrupamiento": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoria_salarial": {
+            "type": "string",
+            "nullable": true
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "justificado": {
+            "type": "string",
+            "nullable": true
+          },
+          "estructura_servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "dependencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "archivo_origen": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "novedad"
+        ]
+      },
+      "Table_historial_bkp_20260828_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "legajo": {
+            "type": "string",
+            "nullable": true
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "sexo": {
+            "type": "string",
+            "nullable": true
+          },
+          "regimen_estatutario": {
+            "type": "string",
+            "nullable": true
+          },
+          "planta": {
+            "type": "string",
+            "nullable": true
+          },
+          "agrupamiento": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoria_salarial": {
+            "type": "string",
+            "nullable": true
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "justificado": {
+            "type": "string",
+            "nullable": true
+          },
+          "estructura_servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "dependencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "archivo_origen": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "dni",
+          "novedad"
+        ]
+      },
+      "Table_historial_bkp_20260828_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "legajo": {
+            "type": "string",
+            "nullable": true
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "sexo": {
+            "type": "string",
+            "nullable": true
+          },
+          "regimen_estatutario": {
+            "type": "string",
+            "nullable": true
+          },
+          "planta": {
+            "type": "string",
+            "nullable": true
+          },
+          "agrupamiento": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoria_salarial": {
+            "type": "string",
+            "nullable": true
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "justificado": {
+            "type": "string",
+            "nullable": true
+          },
+          "estructura_servicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "dependencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "archivo_origen": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "Table_historial_estructura": {
         "type": "object",
         "additionalProperties": false,
@@ -38924,8 +41542,22 @@
           "situacion_revista": {
             "type": "string"
           },
+          "beca_aporto": {
+            "type": "number"
+          },
+          "ips_aporto": {
+            "type": "number"
+          },
           "es_insalubre_ips": {
             "type": "number"
+          },
+          "diferencial_2pct_pagado": {
+            "type": "number"
+          },
+          "fecha_calculo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "anses_anios": {
             "type": "number"
@@ -38944,6 +41576,10 @@
             "nullable": true
           },
           "servicios_externos": {
+            "type": "string",
+            "nullable": true
+          },
+          "resoluciones_manuales": {
             "type": "string",
             "nullable": true
           },
@@ -39022,8 +41658,22 @@
           "situacion_revista": {
             "type": "string"
           },
+          "beca_aporto": {
+            "type": "number"
+          },
+          "ips_aporto": {
+            "type": "number"
+          },
           "es_insalubre_ips": {
             "type": "number"
+          },
+          "diferencial_2pct_pagado": {
+            "type": "number"
+          },
+          "fecha_calculo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "anses_anios": {
             "type": "number"
@@ -39042,6 +41692,10 @@
             "nullable": true
           },
           "servicios_externos": {
+            "type": "string",
+            "nullable": true
+          },
+          "resoluciones_manuales": {
             "type": "string",
             "nullable": true
           },
@@ -39122,8 +41776,22 @@
           "situacion_revista": {
             "type": "string"
           },
+          "beca_aporto": {
+            "type": "number"
+          },
+          "ips_aporto": {
+            "type": "number"
+          },
           "es_insalubre_ips": {
             "type": "number"
+          },
+          "diferencial_2pct_pagado": {
+            "type": "number"
+          },
+          "fecha_calculo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "anses_anios": {
             "type": "number"
@@ -39145,12 +41813,262 @@
             "type": "string",
             "nullable": true
           },
+          "resoluciones_manuales": {
+            "type": "string",
+            "nullable": true
+          },
           "resultado": {
             "type": "string",
             "nullable": true
           },
           "observaciones": {
             "type": "string",
+            "nullable": true
+          },
+          "creado_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "modificado_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "modificado_por_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Table_jubilacion_citas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "apellido": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "ley_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "ocupacion_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "fecha_cita": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hora_cita": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string"
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "posible_jubilado_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "modificado_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "modificado_por_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "apellido",
+          "nombre",
+          "fecha_cita",
+          "hora_cita"
+        ]
+      },
+      "Table_jubilacion_citas_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "apellido": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "ley_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "ocupacion_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "fecha_cita": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hora_cita": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string"
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "posible_jubilado_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "creado_por_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "modificado_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "modificado_por_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dni",
+          "apellido",
+          "nombre",
+          "fecha_cita",
+          "hora_cita"
+        ]
+      },
+      "Table_jubilacion_citas_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "apellido": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "ley_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "ocupacion_nombre": {
+            "type": "string",
+            "nullable": true
+          },
+          "fecha_cita": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hora_cita": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string"
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "posible_jubilado_id": {
+            "type": "number",
             "nullable": true
           },
           "creado_por": {
@@ -43544,6 +46462,16 @@
             "type": "string",
             "nullable": true
           },
+          "fecha_presentacion_papeles": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_jubilacion": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "estado": {
             "type": "string"
           },
@@ -43632,6 +46560,16 @@
           },
           "mes_corte": {
             "type": "string",
+            "nullable": true
+          },
+          "fecha_presentacion_papeles": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_jubilacion": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           },
           "estado": {
@@ -43724,6 +46662,16 @@
           },
           "mes_corte": {
             "type": "string",
+            "nullable": true
+          },
+          "fecha_presentacion_papeles": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fecha_jubilacion": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           },
           "estado": {
@@ -44173,6 +47121,10 @@
           "procesado": {
             "type": "number"
           },
+          "errores_carga": {
+            "type": "string",
+            "nullable": true
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -44274,6 +47226,10 @@
           },
           "procesado": {
             "type": "number"
+          },
+          "errores_carga": {
+            "type": "string",
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -44378,6 +47334,10 @@
           },
           "procesado": {
             "type": "number"
+          },
+          "errores_carga": {
+            "type": "string",
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -46272,6 +49232,9 @@
             "type": "number",
             "nullable": true
           },
+          "oculto": {
+            "type": "number"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -46309,6 +49272,9 @@
           "reparticion_id": {
             "type": "number",
             "nullable": true
+          },
+          "oculto": {
+            "type": "number"
           },
           "created_at": {
             "type": "string",
@@ -46349,6 +49315,9 @@
           "reparticion_id": {
             "type": "number",
             "nullable": true
+          },
+          "oculto": {
+            "type": "number"
           },
           "created_at": {
             "type": "string",
@@ -46692,6 +49661,93 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          }
+        }
+      },
+      "Table_stress_cargados": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "anio": {
+            "type": "number"
+          },
+          "dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "licencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "cargado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "anio"
+        ]
+      },
+      "Table_stress_cargados_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "anio": {
+            "type": "number"
+          },
+          "dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "licencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "cargado_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "dni",
+          "anio"
+        ]
+      },
+      "Table_stress_cargados_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "anio": {
+            "type": "number"
+          },
+          "dias": {
+            "type": "number",
+            "nullable": true
+          },
+          "licencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "cargado_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

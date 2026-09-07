@@ -1,0 +1,60 @@
+CONVENCIONES SHARED Y SERVICIOS
+Fecha: 2026-05-09
+
+Objetivo
+- Reducir helpers duplicados entre servicios.
+- Unificar contexto de request, validacion y guards de admin.
+- Mantener una base comun estable ahora que los servicios grandes ya quedaron partidos.
+
+Reglas base
+1. Todo servicio debe leer contexto de gateway con `shared/requestContext.js`.
+2. Todo middleware de validacion con `express-validator` debe cerrar con `shared/validation.js`.
+3. Los guards de admin deben usar `shared/adminAuth.js`.
+4. `shared/serviceBase.js` sigue siendo la entrada recomendada para nuevos servicios o refactors.
+5. Los mecanismos compartidos que degradan no deben fallar en silencio: deben dejar `warn` y contexto.
+
+Request context
+- `fromHeaders(req, res, next)` hidrata `req.user`.
+- Campos esperados:
+  - `userId`
+  - `orgId`
+  - `branchId`
+  - `roles`
+  - `email`
+  - `jti`
+  - `requestId`
+  - `traceId`
+- `req.requestId` y `req.traceId` deben quedar disponibles para logs y respuestas sin releer headers.
+- Si una ruta necesita tenant, usar `requireOrgContext`.
+- Si una ruta necesita sucursal, usar `requireBranchContext`.
+
+Validacion
+- No declarar `function validate(...)` por router salvo necesidad excepcional.
+- Usar `validateRequest` para responder siempre:
+  - `success: false`
+  - `error.code: VALIDATION_ERROR`
+  - `error.details: errors.array()`
+
+Guards admin
+- Usar `requireAdminRole`.
+- Roles considerados admin:
+  - `superadmin`
+  - `org_admin`
+
+Permisos
+- El esquema vigente es `recurso:accion`.
+- Acciones esperadas:
+  - `read`
+  - `create`
+  - `update`
+  - `delete`
+- Los servicios que usan `requirePerm` y `guardWrite` deben mantener ese esquema estable.
+
+Observabilidad
+- No dejar `catch {}` silenciosos en capas shared cuando la falla pueda afectar visibilidad o trazabilidad.
+- Si un mecanismo compartido queda degradado pero no bloquea el servicio, loggear `warn`.
+- OpenAPI validation, health probes y service registry heartbeat ya deben dejar rastro si fallan.
+
+Siguiente paso recomendado
+- Seguir moviendo los restos menores de logging y contrato a `shared` solo cuando aporten trazabilidad real.
+- Mantener los nuevos routers como ensambladores finos y evitar reintroducir lógica de negocio en rutas.

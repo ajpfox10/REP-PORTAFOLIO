@@ -393,7 +393,7 @@ async function handleCdataPost(req: Request, res: Response): Promise<Response> {
   if (!ctx.conn || !ctx.device) return res;
   try {
     const raw = bodyAsText(req);
-    const table = one(req.query.table).toUpperCase();
+    const table = one(req.query.table || req.query.type || req.query.Type).toUpperCase();
     const stamp = one(req.query.Stamp || req.query.ATTLOGStamp || req.query.OpStamp || req.query.OPERLOGStamp);
     let ok = 0;
     let errors = 0;
@@ -550,7 +550,7 @@ async function querydata(req: Request, res: Response): Promise<Response> {
   if (!ctx.conn || !ctx.device) return res;
   try {
     const raw = bodyAsText(req);
-    const tableHint = one(req.query.table || req.query.Table || req.query.tablename || req.query.TableName);
+    const tableHint = one(req.query.table || req.query.Table || req.query.tablename || req.query.TableName || req.query.type || req.query.Type);
     let ok = 0;
     let errors = 0;
     let object = tableHint || 'AUTO';

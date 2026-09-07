@@ -2,10 +2,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../../../../ui/toast';
 import { apiFetch } from '../../../../api/http';
+import { fetchRowsByDnis } from '../../hooks/useDnisRelacionados';
 import { loadSession } from '../../../../auth/session';
 
 interface Props {
   row: any;
+  dnis?: string[];
   onClose: () => void;
   onCountChange: (n: number) => void;
 }
@@ -21,8 +23,10 @@ function fmtFecha(f?: string | null) {
 }
 
 // ─── Modal de expedientes (lista + alta/edición) ──────────────────────────────
-export function ExpedientesModal({ row, onClose, onCountChange }: Props) {
+export function ExpedientesModal({ row, dnis, onClose, onCountChange }: Props) {
   const toast = useToast();
+  // DNIs a consultar: el del agente + los anteriores por cambio de DNI.
+  const dnisConsulta = (dnis && dnis.length) ? dnis : (row?.dni ? [String(row.dni)] : []);
 
   const [expedientes, setExpedientes] = useState<any[]>([]);
   const [loading,     setLoading]     = useState(false);
@@ -33,11 +37,10 @@ export function ExpedientesModal({ row, onClose, onCountChange }: Props) {
   const [saving,    setSaving]    = useState(false);
 
   const cargar = useCallback(async () => {
-    if (!row?.dni) return;
+    if (!dnisConsulta.length) return;
     setLoading(true);
     try {
-      const res = await apiFetch<any>(`/expedientes?dni=${row.dni}&limit=200&sort=-fecha`);
-      const data = Array.isArray(res?.data) ? res.data : [];
+      const data = await fetchRowsByDnis('/expedientes', dnisConsulta, { extraQuery: 'sort=-fecha', limit: 200 });
       setExpedientes(data);
       onCountChange(data.length);
     } catch {
@@ -45,7 +48,7 @@ export function ExpedientesModal({ row, onClose, onCountChange }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [row?.dni]); // eslint-disable-line
+  }, [dnisConsulta.join(',')]); // eslint-disable-line
 
   useEffect(() => { cargar(); }, [cargar]);
 

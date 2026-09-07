@@ -22,6 +22,7 @@ import { EstadisticasPage } from '../pages/EstadisticasPage';
 import { OrganigramaPage } from '../pages/OrganigramaPage';
 import { ComparadorPage } from '../pages/ComparadorPage';
 import { ComparadorSiapePage } from '../pages/ComparadorSiapePage';
+import { LicenciasConsultorioPage } from '../pages/LicenciasConsultorioPage';
 import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
@@ -34,6 +35,7 @@ import { GuarderiaPage } from '../pages/GuarderiaPage';
 import { ResidentesRotacionPage } from '../pages/ResidentesRotacionPage';
 import { ResidentesPage } from '../pages/ResidentesPage';
 import { AsistenciaPage } from '../pages/AsistenciaPage';
+import { AusentismoPage } from '../pages/AusentismoPage';
 import { AtencionPublicoPage } from '../pages/AtencionPublicoPage';
 import { EscaneoPage } from '../pages/EscaneoPage';
 import { EscaneoAgentePage } from '../pages/EscaneoAgentePage';
@@ -43,6 +45,7 @@ import { JefeServicioPage } from '../pages/JefeServicioPage';
 import { SamoPage } from '../pages/SamoPage';
 import { ResolucionesPage } from '../pages/ResolucionesPage';
 import { FicheroPage } from '../pages/FicheroPage';
+import { FicheroBiometriaLabPage } from '../pages/FicheroBiometriaLabPage';
 import { AusenciasConFichajesPage } from '../pages/AusenciasConFichajesPage';
 import { SinFichajeSalidaPage }    from '../pages/SinFichajeSalidaPage';
 import { ExamenIngresoPage } from '../pages/ExamenIngresoPage';
@@ -62,6 +65,7 @@ import { EstructuraPage } from '../pages/EstructuraPage';
 import { FcCertReemplazosPage } from '../pages/FcCertReemplazosPage';
 import { BecariosArtPage }      from '../pages/BecariosArtPage';
 import { TramitesDocumentalesPage } from '../pages/TramitesDocumentalesPage';
+import { CargaSiapePage } from '../pages/CargaSiapePage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -375,6 +379,26 @@ export function App() {
               }
             />
             <Route
+              path="/app/licencias-consultorio"
+              element={
+                <Private>
+                  <Guard anyOf={['app:licencias-consultorio:access', 'crud:*:*']}>
+                    <LicenciasConsultorioPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/carga-siape"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <CargaSiapePage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/legajo"
               element={
                 <Private>
@@ -415,6 +439,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/ausentismo"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <AusentismoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/atencion"
               element={
                 <Private>
@@ -450,6 +484,16 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <FicheroPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/fichero-biometria-lab"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <FicheroBiometriaLabPage />
                   </Guard>
                 </Private>
               }
