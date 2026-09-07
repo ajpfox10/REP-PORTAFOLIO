@@ -1,0 +1,35 @@
+COBERTURA SALUD - App de escritorio (navegador embebido)
+=========================================================
+
+ARCHIVO
+  Cobertura-Salud-Setup.exe   (instalador para Windows)
+
+QUE ES
+  App de escritorio que abre las paginas de los organismos (SSS, ARCA, ANSES,
+  Servicio Domestico) embebidas en una sola ventana, prellena el DNI/CUIL, el
+  operador resuelve el captcha/reCAPTCHA ahi mismo, y la app registra el
+  resultado en el servidor central.
+
+INSTALAR EN UNA PC OPERADORA
+  1. Copiar y ejecutar Cobertura-Salud-Setup.exe (pide permisos de administrador).
+  2. Elegir carpeta (o dejar la que sugiere) y crear acceso directo.
+  3. Abrir "Cobertura Salud" desde el escritorio.
+  4. En el ingreso, el Servidor ya viene cargado (http://192.168.0.21:8510).
+     Solo poner usuario y contrasena. Queda recordado para la proxima.
+
+EN EL SERVIDOR (una sola vez)
+  - Tener corriendo el backend en el puerto 8510 (produccion).
+  - Abrir el puerto en el firewall para que las PC de la red lleguen:
+      netsh advfirewall firewall add rule name="Cobertura Salud 8510" ^
+        dir=in action=allow protocol=TCP localport=8510
+
+USUARIOS
+  - admin: consulta, historial general y administra usuarios/roles.
+  - user:  consulta y ve sus propias consultas.
+  - superusuario: ve el Informe general (quien consulto que DNI/CUIL y que
+    resultado dio), con filtros por usuario / DNI / CUIL.
+
+REGENERAR EL INSTALADOR (si se cambia el codigo del escritorio)
+  cd C:\apps\cobertura-salud\desktop
+  npm run dist
+  (el .exe queda en desktop\dist\ ; copiarlo a esta carpeta)

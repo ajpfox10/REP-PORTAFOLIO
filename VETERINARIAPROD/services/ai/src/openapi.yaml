@@ -1,0 +1,72 @@
+openapi: '3.0.3'
+info:
+  title: VetManager AI Service
+  version: '1.0.0'
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /health/deep:
+    get:
+      responses:
+        '200':
+          description: OK
+  /ai/diagnosis:
+    post:
+      responses:
+        '200':
+          description: OK
+  /ai/images/analyze:
+    post:
+      responses:
+        '200':
+          description: OK
+  /ai/chat:
+    post:
+      responses:
+        '201':
+          description: Created
+  /ai/chat/{sessionId}:
+    get:
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /ai/chat/{sessionId}/messages:
+    post:
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /ai/patients/{patientId}/risk:
+    get:
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /ai/patients/{patientId}/risk/history:
+    get:
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK

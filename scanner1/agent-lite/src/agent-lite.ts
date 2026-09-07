@@ -118,10 +118,15 @@ function makeDeviceClient(): AxiosInstance {
 // ── WIA scan via PowerShell ───────────────────────────────────────────────────
 // Escanea usando el primer escáner disponible en WIA (USB, WSD, o red)
 async function scanWIA(opts: {
-  dpi: number; color: boolean; source: string; duplex: boolean
+  dpi: number; color: boolean; source: string; duplex: boolean; paper_size?: string
 }): Promise<Buffer[]> {
   const tmpDir = path.join(os.tmpdir(), `scan_lite_${Date.now()}`)
   fs.mkdirSync(tmpDir, { recursive: true })
+
+  // Área de escaneo según tamaño de papel (en píxeles a la resolución elegida)
+  const mm = paperMm(opts.paper_size)
+  const extentW = Math.round(mm.widthMm  / 25.4 * (opts.dpi || 300))
+  const extentH = Math.round(mm.heightMm / 25.4 * (opts.dpi || 300))
 
   const ps = `
 $ErrorActionPreference = 'Stop'
@@ -152,6 +157,10 @@ try {
   # Configurar resolución
   try { $item.Properties("Horizontal Resolution").Value = ${opts.dpi} } catch {}
   try { $item.Properties("Vertical Resolution").Value   = ${opts.dpi} } catch {}
+
+  # Área de escaneo (tamaño de papel)
+  try { $item.Properties("Horizontal Extent").Value = ${extentW} } catch {}
+  try { $item.Properties("Vertical Extent").Value   = ${extentH} } catch {}
 
   # Color: 4=RGB, 2=grayscale
   try { $item.Properties("Current Intent").Value = ${opts.color ? 4 : 2} } catch {}
@@ -196,12 +205,29 @@ try {
   }
 }
 
-// ── Helper tamaño de papel ────────────────────────────────────────────────────
-function getEsclPaperDims300(value?: string | null): { width: number; height: number } {
+// ── Helpers de tamaño de papel ────────────────────────────────────────────────
+// Catálogo alineado con el agente principal (agent.ts). Oficio = Legal (14").
+const PAPER_CATALOG: Record<string, { widthMm: number; heightMm: number }> = {
+  A3: { widthMm: 297, heightMm: 420 }, A4: { widthMm: 210, heightMm: 297 },
+  A5: { widthMm: 148, heightMm: 210 }, A6: { widthMm: 105, heightMm: 148 },
+  B4: { widthMm: 257, heightMm: 364 }, B5: { widthMm: 182, heightMm: 257 },
+  Letter: { widthMm: 215.9, heightMm: 279.4 }, Legal: { widthMm: 215.9, heightMm: 355.6 },
+  Folio: { widthMm: 215.9, heightMm: 330.2 }, Tabloid: { widthMm: 279.4, heightMm: 431.8 },
+  Executive: { widthMm: 184.15, heightMm: 266.7 }, Statement: { widthMm: 139.7, heightMm: 215.9 },
+}
+const PAPER_ALIASES: Record<string, string> = {
+  carta: "Letter", letter: "Letter", oficio: "Legal", legal: "Legal", folio: "Folio",
+  ledger: "Tabloid", tabloid: "Tabloid", a3: "A3", a4: "A4", a5: "A5", a6: "A6", b4: "B4", b5: "B5",
+  executive: "Executive", statement: "Statement",
+}
+function paperMm(value?: string | null): { widthMm: number; heightMm: number } {
   const v = String(value || "A4").toLowerCase().trim()
-  if (v === "letter" || v === "carta")   return { width: Math.round(215.9 / 25.4 * 300), height: Math.round(279.4 / 25.4 * 300) }
-  if (v === "legal"  || v === "oficio")  return { width: Math.round(215.9 / 25.4 * 300), height: Math.round(355.6 / 25.4 * 300) }
-  return { width: Math.round(210 / 25.4 * 300), height: Math.round(297 / 25.4 * 300) }  // A4
+  const key = PAPER_ALIASES[v] || Object.keys(PAPER_CATALOG).find((k) => k.toLowerCase() === v) || "A4"
+  return PAPER_CATALOG[key] || PAPER_CATALOG.A4
+}
+function getEsclPaperDims300(value?: string | null): { width: number; height: number } {
+  const d = paperMm(value)
+  return { width: Math.round(d.widthMm / 25.4 * 300), height: Math.round(d.heightMm / 25.4 * 300) }
 }
 
 // ── eSCL fallback (si hay escáner en red con eSCL) ────────────────────────────
@@ -308,7 +334,7 @@ async function heartbeat(): Promise<void> {
         manufacturer: "Agent Lite",
         sources: ["flatbed", "adf"],
         resolutions: [150, 300, 600],
-        paper_sizes: ["A4", "Carta", "Oficio"],
+        paper_sizes: ["A4", "Carta", "Oficio", "Folio", "A5"],
         color_modes: ["color", "gris"],
         duplex: false,
         max_pages_adf: 50,
@@ -353,8 +379,7 @@ async function poll(): Promise<void> {
 
     let pages: Buffer[]
     try {
-      pages = await scanWIA({ dpi, color, source: src, duplex: dup })
-      // paper_size no aplica a WIA (el driver usa el tamaño físico del vidrio)
+      pages = await scanWIA({ dpi, color, source: src, duplex: dup, paper_size: paperSize })
       console.log(`[lite] ✅ WIA → ${pages.length} pág.`)
     } catch (e: any) {
       console.error(`[lite] ❌ scan falló: ${e.message}`)

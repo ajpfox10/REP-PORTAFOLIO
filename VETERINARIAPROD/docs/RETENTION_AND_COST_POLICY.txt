@@ -1,0 +1,37 @@
+RETENTION AND COST POLICY
+
+1. Prometheus
+- retention base: 30 days
+- storage path: `/prometheus`
+- metricas de alta cardinalidad deben evitarse
+- revisar crecimiento semanal de `prometheus_data`
+
+2. Tempo
+- retention base: 24h en local
+- usar esta retencion corta en entornos chicos para no disparar costo/disco
+- si se necesita mas retencion, mover a backend de objetos antes de subir dias
+
+3. Grafana
+- dashboards y datasources versionados en repo
+- estado persistente en `grafana_data`
+- evitar plugins innecesarios
+
+4. Logs de aplicacion
+- archive script: `npm run logs:archive`
+- retencion base recomendada: 90 dias
+- reducir si disco/DB se vuelve cuello
+
+5. Backups
+- MySQL: diario
+- restore drill: semanal
+- retencion recomendada: 30 a 90 dias segun compliance
+
+6. Redis
+- no tratar Redis como backup primario
+- validar recovery de quotas/revocacion despues de reinicio o failover
+
+7. Revision mensual obligatoria
+- tamanio de `prometheus_data`
+- tamanio de trazas Tempo
+- volumen de alertas
+- costo de almacenamiento de backups

@@ -1,0 +1,67 @@
+# OT-128: Velero backup schedules for PVC snapshots.
+#
+# Prerequisites:
+#   1. Velero installed in the cluster with a cloud storage BackupStorageLocation
+#      (S3 compatible). Install with:
+#        velero install \
+#          --provider aws \
+#          --plugins velero/velero-plugin-for-aws:v1.10.0 \
+#          --bucket vetmanager-velero-backups \
+#          --secret-file ./credentials-velero \
+#          --backup-location-config region=us-east-1 \
+#          --snapshot-location-config region=us-east-1 \
+#          --use-node-agent
+#
+#   2. A VolumeSnapshotClass or Restic/Kopia node-agent configured for PVC backups.
+#      If using CSI snapshots, ensure --features=EnableCSI is set.
+#
+# Strategy:
+#   - Daily full backup of all vetmanager resources + PVC data, kept 7 days
+#   - Weekly backup kept 30 days (for monthly restore drills — see OT-131)
+#
+---
+# Daily backup — 02:00 UTC, 7-day TTL
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: vetmanager-daily
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    ttl: 168h0m0s    # 7 days
+    includedNamespaces:
+      - default      # adjust to the actual namespace where vetmanager runs
+    labelSelector:
+      matchExpressions:
+        - key: app
+          operator: In
+          values:
+            - vetmanager-redis
+            - vetmanager-prometheus
+            - vetmanager-grafana
+    defaultVolumesToFsBackup: true   # Restic/Kopia file-system backup for PVCs
+    storageLocation: default
+    snapshotVolumes: false           # use fs backup (CSI snapshots need provider)
+    metadata:
+      labels:
+        schedule: daily
+---
+# Weekly backup — Sunday 03:00 UTC, 30-day TTL
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: vetmanager-weekly
+  namespace: velero
+spec:
+  schedule: "0 3 * * 0"
+  template:
+    ttl: 720h0m0s    # 30 days
+    includedNamespaces:
+      - default
+    defaultVolumesToFsBackup: true
+    storageLocation: default
+    snapshotVolumes: false
+    metadata:
+      labels:
+        schedule: weekly

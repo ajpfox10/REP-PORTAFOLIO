@@ -1,0 +1,3430 @@
+openapi: 3.0.3
+info:
+  title: VetManager Pro API
+  description: |
+    API REST para el sistema veterinario SaaS multinacional VetManager Pro.
+
+    **Autenticación:** Bearer JWT (access token de 15min + refresh token de 7 días)
+
+    **Multi-tenant:** Todos los endpoints filtran datos por `branchId` del token JWT.
+
+    **RBAC:** Cada endpoint requiere un permiso específico según el rol del usuario.
+  version: "1.0.0"
+  contact:
+    name: VetManager Pro
+    email: api@vetmanagerpro.com
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://api.vetmanagerpro.com/api/v1
+    description: Production
+tags:
+  - name: Auth
+    description: Autenticación, sesiones, API keys
+  - name: Clients
+    description: Clientes / dueños de mascotas
+  - name: Patients
+    description: Pacientes (animales)
+  - name: Appointments
+    description: Agenda de turnos y triage de emergencias
+  - name: Medical Records
+    description: Historia clínica completa (HC)
+  - name: Lab
+    description: Laboratorio clínico
+  - name: Imaging
+    description: Diagnóstico por imágenes
+  - name: Pathology
+    description: Patología (histopatología, citología, necropsias)
+  - name: Surgery
+    description: Cirugías y registros anestésicos
+  - name: Hospitalization
+    description: Internación y monitoreo de enfermería
+  - name: Vaccination
+    description: Vacunaciones y desparasitaciones
+  - name: Billing
+    description: Facturación multi-moneda y pagos
+  - name: Inventory
+    description: Farmacia e inventario
+  - name: Telemedicine
+    description: Teleconsulta y prescripciones digitales
+  - name: Grooming
+    description: Peluquería y estética canina/felina
+  - name: Reports
+    description: Reportes ejecutivos y KPIs
+  - name: Documents
+    description: Casillas de correo e inbox documental
+  - name: Notifications
+    description: Notificaciones, recordatorios y mensajería
+  - name: Portal
+    description: Portal de dueños de mascotas
+  - name: AI
+    description: Diagnóstico asistido por IA y análisis de imágenes
+  - name: Platform
+    description: Salud y descubrimiento de servicios internos
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            message: { type: string }
+            details: { type: array, items: { type: object } }
+
+    Pagination:
+      type: object
+      properties:
+        total:      { type: integer }
+        page:       { type: integer }
+        limit:      { type: integer }
+        totalPages: { type: integer }
+
+    Patient:
+      type: object
+      properties:
+        id:                   { type: integer }
+        name:                 { type: string, example: "Firulais" }
+        speciesId:            { type: integer }
+        species:              { type: string, example: "Canino" }
+        breedId:              { type: integer }
+        breed:                { type: string, example: "Labrador Retriever" }
+        sex:                  { type: string, enum: [male, female, unknown] }
+        birthdate:            { type: string, format: date }
+        chipNumber:           { type: string }
+        weightKg:             { type: number }
+        bodyConditionScore:   { type: integer, minimum: 1, maximum: 9 }
+        isNeutered:           { type: boolean }
+        photoUrl:             { type: string }
+        isActive:             { type: boolean }
+
+    Client:
+      type: object
+      properties:
+        id:             { type: integer }
+        firstName:      { type: string }
+        lastName:       { type: string }
+        email:          { type: string, format: email }
+        phone:          { type: string }
+        documentType:   { type: string, enum: [dni, passport, rut, cedula, other] }
+        documentNumber: { type: string }
+        address:        { type: string }
+        city:           { type: string }
+        outstandingBalance: { type: number }
+
+    Appointment:
+      type: object
+      properties:
+        id:              { type: integer }
+        scheduledDate:   { type: string, format: date-time }
+        durationMinutes: { type: integer }
+        status:          { type: string, enum: [scheduled,confirmed,in_progress,completed,cancelled,no_show] }
+        patientName:     { type: string }
+        ownerName:       { type: string }
+        vetName:         { type: string }
+        isEmergency:     { type: boolean }
+        reason:          { type: string }
+
+    PrescriptionItemInput:
+      type: object
+      required: [medicationName, dose, frequency]
+      properties:
+        medicationId:   { type: integer, minimum: 1, nullable: true }
+        medicationName: { type: string, minLength: 1, maxLength: 255 }
+        dose:           { type: string, minLength: 1, maxLength: 100 }
+        doseUnit:       { type: string, maxLength: 50, nullable: true }
+        frequency:      { type: string, minLength: 1, maxLength: 100 }
+        route:          { type: string, maxLength: 50, nullable: true }
+        durationDays:   { type: integer, minimum: 1, maximum: 3650, nullable: true }
+        quantity:       { type: number, minimum: 0, nullable: true }
+        instructions:   { type: string, maxLength: 4000, nullable: true }
+
+    PrescriptionCreateRequest:
+      type: object
+      required: [items]
+      properties:
+        notes:   { type: string, maxLength: 4000, nullable: true }
+        refills: { type: integer, minimum: 0, maximum: 12, default: 0 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PrescriptionItemInput'
+
+    MedicalRecord:
+      type: object
+      properties:
+        id:             { type: integer }
+        patientId:      { type: integer }
+        status:         { type: string, enum: [open, signed, amended] }
+        openedAt:       { type: string, format: date-time }
+        signedAt:       { type: string, format: date-time, nullable: true }
+        chiefComplaint: { type: string }
+        weightKg:       { type: number }
+        vetName:        { type: string }
+
+    Invoice:
+      type: object
+      properties:
+        id:              { type: integer }
+        invoiceNumber:   { type: string, example: "FAC-000042" }
+        status:          { type: string, enum: [draft,pending,partial,paid,overdue,cancelled] }
+        issuedDate:      { type: string, format: date }
+        totalAmount:     { type: number }
+        paidAmount:      { type: number }
+        currency:        { type: string, example: "ARS" }
+        clientName:      { type: string }
+
+    LabOrder:
+      type: object
+      properties:
+        id:          { type: integer }
+        orderNumber: { type: string, example: "LAB000042" }
+        status:      { type: string, enum: [pending,in_progress,partial,completed,cancelled] }
+        priority:    { type: string, enum: [routine,urgent,stat] }
+        orderedAt:   { type: string, format: date-time }
+        patientName: { type: string }
+        testCount:   { type: integer }
+
+    TeleSession:
+      type: object
+      properties:
+        id:          { type: integer }
+        sessionCode: { type: string, example: "TELE-M5X2K-A3F9B2" }
+        status:      { type: string, enum: [scheduled,waiting,in_progress,completed,cancelled,no_show] }
+        sessionType: { type: string, enum: [consultation,follow_up,second_opinion,emergency,prescription_renewal] }
+        scheduledAt: { type: string, format: date-time }
+        meetingUrl:  { type: string }
+        patientName: { type: string }
+        vetName:     { type: string }
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+  # ── AUTH ────────────────────────────────────────────────────────────────────
+paths:
+  /csrf-token:
+    get:
+      summary: Obtain CSRF token
+      description: |
+        Endpoint de borde del gateway para obtener el token CSRF y la cookie asociada.
+        Se expone en la ra?z del gateway, fuera del prefijo `/api/v1`.
+      tags: [Auth]
+      servers:
+        - url: http://localhost:3000
+          description: Local gateway root
+        - url: https://api.vetmanagerpro.com
+          description: Production gateway root
+      responses:
+        '200':
+          description: CSRF token returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      csrfToken:
+                        type: string
+                        example: csrf-token-value
+        '500':
+          description: Internal server error
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { type: string, format: email }
+                password: { type: string, minLength: 6 }
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      accessToken:  { type: string }
+                      refreshToken: { type: string }
+                      expiresIn:    { type: string }
+                      user:
+                        type: object
+                        properties:
+                          id:       { type: integer }
+                          email:    { type: string }
+                          name:     { type: string }
+                          orgId:    { type: integer }
+                          branchId: { type: integer }
+                          roles:    { type: array, items: { type: string } }
+        '401': { description: Credenciales inválidas }
+        '429': { description: 'Demasiados intentos, cuenta bloqueada' }
+
+  /auth/captcha/config:
+    get:
+      tags: [Auth]
+      summary: Obtener configuracion publica de CAPTCHA
+      security: []
+      responses:
+        '200':
+          description: Configuracion publica de CAPTCHA
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      enabled: { type: boolean }
+                      provider: { type: string, nullable: true, example: hcaptcha }
+                      siteKey: { type: string, nullable: true }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Renovar access token
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Fallback opcional. El flujo canónico usa cookie httpOnly `refreshToken`.
+      responses:
+        '200': { description: Tokens renovados }
+        '401': { description: Refresh token inválido o expirado }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Cerrar sesión (revoca token actual)
+      responses:
+        '204': { description: Sesión cerrada }
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      summary: Cerrar todas las sesiones activas
+      responses:
+        '204': { description: Todas las sesiones revocadas }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Obtener perfil del usuario autenticado
+      responses:
+        '200': { description: Perfil del usuario con roles }
+
+  /auth/sessions:
+    get:
+      tags: [Auth]
+      summary: Listar sesiones activas
+      responses:
+        '200': { description: Lista de sesiones }
+
+  /auth/sessions/{id}:
+    delete:
+      tags: [Auth]
+      summary: Revocar una sesión específica
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Sesión revocada }
+
+  /auth/api-keys:
+    get:
+      tags: [Auth]
+      summary: Listar API keys del usuario
+      responses:
+        '200': { description: Lista de API keys }
+    post:
+      tags: [Auth]
+      summary: Crear nueva API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:      { type: string }
+                scopes:    { type: array, items: { type: string } }
+                expiresAt: { type: string, format: date }
+      responses:
+        '201':
+          description: API key creada (rawKey visible SOLO en esta respuesta)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      prefix: { type: string }
+                      rawKey: { type: string }
+
+  # ── CLIENTS ────────────────────────────────────────────────────────────────
+  /clients:
+    get:
+      tags: [Clients]
+      summary: Listar clientes de la sucursal
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Buscar por nombre, email, teléfono o documento
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Lista paginada de clientes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Client' } }
+                  meta: { $ref: '#/components/schemas/Pagination' }
+    post:
+      tags: [Clients]
+      summary: Crear nuevo cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, phone]
+              properties:
+                firstName:      { type: string }
+                lastName:       { type: string }
+                email:          { type: string, format: email }
+                phone:          { type: string }
+                documentType:   { type: string, enum: [dni,passport,rut,cedula,other] }
+                documentNumber: { type: string }
+                address:        { type: string }
+                city:           { type: string }
+      responses:
+        '201': { description: Cliente creado }
+        '409': { description: Email o documento duplicado }
+
+  /clients/{id}:
+    get:
+      tags: [Clients]
+      summary: Obtener cliente con sus mascotas
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Cliente con mascotas y contactos de emergencia }
+        '404': { description: Cliente no encontrado }
+    put:
+      tags: [Clients]
+      summary: Actualizar cliente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Actualizado }
+    delete:
+      tags: [Clients]
+      summary: Desactivar cliente (soft delete)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Desactivado }
+
+  # ── PATIENTS ───────────────────────────────────────────────────────────────
+  /auth/admin/users:
+    get:
+      tags: [Auth]
+      summary: Listar usuarios staff del org
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+      responses:
+        '200': { description: Lista de usuarios }
+    post:
+      tags: [Auth]
+      summary: Crear usuario staff
+      responses:
+        '201': { description: Usuario creado }
+
+  /auth/admin/users/{id}/deactivate:
+    patch:
+      tags: [Auth]
+      summary: Desactivar usuario staff
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Usuario desactivado }
+
+  # OT-068
+  /auth/admin/users/{id}/role:
+    patch:
+      tags: [Auth]
+      summary: Cambiar rol de un usuario staff
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, example: vet }
+      responses:
+        '204': { description: Rol actualizado }
+        '400': { description: Rol inválido }
+        '404': { description: Usuario no encontrado }
+
+  # OT-070: /auth/roles — alias público para usuarios autenticados del frontend
+  /auth/roles:
+    get:
+      tags: [Auth]
+      summary: Listar roles RBAC disponibles (alias frontend)
+      description: |
+        Retorna los roles estáticos con sus permisos. No requiere internal sig.
+        Alias de `/auth/admin/rbac/roles` para uso desde el frontend.
+      responses:
+        '200':
+          description: Lista de roles con permisos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:        { type: string }
+                        permissions: { type: array, items: { type: string } }
+
+  # ── AUTH ADMIN — RBAC ──────────────────────────────────────────────────────
+  /auth/admin/rbac/roles:
+    get:
+      tags: [Auth]
+      summary: Listar roles RBAC disponibles
+      responses:
+        '200': { description: Lista de roles }
+
+  /auth/admin/rbac/orgs/{orgId}/overrides:
+    get:
+      tags: [Auth]
+      summary: Obtener overrides de roles para una organización
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Overrides de la organización }
+
+  /auth/admin/rbac/orgs/{orgId}/roles/{role}:
+    put:
+      tags: [Auth]
+      summary: Asignar override de rol a organización
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: role
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '204': { description: Override asignado }
+    delete:
+      tags: [Auth]
+      summary: Eliminar override de rol de organización
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: role
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Override eliminado }
+
+  /auth/admin/rbac/orgs/{orgId}/sync:
+    post:
+      tags: [Auth]
+      summary: Sincronizar roles de organización
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200': { description: Roles sincronizados }
+
+  /auth/admin/rbac/security-alerts:
+    get:
+      tags: [Auth]
+      summary: Listar alertas de seguridad
+      responses:
+        '200': { description: Lista de alertas de seguridad }
+
+  /auth/admin/rbac/security-alerts/{id}/acknowledge:
+    post:
+      tags: [Auth]
+      summary: Reconocer alerta de seguridad
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200': { description: Alerta reconocida }
+
+  # ── AUTH ADMIN — POLICY ────────────────────────────────────────────────────
+  /auth/admin/auth/policy:
+    get:
+      tags: [Auth]
+      summary: Obtener política de autenticación
+      responses:
+        '200': { description: Política de autenticación actual }
+    patch:
+      tags: [Auth]
+      summary: Actualizar política de autenticación
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                passwordMinLength: { type: integer }
+                requireMfa:        { type: boolean }
+                sessionTimeoutMin: { type: integer }
+      responses:
+        '200': { description: Política actualizada }
+
+  # ── AUTH ADMIN — FEATURE FLAGS ─────────────────────────────────────────────
+  /auth/admin/features/orgs/{orgId}:
+    get:
+      tags: [Auth]
+      summary: Obtener feature flags de una organización
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: 'Flags, definiciones y valores por defecto' }
+    patch:
+      tags: [Auth]
+      summary: Actualizar feature flags de una organización
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [flags]
+              properties:
+                flags: { type: object, additionalProperties: { type: boolean } }
+      responses:
+        '200': { description: Flags actualizados }
+
+  # ── AUTH ADMIN — RBAC EFFECTIVE ────────────────────────────────────────────
+  /auth/admin/rbac/orgs/{orgId}/roles/{role}/effective:
+    get:
+      tags: [Auth]
+      summary: Permisos efectivos de un rol para una organización (base + overrides)
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: role
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Lista de permisos efectivos }
+
+  # ── AUTH AUDIT ─────────────────────────────────────────────────────────────
+  /auth/audit/export:
+    get:
+      tags: [Auth]
+      summary: Exportar logs de auditoría
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: format
+          schema: { type: string, enum: [json, csv] }
+        - in: query
+          name: userId
+          schema: { type: integer }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer }
+      responses:
+        '200': { description: Logs de auditoría exportados }
+
+  # ── AUTH ADMIN — TABLE PREVIEW ─────────────────────────────────────────────
+  /auth/admin/preview:
+    get:
+      tags: [Auth]
+      summary: Listar tablas disponibles para preview de datos
+      responses:
+        '200': { description: Lista de tablas con metadatos }
+
+  /auth/admin/preview/{tableName}:
+    get:
+      tags: [Auth]
+      summary: Preview de una tabla (columnas + 10 filas)
+      parameters:
+        - in: path
+          name: tableName
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Esquema y datos de la tabla }
+        '404': { description: Tabla no disponible }
+
+  /patients:
+    get:
+      tags: [Patients]
+      summary: Listar pacientes
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: speciesId
+          schema: { type: string, pattern: '^[0-9]+$' }
+        - in: query
+          name: species
+          schema: { type: string }
+        - in: query
+          name: isActive
+          schema: { type: string, enum: ['true', 'false', 'all'], default: 'true' }
+        - in: query
+          name: is_active
+          schema: { oneOf: [{ type: string, enum: ['true', 'false', 'all'] }, { type: integer, enum: [0, 1] }] }
+        - in: query
+          name: page
+          schema: { type: string, pattern: '^[0-9]+$' }
+        - in: query
+          name: limit
+          schema: { type: string, pattern: '^[0-9]+$' }
+      responses:
+        '200': { description: Lista paginada de pacientes }
+    post:
+      tags: [Patients]
+      summary: Crear nuevo paciente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, speciesId, sex, primaryOwnerId]
+              properties:
+                name:           { type: string }
+                speciesId:      { type: integer }
+                breedId:        { type: integer }
+                sex:            { type: string, enum: [male, female, unknown] }
+                birthdate:      { type: string, format: date }
+                chipNumber:     { type: string }
+                weightKg:       { type: number }
+                primaryOwnerId: { type: integer }
+      responses:
+        '201': { description: Paciente creado }
+
+  /patients/{id}:
+    get:
+      tags: [Patients]
+      summary: Obtener paciente completo (con dueños, alergias, condiciones crónicas)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Paciente completo }
+    put:
+      tags: [Patients]
+      summary: Actualizar datos del paciente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Actualizado }
+    # OT-066: soft delete — conserva historia clínica, desactiva is_active
+    delete:
+      tags: [Patients]
+      summary: Dar de baja al paciente (soft delete)
+      description: |
+        Marca al paciente como inactivo (is_active = false). La historia clínica
+        y todos los registros médicos se conservan. Para baja definitiva usar GDPR.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Paciente dado de baja }
+        '404': { description: Paciente no encontrado }
+
+  /patients/{id}/timeline:
+    get:
+      tags: [Patients]
+      summary: Historial cronológico completo del paciente
+      description: Devuelve todos los eventos clínicos (turnos, HC, vacunas, cirugías, internaciones, teleconsultas, grooming) ordenados por fecha.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Timeline completo del paciente }
+
+  /patients/{id}/owners:
+    post:
+      tags: [Patients]
+      summary: Agregar co-dueño al paciente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, ownershipType]
+              properties:
+                clientId:      { type: integer }
+                ownershipType: { type: string, enum: [secondary, temporary_guardian, foster] }
+      responses:
+        '201': { description: Co-dueño agregado }
+
+  # ── APPOINTMENTS ───────────────────────────────────────────────────────────
+  /patients/species/all:
+    get:
+      tags: [Patients]
+      summary: Listar especies de referencia
+      responses:
+        '200': { description: Lista de especies }
+
+  /species/all:
+    get:
+      tags: [Patients]
+      summary: Listar especies de referencia (alias)
+      responses:
+        '200': { description: Lista de especies }
+
+  /patients/breeds/all:
+    get:
+      tags: [Patients]
+      summary: Listar razas de referencia
+      parameters:
+        - in: query
+          name: speciesId
+          schema: { type: integer }
+      responses:
+        '200': { description: Lista de razas }
+
+  /breeds/all:
+    get:
+      tags: [Patients]
+      summary: Listar razas de referencia (alias)
+      parameters:
+        - in: query
+          name: speciesId
+          schema: { type: integer }
+      responses:
+        '200': { description: Lista de razas }
+
+  /appointments:
+    get:
+      tags: [Appointments]
+      summary: Listar turnos
+      parameters:
+        - in: query
+          name: date
+          schema: { type: string, format: date }
+        - in: query
+          name: vetId
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Lista de turnos }
+    post:
+      tags: [Appointments]
+      summary: Crear turno
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patientId, vetId, scheduledDate]
+              properties:
+                patientId:         { type: integer }
+                vetId:             { type: integer }
+                scheduledDate:     { type: string, format: date-time }
+                durationMinutes:   { type: integer, default: 30 }
+                appointmentTypeId: { type: integer }
+                reason:            { type: string }
+                isEmergency:       { type: boolean }
+      responses:
+        '201': { description: Turno creado }
+
+  /appointments/today:
+    get:
+      tags: [Appointments]
+      summary: Turnos del día (vista agenda)
+      responses:
+        '200': { description: Agenda del día ordenada por hora }
+
+  /appointments/types:
+    get:
+      tags: [Appointments]
+      summary: Tipos de turno disponibles
+      responses:
+        '200': { description: Lista de tipos de turno }
+
+  /appointments/{id}:
+    put:
+      tags: [Appointments]
+      summary: Actualizar turno completo (OT-065)
+      description: Actualiza uno o más campos del turno. Todos los campos son opcionales.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scheduledDate:     { type: string, format: date-time }
+                durationMinutes:   { type: integer, minimum: 5, maximum: 480 }
+                status:            { type: string, enum: [scheduled,confirmed,in_progress,completed,cancelled,no_show] }
+                vetId:             { type: integer }
+                reason:            { type: string }
+                notes:             { type: string }
+                appointmentTypeId: { type: integer }
+      responses:
+        '204': { description: Turno actualizado }
+        '400': { description: Sin campos para actualizar }
+        '404': { description: Turno no encontrado }
+
+  /appointments/{id}/status:
+    patch:
+      tags: [Appointments]
+      summary: Cambiar estado del turno
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [scheduled,confirmed,in_progress,completed,cancelled,no_show] }
+      responses:
+        '204': { description: Estado actualizado }
+
+  # OT-063: /appointments/{id}/triage no existe en el backend.
+  # La ruta canónica es POST /triage/{id} (medical service).
+  # Se elimina esta entrada para evitar confusión; ver /triage/{id} más abajo.
+
+  # ── MEDICAL RECORDS ────────────────────────────────────────────────────────
+  /medical-records:
+    get:
+      tags: [Medical Records]
+      summary: Listar historias clínicas
+      parameters:
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, signed, amended] }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Lista de HCs }
+    post:
+      tags: [Medical Records]
+      summary: Abrir nueva historia clínica
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [appointmentId, chiefComplaint]
+                  properties:
+                    appointmentId:      { type: integer }
+                    chiefComplaint:     { type: string }
+                    reasonForVisit:     { type: string }
+                    visitDate:          { type: string, format: date }
+                    notes:              { type: string }
+                    weightKg:           { type: number }
+                    bodyConditionScore: { type: number }
+                    temperatureC:       { type: number }
+                - type: object
+                  required: [patientId, chiefComplaint]
+                  properties:
+                    patientId:          { type: integer }
+                    chiefComplaint:     { type: string }
+                    reasonForVisit:     { type: string }
+                    visitDate:          { type: string, format: date }
+                    notes:              { type: string }
+                    weightKg:           { type: number }
+                    bodyConditionScore: { type: number }
+                    temperatureC:       { type: number }
+      responses:
+        '201': { description: HC abierta }
+
+  /medical-records/{id}:
+    get:
+      tags: [Medical Records]
+      summary: Obtener HC completa (anamnesis, examen físico, diagnósticos, tratamientos, recetas)
+      responses:
+        '200': { description: HC completa }
+
+  /medical-records/{id}/sign:
+    post:
+      tags: [Medical Records]
+      summary: Firmar / cerrar historia clínica
+      description: Valida que tenga anamnesis y al menos un diagnóstico antes de firmar. Una vez firmada no puede editarse.
+      responses:
+        '200': { description: HC firmada exitosamente }
+        '400': { description: HC incompleta - falta anamnesis o diagnóstico }
+
+  /medical-records/{id}/anamnesis:
+    post:
+      tags: [Medical Records]
+      summary: Guardar anamnesis
+      responses:
+        '201': { description: Anamnesis guardada }
+
+  /medical-records/{id}/physical-exam:
+    post:
+      tags: [Medical Records]
+      summary: Guardar examen físico
+      responses:
+        '201': { description: Examen guardado }
+
+  /medical-records/{id}/diagnoses:
+    post:
+      tags: [Medical Records]
+      summary: Agregar diagnóstico
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [diagnosisName, diagnosisType]
+              properties:
+                diagnosisName:  { type: string }
+                diagnosisType:  { type: string, enum: [definitive,presumptive,differential,rule_out] }
+                diagnosisCode:  { type: string, description: "Código CIE o SNOMED" }
+                isPrimary:      { type: boolean }
+                prognosis:      { type: string, enum: [excellent,good,fair,guarded,poor,grave] }
+      responses:
+        '201': { description: Diagnóstico agregado }
+
+  /medical-records/{id}/treatments:
+    post:
+      tags: [Medical Records]
+      summary: Agregar tratamiento
+      responses:
+        '201': { description: Tratamiento agregado }
+
+  /medical-records/{id}/prescriptions:
+    post:
+      tags: [Medical Records]
+      summary: Crear receta médica
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionCreateRequest'
+      responses:
+        '201': { description: Receta creada }
+
+  # ── LAB ────────────────────────────────────────────────────────────────────
+  /rules:
+    get:
+      tags: [Medical Rules]
+      summary: Listar reglas clinicas y operativas
+      responses:
+        '200': { description: Lista de reglas }
+    post:
+      tags: [Medical Rules]
+      summary: Crear regla clinica u operativa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rule_type, name, conditions]
+              properties:
+                rule_type: { type: string, enum: [appointment_restriction,capacity_limit,clinical_alert,invoice_rule] }
+                name: { type: string }
+                description: { type: string }
+                branch_id: { type: integer, nullable: true }
+                conditions:
+                  type: array
+                  items: { type: object }
+                action: { type: string, enum: [block,warn,alert], default: warn }
+                action_message: { type: string }
+                priority: { type: integer }
+      responses:
+        '201': { description: Regla creada }
+
+  /rules/{id}:
+    put:
+      tags: [Medical Rules]
+      summary: Actualizar regla
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Regla actualizada }
+    delete:
+      tags: [Medical Rules]
+      summary: Desactivar regla
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Regla desactivada }
+
+  /rules/evaluate:
+    post:
+      tags: [Medical Rules]
+      summary: Evaluar reglas
+      responses:
+        '200': { description: Resultado de evaluacion }
+
+  # -- LAB -------------------------------------------------------------------
+  /lab/orders:
+    get:
+      tags: [Lab]
+      summary: Listar órdenes de laboratorio
+      parameters:
+        - { in: query, name: patientId, schema: { type: integer } }
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: Lista de órdenes }
+    post:
+      tags: [Lab]
+      summary: Crear orden de laboratorio
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patientId, tests]
+              properties:
+                patientId:       { type: integer }
+                medicalRecordId: { type: integer }
+                tests:
+                  type: array
+                  description: "IDs de lab_tests o items con testId"
+                  items:
+                    oneOf:
+                      - type: integer
+                      - type: object
+                        required: [testId]
+                        properties:
+                          testId: { type: integer }
+                priority:        { type: string, enum: [routine,urgent,stat], default: routine }
+      responses:
+        '201': { description: Orden creada con número auto-generado }
+
+  /lab/orders/pending:
+    get:
+      tags: [Lab]
+      summary: Resultados pendientes de informar
+      responses:
+        '200': { description: Órdenes sin resultados completos }
+
+  /lab/orders/{id}/results:
+    post:
+      tags: [Lab]
+      summary: Cargar resultados (técnico de laboratorio)
+      description: Auto-detecta valores críticos y dispara alertas. Busca rangos de referencia por especie/sexo.
+      responses:
+        '201': { description: Resultados cargados. Alertas generadas si hay valores críticos. }
+
+  /lab/orders/{id}:
+    get:
+      tags: [Lab]
+      summary: Obtener detalle de una orden de laboratorio
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Orden con items y resultados }
+        '404': { description: Orden no encontrada }
+
+  /lab/tests:
+    get:
+      tags: [Lab]
+      summary: Catálogo de análisis de laboratorio disponibles
+      parameters:
+        - in: query
+          name: categoryId
+          schema: { type: integer }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200': { description: Lista de análisis activos con categoría y precio }
+
+  /lab/panels:
+    get:
+      tags: [Lab]
+      summary: Paneles de análisis (conjuntos predefinidos)
+      responses:
+        '200': { description: Lista de paneles activos con análisis incluidos }
+
+  # ── IMAGING ────────────────────────────────────────────────────────────────
+  /pathology/orders:
+    get:
+      tags: [Lab]
+      summary: Listar Ã³rdenes de patologÃ­a
+      parameters:
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Lista de Ã³rdenes de patologÃ­a }
+    post:
+      tags: [Pathology]
+      summary: Crear orden de patología
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patientId, pathologyTypeId]
+              properties:
+                patientId:        { type: integer }
+                medicalRecordId:  { type: integer }
+                pathologyTypeId:  { type: integer }
+                clinicalHistory:  { type: string }
+                samples:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      sampleType:             { type: string }
+                      anatomicalLocation:     { type: string }
+                      collectionDate:         { type: string, format: date }
+                      fixationMethod:         { type: string }
+                      macroscopicDescription: { type: string }
+                sampleDescription: { type: string }
+                priority:         { type: string, enum: [routine, urgent, stat], default: routine }
+      responses:
+        '201': { description: Orden de patología creada }
+
+  /pathology/types:
+    get:
+      tags: [Lab]
+      summary: CatÃ¡logo de tipos de patologÃ­a
+      responses:
+        '200': { description: Lista de tipos de patologÃ­a }
+
+  # OT-067: GET /imaging → redirect 307 a /imaging/orders (backend alias)
+  /imaging:
+    get:
+      tags: [Imaging]
+      summary: Listar órdenes de imágenes (alias de /imaging/orders)
+      description: Redirige a `/imaging/orders`. Usar `/imaging/orders` directamente.
+      deprecated: true
+      responses:
+        '307': { description: Redirect a /imaging/orders }
+        '200': { description: Lista de órdenes (si el cliente sigue el redirect) }
+
+  /imaging/orders:
+    get:
+      tags: [Imaging]
+      summary: Listar órdenes de imágenes
+      parameters:
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200': { description: Lista de órdenes }
+    post:
+      tags: [Imaging]
+      summary: Crear orden de imágenes
+      responses:
+        '201': { description: Orden creada }
+
+  /imaging/orders/{id}/studies:
+    post:
+      tags: [Imaging]
+      summary: Registrar estudio realizado con URLs de imágenes (PACS/DICOM)
+      description: Almacena solo la URL externa del PACS. No sube imágenes a esta API.
+      responses:
+        '201': { description: Estudio registrado }
+
+  /imaging/orders/{id}/report:
+    post:
+      tags: [Imaging]
+      summary: Cargar informe radiológico
+      responses:
+        '201': { description: Informe cargado }
+
+  # ── SURGERY ────────────────────────────────────────────────────────────────
+  /surgeries:
+    get:
+      tags: [Surgery]
+      summary: Listar cirugías
+      parameters:
+        - { in: query, name: patientId, schema: { type: integer } }
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: Lista de cirugías }
+    post:
+      tags: [Surgery]
+      summary: Programar cirugía
+      responses:
+        '201': { description: Cirugía programada }
+
+  /surgeries/{id}/status:
+    patch:
+      tags: [Surgery]
+      summary: Actualizar estado de cirugía (incluye hora inicio/fin, diagnóstico postoperatorio)
+      responses:
+        '204': { description: Estado actualizado }
+
+  /surgeries/{id}/anesthesia:
+    post:
+      tags: [Surgery]
+      summary: Registrar protocolo anestésico
+      responses:
+        '201': { description: Registro anestésico guardado }
+
+  # ── HOSPITALIZATION ────────────────────────────────────────────────────────
+  /hospitalizations:
+    get:
+      tags: [Hospitalization]
+      summary: Listar internaciones
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [active, discharged, all], default: active } }
+        - { in: query, name: patientId, schema: { type: integer } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 30 } }
+      responses:
+        '200': { description: Lista de internaciones }
+    post:
+      tags: [Hospitalization]
+      summary: Ingresar paciente a internación
+      description: Verifica disponibilidad de kennel. Usa sp_admit_hospitalization.
+      responses:
+        '201': { description: Paciente ingresado }
+        '409': { description: Kennel no disponible }
+
+  /hospitalizations/board:
+    get:
+      tags: [Hospitalization]
+      summary: Pizarrón de enfermería (todos los internados con últimos vitales)
+      responses:
+        '200': { description: Vista del pizarrón de internación }
+
+  /hospitalizations/{id}/monitoring:
+    post:
+      tags: [Hospitalization]
+      summary: Registrar control de enfermería
+      description: Dispara alerta si detecta valores críticos (hipotermia, taquicardia, etc.)
+      responses:
+        '201': { description: Control registrado. Alerta si hay valores críticos. }
+
+  /hospitalizations/{id}/discharge:
+    patch:
+      tags: [Hospitalization]
+      summary: Dar de alta al paciente
+      responses:
+        '200': { description: Alta registrada }
+
+  /hospitalizations/wards/availability:
+    get:
+      tags: [Hospitalization]
+      summary: Disponibilidad de kennels por área
+      responses:
+        '200': { description: Mapa de disponibilidad de kennels }
+
+  # ── VACCINATION ────────────────────────────────────────────────────────────
+  /vaccinations:
+    get:
+      tags: [Vaccination]
+      summary: Historial de vacunas
+      responses:
+        '200': { description: Lista de vacunaciones }
+    post:
+      tags: [Vaccination]
+      summary: Registrar vacuna aplicada
+      description: Auto-genera recordatorio para próxima dosis.
+      responses:
+        '201': { description: Vacuna registrada }
+
+  /vaccinations/alerts:
+    get:
+      tags: [Vaccination]
+      summary: Alertas de vacunas vencidas o por vencer (30 días)
+      responses:
+        '200': { description: Lista de alertas }
+
+  /vaccinations/vaccines:
+    get:
+      tags: [Vaccination]
+      summary: Catalogo de vacunas
+      parameters:
+        - in: query
+          name: speciesId
+          schema: { type: integer }
+      responses:
+        '200': { description: Lista de vacunas }
+
+  /vaccinations/deworming:
+    get:
+      tags: [Vaccination]
+      summary: Historial de desparasitaciones
+      parameters:
+        - in: query
+          name: patientId
+          schema: { type: integer }
+      responses:
+        '200': { description: Lista }
+    post:
+      tags: [Vaccination]
+      summary: Registrar desparasitación
+      responses:
+        '201': { description: Registrado }
+
+  # ── BILLING ────────────────────────────────────────────────────────────────
+  /vaccinations/deworming/products:
+    get:
+      tags: [Vaccination]
+      summary: Catalogo de antiparasitarios
+      responses:
+        '200': { description: Lista de productos antiparasitarios }
+
+  /invoices:
+    get:
+      tags: [Billing]
+      summary: Listar facturas
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+        - in: query
+          name: limit
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+        - in: query
+          name: status
+          schema: { type: string, enum: [draft,pending,partial,paid,overdue,cancelled] }
+        - in: query
+          name: clientId
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Lista paginada de facturas }
+    post:
+      tags: [Billing]
+      summary: Crear factura
+      description: Usa sp_generate_invoice. Numeración auto-correlativa por sucursal.
+      responses:
+        '201': { description: Factura creada }
+
+  /invoices/{id}:
+    get:
+      tags: [Billing]
+      summary: Obtener factura completa con items y pagos
+      responses:
+        '200': { description: Factura completa }
+
+  /invoices/{id}/pay:
+    patch:
+      tags: [Billing]
+      summary: Marcar factura como pagada
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_method: { type: string, enum: [cash,credit_card,debit_card,bank_transfer,check,crypto,other] }
+                paymentMethod:  { type: string, enum: [cash,credit_card,debit_card,bank_transfer,check,crypto,other] }
+                reference:      { type: string }
+                notes:          { type: string }
+      responses:
+        '200': { description: Factura pagada }
+
+  /invoices/{id}/cancel:
+    patch:
+      tags: [Billing]
+      summary: Cancelar factura
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '204': { description: Factura cancelada }
+
+  /invoices/aging:
+    get:
+      tags: [Billing]
+      summary: Reporte de aging (facturas vencidas por rango)
+      responses:
+        '200': { description: Aging report }
+
+  /payments:
+    # OT-062: GET / — listar pagos del branch (opcional: filtrar por invoiceId)
+    get:
+      tags: [Billing]
+      summary: Listar pagos del branch
+      parameters:
+        - in: query
+          name: invoiceId
+          schema: { type: integer }
+          description: Filtrar por factura
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200': { description: Lista de pagos paginada }
+    post:
+      tags: [Billing]
+      summary: Registrar pago
+      description: Auto-actualiza estado de factura y saldo del cliente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceId, amount, paymentMethod]
+              properties:
+                invoiceId:     { type: integer }
+                amount:        { type: number }
+                paymentMethod: { type: string, enum: [cash,credit_card,debit_card,bank_transfer,check,crypto,other] }
+                reference:     { type: string }
+      responses:
+        '201': { description: Pago registrado }
+
+  # ── INVENTORY ──────────────────────────────────────────────────────────────
+
+  /inventory:
+    get:
+      tags: [Inventory]
+      summary: Listar inventario/farmacia
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+
+        - in: query
+          name: itemType
+          required: false
+          schema:
+            type: string
+
+        - in: query
+          name: stockStatus
+          required: false
+          schema:
+            type: string
+            enum: [all, low, zero]
+      responses:
+        '200':
+          description: Lista de items con stock
+
+  /inventory/movements:
+    post:
+      tags: [Inventory]
+      summary: Registrar movimiento de inventario
+      responses:
+        '201':
+          description: Movimiento registrado. Alerta si stock bajo.
+
+  /inventory/alerts:
+    get:
+      tags: [Inventory]
+      summary: Listar alertas de stock bajo o vencimiento
+      parameters:
+        - in: query
+          name: resolved
+          required: false
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Lista de alertas de stock
+
+  /inventory/alerts/{id}/resolve:
+    patch:
+      tags: [Inventory]
+      summary: Marcar alerta como resuelta
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Alerta resuelta }
+
+  /inventory/alerts/check:
+    post:
+      tags: [Inventory]
+      summary: Generar alertas de stock (cron o manual)
+      responses:
+        '200': { description: Alertas generadas }
+
+  /inventory/items:
+    post:
+      tags: [Inventory]
+      summary: Crear item de inventario
+      responses:
+        '201': { description: Item creado }
+
+  /inventory/items/{id}:
+    put:
+      tags: [Inventory]
+      summary: Actualizar item de inventario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Item actualizado }
+
+  /inventory/batches:
+    get:
+      tags: [Inventory]
+      summary: Listar lotes de inventario
+      parameters:
+        - in: query
+          name: itemId
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Lista de lotes }
+    post:
+      tags: [Inventory]
+      summary: Registrar lote de inventario
+      responses:
+        '201': { description: Lote registrado }
+
+  /suppliers:
+    get:
+      tags: [Inventory]
+      summary: Listar proveedores
+      responses:
+        '200': { description: Lista de proveedores }
+    post:
+      tags: [Inventory]
+      summary: Crear proveedor
+      responses:
+        '201': { description: Proveedor creado }
+
+  /suppliers/{id}:
+    put:
+      tags: [Inventory]
+      summary: Actualizar proveedor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Proveedor actualizado }
+    delete:
+      tags: [Inventory]
+      summary: Eliminar proveedor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Proveedor eliminado }
+
+  /purchase-orders:
+    get:
+      tags: [Inventory]
+      summary: Listar órdenes de compra
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Lista de órdenes de compra }
+    post:
+      tags: [Inventory]
+      summary: Crear orden de compra
+      responses:
+        '201': { description: Orden de compra creada }
+
+  /purchase-orders/{id}:
+    get:
+      tags: [Inventory]
+      summary: Obtener orden de compra por ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+
+  /purchase-orders/{id}/send:
+    patch:
+      tags: [Inventory]
+      summary: Enviar orden de compra al proveedor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Orden enviada }
+
+  /purchase-orders/{id}/receive:
+    post:
+      tags: [Inventory]
+      summary: Registrar recepción de orden de compra
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Recepción registrada }
+
+  /purchase-orders/{id}/cancel:
+    patch:
+      tags: [Inventory]
+      summary: Cancelar orden de compra
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Orden cancelada }
+
+  # ── TELEMEDICINE ───────────────────────────────────────────────────────────
+  /tele/sessions:
+    get:
+      tags: [Telemedicine]
+      summary: Listar sesiones de teleconsulta
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: vetId
+          schema: { type: integer }
+        - in: query
+          name: date
+          schema: { type: string, format: date }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Lista de sesiones }
+    post:
+      tags: [Telemedicine]
+      summary: Crear sesión de teleconsulta
+      responses:
+        '201': { description: Sesión creada con código único }
+
+  /tele/sessions/today:
+    get:
+      tags: [Telemedicine]
+      summary: Sesiones del día
+      responses:
+        '200': { description: Agenda de teleconsultas del día }
+
+  /tele/sessions/{id}:
+    get:
+      tags: [Telemedicine]
+      summary: Obtener detalle de una sesion de teleconsulta
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Detalle de sesion }
+        '404': { description: Sesion no encontrada }
+
+  /tele/sessions/{id}/pre-anamnesis:
+    post:
+      tags: [Telemedicine]
+      summary: Cliente completa pre-anamnesis antes de la sesión
+      responses:
+        '201': { description: Pre-anamnesis guardada }
+
+  /tele/sessions/{id}/prescription:
+    post:
+      tags: [Telemedicine]
+      summary: Emitir prescripción digital con firma hash
+      responses:
+        '201': { description: Prescripción digital creada con hash SHA-256 }
+
+  /tele/sessions/{id}/rating:
+    post:
+      tags: [Telemedicine]
+      summary: Calificar sesión
+      responses:
+        '201': { description: Calificación registrada }
+
+  # ── GROOMING ───────────────────────────────────────────────────────────────
+  /tele/sessions/{id}/status:
+    patch:
+      tags: [Telemedicine]
+      summary: Actualizar estado de teleconsulta
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Estado actualizado }
+
+  /tele/stats:
+    get:
+      tags: [Telemedicine]
+      summary: Estadisticas de telemedicina
+      responses:
+        '200': { description: Estadisticas de teleconsultas }
+
+  /tele/platforms:
+    get:
+      tags: [Telemedicine]
+      summary: Plataformas habilitadas de telemedicina
+      responses:
+        '200': { description: Lista de plataformas }
+
+  # OT-060: /follow-ups — acceso directo a sesiones de tipo follow_up sin prefijo /tele
+  /follow-ups:
+    get:
+      tags: [Telemedicine]
+      summary: Listar sesiones de seguimiento (follow-up)
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [scheduled,waiting,in_progress,completed,cancelled,no_show] }
+        - in: query
+          name: vetId
+          schema: { type: integer }
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200': { description: Lista paginada de follow-ups }
+    post:
+      tags: [Telemedicine]
+      summary: Crear sesión de seguimiento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patientId, clientId, vetId, scheduledAt]
+              properties:
+                patientId:       { type: integer }
+                clientId:        { type: integer }
+                vetId:           { type: integer }
+                scheduledAt:     { type: string, format: date-time }
+                platformId:      { type: integer, nullable: true }
+                durationMinutes: { type: integer, default: 30 }
+                chiefComplaint:  { type: string }
+                notes:           { type: string }
+      responses:
+        '201':
+          description: Follow-up creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:          { type: integer }
+                  sessionCode: { type: string }
+                  sessionType: { type: string, example: follow_up }
+
+  /grooming/appointments:
+    get:
+      tags: [Grooming]
+      summary: Listar turnos de grooming
+      parameters:
+        - in: query
+          name: date
+          schema: { type: string, format: date }
+        - in: query
+          name: groomerId
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Lista de turnos }
+    post:
+      tags: [Grooming]
+      summary: Crear turno de grooming
+      description: Calcula precio estimado automáticamente basado en servicios y tamaño del paciente.
+      responses:
+        '201': { description: Turno creado con precio estimado }
+
+  /grooming/appointments/today:
+    get:
+      tags: [Grooming]
+      summary: Agenda de grooming del día
+      responses:
+        '200': { description: Agenda del día }
+
+  /grooming/appointments/{id}/record:
+    post:
+      tags: [Grooming]
+      summary: Registrar trabajo realizado (fotos antes/después, servicios, productos)
+      description: Si detecta problemas dermatológicos o de salud, genera alerta para derivación veterinaria.
+      responses:
+        '201': { description: Ficha de grooming guardada }
+
+  /grooming/groomers:
+    get:
+      tags: [Grooming]
+      summary: Listar groomers activos de la sucursal
+      responses:
+        '200': { description: Catálogo de groomers }
+
+  /grooming/service-types:
+    get:
+      tags: [Grooming]
+      summary: Listar tipos de servicio de grooming
+      responses:
+        '200': { description: Catálogo de servicios de grooming }
+
+  /grooming/groomers/performance:
+    get:
+      tags: [Grooming]
+      summary: Performance de groomers (servicios, ingresos, calificación)
+      responses:
+        '200': { description: Métricas de performance }
+
+  # ── REPORTS ────────────────────────────────────────────────────────────────
+  /reports/dashboard:
+    get:
+      tags: [Reports]
+      summary: Dashboard KPIs de la sucursal (hoy)
+      responses:
+        '200': { description: KPIs del día }
+
+  /reports/revenue:
+    get:
+      tags: [Reports]
+      summary: Ingresos por período
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: groupBy
+          schema: { type: string, enum: [day, week, month], default: day }
+      responses:
+        '200': { description: Ingresos agrupados }
+
+  /reports/appointments:
+    get:
+      tags: [Reports]
+      summary: Funnel de turnos por período
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Resumen y distribución por tipo de turno }
+
+  /reports/{type}/export:
+    post:
+      tags: [Reports]
+      summary: Exportar reporte en CSV, Excel o PDF
+      parameters:
+        - in: path
+          name: type
+          required: true
+          schema: { type: string, enum: [revenue, appointments, diagnoses] }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:  { type: string, enum: [csv, excel, pdf], default: excel }
+                from:    { type: string, format: date }
+                to:      { type: string, format: date }
+                groupBy: { type: string, enum: [day, week, month] }
+                limit:   { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Archivo exportado }
+
+  /reports/top-clients:
+    get:
+      tags: [Reports]
+      summary: Top clientes por gasto
+      responses:
+        '200': { description: Ranking de clientes }
+
+  /reports/diagnoses:
+    get:
+      tags: [Reports]
+      summary: Diagnósticos más frecuentes
+      responses:
+        '200': { description: Top diagnósticos por frecuencia }
+
+  /reports/vaccination-compliance:
+    get:
+      tags: [Reports]
+      summary: Tasa de cumplimiento de vacunación
+      responses:
+        '200': { description: Porcentaje de pacientes al día con vacunas }
+
+  /reports/hospitalization-occupancy:
+    get:
+      tags: [Reports]
+      summary: Ocupación de internación (actual + histórico)
+      responses:
+        '200': { description: Porcentajes de ocupación por área }
+
+  /reports/executive:
+    get:
+      tags: [Reports]
+      summary: Dashboard ejecutivo completo (multi-sucursal)
+      description: Usa sp_executive_dashboard. Requiere rol org_admin o superior.
+      responses:
+        '200': { description: 'Reporte ejecutivo con revenue, diagnósticos, ocupación' }
+
+  # OT-069: endpoints de reports faltantes en spec ─────────────────────────────
+  /reports/kpis:
+    get:
+      tags: [Reports]
+      summary: KPIs del período (dashboard flexible)
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: KPIs del período }
+
+  /reports/revenue-by-service:
+    get:
+      tags: [Reports]
+      summary: Ingresos desglosados por categoría de servicio
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Ingresos por servicio }
+
+  /reports/new-patients:
+    get:
+      tags: [Reports]
+      summary: Nuevos pacientes por período
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: groupBy
+          schema: { type: string, enum: [day, week, month], default: month }
+      responses:
+        '200': { description: Serie de nuevos pacientes }
+
+  /reports/lab-turnaround:
+    get:
+      tags: [Reports]
+      summary: Tiempo de respuesta promedio del laboratorio
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Tiempos de turnaround por tipo de análisis }
+
+  /reports/telemedicine:
+    get:
+      tags: [Reports]
+      summary: Métricas de telemedicina por período
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: 'Sesiones, duración promedio, rating por período' }
+
+  /reports/grooming:
+    get:
+      tags: [Reports]
+      summary: Métricas de grooming por período
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: 'Turnos de grooming, ingresos, servicios más pedidos' }
+
+  /reports/security:
+    get:
+      tags: [Reports]
+      summary: Reporte de seguridad (logins, alertas, RBAC denials)
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Métricas de seguridad del período }
+
+  /reports/charts/revenue-trend:
+    get:
+      tags: [Reports]
+      summary: Gráfico de tendencia de ingresos (datasets para Chart.js)
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: groupBy
+          schema: { type: string, enum: [day, week, month], default: month }
+      responses:
+        '200': { description: 'Labels + datasets (gross, net, collected)' }
+
+  /reports/charts/appointments-heatmap:
+    get:
+      tags: [Reports]
+      summary: Heatmap de turnos por día de semana y hora
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: 'Matriz de calor por dayOfWeek y hora' }
+
+  /reports/charts/species-distribution:
+    get:
+      tags: [Reports]
+      summary: Distribución de pacientes por especie (pie chart)
+      responses:
+        '200': { description: Conteo por especie }
+
+  /reports/charts/top-diagnoses-bar:
+    get:
+      tags: [Reports]
+      summary: Top 10 diagnósticos más frecuentes (bar chart)
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Diagnósticos por frecuencia }
+
+  /reports/charts/payment-methods:
+    get:
+      tags: [Reports]
+      summary: Distribución de métodos de pago (pie/bar chart)
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Pagos por método }
+
+  /billing/consolidated/summary:
+    get:
+      tags: [Billing]
+      summary: Resumen financiero consolidado multi-sucursal
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: Resumen consolidado por período }
+
+  /billing/consolidated/outstanding:
+    get:
+      tags: [Billing]
+      summary: Deuda pendiente consolidada por sucursal
+      responses:
+        '200': { description: Saldos pendientes agrupados por sucursal }
+
+  /auth/password-reset/request:
+    post:
+      tags: [Auth]
+      summary: Solicitar restablecimiento de contraseña
+      security: []
+      responses:
+        '200': { description: Correo de restablecimiento enviado }
+
+  /auth/password-reset/confirm:
+    post:
+      tags: [Auth]
+      summary: Confirmar restablecimiento de contraseña
+      security: []
+      responses:
+        '200': { description: Contraseña actualizada }
+
+  /clients/signatures/public-key:
+    get:
+      tags: [Clients]
+      summary: Obtener clave pública de firmas digitales
+      responses:
+        '200': { description: Clave pública disponible }
+
+  /clients/signatures/verify:
+    post:
+      tags: [Clients]
+      summary: Verificar firma digital de cliente
+      responses:
+        '200': { description: Firma verificada }
+
+  /branches:
+    get:
+      tags: [Clients]
+      summary: Listar sucursales
+      responses:
+        '200': { description: Lista de sucursales }
+
+  /branches/{id}:
+    get:
+      tags: [Clients]
+      summary: Obtener sucursal por id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Sucursal encontrada }
+
+  /branches/{id}/settings:
+    patch:
+      tags: [Clients]
+      summary: Actualizar settings de sucursal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Settings actualizados }
+
+  /deworming:
+    get:
+      tags: [Vaccination]
+      summary: Listar desparasitaciones
+      responses:
+        '200': { description: Lista de desparasitaciones }
+    post:
+      tags: [Vaccination]
+      summary: Registrar desparasitación
+      responses:
+        '201': { description: Desparasitación creada }
+
+  /deworming/alerts:
+    get:
+      tags: [Vaccination]
+      summary: Alertas de desparasitación
+      responses:
+        '200': { description: Alertas de desparasitación }
+
+  /deworming/products:
+    get:
+      tags: [Vaccination]
+      summary: Productos de desparasitación
+      responses:
+        '200': { description: Catálogo de productos }
+
+  /price-lists:
+    get:
+      tags: [Billing]
+      summary: Listar listas de precios
+      responses:
+        '200': { description: Listado de listas de precios }
+
+  /price-lists/{id}/items:
+    get:
+      tags: [Billing]
+      summary: Ítems de una lista de precios
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Ítems de la lista }
+
+  /payments/mp/webhook:
+    post:
+      tags: [Billing]
+      summary: Webhook público de Mercado Pago
+      security: []
+      responses:
+        '200': { description: Webhook procesado }
+
+  /tele/webrtc/config:
+    get:
+      tags: [Telemedicine]
+      summary: Configuración WebRTC
+      responses:
+        '200': { description: Configuración WebRTC }
+
+  /triage/{id}:
+    post:
+      tags: [Appointments]
+      summary: Crear triage para un turno
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201': { description: Triage registrado }
+
+  /prescriptions/{id}:
+    get:
+      tags: [Medical Records]
+      summary: Obtener prescripciones asociadas a una historia clínica
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Prescripciones de la HC }
+    post:
+      tags: [Medical Records]
+      summary: Crear prescripción para una historia clínica
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionCreateRequest'
+      responses:
+        '201': { description: Prescripción creada }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Listar notificaciones del usuario
+      parameters:
+        - in: query
+          name: unreadOnly
+          required: false
+          schema: { type: string, enum: ['true', 'false'] }
+        - in: query
+          name: page
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Notificaciones }
+
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Marcar notificación como leída
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Notificación leída }
+
+  /notifications/read-all:
+    patch:
+      tags: [Notifications]
+      summary: Marcar todas como leídas
+      responses:
+        '204': { description: Notificaciones leídas }
+
+  /notifications/push:
+    post:
+      tags: [Notifications]
+      summary: Crear notificación interna
+      responses:
+        '201': { description: Notificación creada }
+
+  /notifications/reminders/generate:
+    post:
+      tags: [Notifications]
+      summary: Generar recordatorios
+      responses:
+        '201': { description: Recordatorios generados }
+
+  /notifications/reminders:
+    get:
+      tags: [Notifications]
+      summary: Listar recordatorios
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema: { type: string }
+        - in: query
+          name: type
+          required: false
+          schema: { type: string }
+        - in: query
+          name: page
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Recordatorios }
+
+  /notifications/messages/send:
+    post:
+      tags: [Notifications]
+      summary: Enviar mensaje
+      responses:
+        '200': { description: Mensaje enviado }
+
+  /notifications/messages/template:
+    post:
+      tags: [Notifications]
+      summary: Crear mensaje desde plantilla
+      responses:
+        '200': { description: Plantilla procesada }
+
+  /notifications/messages/reminder/{reminderId}:
+    post:
+      tags: [Notifications]
+      summary: Enviar mensaje para recordatorio
+      parameters:
+        - in: path
+          name: reminderId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Mensaje de recordatorio enviado }
+
+  /notifications/messages/bulk-reminders:
+    post:
+      tags: [Notifications]
+      summary: Enviar mensajes masivos de recordatorios
+      responses:
+        '200': { description: Mensajes enviados }
+
+  /notifications/messages:
+    get:
+      tags: [Notifications]
+      summary: Listar mensajes enviados
+      parameters:
+        - in: query
+          name: channel
+          required: false
+          schema: { type: string }
+        - in: query
+          name: page
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Mensajes }
+
+  /notifications/retries:
+    get:
+      tags: [Notifications]
+      summary: Listar jobs de reintento
+      responses:
+        '200': { description: Reintentos }
+
+  /documents/providers:
+    get:
+      tags: [Documents]
+      summary: Listar proveedores de correo disponibles
+      responses:
+        '200': { description: Proveedores }
+
+  /documents/mail-accounts:
+    get:
+      tags: [Documents]
+      summary: Listar cuentas de correo configuradas
+      responses:
+        '200': { description: Cuentas }
+    post:
+      tags: [Documents]
+      summary: Crear cuenta de correo
+      responses:
+        '201': { description: Cuenta creada }
+
+  /documents/mail-accounts/{id}:
+    patch:
+      tags: [Documents]
+      summary: Actualizar cuenta de correo
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Cuenta actualizada }
+
+  /documents/mail-accounts/{id}/sync:
+    post:
+      tags: [Documents]
+      summary: Disparar sincronización de una cuenta
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '202': { description: Sincronización aceptada }
+
+  /documents/inbox:
+    get:
+      tags: [Documents]
+      summary: Listar documentos entrantes
+      parameters:
+        - in: query
+          name: accountId
+          schema: { type: integer }
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: associationStatus
+          schema: { type: string, enum: [unassociated, associated, needs_review] }
+        - in: query
+          name: provider
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer }
+        - in: query
+          name: limit
+          schema: { type: integer }
+      responses:
+        '200': { description: Bandeja }
+
+  /documents/inbox/manual:
+    post:
+      tags: [Documents]
+      summary: Importar documentos manualmente
+      responses:
+        '201': { description: Importación creada }
+
+  /documents/inbox/upload:
+    post:
+      tags: [Documents]
+      summary: Subir PDFs reales a la bandeja documental
+      responses:
+        '201': { description: Upload creado }
+
+  /documents/inbox/{id}:
+    get:
+      tags: [Documents]
+      summary: Ver detalle de documento entrante
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Documento }
+
+  /documents/inbox/{id}/download-url:
+    get:
+      tags: [Documents]
+      summary: Generar URL temporal de descarga del documento
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: URL temporal }
+
+  /documents/inbox/{id}/associate:
+    patch:
+      tags: [Documents]
+      summary: Asociar documento entrante a un paciente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Documento asociado }
+
+  /documents/inbox/{id}/ingest:
+    post:
+      tags: [Documents]
+      summary: Procesar PDF y volcarlo en tablas clínicas soportadas
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Documento procesado }
+
+  /documents/inbox/patients/{patientId}:
+    get:
+      tags: [Documents]
+      summary: Listar documentos de un paciente
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Documentos del paciente }
+
+  /notifications/fcm/register:
+    post:
+      tags: [Notifications]
+      summary: Registrar token FCM
+      responses:
+        '201': { description: Token registrado }
+
+  /notifications/fcm/unregister:
+    delete:
+      tags: [Notifications]
+      summary: Borrar token FCM
+      responses:
+        '204': { description: Token borrado }
+
+  /notifications/fcm/tokens:
+    get:
+      tags: [Notifications]
+      summary: Listar tokens FCM
+      responses:
+        '200': { description: Tokens FCM }
+
+  /notifications/fcm/send:
+    post:
+      tags: [Notifications]
+      summary: Enviar push FCM
+      responses:
+        '200': { description: Push enviado }
+
+  /notifications/fcm/broadcast:
+    post:
+      tags: [Notifications]
+      summary: Broadcast FCM
+      responses:
+        '200': { description: Broadcast enviado }
+
+  /portal/auth/register:
+    post:
+      tags: [Portal]
+      summary: Registrar dueño de mascota
+      security: []
+      responses:
+        '201': { description: Dueño registrado }
+
+  /portal/auth/login:
+    post:
+      tags: [Portal]
+      summary: Iniciar sesión de portal
+      security: []
+      responses:
+        '200': { description: Sesión iniciada }
+
+  /portal/auth/refresh:
+    post:
+      tags: [Portal]
+      summary: Renovar tokens de portal
+      security: []
+      responses:
+        '200': { description: Tokens renovados }
+
+  /portal/auth/forgot-password:
+    post:
+      tags: [Portal]
+      summary: Recuperar contraseña de portal
+      security: []
+      responses:
+        '200': { description: Correo enviado }
+
+  /portal/me:
+    get:
+      tags: [Portal]
+      summary: Obtener perfil de portal
+      responses:
+        '200': { description: Perfil devuelto }
+    put:
+      tags: [Portal]
+      summary: Actualizar perfil de portal
+      responses:
+        '204': { description: Perfil actualizado }
+
+  /portal/me/password:
+    put:
+      tags: [Portal]
+      summary: Cambiar contraseña de portal
+      responses:
+        '204': { description: Contraseña actualizada }
+
+  /portal/pets:
+    get:
+      tags: [Portal]
+      summary: Listar mascotas del dueño
+      responses:
+        '200': { description: Mascotas }
+
+  /portal/pets/{id}:
+    get:
+      tags: [Portal]
+      summary: Obtener mascota del dueño
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Mascota encontrada }
+
+  /portal/pets/{id}/medical-history:
+    get:
+      tags: [Portal]
+      summary: Historia clínica resumida del dueño
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Historia clínica }
+
+  /portal/pets/{id}/vaccinations:
+    get:
+      tags: [Portal]
+      summary: Vacunas de la mascota
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Vacunas }
+
+  /portal/pets/{id}/prescriptions:
+    get:
+      tags: [Portal]
+      summary: Prescripciones de la mascota
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Prescripciones }
+
+  /portal/appointments:
+    get:
+      tags: [Portal]
+      summary: Listar turnos del dueño
+      parameters:
+        - in: query
+          name: upcoming
+          schema: { type: string, enum: ['true', 'false'] }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Turnos }
+    post:
+      tags: [Portal]
+      summary: Solicitar turno desde portal
+      responses:
+        '201': { description: Turno solicitado }
+
+  /portal/appointments/{id}/cancel:
+    patch:
+      tags: [Portal]
+      summary: Cancelar turno desde portal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Turno cancelado }
+
+  /portal/invoices:
+    get:
+      tags: [Portal]
+      summary: Listar facturas del dueño
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Facturas }
+
+  /portal/invoices/{id}:
+    get:
+      tags: [Portal]
+      summary: Obtener factura del dueño
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Factura }
+
+  /portal/invoices/{id}/pay:
+    post:
+      tags: [Portal]
+      summary: Pagar factura desde portal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Pago procesado }
+
+  /portal/notifications:
+    get:
+      tags: [Portal]
+      summary: Notificaciones del dueño
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { description: Notificaciones }
+
+  /portal/notifications/{id}/read:
+    patch:
+      tags: [Portal]
+      summary: Marcar notificación de portal como leída
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Notificación leída }
+
+  /portal/fcm/register:
+    post:
+      tags: [Portal]
+      summary: Registrar FCM del dueño
+      responses:
+        '201': { description: Token registrado }
+
+  /portal/telemedicine:
+    get:
+      tags: [Portal]
+      summary: Sesiones de telemedicina del dueño
+      responses:
+        '200': { description: Teleconsultas }
+
+  /ai/diagnosis:
+    post:
+      tags: [AI]
+      summary: Diagnóstico asistido por IA
+      responses:
+        '200': { description: Diagnóstico generado }
+
+  /ai/images/analyze:
+    post:
+      tags: [AI]
+      summary: Análisis de imágenes por IA
+      responses:
+        '200': { description: Análisis generado }
+
+  /ai/chat:
+    post:
+      tags: [AI]
+      summary: Crear sesión de chat IA
+      responses:
+        '201': { description: Chat creado }
+
+  /ai/chat/{sessionId}:
+    get:
+      tags: [AI]
+      summary: Obtener historial de chat IA
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Historial }
+
+  /ai/chat/{sessionId}/messages:
+    post:
+      tags: [AI]
+      summary: Enviar mensaje a chat IA
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Mensaje procesado }
+
+  /ai/patients/{patientId}/risk:
+    get:
+      tags: [AI]
+      summary: Evaluación de riesgo de paciente
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Riesgo calculado }
+
+  /ai/patients/{patientId}/risk/history:
+    get:
+      tags: [AI]
+      summary: Historial de riesgo de paciente
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Historial de riesgo }
+
+  # ── SURGERY (rutas faltantes) ───────────────────────────────────────────────
+  /surgeries/types/all:
+    get:
+      tags: [Surgery]
+      summary: Catálogo de tipos de cirugía
+      responses:
+        '200': { description: Lista de tipos de cirugía activos }
+
+  /surgeries/{id}:
+    get:
+      tags: [Surgery]
+      summary: Obtener detalle de una cirugía
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Detalle de la cirugía }
+        '404': { description: Cirugía no encontrada }
+
+  # ── IMAGING (rutas faltantes) ───────────────────────────────────────────────
+  /imaging/types:
+    get:
+      tags: [Imaging]
+      summary: Catálogo de tipos de estudio de imágenes
+      responses:
+        '200': { description: Lista de tipos de imagen activos }
+
+  /imaging/orders/pending-report:
+    get:
+      tags: [Imaging]
+      summary: Órdenes de imágenes pendientes de informe radiológico
+      responses:
+        '200': { description: Órdenes sin informe }
+
+  /imaging/orders/{id}:
+    get:
+      tags: [Imaging]
+      summary: Obtener detalle de una orden de imágenes
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Orden con estudios e informe }
+        '404': { description: Orden no encontrada }
+
+  # ── PATHOLOGY (rutas faltantes) ─────────────────────────────────────────────
+  /pathology/orders/{id}:
+    get:
+      tags: [Pathology]
+      summary: Obtener detalle de una orden de patología
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Orden con resultado }
+        '404': { description: Orden no encontrada }
+
+  /pathology/orders/{id}/result:
+    post:
+      tags: [Pathology]
+      summary: Cargar resultado / informe patológico
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [microscopicDescription, diagnosis]
+              properties:
+                microscopicDescription: { type: string }
+                diagnosis:              { type: string }
+                behavior:               { type: string }
+                differentialDiagnosis:  { type: string }
+                prognosticNotes:        { type: string }
+                recommendations:        { type: string }
+                ihcResults:             { type: string }
+                specialStains:          { type: string }
+      responses:
+        '201': { description: Resultado cargado }
+
+  # ── HOSPITALIZATION (rutas faltantes) ───────────────────────────────────────
+  /hospitalizations/{id}:
+    get:
+      tags: [Hospitalization]
+      summary: Obtener detalle de una internación
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Detalle de la internación con historial de monitoreo }
+        '404': { description: Internación no encontrada }
+
+  /hospitalizations/{id}/medications:
+    post:
+      tags: [Hospitalization]
+      summary: Registrar medicación administrada al paciente internado
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [medicationName, dose, route]
+              properties:
+                medicationName: { type: string }
+                dose:           { type: string }
+                route:          { type: string, enum: [oral, iv, im, sc, topical, other] }
+                administeredAt: { type: string, format: date-time }
+                notes:          { type: string }
+      responses:
+        '201': { description: Medicación registrada }
+
+  # ── VACCINATION (rutas faltantes) ───────────────────────────────────────────
+  /vaccinations/deworming/alerts:
+    get:
+      tags: [Vaccination]
+      summary: Alertas de desparasitaciones vencidas o por vencer
+      responses:
+        '200': { description: Lista de alertas de desparasitación }
+
+  # ── AUTH (rutas faltantes) ──────────────────────────────────────────────────
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Cambiar contraseña del usuario autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, minLength: 6 }
+                newPassword:     { type: string, minLength: 8 }
+      responses:
+        '204': { description: Contraseña actualizada }
+        '400': { description: Contraseña actual incorrecta o nueva inválida }
+
+  /auth/api-keys/{id}:
+    delete:
+      tags: [Auth]
+      summary: Revocar una API key
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: API key revocada }
+        '404': { description: API key no encontrada }
+
+  # ── GROOMING (rutas faltantes) ──────────────────────────────────────────────
+  /grooming/patient-profile/{patientId}:
+    get:
+      tags: [Grooming]
+      summary: Perfil de grooming de un paciente (historial, notas, preferencias)
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Perfil de grooming del paciente }
+
+  # ── PLATFORM / HEALTH ────────────────────────────────────────────────────────
+  /health/services:
+    get:
+      tags: [Platform]
+      summary: Estado de salud de todos los microservicios
+      security: []
+      responses:
+        '200': { description: Mapa de salud por servicio }
+
+  # OT-064
+  /health/deep:
+    get:
+      tags: [Platform]
+      summary: Health check profundo (DB, Redis, dependencias externas)
+      description: |
+        Verifica conectividad con MySQL, Redis, Stripe, MercadoPago y OpenAI.
+        Retorna `status: healthy | degraded | unhealthy` por componente.
+      security: []
+      responses:
+        '200':
+          description: Health check completado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [healthy, degraded, unhealthy] }
+                  checks:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        status: { type: string }
+                        latencyMs: { type: number }
+        '503': { description: Servicio degradado o no disponible }
+
+  /platform/services:
+    get:
+      tags: [Platform]
+      summary: Listar servicios registrados y sus targets
+      responses:
+        '200': { description: Registro de servicios con URLs y estado }

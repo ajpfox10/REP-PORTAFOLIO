@@ -75,6 +75,10 @@ export function Layout({ title, children, showBack }: {
   const canSeeResidentesRotacion = hasPerm('crud:residentes_rotacion:read') || hasPerm('crud:*:*');
   const canSeeResidentes = hasPerm('app:residentes:access') || hasPerm('crud:*:*');
 
+  const canSeeLicenciasConsultorio = hasPerm('app:licencias-consultorio:access') || hasPerm('crud:*:*');
+  const isJefeConsultorio =
+    hasPerm('app:licencias-consultorio:access') && !hasPerm('crud:*:*');
+
   const isGestionTurnos =
     hasPerm('app:gestion_turnos:access') && !hasPerm('crud:*:*');
 
@@ -133,7 +137,12 @@ export function Layout({ title, children, showBack }: {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', flexShrink: 0 }}>
-            {isKiosk ? null : isGestionTurnos ? (
+            {isKiosk ? null : isJefeConsultorio ? (
+              <>
+                {navLink('/app/licencias-consultorio', '🩺 Licencias de Consultorio')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
+            ) : isGestionTurnos ? (
               <>
                 {navLink('/app/examen-ingreso', '🩺 Examen de Ingreso')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
@@ -252,12 +261,13 @@ export function Layout({ title, children, showBack }: {
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 
-                      {(canSeeSaludLaboral || canSeeEmbarazadas) && (
+                      {(canSeeSaludLaboral || canSeeEmbarazadas || canSeeLicenciasConsultorio) && (
                         <>
                           <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', padding: '4px 8px', letterSpacing: '0.07em' }}>
                             Salud laboral
                           </div>
                           {canSeeSaludLaboral && navLink('/app/salud-laboral', '🏥 Salud Laboral')}
+                          {canSeeLicenciasConsultorio && navLink('/app/licencias-consultorio', '🩺 Licencias de Consultorio')}
                           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
                         </>
                       )}

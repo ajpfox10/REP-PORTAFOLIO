@@ -1,0 +1,57 @@
+PLAN DE EXPANSION
+
+1. Discovery de servicios
+- El backend ya soporta discovery por `dns` / `runtime`, `registry` y `hybrid`.
+- El registry en Redis queda como compatibilidad y metadata de instancias, no como unico mecanismo deseado a futuro.
+- La resolucion ahora contempla multiples endpoints por servicio, chequeo de salud sobre `/health/ready` y seleccion round-robin entre instancias sanas.
+
+2. Estrategia de convivencia
+- Se puede operar con mecanismo nuevo y Redis al mismo tiempo.
+- `SERVICE_DISCOVERY_MODE=runtime` o `dns` prioriza el runtime real.
+- `SERVICE_DISCOVERY_MODE=hybrid` permite convivir con registry Redis durante la transicion.
+- `SERVICE_DISCOVERY_MODE=registry` deja el comportamiento anterior como fallback controlado.
+
+3. Condicion para aprovecharlo al maximo en produccion
+- Para aprovecharlo al maximo, produccion tiene que correr con nombres DNS/runtime validos del entorno y mas de una instancia por servicio.
+- El codigo ya quedo preparado para eso.
+
+4. Criterio de apagado gradual
+- Primero habilitar `hybrid`.
+- Verificar resolucion por runtime, health-aware selection y estabilidad de trafico.
+- Luego mover servicios a `runtime` o `dns` como fuente principal.
+- Finalmente dejar Redis solo para compatibilidad temporal o retirarlo del discovery.
+
+5. Base de datos
+- No hay sharding de base de datos hoy.
+- El crecimiento actual se apoya en MySQL primario, read replica y scoping por `org_id` / `branch_id`.
+- Si el volumen exige escalar mucho mas, el siguiente paso es particionado por tenant, separacion de dominios o sharding real con router de datos.
+
+6. Eventos y volumen alto
+- No hay event sourcing para volumen alto hoy.
+- El sistema usa eventos puntuales, colas de retry y pub/sub liviano, pero no un modelo append-only como base del dominio.
+- Si el volumen o la auditabilidad exigieran mas, habria que evaluar event sourcing por dominio o un broker/event log dedicado con replays controlados.
+
+7. Multi-tenancy
+- La multi-tenancy actual esta a nivel `org_id` y `branch_id`, no con base de datos separada por tenant.
+- Eso simplifica operacion y costos, pero obliga a mantener filtros de scoping y validaciones estrictas en cada servicio.
+- Si el crecimiento o compliance lo exigieran, el siguiente paso seria separar dominios o tenants criticos en bases distintas.
+
+8. Aislamiento por tenant
+- El riesgo de aislamiento sigue existiendo mientras varias clinicas compartan la misma base con filtros por `org_id`.
+- Un bug en una query o un flujo sin scoping puede exponer datos entre tenants.
+- El objetivo de nivel superior seria aislamiento por schema o por base de datos separada por tenant.
+
+9. Vistas grandes
+- Hay vistas con mucha logica acumulada, por ejemplo `EvolucionesView.vue`, `AdminView.vue` y `HospitalizacionesView.vue`.
+- Eso no rompe hoy, pero eleva el costo de mantenimiento y el riesgo de regresiones.
+- El siguiente paso seria descomponer esas vistas en componentes y containers mas chicos.
+
+10. Portal cliente
+- El servicio `portal` existe y tiene rutas, y el frontend ya cuenta con una vista operativa propia para el duenio de mascota.
+- La brecha anterior de UI ya quedo cubierta con login, mascotas, turnos, facturas, notificaciones, telemedicina, perfil y FCM.
+- Sigue siendo un frente de negocio importante, pero ya no es una ausencia funcional.
+
+11. UI del portal de duenos
+- Existe una `PortalView.vue` publica y operativa, con login propio y flujo end-to-end de duenio.
+- Incluye listado de mascotas, detalle, turnos, facturas, notificaciones, telemedicina, perfil y registro FCM.
+- Ya no queda como pantalla informativa; el punto quedo resuelto en frontend.

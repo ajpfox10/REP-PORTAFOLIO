@@ -368,7 +368,11 @@ async function runPipeline(
 ) {
   try {
     const pageBuffers = await Promise.all(data.storage_keys.map((key) => storage().get(key)))
-    const finalOutput = await buildStoredOutput(tenant_id, scan_job_id, data.output_format, pageBuffers)
+    // JPG es de 1 sola imagen: si un job (p. ej. ADF dúplex) trae varias páginas, el
+    // documento principal del job se arma como PDF transitorio. El "1 JPG por página"
+    // definitivo se genera al consolidar la sesión (POST /scan-jobs/consolidate).
+    const finalizeFormat = (data.output_format === "jpg" && pageBuffers.length > 1) ? "pdf" : data.output_format
+    const finalOutput = await buildStoredOutput(tenant_id, scan_job_id, finalizeFormat, pageBuffers)
     const storage_key = finalOutput.storage_key
 
     // 1. Crear documento principal apuntando al PDF consolidado

@@ -70,6 +70,8 @@ export const TIPOS_DOCUMENTO_ESCANER = [
   { value: 'dj_asignacion',             label: 'Decl. Jurada de Asignación' },
   { value: 'guarderia',                 label: 'Guardería' },
   { value: 'cedula_notificacion',       label: 'Cédula de Notificación' },
+  { value: 'nota_cambio_agrupamiento',  label: 'Nota Solicitud Cambio de Agrupamiento' },
+  { value: 'solicitud_btu',             label: 'Solicitud de BTU' },
 ] as const;
 
 function getScannerDocumentsBaseDir(): string {

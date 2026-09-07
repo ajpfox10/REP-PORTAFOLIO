@@ -1,5 +1,6 @@
 // services/storage.ts — Local + S3/MinIO storage provider
 import fs from "fs/promises"
+import { createReadStream } from "fs"
 import path from "path"
 import crypto from "crypto"
 import { Readable } from "stream"
@@ -9,6 +10,7 @@ export type StoredObject = { key: string; url: string; size_bytes: number }
 export interface StorageProvider {
   put(buffer: Buffer, ext: string, contentType: string, prefix?: string): Promise<StoredObject>
   get(key: string): Promise<Buffer>
+  getStream(key: string): Readable
   del(key: string): Promise<void>
   exists(key: string): Promise<boolean>
 }
@@ -31,6 +33,12 @@ class LocalStorage implements StorageProvider {
     return fs.readFile(this.fullPath(key))
   }
 
+  getStream(key: string): Readable {
+    // Lee en chunks (no carga todo el archivo en memoria y libera el hilo del
+    // threadpool entre lecturas). Un archivo inexistente emite 'error' (ENOENT).
+    return createReadStream(this.fullPath(key))
+  }
+
   async del(key: string): Promise<void> {
     await fs.unlink(this.fullPath(key)).catch(() => {})
   }
@@ -48,6 +56,7 @@ class S3Storage implements StorageProvider {
     throw new Error("S3Storage: install @aws-sdk/client-s3 and implement")
   }
   async get(_key: string): Promise<Buffer> { throw new Error("S3Storage: not implemented") }
+  getStream(_key: string): Readable { throw new Error("S3Storage: not implemented") }
   async del(_key: string): Promise<void>   { throw new Error("S3Storage: not implemented") }
   async exists(_key: string): Promise<boolean> { return false }
 }

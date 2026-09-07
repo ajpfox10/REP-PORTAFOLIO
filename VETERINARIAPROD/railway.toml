@@ -1,0 +1,27 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+watchPatterns = [
+  "gateway/src/**",
+  "services/**/src/**",
+  "shared/**",
+  "plugins/**",
+  "andromeda-front/src/**",
+  "andromeda-front/public/**",
+  "andromeda-front/index.html",
+  "andromeda-front/vite.config.js",
+  "andromeda-front/package.json",
+  "andromeda-front/package-lock.json",
+  "package.json",
+  "package-lock.json",
+  "ecosystem.railway.config.js",
+  "Dockerfile",
+  ".dockerignore",
+  "railway.toml",
+]
+
+[deploy]
+healthcheckPath = "/health/ready"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

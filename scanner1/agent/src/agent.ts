@@ -29,6 +29,7 @@ const PASSWORD = process.env.AGENT_PASSWORD    || "Admin12345@"
 const POLL_MS  = Number(process.env.POLL_INTERVAL_MS  || 4000)
 const BEAT_MS  = Number(process.env.HEARTBEAT_MS      || 30000)
 const SCAN_CONCURRENCY = Math.max(1, Number(process.env.SCAN_CONCURRENCY || 2))
+const SCAN_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.SCAN_JOB_TIMEOUT_MS || 180_000))
 const AUTO_DISCOVERY_ENABLED = process.env.AUTO_DISCOVERY_ENABLED !== "false"
 const HOSTNAME = os.hostname()
 
@@ -118,7 +119,7 @@ async function getDevices(): Promise<DeviceRow[]> {
     let cursor = 0
     for (let i = 0; i < 10; i++) {
       const res = await http_client.get<{ items: DeviceRow[]; next_cursor?: number }>("/devices", {
-        params: { limit: 200, cursor }
+        params: { limit: 200, cursor, fast: true }
       })
       const items = res.data.items || []
       out.push(...items)
@@ -131,6 +132,20 @@ async function getDevices(): Promise<DeviceRow[]> {
     if (e?.response?.status === 401) { jwt_token = ""; console.warn("[agent] getDevices 401 — will re-login") }
     else console.warn("[agent] getDevices error:", e?.message)
     return []
+  }
+}
+
+async function getQueuedDeviceIds(): Promise<Set<number>> {
+  try {
+    await ensureToken()
+    const res = await http_client.get<{ items: any[] }>("/scan-jobs", {
+      params: { limit: 200, cursor: 0, status: "queued" },
+    })
+    return new Set((res.data.items || []).map((job: any) => Number(job.device_id)).filter(Number.isFinite))
+  } catch (e: any) {
+    if (e?.response?.status === 401) jwt_token = ""
+    else console.warn("[agent] queued jobs lookup error:", e?.message)
+    return new Set()
   }
 }
 
@@ -209,7 +224,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
   // ── Si todos fallaron por "escáner ocupado con trabajo anterior",
   //    reintentamos hasta 3 veces con esperas progresivas (10s, 20s, 30s).
   //    El Kyocera puede tardar hasta ~45s en liberar el scanner tras un scan por cristal.
-  if (/ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(combinedError)) {
+  if (isScannerBusyMessage(combinedError)) {
     const waitMs = [10_000, 20_000, 30_000]
     let retryErrors: string[] = []
     for (let attempt = 0; attempt < waitMs.length; attempt++) {
@@ -228,7 +243,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
         return pages
       } catch (e: any) { retryErrors.push(`WSD: ${e.message}`) }
       // Si todavía está bloqueado, seguir con el siguiente intento
-      if (/ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(retryErrors.join(" "))) continue
+      if (isScannerBusyMessage(retryErrors.join(" "))) continue
       // Si ya no está bloqueado pero falló por otra razón, abortar
       break
     }
@@ -347,7 +362,7 @@ try {
   try {
     const { stdout, stderr } = await _execAsync(
       `powershell -NonInteractive -ExecutionPolicy Bypass -File "${psFile}"`,
-      { timeout: 55_000 }
+      { timeout: 55_000, windowsHide: true }
     )
     console.log(`[wia] stdout: ${stdout.trim().slice(0, 200)}`)
     if (stderr.trim()) console.warn(`[wia] stderr: ${stderr.trim().slice(0, 200)}`)
@@ -365,24 +380,47 @@ try {
 }
 
 // ── Helpers de tamaño de papel ───────────────────────────────────────────────
-function normalizePaperSize(value?: string | null): "A4" | "Letter" | "Legal" {
+// Catálogo completo de tamaños. La capacidad real del scanner (MaxWidth/MaxHeight
+// que anuncia por eSCL) filtra cuáles se ofrecen — ver derivePaperSizesFromCaps().
+const PAPER_CATALOG: Record<string, { widthMm: number; heightMm: number }> = {
+  A3:        { widthMm: 297,    heightMm: 420 },
+  A4:        { widthMm: 210,    heightMm: 297 },
+  A5:        { widthMm: 148,    heightMm: 210 },
+  A6:        { widthMm: 105,    heightMm: 148 },
+  B4:        { widthMm: 257,    heightMm: 364 },   // JIS B4
+  B5:        { widthMm: 182,    heightMm: 257 },   // JIS B5
+  Letter:    { widthMm: 215.9,  heightMm: 279.4 }, // Carta
+  Legal:     { widthMm: 215.9,  heightMm: 355.6 }, // Oficio (AR) se trata como Legal 14"
+  Folio:     { widthMm: 215.9,  heightMm: 330.2 }, // 8.5 × 13"
+  Tabloid:   { widthMm: 279.4,  heightMm: 431.8 }, // Ledger 11 × 17"
+  Executive: { widthMm: 184.15, heightMm: 266.7 },
+  Statement: { widthMm: 139.7,  heightMm: 215.9 },
+}
+
+// Orden de presentación (los más comunes primero)
+const PAPER_ORDER = ["A4", "Letter", "Legal", "Folio", "A5", "B5", "A3", "B4", "Tabloid", "Executive", "Statement", "A6"]
+
+// Alias → clave canónica del catálogo
+const PAPER_ALIASES: Record<string, string> = {
+  carta: "Letter", letter: "Letter",
+  oficio: "Legal", legal: "Legal",   // Oficio = Legal (14") por decisión
+  folio: "Folio",
+  ledger: "Tabloid", tabloid: "Tabloid",
+  a3: "A3", a4: "A4", a5: "A5", a6: "A6", b4: "B4", b5: "B5",
+  executive: "Executive", statement: "Statement",
+}
+
+function normalizePaperSize(value?: string | null): string {
   const v = String(value || "A4").toLowerCase().trim()
-  if (v === "letter" || v === "carta") return "Letter"
-  if (v === "legal" || v === "oficio") return "Legal"
-  return "A4"
+  if (PAPER_ALIASES[v]) return PAPER_ALIASES[v]
+  const hit = Object.keys(PAPER_CATALOG).find((k) => k.toLowerCase() === v)
+  return hit || "A4"
 }
 
 function getPaperSizeMm(value?: string | null) {
   const paper = normalizePaperSize(value)
-  switch (paper) {
-    case "Letter":
-      return { paper, widthMm: 215.9, heightMm: 279.4 }
-    case "Legal":
-      return { paper, widthMm: 215.9, heightMm: 355.6 }
-    case "A4":
-    default:
-      return { paper: "A4" as const, widthMm: 210, heightMm: 297 }
-  }
+  const dims = PAPER_CATALOG[paper] || PAPER_CATALOG.A4
+  return { paper, widthMm: dims.widthMm, heightMm: dims.heightMm }
 }
 
 /** eSCL usa ThreeHundredthsOfInches como unidad base — siempre 300dpi como referencia */
@@ -406,13 +444,52 @@ function getWsdRegion(value?: string | null) {
 }
 
 function getKyoceraOriginalSize(value?: string | null): string {
-  const paper = normalizePaperSize(value)
-  switch (paper) {
+  switch (normalizePaperSize(value)) {
     case "Letter": return "LETTER_R"
     case "Legal":  return "LEGAL_R"
-    case "A4":
+    case "A3":     return "A3_R"
+    case "A5":     return "A5_R"
+    case "B4":     return "B4_R"
+    case "B5":     return "B5_R"
     default:       return "A4_R"
   }
+}
+
+// Extrae el contenido de un bloque XML <ns:Name>…</ns:Name> (namespace opcional)
+function extractXmlBlock(xml: string, name: string): string | null {
+  const re = new RegExp(`<(?:[A-Za-z0-9_.-]+:)?${name}[^>]*>([\\s\\S]*?)</(?:[A-Za-z0-9_.-]+:)?${name}>`, "i")
+  const m = xml.match(re)
+  return m ? m[1] : null
+}
+
+// Área máxima de escaneo (en 300avos de pulgada) que el equipo anuncia por eSCL,
+// priorizando el bloque de la fuente activa (ADF vs cristal).
+function readEsclMaxArea(xml: string, feeder: boolean): { width: number; height: number } | null {
+  const blocks = feeder
+    ? ["AdfSimplexInputCaps", "AdfDuplexInputCaps", "AdfInputCaps", "FeederInputCaps"]
+    : ["PlatenInputCaps", "FlatbedInputCaps"]
+  for (const name of [...blocks, ""]) {
+    const scope = name ? extractXmlBlock(xml, name) : xml
+    if (!scope) continue
+    const w = Number(firstXmlValue(scope, ["MaxWidth"]) || "")
+    const h = Number(firstXmlValue(scope, ["MaxHeight"]) || "")
+    if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) return { width: w, height: h }
+  }
+  return null
+}
+
+// Tamaños del catálogo que entran en el área máxima del equipo. Sin datos → fallback.
+function derivePaperSizesFromCaps(xml: string, feeder: boolean): string[] {
+  const max = readEsclMaxArea(xml, feeder)
+  if (!max) return ["A4", "Letter", "Legal"]
+  const maxWmm = max.width  / 300 * 25.4
+  const maxHmm = max.height / 300 * 25.4
+  const TOL = 3 // mm de tolerancia
+  const fits = PAPER_ORDER.filter((k) => {
+    const d = PAPER_CATALOG[k]
+    return d.widthMm <= maxWmm + TOL && d.heightMm <= maxHmm + TOL
+  })
+  return fits.length ? fits : ["A4"]
 }
 
 // ── 2. eSCL / AirScan ────────────────────────────────────────────────────────
@@ -497,7 +574,12 @@ async function scanESCL(ip: string, opts: {
     try {
       console.log(`[escl] ${ip} creando job (${variant.label})`)
       jobLocation = await httpPostWithRetry(`${base}/eSCL/ScanJobs`, variant.xml, "text/xml; charset=utf-8", 20_000, 5)
-      if (jobLocation) break
+      if (jobLocation) {
+        if (variant.label === "pwg-simple-jpeg" && region.paper !== "A4") {
+          console.warn(`[escl] ${ip} ⚠️ el equipo solo aceptó la variante SIN región: escaneará en su tamaño por defecto, NO en ${region.paper}`)
+        }
+        break
+      }
       lastPostError = new Error("respuesta sin Location")
     } catch (e: any) {
       lastPostError = e
@@ -539,8 +621,13 @@ async function scanESCL(ip: string, opts: {
         // 404 = no más páginas, es el fin normal
         const msg = e?.message || String(e)
         if (msg.includes("404") || msg.includes("503")) {
-          if (pages.length && (!isAdf || Date.now() - lastPageAt > 15_000)) break
-          if (Date.now() - startedAt > 60_000) break
+          if (pages.length) {
+            // ADF: si pasan ~12s sin páginas nuevas, el alimentador está vacío → fin.
+            // (Antes esperaba 90s fijos, lo que hacía que 1 hoja por ADF tardara ~1,5 min de más.)
+            if (!isAdf || Date.now() - lastPageAt > 12_000) break
+          } else if (Date.now() - startedAt > 60_000) {
+            break
+          }
           await sleep(1_500)
           continue
         }
@@ -551,9 +638,10 @@ async function scanESCL(ip: string, opts: {
           break
         }
         // Sin páginas aún: no reintentar más de 15s (scanner probablemente no pudo escanear)
-        // Con páginas: reintentar hasta 75s para conexiones intermitentes entre páginas
-        const maxRetryMs = pages.length > 0 ? 75_000 : 15_000
-        if (isTransientHttpError(e) && Date.now() - startedAt <= maxRetryMs) {
+        // Con páginas: reintentar hasta 30s para conexiones intermitentes entre páginas
+        const retryAgeMs = pages.length > 0 ? Date.now() - lastPageAt : Date.now() - startedAt
+        const maxRetryMs = pages.length > 0 ? 30_000 : 15_000
+        if (isTransientHttpError(e) && retryAgeMs <= maxRetryMs) {
           console.warn(`[escl] ${ip} NextDocument transitorio: ${msg}; reintentando...`)
           await sleep(1_500)
           continue
@@ -608,6 +696,9 @@ function buildEsclScanSettingsVariants(opts: {
 ${body}
 </scan:ScanSettings>`
 
+  // Las variantes CON región van primero; la variante SIN región (que deja al
+  // equipo escanear en su tamaño por defecto = A4) queda de último recurso, para
+  // no degradar el tamaño elegido en silencio.
   return [
     {
       label: "pwg-region-jpeg",
@@ -616,14 +707,14 @@ ${body}
 ${common}`),
     },
     {
-      label: "pwg-simple-jpeg",
-      xml: wrap(`  <pwg:InputSource>${opts.inputSource}</pwg:InputSource>
-${common}`),
-    },
-    {
       label: "scan-input-jpeg",
       xml: wrap(`${scanRegion}
   <scan:InputSource>${opts.inputSource}</scan:InputSource>
+${common}`),
+    },
+    {
+      label: "pwg-simple-jpeg",
+      xml: wrap(`  <pwg:InputSource>${opts.inputSource}</pwg:InputSource>
 ${common}`),
     },
   ]
@@ -894,7 +985,7 @@ async function scanWSDScan(ip: string, opts: {
   // ── Paso 2: RetrieveImageRequest (repetir hasta que no haya más páginas) ──
   const pages: Buffer[] = []
 
-  for (let pageNum = 1; pageNum <= 50; pageNum++) {
+  for (let pageNum = 1; pageNum <= 200; pageNum++) {
     const retrieveXml = `<?xml version="1.0" encoding="UTF-8"?>
 <s:Envelope
   xmlns:s="http://www.w3.org/2003/05/soap-envelope"
@@ -1191,7 +1282,19 @@ function resolveDeviceUrl(base: string, location: string): string {
 function isTransientHttpError(err: any): boolean {
   const msg = err?.message || String(err)
   const code = err?.code || ""
-  return /socket hang up|ECONNRESET|EPIPE|ETIMEDOUT|timeout|HTTP 503|Service Unavailable/i.test(`${code} ${msg}`)
+  return /socket hang up|ECONNRESET|EPIPE|ETIMEDOUT|timeout|HTTP 409|409 Conflict|HTTP 503|Service Unavailable/i.test(`${code} ${msg}`)
+}
+
+function isScannerBusyMessage(value: string): boolean {
+  return /SCANNER_BUSY|HTTP 409|409 Conflict|ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(value)
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
 function httpGet(url: string, timeoutMs = 5000, maxRedirects = 3): Promise<string> {
@@ -1550,6 +1653,7 @@ async function uploadPages(_deviceKey: string, jobId: number, nonce: string, pag
       contentType: file.contentType,
     })
   }
+  const uploadTimeoutMs = Math.min(Math.max(120_000, pages.length * 15_000), 20 * 60_000)
   try {
     await axios.post(`${API}/v1/scan-jobs/${jobId}/upload`, form, {
       headers: {
@@ -1558,7 +1662,7 @@ async function uploadPages(_deviceKey: string, jobId: number, nonce: string, pag
         "x-tenant": TENANT,
         "x-device-key": _deviceKey,
       },
-      timeout: 120_000,
+      timeout: uploadTimeoutMs,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
     })
@@ -1736,7 +1840,7 @@ function parseEsclCapabilitiesXml(xml: string, fallbackName: string): DeviceCapa
     manufacturer: manufacturer || null,
     sources: platen || !feeder ? feeder ? ["flatbed", "adf"] : ["flatbed"] : ["adf"],
     resolutions: resolutions.length ? resolutions : [200, 300],
-    paper_sizes: ["A4", "Letter", "Legal"],
+    paper_sizes: derivePaperSizesFromCaps(xml, feeder),
     color_modes: colorModes.length ? colorModes : ["color", "grayscale"],
     duplex,
     max_pages_adf: feeder ? (Number.isFinite(feederCapacity) && feederCapacity > 0 ? feederCapacity : 50) : null,
@@ -1815,7 +1919,7 @@ function friendlyErrorMessage(technical: string): string {
   if (/SCAN_EMPTY|solamente páginas en blanco/i.test(technical)) {
     return 'El escáner devolvió solamente páginas en blanco. Verifique si seleccionó ADF o cristal y vuelva a intentar.'
   }
-  if (/SCANNER_BUSY|ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(technical)) {
+  if (isScannerBusyMessage(technical)) {
     return '⚠️ El escáner quedó bloqueado con un trabajo anterior. Se esperaron 12 segundos pero sigue ocupado. Espere 1-2 minutos y vuelva a intentarlo.'
   }
   if (/no devolvió páginas|no se recibió páginas|sin páginas/i.test(technical)) {
@@ -1841,12 +1945,26 @@ function friendlyErrorMessage(technical: string): string {
 // POLL
 // ══════════════════════════════════════════════════════════════════════════════
 let polling = false
+// Equipos físicos (por IP/hostname) que están escaneando en este momento.
+// Evita dispararle dos escaneos simultáneos al MISMO equipo (Kyocera → 409/bloqueo),
+// aunque existan filas de device duplicadas apuntando a la misma IP.
+const scanningIps = new Set<string>()
 
 async function pollAll(devices: DeviceRow[]): Promise<void> {
   if (polling || !devices.length) return
   polling = true
   try {
-    await mapWithConcurrency(devices, SCAN_CONCURRENCY, async (dev) => {
+    const queuedDeviceIds = await getQueuedDeviceIds()
+    const pollDevices = queuedDeviceIds.size
+      ? [...devices].sort((a, b) => Number(queuedDeviceIds.has(b.id)) - Number(queuedDeviceIds.has(a.id)))
+      : devices
+    await mapWithConcurrency(pollDevices, SCAN_CONCURRENCY, async (dev) => {
+      const ip = dev.hostname || "127.0.0.1"
+      // Candado por equipo físico: si esta IP ya está escaneando, saltar este ciclo.
+      // Así no se le dispara un segundo escaneo al mismo Kyocera (→ 409/bloqueo) aunque
+      // queden filas de device duplicadas. El job queda en cola y lo toma el próximo ciclo.
+      if (scanningIps.has(ip)) return
+      scanningIps.add(ip)
       try {
         const caps = await detectDeviceCapabilities(dev)
         if (caps.online === false) return
@@ -1858,13 +1976,16 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
         const src = data.source || "flatbed"
         const dup = !!data.duplex
         const paperSize = data.paper_size || "A4"
-        const ip  = dev.hostname || "127.0.0.1"
 
         console.log(`[poll] 📋 job ${job_id} → device "${dev.name}" (${ip}) source=${src} duplex=${dup} paper=${paperSize}`)
 
         let pages: Buffer[]
         try {
-          pages = await scanDevice(ip, { ...profile, source: src, duplex: dup, paper_size: paperSize, escl_port: dev.escl_port || null, driver: dev.driver })
+          pages = await withTimeout(
+            scanDevice(ip, { ...profile, source: src, duplex: dup, paper_size: paperSize, escl_port: dev.escl_port || null, driver: dev.driver }),
+            SCAN_JOB_TIMEOUT_MS,
+            `SCAN_TIMEOUT: el escaneo superó ${Math.round(SCAN_JOB_TIMEOUT_MS / 1000)} segundos`
+          )
           pages = await processScannedPages(pages, profile || null)
         } catch (scanErr: any) {
           console.error(`[scan] ❌ job ${job_id} falló:`, scanErr.message)
@@ -1894,6 +2015,8 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
           console.warn(`[poll] device ${dev.id}:`, e?.code || e?.message,
             e?.response?.status ? `HTTP ${e.response.status}` : "")
         }
+      } finally {
+        scanningIps.delete(ip)
       }
     })
   } finally {
@@ -1958,7 +2081,10 @@ async function main() {
   devices.forEach(d => console.log(`[agent]    - ${d.name} (${d.hostname}) key=${d.device_key}`))
 
   if (!devices.length) console.warn("[agent] ⚠️  Sin devices — reintentando en 30s…")
-  if (devices.length) await heartbeatAll(devices)
+  if (devices.length) {
+    heartbeatAll(devices).catch((e) => console.warn("[heartbeat] error:", e?.message || e))
+    pollAll(devices).catch((e) => console.warn("[poll] error:", e?.message || e))
+  }
 
   // Autodiscovery cada 5 minutos + refresh de device list
   if (AUTO_DISCOVERY_ENABLED) {

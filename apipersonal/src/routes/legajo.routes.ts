@@ -89,17 +89,18 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
            LEFT JOIN plantas          pla ON pla.id  = a.planta_id
            LEFT JOIN regimenes_horarios rh ON rh.id  = a.regimen_horario_id
            LEFT JOIN reparticiones    rep ON rep.id  = se.reparticion_id AND rep.deleted_at IS NULL
-           LEFT JOIN dependencias     dep ON dep.id  = COALESCE(rep.dependencia_id, ags_leg.dependencia_id) AND dep.deleted_at IS NULL
+           LEFT JOIN dependencias     dep ON dep.id  = rep.dependencia_id AND dep.deleted_at IS NULL
            WHERE a.dni = :dni AND a.deleted_at IS NULL
            ORDER BY a.fecha_ingreso DESC`,
           { replacements: { dni }, type: QueryTypes.SELECT }
         ),
         // Pág 06 — historial de servicios
         sequelize.query(
-          `SELECT as2.*, dep.nombre as dependencia_nombre, se.nombre as servicio_nombre
+          `SELECT as2.*, dep.nombre as dependencia_nombre, rep2.reparticion_nombre as reparticion_nombre, se.nombre as servicio_nombre
            FROM agentes_servicios as2
-           LEFT JOIN dependencias dep ON dep.id = as2.dependencia_id
            LEFT JOIN servicios se ON se.id = as2.servicio_id
+           LEFT JOIN reparticiones rep2 ON rep2.id = se.reparticion_id AND rep2.deleted_at IS NULL
+           LEFT JOIN dependencias dep ON dep.id = rep2.dependencia_id AND dep.deleted_at IS NULL
            WHERE as2.dni = :dni AND as2.deleted_at IS NULL
            ORDER BY as2.fecha_desde DESC`,
           { replacements: { dni }, type: QueryTypes.SELECT }

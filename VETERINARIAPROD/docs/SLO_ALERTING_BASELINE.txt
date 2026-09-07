@@ -1,0 +1,40 @@
+SLO / ALERTING BASELINE
+
+1. SLOs operativos base
+- gateway availability mensual >= 99.9%
+- auth login success rate >= 99.5%
+- auth refresh success rate >= 99.9%
+- p95 gateway latency < 300 ms
+- p95 servicios core < 500 ms
+- 5xx rate por servicio < 1%
+- notification retry backlog < 200 jobs por 15 min
+- event-bus DLQ growth = 0 sostenido; cualquier crecimiento sostenido es incidente
+
+2. Alertas mínimas obligatorias
+- `dependency_degradations_total` creciendo en `internal_auth`, `auth_revocation`, `usage_limits`
+- `service_registry_operations_total{result="failure"}` sostenido
+- `event_bus_messages_total{direction="consume",result="failure"}` sostenido
+- `event_bus_messages_total{direction="consume",result="dlq"}` > 0
+- `http_requests_total` con 5xx sostenido por servicio
+- `http_request_duration_seconds` p95 fuera de objetivo por 10 min
+
+3. Criterio operativo
+- `internal_auth` en modo `strict` en producción
+- `auth_revocation` en modo `strict` para rutas administrativas o sesiones de alto riesgo
+- `usage_limits` en modo `strict` para IA, storage y features pagas/costosas
+- Redis puede degradar cache/registry, no auth interna ni cuotas costosas
+
+4. Variables de entorno relevantes
+- `INTERNAL_AUTH_MODE=strict|degraded|open`
+- `DEPENDENCY_MODE_AUTH_REVOCATION=strict|degraded|open`
+- `DEPENDENCY_MODE_USAGE_LIMIT=strict|degraded|open`
+- `DEPENDENCY_MODE_USAGE_LIMIT_AI_DIAGNOSIS=strict|degraded|open`
+- `DEPENDENCY_MODE_USAGE_LIMIT_AI_IMAGE_ANALYSIS=strict|degraded|open`
+- `DEPENDENCY_MODE_USAGE_LIMIT_AI_CHATBOT=strict|degraded|open`
+- `DEPENDENCY_MODE_USAGE_LIMIT_AI_RISK_ASSESSMENT=strict|degraded|open`
+
+5. Pruebas de degradación que deben correrse
+- Redis caído: gateway auth, rate limit, usage limits, registry
+- auth lento/caído: lookup de subdominio, login, refresh
+- event bus indisponible: publish y consumer con DLQ
+- AI provider timeout: breaker + error envelope consistente

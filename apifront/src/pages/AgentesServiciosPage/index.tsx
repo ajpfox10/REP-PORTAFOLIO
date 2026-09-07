@@ -135,7 +135,6 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
   const toast = useToast();
   const [form, setForm] = useState({
     servicio_id: '',
-    dependencia_id: '',
     fecha_desde: '',
     motivo: '',
     jefe_nombre: '',
@@ -155,7 +154,6 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
         body: JSON.stringify({
           dni: agente.dni,
           servicio_id: Number(form.servicio_id),
-          dependencia_id: form.dependencia_id ? Number(form.dependencia_id) : null,
           fecha_desde: form.fecha_desde,
           motivo: form.motivo || null,
           jefe_nombre: form.jefe_nombre || null,
@@ -190,15 +188,6 @@ function NuevoPaseModal({ agente, servicios, dependencias, onClose, onSaved }: N
                 <option value="">— Seleccioná —</option>
                 {servicios.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre || `Servicio #${s.id}`}</option>
-                ))}
-              </select>
-            </div>
-            <div className="asv-field">
-              <label htmlFor="asv-dep" className="asv-label">Dependencia</label>
-              <select id="asv-dep" name="dependencia_id" className="input" value={form.dependencia_id} onChange={e => set('dependencia_id', e.target.value)}>
-                <option value="">— Ninguna —</option>
-                {dependencias.map((d: any) => (
-                  <option key={d.id} value={d.id}>{d.reparticion_nombre || d.nombre || `#${d.id}`}</option>
                 ))}
               </select>
             </div>
@@ -318,7 +307,8 @@ function ExportarAntiguedadModal({
       const params = new URLSearchParams();
       params.set('solo_activos', soloActivos ? '1' : '0');
       if (servicioId)    params.set('servicio_id', servicioId);
-      if (dependenciaId) params.set('dependencia_id', dependenciaId);
+      // el combo lista reparticiones → el backend filtra por repartición del servicio
+      if (dependenciaId) params.set('reparticion_id', dependenciaId);
       if (leyId)         params.set('ley_id', leyId);
 
       const blob = await apiFetchBlob(`/antiguedad/excel?${params.toString()}`);
@@ -487,12 +477,18 @@ export function AgentesServiciosPage() {
     row.servicio_nombre || servicios.find((s: any) => s.id === row.servicio_id)?.nombre || row.nombre || `#${row.servicio_id ?? '?'}`,
   [servicios]);
 
-  const nombreDep = useCallback((row: any) =>
-    row.dependencia_nombre ||
-    dependencias.find((d: any) => d.id === row.dependencia_id)?.reparticion_nombre ||
-    dependencias.find((d: any) => d.id === row.dependencia_id)?.nombre ||
-    '—',
-  [dependencias]);
+  // La dependencia/repartición ya no se guarda en agentes_servicios:
+  // se deriva del servicio (servicios.reparticion_id -> reparticiones).
+  const repDeRow = useCallback((row: any) => {
+    const srv = servicios.find((s: any) => s.id === row.servicio_id);
+    if (!srv) return null;
+    return dependencias.find((d: any) => d.id === srv.reparticion_id) || null;
+  }, [servicios, dependencias]);
+
+  const nombreDep = useCallback((row: any) => {
+    const rep = repDeRow(row);
+    return row.dependencia_nombre || rep?.reparticion_nombre || rep?.nombre || '—';
+  }, [repDeRow]);
 
   const cargarTabla = useCallback(async (pageNum = 1) => {
     setLoading(true);
@@ -503,7 +499,9 @@ export function AgentesServiciosPage() {
       const dependenciaIdExacta = filtroDependencia || findCatalogIdByText(dependencias, dependenciaTexto, '#');
       const filtraServicioPorTexto = !!servicioTexto && !servicioIdExacto;
       const filtraDependenciaPorTexto = !!dependenciaTexto && !dependenciaIdExacta;
-      const filtraPorTexto = filtraServicioPorTexto || filtraDependenciaPorTexto;
+      // el filtro por dependencia/repartición se resuelve client-side: ya no es
+      // columna de agentes_servicios, se deriva del servicio de cada fila.
+      const filtraPorTexto = filtraServicioPorTexto || filtraDependenciaPorTexto || !!dependenciaIdExacta;
 
       const params = new URLSearchParams();
       params.set('limit', filtraPorTexto ? '5000' : String(PAGE_SIZE));
@@ -512,7 +510,6 @@ export function AgentesServiciosPage() {
 
       if (filtroDni.trim())           params.set('dni', filtroDni.trim());
       if (servicioIdExacto)           params.set('servicio_id', servicioIdExacto);
-      if (dependenciaIdExacta)        params.set('dependencia_id', dependenciaIdExacta);
       // estado activo/cerrado → filtro client-side (el backend no soporta fecha_hasta=null)
 
       const res = await apiFetch<any>(`/agentes_servicios?${params.toString()}`);
@@ -520,6 +517,7 @@ export function AgentesServiciosPage() {
 
       if (filtraServicioPorTexto)     data = data.filter((r: any) => containsFilterText(nombreServicio(r), servicioTexto));
       if (filtraDependenciaPorTexto)  data = data.filter((r: any) => containsFilterText(nombreDep(r), dependenciaTexto));
+      if (dependenciaIdExacta)        data = data.filter((r: any) => String(repDeRow(r)?.id ?? '') === String(dependenciaIdExacta));
 
       // Filtro estado cerrado (fecha_hasta no nula)
       if (filtroEstado === 'activo')  data = data.filter((r: any) => !r.fecha_hasta);

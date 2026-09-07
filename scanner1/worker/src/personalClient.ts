@@ -53,6 +53,7 @@ export async function notifyPersonalApiFromWorker(
       doc_class:           opts.doc_class,
       page_count:          opts.page_count,
       storage_key:         opts.storage_key,
+      files_base_url:      process.env.SCANNER_PUBLIC_URL || process.env.SCANNER_SELF_URL || undefined,
       ocr_summary:         opts.ocr_text ? opts.ocr_text.slice(0, 500) : null,
     })
 

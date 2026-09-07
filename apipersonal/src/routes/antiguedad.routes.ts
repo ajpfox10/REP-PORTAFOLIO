@@ -10,7 +10,8 @@
  * Query params opcionales:
  *   solo_activos  = 1 (default) | 0  → solo pases sin fecha_hasta
  *   servicio_id   = number            → filtrar por servicio
- *   dependencia_id= number            → filtrar por sector
+ *   dependencia_id= number            → filtrar por dependencia (derivada del servicio)
+ *   reparticion_id= number            → filtrar por repartición (derivada del servicio)
  *   ley_id        = number            → filtrar por ley
  */
 
@@ -33,6 +34,8 @@ interface AntiguedadRow {
   ley_nombre: string | null;
   servicio_id: number;
   servicio_nombre: string;
+  reparticion_id: number | null;
+  reparticion_nombre: string | null;
   dependencia_id: number | null;
   dependencia_nombre: string | null;
   fecha_desde: string | null;
@@ -363,6 +366,7 @@ export function buildAntiguedadRouter(sequelize: Sequelize): Router {
       const soloActivos   = req.query.solo_activos   !== '0';
       const servicioId    = req.query.servicio_id    ? Number(req.query.servicio_id)    : null;
       const dependenciaId = req.query.dependencia_id ? Number(req.query.dependencia_id) : null;
+      const reparticionId = req.query.reparticion_id ? Number(req.query.reparticion_id) : null;
       const leyId         = req.query.ley_id         ? Number(req.query.ley_id)         : null;
 
       const whereParts: string[] = ['ags.deleted_at IS NULL', 'p.deleted_at IS NULL'];
@@ -370,7 +374,8 @@ export function buildAntiguedadRouter(sequelize: Sequelize): Router {
 
       if (soloActivos)   { whereParts.push('ags.fecha_hasta IS NULL'); }
       if (servicioId)    { whereParts.push('ags.servicio_id = :servicio_id');    repl.servicio_id    = servicioId; }
-      if (dependenciaId) { whereParts.push('ags.dependencia_id = :dependencia_id'); repl.dependencia_id = dependenciaId; }
+      if (dependenciaId) { whereParts.push('rep.dependencia_id = :dependencia_id'); repl.dependencia_id = dependenciaId; }
+      if (reparticionId) { whereParts.push('srv.reparticion_id = :reparticion_id'); repl.reparticion_id = reparticionId; }
       if (leyId)         { whereParts.push('a.ley_id = :ley_id');                repl.ley_id         = leyId; }
 
       const whereSQL = whereParts.join(' AND ');
@@ -389,8 +394,10 @@ export function buildAntiguedadRouter(sequelize: Sequelize): Router {
           l.nombre                                                       AS ley_nombre,
           srv.id                                                         AS servicio_id,
           srv.nombre                                                     AS servicio_nombre,
-          rep.id                                                         AS dependencia_id,
-          rep.reparticion_nombre                                         AS dependencia_nombre,
+          rep.id                                                         AS reparticion_id,
+          rep.reparticion_nombre                                         AS reparticion_nombre,
+          dep.id                                                         AS dependencia_id,
+          dep.nombre                                                     AS dependencia_nombre,
           ags.fecha_desde,
           ags.fecha_hasta,
           CASE WHEN ags.fecha_hasta IS NULL THEN 'ACTIVO' ELSE 'CERRADO' END AS estado_pase
@@ -403,7 +410,8 @@ export function buildAntiguedadRouter(sequelize: Sequelize): Router {
         )
         LEFT JOIN ley l   ON l.id  = a.ley_id  AND l.deleted_at IS NULL
         JOIN servicios srv ON srv.id = ags.servicio_id
-        LEFT JOIN reparticiones rep ON rep.id = ags.dependencia_id
+        LEFT JOIN reparticiones rep ON rep.id = srv.reparticion_id AND rep.deleted_at IS NULL
+        LEFT JOIN dependencias  dep ON dep.id = rep.dependencia_id AND dep.deleted_at IS NULL
         WHERE ${whereSQL}
         ORDER BY srv.nombre ASC, rep.reparticion_nombre ASC, p.apellido ASC, p.nombre ASC
       `, { replacements: repl, type: QueryTypes.SELECT });
@@ -417,7 +425,8 @@ export function buildAntiguedadRouter(sequelize: Sequelize): Router {
       if (soloActivos)         filtroDesc['Estado'] = 'Solo activos';
       else                     filtroDesc['Estado'] = 'Todos';
       if (servicioId)          filtroDesc['Servicio']   = String(rows[0]?.servicio_nombre ?? servicioId);
-      if (dependenciaId)       filtroDesc['Sector']     = String(rows[0]?.dependencia_nombre ?? dependenciaId);
+      if (dependenciaId)       filtroDesc['Dependencia'] = String(rows[0]?.dependencia_nombre ?? dependenciaId);
+      if (reparticionId)       filtroDesc['Repartición'] = String(rows[0]?.reparticion_nombre ?? reparticionId);
       if (leyId)               filtroDesc['Ley']        = String(rows[0]?.ley_nombre ?? leyId);
 
       const buffer = await buildExcel(rows, filtroDesc);

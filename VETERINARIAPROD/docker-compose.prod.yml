@@ -1,0 +1,616 @@
+version: '3.9'
+
+# Producción: todos los servicios con healthchecks, restart policies, y resource limits.
+# Base de datos: AWS RDS — no hay contenedor MySQL local.
+# Usar con: docker compose -f docker-compose.prod.yml up -d
+
+networks:
+  vetmanager-internal:
+    driver: bridge
+    # Needs outbound access for RDS/S3/Stripe/OpenAI/SMTP. Edge exposure is controlled by published ports.
+  vetmanager-public:
+    driver: bridge    # Solo gateway tiene acceso
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+services:
+  # ── Cache ─────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ── Gateway (único servicio público) ─────────────────────────────────────────
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:4050"
+      - "443:4050"   # con reverse proxy nginx/traefik delante
+    environment:
+      NODE_ENV: production
+      PORT: 4050
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      SERVICE_AUTH: http://auth:3001
+      SERVICE_PATIENTS: http://patients:3002
+      SERVICE_MEDICAL: http://medical:3003
+      SERVICE_LAB: http://lab-imaging:3004
+      SERVICE_BILLING: http://billing:3005
+      SERVICE_TELEMEDICINE: http://telemedicine:3006
+      SERVICE_GROOMING: http://grooming:3007
+      SERVICE_REPORTS: http://reports:3008
+      SERVICE_NOTIFICATIONS: http://notifications:3009
+      SERVICE_PORTAL: http://portal:3010
+      SERVICE_AI: http://ai:3011
+      SERVICE_DOCUMENTS: http://documents:3012
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      INTERNAL_SIG_TTL_S: ${INTERNAL_SIG_TTL_S:-60}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      JWT_PUBLIC_KEY_OLD: ${JWT_PUBLIC_KEY_OLD:-}
+      JWT_KEYRING_JSON: ${JWT_KEYRING_JSON:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      CSRF_SECRET: ${CSRF_SECRET}
+      CSRF_EXCLUDE_PATHS: ${CSRF_EXCLUDE_PATHS}
+      DEPENDENCY_MODE_AUTH_REVOCATION: ${DEPENDENCY_MODE_AUTH_REVOCATION:-strict}
+      API_VERSION: ${API_VERSION:-v1}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+      APP_DOMAIN: ${APP_DOMAIN}
+      DLP_EXPORT_THRESHOLD: ${DLP_EXPORT_THRESHOLD:-1000}
+      DLP_EXPORT_WINDOW_SECS: ${DLP_EXPORT_WINDOW_SECS:-300}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-10}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      WS_HEARTBEAT_INTERVAL: ${WS_HEARTBEAT_INTERVAL:-30000}
+      CIRCUIT_THRESHOLD: ${CIRCUIT_THRESHOLD:-5}
+      CIRCUIT_TIMEOUT_MS: ${CIRCUIT_TIMEOUT_MS:-30000}
+      CIRCUIT_SUCCESS: ${CIRCUIT_SUCCESS:-2}
+    depends_on:
+      auth: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal, vetmanager-public]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4050/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Servicios internos ────────────────────────────────────────────────────────
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MIN: ${MYSQL_POOL_MIN:-2}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
+      JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-7d}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      INTERNAL_SIG_TTL_S: ${INTERNAL_SIG_TTL_S:-60}
+      CAPTCHA_ENABLED: ${CAPTCHA_ENABLED:-false}
+      HCAPTCHA_SECRET: ${HCAPTCHA_SECRET}
+      HCAPTCHA_SITE_KEY: ${HCAPTCHA_SITE_KEY}
+      DEVICE_FINGERPRINT_ENABLED: ${DEVICE_FINGERPRINT_ENABLED:-true}
+      CSRF_EXCLUDE_PATHS: ${CSRF_EXCLUDE_PATHS}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  patients:
+    build:
+      context: .
+      dockerfile: services/patients/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  medical:
+    build:
+      context: .
+      dockerfile: services/medical/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3003/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  lab-imaging:
+    build:
+      context: .
+      dockerfile: services/lab-imaging/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3004/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  billing:
+    build:
+      context: .
+      dockerfile: services/billing/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3005
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_BASIC: ${STRIPE_PRICE_BASIC}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO}
+      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE}
+      BILLING_PORTAL_RETURN_URL: ${BILLING_PORTAL_RETURN_URL}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3005/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  grooming:
+    build:
+      context: .
+      dockerfile: services/grooming/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3007
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_GROOMING: ${MINIO_BUCKET_GROOMING:-grooming-photos}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3007/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  reports:
+    build:
+      context: .
+      dockerfile: services/reports/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3008
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3008/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  telemedicine:
+    build:
+      context: .
+      dockerfile: services/telemedicine/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3006
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_TELE: ${MINIO_BUCKET_TELE:-tele-docs}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3006/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  notifications:
+    build:
+      context: .
+      dockerfile: services/notifications/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3009
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      FROM_EMAIL: ${FROM_EMAIL}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3009/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  portal:
+    build:
+      context: .
+      dockerfile: services/portal/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3010/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3011
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3011/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  documents:
+    build:
+      context: .
+      dockerfile: services/documents/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3012
+      TRACING_ENABLED: "true"
+      TRACING_EXPORTER_URL: http://tempo:9411/api/v2/spans
+      SERVICE_DISCOVERY_MODE: hybrid
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_POOL_MAX: ${MYSQL_POOL_MAX:-20}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_PATIENTS: ${MINIO_BUCKET_PATIENTS:-patient-files}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-20}
+      SLOW_QUERY_MS: ${SLOW_QUERY_MS:-500}
+    depends_on:
+      redis: {condition: service_healthy}
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3012/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Observabilidad ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./docker/prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./docker/prometheus/synthetics.yml:/etc/prometheus/synthetics.yml:ro
+      - prometheus-data:/prometheus
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    volumes:
+      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/blackbox/blackbox.yml'
+    volumes:
+      - ./docker/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/tempo/tempo.yml
+    volumes:
+      - ./docker/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+    networks: [vetmanager-internal]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3200/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
+      - tempo
+    networks: [vetmanager-internal]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M

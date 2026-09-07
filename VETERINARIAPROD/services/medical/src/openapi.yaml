@@ -1,0 +1,368 @@
+openapi: 3.0.3
+info:
+  title: VetManager Medical Service
+  version: "1.0.0"
+  description: Medical appointments, records, triage, prescriptions and rules
+
+servers:
+  - url: /
+
+paths:
+  /appointments:
+    get:
+      summary: List appointments
+      responses:
+        '200':
+          description: Appointments list
+    post:
+      summary: Create appointment
+      responses:
+        '201':
+          description: Appointment created
+
+  /appointments/today:
+    get:
+      summary: List today's appointments
+      responses:
+        '200':
+          description: Today's appointments
+
+  /appointments/types:
+    get:
+      summary: List appointment types
+      responses:
+        '200':
+          description: Appointment types
+
+  /appointments/{id}:
+    get:
+      summary: Get appointment detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Appointment detail
+
+  /appointments/{id}/status:
+    patch:
+      summary: Update appointment status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Status updated
+
+  /appointments/{id}/triage:
+    post:
+      summary: Record appointment triage
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Triage recorded
+
+  /triage/{id}:
+    post:
+      summary: Record appointment triage via legacy alias
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Triage recorded
+
+  /appointments/{id}/ical:
+    get:
+      summary: Download appointment iCal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: iCal file
+
+  /appointments/agenda/ical:
+    get:
+      summary: Download agenda iCal
+      responses:
+        '200':
+          description: Agenda iCal file
+
+  /appointments/calendar/connect:
+    get:
+      summary: Connect calendar
+      responses:
+        '302':
+          description: Redirect to provider
+
+  /appointments/calendar/status:
+    get:
+      summary: Calendar connection status
+      responses:
+        '200':
+          description: Calendar status
+
+  /appointments/calendar/disconnect:
+    delete:
+      summary: Disconnect calendar
+      responses:
+        '204':
+          description: Calendar disconnected
+
+  /appointments/calendar/events:
+    get:
+      summary: List calendar events
+      responses:
+        '200':
+          description: Calendar events
+
+  /appointments/{id}/calendar/sync:
+    post:
+      summary: Sync appointment to calendar
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Sync created
+    delete:
+      summary: Remove appointment calendar sync
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Sync removed
+
+  /medical-records:
+    get:
+      summary: List medical records
+      responses:
+        '200':
+          description: Medical records list
+    post:
+      summary: Create medical record
+      responses:
+        '201':
+          description: Medical record created
+
+  /medical-records/{id}:
+    get:
+      summary: Get medical record detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Medical record detail
+
+  /medical-records/{id}/anamnesis:
+    post:
+      summary: Save anamnesis
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Anamnesis saved
+
+  /medical-records/{id}/physical-exam:
+    post:
+      summary: Save physical exam
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Physical exam saved
+
+  /medical-records/{id}/diagnoses:
+    post:
+      summary: Add diagnosis
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Diagnosis added
+
+  /medical-records/{id}/treatments:
+    post:
+      summary: Add treatment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Treatment added
+
+  /medical-records/{id}/sign:
+    post:
+      summary: Sign medical record
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Medical record signed
+
+  /medical-records/{id}/prescriptions:
+    get:
+      summary: List medical record prescriptions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Prescriptions
+    post:
+      summary: Add medical record prescription
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionCreateRequest'
+      responses:
+        '201':
+          description: Prescription added
+
+  /prescriptions/{id}:
+    get:
+      summary: Get prescriptions by medical record
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Prescriptions list
+    post:
+      summary: Create prescription by medical record
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionCreateRequest'
+      responses:
+        '201':
+          description: Prescription created
+
+  /rules:
+    get:
+      summary: List rules
+      responses:
+        '200':
+          description: Rules list
+    post:
+      summary: Create rule
+      responses:
+        '201':
+          description: Rule created
+
+  /rules/{id}:
+    put:
+      summary: Update rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Rule updated
+    delete:
+      summary: Delete rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Rule deleted
+
+  /rules/evaluate:
+    post:
+      summary: Evaluate rules
+      responses:
+        '200':
+          description: Evaluation result
+
+components:
+  schemas:
+    PrescriptionItemInput:
+      type: object
+      required: [medicationName, dose, frequency]
+      properties:
+        medicationId:   { type: integer, minimum: 1, nullable: true }
+        medicationName: { type: string, minLength: 1, maxLength: 255 }
+        dose:           { type: string, minLength: 1, maxLength: 100 }
+        doseUnit:       { type: string, maxLength: 50, nullable: true }
+        frequency:      { type: string, minLength: 1, maxLength: 100 }
+        route:          { type: string, maxLength: 50, nullable: true }
+        durationDays:   { type: integer, minimum: 1, maximum: 3650, nullable: true }
+        quantity:       { type: number, minimum: 0, nullable: true }
+        instructions:   { type: string, maxLength: 4000, nullable: true }
+
+    PrescriptionCreateRequest:
+      type: object
+      required: [items]
+      properties:
+        notes:   { type: string, maxLength: 4000, nullable: true }
+        refills: { type: integer, minimum: 0, maximum: 12, default: 0 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PrescriptionItemInput'

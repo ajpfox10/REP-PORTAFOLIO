@@ -1,0 +1,27 @@
+ALERT ROUTING BASELINE
+
+1. Alertmanager
+- config: `docker/alertmanager/alertmanager.yml`
+- receiver default:
+  `http://host.docker.internal:19093/alerts/default`
+- receiver critical:
+  `http://host.docker.internal:19093/alerts/critical`
+- receiver high:
+  `http://host.docker.internal:19093/alerts/high`
+
+2. Uso esperado
+- en local/dev: webhooks simulados o listener local
+- en entorno real: reemplazar esos endpoints por Slack bridge, PagerDuty, Opsgenie, email gateway o equivalente
+
+3. Severidades
+- `critical`
+  auth, gateway, 5xx sostenido, synthetic down
+- `high`
+  usage limits bloqueando, event bus DLQ, fallos fuertes de componentes
+- `medium`
+  synthetic slow, registry degradado sostenido
+
+4. Verificacion minima
+- levantar `alertmanager`
+- forzar una alerta conocida
+- verificar entrega al endpoint correcto

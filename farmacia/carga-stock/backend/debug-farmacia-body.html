@@ -1,0 +1,417 @@
+<body class="d-flex flex-column h-100" marginwidth="0" marginheight="0">
+
+
+<header class="container">
+    <!--  START NAVBAR   -->
+    <nav class="navbar fixed-top navbar-offcanvas navbar-ms">
+        <div class="row w-100 flex-nowrap">
+            <button class="navbar-toggler mr-1 border-0" type="button" id="navToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="col-9 pl-0 pl-md-2 intranet-logo">
+                <span class="fst-line">INTRANET</span>
+                <span class="snd-line">MINISTERIO DE SALUD</span>
+            </div>
+            <div class="col-3 d-flex justify-content-end align-items-center">
+                <div class="dropdown">
+                    <button class="btn btn-user font-weight-medium dropdown-toggle" type="button" id="dropdownMenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-user-circle fa-lg fa-fw"></i>
+                        <span class="username"> Choques Paula Graciela </span>
+                    </button>
+                    <div class="dropdown-user dropdown-menu pt-4" aria-labelledby="dropdownMenu">
+                        <div class="dropdown-item text-center text-secondary mb-2 pt-2" type="button">
+                            <svg style="width:5rem;height:5rem;color:#ccc" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle" viewBox="0 0 16 16">
+                                <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path>
+                                <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"></path>
+                            </svg>
+                            <div class="font-weight-bold text-no-wrap mt-2">
+                                Choques Paula Graciela
+                            </div>
+                            <div class="text-muted">
+                                @choquesp
+                            </div>
+                            <div class="text-muted text-center mt-3">
+                                <span class="badge badge-pill badge-light border border-dark px-5 py-2">
+                                    Perfil Administrador
+                                </span>
+                            </div>
+                        </div>
+                        <div class="dropdown-divider mt-4"></div>
+                        <div class="dropdown-item text-secondary text-center py-3" type="button">
+                            Hospital Interzonal General De Agudos Simplemente Evita De  Gonzales Catan Km 32
+                        </div>
+                        <div class="dropdown-divider mb-2"></div>
+                        <div class="dropdown-item text-center" type="button">
+                            <a id="closeSession" class="btn btn-danger close-session w-50" href="/farmaciams/logout" data-url="/farmaciams/logout">Salir</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>        
+                
+                                                                                    
+                                                                                    <div class="sidebar-nav navbar-collapse offcanvas-collapse open">
+    <label style="padding: .85rem 0;margin-bottom:1px;color: #606060;letter-spacing: 1px;opacity:.3;">Menú de navegación </label>
+    <ul class="metismenu side-menu" id="side-menu">
+                <li>
+            <a id="home" href="/farmaciams/home"><i class="fas fa-home"></i> Inicio </a>
+        </li>
+        
+                    <li>
+                <a href="/farmaciams/sector/"><i class="fas fa-hospital"></i> Sectores </a>
+            </li>
+
+            <li>
+                <a href="/farmaciams/servicio/"><i class="fas fa-hospital"></i> Servicios / Salas </a>
+            </li>
+
+            <li>
+                <a href="/farmaciams/recuentoInicial/"><i class="fas fa-clipboard-list"></i> Recuento Inicial </a>
+            </li>
+        
+                
+
+                <li>
+            <a class="has-arrow" href="#" aria-expanded="false">
+                <i class="fas fa-sign-in-alt"></i> Ingresos 
+            </a>            
+            <ul class="sub-menu mm-collapse">
+                <li>
+                    <a href="/farmaciams/ingresos/sobranteOL/">Listado de Ingresos</a>
+                </li>
+                                    <li>
+                        <a href="/farmaciams/ingresos/ordencompra/new">Ordenes de compra Sipach </a>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/ingresos/compra-menor/new">Compras Menores</a>
+                    </li>
+                                <li>
+                    <a href="/farmaciams/ingresos/otros/new">Otros Ingresos</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/devolucion-servicios/new">Devolución de Servicios / Salas</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/donacion/new">Donaciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/otraInstitucion/new">Entrega de Otra Institución</a>
+                </li>
+
+                <li>
+                    <a href="/farmaciams/ingresos/prestamo/new">Préstamos</a>
+                </li>  
+                <li>
+                    <a href="/farmaciams/ingresos/devolucion-institucion/new">Devolución de Otras Instituciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/proveedor/new">Entrega de Proveedores</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/devolucion/dispensa-vencidos/new">Devolución de Dispensación (vencidos)</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/desdeOL/new">Ingresos desde OL</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/otroSector/new">Entrega de Otro Sector</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/ingresos/sobranteOL/new">Ingresos sobrantes de OL</a>
+                </li>
+            </ul>
+        </li>
+
+        
+        <li>
+            <a class="has-arrow" href="#" aria-expanded="false">
+                <i class="fas fa-sign-out-alt"></i> Egresos
+            </a>
+            <ul class="sub-menu mm-collapse">
+                <li>
+                    <a href="/farmaciams/egresos/pacientes/new">Dispensa a paciente nominalizado (ambulatorio o internado)</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/servicios/new">Entrega a Servicios / Salas</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/vencidos/new">Insumos / Medicamentos Vencidos</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/devolucion-hospitales/new">Devoluciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/prestamos/new">Préstamos a Otras Instituciones</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/otras-instituciones/new">Entrega a Otras Instituciones</a>
+                </li>
+                                <li>
+                    <a href="/farmaciams/egresos/pacientes-resumido/new">A pacientes ambulatorios (resumido)</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/otros/new">Otros Egresos</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/otrosector/new">Entrega a Otro Sector</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/descarte/new">Descartes</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/faltanteOL/new">Faltante de OL</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/egresos/requerimiento/new">Requerimientos de Otro Sector</a>
+                </li>
+                            
+                <li>
+                    <a href="/farmaciams/egresos/">Listado de Egresos</a>
+                </li>
+            </ul>
+        </li>
+        
+                <li>
+            <a class="has-arrow" href="#" aria-expanded="false">
+                <i class="fas fa-file-excel"></i> Reportes
+            </a>
+            <ul class="sub-menu mm-collapse">             
+                <li>
+                    <a href="/farmaciams/reportes/stock">Consulta de Stock</a>
+                </li>
+                                <li>
+                    <a href="/farmaciams/reportes/reporteStockCritico">Artículos con Stock Crítico</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/reporteStockPorRubro">Stock por Rubro</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/ingresos/detalles">Ingresos Detallados</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/egresos/detalles">Egresos Detallados</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/movimientosArticulo">Consulta movimiento de un artículo</a>
+                </li>
+                <li>
+                    <a href="/farmaciams/reportes/consumos">Consulta Consumos</a>
+                </li>
+                                    <li>
+                        <a href="/farmaciams/reportes/stockAdmin">Consulta de Stock por Establecimiento</a>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/reportes/psicotropicos">Libro Recetario</a>
+                    </li>
+                                <li>
+                    <a href="/farmaciams/reportes/consumoComparativoMensual">Consumo Comparativo mensual</a>
+                </li>                
+                                <li>
+                    <a class="has-arrow" href="#">Consulta Sipach: </a>
+                    <ul class="sub-menu mm-collapse">
+                        <li><a href="/farmaciams/reportes/articulosProcesoCompra">Artículos en Proceso de compra</a></li>
+                        <li><a href="/farmaciams/reportes/compras">Artículos Pendientes de Ingreso</a></li> 
+                    </ul>
+                </li>
+                                <li>
+                    <a>Orden de distribución de RS</a>
+                </li>             
+                <li>
+                    <a href="/farmaciams/reportes/vencidosYPorVencer">Artículos Vencidos y Próximos a Vencer</a>
+                </li>
+                            </ul>
+        </li> 
+        
+                            <li>
+                <a class="has-arrow" href="#" aria-expanded="false">
+                    <i class="fas fa-plus"></i> Otras Operaciones
+                </a>
+                <ul class="sub-menu mm-collapse">             
+                                        <li>
+                        <a href="/farmaciams/stock/">Stock Crítico</a>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/vademecum/">Habilitar / Deshabilitar códigos vademecum</a>
+                    </li>
+                    <li>
+                        <a class="has-arrow" href="#" aria-expanded="false">
+                            Fórmulas Magistrales
+                        </a>
+                        <ul class="sub-menu mm-collapse"> 
+                            <li>
+                                <a href="/farmaciams/fmagistrales/">Listado</a>
+                            </li>
+                            <li>
+                                <a href="/farmaciams/fmagistrales/new">Registrar</a>
+                            </li>
+                            <li>
+                                <a href="/farmaciams/ingresos/fmagistral/new">Ingresar Stock</a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="/farmaciams/plantilla/">Gestión de plantillas</a>
+                    </li>
+                </ul>
+            </li>
+                
+                        
+        <li>
+            <a href="/farmaciams/requerimiento/despacho/"><i class="fas fa-clipboard-list"></i> Requerimiento a Otro Sector</a>
+        </li>
+    </ul>
+</div>
+                                                                                                                                            
+                                
+                        </nav>
+</header>
+    <nav aria-label="breadcrumb" class="breadcrumbs">
+        <div class="row m-1 justify-content-end">
+                    <div class="col-md-6 d-grid ">
+                <span class="badge badge-secondary border border-dark px-5 spanuser" style="font-size: 1.1rem">
+                    FARMACIA UNIFICADA
+                </span>
+            </div>
+                        <div class="col-md-2">
+                <button id="change-sector" type="button" class="btn btn-info btn-sector" data-url_sectores="/farmaciams/jx-sectores-usuario" data-url_change="/farmaciams/jx-change-sector">
+                    <i class="fa fa-exchange" aria-hidden="true"></i>
+                    Cambiar Sector
+                </button>
+            </div>
+                                </div>
+    </nav>
+
+<script type="text/javascript" src="/farmaciams/assets/sweet/sweetalert2.all.min.js?1.0.0"></script>
+<script type="text/javascript" src="/farmaciams/app/js/general.js?1.0.0"></script>
+
+<style>
+
+    .swal2-select{
+        border-radius: 0;
+        box-shadow: none;
+        width: 100%;
+        height: calc(1.5em + .75rem + 2px);
+        font-weight: 400;
+        line-height: 1.5;
+        color: #495057;
+        border: 1px solid #ced4da;
+        background-color: #fff;
+        background-clip: padding-box;
+        transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    }
+    .breadcrumbs{
+        background-color: #0c5460;
+    }
+
+    .badge-secondary{
+        padding: 0.5em;
+        width: 100%;
+        height: 100%;
+    }
+
+    .d-grid{
+        display: grid;
+        justify-items: end;
+    }
+    .spanuser{
+        width: fit-content;
+    }
+    .btn-sector{
+        width: 100%;
+    }
+</style>    <data id="change-sector" value="1865" data-url_sectores="/farmaciams/jx-sectores-usuario" data-url_change="/farmaciams/jx-change-sector"></data>
+    <div class="container-fluid container-lg my-3 my-lg-5 pb-5">
+        <div class="titulo-principal d-flex align-items-center mb-3">
+            <div>
+                <span class="fa-stack fa-2x">
+                  <i class="far fa-circle fa-stack-2x text-info"></i>
+                  <i class="fas fa-hospital-symbol fa-stack-1x text-muted"></i>
+                </span>
+            </div>
+            <div>
+                <h4 class="font-weight-bold text-muted text-uppercase mb-0">Farmacia MS</h4>
+                <h6 class="text-info mb-0">HOSPITAL INTERZONAL GENERAL DE AGUDOS SIMPLEMENTE EVITA DE  GONZALES CATAN KM 32
+                </h6>
+            </div>
+        </div>
+
+        
+        <div class="card shadow">
+            <div class="card-body">
+                <div class="card-text">
+                    <h3>Hola, Choques Paula Graciela 👋</h3>
+                    <p>
+                        Te damos la bienvenida al sistema <strong>Farmacia MS</strong>.
+                    </p>
+                    <p>
+                        Ante cualquier duda o consulta, por favor comunicate con el 
+                        <a href="mailto:usuarios@ms.gba.gov.ar">Departamento de Atención de Usuarios</a>
+                    </p>
+                    <p class="">
+                        Dejamos a tu disposición el <strong>Manual de Uso del Sistema</strong>. <br>
+                        <a class="btn link-manual mt-3" href="https://drive.google.com/file/d/1gvDn4x3cYtmIQGf3pMvYtiIPGlMbgY7O/view?usp=sharing" download="" target="blank">
+                            <i class="fas fa-cloud-download-alt fa-fw fa-lg"></i>
+                            Descargar Manual del Usuario
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <p>&nbsp;</p>
+                                                        <div class="row">
+                        <div class="col-sm-4">
+                            <div class="card shadow card-alertas">
+                                    <div class="tituloNovedades">
+                                        <h6 class="text-left ml-1 mt-1">
+                                            <i class="fas fa-bell"></i>
+                                            Movimientos desde otras Instituciones pendientes de aceptación
+                                        </h6>
+                                    </div>
+                                <div class="card-body">
+                                    <div class="card-text">
+                                                                                    <p>
+                                                Usted no posee movimientos pendientes de aceptación de otras Instituciones.
+                                            </p>
+                                                                                
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-sm-4">
+                            <div class="card shadow card-alertas">
+                                    <div class="tituloNovedades">
+                                        <h6 class="text-left ml-1 mt-1">
+                                            <i class="fas fa-bell"></i>
+                                            Movimientos pendientes de aceptación entre Sectores del Hospital
+                                        </h6>
+                                    </div>
+                                <div class="card-body">
+                                    <div class="card-text">
+                                                                                    <p>
+                                                Usted no posee movimientos pendientes de aceptación de otros Sectores del Hospital.
+                                            </p>
+                                                                            </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <br>
+                        <br>
+                                                <div class="col-sm-4">
+                            <div class="card shadow card-alertas">
+                                    <div class="tituloNovedades">
+                                        <h6 class="text-left ml-1 mt-1">
+                                            <i class="fas fa-bell"></i>
+                                            Requerimientos de dispensa pendientes
+                                        </h6>
+                                    </div>
+                                <div class="card-body">
+                                    <div class="card-text">
+                                                                                    <p>
+                                                Usted no posee requerimientos pendientes de dispensación.
+                                            </p>
+                                                                            </div>
+                                </div>
+             

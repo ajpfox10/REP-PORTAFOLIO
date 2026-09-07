@@ -1,0 +1,19 @@
+# Dependencias y salidas generadas.
+node_modules/
+dist/
+
+# Secretos locales. Las claves reales viven en el entorno.
+.env
+.env.*
+!.env.example
+
+# Archivos de logs y temporales.
+logs/
+*.log
+tmp/
+
+# Metadatos locales del editor o sistema operativo.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

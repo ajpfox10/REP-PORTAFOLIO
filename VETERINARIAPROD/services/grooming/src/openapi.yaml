@@ -1,0 +1,119 @@
+openapi: '3.0.3'
+info:
+  title: VetManager Grooming Service
+  version: '1.0.0'
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /health/deep:
+    get:
+      responses:
+        '200':
+          description: OK
+  /grooming/appointments:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
+  /grooming/appointments/today:
+    get:
+      responses:
+        '200':
+          description: OK
+  /grooming/appointments/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /grooming/appointments/{id}/status:
+    patch:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: No content
+  /grooming/appointments/{id}/record:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /grooming/appointments/{id}/rating:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /grooming/groomers:
+    get:
+      responses:
+        '200':
+          description: OK
+  /grooming/groomers/performance:
+    get:
+      responses:
+        '200':
+          description: OK
+  /grooming/groomers/{id}/commissions:
+    get:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /grooming/patient-profile/{patientId}:
+    get:
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+    post:
+      parameters:
+        - in: path
+          name: patientId
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: Created
+  /grooming/service-types:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created

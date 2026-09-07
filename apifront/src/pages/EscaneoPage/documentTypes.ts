@@ -40,6 +40,7 @@ export const TIPOS_DOCUMENTO: TipoDocumentoEscaneo[] = [
   { value: 'cert_rotacion',        label: 'Certificación de rotación',        icon: '🔄' },
   { value: 'dictamen_junta',       label: 'Dictamen Junta Médica',            icon: '🩺' },
   { value: 'legajo',               label: 'Legajo',                           icon: '📁' },
+  { value: 'nota_cambio_agrupamiento', label: 'Nota Solicitud Cambio de Agrupamiento', icon: '📝' },
   { value: 'otro',                 label: 'Otro documento',                   icon: '📄' },
 
   // ── Nombramiento ─────────────────────────────────────────────────────────
@@ -58,4 +59,5 @@ export const TIPOS_DOCUMENTO: TipoDocumentoEscaneo[] = [
   { value: 'carta_ciudadania',            label: 'Carta de Ciudadanía',                      icon: '🛂', group: 'nombramiento' },
   { value: 'dni_hijos',                   label: 'DNI Hijos',                                icon: '🪪', group: 'nombramiento' },
   { value: 'dni_conyuge',                 label: 'DNI Cónyuge',                              icon: '🪪', group: 'nombramiento' },
+  { value: 'solicitud_btu',               label: 'Solicitud de BTU',                         icon: '🧾', group: 'nombramiento' },
 ];

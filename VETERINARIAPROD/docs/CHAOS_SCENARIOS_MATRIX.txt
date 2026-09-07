@@ -1,0 +1,58 @@
+CHAOS SCENARIOS MATRIX
+
+1. Redis down
+- comando:
+  `npm run chaos:scenario redis-down`
+- objetivo:
+  validar auth revocation, usage limits, registry y event bus degradado
+- alertas esperadas:
+  - `AuthRevocationBlocked` si corre en `strict`
+  - `UsageLimitsUnavailable` si feature costosa corre en `strict`
+  - `ServiceRegistryFailures`
+- comportamiento esperado:
+  - features no criticas degradan
+  - features criticas pueden bloquear con `503`
+  - logs y metricas deben reflejar la degradacion
+
+2. Redis latency
+- comando:
+  `npm run chaos:scenario redis-latency`
+- objetivo:
+  medir sensibilidad a dependencia lenta
+- alertas esperadas:
+  - aumento de `dependency_degradations_total`
+  - latencia p95 alta
+- comportamiento esperado:
+  - sistema sigue operativo
+  - cuotas/revocacion responden segun modo `strict|degraded`
+
+3. Auth timeout
+- comando:
+  `npm run chaos:scenario auth-timeout`
+- objetivo:
+  validar lookup interno y llamadas sensibles al auth service
+- alertas esperadas:
+  - 5xx o degradacion en gateway si la ruta depende de auth interno
+  - trazas incompletas o lentas visibles en Tempo
+- comportamiento esperado:
+  - rutas no dependientes siguen
+  - rutas dependientes fallan con error consistente
+
+4. Reset
+- comando:
+  `npm run chaos:scenario reset`
+- objetivo:
+  volver a baseline
+- comportamiento esperado:
+  - se limpian toxics
+  - bajan las alertas despues del tiempo de evaluacion
+
+5. Smoke observability post-escenario
+- comando:
+  `node scripts/observability/smoke.js`
+- valida:
+  - gateway health
+  - gateway metrics
+  - Prometheus healthy
+  - Grafana healthy
+  - Tempo ready

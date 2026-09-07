@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Cobertura Salud - Escritorio (prueba)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, Segoe UI, sans-serif; display: flex; flex-direction: column; height: 100vh; background: #0f172a; color: #e2e8f0; }
+    header { padding: 12px 16px; background: #1e293b; display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    header h1 { font-size: 15px; margin: 0 12px 0 0; align-self: center; }
+    .field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+    .field input { padding: 7px 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; min-width: 150px; }
+    button { padding: 8px 12px; border-radius: 6px; border: 0; background: #2563eb; color: #fff; cursor: pointer; font-weight: 600; }
+    button:disabled { opacity: .5; cursor: default; }
+    button.ghost { background: #334155; }
+    #status { font-size: 12px; color: #93c5fd; padding: 6px 16px; background: #16233b; display: flex; justify-content: space-between; }
+    #progreso { color: #fbbf24; font-weight: 700; }
+    main { flex: 1; display: flex; min-height: 0; }
+    webview { flex: 1; border: 0; background: #fff; }
+    #panel { width: 360px; background: #111c33; border-left: 1px solid #22314f; padding: 12px; overflow: auto; }
+    #panel h2 { font-size: 13px; margin: 0 0 8px; }
+    .res { border: 1px solid #22314f; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+    .res b { font-size: 12px; }
+    .res .v { font-weight: 700; font-size: 13px; margin: 3px 0; }
+    .res-previo { font-size: 11px; color: #fbbf24; margin-bottom: 8px; padding: 6px 8px; background: #14213b; border-radius: 6px; }
+    .res-head:hover { opacity: .85; }
+    .ver-mas { color: #64748b; font-size: 10px; font-weight: 400; }
+    .res pre { white-space: pre-wrap; font-size: 10.5px; color: #94a3b8; margin: 6px 0 0; max-height: 160px; overflow: auto; border-top: 1px solid #22314f; padding-top: 6px; }
+    #userLabel { font-size: 11px; color: #93c5fd; align-self: center; }
+    #login { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 50; }
+    .login-card { background: #1e293b; padding: 24px; border-radius: 12px; width: 320px; display: flex; flex-direction: column; gap: 10px; }
+    .login-card h2 { margin: 0 0 4px; font-size: 18px; }
+    .login-card label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #cbd5e1; }
+    .login-card input { padding: 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; }
+    #loginMsg { font-size: 12px; color: #f87171; min-height: 14px; }
+    /* Barra de lote por Excel: solo visible para el usuario habilitado (samo). */
+    #loteBar { display: none; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; background: #14213b; border-top: 1px solid #22314f; font-size: 12px; }
+    #loteBar strong { color: #fbbf24; }
+    #loteBar.visible { display: flex; }
+    .file-btn { background: #334155; color: #fff; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    #loteBar select { padding: 6px 8px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; min-width: 160px; }
+    #loteInfo { color: #93c5fd; }
+    #aviso { display: none; padding: 8px 16px; background: #78350f; color: #fde68a; font-size: 13px; font-weight: 600; border-top: 1px solid #92400e; }
+    #aviso.visible { display: block; }
+    .hist-titulo { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; border-top: 1px solid #22314f; padding-top: 10px; }
+    .hist-titulo h2 { margin: 0; }
+    button.compact { padding: 4px 8px; font-size: 11px; }
+    .hist { border: 1px solid #22314f; border-radius: 8px; padding: 6px 9px; margin-bottom: 6px; background: #0d1830; }
+    .hist-head { cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+    .hist-head b { font-size: 12px; }
+    .hist-hora { font-size: 10px; color: #64748b; }
+    .hist-res { font-size: 11px; color: #93c5fd; }
+    .hist-det { margin-top: 6px; border-top: 1px solid #22314f; padding-top: 6px; font-size: 11px; color: #cbd5e1; }
+    .hist-det div { margin: 2px 0; }
+    .hist-vacio { font-size: 11px; color: #64748b; padding: 4px 0; }
+    #historial { max-height: 42vh; overflow-y: auto; }
+    /* Modal de confirmacion DENTRO de la app (no nativo): no roba el teclado del webview. */
+    #modalConfirm { display: none; position: fixed; inset: 0; background: rgba(2,6,23,.7); z-index: 60; align-items: center; justify-content: center; }
+    #modalConfirm.visible { display: flex; }
+    .modal-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; width: 420px; max-width: 90vw; }
+    .modal-card p { margin: 0 0 16px; font-size: 13px; color: #e2e8f0; white-space: pre-line; }
+    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-btns button { padding: 8px 14px; }
+  </style>
+</head>
+<body>
+  <div id="modalConfirm">
+    <div class="modal-card">
+      <p id="modalMsg"></p>
+      <div class="modal-btns">
+        <button id="modalNo" class="ghost">Ver ultimo resultado</button>
+        <button id="modalSi">Repetir consulta</button>
+      </div>
+    </div>
+  </div>
+  <div id="login">
+    <div class="login-card">
+      <h2>Ingreso</h2>
+      <label>Usuario<input id="usr" placeholder="usuario"></label>
+      <label>Contrasena<input id="pwd" type="password"></label>
+      <div id="loginMsg"></div>
+      <button id="btnLogin">Entrar</button>
+    </div>
+  </div>
+
+  <header>
+    <h1>Consulta embebida - recorre todas las fuentes</h1>
+    <span id="userLabel"></span>
+    <div class="field">DNI<input id="dni" placeholder="documento sin puntos"></div>
+    <div class="field">CUIL<input id="cuil" placeholder="XX-XXXXXXXX-X"></div>
+    <button id="iniciar">Iniciar recorrido</button>
+    <button id="siguiente" class="ghost" disabled>Leer y siguiente</button>
+    <button id="recargar" class="ghost" title="Limpia todo (resultados, DNI/CUIL) y deja lista una nueva consulta">&#8635; Recargar</button>
+  </header>
+  <div id="loteBar">
+    <strong>Lote por Excel</strong>
+    <label class="file-btn">Elegir Excel (.xls/.xlsx)
+      <input id="archivoLote" type="file" accept=".xls,.xlsx" hidden>
+    </label>
+    <div class="field">Columna DNI
+      <select id="colDni" disabled></select>
+    </div>
+    <span id="loteInfo">Ningun archivo cargado.</span>
+    <button id="iniciarLote" disabled>Iniciar lote</button>
+    <button id="descargarLote" class="ghost" disabled>Descargar resultados</button>
+  </div>
+  <div id="status">
+    <span id="msg">Carga DNI/CUIL y presiona "Iniciar recorrido". Recorre SSS, ARCA, ANSES y Servicio Domestico, una por una.</span>
+    <span id="progreso"></span>
+  </div>
+  <div id="aviso"></div>
+  <main>
+    <webview id="org" src="about:blank" partition="persist:organismos" allowpopups></webview>
+    <aside id="panel">
+      <h2>Resultados por fuente</h2>
+      <div id="resultados"></div>
+      <div class="hist-titulo">
+        <h2>Ultima busqueda</h2>
+        <button id="limpiarHist" class="ghost compact" title="Actualizar la ultima busqueda de este documento">Actualizar</button>
+      </div>
+      <div id="historial"></div>
+    </aside>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>

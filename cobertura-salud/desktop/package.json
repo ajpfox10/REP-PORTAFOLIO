@@ -1,0 +1,47 @@
+{
+  "name": "cobertura-salud-desktop",
+  "version": "0.2.6",
+  "description": "App de escritorio: navegador embebido para consultas de cobertura de salud.",
+  "main": "main.js",
+  "author": "Cobertura Salud",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "publicar": "electron-builder --win nsis && node publicar-update.js"
+  },
+  "build": {
+    "appId": "ar.cobertura.salud.desktop",
+    "productName": "Cobertura Salud",
+    "files": [
+      "main.js",
+      "index.html",
+      "renderer.js",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Cobertura Salud"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "http://192.168.0.21:8510/updates/"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "xlsx": "^0.18.5"
+  }
+}

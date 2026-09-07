@@ -16,11 +16,39 @@ interface ServicioANSES {
   es_insalubre: boolean;
 }
 
+// Líneas leídas del PDF de ANSES (endpoint /jubilacion/parse-anses-pdf).
+// Se muestran para revisar y recién se cargan cuando el operador confirma.
+interface LineaPdfANSES {
+  orden:           number;
+  codigo_servicio: string | null;
+  el:              string | null;
+  empresa:         string | null;
+  tipo:            'DEPENDENCIA' | 'AUTONOMO';
+  fecha_desde:     string | null;
+  fecha_hasta:     string | null;
+  sugerida:        boolean;
+  motivos:         string[];
+  crudo:           string;
+}
+
+interface RevisionPdfANSES {
+  cuil:         string | null;
+  dni:          number | null;
+  nombre:       string | null;
+  origen:       'texto' | 'ocr';
+  advertencias: string[];
+  texto_crudo:  string;
+  lineas:       (LineaPdfANSES & { usar: boolean })[];
+}
+
 interface ServicioExterno {
   organismo:    string;
   fecha_desde:  string;
   fecha_hasta:  string;
   es_insalubre: boolean;
+  // 'IPS' = municipio / ministerio provincial (aporta a IPS).
+  // 'EXTERNA' = otra provincia / caja profesional (compite en superposiciones).
+  caja:         'IPS' | 'EXTERNA';
 }
 
 interface Periodo { anios: number; meses: number; dias: number }
@@ -30,6 +58,20 @@ interface Superpuesto extends Periodo {
   ganador:   string | null;
   motivo:    string;
   empate:    boolean;
+  // Ids de los contendientes y clave de resolución manual (los manda el backend;
+  // opcionales por compatibilidad con respuestas viejas).
+  key?:     string;
+  id_a?:    string; label_a?: string;
+  id_b?:    string; label_b?: string;
+}
+
+// Días computables agrupados por caja de origen (post-superposición).
+interface DesgloseCaja {
+  caja:      string;
+  label:     string;
+  insalubre: Periodo;
+  comun:     Periodo;
+  total:     Periodo;
 }
 
 interface Resultado {
@@ -48,6 +90,7 @@ interface Resultado {
   servicio_nombrado_desde_2015: Periodo;
   servicio_ips:                 Periodo;
   servicio_ips_ajustado:        Periodo;
+  servicio_ips_extra:           Periodo;
   es_insalubre_efectivo:        boolean;
   diferencial_2pct_pagado:      boolean;
   cargo_deudor_2pct:            boolean;
@@ -58,11 +101,16 @@ interface Resultado {
   total_insalubre:              Periodo;
   total_insalubre_prorateado:   Periodo;
   total_comun:                  Periodo;
+  desglose_cajas?:              DesgloseCaja[];
+  fecha_calculo?:               string;
+  es_fecha_hoy?:                boolean;
   total_prorateado:             Periodo;
   tipo_jubilacion:              string | null;
   cumple_servicio:              boolean;
   cumple_edad:                  boolean;
   falta_servicio:               Periodo;
+  falta_servicio_comun?:        Periodo;
+  falta_servicio_insalubre?:    Periodo;
   falta_edad:                   Periodo;
   pct_servicio_completado:      number;
   pct_edad_completada:          number;
@@ -114,6 +162,24 @@ const toISODate = (d: Date): string => {
 
 const TODAY_ISO = toISODate(new Date());
 
+// Las bajas del cronograma caen a fin de trimestre. Devuelve las próximas
+// cuatro a partir de la fecha dada, para ofrecerlas como atajo.
+const FIN_TRIMESTRE: Array<[number, number]> = [[2, 31], [5, 30], [8, 30], [11, 31]];
+function proximasBajas(desdeISO: string, cuantas = 4): string[] {
+  const base = new Date(desdeISO + 'T00:00:00');
+  if (isNaN(base.getTime())) return [];
+  const out: string[] = [];
+  let anio = base.getFullYear();
+  while (out.length < cuantas) {
+    for (const [m, d] of FIN_TRIMESTRE) {
+      const f = new Date(anio, m, d);
+      if (f > base && out.length < cuantas) out.push(toISODate(f));
+    }
+    anio++;
+  }
+  return out;
+}
+
 const S: Record<string, React.CSSProperties> = {
   card:      { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: 20, marginBottom: 16 },
   label:     { fontSize: '0.68rem', textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.45)', fontWeight: 600, marginBottom: 4, display: 'block' },
@@ -139,6 +205,55 @@ const TIPOS_JUBILACION: Record<string, string> = {
   AGOTAMIENTO_PREMATURO: '⚡ Agotamiento Prematuro (50 años / 25 años servicio)',
   PRORRATEO:             '⚖️ Prorrateo Mixto (Decreto 1554/2022)',
 };
+
+// Cronograma de presentación de papeles y de cobro según la fecha de baja.
+// Las bajas caen a fin de trimestre: se cobra un mes como nombrado y el siguiente
+// ya como jubilado, y los papeles se presentan del 1 al 10 del mes que está tres
+// meses antes de la baja. ─── Si el cronograma cambia, se edita acá. ───
+const CRONOGRAMA_JUBILACION = [
+  { baja: '31 de marzo',      presenta: 'Del 1 al 10 de diciembre (año anterior)', nombrado: 'Abril',              jubilado: 'Mayo'      },
+  { baja: '30 de junio',      presenta: 'Del 1 al 10 de marzo',                    nombrado: 'Julio',              jubilado: 'Agosto'    },
+  { baja: '30 de septiembre', presenta: 'Del 1 al 10 de junio',                    nombrado: 'Octubre',            jubilado: 'Noviembre' },
+  { baja: '31 de diciembre',  presenta: 'Del 1 al 10 de septiembre',               nombrado: 'Enero (año siguiente)', jubilado: 'Febrero' },
+];
+
+// Se muestra en la calculadora y en Posibles Jubilados.
+function CronogramaJubilacion() {
+  return (
+    <div style={S.card}>
+      <div style={S.h3}>Cronograma de presentación y cobro</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 560 }}>
+          <thead>
+            <tr>
+              {['Fecha de baja', 'Presenta los papeles', 'Cobra como nombrado', 'Cobra como jubilado'].map(h => (
+                <th key={h} style={{
+                  textAlign: 'left', padding: '8px 10px', color: 'rgba(255,255,255,0.45)',
+                  fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.06em',
+                  borderBottom: '1px solid rgba(255,255,255,0.12)', whiteSpace: 'nowrap',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {CRONOGRAMA_JUBILACION.map((f, i) => (
+              <tr key={i}>
+                <td style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#e2e8f0', fontWeight: 700, whiteSpace: 'nowrap' }}>{f.baja}</td>
+                <td style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#fdba74', fontWeight: 600 }}>{f.presenta}</td>
+                <td style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#94a3b8' }}>{f.nombrado}</td>
+                <td style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#94a3b8' }}>{f.jubilado}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 10, fontSize: '0.74rem', color: '#64748b' }}>
+        Los papeles se presentan del 1 al 10 del mes que cae tres meses antes del mes de baja.
+        Fechas de referencia: si el IPS cambia el cronograma hay que actualizar esta tabla.
+      </div>
+    </div>
+  );
+}
 
 const SITUACIONES = [
   { value: 'NORMAL',      label: 'Normal (planta permanente)' },
@@ -200,6 +315,54 @@ function FilaFecha({
   );
 }
 
+// ── Historial de cálculos guardados ───────────────────────────────────────────
+// Cada Guardar deja una versión nueva; desde acá se puede reponer cualquiera en
+// el formulario (los inputs se guardan junto con el resultado).
+function HistorialCalculos({ historial, onCargar }: { historial: any[]; onCargar: (h: any) => void }) {
+  return (
+    <div style={S.card}>
+      <div style={S.h3}>Historial de cálculos guardados</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.79rem', minWidth: 720 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              {['Fecha', 'Situación', 'Insalubre', 'Tipo jubilación', 'Total prorateado', 'Cargo deudor', 'Guardado por', ''].map((h, i) => (
+                <th key={i} style={{ textAlign: 'left', padding: '5px 8px', color: '#64748b', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {historial.map((h: any) => {
+              const r: Resultado | null = h.resultado
+                ? (typeof h.resultado === 'string' ? JSON.parse(h.resultado) : h.resultado)
+                : null;
+              return (
+                <tr key={h.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '6px 8px' }}>{fmtFecha(h.created_at)}</td>
+                  <td style={{ padding: '6px 8px' }}>{h.situacion_revista}</td>
+                  <td style={{ padding: '6px 8px' }}>{h.es_insalubre_ips ? <span style={S.tagOrange}>Sí</span> : <span style={{ color: '#64748b' }}>No</span>}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    {r?.tipo_jubilacion
+                      ? <span style={S.tagGreen}>{r.tipo_jubilacion}</span>
+                      : <span style={S.tagRed}>No cumple</span>}
+                  </td>
+                  <td style={{ padding: '6px 8px' }}>{r ? fmtPeriodo(r.total_prorateado) : '—'}</td>
+                  <td style={{ padding: '6px 8px' }}>{r?.cargo_deudor_2pct ? <span style={S.tagOrange}>Sí</span> : <span style={{ color: '#64748b' }}>No</span>}</td>
+                  <td style={{ padding: '6px 8px', color: '#94a3b8' }}>{h.creado_por_nombre ?? '—'}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    <button style={{ ...S.btn, background: '#312e81', color: '#c4b5fd', padding: '4px 12px', fontSize: '0.76rem' }}
+                      onClick={() => onCargar(h)}>Cargar</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export function HerramientasPage() {
   const toast = useToast();
@@ -219,18 +382,31 @@ export function HerramientasPage() {
   const [serviciosAnses,     setServiciosAnses]    = useState<ServicioANSES[]>([]);
   const [serviciosExternos,  setServiciosExternos] = useState<ServicioExterno[]>([]);
 
+  // Lectura del PDF de ANSES (panel de revisión previo a la carga)
+  const [pdfLeyendo, setPdfLeyendo] = useState(false);
+  const [pdfRuta,    setPdfRuta]    = useState('');
+  const [pdfOrigen,  setPdfOrigen]  = useState('');
+  const [revision,   setRevision]   = useState<RevisionPdfANSES | null>(null);
+  const archivoRef                  = useRef<HTMLInputElement | null>(null);
+
   // Resoluciones manuales de empates: key = "IPS|ANSES_0" etc., value = id del ganador
   const [resolucionesManuales, setResolucionesManuales] = useState<Record<string, string>>({});
 
   const [resultado,     setResultado]     = useState<Resultado | null>(null);
   const [calculando,    setCalculando]    = useState(false);
+  // Fecha a la que se para el cálculo. Arranca en hoy y se puede mover.
+  const [fechaCalculo,  setFechaCalculo]  = useState(TODAY_ISO);
   const [guardando,     setGuardando]     = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [historial,     setHistorial]     = useState<any[]>([]);
   const [verHistorial,  setVerHistorial]  = useState(false);
+  // Cálculo guardado que se ofrece precargar al entrar al agente (el más reciente).
+  const [ofertaCarga,   setOfertaCarga]   = useState<any | null>(null);
+  // Mientras esté seteado, el resultado en pantalla es el guardado, no uno recién calculado.
+  const [cargadoDe,     setCargadoDe]     = useState<{ fecha: string; por: string | null } | null>(null);
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
-  const [tab, setTab] = useState<'calculadora' | 'posibles'>('calculadora');
+  const [tab, setTab] = useState<'calculadora' | 'posibles' | 'citas'>('calculadora');
 
   // ── Posibles Jubilados — estado ───────────────────────────────────────────
   const [pjBusqueda,    setPjBusqueda]    = useState('');
@@ -246,7 +422,33 @@ export function HerramientasPage() {
   const [pjEditEstado,  setPjEditEstado]  = useState('');
   const [pjEditMesCorte,setPjEditMesCorte]= useState('');
   const [pjEditObs,     setPjEditObs]     = useState('');
+  const [pjEditFPapeles,   setPjEditFPapeles]   = useState('');
+  const [pjEditFJubilacion,setPjEditFJubilacion]= useState('');
+  const [pjSoloProximos,   setPjSoloProximos]   = useState(false);
   const [pjGuardando,   setPjGuardando]   = useState(false);
+
+  // ── Agenda de citas — estado ──────────────────────────────────────────────
+  const [ctBusqueda,    setCtBusqueda]    = useState('');
+  const [ctSugerencias, setCtSugerencias] = useState<any[]>([]);
+  const [ctBuscando,    setCtBuscando]    = useState(false);
+  const ctTimer                           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ctAgente,      setCtAgente]      = useState<any | null>(null);
+  const [ctFecha,       setCtFecha]       = useState(TODAY_ISO);
+  const [ctHora,        setCtHora]        = useState('09:00');
+  const [ctMotivo,      setCtMotivo]      = useState('');
+  const [ctLista,       setCtLista]       = useState<any[]>([]);
+  const [ctCargando,    setCtCargando]    = useState(false);
+  const [ctRango,       setCtRango]       = useState<'HOY' | 'SEMANA' | 'PROXIMAS' | 'TODAS'>('PROXIMAS');
+  const [ctFiltro,      setCtFiltro]      = useState('');
+  const [ctGuardando,   setCtGuardando]   = useState(false);
+  const [ctEditId,      setCtEditId]      = useState<number | null>(null);
+  const [ctEditFecha,   setCtEditFecha]   = useState('');
+  const [ctEditHora,    setCtEditHora]    = useState('');
+  const [ctEditEstado,  setCtEditEstado]  = useState('');
+  const [ctEditMotivo,  setCtEditMotivo]  = useState('');
+  const [ctEditObs,     setCtEditObs]     = useState('');
+  const [ctPromoverId,  setCtPromoverId]  = useState<number | null>(null);
+  const [ctPromMesCorte,setCtPromMesCorte]= useState('MARZO');
 
   // ── Búsqueda ──────────────────────────────────────────────────────────────
   const onBusquedaChange = useCallback((q: string) => {
@@ -265,6 +467,9 @@ export function HerramientasPage() {
     setBusqueda(`${ag.apellido}, ${ag.nombre}`);
     setResultado(null);
     setResolucionesManuales({});
+    setOfertaCarga(null);
+    setCargadoDe(null);
+    setVerHistorial(false);
     try {
       const res = await apiFetch<any>(`/jubilacion/agente-datos/${ag.dni}`);
       const d   = res?.data;
@@ -279,9 +484,15 @@ export function HerramientasPage() {
       setServiciosAnses([]);
       setServiciosExternos([]);
       setObservaciones('');
+      setRevision(null);
+      setPdfRuta('');
+      setPdfOrigen('');
 
-      const hist = await apiFetch<any>(`/jubilacion/agente/${d.dni}`);
-      setHistorial(hist?.data ?? []);
+      const hist  = await apiFetch<any>(`/jubilacion/agente/${d.dni}`);
+      const filas = hist?.data ?? [];
+      setHistorial(filas);
+      // El historial viene ordenado por created_at DESC: se ofrece el último.
+      setOfertaCarga(filas.length ? filas[0] : null);
     } catch (e: any) {
       toast.error('Error cargando agente: ' + e?.message);
     }
@@ -293,6 +504,79 @@ export function HerramientasPage() {
     new Date(agente.fecha_ingreso) < new Date(agente.fecha_de_nombramiento)
   );
 
+  // ── ANSES: lectura del PDF ────────────────────────────────────────────────
+  // El PDF de ANSES es una impresión de terminal escaneada: el backend la OCR-ea y
+  // devuelve los renglones. Nunca se cargan solos — el operador revisa y confirma.
+  const procesarRespuestaPdf = (data: any, origen: string) => {
+    const lineas: LineaPdfANSES[] = data?.lineas ?? [];
+    setRevision({
+      cuil:         data?.cuil ?? null,
+      dni:          data?.dni ?? null,
+      nombre:       data?.nombre ?? null,
+      origen:       data?.origen ?? 'ocr',
+      advertencias: data?.advertencias ?? [],
+      texto_crudo:  data?.texto_crudo ?? '',
+      lineas:       lineas.map(l => ({ ...l, usar: l.sugerida })),
+    });
+    setPdfOrigen(origen);
+    if (!lineas.length) toast.error('No se detectaron renglones de servicios en el PDF');
+    else toast.ok(`${lineas.length} renglón/es leídos del PDF — revisalos antes de cargar`);
+  };
+
+  const leerPdfArchivo = async (file: File) => {
+    setPdfLeyendo(true);
+    setRevision(null);
+    try {
+      const fd = new FormData();
+      fd.append('archivo', file);
+      const res = await apiFetch<any>('/jubilacion/parse-anses-pdf', { method: 'POST', body: fd });
+      procesarRespuestaPdf(res?.data, file.name);
+    } catch (e: any) {
+      toast.error('No se pudo leer el PDF: ' + (e?.message ?? ''));
+    } finally {
+      setPdfLeyendo(false);
+    }
+  };
+
+  const leerPdfRuta = async () => {
+    const ruta = pdfRuta.trim();
+    if (!ruta) { toast.error('Indicá la ruta del PDF en el servidor'); return; }
+    setPdfLeyendo(true);
+    setRevision(null);
+    try {
+      const res = await apiFetch<any>('/jubilacion/parse-anses-pdf', {
+        method: 'POST',
+        body: JSON.stringify({ ruta }),
+      });
+      procesarRespuestaPdf(res?.data, ruta);
+    } catch (e: any) {
+      toast.error('No se pudo leer el PDF: ' + (e?.message ?? ''));
+    } finally {
+      setPdfLeyendo(false);
+    }
+  };
+
+  const updateRevision = (i: number, campo: 'usar' | 'fecha_desde' | 'fecha_hasta', v: any) =>
+    setRevision(p => p && ({ ...p, lineas: p.lineas.map((l, idx) => idx === i ? { ...l, [campo]: v } : l) }));
+
+  const confirmarRevision = () => {
+    if (!revision) return;
+    const elegidas = revision.lineas.filter(l => l.usar && l.fecha_desde && l.fecha_hasta);
+    if (!elegidas.length) { toast.error('No hay renglones tildados con las dos fechas completas'); return; }
+    setServiciosAnses(p => [
+      ...p,
+      ...elegidas.map(l => ({
+        fecha_desde:  l.fecha_desde as string,
+        fecha_hasta:  l.fecha_hasta as string,
+        // El listado de ANSES no informa insalubridad: queda a criterio del operador.
+        es_insalubre: false,
+      })),
+    ]);
+    toast.ok(`${elegidas.length} línea/s agregadas desde el PDF`);
+    setRevision(null);
+    setPdfOrigen('');
+  };
+
   // ── ANSES ─────────────────────────────────────────────────────────────────
   const agregarAnses = () =>
     setServiciosAnses(p => [...p, { fecha_desde: '', fecha_hasta: TODAY_ISO, es_insalubre: false }]);
@@ -303,7 +587,7 @@ export function HerramientasPage() {
 
   // ── Externos ──────────────────────────────────────────────────────────────
   const agregarExterno = () =>
-    setServiciosExternos(p => [...p, { organismo: '', fecha_desde: '', fecha_hasta: TODAY_ISO, es_insalubre: false }]);
+    setServiciosExternos(p => [...p, { organismo: '', fecha_desde: '', fecha_hasta: TODAY_ISO, es_insalubre: false, caja: 'IPS' }]);
   const updateExterno = (i: number, f: keyof ServicioExterno, v: any) =>
     setServiciosExternos(p => p.map((s, idx) => idx === i ? { ...s, [f]: v } : s));
   const eliminarExterno = (i: number) =>
@@ -317,6 +601,7 @@ export function HerramientasPage() {
     ips_aporto:              ipsAporto,
     es_insalubre_ips:        esInsalubreIPS,
     diferencial_2pct_pagado: diferencial2Pagado,
+    fecha_calculo:           fechaCalculo || null,
     servicios_anses:         serviciosAnses.filter(s => s.fecha_desde && s.fecha_hasta),
     servicios_externos:      serviciosExternos.filter(s => s.organismo.trim() && s.fecha_desde && s.fecha_hasta),
     resoluciones_manuales:   resoluciones,
@@ -338,11 +623,55 @@ export function HerramientasPage() {
     } finally { setCalculando(false); }
   };
 
+  // Mover la fecha de cálculo recalcula solo, pero recién después del primer
+  // cálculo manual: antes no hay resultado que refrescar.
+  const primerRenderFecha = useRef(true);
+  // Al precargar un cálculo guardado la fecha cambia sola: ese cambio no debe
+  // recalcular, porque lo que se muestra es el resultado tal como se guardó.
+  const saltearRecalc = useRef(false);
+  useEffect(() => {
+    if (primerRenderFecha.current) { primerRenderFecha.current = false; return; }
+    if (saltearRecalc.current) { saltearRecalc.current = false; return; }
+    if (!resultado || !fechaCalculo) return;
+    calcular();
+  }, [fechaCalculo]);
+
   const resolverEmpate = (key: string, ganadorId: string) => {
     const nuevas = { ...resolucionesManuales, [key]: ganadorId };
     setResolucionesManuales(nuevas);
     calcular(nuevas);
   };
+
+  // ── Precarga de un cálculo guardado ───────────────────────────────────────
+  // Repone los inputs tal como se guardaron y muestra el resultado de esa vez.
+  // No recalcula solo: el número que se ve es el que quedó registrado.
+  const aplicarCalculoGuardado = useCallback((h: any) => {
+    const parse = (v: any, fallback: any) => {
+      if (v == null) return fallback;
+      try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return fallback; }
+    };
+    setSituacion(h.situacion_revista ?? 'NORMAL');
+    setBecaAporto(!!h.beca_aporto);
+    setIpsAporto(h.ips_aporto == null ? true : !!h.ips_aporto);
+    setEsInsalubreIPS(!!h.es_insalubre_ips);
+    setDiferencial2Pagado(!!h.diferencial_2pct_pagado);
+    setServiciosAnses(parse(h.servicios_anses, []));
+    setServiciosExternos(parse(h.servicios_externos, []));
+    setResolucionesManuales(parse(h.resoluciones_manuales, {}));
+    setObservaciones(h.observaciones ?? '');
+    const nuevaFecha = toInputDate(h.fecha_calculo) || TODAY_ISO;
+    saltearRecalc.current = nuevaFecha !== fechaCalculo;
+    setFechaCalculo(nuevaFecha);
+    setResultado(parse(h.resultado, null));
+    setCargadoDe({ fecha: h.created_at, por: h.creado_por_nombre ?? null });
+    setOfertaCarga(null);
+    setVerHistorial(false);
+    setRevision(null);
+  }, [fechaCalculo]);
+
+  // Recalcular con los datos de hoy: deja de ser el guardado y pasa a ser un
+  // cálculo nuevo, que recién queda registrado si se aprieta Guardar.
+  const recalcularCargado = () => { setCargadoDe(null); calcular(); };
 
   // ── Guardar ───────────────────────────────────────────────────────────────
   const guardar = async () => {
@@ -356,7 +685,9 @@ export function HerramientasPage() {
       if (res?.ok) {
         toast.ok('Cálculo guardado');
         const hist = await apiFetch<any>(`/jubilacion/agente/${agente.dni}`);
-        setHistorial(hist?.data ?? []);
+        const filas = hist?.data ?? [];
+        setHistorial(filas);
+        if (filas.length) setCargadoDe({ fecha: filas[0].created_at, por: filas[0].creado_por_nombre ?? null });
       } else {
         toast.error(res?.error ?? 'Error al guardar');
       }
@@ -381,6 +712,7 @@ export function HerramientasPage() {
     filas.push({ Sección: 'Agente', Dato: 'Situación',         Valor: situacion });
     filas.push({ Sección: 'Agente', Dato: 'Edad actual',       Valor: fmtPeriodo(R.edad_actual) });
 
+    filas.push({ Sección: 'Cálculo', Dato: 'Calculado al', Valor: fmtFecha(R.fecha_calculo ?? fechaCalculo) });
     filas.push({ Sección: '═══ SERVICIOS IPS ═══', Dato: '', Valor: '' });
     if (R.tiene_beca) filas.push({ Sección: 'IPS', Dato: 'Período de beca', Valor: fmtPeriodo(R.servicio_beca) + (R.beca_aporto ? ' (aportó)' : ' (sin aportes)') });
     filas.push({ Sección: 'IPS', Dato: 'Antigüedad nombrado',        Valor: fmtPeriodo(R.servicio_nombrado) });
@@ -401,7 +733,8 @@ export function HerramientasPage() {
     }
 
     for (const ext of serviciosExternos.filter(e => e.organismo.trim())) {
-      filas.push({ Sección: 'Externo', Dato: ext.organismo, Valor: `${fmtFecha(ext.fecha_desde)} → ${fmtFecha(ext.fecha_hasta)} (${ext.es_insalubre ? 'insalubre' : 'común'})` });
+      const seccion = ext.caja === 'EXTERNA' ? 'Externo' : 'IPS (municipio/min. prov.)';
+      filas.push({ Sección: seccion, Dato: ext.organismo, Valor: `${fmtFecha(ext.fecha_desde)} → ${fmtFecha(ext.fecha_hasta)} (${ext.es_insalubre ? 'insalubre' : 'común'})` });
     }
 
     if (R.superpuestos.length) {
@@ -415,6 +748,15 @@ export function HerramientasPage() {
     filas.push({ Sección: 'Totales', Dato: 'Total insalubre',        Valor: fmtPeriodo(R.total_insalubre) });
     filas.push({ Sección: 'Totales', Dato: 'Total común',             Valor: fmtPeriodo(R.total_comun) });
     filas.push({ Sección: 'Totales', Dato: 'Total prorateado (tabla)', Valor: fmtPeriodo(R.total_prorateado) });
+    if (!R.cumple_servicio) {
+      filas.push({ Sección: 'Falta', Dato: 'Servicio faltante (común)',    Valor: fmtPeriodo(R.falta_servicio_comun ?? R.falta_servicio) });
+      if (R.falta_servicio_insalubre)
+        filas.push({ Sección: 'Falta', Dato: 'Servicio faltante (insalubre)', Valor: fmtPeriodo(R.falta_servicio_insalubre) });
+    }
+
+    for (const d of R.desglose_cajas ?? []) {
+      filas.push({ Sección: 'Por caja', Dato: d.label, Valor: `${fmtPeriodo(d.total)} — insalubre ${fmtPeriodo(d.insalubre)} · común ${fmtPeriodo(d.comun)}` });
+    }
     filas.push({ Sección: 'Resultado', Dato: 'Tipo jubilación', Valor: R.tipo_jubilacion ? (TIPOS_JUBILACION[R.tipo_jubilacion] ?? R.tipo_jubilacion) : 'AÚN NO ALCANZA' });
     if (!R.cumple_servicio) filas.push({ Sección: 'Falta', Dato: 'Servicio', Valor: fmtPeriodo(R.falta_servicio) });
     if (!R.cumple_edad)    filas.push({ Sección: 'Falta', Dato: 'Edad',     Valor: fmtPeriodo(R.falta_edad) });
@@ -442,7 +784,53 @@ export function HerramientasPage() {
     return mes ? (m[mes] ?? mes) : 'Sin fecha';
   };
 
-  const pjListaFiltrada = pjFiltro ? pjLista.filter((p: any) => p.estado === pjFiltro) : pjLista;
+  // Días desde hoy hasta una fecha ISO (negativo = ya pasó)
+  const diasHasta = (iso: string | null | undefined): number | null => {
+    if (!iso) return null;
+    const [y, m, d] = String(iso).split('T')[0].split('-').map(Number);
+    if (!y || !m || !d) return null;
+    const hoy    = new Date(); hoy.setHours(0, 0, 0, 0);
+    const objeto = new Date(y, m - 1, d);
+    return Math.round((objeto.getTime() - hoy.getTime()) / 86400000);
+  };
+  const sufijoDias = (dias: number | null): string => {
+    if (dias === null) return '';
+    if (dias === 0)  return ' · hoy';
+    if (dias === 1)  return ' · mañana';
+    if (dias > 0)    return ` · en ${dias} días`;
+    if (dias === -1) return ' · ayer';
+    return ` · hace ${Math.abs(dias)} días`;
+  };
+  // Semáforo: vencida en rojo, dentro de 30 días en amarillo, más lejos en violeta.
+  // Si el trámite ya cerró (jubilado/descartado) no urge: gris.
+  const fechaChipStyle = (iso: string | null | undefined, estado: string): React.CSSProperties => {
+    const dias = diasHasta(iso);
+    if (dias === null || estado === 'JUBILADO' || estado === 'DESCARTADO') return S.tagGray;
+    if (dias < 0)  return S.tagRed;
+    if (dias <= 30) return S.tagYellow;
+    return S.tagPurple;
+  };
+  // Fecha del trámite más próxima del registro (para ordenar y filtrar vencimientos)
+  const pjFechaProxima = (p: any): number | null => {
+    const ds = [diasHasta(p.fecha_presentacion_papeles), diasHasta(p.fecha_jubilacion)]
+      .filter((d): d is number => d !== null);
+    return ds.length ? Math.min(...ds) : null;
+  };
+
+  const pjListaFiltrada = useMemo(() => {
+    let base = pjFiltro ? pjLista.filter((p: any) => p.estado === pjFiltro) : pjLista;
+    if (pjSoloProximos) {
+      base = base
+        .filter((p: any) => {
+          if (p.estado === 'JUBILADO' || p.estado === 'DESCARTADO') return false;
+          const d = pjFechaProxima(p);
+          return d !== null && d <= 60;
+        })
+        .slice()
+        .sort((a: any, b: any) => (pjFechaProxima(a) ?? 0) - (pjFechaProxima(b) ?? 0));
+    }
+    return base;
+  }, [pjLista, pjFiltro, pjSoloProximos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Posibles Jubilados — funciones ────────────────────────────────────────
   const onPjBusquedaChange = useCallback((q: string) => {
@@ -499,6 +887,8 @@ export function HerramientasPage() {
     setPjEditEstado(pj.estado);
     setPjEditMesCorte(pj.mes_corte ?? 'MARZO');
     setPjEditObs(pj.observaciones ?? '');
+    setPjEditFPapeles(toInputDate(pj.fecha_presentacion_papeles));
+    setPjEditFJubilacion(toInputDate(pj.fecha_jubilacion));
   }, []);
 
   const guardarPjEdit = useCallback(async (id: number) => {
@@ -506,7 +896,13 @@ export function HerramientasPage() {
     try {
       const res = await apiFetch<any>(`/jubilacion/posibles/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ estado: pjEditEstado, mes_corte: pjEditMesCorte, observaciones: pjEditObs }),
+        body: JSON.stringify({
+          estado:                     pjEditEstado,
+          mes_corte:                  pjEditMesCorte,
+          observaciones:              pjEditObs,
+          fecha_presentacion_papeles: pjEditFPapeles    || null,
+          fecha_jubilacion:           pjEditFJubilacion || null,
+        }),
       });
       if (res?.ok) {
         toast.ok('Registro actualizado');
@@ -518,7 +914,7 @@ export function HerramientasPage() {
     } catch (e: any) {
       toast.error('Error: ' + e?.message);
     } finally { setPjGuardando(false); }
-  }, [pjEditEstado, pjEditMesCorte, pjEditObs, cargarPosibles, toast]);
+  }, [pjEditEstado, pjEditMesCorte, pjEditObs, pjEditFPapeles, pjEditFJubilacion, cargarPosibles, toast]);
 
   const eliminarPosible = useCallback(async (id: number) => {
     if (!window.confirm('¿Eliminar este registro?')) return;
@@ -535,10 +931,197 @@ export function HerramientasPage() {
     }
   }, [cargarPosibles, toast]);
 
+  // ── Agenda de citas — helpers ─────────────────────────────────────────────
+  const ctEstadoLabel = (e: string) => {
+    const m: Record<string, string> = {
+      AGENDADA: 'Agendada', ATENDIDA: 'Atendida', AUSENTE: 'No asistió',
+      REPROGRAMADA: 'Reprogramada', CANCELADA: 'Cancelada',
+    };
+    return m[e] ?? e;
+  };
+  const ctEstadoStyle = (e: string): React.CSSProperties => {
+    const m: Record<string, React.CSSProperties> = {
+      AGENDADA:     S.tagBlue,
+      ATENDIDA:     S.tagGreen,
+      AUSENTE:      S.tagRed,
+      REPROGRAMADA: S.tagYellow,
+      CANCELADA:    S.tagGray,
+    };
+    return m[e] ?? S.tagGray;
+  };
+
+  const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const ctFechaTitulo = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt   = new Date(y, m - 1, d);
+    const base = `${DIAS_SEMANA[dt.getDay()]} ${d}/${m}/${y}`;
+    if (iso === TODAY_ISO) return `Hoy · ${base}`;
+    const manana = toISODate(new Date(Date.now() + 86400000));
+    if (iso === manana) return `Mañana · ${base}`;
+    return base;
+  };
+
+  const ctListaFiltrada = ctFiltro ? ctLista.filter((c: any) => c.estado === ctFiltro) : ctLista;
+
+  // Agrupar por día para el render de la agenda
+  const ctPorDia = useMemo(() => {
+    const grupos: { fecha: string; citas: any[] }[] = [];
+    for (const c of ctListaFiltrada) {
+      const g = grupos.find(x => x.fecha === c.fecha_cita);
+      if (g) g.citas.push(c);
+      else grupos.push({ fecha: c.fecha_cita, citas: [c] });
+    }
+    return grupos;
+  }, [ctListaFiltrada]);
+
+  // ── Agenda de citas — funciones ───────────────────────────────────────────
+  const onCtBusquedaChange = useCallback((q: string) => {
+    setCtBusqueda(q);
+    setCtAgente(null);
+    if (ctTimer.current) clearTimeout(ctTimer.current);
+    if (!q.trim()) { setCtSugerencias([]); return; }
+    ctTimer.current = setTimeout(async () => {
+      setCtBuscando(true);
+      try { setCtSugerencias((await searchPersonal(q.trim())).slice(0, 8)); }
+      finally { setCtBuscando(false); }
+    }, 250);
+  }, []);
+
+  const seleccionarCtAgente = useCallback((ag: any) => {
+    setCtSugerencias([]);
+    setCtBusqueda(`${ag.apellido}, ${ag.nombre}`);
+    setCtAgente(ag);
+  }, []);
+
+  const cargarCitas = useCallback(async () => {
+    setCtCargando(true);
+    try {
+      const params = new URLSearchParams();
+      if (ctRango === 'HOY') {
+        params.set('desde', TODAY_ISO);
+        params.set('hasta', TODAY_ISO);
+      } else if (ctRango === 'SEMANA') {
+        params.set('desde', TODAY_ISO);
+        params.set('hasta', toISODate(new Date(Date.now() + 7 * 86400000)));
+      } else if (ctRango === 'PROXIMAS') {
+        params.set('desde', TODAY_ISO);
+      }
+      const qs  = params.toString();
+      const res = await apiFetch<any>(`/jubilacion/citas${qs ? `?${qs}` : ''}`);
+      setCtLista(res?.data ?? []);
+    } catch (e: any) {
+      toast.error('Error cargando la agenda: ' + e?.message);
+    } finally { setCtCargando(false); }
+  }, [ctRango, toast]);
+
+  const agendarCita = useCallback(async () => {
+    if (!ctAgente) return;
+    if (!ctFecha || !ctHora) { toast.error('Indicá fecha y hora de la cita'); return; }
+    setCtGuardando(true);
+    try {
+      const res = await apiFetch<any>('/jubilacion/citas', {
+        method: 'POST',
+        body: JSON.stringify({
+          dni:        ctAgente.dni,
+          fecha_cita: ctFecha,
+          hora_cita:  ctHora,
+          motivo:     ctMotivo.trim() || null,
+        }),
+      });
+      if (res?.ok) {
+        toast.ok(`Cita agendada para ${ctAgente.apellido}, ${ctAgente.nombre}`);
+        setCtBusqueda('');
+        setCtAgente(null);
+        setCtMotivo('');
+        await cargarCitas();
+      } else {
+        toast.error(res?.error ?? 'Error al agendar');
+      }
+    } catch (e: any) {
+      toast.error('Error: ' + e?.message);
+    } finally { setCtGuardando(false); }
+  }, [ctAgente, ctFecha, ctHora, ctMotivo, cargarCitas, toast]);
+
+  const abrirCtEdit = useCallback((c: any) => {
+    setCtPromoverId(null);
+    setCtEditId(c.id);
+    setCtEditFecha(c.fecha_cita ?? '');
+    setCtEditHora(c.hora_cita ?? '');
+    setCtEditEstado(c.estado ?? 'AGENDADA');
+    setCtEditMotivo(c.motivo ?? '');
+    setCtEditObs(c.observaciones ?? '');
+  }, []);
+
+  const patchCita = useCallback(async (id: number, cambios: Record<string, any>, msg: string) => {
+    setCtGuardando(true);
+    try {
+      const res = await apiFetch<any>(`/jubilacion/citas/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(cambios),
+      });
+      if (res?.ok) {
+        toast.ok(msg);
+        setCtEditId(null);
+        await cargarCitas();
+      } else {
+        toast.error(res?.error ?? 'Error al actualizar');
+      }
+    } catch (e: any) {
+      toast.error('Error: ' + e?.message);
+    } finally { setCtGuardando(false); }
+  }, [cargarCitas, toast]);
+
+  const guardarCtEdit = useCallback((id: number) => patchCita(id, {
+    fecha_cita:    ctEditFecha,
+    hora_cita:     ctEditHora,
+    estado:        ctEditEstado,
+    motivo:        ctEditMotivo.trim() || null,
+    observaciones: ctEditObs.trim() || null,
+  }, 'Cita actualizada'), [patchCita, ctEditFecha, ctEditHora, ctEditEstado, ctEditMotivo, ctEditObs]);
+
+  const eliminarCita = useCallback(async (id: number) => {
+    if (!window.confirm('¿Eliminar esta cita?')) return;
+    try {
+      const res = await apiFetch<any>(`/jubilacion/citas/${id}`, { method: 'DELETE' });
+      if (res?.ok) {
+        toast.ok('Cita eliminada');
+        await cargarCitas();
+      } else {
+        toast.error(res?.error ?? 'Error al eliminar');
+      }
+    } catch (e: any) {
+      toast.error('Error: ' + e?.message);
+    }
+  }, [cargarCitas, toast]);
+
+  // Cierra la cita como atendida y da de alta al agente en Posibles Jubilados
+  const promoverCita = useCallback(async (id: number) => {
+    setCtGuardando(true);
+    try {
+      const res = await apiFetch<any>(`/jubilacion/citas/${id}/promover`, {
+        method: 'POST',
+        body: JSON.stringify({ mes_corte: ctPromMesCorte }),
+      });
+      if (res?.ok) {
+        toast.ok(res.ya_existia
+          ? 'El agente ya estaba en el registro: la cita quedó vinculada y marcada como atendida'
+          : 'Agente agregado a Posibles Jubilados y cita marcada como atendida');
+        setCtPromoverId(null);
+        await cargarCitas();
+        await cargarPosibles();
+      } else {
+        toast.error(res?.error ?? 'Error al agregar al registro');
+      }
+    } catch (e: any) {
+      toast.error('Error: ' + e?.message);
+    } finally { setCtGuardando(false); }
+  }, [ctPromMesCorte, cargarCitas, cargarPosibles, toast]);
+
   // Cargar lista al entrar al tab
   useEffect(() => {
     if (tab === 'posibles') cargarPosibles();
-  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (tab === 'citas')    cargarCitas();
+  }, [tab, ctRango]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -546,7 +1129,7 @@ export function HerramientasPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 0 40px' }}>
         {/* ─ Tab switcher ─ */}
         <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          {(['calculadora', 'posibles'] as const).map(t => (
+          {(['calculadora', 'citas', 'posibles'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '10px 22px', fontSize: '0.9rem', fontWeight: tab === t ? 700 : 400,
@@ -554,7 +1137,7 @@ export function HerramientasPage() {
               borderBottom: tab === t ? '2px solid #7c3aed' : '2px solid transparent',
               marginBottom: -1, transition: 'color 0.15s',
             }}>
-              {t === 'calculadora' ? '⚖️ Calculadora' : '📋 Posibles Jubilados'}
+              {t === 'calculadora' ? '⚖️ Calculadora' : t === 'citas' ? '🗓️ Agenda de citas' : '📋 Posibles Jubilados'}
             </button>
           ))}
         </div>
@@ -566,6 +1149,35 @@ export function HerramientasPage() {
             Leyes 10471 / 10430 · Decretos 598/2015, 58/2015, 1554/2022 · Prorrateo por tabla
           </p>
         </div>
+
+        {/* ─ Oferta de precarga del último cálculo guardado ─ */}
+        {ofertaCarga && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: 24, maxWidth: 460, width: '100%' }}>
+              <div style={{ fontSize: '1rem', fontWeight: 800, marginBottom: 10 }}>Este agente ya tiene un cálculo guardado</div>
+              <div style={{ fontSize: '0.84rem', color: '#94a3b8', lineHeight: 1.6, marginBottom: 18 }}>
+                Del <strong style={{ color: '#e2e8f0' }}>{fmtFecha(ofertaCarga.created_at)}</strong>
+                {ofertaCarga.creado_por_nombre ? <> · por <strong style={{ color: '#e2e8f0' }}>{ofertaCarga.creado_por_nombre}</strong></> : null}.
+                <br />¿Querés cargarlo?
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button style={{ ...S.btn, background: '#166534', color: '#86efac' }}
+                  onClick={() => aplicarCalculoGuardado(ofertaCarga)}>
+                  Sí, cargarlo
+                </button>
+                <button style={{ ...S.btn, background: '#1e293b', color: '#e2e8f0' }}
+                  onClick={() => { setOfertaCarga(null); setVerHistorial(true); }}>
+                  No, empezar de cero
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─ Historial visible sin resultado en pantalla (se eligió "empezar de cero") ─ */}
+        {agente && !resultado && historial.length > 0 && verHistorial && (
+          <HistorialCalculos historial={historial} onCargar={aplicarCalculoGuardado} />
+        )}
 
         {/* ─ 1. Buscar Agente ─ */}
         <div style={S.card}>
@@ -733,6 +1345,142 @@ export function HerramientasPage() {
                   onClick={agregarAnses}>+ Agregar línea ANSES</button>
               </div>
 
+              {/* Lectura automática del listado de ANSES */}
+              <div
+                onDragOver={e => { e.preventDefault(); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  const f = e.dataTransfer?.files?.[0];
+                  if (f) leerPdfArchivo(f);
+                }}
+                style={{ background: 'rgba(59,130,246,0.06)', border: '1px dashed rgba(147,197,253,0.35)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}
+              >
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#bfdbfe', fontWeight: 600 }}>
+                    Cargar desde el PDF de ANSES
+                  </span>
+                  <input
+                    ref={archivoRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) leerPdfArchivo(f);
+                      e.target.value = '';   // permite volver a elegir el mismo archivo
+                    }}
+                  />
+                  <button
+                    style={{ ...S.btn, background: '#1e40af', color: '#fff', padding: '6px 14px', fontSize: '0.78rem', opacity: pdfLeyendo ? 0.6 : 1 }}
+                    disabled={pdfLeyendo}
+                    onClick={() => archivoRef.current?.click()}
+                  >
+                    📄 Elegir PDF…
+                  </button>
+                  <span style={{ fontSize: '0.74rem', color: '#64748b' }}>o arrastralo acá</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                  <input
+                    style={{ ...S.input, flex: 1, fontSize: '0.78rem' }}
+                    placeholder="…o pegá la ruta del PDF en el servidor (ej: D:\G\DESPAPELIZACION\APELLIDO NOMBRE.pdf)"
+                    value={pdfRuta}
+                    disabled={pdfLeyendo}
+                    onChange={e => setPdfRuta(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') leerPdfRuta(); }}
+                  />
+                  <button
+                    style={{ ...S.btn, background: '#334155', color: '#e2e8f0', padding: '7px 14px', fontSize: '0.78rem', opacity: pdfLeyendo ? 0.6 : 1 }}
+                    disabled={pdfLeyendo}
+                    onClick={leerPdfRuta}
+                  >
+                    Leer del servidor
+                  </button>
+                </div>
+
+                {pdfLeyendo && (
+                  <div style={{ fontSize: '0.76rem', color: '#93c5fd', marginTop: 8 }}>
+                    Leyendo el PDF… si es un escaneo hay que pasarlo por OCR, puede tardar unos segundos.
+                  </div>
+                )}
+              </div>
+
+              {/* Panel de revisión: nada se carga hasta que el operador confirma */}
+              {revision && (
+                <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(147,197,253,0.25)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <div style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 700 }}>
+                      Renglones leídos {pdfOrigen && <span style={{ color: '#64748b', fontWeight: 400 }}>· {pdfOrigen}</span>}
+                    </div>
+                    <span style={revision.origen === 'ocr' ? S.tagYellow : S.tagGray}>
+                      {revision.origen === 'ocr' ? 'Leído por OCR — verificá las fechas' : 'Leído del texto del PDF'}
+                    </span>
+                  </div>
+
+                  {/* Sólo informativo: los servicios se cargan al agente abierto en pantalla. */}
+                  {(revision.nombre || revision.cuil || revision.dni) && (
+                    <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginBottom: 8 }}>
+                      Según el documento: {revision.nombre ?? 'sin nombre'}
+                      {revision.cuil ? ` · CUIL ${revision.cuil}` : revision.dni ? ` · DNI ${revision.dni}` : ''}
+                    </div>
+                  )}
+
+                  {revision.advertencias.map((a, i) => (
+                    <div key={i} style={{ fontSize: '0.75rem', color: '#fdba74', marginBottom: 4 }}>• {a}</div>
+                  ))}
+
+                  <div style={{ marginTop: 10 }}>
+                    {revision.lineas.map((l, i) => (
+                      <div key={i} style={{
+                        display: 'grid', gridTemplateColumns: '28px 1fr 150px 150px', gap: 8, alignItems: 'center',
+                        padding: '6px 0', borderTop: i ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                      }}>
+                        <input type="checkbox" checked={l.usar} style={S.chk}
+                          onChange={e => updateRevision(i, 'usar', e.target.checked)} />
+                        <div>
+                          <div style={{ fontSize: '0.82rem', color: '#e2e8f0' }}>
+                            {l.empresa ?? '(sin empresa)'}{' '}
+                            {l.tipo === 'AUTONOMO' && <span style={{ ...S.tagPurple, fontSize: '0.68rem' }}>autónomo</span>}
+                          </div>
+                          {!!l.motivos.length && (
+                            <div style={{ fontSize: '0.72rem', color: '#fdba74' }}>{l.motivos.join(' · ')}</div>
+                          )}
+                        </div>
+                        <input type="date" style={{ ...S.input, fontSize: '0.8rem' }} value={l.fecha_desde ?? ''}
+                          onChange={e => updateRevision(i, 'fecha_desde', e.target.value)} max={TODAY_ISO} />
+                        <input type="date" style={{ ...S.input, fontSize: '0.8rem' }} value={l.fecha_hasta ?? ''}
+                          onChange={e => updateRevision(i, 'fecha_hasta', e.target.value)} max={TODAY_ISO} />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Cada resolución arma la tabla distinto: si el parser no reconoció algún
+                      renglón, acá se ve lo que leyó para cargarlo a mano. */}
+                  {!!revision.texto_crudo && (
+                    <details style={{ marginTop: 10 }}>
+                      <summary style={{ cursor: 'pointer', fontSize: '0.74rem', color: '#64748b' }}>
+                        Ver el texto leído del documento
+                      </summary>
+                      <pre style={{
+                        marginTop: 6, maxHeight: 220, overflow: 'auto', background: '#0f172a',
+                        border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: 10,
+                        fontSize: '0.7rem', color: '#94a3b8', whiteSpace: 'pre-wrap',
+                      }}>{revision.texto_crudo}</pre>
+                    </details>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button style={{ ...S.btn, background: '#166534', color: '#dcfce7' }} onClick={confirmarRevision}>
+                      Agregar {revision.lineas.filter(l => l.usar && l.fecha_desde && l.fecha_hasta).length} línea/s
+                    </button>
+                    <button style={{ ...S.btn, background: '#334155', color: '#e2e8f0' }}
+                      onClick={() => { setRevision(null); setPdfOrigen(''); }}>
+                      Descartar
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {serviciosAnses.length === 0 && (
                 <p style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', padding: '8px 0' }}>
                   Sin servicios ANSES cargados
@@ -773,10 +1521,20 @@ export function HerramientasPage() {
 
               {serviciosExternos.map((ext, i) => (
                 <div key={i} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
-                  <div style={{ marginBottom: 8 }}>
-                    <label style={S.label}>Organismo / Municipio / Ministerio</label>
-                    <input style={S.input} placeholder="Nombre del organismo" value={ext.organismo}
-                      onChange={e => updateExterno(i, 'organismo', e.target.value)} />
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={S.label}>Organismo / Municipio / Ministerio</label>
+                      <input style={S.input} placeholder="Nombre del organismo" value={ext.organismo}
+                        onChange={e => updateExterno(i, 'organismo', e.target.value)} />
+                    </div>
+                    <div style={{ width: 210 }}>
+                      <label style={S.label}>Caja</label>
+                      <select style={S.input} value={ext.caja}
+                        onChange={e => updateExterno(i, 'caja', e.target.value as 'IPS' | 'EXTERNA')}>
+                        <option value="IPS">IPS (municipio / min. provincial)</option>
+                        <option value="EXTERNA">Externa (otra provincia / profesional)</option>
+                      </select>
+                    </div>
                   </div>
                   <FilaFecha
                     prefijo="ext" idx={i}
@@ -788,6 +1546,32 @@ export function HerramientasPage() {
                   />
                 </div>
               ))}
+            </div>
+
+            <CronogramaJubilacion />
+
+            {/* ─ Fecha de cálculo ─ */}
+            <div style={S.card}>
+              <div style={S.h3}>Fecha de cálculo</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: 12 }}>
+                Todo se mide a esta fecha: la edad, la antigüedad y el recorte de los servicios cargados.
+                Arranca en hoy; si la cambiás, el resultado se actualiza solo.
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input type="date" style={{ ...S.input, maxWidth: 190 }} value={fechaCalculo}
+                  onChange={e => setFechaCalculo(e.target.value)} />
+                <button
+                  style={{ ...S.btn, background: fechaCalculo === TODAY_ISO ? '#166534' : '#1e293b', color: fechaCalculo === TODAY_ISO ? '#86efac' : '#e2e8f0', padding: '6px 14px', fontSize: '0.8rem' }}
+                  onClick={() => setFechaCalculo(TODAY_ISO)}
+                >Hoy</button>
+                <span style={{ fontSize: '0.74rem', color: '#64748b' }}>Próximas bajas:</span>
+                {proximasBajas(TODAY_ISO).map(iso => (
+                  <button key={iso}
+                    style={{ ...S.btn, background: fechaCalculo === iso ? '#166534' : '#1e293b', color: fechaCalculo === iso ? '#86efac' : '#e2e8f0', padding: '6px 14px', fontSize: '0.8rem' }}
+                    onClick={() => setFechaCalculo(iso)}
+                  >{fmtFecha(iso)}</button>
+                ))}
+              </div>
             </div>
 
             {/* ─ Botón calcular ─ */}
@@ -805,9 +1589,12 @@ export function HerramientasPage() {
               // Construir ids para resolución de empates — mismo orden que backend
               const ansesValidos   = serviciosAnses.filter(s => s.fecha_desde && s.fecha_hasta);
               const externosValidos = serviciosExternos.filter(s => s.organismo.trim() && s.fecha_desde && s.fecha_hasta);
+              // Solo caja EXTERNA compite (mismo orden/índice que el backend arma EXT_i).
+              const externosReales = externosValidos.filter(s => s.caja === 'EXTERNA');
+              const externosIps    = externosValidos.filter(s => s.caja !== 'EXTERNA');
               const todosIds: { id: string; label: string }[] = [
                 ...ansesValidos.map((a, i) => ({ id: `ANSES_${i}`, label: `ANSES (${fmtFecha(a.fecha_desde)} → ${fmtFecha(a.fecha_hasta)})` })),
-                ...externosIds(externosValidos),
+                ...externosIds(externosReales),
               ];
               function externosIds(exts: ServicioExterno[]) {
                 return exts.map((e, i) => ({ id: `EXT_${i}`, label: e.organismo }));
@@ -825,18 +1612,18 @@ export function HerramientasPage() {
                         El servicio prorateado es igual en ambas cajas. Elegí cuál gana cada período superpuesto:
                       </div>
                       {empatesSinResolver.map((sp, i) => {
-                        // Extraer los dos ids del organismo "A ↔ B"
+                        // Los ids vienen del backend; si faltan (respuesta vieja),
+                        // se deducen del texto "A ↔ B".
                         const partes = sp.organismo.split(' ↔ ');
-                        const rawA = partes[0].trim();
-                        const rawB = partes[1]?.trim() ?? '';
-                        // Buscar id en todosIds por label, o usar 'IPS'
+                        const rawA = sp.label_a ?? partes[0].trim();
+                        const rawB = sp.label_b ?? (partes[1]?.trim() ?? '');
                         const findId = (label: string) => {
                           if (label === 'IPS') return 'IPS';
                           return todosIds.find(x => x.label === label)?.id ?? label;
                         };
-                        const idA = findId(rawA);
-                        const idB = findId(rawB);
-                        const key = `${idA}|${idB}`;
+                        const idA = sp.id_a ?? findId(rawA);
+                        const idB = sp.id_b ?? findId(rawB);
+                        const key = sp.key ?? `${idA}|${idB}`;
                         return (
                           <div key={i} style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 8 }}>
                             <div style={{ fontWeight: 700, color: '#fef08a', fontSize: '0.82rem', marginBottom: 6 }}>
@@ -857,6 +1644,14 @@ export function HerramientasPage() {
                         );
                       })}
                     </div>
+                  )}
+
+                  {/* Fecha a la que corresponde el resultado */}
+                  {R.fecha_calculo && !R.es_fecha_hoy && (
+                    <InfoBox color="#fdba74">
+                      <strong style={{ color: '#fdba74' }}>Cálculo al {fmtFecha(R.fecha_calculo)}</strong>{' '}
+                      <span style={{ color: '#94a3b8' }}>— no es la fecha de hoy. Los servicios posteriores a esa fecha quedaron recortados.</span>
+                    </InfoBox>
                   )}
 
                   {/* Veredicto */}
@@ -888,9 +1683,23 @@ export function HerramientasPage() {
                           <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏳</div>
                           <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fca5a5', marginBottom: 6 }}>AÚN NO REÚNE CONDICIONES</div>
                           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-                            {!R.cumple_servicio && <div style={S.tagRed}>Le faltan: {fmtPeriodo(R.falta_servicio)} de servicio</div>}
+                            {!R.cumple_servicio && (
+                              <div style={S.tagRed}>
+                                Le faltan: {fmtPeriodo(R.falta_servicio_comun ?? R.falta_servicio)} de servicio común
+                              </div>
+                            )}
                             {!R.cumple_edad     && <div style={S.tagRed}>Le faltan: {fmtPeriodo(R.falta_edad)} de edad</div>}
                           </div>
+                          {/* Lo mismo, pero si sigue prestando servicios insalubres: computan 1,4 a 1. */}
+                          {!R.cumple_servicio && R.falta_servicio_insalubre && (
+                            <div style={{ marginTop: 8, fontSize: '0.82rem', color: '#fdba74' }}>
+                              Trabajando como <strong>insalubre</strong> le faltan{' '}
+                              <strong>{fmtPeriodo(R.falta_servicio_insalubre)}</strong> de servicio
+                              <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: 2 }}>
+                                Son días de almanaque: un día insalubre computa más que uno común según la tabla de prorrateo.
+                              </div>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -966,6 +1775,13 @@ export function HerramientasPage() {
                             tipo: R.es_insalubre_efectivo ? 'Insalubre' : 'Mixto',
                             estado: 'Computa',
                           } : null,
+                          // IPS-extra (municipio / ministerio provincial → misma caja IPS)
+                          R.servicio_ips_extra && !isZero(R.servicio_ips_extra) ? {
+                            concepto: `IPS — Municipio / min. provincial (${externosIps.map(e => e.organismo).join(', ')})`,
+                            p: R.servicio_ips_extra,
+                            tipo: externosIps.some(e => e.es_insalubre) ? 'Insalubre' : 'Común',
+                            estado: 'Computa (unión IPS)',
+                          } : null,
                           // ANSES neto
                           !isZero(R.anses_neto) ? {
                             concepto: 'ANSES — total neto (sin superpuesto)',
@@ -973,8 +1789,8 @@ export function HerramientasPage() {
                             tipo: ansesValidos.some(a => a.es_insalubre) ? 'Mixto' : 'Común',
                             estado: 'Computa',
                           } : null,
-                          // Externos
-                          ...externosValidos.map(e => ({
+                          // Externos reales (otras cajas)
+                          ...externosReales.map(e => ({
                             concepto: e.organismo,
                             p: { anios: 0, meses: 0, dias: 0 } as Periodo,
                             tipo: e.es_insalubre ? 'Insalubre' : 'Común',
@@ -1054,6 +1870,35 @@ export function HerramientasPage() {
                     ))}
                   </div>
 
+                  {/* Desglose por caja */}
+                  {(R.desglose_cajas?.length ?? 0) > 0 && (
+                    <div style={{ ...S.card, marginBottom: 16 }}>
+                      <div style={S.h3}>Aportes por caja</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: 12 }}>
+                        Días que computan de cada caja, ya descontadas las superposiciones. Suman los totales de arriba.
+                        El prorrateo se aplica al insalubre total, no caja por caja, por eso acá va en crudo.
+                      </div>
+                      <div style={S.grid3}>
+                        {R.desglose_cajas!.map(d => (
+                          <div key={d.caja} style={{ ...S.card, borderColor: '#33415566', marginBottom: 0 }}>
+                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                              {d.label}
+                            </div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#e2e8f0', marginBottom: 8 }}>
+                              {fmtPeriodo(d.total)}
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#fb923c' }}>
+                              Insalubre: <strong>{fmtPeriodo(d.insalubre)}</strong>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#60a5fa' }}>
+                              Común: <strong>{fmtPeriodo(d.comun)}</strong>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Alertas */}
                   {(R.cargo_deudor_2pct || R.sin_aportes) && (
                     <div style={S.card}>
@@ -1086,6 +1931,16 @@ export function HerramientasPage() {
                       value={observaciones}
                       onChange={e => setObservaciones(e.target.value)}
                     />
+                    {cargadoDe && (
+                      <div style={{ marginTop: 12, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 8, padding: '10px 14px', fontSize: '0.8rem', color: '#c7d2fe' }}>
+                        Estás viendo el cálculo guardado del <strong>{fmtFecha(cargadoDe.fecha)}</strong>
+                        {cargadoDe.por ? <> por <strong>{cargadoDe.por}</strong></> : null}.
+                        <button style={{ ...S.btn, background: '#312e81', color: '#c4b5fd', padding: '5px 12px', fontSize: '0.78rem', marginLeft: 10 }}
+                          onClick={recalcularCargado} disabled={calculando}>
+                          {calculando ? '⏳ Recalculando...' : '🔄 Recalcular con datos actuales'}
+                        </button>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
                       <button style={{ ...S.btn, background: guardando ? '#374151' : '#166534', color: '#86efac' }}
                         onClick={guardar} disabled={guardando || R.hay_empates}>
@@ -1110,41 +1965,9 @@ export function HerramientasPage() {
 
                   {/* Historial */}
                   {verHistorial && historial.length > 0 && (
-                    <div style={S.card}>
-                      <div style={S.h3}>Historial de cálculos guardados</div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.79rem' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                            {['Fecha', 'Situación', 'Insalubre', 'Tipo jubilación', 'Total prorateado', 'Cargo deudor', 'Guardado por'].map(h => (
-                              <th key={h} style={{ textAlign: 'left', padding: '5px 8px', color: '#64748b', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {historial.map((h: any) => {
-                            const r: Resultado | null = h.resultado
-                              ? (typeof h.resultado === 'string' ? JSON.parse(h.resultado) : h.resultado)
-                              : null;
-                            return (
-                              <tr key={h.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                <td style={{ padding: '6px 8px' }}>{fmtFecha(h.created_at)}</td>
-                                <td style={{ padding: '6px 8px' }}>{h.situacion_revista}</td>
-                                <td style={{ padding: '6px 8px' }}>{h.es_insalubre_ips ? <span style={S.tagOrange}>Sí</span> : <span style={{ color: '#64748b' }}>No</span>}</td>
-                                <td style={{ padding: '6px 8px' }}>
-                                  {r?.tipo_jubilacion
-                                    ? <span style={S.tagGreen}>{r.tipo_jubilacion}</span>
-                                    : <span style={S.tagRed}>No cumple</span>}
-                                </td>
-                                <td style={{ padding: '6px 8px' }}>{r ? fmtPeriodo(r.total_prorateado) : '—'}</td>
-                                <td style={{ padding: '6px 8px' }}>{r?.cargo_deudor_2pct ? <span style={S.tagOrange}>Sí</span> : <span style={{ color: '#64748b' }}>No</span>}</td>
-                                <td style={{ padding: '6px 8px', color: '#94a3b8' }}>{h.creado_por_nombre ?? '—'}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                    <HistorialCalculos historial={historial} onCargar={aplicarCalculoGuardado} />
                   )}
+
                 </>
               );
             })()}
@@ -1157,6 +1980,287 @@ export function HerramientasPage() {
           </div>
         )}
         </>)}
+
+        {/* ─ Tab: Agenda de citas ─ */}
+        {tab === 'citas' && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: 4 }}>🗓️ Agenda de citas</h1>
+              <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0 }}>
+                Citas con agentes candidatos a jubilación. Después de la cita se los puede agregar al registro de Posibles Jubilados
+              </p>
+            </div>
+
+            {/* Agendar */}
+            <div style={S.card}>
+              <div style={S.h3}>Agendar cita</div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  aria-label="Buscar agente por apellido, nombre o DNI"
+                  style={S.input}
+                  placeholder="Apellido, nombre o DNI..."
+                  value={ctBusqueda}
+                  onChange={e => onCtBusquedaChange(e.target.value)}
+                />
+                {ctBuscando && (
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '0.75rem' }}>Buscando...</span>
+                )}
+                {ctSugerencias.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, zIndex: 100, maxHeight: 260, overflowY: 'auto' }}>
+                    {ctSugerencias.map((s, i) => (
+                      <div key={i} onClick={() => seleccionarCtAgente(s)}
+                        style={{ padding: '9px 14px', cursor: 'pointer', fontSize: '0.84rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.07)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <strong>{s.apellido}, {s.nombre}</strong>
+                        <span style={{ color: '#64748b', marginLeft: 10, fontSize: '0.75rem' }}>DNI {s.dni} · {s.ley_nombre ?? '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {ctAgente && (
+                <div style={{ marginTop: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '12px 14px' }}>
+                  <div style={{ marginBottom: 10 }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{ctAgente.apellido}, {ctAgente.nombre}</span>
+                    <span style={{ color: '#64748b', marginLeft: 10, fontSize: '0.78rem' }}>DNI {ctAgente.dni} · {ctAgente.ley_nombre ?? '—'}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '150px 110px 1fr auto', gap: 12, alignItems: 'end' }}>
+                    <div>
+                      <label style={S.label}>Fecha</label>
+                      <input type="date" style={S.input} value={ctFecha} onChange={e => setCtFecha(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={S.label}>Hora</label>
+                      <input type="time" style={S.input} value={ctHora} onChange={e => setCtHora(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={S.label}>Motivo (opcional)</label>
+                      <input style={S.input} value={ctMotivo} onChange={e => setCtMotivo(e.target.value)}
+                        placeholder="Ej: entrevista inicial, entrega de documentación..." />
+                    </div>
+                    <button
+                      style={{ ...S.btn, background: ctGuardando ? '#374151' : '#166534', color: '#86efac', padding: '8px 18px' }}
+                      onClick={agendarCita}
+                      disabled={ctGuardando}
+                    >
+                      {ctGuardando ? '⏳ Guardando...' : '🗓️ Agendar cita'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Agenda */}
+            <div style={S.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={S.h3}>Agenda</div>
+                <button onClick={cargarCitas} style={{ ...S.btn, background: 'rgba(255,255,255,0.06)', color: '#94a3b8', padding: '5px 12px', fontSize: '0.76rem' }}>
+                  🔄 Actualizar
+                </button>
+              </div>
+
+              {/* Rango de fechas */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                {([['HOY', 'Hoy'], ['SEMANA', 'Próximos 7 días'], ['PROXIMAS', 'Próximas'], ['TODAS', 'Todas']] as const).map(([v, lbl]) => (
+                  <button key={v} onClick={() => setCtRango(v)}
+                    style={{ ...S.btn, padding: '5px 12px', fontSize: '0.76rem',
+                      background: ctRango === v ? '#1e3a8a' : 'rgba(255,255,255,0.05)',
+                      color:      ctRango === v ? '#bfdbfe' : '#94a3b8',
+                      border:     ctRango === v ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.08)',
+                    }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {/* Filtros por estado */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+                {(['', 'AGENDADA', 'ATENDIDA', 'AUSENTE', 'REPROGRAMADA', 'CANCELADA'] as const).map(e => (
+                  <button key={e || 'all'} onClick={() => setCtFiltro(e)}
+                    style={{ ...S.btn, padding: '5px 12px', fontSize: '0.76rem',
+                      background: ctFiltro === e ? '#4c1d95' : 'rgba(255,255,255,0.05)',
+                      color:      ctFiltro === e ? '#c4b5fd' : '#94a3b8',
+                      border:     ctFiltro === e ? '1px solid #7c3aed' : '1px solid rgba(255,255,255,0.08)',
+                    }}>
+                    {e === '' ? 'Todos' : ctEstadoLabel(e)}
+                    {e === '' && ctLista.length > 0 && <span style={{ marginLeft: 6, background: 'rgba(255,255,255,0.12)', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem' }}>{ctLista.length}</span>}
+                    {e !== '' && ctLista.filter((c: any) => c.estado === e).length > 0 && (
+                      <span style={{ marginLeft: 6, background: 'rgba(255,255,255,0.12)', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem' }}>{ctLista.filter((c: any) => c.estado === e).length}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {ctCargando ? (
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '40px 0', fontSize: '0.85rem' }}>Cargando...</div>
+              ) : ctPorDia.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#475569', padding: '40px 0', fontSize: '0.85rem' }}>
+                  {ctFiltro ? `Sin citas con estado "${ctEstadoLabel(ctFiltro)}"` : 'No hay citas en este período'}
+                </div>
+              ) : (
+                <div>
+                  {ctPorDia.map(grupo => (
+                    <div key={grupo.fecha} style={{ marginBottom: 18 }}>
+                      <div style={{
+                        fontSize: '0.76rem', fontWeight: 700, color: grupo.fecha === TODAY_ISO ? '#c4b5fd' : '#94a3b8',
+                        textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: 8,
+                        borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 5,
+                      }}>
+                        {ctFechaTitulo(grupo.fecha)}
+                        <span style={{ marginLeft: 8, color: '#475569', fontWeight: 400 }}>
+                          {grupo.citas.length} cita{grupo.citas.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      {grupo.citas.map((c: any) => (
+                        <div key={c.id} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '12px 16px', marginBottom: 8, border: '1px solid rgba(255,255,255,0.07)' }}>
+                          {ctEditId === c.id ? (
+                            /* Modo edición / reprogramar */
+                            <div>
+                              <div style={{ fontWeight: 700, marginBottom: 10, fontSize: '0.88rem' }}>
+                                {c.apellido}, {c.nombre}
+                                <span style={{ color: '#64748b', fontWeight: 400, marginLeft: 10, fontSize: '0.76rem' }}>DNI {c.dni}</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '150px 110px 1fr', gap: 12, marginBottom: 10 }}>
+                                <div>
+                                  <label style={S.label}>Fecha</label>
+                                  <input type="date" style={S.input} value={ctEditFecha} onChange={e => setCtEditFecha(e.target.value)} />
+                                </div>
+                                <div>
+                                  <label style={S.label}>Hora</label>
+                                  <input type="time" style={S.input} value={ctEditHora} onChange={e => setCtEditHora(e.target.value)} />
+                                </div>
+                                <div>
+                                  <label style={S.label}>Estado</label>
+                                  <select style={S.select} value={ctEditEstado} onChange={e => setCtEditEstado(e.target.value)}>
+                                    <option value="AGENDADA">Agendada</option>
+                                    <option value="ATENDIDA">Atendida</option>
+                                    <option value="AUSENTE">No asistió</option>
+                                    <option value="REPROGRAMADA">Reprogramada</option>
+                                    <option value="CANCELADA">Cancelada</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div style={{ marginBottom: 10 }}>
+                                <label style={S.label}>Motivo</label>
+                                <input style={S.input} value={ctEditMotivo} onChange={e => setCtEditMotivo(e.target.value)}
+                                  placeholder="Motivo de la cita..." />
+                              </div>
+                              <div style={{ marginBottom: 10 }}>
+                                <label style={S.label}>Observaciones</label>
+                                <textarea style={{ ...S.input, minHeight: 64, resize: 'vertical' as const }}
+                                  value={ctEditObs} onChange={e => setCtEditObs(e.target.value)}
+                                  placeholder="Qué se habló en la cita, documentación pendiente..." />
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button style={{ ...S.btn, background: ctGuardando ? '#374151' : '#166534', color: '#86efac' }}
+                                  onClick={() => guardarCtEdit(c.id)} disabled={ctGuardando}>
+                                  {ctGuardando ? '⏳' : '💾 Guardar'}
+                                </button>
+                                <button style={{ ...S.btn, background: 'rgba(255,255,255,0.07)', color: '#94a3b8' }}
+                                  onClick={() => setCtEditId(null)}>Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* Modo vista */
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                <div style={{
+                                  fontSize: '1rem', fontWeight: 800, color: '#e2e8f0', minWidth: 52,
+                                  background: 'rgba(124,58,237,0.18)', borderRadius: 8, padding: '8px 6px', textAlign: 'center' as const,
+                                }}>
+                                  {c.hora_cita}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
+                                    {c.apellido}, {c.nombre}
+                                    <span style={{ color: '#64748b', fontWeight: 400, marginLeft: 10, fontSize: '0.75rem' }}>DNI {c.dni}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 3 }}>
+                                    <span style={ctEstadoStyle(c.estado)}>{ctEstadoLabel(c.estado)}</span>
+                                    {c.registro_id && <span style={S.tagGreen}>✓ En el registro</span>}
+                                    {c.motivo     && <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>{c.motivo}</span>}
+                                    {c.ley_nombre && <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{c.ley_nombre}</span>}
+                                  </div>
+                                  {c.observaciones && (
+                                    <div style={{ fontSize: '0.74rem', color: '#94a3b8', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      "{c.observaciones}"
+                                    </div>
+                                  )}
+                                  <div style={{ fontSize: '0.7rem', color: '#475569', marginTop: 2 }}>
+                                    Agendada: {fmtFecha(c.created_at)}
+                                    {c.creado_por_nombre && ` · por ${c.creado_por_nombre}`}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                  {c.estado !== 'ATENDIDA' && (
+                                    <button onClick={() => patchCita(c.id, { estado: 'ATENDIDA' }, 'Cita marcada como atendida')}
+                                      disabled={ctGuardando}
+                                      style={{ ...S.btn, background: '#14532d', color: '#86efac', padding: '5px 10px', fontSize: '0.76rem' }}>
+                                      ✅ Atendida
+                                    </button>
+                                  )}
+                                  {c.estado !== 'AUSENTE' && c.estado !== 'ATENDIDA' && (
+                                    <button onClick={() => patchCita(c.id, { estado: 'AUSENTE' }, 'Cita marcada como no asistió')}
+                                      disabled={ctGuardando}
+                                      style={{ ...S.btn, background: '#450a0a', color: '#fca5a5', padding: '5px 10px', fontSize: '0.76rem' }}>
+                                      🚫 No asistió
+                                    </button>
+                                  )}
+                                  {!c.registro_id && (
+                                    <button onClick={() => { setCtEditId(null); setCtPromoverId(ctPromoverId === c.id ? null : c.id); }}
+                                      style={{ ...S.btn, background: '#4c1d95', color: '#ddd6fe', padding: '5px 10px', fontSize: '0.76rem' }}>
+                                      ➕ A Posibles Jubilados
+                                    </button>
+                                  )}
+                                  <button onClick={() => abrirCtEdit(c)}
+                                    style={{ ...S.btn, background: 'rgba(255,255,255,0.07)', color: '#94a3b8', padding: '5px 12px', fontSize: '0.76rem' }}>
+                                    ✏️ Editar
+                                  </button>
+                                  <button onClick={() => eliminarCita(c.id)}
+                                    style={{ ...S.btn, background: '#450a0a', color: '#fca5a5', padding: '5px 10px', fontSize: '0.76rem' }}>
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+
+                              {ctPromoverId === c.id && (
+                                <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 12, display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
+                                  <div style={{ width: 170 }}>
+                                    <label style={S.label}>Fecha (mes de corte)</label>
+                                    <select style={S.select} value={ctPromMesCorte} onChange={e => setCtPromMesCorte(e.target.value)}>
+                                      <option value="MARZO">Marzo</option>
+                                      <option value="JUNIO">Junio</option>
+                                      <option value="SEPTIEMBRE">Septiembre</option>
+                                      <option value="DICIEMBRE">Diciembre</option>
+                                    </select>
+                                  </div>
+                                  <button style={{ ...S.btn, background: ctGuardando ? '#374151' : '#166534', color: '#86efac' }}
+                                    onClick={() => promoverCita(c.id)} disabled={ctGuardando}>
+                                    {ctGuardando ? '⏳ Agregando...' : '➕ Agregar al registro'}
+                                  </button>
+                                  <button style={{ ...S.btn, background: 'rgba(255,255,255,0.07)', color: '#94a3b8' }}
+                                    onClick={() => setCtPromoverId(null)}>Cancelar</button>
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                    Se agrega el agente a Posibles Jubilados y la cita queda marcada como atendida.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <CronogramaJubilacion />
+          </div>
+        )}
 
         {/* ─ Tab: Posibles Jubilados ─ */}
         {tab === 'posibles' && (
@@ -1248,13 +2352,25 @@ export function HerramientasPage() {
                     )}
                   </button>
                 ))}
+
+                {/* Vencimientos del trámite: papeles o jubilación dentro de 60 días (o ya vencidos) */}
+                <button onClick={() => setPjSoloProximos(v => !v)}
+                  style={{ ...S.btn, padding: '5px 12px', fontSize: '0.76rem', marginLeft: 8,
+                    background: pjSoloProximos ? '#7f1d1d' : 'rgba(255,255,255,0.05)',
+                    color:      pjSoloProximos ? '#fecaca' : '#94a3b8',
+                    border:     pjSoloProximos ? '1px solid #dc2626' : '1px solid rgba(255,255,255,0.08)',
+                  }}>
+                  ⏰ Fechas próximas
+                </button>
               </div>
 
               {pjCargando ? (
                 <div style={{ textAlign: 'center', color: '#64748b', padding: '40px 0', fontSize: '0.85rem' }}>Cargando...</div>
               ) : pjListaFiltrada.length === 0 ? (
                 <div style={{ textAlign: 'center', color: '#475569', padding: '40px 0', fontSize: '0.85rem' }}>
-                  {pjFiltro ? `Sin registros con estado "${pjEstadoLabel(pjFiltro)}"` : 'No hay posibles jubilados registrados'}
+                  {pjSoloProximos
+                    ? 'Sin fechas de papeles o jubilación en los próximos 60 días'
+                    : pjFiltro ? `Sin registros con estado "${pjEstadoLabel(pjFiltro)}"` : 'No hay posibles jubilados registrados'}
                 </div>
               ) : (
                 <div>
@@ -1295,6 +2411,23 @@ export function HerramientasPage() {
                                 onClick={() => setPjEditId(null)}>Cancelar</button>
                             </div>
                           </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 10 }}>
+                            <div>
+                              <label style={S.label}>Presentación de papeles</label>
+                              <input type="date" style={S.input} value={pjEditFPapeles}
+                                onChange={e => setPjEditFPapeles(e.target.value)} />
+                            </div>
+                            <div>
+                              <label style={S.label}>Fecha de jubilación</label>
+                              <input type="date" style={S.input} value={pjEditFJubilacion}
+                                onChange={e => setPjEditFJubilacion(e.target.value)} />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                              <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
+                                Cada fecha cargada avisa en el legajo del agente y el aviso queda hasta que la fecha pase.
+                              </span>
+                            </div>
+                          </div>
                           <div>
                             <label style={S.label}>Observaciones</label>
                             <textarea style={{ ...S.input, minHeight: 64, resize: 'vertical' as const }}
@@ -1317,6 +2450,20 @@ export function HerramientasPage() {
                               {pj.tipo_jubilacion && <span style={{ fontSize: '0.74rem', color: '#a78bfa' }}>{pj.tipo_jubilacion}</span>}
                               {pj.es_insalubre    && <span style={S.tagOrange}>Insalubre</span>}
                             </div>
+                            {(pj.fecha_presentacion_papeles || pj.fecha_jubilacion) && (
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 3 }}>
+                                {pj.fecha_presentacion_papeles && (
+                                  <span style={fechaChipStyle(pj.fecha_presentacion_papeles, pj.estado)}>
+                                    📄 Papeles: {fmtFecha(pj.fecha_presentacion_papeles)}{sufijoDias(diasHasta(pj.fecha_presentacion_papeles))}
+                                  </span>
+                                )}
+                                {pj.fecha_jubilacion && (
+                                  <span style={fechaChipStyle(pj.fecha_jubilacion, pj.estado)}>
+                                    🏁 Jubilación: {fmtFecha(pj.fecha_jubilacion)}{sufijoDias(diasHasta(pj.fecha_jubilacion))}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                             {pj.observaciones && (
                               <div style={{ fontSize: '0.74rem', color: '#94a3b8', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 "{pj.observaciones}"
@@ -1344,6 +2491,7 @@ export function HerramientasPage() {
                 </div>
               )}
             </div>
+            <CronogramaJubilacion />
           </div>
         )}
       </div>

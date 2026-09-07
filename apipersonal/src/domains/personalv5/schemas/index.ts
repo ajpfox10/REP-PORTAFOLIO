@@ -66,7 +66,6 @@ export const altaAgenteSchema = z.object({
   regimen_horario_id: z.number().int().optional(),
   jefatura_id:        z.number().int().optional(),
   sector_id:          z.number().int().optional(),
-  dependencia_id:     z.number().int().optional(),
   fecha_ingreso:      z.string().optional(),
   fecha_egreso:       z.string().optional(),
   estado:             z.enum(['ACTIVO', 'INACTIVO', 'LICENCIA']).default('ACTIVO'),

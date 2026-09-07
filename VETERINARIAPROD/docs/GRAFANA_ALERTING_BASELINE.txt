@@ -1,0 +1,163 @@
+GRAFANA / PROMETHEUS BASELINE
+
+Objetivo
+- convertir las metricas nuevas del backend en dashboards y alertas operativas utiles
+- cubrir dependencias criticas: `internal_auth`, `auth_revocation`, `usage_limits`, `event_bus`, `service_registry`
+
+1. Dashboard recomendado: "Backend SaaS Overview"
+
+Panel 1. Request rate por servicio
+- tipo: time series
+- query:
+  sum by (service) (rate(http_requests_total[5m]))
+
+Panel 2. Error rate 5xx por servicio
+- tipo: time series
+- query:
+  sum by (service) (rate(http_requests_total{status_code=~"5.."}[5m]))
+
+Panel 3. Latencia p95 por servicio
+- tipo: time series
+- query:
+  histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))
+
+Panel 4. Requests activos por servicio
+- tipo: time series
+- query:
+  http_active_requests
+
+Panel 5. Degradaciones por dependencia
+- tipo: time series
+- query:
+  sum by (dependency, mode, outcome, service) (rate(dependency_degradations_total[5m]))
+
+Panel 6. Event bus publish/consume
+- tipo: time series
+- query A:
+  sum by (topic, direction, result) (rate(event_bus_messages_total[5m]))
+
+Panel 7. Service registry health
+- tipo: time series
+- query:
+  sum by (operation, result) (rate(service_registry_operations_total[5m]))
+
+Panel 8. RBAC denials
+- tipo: time series
+- query:
+  sum by (permission, service) (rate(rbac_denials_total[5m]))
+
+2. Dashboard recomendado: "Security / Tenant"
+
+Panel 1. Auth failures
+- query:
+  sum by (result) (rate(auth_attempts_total[5m]))
+
+Panel 2. Revocation degradation
+- query:
+  sum(rate(dependency_degradations_total{dependency="auth_revocation"}[5m]))
+
+Panel 3. Internal auth degradation
+- query:
+  sum(rate(dependency_degradations_total{dependency="internal_auth"}[5m]))
+
+Panel 4. Quota backend degradation
+- query:
+  sum by (service, outcome) (rate(dependency_degradations_total{dependency="usage_limits"}[5m]))
+
+3. Alertas criticas
+
+Alerta: Internal auth degradada
+- severidad: critical
+- query:
+  sum(rate(dependency_degradations_total{dependency="internal_auth",outcome=~"blocked|degraded"}[5m])) > 0
+- for: 5m
+- mensaje:
+  "Internal auth degradada o bloqueando requests. Verificar INTERNAL_SECRET / INTERNAL_AUTH_MODE."
+
+Alerta: Revocation backend bloqueando
+- severidad: critical
+- query:
+  sum(rate(dependency_degradations_total{dependency="auth_revocation",outcome="blocked"}[5m])) > 0
+- for: 5m
+- mensaje:
+  "Revocation backend no disponible en modo strict. Revisar Redis y gateway auth."
+
+Alerta: Usage limits criticos caidos
+- severidad: high
+- query:
+  sum(rate(dependency_degradations_total{dependency="usage_limits",outcome="blocked"}[5m])) > 0
+- for: 5m
+- mensaje:
+  "Features pagas/costosas estan siendo bloqueadas por falla de usage limits."
+
+Alerta: Event bus DLQ creciendo
+- severidad: high
+- query:
+  sum(rate(event_bus_messages_total{direction="consume",result="dlq"}[5m])) > 0
+- for: 10m
+- mensaje:
+  "Mensajes estan entrando a DLQ. Revisar consumers y EVENT_BUS_DLQ_STREAM."
+
+Alerta: Event bus consume failures
+- severidad: high
+- query:
+  sum(rate(event_bus_messages_total{direction="consume",result="failure"}[5m])) > 0
+- for: 10m
+- mensaje:
+  "Consumers del event bus estan fallando."
+
+Alerta: Service registry failures
+- severidad: medium
+- query:
+  sum(rate(service_registry_operations_total{result="failure"}[5m])) > 0
+- for: 10m
+- mensaje:
+  "Service registry con fallos. Verificar Redis o discovery runtime."
+
+Alerta: 5xx sostenido por servicio
+- severidad: critical
+- query:
+  sum by (service) (rate(http_requests_total{status_code=~"5.."}[5m])) > 0.05
+- for: 10m
+- mensaje:
+  "Servicio con tasa sostenida de 5xx superior al umbral."
+
+Alerta: Latencia p95 alta
+- severidad: high
+- query:
+  histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m]))) > 0.5
+- for: 10m
+- mensaje:
+  "Latencia p95 superior a 500ms en servicio core."
+
+4. Umbrales sugeridos
+- gateway p95: 300 ms
+- servicios core p95: 500 ms
+- 5xx rate aceptable: < 1%
+- cualquier `blocked` en `internal_auth` o `auth_revocation`: incidente
+- cualquier `dlq` sostenido en event bus: incidente
+
+5. Variables / labels a usar en Grafana
+- service
+- dependency
+- mode
+- outcome
+- topic
+- direction
+- result
+- permission
+
+6. Orden recomendado de implementacion en Grafana
+1. dashboard overview
+2. alertas criticas de dependency_degradations_total
+3. alertas de event bus / registry
+4. dashboard security / tenant
+
+7. Relacion con el repo
+- metricas HTTP: `shared/metrics.js`
+- degradaciones: `shared/dependencyPolicy.js`
+- auth interna: `shared/internalAuth.js`
+- revocacion JWT: `gateway/src/middleware/auth.js`
+- usage limits: `shared/usageLimits.js`
+- event bus: `shared/eventBus.js`
+- registry: `shared/serviceRegistry.js`

@@ -108,17 +108,23 @@ r.get("/files/:key(*)", async (req, res) => {
   const isPage = !!(pageRows as any[])[0]
   if (!doc && !isPage) throw new ApiError(403, "access_denied")
 
-  try {
-    const buf = await storage().get(key)
-    const ct  = doc?.mime_type || "application/octet-stream"
-    const filename = doc?.title ? encodeURIComponent(doc.title) : "document"
-    res.setHeader("content-type", ct)
-    res.setHeader("content-disposition", `inline; filename="${filename}"`)
-    res.setHeader("content-length", buf.length)
-    res.send(buf)
-  } catch {
-    throw new ApiError(404, "file_not_found")
-  }
+  const ct  = doc?.mime_type || "application/octet-stream"
+  const filename = doc?.title ? encodeURIComponent(doc.title) : "document"
+  res.setHeader("content-type", ct)
+  res.setHeader("content-disposition", `inline; filename="${filename}"`)
+
+  // Stream en chunks (no bufferea el archivo entero ni bloquea un hilo del
+  // threadpool con un readFile grande). El 'error' (ej. ENOENT) se maneja acá.
+  const stream = storage().getStream(key)
+  stream.on("error", (err: any) => {
+    if (!res.headersSent) {
+      res.status(err?.code === "ENOENT" ? 404 : 500)
+         .json({ error: err?.code === "ENOENT" ? "file_not_found" : "file_read_error" })
+    } else {
+      res.destroy(err)
+    }
+  })
+  stream.pipe(res)
 })
 
 // ── PATCH /v1/documents/:id — actualizar título / ref ─────────────────────────

@@ -1,0 +1,38 @@
+module.exports = {
+  apps: [
+    {
+      name: 'cobertura-backend-dev',
+      cwd: 'C:/apps/cobertura-salud/backend',
+      script: 'dotnet',
+      args: 'run --no-build',
+      env: {
+        ASPNETCORE_ENVIRONMENT: 'Development'
+      },
+      watch: false,
+      autorestart: true
+    },
+    {
+      name: 'cobertura-frontend-dev',
+      cwd: 'C:/apps/cobertura-salud/frontend',
+      script: 'node_modules/vite/bin/vite.js',
+      args: '--host 0.0.0.0 --port 4610',
+      interpreter: 'node',
+      env: {
+        NODE_ENV: 'development'
+      },
+      watch: false,
+      autorestart: true
+    },
+    {
+      name: 'cobertura-salud',
+      cwd: 'C:/apps/cobertura-salud/backend',
+      script: 'dotnet',
+      args: 'run --no-build --no-launch-profile',
+      env: {
+        ASPNETCORE_ENVIRONMENT: 'Production'
+      },
+      watch: false,
+      autorestart: true
+    }
+  ]
+};

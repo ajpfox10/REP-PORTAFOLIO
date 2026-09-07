@@ -138,6 +138,7 @@ export function GuarderiaAlertaBanner() {
   const [embarazadasSinGuarderia, setEmbarazadasSinGuarderia] = useState<EmbarazadaPendiente[]>([]);
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [showAllEmb, setShowAllEmb] = useState(false);
   const logged = useRef(false);
 
   useEffect(() => {
@@ -165,10 +166,19 @@ export function GuarderiaAlertaBanner() {
         const enriched = rows.map(r => ({ ...r, ...nameMap.get(String(r.dni).replace(/\D/g, '')) }));
         const enAl = enriched.filter(r => enAlerta(r));
         const dniConGuarderia = new Set(rows.map(r => String(r.dni).replace(/\D/g, '')));
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const diasDesdeFpp = (fpp?: string | null): number | null => {
+          if (!fpp) return null;
+          const [y, m, d] = fpp.slice(0, 10).split('-').map(Number);
+          if (!y || !m || !d) return null;
+          return Math.round((hoy.getTime() - new Date(y, m - 1, d).getTime()) / (1000 * 60 * 60 * 24));
+        };
         const pendientes = embarazadas
           .filter(r => {
             const dni = String(r.dni).replace(/\D/g, '');
             if (!dni || dniConGuarderia.has(dni)) return false;
+            const dias = diasDesdeFpp(r.fecha_probable_parto);
+            if (dias === null || dias < 90) return false; // solo si ya pasaron 90 días de la FPP
             const p = nameMap.get(dni);
             return esNombrada(p?.ley_nombre);
           })
@@ -224,7 +234,7 @@ export function GuarderiaAlertaBanner() {
               {embarazadasSinGuarderia.length} embarazada{embarazadasSinGuarderia.length > 1 ? 's' : ''} nombrada{embarazadasSinGuarderia.length > 1 ? 's' : ''} sin registro de guardería
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: alertas.length ? 8 : 0 }}>
-              {embarazadasSinGuarderia.slice(0, 8).map(a => (
+              {(showAllEmb ? embarazadasSinGuarderia : embarazadasSinGuarderia.slice(0, 8)).map(a => (
                 <div key={`emb-${a.id}`} style={{ fontSize: '0.85rem', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontWeight: 600 }}>{a.apellido ? `${a.apellido}, ${a.nombre}` : `DNI ${a.dni}`}</span>
                   <span className="muted">·</span>
@@ -233,9 +243,14 @@ export function GuarderiaAlertaBanner() {
                 </div>
               ))}
               {embarazadasSinGuarderia.length > 8 && (
-                <div className="muted" style={{ fontSize: '0.78rem' }}>
-                  y {embarazadasSinGuarderia.length - 8} más...
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAllEmb(v => !v)}
+                  className="muted"
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontSize: '0.78rem', textDecoration: 'underline', color: '#c4b5fd', width: 'fit-content' }}
+                >
+                  {showAllEmb ? 'ver menos' : `y ${embarazadasSinGuarderia.length - 8} más...`}
+                </button>
               )}
             </div>
           </>
@@ -286,6 +301,7 @@ export function GuarderiaPage() {
   const [tramiteId, setTramiteId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<GuarderiaRow | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [showAllEmbPend, setShowAllEmbPend] = useState(false);
 
   // form cargar
   const [fechaNacimiento, setFechaNacimiento] = useState('');
@@ -571,7 +587,7 @@ export function GuarderiaPage() {
             🤰 {embarazadasPendientes.length} embarazada{embarazadasPendientes.length > 1 ? 's' : ''} nombrada{embarazadasPendientes.length > 1 ? 's' : ''} sin registro de guardería
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {embarazadasPendientes.map(e => {
+            {(showAllEmbPend ? embarazadasPendientes : embarazadasPendientes.slice(0, 8)).map(e => {
               const hoy = new Date(); hoy.setHours(0,0,0,0);
               const [y, m, d] = e.fecha_probable_parto?.slice(0,10).split('-').map(Number) ?? [0,0,0];
               const diasFpp = e.fecha_probable_parto
@@ -600,6 +616,16 @@ export function GuarderiaPage() {
                 </div>
               );
             })}
+            {embarazadasPendientes.length > 8 && (
+              <button
+                type="button"
+                onClick={() => setShowAllEmbPend(v => !v)}
+                className="muted"
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontSize: '0.78rem', textDecoration: 'underline', color: '#a78bfa', width: 'fit-content' }}
+              >
+                {showAllEmbPend ? 'ver menos' : `y ${embarazadasPendientes.length - 8} más...`}
+              </button>
+            )}
           </div>
           <div style={{ marginTop: 8, fontSize: '0.75rem' }} className="muted">
             Estas agentes tienen embarazo registrado pero aún no tienen trámite de guardería cargado.

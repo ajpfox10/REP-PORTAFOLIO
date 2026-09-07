@@ -392,7 +392,9 @@ async function queryPersonalDesignacionBecario(sequelize: Sequelize, dni: number
               (
                 SELECT dep.nombre
                 FROM agentes_servicios ags
-                LEFT JOIN dependencias dep ON dep.id = ags.dependencia_id AND dep.deleted_at IS NULL
+                LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
+                LEFT JOIN reparticiones rep ON rep.id = srv.reparticion_id AND rep.deleted_at IS NULL
+                LEFT JOIN dependencias dep ON dep.id = rep.dependencia_id AND dep.deleted_at IS NULL
                 WHERE ags.dni = pd.dni
                   AND ags.deleted_at IS NULL
                   AND (ags.fecha_hasta IS NULL OR ags.fecha_hasta >= CURDATE())
@@ -1389,7 +1391,7 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
        LEFT JOIN agentes a ON a.dni = pd.dni AND a.deleted_at IS NULL
        /* dependencia via agentes_servicios activo */
        LEFT JOIN (
-         SELECT dni, servicio_id, dependencia_id
+         SELECT dni, servicio_id
          FROM agentes_servicios
          WHERE deleted_at IS NULL
            AND (fecha_hasta IS NULL OR fecha_hasta >= CURDATE())
@@ -1397,8 +1399,8 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
          LIMIT 1
        ) ags_act ON ags_act.dni = pd.dni
        LEFT JOIN servicios srv       ON srv.id  = ags_act.servicio_id   AND srv.deleted_at IS NULL
-       LEFT JOIN reparticiones rep_srv ON rep_srv.id = srv.reparticion_id
-       LEFT JOIN dependencias  dep_srv ON dep_srv.id = ags_act.dependencia_id AND dep_srv.deleted_at IS NULL
+       LEFT JOIN reparticiones rep_srv ON rep_srv.id = srv.reparticion_id AND rep_srv.deleted_at IS NULL
+       LEFT JOIN dependencias  dep_srv ON dep_srv.id = rep_srv.dependencia_id AND dep_srv.deleted_at IS NULL
        WHERE pd.dni = :dni LIMIT 1`,
       { replacements: { dni }, type: QueryTypes.SELECT }
     );

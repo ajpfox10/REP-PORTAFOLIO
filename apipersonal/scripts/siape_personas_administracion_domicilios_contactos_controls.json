@@ -1,0 +1,1122 @@
+[
+  {
+    "role": "scroll pane",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 3,
+      "y": 103,
+      "height": 566,
+      "width": 999
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "DATOS PERSONALES",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 14,
+      "y": 199,
+      "height": 23,
+      "width": 155
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "DOMICILIOS - CONTACTOS",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable",
+      "seleccionado"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 166,
+      "y": 199,
+      "height": 23,
+      "width": 183
+    }
+  },
+  {
+    "role": "scroll pane",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 17,
+      "y": 225,
+      "height": 435,
+      "width": 974
+    }
+  },
+  {
+    "role": "scroll bar",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 926,
+      "y": 302,
+      "height": 160,
+      "width": 19
+    }
+  },
+  {
+    "role": "text",
+    "name": "CALLE",
+    "description": "CALLE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 112,
+      "y": 290,
+      "height": 27,
+      "width": 309
+    }
+  },
+  {
+    "role": "text",
+    "name": "NUMERO",
+    "description": "NUMERO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 112,
+      "y": 330,
+      "height": 27,
+      "width": 101
+    }
+  },
+  {
+    "role": "text",
+    "name": "TORRE",
+    "description": "TORRE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 274,
+      "y": 330,
+      "height": 27,
+      "width": 46
+    }
+  },
+  {
+    "role": "text",
+    "name": "PISO",
+    "description": "PISO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 373,
+      "y": 330,
+      "height": 27,
+      "width": 47
+    }
+  },
+  {
+    "role": "text",
+    "name": "DEPTO",
+    "description": "DEPTO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 112,
+      "y": 370,
+      "height": 27,
+      "width": 30
+    }
+  },
+  {
+    "role": "text",
+    "name": "MANZ.",
+    "description": "MANZ.",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 188,
+      "y": 370,
+      "height": 27,
+      "width": 30
+    }
+  },
+  {
+    "role": "text",
+    "name": "Declarado el",
+    "description": "Declarado el",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 305,
+      "y": 369,
+      "height": 27,
+      "width": 87
+    }
+  },
+  {
+    "role": "push button",
+    "name": "CALENDARIO",
+    "description": "CALENDARIO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 393,
+      "y": 369,
+      "height": 27,
+      "width": 27
+    }
+  },
+  {
+    "role": "text",
+    "name": "PROVINCIA",
+    "description": "PROVINCIA",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 112,
+      "y": 410,
+      "height": 27,
+      "width": 280
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 393,
+      "y": 410,
+      "height": 27,
+      "width": 27
+    }
+  },
+  {
+    "role": "text",
+    "name": "LOCALIDAD",
+    "description": "LOCALIDAD",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 112,
+      "y": 450,
+      "height": 27,
+      "width": 280
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 393,
+      "y": 450,
+      "height": 27,
+      "width": 27
+    }
+  },
+  {
+    "role": "scroll pane",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 42,
+      "y": 510,
+      "height": 60,
+      "width": 374
+    }
+  },
+  {
+    "role": "text",
+    "name": "OBSERVACIONES  Varias Líneas",
+    "description": "OBSERVACIONES  Varias Líneas",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea múltiple"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 44,
+      "y": 512,
+      "height": 56,
+      "width": 355
+    }
+  },
+  {
+    "role": "scroll bar",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "vertical"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 399,
+      "y": 512,
+      "height": 56,
+      "width": 15
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Otros Domicilios",
+    "description": "Otros Domicilios",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 473,
+      "y": 549,
+      "height": 33,
+      "width": 200
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Preferente",
+    "description": "Preferente",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco",
+      "activado"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 482,
+      "y": 305,
+      "height": 20,
+      "width": 17
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Preferente",
+    "description": "Preferente",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 482,
+      "y": 332,
+      "height": 20,
+      "width": 17
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Preferente",
+    "description": "Preferente",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 482,
+      "y": 359,
+      "height": 20,
+      "width": 17
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Preferente",
+    "description": "Preferente",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 482,
+      "y": 385,
+      "height": 20,
+      "width": 17
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Preferente",
+    "description": "Preferente",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 482,
+      "y": 412,
+      "height": 20,
+      "width": 17
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Preferente",
+    "description": "Preferente",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 482,
+      "y": 439,
+      "height": 20,
+      "width": 17
+    }
+  },
+  {
+    "role": "text",
+    "name": "TIPO",
+    "description": "TIPO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 521,
+      "y": 302,
+      "height": 27,
+      "width": 133
+    }
+  },
+  {
+    "role": "text",
+    "name": "TIPO",
+    "description": "TIPO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 521,
+      "y": 329,
+      "height": 27,
+      "width": 133
+    }
+  },
+  {
+    "role": "text",
+    "name": "TIPO",
+    "description": "TIPO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 521,
+      "y": 356,
+      "height": 26,
+      "width": 133
+    }
+  },
+  {
+    "role": "text",
+    "name": "TIPO",
+    "description": "TIPO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 521,
+      "y": 382,
+      "height": 27,
+      "width": 133
+    }
+  },
+  {
+    "role": "text",
+    "name": "TIPO",
+    "description": "TIPO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 521,
+      "y": 409,
+      "height": 27,
+      "width": 133
+    }
+  },
+  {
+    "role": "text",
+    "name": "TIPO",
+    "description": "TIPO",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 521,
+      "y": 436,
+      "height": 26,
+      "width": 133
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 657,
+      "y": 302,
+      "height": 27,
+      "width": 27
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 657,
+      "y": 329,
+      "height": 27,
+      "width": 27
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 657,
+      "y": 356,
+      "height": 26,
+      "width": 27
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 657,
+      "y": 382,
+      "height": 27,
+      "width": 27
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 657,
+      "y": 409,
+      "height": 27,
+      "width": 27
+    }
+  },
+  {
+    "role": "push button",
+    "name": "...",
+    "description": "...",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 657,
+      "y": 436,
+      "height": 26,
+      "width": 27
+    }
+  },
+  {
+    "role": "text",
+    "name": "DETALLE",
+    "description": "DETALLE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "editable",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 685,
+      "y": 302,
+      "height": 27,
+      "width": 240
+    }
+  },
+  {
+    "role": "text",
+    "name": "DETALLE",
+    "description": "DETALLE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 685,
+      "y": 329,
+      "height": 27,
+      "width": 240
+    }
+  },
+  {
+    "role": "text",
+    "name": "DETALLE",
+    "description": "DETALLE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 685,
+      "y": 356,
+      "height": 26,
+      "width": 240
+    }
+  },
+  {
+    "role": "text",
+    "name": "DETALLE",
+    "description": "DETALLE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 685,
+      "y": 382,
+      "height": 27,
+      "width": 240
+    }
+  },
+  {
+    "role": "text",
+    "name": "DETALLE",
+    "description": "DETALLE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 685,
+      "y": 409,
+      "height": 27,
+      "width": 240
+    }
+  },
+  {
+    "role": "text",
+    "name": "DETALLE",
+    "description": "DETALLE",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 685,
+      "y": 436,
+      "height": 26,
+      "width": 240
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "FAMILIARES",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 346,
+      "y": 199,
+      "height": 23,
+      "width": 121
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "ESTUDIOS",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 464,
+      "y": 199,
+      "height": 23,
+      "width": 121
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "CAPACITACIONES",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 582,
+      "y": 199,
+      "height": 23,
+      "width": 131
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "RELACION LABORAL",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 710,
+      "y": 199,
+      "height": 23,
+      "width": 147
+    }
+  },
+  {
+    "role": "page tab",
+    "name": "LEGAJO DIGITAL",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando",
+      "opaco",
+      "seleccionable"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 854,
+      "y": 199,
+      "height": 23,
+      "width": 121
+    }
+  },
+  {
+    "role": "scroll pane",
+    "name": "",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "visible",
+      "mostrando"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 3,
+      "y": 102,
+      "height": 572,
+      "width": 1001
+    }
+  },
+  {
+    "role": "push button",
+    "name": "BUSCAR",
+    "description": "BUSCAR",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 840,
+      "y": 146,
+      "height": 27,
+      "width": 120
+    }
+  },
+  {
+    "role": "check box",
+    "name": "Editar",
+    "description": "Editar",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "opaco"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 750,
+      "y": 149,
+      "height": 20,
+      "width": 46
+    }
+  },
+  {
+    "role": "text",
+    "name": "APELLIDO",
+    "description": "APELLIDO",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 34,
+      "y": 146,
+      "height": 27,
+      "width": 314
+    }
+  },
+  {
+    "role": "text",
+    "name": "NOMBRE",
+    "description": "NOMBRE",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 355,
+      "y": 146,
+      "height": 27,
+      "width": 251
+    }
+  },
+  {
+    "role": "text",
+    "name": "CUIL-CUIT-CDI",
+    "description": "CUIL-CUIT-CDI",
+    "text": "",
+    "states": [
+      "enfocable",
+      "visible",
+      "mostrando",
+      "línea única"
+    ],
+    "action": false,
+    "bounds": {
+      "x": 614,
+      "y": 146,
+      "height": 27,
+      "width": 106
+    }
+  },
+  {
+    "role": "push button",
+    "name": "Continuar ALT C",
+    "description": "",
+    "text": "",
+    "states": [
+      "activado",
+      "enfocable",
+      "visible",
+      "mostrando",
+      "enfocado"
+    ],
+    "action": true,
+    "bounds": {
+      "x": 734,
+      "y": 441,
+      "height": 27,
+      "width": 111
+    }
+  }
+]

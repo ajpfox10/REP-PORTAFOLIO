@@ -15,6 +15,7 @@
 import { Sequelize, QueryTypes } from 'sequelize';
 import { invalidate, agenteTags, personalTags } from '../../../infra/invalidateOnWrite';
 import { logger } from '../../../logging/logger';
+import { crearCarpetaDocuAgente } from './docuCarpeta.service';
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ export interface AltaAgenteDto {
   localidad_id?: number;
   provincia_id?: string;
   nacionalidad?: string;
+  mp?: string;
   observaciones?: string;
 
   // Datos laborales (tabla: agentes)
@@ -61,7 +63,6 @@ export interface AltaAgenteDto {
   servicios?: Array<{
     servicio_id: number;
     sector_id?: number;
-    dependencia_id?: number;
     fecha_desde?: string;
     fecha_hasta?: string;
   }>;
@@ -73,6 +74,26 @@ export interface AltaAgenteDto {
 export interface AltaAgenteResult {
   dni: number;
   agenteId?: number;
+  /** Qué pasó con el destino (servicio/sector) al dar el alta. */
+  continuidad?: {
+    heredado: boolean;
+    servicio_id?: number | null;
+    sector_id?: number | null;
+    /** Por qué no se heredó: hueco entre tramos o sin tramo previo. */
+    motivo?: 'cargo_nuevo' | 'sin_tramo_previo';
+    dias_hueco?: number | null;
+    desde?: string;
+  };
+  /** Mensaje para mostrarle al operador cuando el agente quedó sin destino. */
+  aviso?: string;
+  /** Resultado de crear la carpeta del agente en DOCU (no bloquea el alta). */
+  carpetaDocu?: {
+    ok: boolean;
+    carpeta?: string;
+    creada?: boolean;
+    subcarpetas?: number;
+    motivo?: string;
+  };
 }
 
 // ─── AgenteService ────────────────────────────────────────────────────────────
@@ -89,6 +110,9 @@ export class AgenteService {
    */
   async alta(dto: AltaAgenteDto): Promise<AltaAgenteResult> {
     const t = await this.sequelize.transaction();
+    // Continuidad de destino entre tramos (ver Paso 5)
+    let continuidad: AltaAgenteResult['continuidad'] = undefined;
+    let avisoCargoNuevo: string | null = null;
 
     try {
       if (dto.fecha_egreso && (dto.estado_empleo || 'ACTIVO') === 'ACTIVO') {
@@ -126,10 +150,10 @@ export class AgenteService {
           `INSERT INTO personal
            (dni, apellido, nombre, fecha_nacimiento, sexo_id, cuil, email, telefono, domicilio,
             numerodomicilio, piso, depto, cp, observacionesdireccion, localidad_id, provincia_id,
-            nacionalidad, observaciones, created_by, created_at, updated_at)
+            nacionalidad, mp, observaciones, created_by, created_at, updated_at)
            VALUES (:dni, :apellido, :nombre, :fecha_nacimiento, :sexo_id, :cuil, :email, :telefono, :domicilio,
                    :numerodomicilio, :piso, :depto, :cp, :observacionesdireccion, :localidad_id, :provincia_id,
-                   :nacionalidad, :observaciones, :actor, NOW(), NOW())`,
+                   :nacionalidad, :mp, :observaciones, :actor, NOW(), NOW())`,
           {
             replacements: {
               dni: dto.dni,
@@ -149,6 +173,7 @@ export class AgenteService {
               localidad_id: dto.localidad_id || null,
               provincia_id: dto.provincia_id || null,
               nacionalidad: dto.nacionalidad || null,
+              mp: dto.mp || null,
               observaciones: dto.observaciones || null,
               actor: dto.actor || null,
             },
@@ -162,7 +187,7 @@ export class AgenteService {
              domicilio = :domicilio, numerodomicilio = :numerodomicilio, piso = :piso, depto = :depto,
              cp = :cp, observacionesdireccion = :observacionesdireccion,
              localidad_id = :localidad_id, provincia_id = :provincia_id, nacionalidad = :nacionalidad,
-             observaciones = :observaciones, updated_by = :actor, updated_at = NOW()
+             mp = :mp, observaciones = :observaciones, updated_by = :actor, updated_at = NOW()
            WHERE dni = :dni AND deleted_at IS NULL`,
           {
             replacements: {
@@ -183,6 +208,7 @@ export class AgenteService {
               localidad_id: dto.localidad_id || null,
               provincia_id: dto.provincia_id || null,
               nacionalidad: dto.nacionalidad || null,
+              mp: dto.mp || null,
               observaciones: dto.observaciones || null,
               actor: dto.actor || null,
             },
@@ -228,14 +254,12 @@ export class AgenteService {
         for (const srv of dto.servicios) {
           await this.sequelize.query(
             `INSERT INTO agentes_servicios
-             (dni, servicio_id, sector_id, dependencia_id, fecha_desde, fecha_hasta, created_by, created_at, updated_at)
-             VALUES (:dni, :servicio_id, :sector_id, :dependencia_id, :fecha_desde, :fecha_hasta, :actor, NOW(), NOW())`,
+             (dni, servicio_id, fecha_desde, fecha_hasta, created_by, created_at, updated_at)
+             VALUES (:dni, :servicio_id, :fecha_desde, :fecha_hasta, :actor, NOW(), NOW())`,
             {
               replacements: {
                 dni: dto.dni,
                 servicio_id: srv.servicio_id,
-                sector_id: srv.sector_id || null,
-                dependencia_id: srv.dependencia_id || dto.reparticion_id || null,
                 fecha_desde: srv.fecha_desde || dto.fecha_ingreso || null,
                 fecha_hasta: srv.fecha_hasta || null,
                 actor: dto.actor || null,
@@ -243,18 +267,137 @@ export class AgenteService {
               transaction: t,
             }
           );
+          // El sector no vive en agentes_servicios: su unica fuente es agentes_sectores.
+          if (srv.sector_id) {
+            await this.sequelize.query(
+              `INSERT INTO agentes_sectores
+               (dni, sector_id, servicio_id, fecha_desde, fecha_hasta, created_by, created_at, updated_at)
+               VALUES (:dni, :sector_id, :servicio_id, :fecha_desde, :fecha_hasta, :actor, NOW(), NOW())`,
+              {
+                replacements: {
+                  dni: dto.dni,
+                  sector_id: srv.sector_id,
+                  servicio_id: srv.servicio_id,
+                  fecha_desde: srv.fecha_desde || dto.fecha_ingreso || null,
+                  fecha_hasta: srv.fecha_hasta || null,
+                  actor: dto.actor || null,
+                },
+                transaction: t,
+              }
+            );
+          }
+        }
+      }
+
+      // ── Paso 5: continuidad de destino ───────────────────────────────────
+      // Si el alta no trae servicio y el agente ya tenia un tramo cerrado, el
+      // destino se hereda SOLO si el alta arranca el dia siguiente al cierre
+      // (tramos consecutivos, sin hueco). Cualquier hueco se considera un cargo
+      // nuevo: no se hereda nada y se deja un aviso en alertas_agente.
+      const traeServicio = !!dto.servicios?.some(s => s.servicio_id);
+      if (!traeServicio && dto.fecha_ingreso) {
+        const previo = (await this.sequelize.query(
+          `SELECT ags.servicio_id, ags.jefe_nombre, ags.fecha_hasta,
+                  DATEDIFF(:fecha_ingreso, ags.fecha_hasta) AS dias_hueco,
+                  (SELECT asec.sector_id FROM agentes_sectores asec
+                    WHERE asec.dni = ags.dni AND asec.deleted_at IS NULL
+                    ORDER BY asec.fecha_hasta IS NULL DESC, asec.fecha_hasta DESC, asec.id DESC
+                    LIMIT 1) AS sector_id
+             FROM agentes_servicios ags
+            WHERE ags.dni = :dni AND ags.deleted_at IS NULL AND ags.fecha_hasta IS NOT NULL
+              AND ags.servicio_id IS NOT NULL
+            ORDER BY ags.fecha_hasta DESC, ags.id DESC LIMIT 1`,
+          { replacements: { dni: dto.dni, fecha_ingreso: dto.fecha_ingreso },
+            type: QueryTypes.SELECT, transaction: t }
+        )) as any[];
+
+        const prev = previo[0];
+        const dias = prev ? Number(prev.dias_hueco) : null;
+
+        if (prev && dias === 1) {
+          // Consecutivo exacto: continua el mismo destino.
+          await this.sequelize.query(
+            `INSERT INTO agentes_servicios
+             (dni, servicio_id, jefe_nombre, fecha_desde, fecha_hasta, motivo, observaciones, created_by, created_at, updated_at)
+             VALUES (:dni, :servicio_id, :jefe_nombre, :fecha_desde, NULL,
+                     'Continuidad de destino',
+                     'Servicio y sector heredados del tramo anterior (cierre el dia previo al alta)',
+                     :actor, NOW(), NOW())`,
+            { replacements: {
+                dni: dto.dni, servicio_id: prev.servicio_id,
+                jefe_nombre: prev.jefe_nombre ?? null, fecha_desde: dto.fecha_ingreso, actor: dto.actor || null },
+              transaction: t }
+          );
+          // El sector tambien vive en agentes_sectores, que es lo que usan el
+          // organigrama, el fichero y los filtros: hay que reabrirlo ahi tambien.
+          if (prev.sector_id) {
+            await this.sequelize.query(
+              `INSERT INTO agentes_sectores (dni, sector_id, fecha_desde, fecha_hasta, created_by, created_at, updated_at)
+               SELECT :dni, :sector_id, :fecha_desde, NULL, :actor, NOW(), NOW()
+                 WHERE NOT EXISTS (SELECT 1 FROM agentes_sectores
+                                    WHERE dni = :dni AND fecha_hasta IS NULL AND deleted_at IS NULL)`,
+              { replacements: { dni: dto.dni, sector_id: prev.sector_id, fecha_desde: dto.fecha_ingreso, actor: dto.actor || null },
+                transaction: t }
+            );
+          }
+          continuidad = { heredado: true, servicio_id: prev.servicio_id, sector_id: prev.sector_id ?? null };
+        } else if (prev) {
+          // Hay tramo anterior pero con hueco: es un cargo nuevo.
+          continuidad = { heredado: false, motivo: 'cargo_nuevo', dias_hueco: dias, desde: String(prev.fecha_hasta).slice(0, 10) };
+          avisoCargoNuevo = `El alta no es consecutiva al tramo anterior (cerro el ${String(prev.fecha_hasta).slice(0, 10)}, hueco de ${dias} dia(s)). Se tomo como cargo nuevo: hay que asignarle servicio y sector.`;
+        } else {
+          continuidad = { heredado: false, motivo: 'sin_tramo_previo' };
+          avisoCargoNuevo = 'El alta no tiene servicio asignado y el agente no registra un tramo anterior. Hay que asignarle servicio y sector.';
         }
       }
 
       // Todo OK: confirmar la transaccion
       await t.commit();
 
+      // El aviso va fuera de la transaccion: si falla, no debe voltear el alta.
+      if (avisoCargoNuevo) {
+        await this.sequelize.query(
+          `INSERT INTO alertas_agente (dni, titulo, mensaje, urgente, activa, creado_por, created_at, updated_at)
+           SELECT :dni, 'Falta destino', :mensaje, 0, 1, NULL, NOW(), NOW()
+             WHERE NOT EXISTS (SELECT 1 FROM alertas_agente
+                                WHERE dni = :dni AND titulo = 'Falta destino' AND activa = 1)`,
+          { replacements: { dni: dto.dni, mensaje: avisoCargoNuevo } }
+        ).catch(err => logger.warn({ msg: 'No se pudo crear la alerta de destino', dni: dto.dni, err: String(err) }));
+        logger.warn({ msg: 'Alta sin destino asignado', dni: dto.dni, aviso: avisoCargoNuevo });
+      }
+
+      // Carpeta del agente en DOCU (D:\G\DOCU\<dni>) + subcarpetas por ley.
+      // Va fuera de la transaccion y nunca lanza: si el disco no esta, el alta
+      // igual queda hecha y solo se loguea el motivo.
+      const carpetaDocu = await crearCarpetaDocuAgente(this.sequelize, dto.dni, agenteId);
+      if (!carpetaDocu.ok) {
+        logger.warn({ msg: 'No se pudo crear la carpeta DOCU del agente', dni: dto.dni, motivo: carpetaDocu.motivo });
+      } else {
+        logger.info({
+          msg: 'Carpeta DOCU del agente lista',
+          dni: dto.dni, carpeta: carpetaDocu.carpeta, creada: carpetaDocu.creada,
+          ley: carpetaDocu.ley, subcarpetas: carpetaDocu.subcarpetas,
+        });
+      }
+
       // Invalida el cache del listado de personal
       await invalidate([...personalTags.all(dto.dni), ...agenteTags.all(dto.dni)], 'agente.alta');
 
       logger.info({ msg: 'Alta de agente exitosa', dni: dto.dni, agenteId, actor: dto.actor });
 
-      return { dni: dto.dni, agenteId };
+      return {
+        dni: dto.dni,
+        agenteId,
+        continuidad,
+        aviso: avisoCargoNuevo ?? undefined,
+        carpetaDocu: {
+          ok: carpetaDocu.ok,
+          carpeta: carpetaDocu.carpeta,
+          creada: carpetaDocu.creada,
+          subcarpetas: carpetaDocu.subcarpetas,
+          motivo: carpetaDocu.motivo,
+        },
+      };
 
     } catch (err) {
       // Algo fallo: revertir TODO (ningun dato queda a medias en la BD)
@@ -323,7 +466,7 @@ export class AgenteService {
     const rows = await this.sequelize.query(
       `SELECT p.*, a.ley_id, a.planta_id, a.categoria_id, a.funcion_id,
               a.ocupacion_id, a.regimen_horario_id, a.jefatura_id,
-              (SELECT COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id)
+              (SELECT r_dep.dependencia_id
                  FROM agentes_servicios ags_dep
                  LEFT JOIN servicios s_dep ON s_dep.id = ags_dep.servicio_id AND s_dep.deleted_at IS NULL
                  LEFT JOIN reparticiones r_dep ON r_dep.id = s_dep.reparticion_id AND r_dep.deleted_at IS NULL

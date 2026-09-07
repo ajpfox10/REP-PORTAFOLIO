@@ -29,6 +29,7 @@ const altaAgenteSchema = z.object({
   localidad_id:    z.number().int().positive().optional(),
   provincia_id:    z.string().max(50).optional(),
   nacionalidad:    z.string().max(50).optional(),
+  mp:              z.string().max(30).optional(),
   observaciones:   z.string().optional(),
   // Datos laborales (opcionales)
   ley_id:           z.number().int().positive().optional(),
@@ -39,7 +40,6 @@ const altaAgenteSchema = z.object({
   regimen_horario_id: z.number().int().positive().optional(),
   jefatura_id:      z.number().int().positive().optional(),
   sector_id:        z.number().int().positive().optional(),
-  dependencia_id:   z.number().int().positive().optional(),
   reparticion_id:    z.number().int().positive().optional(),
   fecha_ingreso:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   fecha_egreso:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -51,7 +51,6 @@ const altaAgenteSchema = z.object({
   servicios: z.array(z.object({
     servicio_id: z.number().int().positive(),
     sector_id: z.number().int().positive().optional(),
-    dependencia_id: z.number().int().positive().optional(),
     fecha_desde: z.string().optional(),
     fecha_hasta: z.string().optional(),
   })).optional(),
@@ -132,7 +131,6 @@ export class AgenteController {
       ocupacion_id:       z.number().int().positive().optional(),
       regimen_horario_id: z.number().int().positive().optional(),
       sector_id:          z.number().int().positive().optional(),
-      dependencia_id:     z.number().int().positive().optional(),
       fecha_ingreso:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       fecha_egreso:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       estado:             z.string().max(50).optional(),

@@ -19,7 +19,8 @@ module.exports = {
         MYSQL_PORT: '3306',
         MYSQL_DB: 'scanner_saas',
         MYSQL_USER: 'root',
-        MYSQL_PASSWORD: 'Cuernos2503'
+        MYSQL_PASSWORD: 'Cuernos2503',
+        UV_THREADPOOL_SIZE: '64'
       }
     },
     {
@@ -62,7 +63,8 @@ module.exports = {
         MYSQL_PORT: '3306',
         MYSQL_DB: 'scanner_saas',
         MYSQL_USER: 'root',
-        MYSQL_PASSWORD: 'Cuernos2503'
+        MYSQL_PASSWORD: 'Cuernos2503',
+        UV_THREADPOOL_SIZE: '64'
       }
     },
     // ── AGENT LITE (servidor, siempre corriendo en el server) ─────────────────

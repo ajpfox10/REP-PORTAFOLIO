@@ -1,0 +1,51 @@
+-- Migration 036: documents mail inbox base
+
+CREATE TABLE IF NOT EXISTS mail_accounts (
+  id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  org_id         INT UNSIGNED NOT NULL,
+  provider       ENUM('gmail','imap','outlook','manual') NOT NULL,
+  email_address  VARCHAR(255) NOT NULL,
+  display_name   VARCHAR(255) NULL,
+  folder_name    VARCHAR(255) NOT NULL DEFAULT 'INBOX',
+  is_active      TINYINT(1) NOT NULL DEFAULT 1,
+  settings_json  JSON NULL,
+  last_synced_at DATETIME NULL,
+  last_error     VARCHAR(512) NULL,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mail_accounts_org_email (org_id, email_address),
+  KEY idx_mail_accounts_org_active (org_id, is_active),
+  KEY idx_mail_accounts_provider (provider)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mail_document_inbox (
+  id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  org_id             INT UNSIGNED NOT NULL,
+  branch_id          INT UNSIGNED NULL,
+  account_id         INT UNSIGNED NULL,
+  patient_id         INT UNSIGNED NULL,
+  external_message_id VARCHAR(255) NULL,
+  from_email         VARCHAR(255) NOT NULL,
+  subject            VARCHAR(512) NULL,
+  received_at        DATETIME NOT NULL,
+  filename           VARCHAR(255) NOT NULL,
+  mime_type          VARCHAR(120) NOT NULL DEFAULT 'application/pdf',
+  file_size          BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  checksum           VARCHAR(128) NULL,
+  storage_path       VARCHAR(1024) NULL,
+  document_category  VARCHAR(80) NOT NULL DEFAULT 'external_lab',
+  association_status ENUM('unassociated','associated','needs_review') NOT NULL DEFAULT 'unassociated',
+  ingestion_status   ENUM('indexed','downloaded','processed','error') NOT NULL DEFAULT 'indexed',
+  error_message      VARCHAR(512) NULL,
+  metadata_json      JSON NULL,
+  created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_mdi_org_received (org_id, received_at),
+  KEY idx_mdi_patient (patient_id),
+  KEY idx_mdi_account (account_id),
+  KEY idx_mdi_assoc (association_status),
+  KEY idx_mdi_checksum (checksum),
+  CONSTRAINT fk_mdi_account FOREIGN KEY (account_id) REFERENCES mail_accounts(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

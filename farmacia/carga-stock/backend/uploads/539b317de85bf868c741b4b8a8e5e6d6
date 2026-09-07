@@ -1,0 +1,3978 @@
+<html>
+    <head>
+        <meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8" />
+        <meta name="description" content="Stock">
+        <style type="text/css">
+            table {
+                padding: 3px 3px 4px 5px;
+            }
+            th, td {
+                border: 1px solid black;
+            }
+        </style>
+    </head>
+    <body>
+        <br><br>
+        <table>
+            <thead>
+                <tr>
+                    <th colspan="6" style="background-color:#CCC;">
+                        HOSPITAL INTERZONAL GENERAL DE AGUDOS SIMPLEMENTE EVITA DE  GONZALES CATAN KM 32 - FARMACIA UNIFICADA
+                    </th>
+                </tr>
+                <tr>
+                    <th colspan="6" style="background-color:#CCC;">
+                        Reporte de Stock Crítico - Emisión: 09/08/2026
+                    </th>
+                </tr>
+                <tr class="text-center">
+                    <th style="background-color:#CCC;" >#</th>
+                    <th style="background-color:#CCC;" >Cod Artículo</th>
+                    <th style="background-color:#CCC;" >Descripción</th>
+                    <th style="background-color:#CCC;" >Stock Mínimo</th>
+                    <th style="background-color:#CCC;" >Stock Máximo</th>
+                    <th style="background-color:#CCC;" >Stock Actual</th>
+
+                </tr>
+            </thead>
+            <tbody>
+                                    <tr style="text-align:center;">
+
+                        <td >1</td>
+                        <td>M2608111</td>
+                        <td>ACENOCUMAROL -  - COMPRIMIDOS - 4 MG</td>
+                        <td>800</td>
+                        <td>2400</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >2</td>
+                        <td>M4201003</td>
+                        <td>ACICLOVIR -  - COMPRIMIDOS - 800 MG</td>
+                        <td>1200</td>
+                        <td>3600</td>
+                        <td>50</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >3</td>
+                        <td>M4201035</td>
+                        <td>ACICLOVIR -  - SUSPENSION ORAL - 80MG/ML-120ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>10</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >4</td>
+                        <td>M4208112</td>
+                        <td>ACICLOVIR - FRASCO AMPOLLA - INYECTABLE - 500 MG</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>495</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >5</td>
+                        <td>M1701085</td>
+                        <td>ACIDO ACETIL SALICILICO -  - COMPRIMIDO - 100 MG</td>
+                        <td>4000</td>
+                        <td>12000</td>
+                        <td>6054</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >6</td>
+                        <td>M0501008</td>
+                        <td>ACIDO FOLICO -  - GOTAS - 5MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>110</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >7</td>
+                        <td>M0501001</td>
+                        <td>ACIDO FOLICO -  - COMPRIMIDO - 1 MG</td>
+                        <td>600</td>
+                        <td>1800</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >8</td>
+                        <td>M0501002</td>
+                        <td>ACIDO FOLICO -  - COMPRIMIDO - 5 MG</td>
+                        <td>1400</td>
+                        <td>4200</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >9</td>
+                        <td>M0502111</td>
+                        <td>ACIDO FOLICO-COMPLEJO B - AMPOLLA - INYECTABLE - 15MG - 2ML</td>
+                        <td>40</td>
+                        <td>120</td>
+                        <td>18</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >10</td>
+                        <td>M3801016</td>
+                        <td>ACIDO TIOCTICO -  - COMPRIMIDO - 600 MG</td>
+                        <td>600</td>
+                        <td>1800</td>
+                        <td>3620</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >11</td>
+                        <td>M2509999</td>
+                        <td>ACIDO TRANEXAMICO - AMPOLLA X 10 ML - INYECTABLE - 100 MG/ML - 1000 MG</td>
+                        <td>0</td>
+                        <td>1</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >12</td>
+                        <td>M2301005</td>
+                        <td>ACIDO URSODESOXICOLICO -  - COMPRIMIDO - 300 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>320</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >13</td>
+                        <td>M2601007</td>
+                        <td>ACTIVADOR TISULAR DEL PLASMINOGENO - FRASCO AMPOLLA - INYECTABLE - 50MG - 50 ML</td>
+                        <td>4</td>
+                        <td>12</td>
+                        <td>2</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >14</td>
+                        <td>M2534137</td>
+                        <td>ADENOSINA - AMPOLLA - INYECTABLE - 3MG/ML - 2 ML</td>
+                        <td>20</td>
+                        <td>60</td>
+                        <td>96</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >15</td>
+                        <td>M4104111</td>
+                        <td>ADRENALINA CLORHIDRATO - AMPOLLA - INYECTABLE - 1MG(0.1%-1%.)- 1 ML</td>
+                        <td>500</td>
+                        <td>1500</td>
+                        <td>1048</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >16</td>
+                        <td>M4528234</td>
+                        <td>AGUA ESTERIL PARA INYECTABLES - 5 ML - AMPOLLA - -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2435</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >17</td>
+                        <td>M2615131</td>
+                        <td>ALBUMINA HUMANA - FRASCO AMPOLLA - INYECTABLE - 20% - 50 ML</td>
+                        <td>3</td>
+                        <td>9</td>
+                        <td>37</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >18</td>
+                        <td>M2022228</td>
+                        <td>ALCOHOL ETILICO - ENVASE BOTELLA PLÁSTICA X 1000 ML - USO MEDICINAL - 70%</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>600</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >19</td>
+                        <td>M2508112</td>
+                        <td>ALFA-METILDOPA -  - COMPRIMIDO - 500 MG</td>
+                        <td>1200</td>
+                        <td>3600</td>
+                        <td>320</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >20</td>
+                        <td>M0141282</td>
+                        <td>ALPROSTADIL - AMPOLLA DE 1 ML - SOLUCIÓN INYECTABLE - 500 MCG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>6</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >21</td>
+                        <td>M2615243</td>
+                        <td>ALTEPLASA -  - POLVO PARA SOLUCIÓN INYECTABLE - 50 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >22</td>
+                        <td>M2101001</td>
+                        <td>AMBROXOL - 125 ML - JARABE - 300MG/100ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>39</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >23</td>
+                        <td>M1109201</td>
+                        <td>AMIKACINA  - VIAL DE 2 ML - SOLUCIÓN INYECTABLE  - 250 MG/ML </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>480</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >24</td>
+                        <td>M0601113</td>
+                        <td>AMIKACINA SULFATO - AMPOLLA - SOLUCIÓN INYECTABLE - 500MG - 2 ML</td>
+                        <td>100</td>
+                        <td>300</td>
+                        <td>7</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >25</td>
+                        <td>M0601111</td>
+                        <td>AMIKACINA SULFATO - AMPOLLA - SOLUCIÓN INYECTABLE - 100MG - 2 ML</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>2</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >26</td>
+                        <td>M0601012</td>
+                        <td>AMIKACINA SULFATO -  - AMPOLLAS - 500MG - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >27</td>
+                        <td>M2434188</td>
+                        <td>AMINOFILINA - AMPOLLA DE 10 ML - SOLUCIÓN INYECTABLE - 24 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>117</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >28</td>
+                        <td>M2501121</td>
+                        <td>AMIODARONA - AMPOLLA - INYECTABLE - 150MG - 3 ML</td>
+                        <td>150</td>
+                        <td>450</td>
+                        <td>184</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >29</td>
+                        <td>M2501111</td>
+                        <td>AMIODARONA -  - COMPRIMIDO - 200 MG</td>
+                        <td>600</td>
+                        <td>1800</td>
+                        <td>100</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >30</td>
+                        <td>M2501009</td>
+                        <td>AMLODIPINA -  - COMPRIMIDO - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2500</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >31</td>
+                        <td>M2501010</td>
+                        <td>AMLODIPINA -  - COMPRIMIDOS - 5 MG</td>
+                        <td>5200</td>
+                        <td>15700</td>
+                        <td>1800</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >32</td>
+                        <td>M0724126</td>
+                        <td>AMOXICILINA -  - COMPRIMIDO - 500 MG</td>
+                        <td>4000</td>
+                        <td>12000</td>
+                        <td>3408</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >33</td>
+                        <td>M0724118</td>
+                        <td>AMOXICILINA - FRASCO X 90 ML - POLVO P/SUSPENSIÓN ORAL - 500MG/5ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>393</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >34</td>
+                        <td>M0701131</td>
+                        <td>AMOXICILINA - FRASCO X 90 ML - POLVO P/SUSPENSIÓN ORAL - 250MG/5ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>240</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >35</td>
+                        <td>M0724157</td>
+                        <td>AMOXICILINA + ACIDO CLAVULANICO - FRASCO DE 70 ML - SUSPENSIÓN ORAL - 400 MG/ 5 ML + 57 MG/ 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>45</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >36</td>
+                        <td>M0724140</td>
+                        <td>AMOXICILINA+CLAVULANICO,AC. - 1 UNIDADES DE 140 ML - JARABE/SUSPENSION ORAL/POLVO PARA USO ORAL - 400/57 MG/5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >37</td>
+                        <td>M0701037</td>
+                        <td>AMOXICILINA-ACIDO CLAVULANICO - FRASCO - POLVO P/SUSPENSIÓN ORAL - 500MG-125MG/5ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>138</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >38</td>
+                        <td>M0701011</td>
+                        <td>AMOXICILINA-ACIDO CLAVULANICO -  - COMPRIMIDO - 875MG-125MG</td>
+                        <td>7000</td>
+                        <td>21000</td>
+                        <td>4882</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >39</td>
+                        <td>M0702133</td>
+                        <td>AMPICILINA - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td>700</td>
+                        <td>2100</td>
+                        <td>1299</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >40</td>
+                        <td>M0702132</td>
+                        <td>AMPICILINA - FRASCO AMPOLLA - INYECTABLE - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>14</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >41</td>
+                        <td>M0720113</td>
+                        <td>AMPICILINA-SULBACTAM - FRASCO AMPOLLA - INYECTABLE - 1GR-500MG</td>
+                        <td>2000</td>
+                        <td>6000</td>
+                        <td>7752</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >42</td>
+                        <td>M1804111</td>
+                        <td>ANFOTERICINA B - FRASCO AMPOLLA - INYECTABLE - 50 MG</td>
+                        <td>20</td>
+                        <td>60</td>
+                        <td>30</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >43</td>
+                        <td>M1801008</td>
+                        <td>ANFOTERICINA B - FORMULADO EN LIPOSOMAS - FRASCO AMPOLLA LIOFILIZADO - INYECTABLE - 50 MG</td>
+                        <td>40</td>
+                        <td>120</td>
+                        <td>117</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >44</td>
+                        <td>M1805120</td>
+                        <td>ANIDULAFUNGINA - FRASCO AMPOLLA - UNIDAD - INYECTABLE - 100 MG - I.V.</td>
+                        <td>5</td>
+                        <td>15</td>
+                        <td>25</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >45</td>
+                        <td>E1201263</td>
+                        <td>APIROFUSOR AL VACIO P/DRENAJE -  -  - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >46</td>
+                        <td>M1246286</td>
+                        <td>ARIPIPRAZOL -  - COMPRIMIDOS - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >47</td>
+                        <td>M2523121</td>
+                        <td>ATENOLOL -  - COMPRIMIDO - 50 MG</td>
+                        <td>800</td>
+                        <td>2400</td>
+                        <td>270</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >48</td>
+                        <td>M2615135</td>
+                        <td>ATORVASTATIN -  - COMPRIMIDO - 20MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>5310</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >49</td>
+                        <td>M2615209</td>
+                        <td>ATORVASTATINA  COMPRIMIDOS - UNIDAD - COMPRIMIDOS - 40 MG</td>
+                        <td>3600</td>
+                        <td>10800</td>
+                        <td>4010</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >50</td>
+                        <td>M2534250</td>
+                        <td>ATORVASTATINA (COMO ATORVASTATINA CÁLCICA) -  - COMPRIMIDO ORAL - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>7400</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >51</td>
+                        <td>M3103177</td>
+                        <td>ATOSIBAN - FRASCO AMPOLLA DE 5 ML - SOLUCIÓN PARA INFUSIÓN - 7,5 MG/ML </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>25</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >52</td>
+                        <td>M3103176</td>
+                        <td>ATOSIBAN  7,5 MG/ML  SOLUCIÓN PARA INFUSIÓN, FRASCO AMPOLLA DE 0,9 ML - FRASCO AMPOLLA DE 0,9 ML - SOLUCIÓN INYECTABLE - 7,5 MG/ML  </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>5</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >53</td>
+                        <td>M4116123</td>
+                        <td>ATRACURIO BESILATO - VIAL DE 5 ML - SOLUCIÓN INYECTABLE - 10 MG/ML</td>
+                        <td>1200</td>
+                        <td>3600</td>
+                        <td>763</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >54</td>
+                        <td>M1501123</td>
+                        <td>ATROPINA - AMPOLLA - UNIDAD - SOLUCIÓN INYECTABLE - 1MG/1ML</td>
+                        <td>200</td>
+                        <td>600</td>
+                        <td>117</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >55</td>
+                        <td>M0801001</td>
+                        <td>AZITROMICINA - FRASCO X 15 ML - POLVO P/SUSPENSIÓN ORAL - 200MG/5ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>30</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >56</td>
+                        <td>M0801002</td>
+                        <td>AZITROMICINA -  - COMPRIMIDO/CÁPSULA - 500 MG</td>
+                        <td>750</td>
+                        <td>2250</td>
+                        <td>2813</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >57</td>
+                        <td>M0701127</td>
+                        <td>AZTREONAM - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td>100</td>
+                        <td>300</td>
+                        <td>162</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >58</td>
+                        <td>M2901014</td>
+                        <td>BETAMETASONA - POMO 15/20 GRS. - CREMA - 50MG/100GR -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>58</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >59</td>
+                        <td>M2709151</td>
+                        <td>BETAMETASONA - 1 UNIDADES DE 30 ML - GOTAS ORALES - 0.6 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3013</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >60</td>
+                        <td>M2709215</td>
+                        <td>BETAMETASONA ACETATO + BETAMETASONA (COMO FOSFATO SÓDICO) - AMPOLLA DE 2 ML - SUSPENSIÓN INYECTABLE DE LIBERACIÓN PROLONGADA - 3 MG/ML + 3 MG/ML,</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>49</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >61</td>
+                        <td>M2709188</td>
+                        <td>BETAMETASONA ACETATO + BETAMETASONA FOSFATO - AMPOLLA DE 2 ML - SUSPENSIÓN INYECTABLE DE LIBERACIÓN PROLONGADA - 3 MG/ML + 3 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>415</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >62</td>
+                        <td>M4501084</td>
+                        <td>BICARBONATO DE SODIO SOLUCIÓN - SACHET - INYECTABLE - 1 MOLAR - 100 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >63</td>
+                        <td>M1308122</td>
+                        <td>BISMUTO (COMO HIDRÓXIDO DE BISMUTO) + PECTINA - FRASCO DE 90 ML - SUSPENSIÓN ORAL - 30 MG/ML + 7.5 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>21</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >64</td>
+                        <td>M2301012</td>
+                        <td>BISMUTO HIDROXIDO-PECTINA -  - SUSPENSION ORAL - 3GR-750MG/100ML-90ML</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >65</td>
+                        <td>M2501151</td>
+                        <td>BISOPROLOL -  - COMPRIMIDO - 5 MG</td>
+                        <td>2000</td>
+                        <td>6000</td>
+                        <td>660</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >66</td>
+                        <td>M2105115</td>
+                        <td>BROMHEXINA -  - SOLUCION - 200MG/100ML - 120 ML</td>
+                        <td>30</td>
+                        <td>100</td>
+                        <td>54</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >67</td>
+                        <td>M2401037</td>
+                        <td>BROMURO DE IPATROPIO -  - GOTAS P/NEBULIZAR - 25 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>249</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >68</td>
+                        <td>M2434195</td>
+                        <td>BROMURO DE IPRATROPIO  - FRASCO DE 20 ML - SOLUCIÓN PARA NEBULIZACIÓN - 250 MCG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>594</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >69</td>
+                        <td>M4101048</td>
+                        <td>BROMURO DE PANCURONIO -  - AMPOLLAS - 2MG/ML - 2 ML</td>
+                        <td>300</td>
+                        <td>900</td>
+                        <td>935</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >70</td>
+                        <td>M2434210</td>
+                        <td>BUDESONIDA - FRASCO DE 20 ML - SUSPENSIÓN PARA NEBULIZACIÓN - 1 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>999</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >71</td>
+                        <td>M2434202</td>
+                        <td>BUDESONIDA  - AEROSOL POR 200 DOSIS - SUSPENSIÓN PRESURIZADA PARA INHALACIÓN   - 200 MCG/DOSIS </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>729</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >72</td>
+                        <td>M2701006</td>
+                        <td>BUDESONIDE - AEROSOL -  - 200MCG/DOSIS</td>
+                        <td>300</td>
+                        <td>1000</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >73</td>
+                        <td>M2709170</td>
+                        <td>BUDESONIDE C/AEROCÁMARA - UNIDAD - 200 MCG/DOSIS X 200 DOSIS - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >74</td>
+                        <td>M2434145</td>
+                        <td>BUDESONIDE+FORMOTEROL - 60 UNIDADES - CAPSULAS PARA INHALAR+APLICADOR - 400/6 MCG/DOSIS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >75</td>
+                        <td>M2701005</td>
+                        <td>BUDESONIDE-FORMOTEROL -  - AEROSOL - 160/4,5MG - 120 DOSIS</td>
+                        <td>5</td>
+                        <td>15</td>
+                        <td>12</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >76</td>
+                        <td>M0314155</td>
+                        <td>BUPIVACAINA CLORHIDRATO - VIAL DE 20 ML - SOLUCIÓN INYECTABLE - 5 MG/ML</td>
+                        <td>150</td>
+                        <td>500</td>
+                        <td>810</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >77</td>
+                        <td>M0306112</td>
+                        <td>BUPIVACAINA HIPERBARICA - AMPOLLA - INYECTABLE - 0.5% - 4 ML</td>
+                        <td>200</td>
+                        <td>600</td>
+                        <td>999</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >78</td>
+                        <td>M1501121</td>
+                        <td>BUTIL ESCOPOLAMINA (HIOSCINA) -  - COMPRIMIDOS - 10 MG</td>
+                        <td>1000</td>
+                        <td>3000</td>
+                        <td>1946</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >79</td>
+                        <td>M1501111</td>
+                        <td>BUTIL ESCOPOLAMINA (HIOSCINA) - AMPOLLA - INYECTABLE - 20MG - 1ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >80</td>
+                        <td>M3814111</td>
+                        <td>CAFEINA - AMPOLLA - INYECTABLE - 25 % - 1 ML</td>
+                        <td>150</td>
+                        <td>450</td>
+                        <td>11</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >81</td>
+                        <td>M3318150</td>
+                        <td>CALCIO CARBONATO  -  - COMPRIMIDO - 1250 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>600</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >82</td>
+                        <td>M2615230</td>
+                        <td>CALCIO GLUCONATO - SOLUCION INYECTABLE AMPOLLA DE 10 ML - SOLUCIÓN INYECTABLE - 100 MG/ML (10%)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>54</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >83</td>
+                        <td>D0401825</td>
+                        <td>CANULA P/TRAQUEOTOMIA -  - ESTERIL-DESCARTABLE - 7 MM</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >84</td>
+                        <td>D0401839</td>
+                        <td>CANULA P/TRAQUEOTOMIA -  - ESTERIL-DESCARTABLE - NRO 7 1/2</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >85</td>
+                        <td>M1202111</td>
+                        <td>CARBAMAZEPINA -  - COMPRIMIDOS - 200 MG</td>
+                        <td>2500</td>
+                        <td>7500</td>
+                        <td>9085</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >86</td>
+                        <td>M3101016</td>
+                        <td>CARBETOCINA - AMPOLLA - INYECTABLE - 100 MCG</td>
+                        <td>30</td>
+                        <td>100</td>
+                        <td>177</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >87</td>
+                        <td>LA199032</td>
+                        <td>CARBON ACTIVADO -  -  - GRS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>4</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >88</td>
+                        <td>M2501152</td>
+                        <td>CARVEDILOL -  - COMPRIMIDOS - 3,125 MG</td>
+                        <td>800</td>
+                        <td>2400</td>
+                        <td>4380</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >89</td>
+                        <td>M2534129</td>
+                        <td>CARVEDILOL -  - COMPRIMIDOS - 12.5 MG</td>
+                        <td>1200</td>
+                        <td>3600</td>
+                        <td>13710</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >90</td>
+                        <td>M2501112</td>
+                        <td>CARVEDILOL -  - COMPRIMIDOS - 6.25 MG</td>
+                        <td>800</td>
+                        <td>2400</td>
+                        <td>4170</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >91</td>
+                        <td>M2501017</td>
+                        <td>CARVEDILOL -  - COMPRIMIDO - 25 MG</td>
+                        <td>1200</td>
+                        <td>3600</td>
+                        <td>8100</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >92</td>
+                        <td>M0711111</td>
+                        <td>CEFALEXINA -  - COMPRIMIDOS - 500 MG</td>
+                        <td>5000</td>
+                        <td>15000</td>
+                        <td>13226</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >93</td>
+                        <td>M0711122</td>
+                        <td>CEFALEXINA - FRASCO X 90 ML - POLVO P/SUSPENSIÓN ORAL - 250MG/5ML</td>
+                        <td>3000</td>
+                        <td>9000</td>
+                        <td>2616</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >94</td>
+                        <td>M0701139</td>
+                        <td>CEFALEXINA - FRASCO X 60 ML - POLVO P/SUSPENSIÓN ORAL - 500MG/5ML</td>
+                        <td>3000</td>
+                        <td>9000</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >95</td>
+                        <td>M0714111</td>
+                        <td>CEFALOTINA - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td>400</td>
+                        <td>1200</td>
+                        <td>3424</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >96</td>
+                        <td>M0701146</td>
+                        <td>CEFAZOLINA - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td>800</td>
+                        <td>2400</td>
+                        <td>1010</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >97</td>
+                        <td>M0701026</td>
+                        <td>CEFEPIME - FRASCO AMPOLLA - INYECTABLE - 2 GR</td>
+                        <td>30</td>
+                        <td>100</td>
+                        <td>20</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >98</td>
+                        <td>M0701148</td>
+                        <td>CEFEPIME - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>55</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >99</td>
+                        <td>M0724122</td>
+                        <td>CEFOTAXIMA - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>132</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >100</td>
+                        <td>M0718111</td>
+                        <td>CEFTAZIDIMA - FRASCO AMPOLLA - INYECTABLE - 1GR</td>
+                        <td>300</td>
+                        <td>900</td>
+                        <td>98</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >101</td>
+                        <td>M1109166</td>
+                        <td>CEFTAZIDIMA 2GR / AVIBACTAM 0.5GR - FRASCO AMPOLLA - INTRAVENOSO - </td>
+                        <td>30</td>
+                        <td>100</td>
+                        <td>67</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >102</td>
+                        <td>M0717111</td>
+                        <td>CEFTRIAXONA - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td>600</td>
+                        <td>1800</td>
+                        <td>2198</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >103</td>
+                        <td>M0724160</td>
+                        <td>CEFTRIAXONA  - VIAL - POLVO PARA SOLUCIÓN INYECTABLE - 1 G</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1800</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >104</td>
+                        <td>E1201217</td>
+                        <td>CERA P/HUESOS -  -  - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >105</td>
+                        <td>M3209112</td>
+                        <td>CICLOFOSFAMIDA - FRASCO AMPOLLA - INYECTABLE - 1 GR</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>58</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >106</td>
+                        <td>M2601099</td>
+                        <td>CILOSTAZOL -  - COMPRIMIDOS - 100 MG</td>
+                        <td>3000</td>
+                        <td>9000</td>
+                        <td>590</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >107</td>
+                        <td>M1101034</td>
+                        <td>CIPROFLOXACINA - SACHET - SOLUCIÓN INYECTABLE - 200MG - 100 ML</td>
+                        <td>400</td>
+                        <td>1200</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >108</td>
+                        <td>M1101006</td>
+                        <td>CIPROFLOXACINA -  - COMPRIMIDO - 500 MG</td>
+                        <td>3500</td>
+                        <td>10000</td>
+                        <td>10836</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >109</td>
+                        <td>M4001112</td>
+                        <td>CIPROFLOXACINA-DEXAMETASONA - 5 ML - COLIRIO - 0,3%-0,1%</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>8</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >110</td>
+                        <td>M1109203</td>
+                        <td>CIPROFLOXACINO - BOLSA DE 100 ML - SOLUCIÓN INYECTABLE  - 2 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1385</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >111</td>
+                        <td>M0801005</td>
+                        <td>CLARITROMICINA -  - COMPRIMIDO - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >112</td>
+                        <td>M0801133</td>
+                        <td>CLARITROMICINA - 60 ML - SUSPENCION ORAL - 250MG/5ML</td>
+                        <td>100</td>
+                        <td>300</td>
+                        <td>107</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >113</td>
+                        <td>M0801136</td>
+                        <td>CLARITROMICINA - FRASCO AMPOLLA - INYECTABLE - 500 MG</td>
+                        <td>400</td>
+                        <td>1200</td>
+                        <td>2951</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >114</td>
+                        <td>M1109182</td>
+                        <td>CLINDAMICINA -  - CÁPSULA - 300 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3502</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >115</td>
+                        <td>M1101032</td>
+                        <td>CLINDAMICINA -  - COMPRIMIDOS - 600 MG</td>
+                        <td>0</td>
+                        <td>1</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >116</td>
+                        <td>M1101999</td>
+                        <td>CLINDAMICINA 600 MG - UNIDAD - AMPOLLA - </td>
+                        <td>900</td>
+                        <td>2700</td>
+                        <td>1859</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >117</td>
+                        <td>M1201029</td>
+                        <td>CLONAZEPAM -  - COMPRIMIDOS - 0.5 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >118</td>
+                        <td>M1201031</td>
+                        <td>CLONAZEPAM -  - COMPRIMIDOS - 2 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >119</td>
+                        <td>M2501019</td>
+                        <td>CLONIDINA - AMPOLLA - INYECTABLE - 0.150MG - 1 ML</td>
+                        <td>30</td>
+                        <td>90</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >120</td>
+                        <td>M2615123</td>
+                        <td>CLOPIDOGREL -  - COMPRIMIDOS - 75 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>770</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >121</td>
+                        <td>M2501003</td>
+                        <td>CLORHIDRATO DE LABETALOL - AMPOLLA - INYECTABLE - 5MG/ML - 4 ML</td>
+                        <td>400</td>
+                        <td>1200</td>
+                        <td>758</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >122</td>
+                        <td>M0314167</td>
+                        <td>CLORHIDRATO DE LIDOCAÍNA  - VIAL DE 20 ML - SOLUCIÓN INYECTABLE  - 20 MG/ML (2%)  </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1459</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >123</td>
+                        <td>M2534258</td>
+                        <td>CLORHIDRATO DE PROPRANOLOL  - VIAL DE 5 ML - SOLUCIÓN INYECTABLE  - 1 MG/ML </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>13</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >124</td>
+                        <td>M3318149</td>
+                        <td>CLORURO DE POTASIO - AMPOLLA DE 5 ML - SOLUCIÓN INYECTABLE - 3 MEQ/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1087</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >125</td>
+                        <td>M1225111</td>
+                        <td>CLOTIAPINA -  - COMPRIMIDOS - 40 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >126</td>
+                        <td>M2901035</td>
+                        <td>CLOTRIMAZOL - ENVASE X20- 30 GRS. - CREMA - 1% -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>112</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >127</td>
+                        <td>M0901111</td>
+                        <td>COLISTINA - FRASCO AMPOLLA - INYECTABLE - 100MG</td>
+                        <td>600</td>
+                        <td>1800</td>
+                        <td>317</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >128</td>
+                        <td>MMM00097</td>
+                        <td>COMPLEJO B -  - COMPRIMIDOS - ......</td>
+                        <td>100</td>
+                        <td>300</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >129</td>
+                        <td>M4606211</td>
+                        <td>COMPLEJO VITAMINICO A-D-C - GOTAS - SOLUCIÓN ORAL - -20 ML-5000UI-1000UI-50MG/O,6ML</td>
+                        <td>500</td>
+                        <td>1500</td>
+                        <td>3000</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >130</td>
+                        <td>M4606121</td>
+                        <td>COMPLEJO VITAMINICO B- 07 - AMPOLLA - INYECTABLE - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>12</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >131</td>
+                        <td>M1109189</td>
+                        <td>DAPSONA  -  - COMPRIMIDO - 100 MG </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>200</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >132</td>
+                        <td>M1608126</td>
+                        <td>DESLORATADINA - SUSPENSIÓN - SUSPENSIÓN ORAL - 5MG/100ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>15</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >133</td>
+                        <td>M3601005</td>
+                        <td>DESMOPRESINA - AMPOLLA - INYECTABLE - 4MCG/ML - 1 ML</td>
+                        <td>10</td>
+                        <td>30</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >134</td>
+                        <td>M3601023</td>
+                        <td>DESMOPRESINA - AMPOLLA - 1 ML - INYECTABLE - 15MCG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >135</td>
+                        <td>M0141283</td>
+                        <td>DESMOPRESINA ACETATO - AMPOLLA DE 1 ML - SOLUCIÓN INYECTABLE - 4 MCG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >136</td>
+                        <td>M2701041</td>
+                        <td>DEXAMETASONA -  - COMPRIMIDOS - 4 MG</td>
+                        <td>30</td>
+                        <td>90</td>
+                        <td>43</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >137</td>
+                        <td>M2709187</td>
+                        <td>DEXAMETASONA (COMO FOSFATO SÓDICO DE DEXAMETASONA) - AMPOLLA DE 2 ML - SOLUCIÓN INYECTABLE - 4 MG/ML</td>
+                        <td>4000</td>
+                        <td>12000</td>
+                        <td>958</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >138</td>
+                        <td>M1201017</td>
+                        <td>DEXMEDETOMIDINA - FRASCO AMPOLLA - INYECTABLE - 100 MCG/ML - 2 ML</td>
+                        <td>350</td>
+                        <td>1050</td>
+                        <td>1776</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >139</td>
+                        <td>M1210131</td>
+                        <td>DIAZEPAM - AMPOLLA - INYECTABLE - 10MG - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >140</td>
+                        <td>M1701003</td>
+                        <td>DICLOFENAC -  - COMPRIMIDOS - 75 MG</td>
+                        <td>3600</td>
+                        <td>11000</td>
+                        <td>4563</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >141</td>
+                        <td>M1703121</td>
+                        <td>DICLOFENAC - AMPOLLA - 3 ML - INYECTABLE - 75MG -</td>
+                        <td>5500</td>
+                        <td>16500</td>
+                        <td>3221</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >142</td>
+                        <td>M1601010</td>
+                        <td>DIFENHIDRAMINA - 100ML - JARABE - 250MG</td>
+                        <td>150</td>
+                        <td>450</td>
+                        <td>743</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >143</td>
+                        <td>M1601132</td>
+                        <td>DIFENHIDRAMINA - AMPOLLA - 1 ML - INYECTABLE - 10MG/ML</td>
+                        <td>800</td>
+                        <td>2400</td>
+                        <td>84</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >144</td>
+                        <td>M2511131</td>
+                        <td>DIGOXINA - AMPOLLA - INYECTABLE - 0.25 MG</td>
+                        <td>70</td>
+                        <td>210</td>
+                        <td>248</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >145</td>
+                        <td>M2511111</td>
+                        <td>DIGOXINA -  - COMPRIMIDO - 0.25 MG</td>
+                        <td>600</td>
+                        <td>1800</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >146</td>
+                        <td>M2505111</td>
+                        <td>DILTIAZEM -  - COMPRIMIDOS - 60 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>130</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >147</td>
+                        <td>M2513111</td>
+                        <td>DINITRATO DE ISOSORBIDE -  - COMPRIMIDOS - 5 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>60</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >148</td>
+                        <td>M1701063</td>
+                        <td>DIPIRONA - 120 ML - JARABE - 5GR/100ML</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>453</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >149</td>
+                        <td>M1701082</td>
+                        <td>DIPIRONA - AMPOLLA - 2 ML - INYECTABLE - 1GR - 2 ML</td>
+                        <td>2000</td>
+                        <td>6000</td>
+                        <td>869</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >150</td>
+                        <td>M1701054</td>
+                        <td>DIPIRONA -  - COMPRIMIDOS - 500MG</td>
+                        <td>650</td>
+                        <td>2000</td>
+                        <td>1770</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >151</td>
+                        <td>M1200134</td>
+                        <td>DIVALPROATO DE SODIO -  - COMPRIMIDO - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >152</td>
+                        <td>M1200135</td>
+                        <td>DIVALPROATO DE SODIO -  - COMPRIMIDO - 250 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >153</td>
+                        <td>M2501032</td>
+                        <td>DOBUTAMINA - FRASCO AMPOLLA - INYECTABLE - 250MG - 20 ML</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>696</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >154</td>
+                        <td>M2501035</td>
+                        <td>DOPAMINA - AMPOLLA - INYECTABLE - 200MG - 5 ML</td>
+                        <td>50</td>
+                        <td>150</td>
+                        <td>923</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >155</td>
+                        <td>M1001001</td>
+                        <td>DOXICICLINA -  - COMPRIMIDO - 100 MG</td>
+                        <td>300</td>
+                        <td>900</td>
+                        <td>16</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >156</td>
+                        <td>E8401288</td>
+                        <td>ELECTRODO DESC. ADULTOS -  -  - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >157</td>
+                        <td>M2519111</td>
+                        <td>ENALAPRIL -  - COMPRIMIDOS - 10 MG</td>
+                        <td>18000</td>
+                        <td>55000</td>
+                        <td>69110</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >158</td>
+                        <td>M2519112</td>
+                        <td>ENALAPRIL -  - COMPRIMIDOS - 5 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1000</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >159</td>
+                        <td>M2501038</td>
+                        <td>ENALAPRIL - AMPOLLA - INYECTABLE - 1.25 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>10</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >160</td>
+                        <td>M2615234</td>
+                        <td>ENOXAPARINA SÓDICA - JERINGA DE 0,4 ML - SOLUCIÓN INYECTABLE - 40 MG/0,4 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >161</td>
+                        <td>M2615235</td>
+                        <td>ENOXAPARINA SÓDICA - JERINGA DE 0,6 ML - SOLUCIÓN INYECTABLE - 60 MG/0,6 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>490</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >162</td>
+                        <td>D02R0102</td>
+                        <td>EQUIPO P/MONITORIZACION DE GLUCEMIA - UNIDAD -  - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >163</td>
+                        <td>M4023187</td>
+                        <td>ERITROMICINA -  - UNGUENTO OFTALMICO - </td>
+                        <td>10</td>
+                        <td>30</td>
+                        <td>50</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >164</td>
+                        <td>M0801121</td>
+                        <td>ERITROMICINA -  - COMPRIMIDO - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>100</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >165</td>
+                        <td>M4023120</td>
+                        <td>ERITROMICINA LACTIOBONATO -  - GOTAS OFTALMOLOGICAS - 1GR/100ML - 10 ML</td>
+                        <td>20</td>
+                        <td>60</td>
+                        <td>118</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >166</td>
+                        <td>M3601030</td>
+                        <td>ERITROPOYETINA - AMPOLLA - INYECTABLE - 2.000 U.I.</td>
+                        <td>20</td>
+                        <td>60</td>
+                        <td>28</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >167</td>
+                        <td>M0801019</td>
+                        <td>ESPIRAMICINA -  - COMPRIMIDO - 3.000.000U.I (1 GR)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>390</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >168</td>
+                        <td>M3002111</td>
+                        <td>ESPIRONOLACTONA -  - COMPRIMIDOS - 25 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>4800</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >169</td>
+                        <td>M3002112</td>
+                        <td>ESPIRONOLACTONA -  - COMPRIMIDOS - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1500</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >170</td>
+                        <td>M2601033</td>
+                        <td>ESTREPTOQUINASA - AMPOLLA - INYECTABLE - 1.500.000 U.I.</td>
+                        <td>5</td>
+                        <td>15</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >171</td>
+                        <td>M0908111</td>
+                        <td>ETAMBUTOL -  - COMPRIMIDOS - 400 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >172</td>
+                        <td>M2517121</td>
+                        <td>ETILEFRINA - AMPOLLA - INYECTABLE - 10MG - 1 ML</td>
+                        <td>100</td>
+                        <td>300</td>
+                        <td>404</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >173</td>
+                        <td>M3103187</td>
+                        <td>ETONOGESTREL  -  - IMPLANTE SUBCUTÁNEO DE LIBERACIÓN PROLONGADA - 68 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >174</td>
+                        <td>M2615244</td>
+                        <td>FACTOR DE COAGULACION II, VII, IX y X -  - POLVO PARA SOLUCIÓN INYECTABLE - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>8</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >175</td>
+                        <td>M4001014</td>
+                        <td>FENILEFRINA-TROPICAMIDA -  - GOTAS - 5%-0.5% - 5 ML</td>
+                        <td>8</td>
+                        <td>24</td>
+                        <td>39</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >176</td>
+                        <td>M1201058</td>
+                        <td>FENITOINA (DIFENILHIDANTOINA) -  - JARABE - 2.5GR/100ML - 120ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >177</td>
+                        <td>M1201059</td>
+                        <td>FENITOINA (DIFENILHIDANTOINA) - AMPOLLA - INYECTABLE - 100MG - 2 ML</td>
+                        <td>850</td>
+                        <td>2500</td>
+                        <td>407</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >178</td>
+                        <td>M1201056</td>
+                        <td>FENITOINA (DIFENILHIDANTOINA) -  - COMPRIMIDOS/CÁPSULAS - 100 MG</td>
+                        <td>4400</td>
+                        <td>13000</td>
+                        <td>7660</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >179</td>
+                        <td>M2601024</td>
+                        <td>FENOFIBRATO -  - CAPSULA - 200 MG</td>
+                        <td>1500</td>
+                        <td>4500</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >180</td>
+                        <td>M0724156</td>
+                        <td>FENOXIMETILPENICILINA - FRASCO DE 100 ML - SUSPENSIÓN ORAL - 60000 UI/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>25</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >181</td>
+                        <td>M0724147</td>
+                        <td>FENOXIMETILPENICILINA - 1 UNIDADES DE 180 ML - JARABE/SUSPENSION ORAL/POLVO PARA USO ORAL - 300000 UI/5ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>5</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >182</td>
+                        <td>M0216124</td>
+                        <td>FENTANILO CITRATO - AMPOLLA - INYECTABLE - 50MCG/ML - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >183</td>
+                        <td>M3253111</td>
+                        <td>FILGRASTIM - FRASCO AMPOLLA - INYECTABLE - 30.000.000 U.I - 1ML</td>
+                        <td>3</td>
+                        <td>10</td>
+                        <td>3</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >184</td>
+                        <td>M1805112</td>
+                        <td>FLUCONAZOL -  - COMPRIMIDOS - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >185</td>
+                        <td>M1801005</td>
+                        <td>FLUCONAZOL -  - COMPRIMIDOS - 150 MG</td>
+                        <td>240</td>
+                        <td>720</td>
+                        <td>2476</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >186</td>
+                        <td>M1801024</td>
+                        <td>FLUCONAZOL -  - SOLUCION INYECTABLE (ENVASE PLASTICO) - 200MG - 100ML</td>
+                        <td>60</td>
+                        <td>200</td>
+                        <td>514</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >187</td>
+                        <td>M1801006</td>
+                        <td>FLUCONAZOL -  - COMPRIMIDOS - 200 MG</td>
+                        <td>240</td>
+                        <td>720</td>
+                        <td>96</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >188</td>
+                        <td>M4023155</td>
+                        <td>FLUORESCEINA -  - COLIRIO - 0.25%</td>
+                        <td>2</td>
+                        <td>6</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >189</td>
+                        <td>M2434155</td>
+                        <td>FLUTICASONA+SALMETEROL - 60 DOSIS - CAPSULAS PARA INHALAR+APLICADOR - 250/50 MCG/DOSIS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >190</td>
+                        <td>M2310158</td>
+                        <td>FOSFATO DISODICO + FOSFATO MONOSODICO - FRASCO DE 45 ML - SOLUCIÓN ORAL - 180 MG/ML + 480 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>41</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >191</td>
+                        <td>M2434116</td>
+                        <td>FOSFOLIPIDOS (SURFACTANTE PULMONAR BOVINO) -  - VIAL - 30MG/ML - 4 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>16</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >192</td>
+                        <td>M2434125</td>
+                        <td>FOSFOLIPIDOS (SURFACTANTE PULMONAR BOVINO) -  - FCO AMPOLLA - 30MG/ML-8ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >193</td>
+                        <td>M1104111</td>
+                        <td>FOSFOMICINA -  - FCO. AMPOLLA I.V. - 1 GR</td>
+                        <td>30</td>
+                        <td>90</td>
+                        <td>229</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >194</td>
+                        <td>M2534251</td>
+                        <td>FUROSEMIDA - AMPOLLA DE 2 ML - SOLUCIÓN INYECTABLE - 10 MG/ML</td>
+                        <td>1500</td>
+                        <td>4500</td>
+                        <td>5477</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >195</td>
+                        <td>M3001122</td>
+                        <td>FUROSEMIDA -  - AMPOLLAS - 20MG - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >196</td>
+                        <td>M3001111</td>
+                        <td>FUROSEMIDA -  - COMPRIMIDOS - 40 MG</td>
+                        <td>2000</td>
+                        <td>6000</td>
+                        <td>2350</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >197</td>
+                        <td>M2615221</td>
+                        <td>GAMMAGLOBULINA -  -  - 300 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >198</td>
+                        <td>M3701009</td>
+                        <td>GAMMAGLOBULINA ANTITETANICA - AMPOLLA - INYECTABLE - 500 U.I.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >199</td>
+                        <td>M4201011</td>
+                        <td>GANCICLOVIR -  - FCO. AMPOLLA - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>81</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >200</td>
+                        <td>M0601004</td>
+                        <td>GENTAMICINA -  - SOLUCION (SOLUFLEX) - 80MG - 100 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>68</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >201</td>
+                        <td>LH433020</td>
+                        <td>GENTAMICINA -  -  - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >202</td>
+                        <td>M0604221</td>
+                        <td>GENTAMICINA (COMO SULFATO DE GENTAMICINA)  - AMPOLLA DE 1 ML - SOLUCIÓN INYECTABLE - 20 MG/ML </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>43</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >203</td>
+                        <td>M0603114</td>
+                        <td>GENTAMICINA SULFATO - INYECTABLE - AMPOLLA - 80MG/  EN 2ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >204</td>
+                        <td>M4402111</td>
+                        <td>GLUCAGON -  - FCO. AMPOLLA - 1 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >205</td>
+                        <td>M4402112</td>
+                        <td>GLUCOSA  - VIAL DE 10 ML - SOLUCIÓN INYECTABLE - 250 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >206</td>
+                        <td>M1246415</td>
+                        <td>HALOPERIDOL - FRASCO DE 20 ML - SOLUCIÓN ORAL - 2 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >207</td>
+                        <td>M1222112</td>
+                        <td>HALOPERIDOL -  - COMPRIMIDOS - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >208</td>
+                        <td>M2601030</td>
+                        <td>HEPARINA BAJO PESO MOLECULAR (ENOXAPARINA) -  - JERINGA PRELLENADA - 60MG - 0.6 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>4</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >209</td>
+                        <td>M2601031</td>
+                        <td>HEPARINA BAJO PESO MOLECULAR (ENOXAPARINA) -  - JERINGA PRELLENADA - 80MG - 0.8 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1339</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >210</td>
+                        <td>M2601029</td>
+                        <td>HEPARINA BAJO PESO MOLECULAR (ENOXAPARINA) -  - JERINGA PRELLENADA - 40MG - 0.4 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >211</td>
+                        <td>M2601053</td>
+                        <td>HEPARINA SODICA - 5 ML - FCO. AMPOLLA - 5.000U.I/ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>47</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >212</td>
+                        <td>M2615241</td>
+                        <td>HEPARINA SÓDICA - VIAL DE 5 ML - SOLUCIÓN INYECTABLE - 5000 UI/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>308</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >213</td>
+                        <td>M2523457</td>
+                        <td>HIDROCLOROTIAZIDA -  - COMPRIMIDO - 12.5 MG</td>
+                        <td>2400</td>
+                        <td>7500</td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >214</td>
+                        <td>M3004111</td>
+                        <td>HIDROCLOROTIAZIDA -  - COMPRIMIDOS - 50 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>150</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >215</td>
+                        <td>M3000019</td>
+                        <td>HIDROCLOROTIAZIDA -  - COMPRIMIDOS - 25 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>525</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >216</td>
+                        <td>M2709125</td>
+                        <td>HIDROCORTISONA -  - FCO. AMPOLLA - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>905</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >217</td>
+                        <td>M2706121</td>
+                        <td>HIDROCORTISONA -  - COMPRIMIDOS - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>50</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >218</td>
+                        <td>M2709213</td>
+                        <td>HIDROCORTISONA   - VIAL - POLVO PARA SOLUCIÓN INYECTABLE  - 500 MG  </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1466</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >219</td>
+                        <td>M1901007</td>
+                        <td>HIDROXICLOROQUINA -  - COMPRIMIDOS - 200 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >220</td>
+                        <td>M4023138</td>
+                        <td>HIDROXIPROPILMETILCELULOSA -  - GOTAS OFTALMICAS - 3MGR/GR - 25 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >221</td>
+                        <td>M4023144</td>
+                        <td>HIDROXIPROPILMETILCELULOSA -  - GOTAS OFTALMICAS - 15 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>55</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >222</td>
+                        <td>M0505149</td>
+                        <td>HIERRO ELEMENTAL + ACIDO FOLICO - COMPRIMIDOS RECUBUERTOS - MICROESFEREAS- COMPRIMIDOS - 80 MG. / 1 MG.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>200</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >223</td>
+                        <td>M0501118</td>
+                        <td>HIERRO SACARATO - AMPOLLA - 5 ML - INYECTABLE - 100MG - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >224</td>
+                        <td>M1505127</td>
+                        <td>HIOSCINA BUTILBROMURO - AMPOLLA DE 1 ML - SOLUCIÓN INYECTABLE - 20 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>7024</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >225</td>
+                        <td>M1701074</td>
+                        <td>IBUPROFENO - 90ML - SUSPENSION - 2GR/100ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3270</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >226</td>
+                        <td>M0216172</td>
+                        <td>IBUPROFENO - AMPOLLA DE 3 ML - SOLUCIÓN INYECTABLE - 133.33 MG/ML (400 MG/3ML)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >227</td>
+                        <td>M1701075</td>
+                        <td>IBUPROFENO -  - COMPRIMIDOS - 400 MG</td>
+                        <td>13000</td>
+                        <td>39000</td>
+                        <td>11110</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >228</td>
+                        <td>M1701110</td>
+                        <td>IBUPROFENO -  - SUSPENSION - 400MG - 90 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2735</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >229</td>
+                        <td>M1701010</td>
+                        <td>IBUPROFENO -  - JARABE - 2GR/100ML - 60ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >230</td>
+                        <td>M0724163</td>
+                        <td>IMIPENEM + CILASTATINA - VIAL - POLVO PARA SUSPENSIÓN INYECTABLE  - 500 MG + 500 MG  </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1168</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >231</td>
+                        <td>M0724115</td>
+                        <td>IMIPENEM-CILASTATINA - INYECTABLE - FRASCO  AMPOLLA - 500MG-500MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >232</td>
+                        <td>M1702121</td>
+                        <td>INDOMETACINA -  - AMPOLLAS - 75 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>40</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >233</td>
+                        <td>M1702131</td>
+                        <td>INDOMETACINA -  - SUPOSITORIOS - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>38</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >234</td>
+                        <td>M3706209</td>
+                        <td>INMUNOGLOBULINA ANTI RH (D) HUMANA  - JERINGA DE 2 ML -  SOLUCIÓN INYECTABLE  - 300 MCG/2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>53</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >235</td>
+                        <td>M3706202</td>
+                        <td>INMUNOGLOBULINA ANTITETANICA + TOXOIDE TETANICO - 1 JERINGA PRELLENADA + 1 AMPOLLA - SUSPENSIÓN INYECTABLE - 500 UI + 75 UI</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>21</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >236</td>
+                        <td>M3706216</td>
+                        <td>INMUNOGLOBULINA HUMANA NORMAL - VIAL DE 100 ML - SOLUCIÓN INYECTABLE - 100 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>16</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >237</td>
+                        <td>M3408126</td>
+                        <td>INSULINA GLULISINA - UNIDAD - LAPICERA PRELLENADA - 3 ML . 100 UI/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >238</td>
+                        <td>M3409053</td>
+                        <td>INSULINA HUMANA REGULAR - VIAL DE 10 ML - SOLUCIÓN INYECTABLE - 100 UI/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>31</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >239</td>
+                        <td>M3409052</td>
+                        <td>INSULINA ISOFANA HUMANA (NPH) - VIAL DE 10 ML - SUSPENSIÓN INYECTABLE - 100 UI/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>9</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >240</td>
+                        <td>M2434200</td>
+                        <td>IPRATROPIO BROMURO - AEROSOL POR 250 DOSIS - SOLUCIÓN PRESURIZADA PARA INHALACIÓN - 20 MCG/ DOSIS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>379</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >241</td>
+                        <td>M1109188</td>
+                        <td>ISONIAZIDA  -  - COMPRIMIDO - 100 MG </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >242</td>
+                        <td>M2501047</td>
+                        <td>ISOPROTERENOL - AMPOLLA - INYECTABLE - 1MG - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>25</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >243</td>
+                        <td>M3101022</td>
+                        <td>ISOXSUPRINA - AMPOLLA 2 ML - INYECTABLE - 10MG - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1020</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >244</td>
+                        <td>M3101058</td>
+                        <td>ISOXSUPRINA -  - COMPRIMIDOS - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>900</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >245</td>
+                        <td>M1801011</td>
+                        <td>ITRACONAZOL -  - CAPSULAS - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>100</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >246</td>
+                        <td>M1901032</td>
+                        <td>IVERMECTINA -  - COMPRIMIDOS - 6 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>492</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >247</td>
+                        <td>M1708123</td>
+                        <td>KETOROLAC TROMETAMINA -  - AMPOLLAS - 30MG - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >248</td>
+                        <td>M1701023</td>
+                        <td>KETOROLAC TROMETAMINA -  - COMPRIMIDOS - 20 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2520</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >249</td>
+                        <td>M2501007</td>
+                        <td>LABETALOL CLORHIDRATO -  - COMPRIMIDOS - 200 MG</td>
+                        <td>1200</td>
+                        <td>3600</td>
+                        <td>1975</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >250</td>
+                        <td>M2301112</td>
+                        <td>LACTULOSA -  - JARABE - 65GR/100ML - 120 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>293</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >251</td>
+                        <td>M2301111</td>
+                        <td>LACTULOSA -  - JARABE - 65GR/100ML - 250 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>142</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >252</td>
+                        <td>E0350469</td>
+                        <td>LAMINA DE OXIDO DE CELULOSA REGENERADA - UNIDAD - 2&quot; X 3&quot; - VARIAS MEDIDAS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >253</td>
+                        <td>M3201009</td>
+                        <td>LEUCOVORINA CALCICA -  - COMPRIMIDOS - 15 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>250</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >254</td>
+                        <td>M1101059</td>
+                        <td>LEVOFLOXACINA -  - COMPRIMIDO - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>809</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >255</td>
+                        <td>M1101063</td>
+                        <td>LEVOFLOXACINA - INYECTABLE - FRASCO  AMPOLLA - 500MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>11</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >256</td>
+                        <td>M1201089</td>
+                        <td>LEVOMEPROMAZINA - 1 ML - AMPOLLAS - 25MG -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>25</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >257</td>
+                        <td>M3601010</td>
+                        <td>LEVOTIROXINA -  - COMPRIMIDOS - 0.05 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>50</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >258</td>
+                        <td>M0301130</td>
+                        <td>LIDOCAINA -  - SPRAY - 10% - 50 GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >259</td>
+                        <td>M0309114</td>
+                        <td>LIDOCAINA C/EPINEFRINA -  - AMPOLLAS - 2% - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >260</td>
+                        <td>M0314153</td>
+                        <td>LIDOCAINA CLORHIDRATO - AMPOLLA DE 5 ML - SOLUCIÓN INYECTABLE - 10 MG/ML (1 %)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>305</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >261</td>
+                        <td>M0314161</td>
+                        <td>LIDOCAINA CLORHIDRATO CON EPINEFRINA - VIAL DE 20 ML - SOLUCIÓN INYECTABLE - 2 %</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>152</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >262</td>
+                        <td>M0308131</td>
+                        <td>LIDOCAINA S/EPINEFRINA - 25 ML - JALEA - 2% -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>242</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >263</td>
+                        <td>M0301140</td>
+                        <td>LIDOCAINA S/EPINEFRINA -  - AMPOLLAS - 2% - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >264</td>
+                        <td>M0314133</td>
+                        <td>LIDOCAINA S/EPINEFRINA-S/CONSERVADORES -  - AMPOLLAS POLIPROPILENO - 2% - 20 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >265</td>
+                        <td>M1109135</td>
+                        <td>LINEZOLID - SOLUCIÓN INYECTABLE - SACHET - 60O MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>94</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >266</td>
+                        <td>M1305111</td>
+                        <td>LOPERAMIDA -  - COMPRIMIDOS - 2 MG</td>
+                        <td>1000</td>
+                        <td>3000</td>
+                        <td>7300</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >267</td>
+                        <td>M1601028</td>
+                        <td>LORATADINA -  - COMPRIMIDOS - 10MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2240</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >268</td>
+                        <td>M1246136</td>
+                        <td>LORAZEPAM -  - COMPRIMIDOS SUBLINGUALES - 1 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1000</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >269</td>
+                        <td>M1211112</td>
+                        <td>LORAZEPAM -  - COMPRIMIDOS - 2.5MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >270</td>
+                        <td>M1211121</td>
+                        <td>LORAZEPAM -  - AMPOLLAS - 4 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >271</td>
+                        <td>M2516112</td>
+                        <td>LOSARTAN -  - COMPRIMIDOS - 50 MG</td>
+                        <td>3000</td>
+                        <td>9000</td>
+                        <td>20930</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >272</td>
+                        <td>M3301055</td>
+                        <td>MAGNESIO SULFATO - 10 ML - AMPOLLAS - 25 % - 10 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>731</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >273</td>
+                        <td>M3318145</td>
+                        <td>MAGNESIO SULFATO - SOLUCION INYECTABLE AMPOLLA 5 ML - SOLUCIÓN INYECTABLE - 250 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1306</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >274</td>
+                        <td>M3315111</td>
+                        <td>MAGNESIO SULFATO - 5 ML - AMPOLLAS - 25 % -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >275</td>
+                        <td>M1902124</td>
+                        <td>MEBENDAZOL - 30 ML - SUSPENSION - 200MG/5ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >276</td>
+                        <td>M1902123</td>
+                        <td>MEBENDAZOL -  - COMPRIMIDOS - 200 MG</td>
+                        <td>180</td>
+                        <td>540</td>
+                        <td>400</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >277</td>
+                        <td>M1911136</td>
+                        <td>MEBENDAZOL - FRASCO DE 30 ML - SUSPENSIÓN ORAL - 20 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>361</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >278</td>
+                        <td>E7003111</td>
+                        <td>MEDIDOR DE GLUCOSA EN SANGRE -  - ----- - -----</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>94</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >279</td>
+                        <td>M0208111</td>
+                        <td>MEPERIDINA -  - AMPOLLAS - 100MG - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >280</td>
+                        <td>M2709184</td>
+                        <td>MEPREDNISONA -  - COMPRIMIDO ORAL - 8 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >281</td>
+                        <td>M2709206</td>
+                        <td>MEPREDNISONA - FRASCO DE 15 ML - SOLUCIÓN ORAL - 4 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2435</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >282</td>
+                        <td>M2709185</td>
+                        <td>MEPREDNISONA -  - COMPRIMIDO ORAL - 40 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>9850</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >283</td>
+                        <td>M43R0106</td>
+                        <td>MEPREDNISONA -  - 8MG - COMPRIMIDOS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>50</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >284</td>
+                        <td>M2709189</td>
+                        <td>MEPREDNISONA - FRASCO DE 15 ML - SOLUCIÓN ORAL - 4 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >285</td>
+                        <td>M2709183</td>
+                        <td>MEPREDNISONA  -  - COMPRIMIDO ORAL - 4 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>840</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >286</td>
+                        <td>M0701173</td>
+                        <td>MEROPENEM - INYECTABLE - FRANCO  AMPOLLA - 1 GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>329</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >287</td>
+                        <td>M0701190</td>
+                        <td>MEROPENEM - INYECTABLE - FRASCO  AMPOLLA - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >288</td>
+                        <td>M2310123</td>
+                        <td>MESALAZINA -  - SUPOSITORIOS - 400 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >289</td>
+                        <td>M3401022</td>
+                        <td>METFORMINA -  - COMPRIMIDOS - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >290</td>
+                        <td>M3101112</td>
+                        <td>METILERGONOVINA -  - COMPRIMIDOS - 0.2 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >291</td>
+                        <td>M3101122</td>
+                        <td>METILERGONOVINA - 1 ML - INYECTABLE - 0.2MG -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>996</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >292</td>
+                        <td>M2709182</td>
+                        <td>METILPREDNISOLONA (COMO SUCCINATO SÓDICO DE METILPREDNISOLONA) -  - POLVO PARA SOLUCIÓN INYECTABLE - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>145</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >293</td>
+                        <td>M3601020</td>
+                        <td>METIMAZOL -  - COMPRIMIDOS - 20 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>250</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >294</td>
+                        <td>M2310157</td>
+                        <td>METOCLOPRAMIDA - AMPOLLA DE 2 ML - SOLUCIÓN INYECTABLE - 5 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>6831</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >295</td>
+                        <td>M1401132</td>
+                        <td>METOCLOPRAMIDA -  - GOTAS - 0.5% - 20 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>290</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >296</td>
+                        <td>M1403124</td>
+                        <td>METOCLOPRAMIDA - AMPOLLA - INYECTABLE - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >297</td>
+                        <td>M1401111</td>
+                        <td>METOCLOPRAMIDA -  - COMPRIMIDOS - 10MG</td>
+                        <td>400</td>
+                        <td>1500</td>
+                        <td>1800</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >298</td>
+                        <td>M3201012</td>
+                        <td>METOTREXATO -  - FCO. AMPOLLA - 50 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>197</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >299</td>
+                        <td>M3259198</td>
+                        <td>METOTREXATO 15 MG - COMPRIMIDOS RANURADOS X 4 -  - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >300</td>
+                        <td>M1901037</td>
+                        <td>METRONIDAZOL -  - COMPRIMIDO - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1094</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >301</td>
+                        <td>M1901016</td>
+                        <td>METRONIDAZOL - SACHET - INYECTABLE - 500MG/100ML - 100 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>113</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >302</td>
+                        <td>M3101060</td>
+                        <td>METRONIDAZOL-DEXAMETASONA-LIDOCAINA-NEOMICINA-NISTATINA - 00UI - OVULOS - 500-0.2-10-5MG-100.0</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>108</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >303</td>
+                        <td>M1109185</td>
+                        <td>MICONAZOL  + BETAMETASONA  + GENTAMICINA    - POMO DE 20 G - CREMA CUTÁNEA - 20 MG/G +  1 MG/G  +  1 MG/G  </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>208</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >304</td>
+                        <td>M1802112</td>
+                        <td>MICONAZOL-BETAMETASONA-GENTAMICINA -  - CREMA - 20 GRS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>30</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >305</td>
+                        <td>M2534252</td>
+                        <td>MILRINONA - VIAL DE 10 ML - SOLUCIÓN INYECTABLE - 1 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>22</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >306</td>
+                        <td>M1001008</td>
+                        <td>MINOCICLINA -  - COMPRIMIDO - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>200</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >307</td>
+                        <td>M1201105</td>
+                        <td>MIRTAZAPINA -  - COMPRIMIDOS - 30 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >308</td>
+                        <td>M3103185</td>
+                        <td>MISOPROSTOL -  - COMPRIMIDO VAGINAL - 200 MCG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>204</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >309</td>
+                        <td>M2401039</td>
+                        <td>MONTELUKAST SODICO -  - COMPRIMIDOS - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >310</td>
+                        <td>M0200126</td>
+                        <td>MORFINA -  - JARABE - 4% - 200 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >311</td>
+                        <td>M2901084</td>
+                        <td>MUPIROCINA -  - UNGUENTO TOPICO - 2GR/100GR - 15 GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>19</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >312</td>
+                        <td>LA199073</td>
+                        <td>N-ACETIL CISTEINA -  -  - GRS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>200</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >313</td>
+                        <td>M3805111</td>
+                        <td>NALOXONA - 1 ML - AMPOLLAS - 0.4MG/ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>230</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >314</td>
+                        <td>M1701024</td>
+                        <td>NAPROXENO -  - COMPRIMIDOS - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2940</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >315</td>
+                        <td>M2615246</td>
+                        <td>NEBIVOLOL -  - COMPRIMIDO - 5 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>300</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >316</td>
+                        <td>M2534235</td>
+                        <td>NEBIVOLOL -  - COMPRIMIDOS - 5 MG.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>196</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >317</td>
+                        <td>M4109111</td>
+                        <td>NEOSTIGMINA - 1 ML - AMPOLLAS - 0.5MG/ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>581</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >318</td>
+                        <td>M2501072</td>
+                        <td>NIMODIPINA -  - COMPRIMIDO - 60 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1050</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >319</td>
+                        <td>M1803121</td>
+                        <td>NISTATINA - 30 GR - CREMA - 100.000U.I/GR -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>30</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >320</td>
+                        <td>M1803152</td>
+                        <td>NISTATINA - 60ML - SUSPENSION ORAL - 100.000U.I/ML -</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>14</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >321</td>
+                        <td>M3000033</td>
+                        <td>NITROFURANTOINA -  - COMPRIMIDO - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>274</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >322</td>
+                        <td>M2534253</td>
+                        <td>NITROGLICERINA - AMPOLLA DE 5 ML - SOLUCIÓN INYECTABLE - 5 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1307</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >323</td>
+                        <td>M2501075</td>
+                        <td>NITROGLICERINA - AMPOLLA - INYECTABLE - 5MG/ML - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >324</td>
+                        <td>M2509113</td>
+                        <td>NITROPRUSIATO DE SODIO - FRASCO AMPOLLA  C/BOLSA PROTECTORA - INYECTABLE - 50 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>125</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >325</td>
+                        <td>M2501116</td>
+                        <td>NORADRENALINA -  - AMPOLLAS - 1MG/ML - 4 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>439</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >326</td>
+                        <td>M1101075</td>
+                        <td>NORFLOXACINA -  - COMPRIMIDO - 400MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>150</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >327</td>
+                        <td>M3629171</td>
+                        <td>OCTREOTIDA - AMPOLLA DE 1 ML - SOLUCIÓN INYECTABLE - 100 MCG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>141</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >328</td>
+                        <td>M2310167</td>
+                        <td>OMEPRAZOL -  - CÁPSULA - 20 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>16</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >329</td>
+                        <td>M2201005</td>
+                        <td>OMEPRAZOL -  - FCO. AMPOLLA I.V. - 40 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1159</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >330</td>
+                        <td>M2201123</td>
+                        <td>OMEPRAZOL -  - CAPSULAS - 20 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>10400</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >331</td>
+                        <td>M1403127</td>
+                        <td>ONDANSETRÓN - ampolla de 4 ml - SOLUCIÓN INYECTABLE - 2 mg/ml</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>489</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >332</td>
+                        <td>M1101026</td>
+                        <td>ORNIDAZOL - SOLUCIÓN INYECTABLE - AMPOLLA - 1GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>148</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >333</td>
+                        <td>M2000117</td>
+                        <td>ORTOFTALDEHIDO -  - LIQUIDO - 0,55%-5 LITROS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >334</td>
+                        <td>M4219140</td>
+                        <td>OSELTAMIVIR - FCO X 75 ML - JARABE - 30GR/75 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>10</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >335</td>
+                        <td>M4219120</td>
+                        <td>OSELTAMIVIR FOSFATO -  - CAPSULAS - 98.5 MG (EQ.75MG)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>172</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >336</td>
+                        <td>M3629172</td>
+                        <td>OXITOCINA - AMPOLLA DE 1 ML - SOLUCIÓN INYECTABLE - 10 UI/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>5741</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >337</td>
+                        <td>M1701064</td>
+                        <td>PARACETAMOL -  - COMPRIMIDOS - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>4360</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >338</td>
+                        <td>M0216164</td>
+                        <td>PARACETAMOL - AMPOLLA DE 10 MG/ML DE 100 ML -  - 10MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>50</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >339</td>
+                        <td>M0216170</td>
+                        <td>PARACETAMOL - FRASCO DE 20 ML - SOLUCIÓN ORAL - 100 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >340</td>
+                        <td>M1701109</td>
+                        <td>PARACETAMOL -  - SUSPENSION - 120 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>131</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >341</td>
+                        <td>M0216174</td>
+                        <td>PARACETAMOL - FRASCO DE 120 ML - SUSPENSIÓN ORAL - 20 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>150</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >342</td>
+                        <td>M0216178</td>
+                        <td>PARACETAMOL  - FRASCO DE 20 ML - SOLUCIÓN ORAL - 100 MG/ML (10%)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>200</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >343</td>
+                        <td>M1701093</td>
+                        <td>PARACETAMOL 
+ -  - GOTAS - 10 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1431</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >344</td>
+                        <td>D0851118</td>
+                        <td>PASTA KARAYA - UNIDAD - GEL - GRS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>6</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >345</td>
+                        <td>M0724159</td>
+                        <td>PENICILINA G BENZATÍNICA - VIAL - POLVO PARA SUSPENSIÓN INYECTABLE - 2.400.000 UI</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>395</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >346</td>
+                        <td>M0705111</td>
+                        <td>PENICILINA G. BENZATINICA - INYECTABLE - FRASCO  AMPOLLA - 1.200.000U.I</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >347</td>
+                        <td>M0705112</td>
+                        <td>PENICILINA G. BENZATINICA - INYECTABLE - FRASCO AMPOLLA - 2.400.000U.I.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>10</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >348</td>
+                        <td>M0706111</td>
+                        <td>PENICILINA G. SODICA - INYECTABLE - FRASCO AMPOLLA - 1.000.000U.I.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>98</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >349</td>
+                        <td>M0706112</td>
+                        <td>PENICILINA G. SODICA -  - FCO. AMPOLLA - 3.000.000U.I.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>189</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >350</td>
+                        <td>M0701174</td>
+                        <td>PENICILINA V (FENOXIMETILPENICILINA) -  - COMPRIMIDO - 1.500.000U.I.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>348</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >351</td>
+                        <td>M0701151</td>
+                        <td>PENICILINA V (FENOXIMETILPENICILINA) - FRASCO X 100 ML - POLVO P/SUSPENSIÓN ORAL - 300.000UI/5ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >352</td>
+                        <td>M1901038</td>
+                        <td>PENTAMIDINA -  - FCO. AMPOLLA - 300 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>8</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >353</td>
+                        <td>M1901041</td>
+                        <td>PERMETRINA -  - LOCION - 1% - 100 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>9</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >354</td>
+                        <td>M1901046</td>
+                        <td>PERMETRINA 
+ -  - CREMA - 5%-100GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>37</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >355</td>
+                        <td>M1901004</td>
+                        <td>PERMETRINA-BENCILO BENZOATO -  - LOCION    100 ML - 1GR-5.7GR/100ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >356</td>
+                        <td>M0701179</td>
+                        <td>PIPERACILINA SODICA-TAZOBACTAM - INYECTABLE - FRASCO AMPOLLA - 4GR-500MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3062</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >357</td>
+                        <td>M1109184</td>
+                        <td>PIRAZINAMIDA+ETAMBUTOL+RIFAMPICINA+ISONIAZIDA -  - COMPRIMIDO - 400MG+275MG+150MG+75MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >358</td>
+                        <td>M2534254</td>
+                        <td>POLIDOCANOL - AMPOLLA DE 2 ML - SOLUCIÓN INYECTABLE - 20 MG/ML (2%)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>15</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >359</td>
+                        <td>M3316111</td>
+                        <td>POTASIO CLORURO -  - AMPOLLAS - 15 MEQ - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >360</td>
+                        <td>M3301112</td>
+                        <td>POTASIO GLUCONATO -  - ELIXIR - 31,2G/100 ML - 200 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>333</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >361</td>
+                        <td>M1200175</td>
+                        <td>PREGABALINA -  - COMPRIMIDOS - 75MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >362</td>
+                        <td>M1231111</td>
+                        <td>PROMETAZINA -  - AMPOLLAS - 50MG - 2 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >363</td>
+                        <td>M2501085</td>
+                        <td>PROPANOLOL -  - COMPRIMIDO - 40 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >364</td>
+                        <td>M2501087</td>
+                        <td>PROPANOLOL - AMPOLLA I.V. - INYECTABLE - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >365</td>
+                        <td>M4005112</td>
+                        <td>PROPARACAINA -  - COLIRIO - 0,5% - 10 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >366</td>
+                        <td>M0314156</td>
+                        <td>PROPARACAÍNA CLORHIDRATO - frasco de 10 ml - GOTAS OFTÁLMICAS - 5 mg/ml ( 0,5 %)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>6</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >367</td>
+                        <td>M2709200</td>
+                        <td>PROPIONATO DE FLUTICASONA  - AEROSOL POR 120 DOSIS - SUSPENSIÓN PRESURIZADA PARA INHALACIÓN  - 125 MCG/DOSIS  </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >368</td>
+                        <td>M0301154</td>
+                        <td>PROPOFOL -  - AMPOLLAS - 10MG/ML - 20 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>4744</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >369</td>
+                        <td>M2615139</td>
+                        <td>PROTAMINA SULFATO -  - AMPOLLAS - 10MG/ML - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>18</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >370</td>
+                        <td>M2201121</td>
+                        <td>RANITIDINA -  - FCO. AMPOLLA - 50MG - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >371</td>
+                        <td>M2203112</td>
+                        <td>RANITIDINA -  - AMPOLLAS - 50MG - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>5537</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >372</td>
+                        <td>M0200125</td>
+                        <td>REMIFENTANILO -  - FCO. AMPOLLA - 5MG - 10 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >373</td>
+                        <td>M0314150</td>
+                        <td>REMIFENTANILO -  - POLVO PARA SOLUCIÓN INYECTABLE - 5 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >374</td>
+                        <td>Q5010124</td>
+                        <td>REPELENTE - CREMA - PARA MOSQUITOS - 200 GRS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>123</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >375</td>
+                        <td>Q5010122</td>
+                        <td>REPELENTE 
+ -  - P/MOSQUITOS E INSECTOS - SPRAY</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>4233</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >376</td>
+                        <td>M0903111</td>
+                        <td>RIFAMPICINA -  - CAPSULAS - 300 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >377</td>
+                        <td>M0908114</td>
+                        <td>RIFAMPICINA -  - FRASCO AMPOLLA - 600 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>37</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >378</td>
+                        <td>M0908117</td>
+                        <td>RIFAMPICINA+ISONIAZIDA - 672 COMPRIMIDOS - 150+75MG - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >379</td>
+                        <td>M09R0101</td>
+                        <td>RIFAMPICINA-ISONIAZIDA-PIRAZINAMIDAY-ETAMBUTOL -  - COMPRIMIDO - 150/75/400/275 MGRS.</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >380</td>
+                        <td>M1201124</td>
+                        <td>RISPERIDONA -  - COMPRIMIDOS - 2 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >381</td>
+                        <td>M2601076</td>
+                        <td>ROSUVASTATINA -  - COMPRIMIDOS - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >382</td>
+                        <td>M2401071</td>
+                        <td>SALBUTAMOL -  - AEROSOL 250 DOSIS - 100MCG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >383</td>
+                        <td>M2401060</td>
+                        <td>SALBUTAMOL -  - SOLUCION P/NEBULIZAR - 5MG/ML - 20 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1915</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >384</td>
+                        <td>M2434193</td>
+                        <td>SALBUTAMOL - FRASCO DE 20 ML - SOLUCIÓN PARA NEBULIZACIÓN - 0.5 %</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>358</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >385</td>
+                        <td>M2401043</td>
+                        <td>SALBUTAMOL -  - AEROSOL  200 DOSIS - 100MCG/DOSIS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>6098</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >386</td>
+                        <td>M2434189</td>
+                        <td>SALBUTAMOL - AEROSOL POR 250 DOSIS CON AEROCÁMARA - SUSPENSIÓN PARA INHALACIÓN - 100 MCG/DOSIS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>3967</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >387</td>
+                        <td>M3310111</td>
+                        <td>SALES DE REHIDRATACION ORAL -  - SOBRES - 27.9 GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>909</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >388</td>
+                        <td>M2401067</td>
+                        <td>SALMETEROL-FLUTICASONA -  - AEROSOL - 25MCG-250MCG/120 DOSIS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>105</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >389</td>
+                        <td>M2401065</td>
+                        <td>SALMETEROL-FLUTICASONA -  - AEROSOL - 25 MCG. -125MCG - 120 DOSIS</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>68</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >390</td>
+                        <td>M0314116</td>
+                        <td>SEVOFLURANO -  - FRASCO - 100% - 250 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>43</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >391</td>
+                        <td>M2615119</td>
+                        <td>SIMVASTATIN -  - COMPRIMIDOS - 20 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>5000</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >392</td>
+                        <td>M7015817</td>
+                        <td>SODIO CLORURO - SOLUCION INYECTABLE AMPOLLA DE 5 ML - SOLUCIÓN INYECTABLE - 9 MG/ML (0.9%)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1063</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >393</td>
+                        <td>M7015815</td>
+                        <td>SODIO CLORURO - SOLUCION INYECTABLE AMPOLLA DE 10 ML - SOLUCIÓN INYECTABLE - 200 MG/ML (20%)</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1991</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >394</td>
+                        <td>M4401004</td>
+                        <td>SOLUCION DEXTROSADA ( GLUCOSADA)  HIPERTONICA -  - INYECTABLE: AMPOLLAS- FRASCO AMPOLLA - 50 % - 10 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >395</td>
+                        <td>M4401009</td>
+                        <td>SOLUCION DEXTROSADA ( GLUCOSADA) HIPERTONICA -  - INYECTABLE  AMPOLLA - FRASCO AMPOLLA - 25 % - 20 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >396</td>
+                        <td>M4501033</td>
+                        <td>SOLUCIÒN DEXTROSADA (GLUCOSADA) HIPERTONICA -  - INYECTABLE  AMPOLLA - FRASCO AMPOLLA - 25 % - 250 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>57</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >397</td>
+                        <td>M4116122</td>
+                        <td>SUCCINILCOLINA CLORURO  - AMPOLLA DE 2 ML - SOLUCIÓN INYECTABLE - 50 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >398</td>
+                        <td>M2301066</td>
+                        <td>SUCRALFATO -  - SUSPENSION - 1 G/ 5 ML - 200 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >399</td>
+                        <td>M2310159</td>
+                        <td>SUCRALFATO - FRASCO DE 200 ML - SUSPENSIÓN ORAL - 200 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>157</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >400</td>
+                        <td>M2901158</td>
+                        <td>SULFADIAZINA DE PLATA-VITAMINA A-LIDOCAINA -  - CREMA     400 GR - 1GR-248.000U.I-666MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>42</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >401</td>
+                        <td>M2901110</td>
+                        <td>SULFADIAZINA DE PLATA-VITAMINA A-LIDOCAINA -  - CREMA    30 GR - 1GR-248.000U.I-666MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >402</td>
+                        <td>M1109186</td>
+                        <td>SULFAMETOXAZOL + TRIMETOPRIMA - FRASCO DE 100 ML - SUSPENSIÓN ORAL - 40 MG/ML + 8 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>995</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >403</td>
+                        <td>M1109181</td>
+                        <td>SULFAMETOXAZOL + TRIMETOPRIMA - AMPOLLA DE 5 ML - SOLUCIÓN INYECTABLE - 80 MG/ML + 16 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2285</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >404</td>
+                        <td>M0501125</td>
+                        <td>SULFATO FERROSO -  - COMPRIMIDOS - 200 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>5000</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >405</td>
+                        <td>M3318147</td>
+                        <td>SULFATO FERROSO - FRASCO DE 20 ML - SOLUCIÓN ORAL - 125 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1500</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >406</td>
+                        <td>M0505157</td>
+                        <td>SULFATO FERROSO (HIERRO) - FRASCO DE 20 ML - SOLUCIÓN ORAL - 125 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >407</td>
+                        <td>M0505134</td>
+                        <td>SULFATO FERROSO-ACIDO FOLICO -  - COMPRIMIDOS - 525MG-0.35MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>41310</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >408</td>
+                        <td>M3000011</td>
+                        <td>TAMSULOSINA -  - CAPSULAS - 0.4 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>230</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >409</td>
+                        <td>M1101044</td>
+                        <td>TEICOPLANINA - INYECTABLE - FRASCO AMPOLLA - 400 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>30</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >410</td>
+                        <td>M0141306</td>
+                        <td>TENECTEPLASA - VIAL - POLVO PARA SOLUCIÓN INYECTABLE - 25 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >411</td>
+                        <td>M2601055</td>
+                        <td>TERLIPRESINA ACETATO-MANITOL -  - FCO. AMPOLLA + AMPOLLA DILUYENTE - 1MG-10MG - 5ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>11</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >412</td>
+                        <td>M1101076</td>
+                        <td>TIGECICLINA - INYECTABLE - FRASCO AMPOLLA - 50MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>258</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >413</td>
+                        <td>D0603128</td>
+                        <td>TIRA REACTIVA P/DETERMINACION DE GLUCOSA -  -  - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>22700</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >414</td>
+                        <td>D02R0105</td>
+                        <td>TIRAS REACTIVAS - 100 U - P/EQUIPO DE MONITORIZACIÓN DE GLUCEMIA - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>15000</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >415</td>
+                        <td>M4001040</td>
+                        <td>TOBRAMICINA -  - GOTAS - 0.3% - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >416</td>
+                        <td>M4015111</td>
+                        <td>TOBRAMICINA -  - GOTAS - 0.3% - 10 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>173</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >417</td>
+                        <td>M4023199</td>
+                        <td>TOBRAMICINA + DEXAMETASONA - FRASCO DE 5 ML - GOTAS OFTÁLMICAS - 3 MG/ML + 1 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>223</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >418</td>
+                        <td>M1246126</td>
+                        <td>TOPIRAMATO -  - COMPRIMIDOS - 100 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >419</td>
+                        <td>M0201162</td>
+                        <td>TRAMADOL -  - COMPRIMIDOS - 50 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >420</td>
+                        <td>M1109128</td>
+                        <td>TRIMETOPRIMA-SULFAMETOXAZOL (COTRIMOXAZOL) - INYECTABLE - AMPOLLAS - 80MG-400MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >421</td>
+                        <td>M1101036</td>
+                        <td>TRIMETOPRIMA-SULFAMETOXAZOL (COTRIMOXAZOL) -  - COMPRIMIDOS - 160MG-800MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>2452</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >422</td>
+                        <td>M2501088</td>
+                        <td>TRINITROGLICERINA -  - FCO. AMPOLLA - 5MG/ML - 5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>12</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >423</td>
+                        <td>M1246168</td>
+                        <td>VALPROATO DE MAGNESIO -  - COMPRIMIDOS - 400 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >424</td>
+                        <td>M2501092</td>
+                        <td>VALSARTAN -  - CAPSULAS - 80 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >425</td>
+                        <td>M2534231</td>
+                        <td>VALSARTAN - COMPRIMIDOS 80 MG - COMPRIMIDO-CAPSULA - </td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1120</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >426</td>
+                        <td>M2534259</td>
+                        <td>VALSARTAN -  - COMPRIMIDO - 80 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >427</td>
+                        <td>M1101056</td>
+                        <td>VANCOMICINA - INYECTABLE - FRASCO AMPOLLA - 500 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>318</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >428</td>
+                        <td>M1101055</td>
+                        <td>VANCOMICINA - INYECTABLE - FRASCO AMPOLLA - 1 GR</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>1530</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >429</td>
+                        <td>M0114011</td>
+                        <td>VASELINA LIQUIDA - ENVASE X 1 LITRO - SOLUCION - LITRO</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>92</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >430</td>
+                        <td>M0114021</td>
+                        <td>VASELINA SOLIDA - KG - X - X</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>16</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >431</td>
+                        <td>M3629129</td>
+                        <td>VASOPRESINA SINTETICA - AMPOLLA - INYECTABLE - 20UI-1ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >432</td>
+                        <td>M4101008</td>
+                        <td>VECURONIO - FRASCO AMPOLLA LIOFILIZADO - INYECTABLE - 10 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>885</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >433</td>
+                        <td>M1201139</td>
+                        <td>VENLAFAXINA -  - COMPRIMIDOS - 75 MG</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>0</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >434</td>
+                        <td>M4601031</td>
+                        <td>VITAMINA B1 (TIAMINA) - AMPOLLA X 1 ML - INYECTABLE - 100MG/ML- 1 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>322</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >435</td>
+                        <td>M2601085</td>
+                        <td>VITAMINA K (FITOMENADIONA) - AMPOLLA X 1 ML - INYECTABLE - 1MG - 0.5 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>581</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >436</td>
+                        <td>M2601059</td>
+                        <td>VITAMINA K (FITOMENADIONA) - AMPOLLA X 1 ML - INYECTABLE - 10MG - 1 ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>353</td>
+                    </tr>
+                                    <tr style="text-align:center;">
+
+                        <td >437</td>
+                        <td>M2615233</td>
+                        <td>ÁCIDO TRANEXÁMICO - AMPOLLA DE 5 ML - SOLUCIÓN INYECTABLE - 100 MG/ML</td>
+                        <td> - </td>
+                        <td> - </td>
+                        <td>289</td>
+                    </tr>
+                            </tbody>
+        </table>
+    </body>
+</html>

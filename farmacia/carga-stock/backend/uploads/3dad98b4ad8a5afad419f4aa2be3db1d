@@ -1,0 +1,48 @@
+<html>
+    <head>
+        <meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8" />
+        <meta name="description" content="Stock">
+        <style type="text/css">
+            table {
+                padding: 3px 3px 4px 5px;
+            }
+            th, td {
+                border: 1px solid black;
+            }
+        </style>
+    </head>
+    <body>
+        <br><br>
+        <table>
+            <thead>
+                <tr>
+                                        <th colspan="17">HOSPITAL INTERZONAL GENERAL DE AGUDOS SIMPLEMENTE EVITA DE  GONZALES CATAN KM 32 - FARMACIA UNIFICADA FARMACIA UNIFICADA</th>
+                                        
+                </tr>
+                <tr>
+                    <th style="background-color:#CCC;">Código de Artículo</th>
+                    <th style="background-color:#CCC;">Nombre Genérico</th>
+                    <th style="background-color:#CCC;">Concentración</th>
+                    <th style="background-color:#CCC;">Presentación</th>
+                    <th style="background-color:#CCC;">Forma</th>
+                                            <th style="background-color:#CCC;">Sector</th>
+                    
+                                        <th style="background-color:#CCC;">Enero</th>
+                    <th style="background-color:#CCC;">Febrero</th>
+                    <th style="background-color:#CCC;">Marzo</th>
+                    <th style="background-color:#CCC;">Abril</th>
+                    <th style="background-color:#CCC;">Mayo</th>
+                    <th style="background-color:#CCC;">Junio</th>
+                                                            <th style="background-color:#CCC;">Julio</th>
+                    <th style="background-color:#CCC;">Agosto</th>
+                    <th style="background-color:#CCC;">Septiembre</th>
+                    <th style="background-color:#CCC;">Octubre</th>
+                    <th style="background-color:#CCC;">Noviembre</th>
+                    <th style="background-color:#CCC;">Diciembre</th>
+                                    </tr>
+            </thead>
+            <tbody>
+                            </tbody>
+        </table>
+    </body>
+</html>

@@ -145,7 +145,11 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     const row = rows[0] || {};
     const ley = String(row.ley_nombre || '').toLowerCase();
     const planta = String(row.planta_nombre || '').toUpperCase();
-    const titularSiape = ley.includes('10430') || (ley.includes('10471') && planta === 'PERMANENTE');
+    // Planta explícitamente temporal → NO titular (aunque sea 10430)
+    const plantaTemporal = planta.includes('TEMPORARI') || planta.includes('INTERIN') || planta.includes('BECA');
+    const titularSiape = ley.includes('10471')
+      ? planta === 'PERMANENTE'
+      : ley.includes('10430') ? !plantaTemporal : false;
     if (titularSiape) {
       return 'Prácticas profesionales se cargan acá solo para no titulares.';
     }
@@ -158,6 +162,58 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     const all = Object.keys(schema.tables || {}).sort();
     const filtered = all.filter(isAllowedTable);
     res.json({ ok: true, data: filtered });
+  });
+
+  // ── GET /tables/:table/schema ────────────────────────────────────────────────
+  // Metadatos de una tabla (columnas, PK, FKs y valores de los ENUM) para que el
+  // front pueda armar el editor de cualquier tabla sin hardcodear nada.
+  router.get("/tables/:table/schema", requireMetaRead, async (req: Request, res: Response) => {
+    const table = String(req.params.table || "");
+    const info = schema.tables?.[table];
+    if (!info || !isAllowedTable(table)) {
+      return res.status(404).json({ ok: false, error: "Tabla no encontrada" });
+    }
+
+    // COLUMN_TYPE no está en el snapshot: lo pedimos solo para los ENUM/SET.
+    const enumValues: Record<string, string[]> = {};
+    try {
+      const rows = await sequelize.query<any>(
+        `SELECT COLUMN_NAME, COLUMN_TYPE
+           FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :table
+            AND DATA_TYPE IN ('enum','set')`,
+        { replacements: { db: env.DB_NAME, table }, type: QueryTypes.SELECT }
+      );
+      for (const r of rows) {
+        const m = String(r.COLUMN_TYPE || "").match(/^(?:enum|set)\((.*)\)$/i);
+        if (!m) continue;
+        enumValues[r.COLUMN_NAME] = m[1]
+          .split(",")
+          .map((s) => s.trim().replace(/^'(.*)'$/s, "$1").replace(/''/g, "'"));
+      }
+    } catch {
+      // sin enums: el front cae a input de texto
+    }
+
+    const fkByColumn: Record<string, { table: string; column: string }> = {};
+    for (const fk of info.foreignKeys || []) {
+      fk.columns.forEach((c, i) => {
+        fkByColumn[c] = { table: fk.refTable, column: fk.refColumns[i] || "id" };
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        table,
+        primaryKey: info.primaryKey,
+        columns: (info.columns || []).map((c) => ({
+          ...c,
+          enumValues: enumValues[c.name] || null,
+          references: fkByColumn[c.name] || null,
+        })),
+      },
+    });
   });
 
   // ── GET /:table/export/:format  (ANTES de /:table/:id para evitar shadowing) ──
@@ -249,6 +305,12 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
       const offset = (page - 1) * limit;
 
       const where = buildWhereClause(req.query, schema.tables?.[table]);
+      // Servicios internos (ej. "A UBICAR") no se ofrecen en los combos: siguen
+      // existiendo para derivar la dependencia, pero se excluyen del listado
+      // salvo que se pida explícitamente con ?incluirOcultos=1
+      if (table === 'servicios' && req.query.incluirOcultos !== '1' && where.oculto === undefined) {
+        where.oculto = 0;
+      }
       const order = buildOrderClause(req.query);
       const attributes = buildAttributesClause(req.query);
 

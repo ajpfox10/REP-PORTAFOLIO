@@ -1,0 +1,30 @@
+{
+  "name": "carga-stock-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend seguro para Carga de Stock Critico Farmacia",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development node src/server.js",
+    "prod": "cross-env NODE_ENV=production node src/server.js",
+    "migrate:dev": "cross-env NODE_ENV=development node src/migrate.js",
+    "migrate:prod": "cross-env NODE_ENV=production node src/migrate.js",
+    "script:dev": "cross-env NODE_ENV=development node scripts/cargar-stock-web.js",
+    "script:prod": "cross-env NODE_ENV=production node scripts/cargar-stock-web.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.2.0",
+    "mysql2": "^3.11.0",
+    "pdfjs-dist": "^3.11.174",
+    "playwright": "^1.46.1",
+    "xlsx": "^0.18.5"
+  }
+}

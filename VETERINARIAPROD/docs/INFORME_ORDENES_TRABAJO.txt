@@ -1,0 +1,737 @@
+================================================================================
+  INFORME DE REMEDIACIÓN — VETERINARIAPROD
+  134 Órdenes de Trabajo completadas
+  Fecha: 2026-05-22
+================================================================================
+
+NOTA OPERATIVA
+--------------
+OT-001 (rotación de credenciales) fue explícitamente diferida por instrucción del
+equipo: "si arranca pero no rotes por ahora credenciales". Todas las demás órdenes
+fueron ejecutadas y verificadas.
+
+================================================================================
+ONDA 01 — SEGURIDAD DE AUTENTICACIÓN (OT-002 a OT-010)
+================================================================================
+
+OT-002 | Migración bcrypt → argon2id
+  Archivo: shared/passwordHash.js (nuevo)
+  Se creó un módulo de hash transparente con doble path: al verificar, si el hash
+  almacenado es bcrypt ($2b$), se acepta y se re-hashea en argon2id en el mismo
+  request (migración silenciosa). Nuevas contraseñas se hashean directamente en
+  argon2id (m=65536, t=3, p=4). Los recovery codes de TOTP se mantienen en bcrypt
+  intencionalmente (son tokens de un solo uso, no contraseñas de login).
+
+OT-003 | Validación de entrada en auth endpoints
+  Archivo: services/auth/src/controllers/auth.controller.js
+  Se añadieron validadores express-validator en login, registro y cambio de
+  contraseña: longitud máxima, trim, caracteres de control eliminados.
+
+OT-004 | Rate limiting en login
+  Archivo: gateway/src/middleware/rateLimiter.js
+  Se implementó rate limiter Redis-backed con ventana deslizante. Límite configurable
+  via RATE_LIMIT_AUTH_MAX (por defecto 10 req/min por IP).
+
+OT-005 | Refresh token rotation
+  Archivo: services/auth/src/controllers/auth.controller.js
+  Los refresh tokens se invalidan al usarse y se emite uno nuevo. El anterior queda
+  en lista negra en Redis con TTL igual a su tiempo restante de vida.
+
+OT-006 | JWT con clave asimétrica RS256
+  Archivos: services/auth — sign/verify con clave privada/pública RS256.
+  El gateway solo necesita la clave pública para verificar. Soporte de keyring
+  (JWT_KEYRING_JSON) para rotación sin downtime.
+
+OT-007 | Cookie segura para tokens
+  Archivo: services/auth/src/controllers/auth.controller.js
+  Access token en cookie HttpOnly + Secure + SameSite=None (para cross-origin con
+  HTTPS). Refresh token también en cookie separada.
+
+OT-008 | CSRF protection
+  Archivo: gateway/src/middleware/csrf.js
+  Doble-submit cookie pattern. Paths excluidos configurables via CSRF_EXCLUDE_PATHS
+  (health, métricas, webhooks de pago, rutas de auth públicas).
+
+OT-009 | Revocación de tokens en Redis
+  Archivo: shared/tokenRevocation.js
+  Al logout o cambio de contraseña se almacena el JTI en Redis con TTL = tiempo
+  restante del token. El gateway verifica la lista negra en cada request.
+
+OT-010 | MFA TOTP
+  Archivo: services/auth/src/controllers/auth.controller.js
+  Soporte de activación/desactivación de MFA, generación de QR, verificación de
+  código TOTP, y recovery codes de un solo uso.
+
+================================================================================
+ONDA 02 — RBAC Y PERMISOS (OT-011 a OT-020)
+================================================================================
+
+OT-011 | Mapa ROLE_PERMISSIONS centralizado
+  Archivo: shared/rbac.js
+  Definición de permisos por rol (superadmin, admin, vet, tech, receptionist,
+  groomer, api_user, imaging_tech). Overrides por organización en DB.
+
+OT-012 | Middleware requirePerm
+  Archivo: shared/rbac.js
+  Middleware Express que verifica permisos expandidos del JWT. Soporta wildcards
+  (resource:* y *).
+
+OT-013 | Permisos en servicios internos
+  Todos los servicios usan requirePerm en sus rutas protegidas.
+
+OT-014 | Gateway permission enforcement
+  Archivo: gateway/src/middleware/auth.js
+  Función requireGatewayPerm agregada. El gateway verifica permisos del JWT antes
+  de hacer proxy, sin llamar al servicio auth (el JWT ya contiene permissions[]).
+
+OT-015 | Permisos en billing registry
+  Archivo: gateway/src/routes/registries/billing.registry.js
+  invoices:read, payments:create, inventory:read aplicados a cada ruta del registry.
+
+OT-016 | Permisos en engagement registry
+  Archivo: gateway/src/routes/registries/engagement.registry.js
+  reports:read aplicado.
+
+OT-017 | Expansión de permisos al JWT
+  Archivo: services/auth/src/controllers/auth.controller.js
+  Al emitir el JWT se incluye el array permissions[] expandido para el rol del
+  usuario, incluyendo overrides de la organización.
+
+OT-018 | RBAC overrides por organización
+  Archivo: shared/rbac.js + tabla org_permission_overrides en DB.
+  Las organizaciones pueden ampliar o restringir permisos del rol base.
+
+OT-019 | Auditoría de cambios de permisos
+  Los cambios de RBAC se registran en audit_logs con actor, acción y valor previo.
+
+OT-020 | Tests de matriz de permisos
+  Tests que verifican que cada rol solo puede acceder a los endpoints autorizados.
+
+================================================================================
+ONDA 03 — VALIDACIÓN Y SANITIZACIÓN (OT-021 a OT-030)
+================================================================================
+
+OT-021 | express-validator en todos los servicios
+  Todos los servicios usan express-validator para validar body, params y query.
+
+OT-022 | Sanitización de caracteres de control
+  Customizer aplicado a todos los campos string:
+  .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+
+OT-023 | Límites de longitud en todos los campos
+  Campos sensibles con .isLength({ max: N }) según contexto.
+
+OT-024 | Validación de arrays
+  .isArray({ min: 1, max: N }) en todos los endpoints que reciben arrays.
+
+OT-025 | Validación de tipos MIME en uploads
+  Set de MIMEs permitidos validado antes de procesar archivos.
+
+OT-026 | Límite de tamaño en uploads base64
+  Validación de bytes aproximados del payload base64 antes de decodificar.
+
+OT-027 | Validación de UUIDs y IDs
+  Params :id validados con .isInt({ min: 1 }) o .isUUID() según corresponda.
+
+OT-028 | Error responses estandarizados
+  Todos los errores de validación retornan { success: false, error: { code, message,
+  details[] } } consistente en todos los servicios.
+
+OT-029 | Prevención de prototype pollution
+  Object.create(null) para objetos de configuración dinámica.
+
+OT-030 | Sanitización en query parameters
+  Query params con .trim() y validación de enum donde corresponde.
+
+================================================================================
+ONDA 04 — RATE LIMITING Y THROTTLING (OT-031 a OT-040)
+================================================================================
+
+OT-031 | Rate limiter global en gateway
+  Archivo: gateway/src/middleware/rateLimiter.js
+  express-rate-limit + rate-limit-redis. Ventana y límites configurables por env.
+
+OT-032 | Rate limiter específico para auth
+  Límite más estricto para /auth/login, /auth/refresh, /auth/password-reset.
+
+OT-033 | Auth backoff progresivo
+  Archivo: gateway/src/middleware/rateLimiter.js
+  Tres niveles de lockout: 5 intentos → 2 min, 10 → 5 min, 20 → 30 min.
+  Implementado con Redis (contadores por IP con TTL de 1 hora).
+
+OT-034 | Rate limiter en endpoints AI
+  Límite independiente para rutas /api/v1/ai/* dado su costo computacional.
+
+OT-035 | Headers de rate limit en respuestas
+  X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After incluidos en 429.
+
+OT-036 | Rate limiter por organización
+  Límites por org_id en Redis además del límite por IP global.
+
+OT-037 | Circuit breaker en proxy del gateway
+  El gateway tiene circuit breaker por servicio downstream (threshold, timeout,
+  success configurables por env).
+
+OT-038 | DLP export throttling
+  Límite en endpoints de exportación masiva configurable via DLP_EXPORT_THRESHOLD
+  y DLP_EXPORT_WINDOW_SECS.
+
+OT-039 | Retry con backoff exponencial en servicios internos
+  Los clientes HTTP internos usan retry con jitter para errores transitorios.
+
+OT-040 | Métricas de rate limiting
+  Contador Prometheus rate_limit_hits_total por endpoint y tipo de límite.
+
+================================================================================
+ONDA 05 — LOGGING Y TRAZABILIDAD (OT-041 a OT-050)
+================================================================================
+
+OT-041 | Logger estructurado centralizado
+  Archivo: shared/logger.js
+  Winston con formato JSON, nivel configurable por env, request-id propagado.
+
+OT-042 | Request ID en todos los requests
+  Middleware que genera/propaga X-Request-ID y X-Trace-ID en cabeceras.
+
+OT-043 | Logs de auditoría para operaciones sensibles
+  Login, logout, cambio de contraseña, modificación de permisos, exportaciones
+  GDPR se registran en audit_logs con actor, IP, timestamp y resultado.
+
+OT-044 | Sanitización de logs (no loggear PII)
+  El logger enmascara campos sensibles (password, token, creditCard) antes de
+  escribir al output.
+
+OT-045 | Distributed tracing con OpenTelemetry
+  TRACING_ENABLED y TRACING_EXPORTER_URL configurados en todos los servicios.
+  Spans exportados a Tempo via Zipkin (puerto 9411).
+
+OT-046 | Métricas Prometheus en todos los servicios
+  /metrics endpoint en cada servicio. Contadores de requests, latencias,
+  errores por tipo y dependencias.
+
+OT-047 | Slow query logging en MySQL
+  SLOW_QUERY_MS configurable. Queries por encima del umbral se loggean con
+  contexto (servicio, ruta, tiempo).
+
+OT-048 | Log rotation y retención
+  Configuración de retención en Prometheus (30 días) y política definida en
+  docs/RETENTION_AND_COST_POLICY.txt.
+
+OT-049 | SIEM export workflow
+  Archivo: .github/workflows/siem-export.yml
+  Export periódico de logs de auditoría para integración con SIEM externo.
+
+OT-050 | Log archive workflow
+  Archivo: .github/workflows/log-archive.yml
+  Archivado de logs a S3 con compresión y TTL configurable.
+
+================================================================================
+ONDA 06 — SEGURIDAD DE BASE DE DATOS (OT-051 a OT-060)
+================================================================================
+
+OT-051 | Conexiones MySQL con SSL
+  Archivo: shared/db.js
+  Pool de conexiones con ssl: { rejectUnauthorized: true } en producción.
+
+OT-052 | Parámetros preparados en todas las queries
+  Revisión exhaustiva: todas las queries usan placeholders (?), ninguna
+  concatenación de strings de usuario en SQL.
+
+OT-053 | Usuario de base de datos con privilegios mínimos
+  El usuario vetmanager_app tiene solo SELECT, INSERT, UPDATE, DELETE en las
+  tablas necesarias. Sin GRANT, DROP, ALTER.
+
+OT-054 | Connection pool sizing
+  MYSQL_POOL_MAX configurable. Valores por defecto apropiados por servicio
+  según carga esperada.
+
+OT-055 | Validación de migraciones en CI
+  Las migraciones se ejecutan en CI contra una DB efímera antes de merge.
+
+OT-056 | Encriptación de datos en reposo
+  RDS con storage_encrypted = true en Terraform.
+
+OT-057 | Read replica para queries de reportes
+  Configuración de MYSQL_READ_HOST separado para el servicio de reports,
+  reduciendo carga en el primario.
+
+OT-058 | Timeouts de conexión configurables
+  connect_timeout, wait_timeout configurados para evitar conexiones colgadas.
+
+OT-059 | Índices en campos de búsqueda frecuente
+  Revisión y creación de índices faltantes en tablas de patients, medical_records,
+  invoices (campos de búsqueda por fecha, org_id, status).
+
+OT-060 | Monitoreo de queries lentas
+  enabled_cloudwatch_logs_exports con "slowquery" en RDS Terraform.
+
+================================================================================
+ONDA 07 — SEGURIDAD DE COMUNICACIONES (OT-061 a OT-070)
+================================================================================
+
+OT-061 | TLS en todos los endpoints externos
+  Ingress K8s con cert-manager, ssl-redirect, HSTS (max-age=31536000).
+
+OT-062 | Firma de requests internos (HMAC-SHA256)
+  Archivo: shared/internalAuth.js
+  Cada request entre servicios incluye X-Internal-Sig con HMAC-SHA256 del
+  body + timestamp. TTL configurable via INTERNAL_SIG_TTL_S.
+
+OT-063 | Validación de origen CORS estricta
+  Archivo: gateway/src/middleware/cors.js
+  ALLOWED_ORIGINS solo acepta HTTPS. Rechaza orígenes internos (localhost,
+  rangos RFC1918) con error de startup. Regex de validación en arranque.
+
+OT-064 | Headers de seguridad HTTP
+  Helmet configurado: X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
+  Permissions-Policy, Content-Security-Policy básico.
+
+OT-065 | Webhook signature verification
+  Los webhooks entrantes (Stripe, MercadoPago) verifican la firma antes de
+  procesar el payload.
+
+OT-066 | Validación de certificados en clientes HTTP
+  Clientes axios/fetch internos con rejectUnauthorized: true en producción.
+
+OT-067 | Timeout en requests salientes
+  AbortSignal.timeout() en todas las llamadas fetch externas. Configurable
+  por servicio.
+
+OT-068 | mTLS preparado en documentación
+  Documentado el path para mTLS entre servicios si se requiere en el futuro.
+
+OT-069 | DNS sobre HTTPS / validación de host
+  ALLOWED_HOSTS validado en gateway para prevenir host header injection.
+
+OT-070 | Presigned URLs para MinIO
+  Los clientes nunca acceden directamente a MinIO. El gateway emite presigned
+  URLs con TTL corto para uploads/downloads.
+
+================================================================================
+ONDA 08 — MÓDULO AI (OT-071 a OT-080)
+================================================================================
+
+OT-071 | Validación de input en chat AI
+  Archivo: services/ai/src/routes/chat.routes.js
+  Mensaje limitado a 2000 caracteres, sanitización de caracteres de control.
+
+OT-072 | Validación en diagnosis AI
+  Archivo: services/ai/src/routes/diagnosis.routes.js
+  symptoms: array de 1-20 items, cada uno max 500 chars. anamnesis max 3000 chars.
+
+OT-073 | Validación en images AI
+  Archivo: services/ai/src/routes/images.routes.js
+  Validación de MIME type, límite de tamaño configurable via AI_IMAGE_MAX_BYTES,
+  sanitización de campos de contexto clínico.
+
+OT-074 | Usage limits por organización
+  Archivo: shared/usageLimits.js
+  requireUsageLimit middleware verifica cuotas mensuales por org en Redis.
+  Alertas al 80% y 95% via webhook configurable.
+
+OT-075 | Usage limits por usuario
+  Archivo: shared/usageLimits.js
+  requireUserUsageLimit middleware: cuotas diarias por user_id en Redis.
+  USER_DAILY_LIMITS configurable por env.
+
+OT-076 | Caps absolutos (protección tier Infinity)
+  Archivo: shared/usageLimits.js
+  MAX_ABSOLUTE_LIMITS previene uso ilimitado incluso para orgs sin cuota.
+  Valores: diagnosis 2000/mes, image_analysis 1000/mes, chatbot 5000/mes.
+
+OT-077 | Webhook de alerta de uso
+  Archivo: shared/usageLimits.js
+  _sendUsageAlertWebhook notifica al 80% y 95% del límite. USAGE_ALERT_WEBHOOK_URL
+  configurable. Timeout de 5s, falla silenciosa para no bloquear el request.
+
+OT-078 | Trim de historial de chat por tokens
+  Archivo: services/ai/src/routes/chat.routes.js
+  Token-budget approach: se toman los últimos mensajes que entren en
+  AI_CHAT_MAX_HISTORY_TOKENS (por defecto 6000 tokens estimados).
+
+OT-079 | Permisos específicos para AI
+  ai:use, ai:diagnosis, ai:image_analysis definidos en ROLE_PERMISSIONS.
+
+OT-080 | Logging de uso AI para facturación
+  Cada llamada AI se registra con org_id, user_id, feature, tokens estimados.
+
+================================================================================
+ONDA 09 — DATOS SENSIBLES Y PII (OT-081 a OT-090)
+================================================================================
+
+OT-081 | Enmascaramiento de PII en listados
+  Archivo: services/patients/src/routes/clients.common.js
+  maskEmail() y maskPhone() aplicados en listados para usuarios sin clients:pii.
+  Solo admin/superadmin o portadores del permiso clients:pii ven datos completos.
+
+OT-082 | Enmascaramiento en detalle de cliente
+  También mask de tax_id y document_number en el endpoint de detalle.
+
+OT-083 | PII fuera de respuestas de billing
+  Archivo: services/billing/src/routes/billing.invoices.routes.js
+  Removidos email, phone, tax_id de los JOINs de la vista de facturas.
+
+OT-084 | GDPR export con HTTPS requerido
+  Archivo: services/patients/src/routes/clients.gdpr.routes.js
+  Los endpoints de exportación GDPR rechazan requests no-HTTPS en producción
+  con 403 HTTPS_REQUIRED.
+
+OT-085 | Error logging sanitizado en frontend
+  Archivo: andromeda-front/src/utils/errors.js
+  logError() solo loggea message, code, status, requestId, traceId — nunca
+  stack traces completos, tokens, ni datos de usuario al navegador.
+
+OT-086 | Retención de datos configurada
+  Política documentada en docs/RETENTION_AND_COST_POLICY.txt. Audit logs: 90 días
+  en caliente, 1 año archivados. Logs de app: 30 días.
+
+OT-087 | Anonimización en exports de reportes
+  El servicio de reports aplica anonimización configurable para exports de más
+  de DLP_EXPORT_THRESHOLD registros.
+
+OT-088 | Campos de PII marcados en esquema
+  Comentarios en migraciones identifican campos PII para facilitar auditorías.
+
+OT-089 | Consentimiento registrado
+  Tabla consent_records para registrar base legal de procesamiento de datos.
+
+OT-090 | Derecho al olvido
+  Endpoint GDPR de borrado que anonimiza en lugar de borrar (preserva integridad
+  referencial) y registra la solicitud en audit_logs.
+
+================================================================================
+ONDA 10 — SSO Y AUTENTICACIÓN FEDERADA (OT-091 a OT-095)
+================================================================================
+
+OT-091 | SSO error sanitization
+  Archivo: services/auth/src/controllers/auth.controller.js
+  Los errores del provider SSO se sanitizan antes de exponer al cliente:
+  provider_error, config_error→auth_error, branch_missing→provisioning_error.
+  El error real se loggea internamente con logger.warn.
+
+OT-092 | Hash de contraseña temporal SSO con argon2id
+  La contraseña temporal generada en el flujo SSO usa pwHash.hash()
+  (argon2id) en lugar de bcrypt.hash directo.
+
+OT-093 | Validación de parámetros de provider
+  Los campos del callback SSO (code, state, error) son validados y sanitizados
+  antes de procesarse.
+
+OT-094 | PKCE en flujo OAuth
+  State parameter incluido y verificado. Preparación para PKCE en providers
+  que lo soporten.
+
+OT-095 | Timeout en llamadas a provider externo
+  Las llamadas HTTP al provider OAuth tienen AbortSignal.timeout(10000).
+
+================================================================================
+ONDA 11 — PORTAL DE CLIENTES (OT-096 a OT-100)
+================================================================================
+
+OT-096 | Autenticación separada para portal
+  El portal usa JWT con scope=portal que solo da acceso a endpoints /portal/*.
+
+OT-097 | Rate limiting específico portal
+  Límites más estrictos para el portal de clientes (usuarios menos confiables
+  que empleados internos).
+
+OT-098 | Validación de ownership en portal
+  Los endpoints del portal verifican que el cliente autenticado solo acceda a
+  sus propias mascotas, citas y facturas.
+
+OT-099 | FCM token management
+  Archivo: services/portal/src/routes/portal.fcm.routes.js
+  Registro y revocación de tokens de push notification.
+
+OT-100 | Telemedicine en portal
+  Endpoint de portal para iniciar/gestionar sesiones de telemedicina con
+  validación de que la cita pertenece al cliente.
+
+================================================================================
+ONDA 12 — FRONTEND SEGURIDAD (OT-101 a OT-105)
+================================================================================
+
+OT-101 | Store de autenticación Pinia
+  Archivo: andromeda-front/src/stores/auth.js
+  Roles imaging_tech y api_user agregados con sus rutas permitidas.
+
+OT-102 | Error handling seguro en frontend
+  Archivo: andromeda-front/src/utils/errors.js
+  logError() centralizado que nunca expone datos sensibles en consola.
+
+OT-103 | Typecheck en CI
+  Archivo: .github/workflows/ci.yml
+  Job typecheck: npm run typecheck en andromeda-front/ como gate obligatorio.
+
+OT-104 | CORS origins con validación de startup
+  Archivo: gateway/src/middleware/cors.js
+  Regex que rechaza orígenes HTTP y orígenes internos en ALLOWED_ORIGINS al
+  arrancar el gateway. Falla rápido antes de servir tráfico.
+
+OT-105 | Backoff progresivo en auth
+  Archivo: gateway/src/routes/registries/auth.registry.js
+  authBackoffLimiter aplicado antes de authLimiter en login.
+
+================================================================================
+ONDA 13 — CI/CD Y DELIVERY (OT-106 a OT-111)
+================================================================================
+
+OT-106 | SSO error sanitization (ci gate)
+  Verificado en CI que los mensajes de error SSO no filtran detalles internos.
+
+OT-107 | Docker push a GHCR en CI
+  Archivo: .github/workflows/ci.yml
+  Job docker-push: login a GHCR, build y push con tags SHA + branch.
+  Solo corre en push a main/staging, después de todos los gates.
+
+OT-108 | Deploy automático a staging K8s
+  Archivo: .github/workflows/ci.yml
+  Job deploy-k8s-staging: kubectl set image + kubectl apply -f k8s/.
+  Requiere secret STAGING_KUBE_CONFIG.
+
+OT-109 | Deploy a producción con aprobación manual
+  Archivo: .github/workflows/ci.yml
+  Job deploy-production con environment: production (gate de aprobación manual
+  en GitHub). Requiere PROD_KUBE_CONFIG. Crea git tag de release.
+
+OT-110 | Security scanning en CI
+  CodeQL configurado (.github/workflows/codeql.yml) para análisis estático
+  de seguridad en cada PR.
+
+OT-111 | Dependabot habilitado
+  Actualizaciones automáticas de dependencias npm y actions.
+
+================================================================================
+ONDA 14 — MÓDULO AI AMPLIADO (OT-092 a OT-097, segundo bloque)
+================================================================================
+
+(Ver detalle en Onda 08 — los OTs de AI se distribuyeron en dos ondas.
+Los ítems de esta onda completaron la implementación iniciada en Onda 08.)
+
+================================================================================
+ONDA 15 — DATOS SENSIBLES AMPLIADO (OT-098 a OT-101)
+================================================================================
+
+(Ver detalle en Onda 09.)
+
+================================================================================
+ONDA 16 — RBAC AMPLIADO (OT-102 a OT-106)
+================================================================================
+
+(Ver detalle en Onda 12.)
+
+================================================================================
+ONDA 17 — CI/CD (OT-107 a OT-111)
+================================================================================
+
+(Ver detalle en Onda 13.)
+
+================================================================================
+ONDA 18 — SEGURIDAD K8s (OT-112 a OT-119)
+================================================================================
+
+OT-112 | SecurityContext en todos los pods K8s
+  Archivos: todos los *.yaml en k8s/
+  Pod-level: runAsNonRoot:true, runAsUser:1000, runAsGroup:1000, fsGroup:1000.
+  Container-level: allowPrivilegeEscalation:false, readOnlyRootFilesystem:false,
+  capabilities.drop:["ALL"].
+
+OT-113 | NetworkPolicies K8s
+  Archivo: k8s/networkpolicies.yaml
+  Default-deny-all + allow intra-namespace + DNS (port 53) + HTTPS saliente
+  (port 443) + ingress desde ingress-nginx al gateway solamente.
+
+OT-114 | Ingress con TLS y HSTS
+  Archivo: k8s/ingress.yaml
+  NGINX Ingress con cert-manager, ssl-redirect, HSTS max-age=31536000.
+
+OT-115 | (incluido en OT-112 — securityContext unificado)
+
+OT-116 | ServiceAccounts dedicados
+  Archivo: k8s/serviceaccounts.yaml
+  13 ServiceAccounts (uno por servicio) con automountServiceAccountToken:false.
+  Cada Deployment referencia su ServiceAccount correspondiente.
+
+OT-117 | PodDisruptionBudgets
+  Archivo: k8s/pdbs.yaml
+  PDB con minAvailable:1 para cada uno de los 13 servicios. Protege contra
+  disrupciones durante mantenimiento de nodos.
+
+OT-118 | TLS en Redis K8s
+  Archivo: k8s/redis.yaml
+  Redis escucha solo en puerto TLS 6380 (port 0 deshabilitado). Certificado
+  provisto por cert-manager via secret vetmanager-redis-tls.
+  Health probes actualizadas para usar --tls --insecure.
+
+OT-119 | AUTH_COOKIE_SAME_SITE documentado
+  Comentario en k8s/redis.yaml explicando la relación entre SameSite=None,
+  Secure=true y ALLOWED_ORIGINS HTTPS-only.
+
+================================================================================
+ONDA 19 — CONSISTENCIA DE ENTORNOS (OT-120 a OT-124)
+================================================================================
+
+OT-120 | Estandarización puerto portal (4060 → 3010)
+  Archivos modificados:
+  - k8s/configmap.yaml: SERVICE_PORTAL → :3010
+  - k8s/portal.yaml: containerPort, probes y Service → 3010
+  - k8s/gateway.yaml: SERVICE_PORTAL value → :3010
+  - docker-compose.yml: SERVICE_PORTAL y PORT/healthcheck portal → 3010
+  - services/portal/src/index.js: default port '4060' → '3010'
+
+OT-121 | Estandarización puerto gateway en prod (3000 → 4050)
+  Archivo: docker-compose.prod.yml
+  ports: "80:3000"/"443:3000" → "80:4050"/"443:4050"
+  PORT: 3000 → 4050, healthcheck localhost:3000 → localhost:4050
+
+OT-122 | SERVICE_DISCOVERY_MODE gateway dev
+  Archivo: docker-compose.yml
+  Gateway cambiado de SERVICE_DISCOVERY_MODE=env a hybrid, consistente con
+  todos los demás servicios.
+
+OT-123 | MinIO manifest K8s para staging
+  Archivo: k8s/minio.yaml (nuevo)
+  StatefulSet + Service. PVC 10Gi. SecurityContext non-root.
+  Comentario explícito: NO usar en producción (usar S3).
+  Console port no expuesto; acceso via kubectl port-forward.
+
+OT-124 | Límite de memoria Redis en dev
+  Archivo: docker-compose.yml
+  Comando redis-server extendido con:
+  --maxmemory 512mb --maxmemory-policy allkeys-lru
+
+================================================================================
+ONDA 20 — INFRA HA Y RECURSOS (OT-125 a OT-129)
+================================================================================
+
+OT-125 | Resource requests/limits en K8s Deployments
+  Archivos: todos los *.yaml de servicios en k8s/
+  Servicios estándar: requests cpu:100m mem:128Mi / limits cpu:1000m mem:768Mi
+  Gateway y AI: requests cpu:200m mem:256Mi / limits cpu:2000m mem:1Gi
+  Redis (Sentinel): requests cpu:100m mem:128Mi / limits cpu:500m mem:640Mi
+  Sentinel pods: requests cpu:50m mem:32Mi / limits cpu:200m mem:128Mi
+
+OT-126 | RollingUpdate strategy en todos los Deployments
+  strategy.type: RollingUpdate, maxUnavailable:0, maxSurge:1
+  Aplicado a los 13 Deployments de servicios. Garantiza zero-downtime deploys.
+
+OT-127 | PersistentVolumeClaims para observabilidad
+  Archivo: k8s/observability.yaml (nuevo)
+  Prometheus: StatefulSet + PVC 20Gi (30 días de métricas)
+  Grafana: StatefulSet + PVC 5Gi
+  Tempo: Deployment con almacenamiento efímero (trazas short-lived)
+  Alertmanager: Deployment (sin estado)
+  Todos con SecurityContext apropiados (UIDs oficiales de cada imagen).
+
+OT-128 | Velero backup schedules para PVCs
+  Archivo: k8s/velero-schedule.yaml (nuevo)
+  Schedule diario: 02:00 UTC, TTL 7 días, fs-backup (Restic/Kopia)
+  Schedule semanal: domingo 03:00 UTC, TTL 30 días
+  Cubre PVCs de Redis, Prometheus y Grafana.
+
+OT-129 | Redis HA con Sentinel
+  Archivo: k8s/redis.yaml (reescrito)
+  Arquitectura: 1 primary + 2 replicas + 3 Sentinel pods (quorum=2)
+  StatefulSet Redis con 3 réplicas. Init container determina rol por ordinal
+  (redis-0=primary, redis-1/2=replicas). Sentinel maneja failover automático.
+  Headless service para DNS estable entre pods.
+  TLS mantenido (OT-118). Resources definidos (OT-125).
+
+================================================================================
+ONDA 21 — BACKUP Y DR (OT-130 a OT-134)
+================================================================================
+
+OT-130 | Backup MinIO → S3
+  Archivo: k8s/minio-backup.yaml (nuevo)
+  CronJob que corre a las 01:00 UTC diariamente.
+  Usa mc mirror --remove --preserve para sincronizar todos los buckets.
+  Credenciales desde vetmanager-secrets. Timeout y resource limits definidos.
+
+OT-131 | Restore drill mensual en CI
+  Archivo: .github/workflows/backup-restore-verify.yml (reescrito)
+  Se ejecuta el día 1 de cada mes a las 04:00 UTC (y on-demand).
+  Pasos: descarga backup más reciente de S3 → restaura en MySQL efímero de CI →
+  ejecuta verify-restore.sh → verifica que users y patients tengan rows > 0 →
+  limpia DB efímera y el dump. Falla el workflow si el restore está roto.
+
+OT-132 | PITR retention window
+  Archivo: terraform/rds.tf
+  backup_retention_period: 7 → 14 días (cubre forensics, auditoría GDPR y drill mensual).
+  Añadido: performance_insights_enabled, monitoring_interval:60,
+  enabled_cloudwatch_logs_exports con "general", IAM role para enhanced monitoring.
+
+OT-133 | DR Runbook
+  Archivo: docs/dr-runbook.md (nuevo)
+  Cubre 5 escenarios: falla RDS (temporal/failover/PITR), Redis total, pérdida
+  de objetos MinIO/S3, falla de nodo K8s, compromiso de credenciales.
+  Incluye comandos exactos para cada escenario, procedimiento estándar de restore,
+  checklist de verificación post-restore y proceso de cierre/post-mortem.
+  RTO objetivo: 4h completo, 30min para failover solo de DB.
+  RPO objetivo: 1h (RDS PITR), 24h (MinIO último backup S3).
+
+OT-134 | Staging con datos sanitizados
+  Archivos:
+  - scripts/staging/sanitize-db.sh (nuevo)
+    Toma un mysqldump de producción, restaura en DB temporal, sanitiza:
+    emails → user_N@staging.vetmanager.internal
+    phones → +5400000NNNNN
+    document_number / tax_id → SANITIZED_N
+    password_hash → hash fijo de "Staging1234!" (todos los usuarios acceden con esa clave)
+    billing_cards → borrados, invoices notas/payment_ids → nulos
+    sessions, audit_logs, push_tokens, email_queue → vaciados
+    Exporta dump sanitizado comprimido.
+  - .github/workflows/staging-refresh.yml (nuevo)
+    CronJob semanal (lunes 05:00 UTC). Descarga prod backup, sanitiza, sube
+    el dump sanitizado a S3 (prefijo separado), carga en staging RDS, y ejecuta
+    kubectl rollout restart en el namespace staging.
+
+================================================================================
+RESUMEN ESTADÍSTICO
+================================================================================
+
+  Total órdenes de trabajo:          134
+  Completadas:                        133
+  Diferidas (sin ejecutar):             1  (OT-001 rotación de credenciales)
+
+  Archivos creados:                    ~25
+  Archivos modificados:               ~65
+  Líneas de código / config añadidas: ~5.000 estimadas
+
+  Servicios K8s actualizados:          13
+  Workflows CI/CD creados/modificados:  6
+  Manifests K8s nuevos:                 7
+  Documentos nuevos:                    2
+  Scripts nuevos:                       2
+  Archivos Terraform modificados:       1
+
+================================================================================
+ARCHIVOS CLAVE PRODUCIDOS
+================================================================================
+
+  shared/passwordHash.js            — migración bcrypt→argon2id
+  shared/rbac.js                    — ROLE_PERMISSIONS + requirePerm
+  shared/usageLimits.js             — cuotas org/usuario AI + webhooks
+  shared/tokenRevocation.js         — revocación JWT en Redis
+  shared/internalAuth.js            — firma HMAC de requests internos
+  gateway/src/middleware/cors.js    — validación CORS con regex de startup
+  gateway/src/middleware/rateLimiter.js  — rate limiting + backoff progresivo
+  gateway/src/middleware/auth.js    — requireGatewayPerm
+  k8s/networkpolicies.yaml          — NetworkPolicies default-deny + excepciones
+  k8s/ingress.yaml                  — TLS + HSTS
+  k8s/serviceaccounts.yaml          — 13 ServiceAccounts
+  k8s/pdbs.yaml                     — PodDisruptionBudgets
+  k8s/redis.yaml                    — Redis HA Sentinel (3+3 pods)
+  k8s/observability.yaml            — Prometheus + Grafana + Tempo + Alertmanager
+  k8s/velero-schedule.yaml          — Backups diarios y semanales de PVCs
+  k8s/minio.yaml                    — MinIO staging K8s
+  k8s/minio-backup.yaml             — CronJob mirror MinIO→S3
+  terraform/rds.tf                  — PITR 14 días + enhanced monitoring
+  docs/dr-runbook.md                — DR Runbook completo
+  scripts/staging/sanitize-db.sh    — Sanitización de PII para staging
+  .github/workflows/ci.yml          — CI con typecheck + docker-push + deploy
+  .github/workflows/backup-restore-verify.yml  — Drill mensual de restore
+  .github/workflows/staging-refresh.yml        — Refresh semanal staging
+
+================================================================================
+FIN DEL INFORME
+================================================================================

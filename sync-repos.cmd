@@ -13,7 +13,7 @@ if /i "%MODE%"=="dry" set "DRY=/L"
 
 REM Carpetas y archivos que NO se copian
 set "XD=node_modules dist .git .claude .cache logs tmp coverage .vs fichadas"
-set "XF=.env .env.production .env.docker .env.local CLAUDE.md fichadas_log.txt *.log Thumbs.db .DS_Store"
+set "XF=.env* CLAUDE.md reformas.txt PENDIENTES.txt fichadas_log.txt *fichad*.txt attlog*.txt *.log *.err *.jpg *.jpeg Thumbs.db .DS_Store"
 
 echo ================================================================
 echo   SYNC personaldev -^> D:\Repositorios   (modo: %MODE%)
@@ -26,6 +26,34 @@ robocopy "C:\apps\personaldev\apipersonal" "D:\Repositorios\apipersonal" %DRY% /
 echo.
 echo === apifront ===
 robocopy "C:\apps\personaldev\apifront" "D:\Repositorios\apifront" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
+echo === abrir-carpeta-handler ===
+robocopy "C:\apps\personaldev\abrir-carpeta-handler" "D:\Repositorios\abrir-carpeta-handler" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
+echo === scanner1 ===
+robocopy "C:\apps\personaldev\scanner1" "D:\Repositorios\scanner1" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
+echo === ARCHIVOPASIVO ===
+robocopy "C:\apps\ARCHIVOPASIVO" "D:\Repositorios\ARCHIVOPASIVO" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
+echo === ARCHIVOPASIVODEV ===
+robocopy "C:\apps\ARCHIVOPASIVODEV" "D:\Repositorios\ARCHIVOPASIVODEV" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
+echo === farmacia ===
+robocopy "C:\apps\farmacia" "D:\Repositorios\farmacia" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
+echo === cobertura-salud ===
+robocopy "C:\apps\cobertura-salud" "D:\Repositorios\cobertura-salud" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
+echo === VETERINARIAPROD ===
+robocopy "C:\apps\VETERINARIAPROD" "D:\Repositorios\VETERINARIAPROD" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
 
 echo.
 echo === Sanitizar credenciales en los .py copiados (usuario/clave -^> xxxxxxx) ===

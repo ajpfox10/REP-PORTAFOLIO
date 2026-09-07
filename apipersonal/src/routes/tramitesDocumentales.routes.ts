@@ -126,7 +126,7 @@ function dependenciaWhereSql(alias = 'd.id') {
     WHERE ags_dep.dni = p.dni
       AND ags_dep.deleted_at IS NULL
       AND (ags_dep.fecha_hasta IS NULL OR ags_dep.fecha_hasta >= CURDATE())
-      AND COALESCE(r_dep.dependencia_id, ags_dep.dependencia_id) = ${alias}
+      AND r_dep.dependencia_id = ${alias}
   )`;
 }
 
@@ -464,7 +464,7 @@ async function agenteCaratulaInfo(sequelize: Sequelize, dni: number): Promise<Ca
             FROM agentes_servicios ags_serv
             LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
             LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
-            LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+            LEFT JOIN dependencias dep_serv ON dep_serv.id = r_serv.dependencia_id AND dep_serv.deleted_at IS NULL
             WHERE ags_serv.dni = p.dni
               AND ags_serv.deleted_at IS NULL
               AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
@@ -1223,7 +1223,7 @@ async function preloadAgents(
         FROM agentes_servicios ags_serv
         LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
         LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
-        LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+        LEFT JOIN dependencias dep_serv ON dep_serv.id = r_serv.dependencia_id AND dep_serv.deleted_at IS NULL
         WHERE ags_serv.dni = p.dni
           AND ags_serv.deleted_at IS NULL
           AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
@@ -1654,7 +1654,7 @@ async function listTandaAgentes(sequelize: Sequelize, tanda?: string | null) {
           FROM agentes_servicios ags_serv
           LEFT JOIN servicios s_serv ON s_serv.id = ags_serv.servicio_id AND s_serv.deleted_at IS NULL
           LEFT JOIN reparticiones r_serv ON r_serv.id = s_serv.reparticion_id AND r_serv.deleted_at IS NULL
-          LEFT JOIN dependencias dep_serv ON dep_serv.id = COALESCE(r_serv.dependencia_id, ags_serv.dependencia_id) AND dep_serv.deleted_at IS NULL
+          LEFT JOIN dependencias dep_serv ON dep_serv.id = r_serv.dependencia_id AND dep_serv.deleted_at IS NULL
           WHERE ags_serv.dni = t.dni
             AND ags_serv.deleted_at IS NULL
             AND (ags_serv.fecha_hasta IS NULL OR ags_serv.fecha_hasta >= CURDATE())
@@ -1663,7 +1663,16 @@ async function listTandaAgentes(sequelize: Sequelize, tanda?: string | null) {
         ) AS dependenciaNombre
       FROM tramites_tanda_interinos t
       JOIN personal p ON p.dni = t.dni AND p.deleted_at IS NULL
-      LEFT JOIN agentes a ON a.dni = t.dni AND a.deleted_at IS NULL
+      -- Una sola fila de agentes por DNI (el DNI no es unico en agentes: hay
+      -- varios tramos de carrera). Se elige el tramo vigente: ACTIVO primero,
+      -- si no el mas reciente. Evita que el agente se duplique en la lista.
+      LEFT JOIN agentes a ON a.id = (
+        SELECT a2.id
+        FROM agentes a2
+        WHERE a2.dni = t.dni AND a2.deleted_at IS NULL
+        ORDER BY (a2.estado_empleo = 'ACTIVO') DESC, a2.fecha_ingreso DESC, a2.id DESC
+        LIMIT 1
+      )
       LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
       LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
       LEFT JOIN ocupaciones oc ON oc.id = a.ocupacion_id AND oc.deleted_at IS NULL
