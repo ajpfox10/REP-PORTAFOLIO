@@ -87,7 +87,6 @@ export class DocumentService {
    */
   async resolveFile(doc: DocumentRow): Promise<ResolvedFile> {
     const rutaRaw = String(doc.ruta || '').trim();
-    const nombreOriginal = String(doc.nombre_archivo_original || doc.nombre || '').trim();
 
     // Caso 1: Registro legacy (solo un numero) - no hay archivo fisico
     if (/^\d+$/.test(rutaRaw) || rutaRaw === '') {
@@ -97,24 +96,8 @@ export class DocumentService {
       );
     }
 
-    // Intentar resolver usando distintas estrategias
-    let fullPath: string | null = null;
-
-    // Estrategia 2 y 3: normalizar la ruta contra DOCUMENTS_BASE_DIR
-    fullPath = this.tryResolvePath(rutaRaw, this.baseDir);
-
-    // Si no encontró, intentar contra DOCUMENTS_SCAN_DIR (carpeta del escáner)
-    if (!fullPath && this.scanDir) {
-      fullPath = this.tryResolvePath(rutaRaw, this.scanDir);
-    }
-
-    // Si no, buscar por nombre de archivo en el arbol de directorios (ambos dirs)
-    if (!fullPath && nombreOriginal) {
-      fullPath = this.searchByFilename(nombreOriginal, this.baseDir);
-      if (!fullPath && this.scanDir) {
-        fullPath = this.searchByFilename(nombreOriginal, this.scanDir);
-      }
-    }
+    // Resolver la ruta fisica (misma estrategia que usa el borrado)
+    const fullPath = this.findPhysicalPath(doc);
 
     if (!fullPath) {
       logger.warn({ msg: 'Archivo no encontrado', id: doc.id, ruta: rutaRaw, base: this.baseDir });
@@ -192,6 +175,18 @@ export class DocumentService {
     const doc = await this.findById(id);
     if (!doc) throw Object.assign(new Error('Documento no encontrado.'), { status: 404 });
 
+    // Borrado del archivo fisico (best-effort: la baja logica se hace igual
+    // aunque el archivo no exista o no se pueda borrar).
+    try {
+      const fullPath = this.findPhysicalPath(doc);
+      if (fullPath && fs.existsSync(fullPath)) {
+        await fs.promises.unlink(fullPath);
+        logger.info({ msg: 'Archivo fisico eliminado', id, ruta: fullPath });
+      }
+    } catch (err: any) {
+      logger.warn({ msg: 'No se pudo borrar el archivo fisico', id, err: err?.message });
+    }
+
     await this.sequelize.query(
       `UPDATE tblarchivos SET deleted_at = NOW(), deleted_by = :userId WHERE id = :id`,
       { replacements: { id, userId } }
@@ -202,6 +197,35 @@ export class DocumentService {
   }
 
   // ─── Helpers privados ────────────────────────────────────────────────────
+
+  /**
+   * Resuelve la ruta fisica de un documento (sin validar MIME ni antivirus).
+   * Devuelve null para registros legacy (solo numero) o si no se encuentra el
+   * archivo. Es la base que comparten resolveFile() (descarga) y softDelete().
+   */
+  private findPhysicalPath(doc: DocumentRow): string | null {
+    const rutaRaw = String(doc.ruta || '').trim();
+    const nombreOriginal = String(doc.nombre_archivo_original || doc.nombre || '').trim();
+
+    // Registro legacy (solo un numero) o sin ruta → no hay archivo fisico
+    if (/^\d+$/.test(rutaRaw) || rutaRaw === '') return null;
+
+    // Estrategia 2 y 3: normalizar la ruta contra DOCUMENTS_BASE_DIR / SCAN_DIR
+    let fullPath = this.tryResolvePath(rutaRaw, this.baseDir);
+    if (!fullPath && this.scanDir) {
+      fullPath = this.tryResolvePath(rutaRaw, this.scanDir);
+    }
+
+    // Si no, buscar por nombre de archivo en el arbol de directorios (ambos dirs)
+    if (!fullPath && nombreOriginal) {
+      fullPath = this.searchByFilename(nombreOriginal, this.baseDir);
+      if (!fullPath && this.scanDir) {
+        fullPath = this.searchByFilename(nombreOriginal, this.scanDir);
+      }
+    }
+
+    return fullPath;
+  }
 
   /**
    * Intenta resolver una ruta (absoluta o relativa) de forma segura.

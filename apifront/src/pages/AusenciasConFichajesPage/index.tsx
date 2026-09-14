@@ -87,7 +87,7 @@ type FiltroDebia   = "todos" | "si" | "no" | "sininfo";
 export function AusenciasConFichajesPage() {
   const { error: toastError } = useToast();
 
-  const [tabActiva, setTabActiva] = useState<"ausentes28" | "siap">("ausentes28");
+  const [tabActiva, setTabActiva] = useState<"ausentes28" | "siap" | "presente">("ausentes28");
 
   // ── Archivos disponibles ──────────────────────────────────────────────────
   const [archivos, setArchivos] = useState<ArchivoInfo[]>([]);
@@ -128,6 +128,18 @@ export function AusenciasConFichajesPage() {
   const [sfFiltroMin,    setSfFiltroMin]    = useState<"todos"|"con"|"sin">("todos");
   const [sfFiltroNovSiap,setSfFiltroNovSiap]= useState("");
   const [sfFiltroJust,   setSfFiltroJust]   = useState<"todos"|"SI"|"NO"|"">("todos");
+
+  // ── Estado tabla PRESENTE sin fichaje ──────────────────────────────────────
+  // Mismo endpoint (siap-fichajes) con tipo=presente: días que el jefe cargó
+  // PRESENTE en SIAPE. La anomalía = presente pero SIN fichaje en el reloj.
+  const [loadingPres, setLoadingPres] = useState(false);
+  const [rowsPres,    setRowsPres]    = useState<SiapFichajeRow[]>([]);
+  const [metaPres,    setMetaPres]    = useState<MetaSiap | null>(null);
+  const [loadedPres,  setLoadedPres]  = useState(false);
+  const [pfFiltroDni,     setPfFiltroDni]     = useState("");
+  const [pfBusqueda,      setPfBusqueda]      = useState("");
+  // Por defecto mostramos la anomalía: presente sin fichaje.
+  const [pfFiltroFichaje, setPfFiltroFichaje] = useState<"todos"|"con"|"sin">("sin");
 
   // ── Modal agente ──────────────────────────────────────────────────────────
   const [modalDni,    setModalDni]    = useState<string | null>(null);
@@ -248,6 +260,30 @@ export function AusenciasConFichajesPage() {
     }
   }, [periodo, siapFile, ministerioFile, toastError]);
 
+  // ── Cargar tabla PRESENTE sin fichaje ─────────────────────────────────────
+  const cargarPres = useCallback(async () => {
+    if (!siapFile) { toastError("Falta archivo", "Seleccioná el archivo SIAP"); return; }
+    setLoadingPres(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("tipo", "presente");
+      if (periodo)        params.set("periodo",        periodo);
+      if (siapFile)       params.set("siapFile",       siapFile);
+      if (ministerioFile) params.set("ministerioFile", ministerioFile);
+      const r = await apiFetch<{ ok: boolean; data: SiapFichajeRow[]; meta: MetaSiap }>(
+        `/asistencia/siap-fichajes?${params}`,
+      );
+      if (!r.ok) throw new Error((r as any).error ?? "Error al cargar");
+      setRowsPres(r.data ?? []);
+      setMetaPres(r.meta ?? null);
+      setLoadedPres(true);
+    } catch (e: any) {
+      toastError("Error", e?.message ?? "No se pudo cargar");
+    } finally {
+      setLoadingPres(false);
+    }
+  }, [periodo, siapFile, ministerioFile, toastError]);
+
 
   // ── Filtro ────────────────────────────────────────────────────────────────
   // Lista de personas únicas para el selector
@@ -321,6 +357,39 @@ export function AusenciasConFichajesPage() {
       Salida:             r.salida  ?? "",
     }));
     exportToExcel(`siap_fichajes_${periodo}`, data);
+  };
+
+  // ── Filtros y exportar tabla PRESENTE sin fichaje ─────────────────────────
+  const pfPersonasUnicas = React.useMemo(() => {
+    const map = new Map<string, string>();
+    rowsPres.forEach(r => { if (!map.has(r.dni)) map.set(r.dni, r.nombre); });
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rowsPres]);
+
+  const pfRowsFiltradas = rowsPres.filter(r => {
+    if (pfFiltroDni && r.dni !== pfFiltroDni)             return false;
+    if (pfFiltroFichaje === "con" && !r.tieneFichaje)     return false;
+    if (pfFiltroFichaje === "sin" &&  r.tieneFichaje)     return false;
+    if (pfBusqueda) {
+      const q = pfBusqueda.toLowerCase();
+      return r.nombre.toLowerCase().includes(q) || r.dni.includes(q) || r.fecha.includes(q);
+    }
+    return true;
+  });
+
+  const exportarPres = () => {
+    const data = pfRowsFiltradas.map(r => ({
+      DNI:            r.dni,
+      Nombre:         r.nombre,
+      Fecha:          fmtFecha(r.fecha),
+      Día:            r.diaSemana,
+      "Novedad SIAP": r.novedadSiap || "—",
+      "Debía venir":  r.debiaVenir === true ? "Sí" : r.debiaVenir === false ? "No" : "Sin info",
+      "Fichó":        r.tieneFichaje ? "Sí" : "No",
+      Entrada:        r.entrada ?? "",
+      Salida:         r.salida  ?? "",
+    }));
+    exportToExcel(`presente_sin_fichaje_${periodo}`, data);
   };
 
   // ── Exportar ──────────────────────────────────────────────────────────────
@@ -409,13 +478,20 @@ export function AusenciasConFichajesPage() {
             <input id="acf-periodo" name="periodo" type="month" className="input" value={periodo} onChange={(e) => setPeriodo(e.target.value)} style={{ width: "100%" }} />
           </div>
 
-          {tabActiva === "ausentes28"
-            ? <button className="btn primary" onClick={cargar} disabled={loading || !ministerioFile} type="button" style={{ height: 36 }}>
-                {loading ? "Cargando…" : loaded ? "↻ Recargar" : "Cargar"}
-              </button>
-            : <button className="btn primary" onClick={cargarSiap} disabled={loadingSiap || !siapFile} type="button" style={{ height: 36 }}>
-                {loadingSiap ? "Cargando…" : loadedSiap ? "↻ Recargar" : "Cargar"}
-              </button>
+          {tabActiva === "ausentes28" &&
+            <button className="btn primary" onClick={cargar} disabled={loading || !ministerioFile} type="button" style={{ height: 36 }}>
+              {loading ? "Cargando…" : loaded ? "↻ Recargar" : "Cargar"}
+            </button>
+          }
+          {tabActiva === "siap" &&
+            <button className="btn primary" onClick={cargarSiap} disabled={loadingSiap || !siapFile} type="button" style={{ height: 36 }}>
+              {loadingSiap ? "Cargando…" : loadedSiap ? "↻ Recargar" : "Cargar"}
+            </button>
+          }
+          {tabActiva === "presente" &&
+            <button className="btn primary" onClick={cargarPres} disabled={loadingPres || !siapFile} type="button" style={{ height: 36 }}>
+              {loadingPres ? "Cargando…" : loadedPres ? "↻ Recargar" : "Cargar"}
+            </button>
           }
         </div>
       </div>
@@ -427,6 +503,9 @@ export function AusenciasConFichajesPage() {
         </button>
         <button style={tabStyle(tabActiva === "siap")} onClick={() => setTabActiva("siap")}>
           SIAP vs Ministerio vs Fichajes
+        </button>
+        <button style={tabStyle(tabActiva === "presente")} onClick={() => setTabActiva("presente")}>
+          Presente sin fichaje
         </button>
       </div>
 
@@ -789,6 +868,131 @@ export function AusenciasConFichajesPage() {
       {!loadedSiap && !loadingSiap && (
         <div className="card" style={{ textAlign: "center", color: "#64748b", padding: 28, marginBottom: 24 }}>
           Seleccioná el archivo SIAP y presioná <strong>Cargar</strong>.
+        </div>
+      )}
+
+      </>}
+
+      {tabActiva === "presente" && <>
+
+      {/* ── Alerta sin biométrico ────────────────────────────────────────── */}
+      {metaPres?.sinBiometrico && (
+        <div className="card" style={{ marginBottom: 12, border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.07)", color: "#fbbf24", fontSize: "0.82rem" }}>
+          ⚠ Sin datos de fichajes: {metaPres.dbError}
+        </div>
+      )}
+
+      {/* ── Resumen PRESENTE ────────────────────────────────────────────── */}
+      {metaPres && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+          {[
+            { label: "Días presente",           value: metaPres.total,      color: "#e2e8f0" },
+            { label: "Fichó (con fichaje)",     value: metaPres.conFichaje, color: "#22c55e" },
+            { label: "Presente SIN fichaje",    value: metaPres.sinFichaje, color: "#ef4444" },
+          ].map(t => (
+            <div key={t.label} className="card" style={{ minWidth: 130, flex: "0 0 auto", padding: "10px 16px" }}>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: t.color }}>{t.value}</div>
+              <div className="muted" style={{ fontSize: "0.72rem" }}>{t.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Filtros PRESENTE ────────────────────────────────────────────── */}
+      {loadedPres && (
+        <div className="card" style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <select
+            value={pfFiltroDni}
+            onChange={e => setPfFiltroDni(e.target.value)}
+            style={{ ...selectStyle, width: 240 }}
+          >
+            <option value="">— Todas las personas —</option>
+            {pfPersonasUnicas.map(([dni, nombre]) => (
+              <option key={dni} value={dni}>{nombre} ({dni})</option>
+            ))}
+          </select>
+          <input
+            className="input" placeholder="Buscar nombre / DNI / fecha…"
+            value={pfBusqueda} onChange={e => setPfBusqueda(e.target.value)}
+            style={{ width: 200 }}
+          />
+          {/* Fichaje */}
+          <div>
+            <span className="muted" style={{ fontSize: "0.72rem", marginRight: 6 }}>Fichaje:</span>
+            {(["todos", "con", "sin"] as const).map(v => (
+              <button key={v} type="button"
+                className={`btn${pfFiltroFichaje === v ? " primary" : ""}`}
+                style={{ fontSize: "0.75rem", padding: "4px 10px", marginRight: 4 }}
+                onClick={() => setPfFiltroFichaje(v)}>
+                {v === "todos" ? "Todos" : v === "con" ? "Fichó" : "No fichó"}
+              </button>
+            ))}
+          </div>
+          <span className="muted" style={{ fontSize: "0.75rem", marginLeft: "auto" }}>
+            {pfRowsFiltradas.length} fila{pfRowsFiltradas.length !== 1 ? "s" : ""}
+          </span>
+          <button
+            className="btn" type="button"
+            disabled={pfRowsFiltradas.length === 0}
+            onClick={exportarPres}
+            style={{ fontSize: "0.75rem", padding: "4px 12px", whiteSpace: "nowrap" }}
+          >
+            📥 Exportar Excel
+          </button>
+        </div>
+      )}
+
+      {/* ── Tabla PRESENTE sin fichaje ──────────────────────────────────── */}
+      {loadedPres && (
+        <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 24 }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                  {["DNI", "Nombre", "Fecha", "Día", "Novedad SIAP", "¿Debía venir?", "¿Fichó?", "Entrada", "Salida"].map(h => (
+                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pfRowsFiltradas.length === 0 ? (
+                  <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin resultados.</td></tr>
+                ) : pfRowsFiltradas.map((r, i) => (
+                  <tr key={`${r.dni}-${r.fecha}-${i}`}
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
+                    <td style={{ padding: "8px 12px", fontFamily: "monospace" }}>
+                      <span
+                        style={{ color: "#60a5fa", cursor: "pointer", textDecoration: "underline" }}
+                        onClick={() => abrirModal(r.dni, r.nombre)}
+                      >{r.dni}</span>
+                    </td>
+                    <td style={{ padding: "8px 12px", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.nombre}>{r.nombre}</td>
+                    <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>{fmtFecha(r.fecha)}</td>
+                    <td style={{ padding: "8px 12px", color: "#94a3b8" }}>{r.diaSemana}</td>
+                    <td style={{ padding: "8px 12px", fontSize: "0.78rem", color: "#a5b4fc", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.novedadSiap}>{r.novedadSiap || "—"}</td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <span style={{ ...badge, ...badgeDebia(r.debiaVenir) }}>
+                        {r.debiaVenir === true ? "Sí" : r.debiaVenir === false ? "No" : "—"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <span style={{ ...badge, ...badgeFichaje(r.tieneFichaje) }}>
+                        {r.tieneFichaje ? "Sí" : "No"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "8px 12px", fontFamily: "monospace", color: r.entrada ? "#22c55e" : "#64748b" }}>{r.entrada ?? "—"}</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "monospace", color: r.salida  ? "#60a5fa" : "#64748b" }}>{r.salida  ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!loadedPres && !loadingPres && (
+        <div className="card" style={{ textAlign: "center", color: "#64748b", padding: 28, marginBottom: 24 }}>
+          Seleccioná el archivo SIAP y presioná <strong>Cargar</strong>. Muestra los días marcados <strong>PRESENTE</strong> por el jefe sin ningún fichaje en el reloj.
         </div>
       )}
 

@@ -108,6 +108,24 @@ function normalizeSexo(value) {
   return optEnv('ART_SEXO_DEFAULT_TEXT', '');
 }
 
+// El combo #nacionalidad de ProvinciART sólo acepta 7 opciones:
+// Argentina, Bolivia, Brasil, Chile, Paraguay, Uruguay y "Otros" (para el resto).
+// Mapea el gentilicio/país que viene de la base (ej. "COLOMBIANO", "ECUATORIANA")
+// a una de esas opciones; cualquier otra nacionalidad → "Otros".
+function normalizeNacionalidad(value) {
+  const raw = String(value || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // saca acentos
+    .toUpperCase().trim();
+  if (!raw) return optEnv('ART_NACIONALIDAD_DEFAULT_TEXT', 'Argentina');
+  if (raw.startsWith('ARGENTIN')) return 'Argentina';
+  if (raw.startsWith('BOLIVIAN') || raw === 'BOLIVIA') return 'Bolivia';
+  if (raw.startsWith('BRASIL')) return 'Brasil';       // BRASIL, BRASILEÑO/A, BRASILERO
+  if (raw.startsWith('CHILEN') || raw === 'CHILE') return 'Chile';
+  if (raw.startsWith('PARAGUAY')) return 'Paraguay';   // PARAGUAY, PARAGUAYO/A
+  if (raw.startsWith('URUGUAY')) return 'Uruguay';     // URUGUAY, URUGUAYO/A
+  return 'Otros';
+}
+
 function isBecarioLike(row) {
   if (BECARIOS_LEY_IDS.has(Number(row.ley_id))) return true;
   const ley = String(row.ley_nombre || '').toUpperCase();
@@ -420,7 +438,7 @@ async function setQueueStatus(conn, queueId, status, fields = {}) {
 
 // Quita tildes/diacríticos para comparar texto de forma robusta.
 function stripAccents(s) {
-  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return String(s || '').normalize('NFD').replace(/[0300-036f]/g, '');
 }
 
 // Detecta si el domicilio es de CABA a partir de las variantes que guarda la base.
@@ -508,7 +526,7 @@ function buildPayload(row, dir, provinciaId = null) {
     sexo: normalizeSexo(row.sexo_nombre),
     estadoCivil: row.estado_civil || optEnv('ART_ESTADO_CIVIL_DEFAULT_TEXT', ''),
     fechaNacimiento: formatDmy(row.fecha_nacimiento),
-    nacionalidad: row.nacionalidad || optEnv('ART_NACIONALIDAD_DEFAULT_TEXT', 'Argentina'),
+    nacionalidad: normalizeNacionalidad(row.nacionalidad),
     email,
     sinEmail: !email,
     fechaIngresoEmpresa: formatDmy(ingresoArt),

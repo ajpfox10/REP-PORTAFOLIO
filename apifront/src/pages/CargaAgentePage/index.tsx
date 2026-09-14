@@ -250,7 +250,7 @@ function StepPersonal({ form, setField, errors, cats, editMode, reentryMode, edi
 }
 
 // ─── Step 2: Datos Laborales ──────────────────────────────────────────────────
-function StepLaboral({ form, setField, errors, cats }: any) {
+function StepLaboral({ form, setField, errors, cats, editMode }: any) {
   const [reparticiones, setReparticiones] = useState<any[]>([]);
   const [servicios,     setServicios]     = useState<any[]>([]);
   const [sectores,      setSectores]      = useState<any[]>([]);
@@ -328,8 +328,15 @@ function StepLaboral({ form, setField, errors, cats }: any) {
           <select id="ca-estado" name="estado_empleo" className="ca-select" value={form.estado_empleo}
             onChange={e => setField('estado_empleo', e.target.value)}>
             {ESTADO_EMPLEO_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+            {/* Solo en edición: cerrar el tramo vigente y abrir uno nuevo con la ocupación cambiada. */}
+            {editMode && <option value="CAMBIO DE OCUPACION">CAMBIO DE OCUPACION</option>}
           </select>
           {errors.estado_empleo && <span className="ca-field-error">⚠ {errors.estado_empleo}</span>}
+          {editMode && form.estado_empleo === 'CAMBIO DE OCUPACION' && (
+            <span className="ca-field-hint" style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 500, marginTop: 4, display: 'block' }}>
+              ⚠ Se cerrará el cargo actual (con esta “Fecha de Egreso” como cierre, o hoy si la dejás vacía) y se abrirá un cargo nuevo al día siguiente con los datos laborales de abajo. Actualizá la ocupación antes de guardar.
+            </span>
+          )}
         </div>
 
         <div className="ca-field">
@@ -579,7 +586,8 @@ export function CargaAgentePage() {
 
   // ── Pantalla de éxito ──
   if (carga.saved) {
-    const isEdit = carga.savedMode === 'edit';
+    const isEdit = carga.savedMode === 'edit' || carga.savedMode === 'cambio';
+    const isCambio = carga.savedMode === 'cambio';
     if (showScanner && carga.savedDni) {
       return (
         <div className="ca-root">
@@ -600,7 +608,7 @@ export function CargaAgentePage() {
             <div className="ca-success">
               <div className="ca-success-icon">{isEdit ? '✅' : '🎉'}</div>
               <div className="ca-success-title">
-                {isEdit ? 'Agente actualizado' : 'Agente registrado'}
+                {isCambio ? 'Cambio de ocupación registrado' : isEdit ? 'Agente actualizado' : 'Agente registrado'}
               </div>
               <div className="ca-success-dni">DNI {carga.savedDni}</div>
               <div style={{ color: 'var(--ca-text2)', fontSize: '0.95rem', textAlign: 'center', lineHeight: 1.6 }}>
@@ -679,7 +687,7 @@ export function CargaAgentePage() {
             onDniBlur={carga.checkDni}
           />
         )}
-        {carga.step === 2 && <StepLaboral  form={carga.form} setField={carga.setField} errors={carga.errors} cats={carga.cats} />}
+        {carga.step === 2 && <StepLaboral  form={carga.form} setField={carga.setField} errors={carga.errors} cats={carga.cats} editMode={carga.editMode} />}
         {carga.step === 3 && <StepFoto cam={cam} photo={carga.photo} setPhoto={carga.setPhoto} />}
         {carga.step === 4 && <StepScannerReady dni={carga.form.dni} />}
 

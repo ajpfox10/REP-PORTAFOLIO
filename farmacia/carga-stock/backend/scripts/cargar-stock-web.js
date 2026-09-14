@@ -15,7 +15,7 @@ async function launchBrowser() {
   const executablePath = getChromeExecutablePath();
   return chromium.launch({
     executablePath: executablePath || undefined,
-    headless: false
+    headless: process.env.SCRIPT_HEADLESS === '1'
   });
 }
 
@@ -96,71 +96,46 @@ async function waitForFrameByUrl(page, pattern, timeout = 30000) {
 }
 
 async function openFarmaciaMs(page) {
-  const current = page.frames().find((entry) => entry.url().includes('/farmaciams/'));
-  if (current) return current;
-
-  const sistemas = await waitForFrameByUrl(page, /\/intranet\/sistemas\.php/i);
-  await sistemas.getByText(/Farmacia MS/i).first().click();
-  return waitForFrameByUrl(page, /\/farmaciams\//i);
+  if (page.url().includes('/farmaciams/')) return page.mainFrame();
+  // Portal nuevo: /intranet/sistemas/ (sin frames). Se clickea "Farmacia MS" en la pagina principal.
+  await page.getByText(/Farmacia MS/i).first().click({ timeout: 20000 });
+  await page.waitForURL(/\/farmaciams\//i, { timeout: 30000 }).catch(() => {});
+  await sleep(1500);
+  return page.mainFrame();
 }
 
 async function selectSector(appFrame) {
   const sectorText = config.farmacia.sector;
-  const sectorSelect = appFrame.locator('select').first();
-  const sectorModalVisible = await appFrame.getByText(/sector actual/i).first()
-    .waitFor({ state: 'visible', timeout: 12000 })
+  // El selector de sector ahora es un modal SweetAlert2 (.swal2-select + .swal2-confirm).
+  const swalSelect = appFrame.locator('.swal2-select');
+  const haySwal = await swalSelect.waitFor({ state: 'visible', timeout: 8000 })
     .then(() => true)
     .catch(() => false);
+  if (!haySwal) return; // ya hay sector elegido en la sesion
 
-  if (!sectorModalVisible && !(await sectorSelect.count())) return;
-
-  await sectorSelect.waitFor({ state: 'visible', timeout: 15000 });
-  const matchedValue = await sectorSelect.evaluate((node, desired) => {
-      const clean = (value) => value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/\s+/g, ' ')
-        .trim();
-      const wanted = clean(desired);
-      const option = Array.from(node.options).find((entry) => clean(entry.textContent).includes(wanted));
-      return option ? option.value : '';
-    }, sectorText);
+  const matchedValue = await swalSelect.evaluate((node, desired) => {
+    const clean = (value) => value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+    const wanted = clean(desired);
+    const option = Array.from(node.options).find((entry) => clean(entry.textContent).includes(wanted));
+    return option ? option.value : '';
+  }, sectorText);
   if (!matchedValue) {
-    const available = await sectorSelect.evaluate((node) =>
+    const available = await swalSelect.evaluate((node) =>
       Array.from(node.options).map((entry) => entry.textContent.trim()).filter(Boolean)
     );
     throw new Error(`No se encontro el sector configurado "${sectorText}". Sectores visibles: ${available.join(' | ')}`);
   }
 
-  await sectorSelect.selectOption(matchedValue);
-  await sectorSelect.evaluate((node) => {
-    node.dispatchEvent(new Event('input', { bubbles: true }));
-    node.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  await sleep(300);
-
-  const okButton = appFrame.getByRole('button', { name: /^OK$/i }).first();
-  await okButton.waitFor({ state: 'visible', timeout: 15000 });
-  await okButton.click();
+  await swalSelect.selectOption(matchedValue);
+  await appFrame.locator('.swal2-confirm').click().catch(() => {});
   await sleep(1500);
-  await appFrame.getByRole('button', { name: /entendido/i }).click().catch(() => {});
-  await sleep(1200);
-  return;
-
-  const buttons = appFrame.locator('button, input[type="button"], input[type="submit"]');
-  const count = await buttons.count();
-  for (let i = 0; i < count; i += 1) {
-    const text = (await buttons.nth(i).innerText().catch(() => '')).toLowerCase();
-    const value = (await buttons.nth(i).getAttribute('value').catch(() => '') || '').toLowerCase();
-    const label = `${text} ${value}`;
-    if (label === 'ok' || label.includes('acept') || label.includes('confirm') || label.includes('continu')) {
-      await buttons.nth(i).click();
-      break;
-    }
-  }
-  await sleep(1500);
-  await appFrame.getByRole('button', { name: /entendido/i }).click().catch(() => {});
+  // posible segundo modal de confirmacion
+  await appFrame.locator('.swal2-confirm').click({ timeout: 3000 }).catch(() => {});
   await sleep(1200);
 }
 
@@ -195,28 +170,13 @@ async function login(page) {
   await page.waitForTimeout(2000);
 }
 
+const STOCK_URL = 'https://sistemas.ms.gba.gov.ar/farmaciams/stock/';
+
 async function openStockCritico(page) {
-  let appFrame = await openFarmaciaMs(page);
-  await selectSector(appFrame);
-  appFrame = await waitForFrameByUrl(page, /\/farmaciams\//i, 30000);
-
-  await appFrame.locator('#navToggle, .navbar-toggler').first().click().catch(() => {});
-  await sleep(800);
-  await appFrame.getByText(/Otras Operaciones/i).first().click().catch(() => {});
-  await sleep(500);
-  const stockLink = appFrame.locator('a[href="/farmaciams/stock/"], a[href$="/farmaciams/stock/"]').first();
-  if (!(await stockLink.count())) {
-    const links = await appFrame.locator('a').evaluateAll((nodes) =>
-      nodes.map((entry) => `${entry.textContent.trim()} -> ${entry.getAttribute('href')}`).filter(Boolean)
-    );
-    throw new Error(`No se encontro el link exacto de Stock Critico. Links visibles/DOM: ${links.join(' | ')}`);
-  }
-  const navigation = appFrame.waitForURL(/\/farmaciams\/stock/i, { timeout: 30000 }).catch(() => null);
-  await stockLink.evaluate((entry) => entry.click());
-  await navigation;
-
-  const stockFrame = page.frames().find((entry) => entry.url().includes('/farmaciams/stock')) ||
-    await waitForFrameByUrl(page, /\/farmaciams\/stock/i, 30000);
+  // El sector ya fue elegido una vez en main(). Se va directo a Stock Critico.
+  await page.goto(STOCK_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await sleep(1200);
+  const stockFrame = page.mainFrame();
   await stockFrame.locator('input[name="desarrollobundle_paginadoformtype[filtros][codArticulo]"], input[id$="_filtros_codArticulo"]').first()
     .waitFor({ state: 'visible', timeout: 30000 })
     .catch(async (error) => {
@@ -251,6 +211,11 @@ async function cargarItem(page, item) {
     await maximo.fill(String(item.stock_maximo_nuevo));
   }
   const guardar = appFrame.getByRole('button', { name: /guardar|aceptar|modificar/i }).first();
+  await guardar.waitFor({ state: 'visible', timeout: 15000 });
+  if (process.env.SCRIPT_DRY_RUN) {
+    console.log(`DRY ${item.codigo_articulo}: min=${item.stock_minimo_nuevo} max=${item.stock_maximo_nuevo} (NO se guarda)`);
+    return;
+  }
   await guardar.click();
   await sleep(1200);
 }
@@ -286,25 +251,33 @@ async function main() {
       return;
     }
 
+    const dryRun = Boolean(process.env.SCRIPT_DRY_RUN);
+    const limit = Number(process.env.SCRIPT_LIMIT || 0);
+    const lista = limit > 0 ? pendientes.slice(0, limit) : pendientes;
+    if (dryRun) console.log(`*** DRY RUN: no se guarda nada. Items a recorrer: ${lista.length} ***`);
+
     browser = await launchBrowser();
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     await login(page);
+    // Portal nuevo: entrar a Farmacia MS y elegir sector una sola vez.
+    const appFrame = await openFarmaciaMs(page);
+    await selectSector(appFrame);
 
-    for (const item of pendientes) {
+    for (const item of lista) {
       try {
-        await marcarResultado(item.valor_id, 'en_proceso');
+        if (!dryRun) await marcarResultado(item.valor_id, 'en_proceso');
         await cargarItem(page, item);
-        await marcarResultado(item.valor_id, 'cargado');
+        if (!dryRun) await marcarResultado(item.valor_id, 'cargado');
         procesados += 1;
         cargados += 1;
-        const accion = item.tipo_operacion === 'actualizacion' ? 'Actualizado' : 'Cargado';
+        const accion = dryRun ? 'DRY-OK' : (item.tipo_operacion === 'actualizacion' ? 'Actualizado' : 'Cargado');
         await actualizarRun(runId, { procesados, cargados, errores, mensaje: `${accion} ${item.codigo_articulo}` });
         console.log(`OK ${accion} ${item.codigo_articulo}`);
       } catch (error) {
         procesados += 1;
         errores += 1;
-        await marcarResultado(item.valor_id, 'error', error.message);
+        if (!dryRun) await marcarResultado(item.valor_id, 'error', error.message);
         await actualizarRun(runId, { procesados, cargados, errores, mensaje: `Error ${item.codigo_articulo}: ${error.message}` });
         console.error(`ERROR ${item.codigo_articulo}: ${error.message}`);
       }

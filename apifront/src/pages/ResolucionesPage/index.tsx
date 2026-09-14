@@ -4,8 +4,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Layout } from '../../components/Layout';
-import { apiFetch } from '../../api/http';
-import { getApiBaseUrl } from '../../api/env';
+import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { searchPersonal } from '../../api/searchPersonal';
 import { useAuth } from '../../auth/AuthProvider';
@@ -167,6 +166,9 @@ export function ResolucionesPage() {
   const toast  = useToast();
   const { session } = useAuth();
 
+  // Eliminar documentos habilitado solo para alex (id 25) y ornella (id 26)
+  const puedeEliminarArchivos = [25, 26].includes(Number(session?.user?.id));
+
   // ── Código de bypass (leído del env, nunca hardcodeado) ────────────────────
   const BYPASS_CODE = (import.meta as any)?.env?.VITE_SCAN_BYPASS_CODE || '';
 
@@ -202,6 +204,95 @@ export function ResolucionesPage() {
   const [uploadForm,     setUploadForm]     = useState(emptyUpload);
   const [uploading,      setUploading]      = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
+
+  // ── Edición de un archivo escaneado (metadatos) ──────────────────────────────
+  const emptyArchivoEdit = { nombre: '', tipo: '', numero: '', anio: '', fecha: '', descripcion_archivo: '' };
+  const [editArchivoId,   setEditArchivoId]   = useState<number | null>(null);
+  const [editArchivoForm, setEditArchivoForm] = useState(emptyArchivoEdit);
+  const [savingArchivo,   setSavingArchivo]   = useState(false);
+
+  // Abre el archivo con autenticación (evita el error "Falta credencial")
+  const abrirArchivo = useCallback(async (id: number) => {
+    try {
+      const { blob } = await apiFetchBlobWithMeta(`/documents/${id}/file`);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) { toast.error('No se pudo abrir el archivo', e?.message); }
+  }, [toast]);
+
+  const iniciarEdicionArchivo = useCallback((a: any) => {
+    setEditArchivoId(a.id);
+    setEditArchivoForm({
+      nombre: a.nombre || a.nombre_archivo_original || '',
+      tipo: a.tipo || '',
+      numero: a.numero || '',
+      anio: a.anio != null ? String(a.anio) : '',
+      fecha: a.fecha ? String(a.fecha).slice(0, 10) : '',
+      descripcion_archivo: a.descripcion_archivo || '',
+    });
+  }, []);
+
+  const cancelarEdicionArchivo = useCallback(() => {
+    setEditArchivoId(null);
+    setEditArchivoForm(emptyArchivoEdit);
+  }, []);
+
+  const guardarArchivo = useCallback(async () => {
+    if (editArchivoId == null) return;
+    setSavingArchivo(true);
+    try {
+      const f = editArchivoForm;
+      const body = {
+        nombre: f.nombre.trim() || null,
+        tipo: f.tipo.trim() || null,
+        numero: f.numero.trim() || null,
+        anio: f.anio.trim() ? Number(f.anio) : null,
+        fecha: f.fecha || null,
+        descripcion_archivo: f.descripcion_archivo.trim() || null,
+      };
+      await apiFetch(`/tblarchivos/${editArchivoId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      toast.ok('Archivo actualizado');
+      setEditArchivoId(null);
+      setEditArchivoForm(emptyArchivoEdit);
+      if (agente?.dni) {
+        const rows = await fetchAll<any>(`/tblarchivos?dni=${agente.dni}`);
+        setArchivos(rows);
+      }
+    } catch (e: any) {
+      toast.error('No se pudo actualizar', e?.message);
+    } finally { setSavingArchivo(false); }
+  }, [editArchivoId, editArchivoForm, agente, toast]);
+
+  // Eliminar un documento: baja lógica en la BD + borrado del archivo físico.
+  const eliminarArchivo = useCallback(async (a: any) => {
+    const label = a.nombre || a.nombre_archivo_original || `#${a.id}`;
+    if (!window.confirm(
+      `¿Eliminar el documento "${label}"?\n\n` +
+      'Se da de baja del sistema y se borra el archivo del servidor. Esta acción no se puede deshacer.'
+    )) return;
+    try {
+      await apiFetch(`/documents/${a.id}`, { method: 'DELETE' });
+      toast.ok('Documento eliminado');
+      if (editArchivoId === a.id) cancelarEdicionArchivo();
+      if (agente?.dni) {
+        const rows = await fetchAll<any>(`/tblarchivos?dni=${agente.dni}`);
+        setArchivos(rows);
+      }
+    } catch (e: any) {
+      toast.error('No se pudo eliminar', e?.message);
+    }
+  }, [agente, toast, editArchivoId, cancelarEdicionArchivo]);
+
+  // Archivos ordenados por fecha descendente (más nuevo primero; sin fecha al final)
+  const archivosOrdenados = [...archivos].sort((a, b) => {
+    const fa = a?.fecha ? String(a.fecha).slice(0, 10) : '';
+    const fb = b?.fecha ? String(b.fecha).slice(0, 10) : '';
+    if (!fa && !fb) return 0;
+    if (!fa) return 1;
+    if (!fb) return -1;
+    return fb.localeCompare(fa);
+  });
 
   // ── Scanner — dispositivos ─────────────────────────────────────────────────
   const [scanDevices,        setScanDevices]        = useState<Device[]>([]);
@@ -1446,27 +1537,77 @@ export function ResolucionesPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {archivos.map(a => (
-                                <tr key={a.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                                  <td style={{ ...td, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#c4b5fd' }}>
-                                      {a.nombre_archivo_original || a.nombre || '—'}
-                                    </span>
-                                  </td>
-                                  <td style={td}>{a.tipo || '—'}</td>
-                                  <td style={{ ...td, fontFamily: 'monospace' }}>{a.numero || '—'}</td>
-                                  <td style={td}>{a.anio || '—'}</td>
-                                  <td style={td}>{fmt(a.fecha)}</td>
-                                  <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.descripcion_archivo || '—'}</td>
-                                  <td style={td}>
-                                    <a
-                                      href={`${String(getApiBaseUrl() || '').replace(/\/+$/, '')}/api/v1/documents/${a.id}/file`}
-                                      target="_blank" rel="noopener noreferrer"
-                                      className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                                      Abrir
-                                    </a>
-                                  </td>
-                                </tr>
+                              {archivosOrdenados.map(a => (
+                                editArchivoId === a.id ? (
+                                  <tr key={a.id} style={{ borderTop: '1px solid rgba(139,92,246,0.4)', background: 'rgba(139,92,246,0.06)' }}>
+                                    <td style={{ ...td, maxWidth: 200 }}>
+                                      <input className="input" style={{ fontSize: '0.75rem', width: '100%', boxSizing: 'border-box' }}
+                                        value={editArchivoForm.nombre}
+                                        onChange={e => setEditArchivoForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Nombre" />
+                                    </td>
+                                    <td style={td}>
+                                      <input className="input" style={{ fontSize: '0.75rem', width: 110, boxSizing: 'border-box' }}
+                                        value={editArchivoForm.tipo}
+                                        onChange={e => setEditArchivoForm(f => ({ ...f, tipo: e.target.value }))} placeholder="Tipo" />
+                                    </td>
+                                    <td style={td}>
+                                      <input className="input" style={{ fontSize: '0.75rem', width: 110, boxSizing: 'border-box' }}
+                                        value={editArchivoForm.numero}
+                                        onChange={e => setEditArchivoForm(f => ({ ...f, numero: e.target.value }))} placeholder="Número" />
+                                    </td>
+                                    <td style={td}>
+                                      <input className="input" type="number" style={{ fontSize: '0.75rem', width: 72, boxSizing: 'border-box' }}
+                                        value={editArchivoForm.anio}
+                                        onChange={e => setEditArchivoForm(f => ({ ...f, anio: e.target.value }))} placeholder="Año" />
+                                    </td>
+                                    <td style={td}>
+                                      <input className="input" type="date" style={{ fontSize: '0.75rem', boxSizing: 'border-box' }}
+                                        value={editArchivoForm.fecha}
+                                        onChange={e => setEditArchivoForm(f => ({ ...f, fecha: e.target.value }))} />
+                                    </td>
+                                    <td style={{ ...td, maxWidth: 180 }}>
+                                      <input className="input" style={{ fontSize: '0.75rem', width: '100%', boxSizing: 'border-box' }}
+                                        value={editArchivoForm.descripcion_archivo}
+                                        onChange={e => setEditArchivoForm(f => ({ ...f, descripcion_archivo: e.target.value }))} placeholder="Descripción" />
+                                    </td>
+                                    <td style={td}>
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <button type="button" className="btn primary" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                                          onClick={guardarArchivo} disabled={savingArchivo}>
+                                          {savingArchivo ? '…' : '💾'}
+                                        </button>
+                                        <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                                          onClick={cancelarEdicionArchivo} disabled={savingArchivo}>✕</button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  <tr key={a.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <td style={{ ...td, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#c4b5fd' }}>
+                                        {a.nombre || a.nombre_archivo_original || '—'}
+                                      </span>
+                                    </td>
+                                    <td style={td}>{a.tipo || '—'}</td>
+                                    <td style={{ ...td, fontFamily: 'monospace' }}>{a.numero || '—'}</td>
+                                    <td style={td}>{a.anio || '—'}</td>
+                                    <td style={td}>{fmt(a.fecha)}</td>
+                                    <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.descripcion_archivo || '—'}</td>
+                                    <td style={td}>
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                                          onClick={() => abrirArchivo(a.id)}>Abrir</button>
+                                        <button type="button" className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                                          onClick={() => iniciarEdicionArchivo(a)} title="Editar datos">✏️</button>
+                                        {puedeEliminarArchivos && (
+                                          <button type="button" className="btn" title="Eliminar documento"
+                                            style={{ fontSize: '0.72rem', padding: '3px 8px', background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' }}
+                                            onClick={() => eliminarArchivo(a)}>🗑️</button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
                               ))}
                             </tbody>
                           </table>

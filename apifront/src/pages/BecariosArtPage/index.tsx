@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Layout }   from '../../components/Layout';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlob } from '../../api/http';
 import { useToast } from '../../ui/toast';
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
@@ -270,6 +270,9 @@ export function BecariosArtPage() {
   const [cola, setCola]                 = useState<ColaItem[]>([]);
   const [colaResumen, setColaResumen]   = useState<Record<string, number>>({});
   const [reencolando, setReencolando]   = useState<Record<number, boolean>>({});
+  // visor de captura del error de ProvinciART
+  const [captura, setCaptura]           = useState<{ dni: number; url: string } | null>(null);
+  const [cargandoCap, setCargandoCap]   = useState<Record<number, boolean>>({});
 
   // ── carga ─────────────────────────────────────────────────────────────────
 
@@ -410,6 +413,27 @@ export function BecariosArtPage() {
     }
   }, [toast, loadCola]);
 
+  // Ver la captura de pantalla del error de ProvinciART (llega como imagen autenticada).
+  const verCaptura = useCallback(async (dni: number) => {
+    setCargandoCap(prev => ({ ...prev, [dni]: true }));
+    try {
+      const blob = await apiFetchBlob(`/becarios-art/cola/${dni}/captura`);
+      const url = URL.createObjectURL(blob);
+      setCaptura(prev => {
+        if (prev?.url) URL.revokeObjectURL(prev.url); // limpiar la anterior
+        return { dni, url };
+      });
+    } catch (e: any) {
+      toast.error('Sin captura', e?.message ?? 'No hay captura para ese DNI');
+    } finally {
+      setCargandoCap(prev => ({ ...prev, [dni]: false }));
+    }
+  }, [toast]);
+
+  const cerrarCaptura = useCallback(() => {
+    setCaptura(prev => { if (prev?.url) URL.revokeObjectURL(prev.url); return null; });
+  }, []);
+
   // ── filtros ───────────────────────────────────────────────────────────────
 
   const candFiltrados = candidatos.filter(c => {
@@ -527,22 +551,36 @@ export function BecariosArtPage() {
                             {item.attempts ?? 0}
                           </td>
                           <td style={{ ...S.td, color: item.last_error ? '#fca5a5' : 'rgba(255,255,255,0.3)', maxWidth: 460, fontSize: '0.74rem', whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const }} title={item.last_error ?? undefined}>
-                            {item.last_error ? item.last_error.slice(0, 300) : (st === 'DONE' ? (item.resultado_art ?? '—') : '—')}
+                            {item.last_error
+                              ? item.last_error.replace(/\s*Captura:.*$/is, '').slice(0, 300)
+                              : (st === 'DONE' ? (item.resultado_art ?? '—') : '—')}
                           </td>
                           <td style={{ ...S.td, fontSize: '0.72rem', whiteSpace: 'nowrap' as const, color: 'rgba(255,255,255,0.4)' }}>
                             {fmt(item.updated_at)}
                           </td>
                           <td style={{ ...S.td, textAlign: 'right' as const }}>
-                            {st !== 'PROCESSING' && (
-                              <button
-                                style={{ ...S.btn, padding: '3px 10px', background: '#166534', color: '#4ade80', fontSize: '0.72rem', opacity: reencolando[item.dni] ? 0.6 : 1, whiteSpace: 'nowrap' as const }}
-                                onClick={() => handleReencolarCola(item)}
-                                disabled={reencolando[item.dni]}
-                                title="Volver a poner en cola (PENDING). El worker lo reintenta en el próximo ciclo."
-                              >
-                                {reencolando[item.dni] ? 'Reencolando…' : 'Reencolar ⟳'}
-                              </button>
-                            )}
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' as const }}>
+                              {st === 'ERROR' && (
+                                <button
+                                  style={{ ...S.btn, padding: '3px 10px', background: '#1e3a8a', color: '#93c5fd', fontSize: '0.72rem', opacity: cargandoCap[item.dni] ? 0.6 : 1, whiteSpace: 'nowrap' as const }}
+                                  onClick={() => verCaptura(item.dni)}
+                                  disabled={cargandoCap[item.dni]}
+                                  title="Ver la captura de pantalla del error en ProvinciART"
+                                >
+                                  {cargandoCap[item.dni] ? 'Abriendo…' : 'Ver captura 🖼'}
+                                </button>
+                              )}
+                              {st !== 'PROCESSING' && (
+                                <button
+                                  style={{ ...S.btn, padding: '3px 10px', background: '#166534', color: '#4ade80', fontSize: '0.72rem', opacity: reencolando[item.dni] ? 0.6 : 1, whiteSpace: 'nowrap' as const }}
+                                  onClick={() => handleReencolarCola(item)}
+                                  disabled={reencolando[item.dni]}
+                                  title="Volver a poner en cola (PENDING). El worker lo reintenta en el próximo ciclo."
+                                >
+                                  {reencolando[item.dni] ? 'Reencolando…' : 'Reencolar ⟳'}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -889,6 +927,26 @@ export function BecariosArtPage() {
 
         </div>
       </div>
+
+      {/* Visor de la captura del error de ProvinciART */}
+      {captura && (
+        <div
+          onClick={cerrarCaptura}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, color: '#e2e8f0' }} onClick={e => e.stopPropagation()}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Captura del error — DNI {captura.dni}</span>
+            <a href={captura.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.75rem', color: '#93c5fd' }}>abrir en pestaña ↗</a>
+            <button style={{ ...S.btn, background: '#450a0a', color: '#f87171', padding: '4px 12px' }} onClick={cerrarCaptura}>Cerrar ✕</button>
+          </div>
+          <img
+            src={captura.url}
+            alt={`Captura error DNI ${captura.dni}`}
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '92vw', maxHeight: '82vh', objectFit: 'contain' as const, border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, background: '#fff' }}
+          />
+        </div>
+      )}
     </Layout>
   );
 }
