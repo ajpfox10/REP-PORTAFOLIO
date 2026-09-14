@@ -91,6 +91,42 @@ export class AgenteController {
   };
 
   /**
+   * POST /api/v1/agentes/:dni/cambio-ocupacion
+   * Cierra el tramo vigente (estado CAMBIO DE OCUPACION) y abre uno nuevo con
+   * todos los datos laborales, atomicamente. `fecha_egreso` = fecha de cierre.
+   */
+  cambioOcupacion = async (req: Request, res: Response): Promise<void> => {
+    const dni = parseInt(req.params.dni, 10);
+    if (!dni || isNaN(dni)) {
+      res.status(400).json({ ok: false, error: 'DNI invalido' });
+      return;
+    }
+
+    const parsed = altaAgenteSchema.safeParse({ ...req.body, dni });
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, error: parsed.error.flatten() });
+      return;
+    }
+
+    try {
+      const actor = (req as any).auth?.principalId ?? undefined;
+      const result = await this.service.cambioOcupacion(dni, { ...parsed.data, actor });
+
+      (res.locals as any).audit = {
+        action: 'agente_cambio_ocupacion',
+        table_name: 'agentes',
+        record_pk: dni,
+        request_json: { dni, ocupacion_id: parsed.data.ocupacion_id },
+        response_json: { status: 201, agenteId: result.agenteId },
+      };
+
+      res.status(201).json({ ok: true, data: result });
+    } catch (err: any) {
+      res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al cambiar de ocupacion' });
+    }
+  };
+
+  /**
    * GET /api/v1/agentes/dni/:dni
    * Busca un agente completo por DNI.
    */

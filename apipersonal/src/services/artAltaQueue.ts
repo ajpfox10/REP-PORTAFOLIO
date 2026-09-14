@@ -66,7 +66,10 @@ export async function ensureArtAltaQueue(sequelize: Sequelize): Promise<void> {
     AFTER INSERT ON agentes
     FOR EACH ROW
     BEGIN
-      IF NEW.estado_empleo = 'ACTIVO' THEN
+      IF NEW.estado_empleo = 'ACTIVO'
+         AND NOT EXISTS (
+           SELECT 1 FROM ley l WHERE l.id = NEW.ley_id AND UPPER(l.nombre) LIKE '%REEMPLAZ%'
+         ) THEN
         INSERT INTO art_alta_queue
           (agente_id, dni, fecha_ingreso_db, estado_empleo, status, created_at, updated_at)
         VALUES
@@ -82,7 +85,10 @@ export async function ensureArtAltaQueue(sequelize: Sequelize): Promise<void> {
     FOR EACH ROW
     BEGIN
       IF NEW.estado_empleo = 'ACTIVO'
-         AND (OLD.estado_empleo IS NULL OR OLD.estado_empleo <> 'ACTIVO') THEN
+         AND (OLD.estado_empleo IS NULL OR OLD.estado_empleo <> 'ACTIVO')
+         AND NOT EXISTS (
+           SELECT 1 FROM ley l WHERE l.id = NEW.ley_id AND UPPER(l.nombre) LIKE '%REEMPLAZ%'
+         ) THEN
         INSERT INTO art_alta_queue
           (agente_id, dni, fecha_ingreso_db, estado_empleo, status, created_at, updated_at)
         VALUES

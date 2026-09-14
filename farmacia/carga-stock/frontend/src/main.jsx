@@ -330,6 +330,7 @@ function StockPage({ token }) {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [soloPendientes, setSoloPendientes] = useState(true);
+  const [estadoFiltro, setEstadoFiltro] = useState('');
   const [busy, setBusy] = useState(false);
   const [scriptBusy, setScriptBusy] = useState(false);
   const [scriptRuns, setScriptRuns] = useState([]);
@@ -404,6 +405,8 @@ function StockPage({ token }) {
       setScriptBusy(false);
     }
   }
+
+  const itemsMostrados = estadoFiltro ? items.filter((it) => estadoCategoria(it) === estadoFiltro) : items;
 
   return (
     <>
@@ -501,6 +504,14 @@ function StockPage({ token }) {
           <input type="checkbox" checked={soloPendientes} onChange={(event) => setSoloPendientes(event.target.checked)} />
           Solo productos con guiones
         </label>
+        <select value={estadoFiltro} onChange={(event) => setEstadoFiltro(event.target.value)} title="Filtrar por estado">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="listo">Listo (en cola script)</option>
+          <option value="cargado">Cargado</option>
+          <option value="actualizado">Actualizado</option>
+          <option value="error">Error</option>
+        </select>
         <button className="primary small" onClick={() => refresh()}><Search size={16} /> Filtrar</button>
       </section>
 
@@ -522,7 +533,7 @@ function StockPage({ token }) {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {itemsMostrados.map((item) => (
               <tr key={item.id}>
                 <td>{item.fila_reporte}</td>
                 <td className="code">{item.codigo_articulo}</td>
@@ -536,7 +547,7 @@ function StockPage({ token }) {
                 <td><button className="icon-btn" title="Guardar valores" onClick={() => guardar(item)}><Save size={17} /></button></td>
               </tr>
             ))}
-            {!items.length ? (
+            {!itemsMostrados.length ? (
               <tr><td colSpan="10" className="empty"><FileSpreadsheet size={20} /> No hay productos para mostrar</td></tr>
             ) : null}
           </tbody>
@@ -2200,6 +2211,16 @@ function StatusBadge({ item }) {
 
 function updateItem(items, id, patch) {
   return items.map((item) => item.id === id ? { ...item, ...patch } : item);
+}
+
+// Categoria del item para el filtro por estado (misma logica que StatusBadge):
+// distingue 'cargado' (carga inicial) de 'actualizado' (ya existia y se modifico).
+function estadoCategoria(item) {
+  const estado = item.estado || 'pendiente';
+  const tipo = item.tipo_operacion || (item.requiere_carga ? 'carga_inicial' : 'actualizacion');
+  if (estado === 'cargado' && tipo === 'actualizacion') return 'actualizado';
+  if (estado === 'cargado') return 'cargado';
+  return estado; // 'pendiente' | 'listo' | 'error'
 }
 
 function updateUser(users, id, patch) {

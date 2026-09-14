@@ -17,6 +17,7 @@ export function buildAgenteRoutes(sequelize: Sequelize): Router {
    * Alta atomica: crea personal + agente + servicios en una transaccion.
    */
   router.post('/alta',      requirePermission('personal:write'), ctrl.alta);
+  router.post('/:dni/cambio-ocupacion', requirePermission('personal:write'), ctrl.cambioOcupacion);
   router.get('/dni/:dni',   requirePermission('personal:read'),  ctrl.findByDni);
 
   return router;

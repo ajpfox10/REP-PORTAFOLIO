@@ -12,10 +12,19 @@
  * El frontend hace 1 sola llamada en lugar de 3.
  */
 
-import { Sequelize, QueryTypes } from 'sequelize';
+import { Sequelize, QueryTypes, Transaction } from 'sequelize';
 import { invalidate, agenteTags, personalTags } from '../../../infra/invalidateOnWrite';
 import { logger } from '../../../logging/logger';
 import { crearCarpetaDocuAgente } from './docuCarpeta.service';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Suma dias a una fecha 'YYYY-MM-DD' y devuelve otra 'YYYY-MM-DD' (UTC, sin husos). */
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -108,8 +117,13 @@ export class AgenteService {
    *
    * @returns Los IDs creados
    */
-  async alta(dto: AltaAgenteDto): Promise<AltaAgenteResult> {
-    const t = await this.sequelize.transaction();
+  async alta(dto: AltaAgenteDto, externalTx?: Transaction): Promise<AltaAgenteResult> {
+    // Cuando el alta es parte de una operacion mayor (p.ej. cambio de ocupacion,
+    // que cierra un tramo y abre otro atomicamente) el llamador provee su propia
+    // transaccion: en ese caso NO hacemos commit ni los efectos post-commit
+    // (carpeta DOCU, alertas, invalidacion) — de eso se encarga el llamador.
+    const t = externalTx ?? await this.sequelize.transaction();
+    const ownTx = !externalTx;
     // Continuidad de destino entre tramos (ver Paso 5)
     let continuidad: AltaAgenteResult['continuidad'] = undefined;
     let avisoCargoNuevo: string | null = null;
@@ -295,7 +309,30 @@ export class AgenteService {
       // (tramos consecutivos, sin hueco). Cualquier hueco se considera un cargo
       // nuevo: no se hereda nada y se deja un aviso en alertas_agente.
       const traeServicio = !!dto.servicios?.some(s => s.servicio_id);
-      if (!traeServicio && dto.fecha_ingreso) {
+      // Si el agente YA tiene un destino abierto (agentes_servicios sin fecha_hasta)
+      // no hay nada que reabrir ni heredar: el servicio y el sector siguen vigentes
+      // por DNI. Es el caso del cambio de ocupacion, donde el tramo laboral cambia
+      // pero el destino continua. Sin este corte, la logica de "tramo cerrado" de
+      // abajo no encontraria un cierre y dispararia un falso aviso de "falta destino".
+      const destinoAbierto = (await this.sequelize.query(
+        `SELECT ags.servicio_id,
+                (SELECT asec.sector_id FROM agentes_sectores asec
+                  WHERE asec.dni = ags.dni AND asec.deleted_at IS NULL AND asec.fecha_hasta IS NULL
+                  ORDER BY asec.id DESC LIMIT 1) AS sector_id
+           FROM agentes_servicios ags
+          WHERE ags.dni = :dni AND ags.deleted_at IS NULL
+            AND ags.fecha_hasta IS NULL AND ags.servicio_id IS NOT NULL
+          ORDER BY ags.id DESC LIMIT 1`,
+        { replacements: { dni: dto.dni }, type: QueryTypes.SELECT, transaction: t }
+      )) as any[];
+
+      if (!traeServicio && destinoAbierto[0]?.servicio_id) {
+        continuidad = {
+          heredado: true,
+          servicio_id: destinoAbierto[0].servicio_id,
+          sector_id: destinoAbierto[0].sector_id ?? null,
+        };
+      } else if (!traeServicio && dto.fecha_ingreso) {
         const previo = (await this.sequelize.query(
           `SELECT ags.servicio_id, ags.jefe_nombre, ags.fecha_hasta,
                   DATEDIFF(:fecha_ingreso, ags.fecha_hasta) AS dias_hueco,
@@ -351,6 +388,17 @@ export class AgenteService {
         }
       }
 
+      // Si la transaccion es externa, el llamador confirma y corre los efectos
+      // post-commit. Devolvemos lo esencial (el agenteId ya esta insertado).
+      if (!ownTx) {
+        return {
+          dni: dto.dni,
+          agenteId,
+          continuidad,
+          aviso: avisoCargoNuevo ?? undefined,
+        };
+      }
+
       // Todo OK: confirmar la transaccion
       await t.commit();
 
@@ -400,7 +448,76 @@ export class AgenteService {
       };
 
     } catch (err) {
-      // Algo fallo: revertir TODO (ningun dato queda a medias en la BD)
+      // Algo fallo: revertir TODO (ningun dato queda a medias en la BD).
+      // Si la transaccion es externa, el rollback lo hace el llamador.
+      if (ownTx) await t.rollback();
+      throw err;
+    }
+  }
+
+  /**
+   * Cambio de ocupacion de un agente.
+   *
+   * Un cambio de ocupacion (p.ej. un administrativo que se recibe y pasa a
+   * tecnico) NO es editar un campo: es un hito de carrera. Se modela como el
+   * resto de la carrera —cerrar el tramo vigente y abrir uno nuevo— para que la
+   * ocupacion anterior no se pierda.
+   *
+   * En UNA transaccion:
+   *   1. Cierra el tramo ACTIVO vigente con estado_empleo = 'CAMBIO DE OCUPACION'
+   *      y fecha_egreso = fecha de cierre.
+   *   2. Abre un tramo nuevo (via alta) con TODOS los datos laborales que traiga
+   *      el dto (ley, planta, categoria, funcion, ocupacion nueva, regimen...),
+   *      con fecha_ingreso = dia siguiente al cierre. Al ser consecutivo, la
+   *      logica de continuidad hereda servicio y sector del tramo anterior.
+   *
+   * @param dni      DNI del agente.
+   * @param dto      Datos del tramo nuevo. `fecha_egreso` es la fecha de cierre
+   *                 del tramo viejo (default: hoy); el nuevo arranca al dia
+   *                 siguiente.
+   */
+  async cambioOcupacion(dni: number, dto: AltaAgenteDto): Promise<AltaAgenteResult> {
+    const t = await this.sequelize.transaction();
+    try {
+      // 1. Tramo ACTIVO vigente
+      const vigente = await this.sequelize.query<{ id: number }>(
+        `SELECT id FROM agentes
+         WHERE dni = :dni AND deleted_at IS NULL
+           AND estado_empleo = 'ACTIVO' AND fecha_egreso IS NULL
+         ORDER BY id DESC LIMIT 1`,
+        { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
+      );
+      if (!vigente[0]?.id) {
+        throw Object.assign(
+          new Error(`El DNI ${dni} no tiene una vinculacion activa para cambiar de ocupacion.`),
+          { status: 409 }
+        );
+      }
+
+      // Fecha de cierre (default: hoy) y fecha de ingreso del tramo nuevo (dia siguiente).
+      const fechaCierre = dto.fecha_egreso || new Date().toISOString().slice(0, 10);
+      const fechaIngreso = addDays(fechaCierre, 1);
+
+      // 2. Cerrar el tramo vigente marcandolo como CAMBIO DE OCUPACION.
+      await this.sequelize.query(
+        `UPDATE agentes
+           SET estado_empleo = 'CAMBIO DE OCUPACION', fecha_egreso = :fechaCierre, updated_at = NOW()
+         WHERE id = :agenteId`,
+        { replacements: { fechaCierre, agenteId: vigente[0].id }, transaction: t }
+      );
+
+      // 3. Abrir el tramo nuevo dentro de la misma transaccion.
+      const result = await this.alta(
+        { ...dto, dni, fecha_ingreso: fechaIngreso, fecha_egreso: undefined, estado_empleo: 'ACTIVO' },
+        t
+      );
+
+      await t.commit();
+      await invalidate([...personalTags.all(dni), ...agenteTags.all(dni)], 'agente.cambioOcupacion');
+      logger.info({ msg: 'Cambio de ocupacion registrado', dni, cierre: fechaCierre, ingreso: fechaIngreso, actor: dto.actor });
+
+      return result;
+    } catch (err) {
       await t.rollback();
       throw err;
     }

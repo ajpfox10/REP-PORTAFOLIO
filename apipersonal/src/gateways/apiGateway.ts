@@ -58,6 +58,7 @@ import { buildStressRouter }   from '../routes/stress.routes';
 import { buildAntiguedadRouter } from '../routes/antiguedad.routes';
 import { buildLicenciasRouter } from '../routes/licencias.routes';
 import { buildComparacionSiapeRouter } from '../routes/comparacionSiape.routes';
+import { buildArticulo26IntranetRouter } from '../routes/articulo26Intranet.routes';
 import { buildLicenciasConsultorioRouter } from '../routes/licenciasConsultorio.routes';
 import { buildIntranetRouter } from '../domains/personalv5/routes/intranet.routes';
 import { buildResidentesRouter } from '../routes/residentes.routes';
@@ -188,6 +189,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
   app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));
   app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter());
+  app.use(`${apiPrefix}/articulo-26-intranet`, ...protect, buildArticulo26IntranetRouter(sequelize));
   app.use(`${apiPrefix}/licencias-consultorio`, ...protect, requireAny(['app:licencias-consultorio:access', 'crud:*:*']), buildLicenciasConsultorioRouter(sequelize));
   app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter(sequelize));
   app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
