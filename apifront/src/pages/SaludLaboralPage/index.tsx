@@ -90,17 +90,46 @@ function isWithin24h(createdAt: string): boolean {
 
 function fmt(d?: string | null): string {
   if (!d) return '—';
+  // Tomar solo la parte de fecha y formatear sin pasar por UTC (evita el corrimiento
+  // de un día en zona horaria negativa como AR/UTC−3).
+  const s = String(d).slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   try { return new Date(d).toLocaleDateString('es-AR'); } catch { return String(d); }
+}
+
+// Parsea "YYYY-MM-DD" (o ISO) como día calendario en UTC, sin corrimiento por zona horaria.
+function toUtcDay(v: string): number {
+  const s = String(v).slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(v).getTime();
 }
 
 function calcDias(desde: string, hasta: string): number | null {
   if (!desde || !hasta) return null;
   try {
-    const d1 = new Date(desde).getTime();
-    const d2 = new Date(hasta).getTime();
+    const d1 = toUtcDay(desde);
+    const d2 = toUtcDay(hasta);
     if (isNaN(d1) || isNaN(d2) || d2 < d1) return null;
     return Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
   } catch { return null; }
+}
+
+// Devuelve la fecha "hasta" = desde + N meses/años (mismo día; si el mes destino
+// no tiene ese día —ej. 31— cae al último día de ese mes). Formato YYYY-MM-DD.
+function calcHastaPorDuracion(desde: string, n: number, unit: 'meses' | 'anios'): string {
+  if (!desde || !Number.isFinite(n) || n <= 0) return '';
+  const [y, m, d] = desde.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const meses = unit === 'anios' ? n * 12 : n;
+  const t = new Date(y, m - 1, d);
+  t.setMonth(t.getMonth() + meses);
+  if (t.getDate() !== d) t.setDate(0); // clamp fin de mes
+  const yy = t.getFullYear();
+  const mm = String(t.getMonth() + 1).padStart(2, '0');
+  const dd = String(t.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
 }
 
 function normalize(s: string) {
@@ -650,6 +679,27 @@ export function SaludLaboralPage() {
 
   const tareaFormDias = calcDias(formTarea.fecha_desde, formTarea.fecha_hasta);
 
+  // Duración (meses/años) que autocompleta "Fecha hasta"
+  const [tareaDur, setTareaDur] = useState<{ n: string; unit: 'meses' | 'anios' }>({ n: '', unit: 'meses' });
+  // Cambia "Fecha desde" y, si hay duración cargada, recalcula "hasta"
+  const setDesdeConDuracion = (v: string) => {
+    const nn = Number(tareaDur.n);
+    setFormTarea(f => ({
+      ...f,
+      fecha_desde: v,
+      fecha_hasta: (tareaDur.n && nn > 0) ? calcHastaPorDuracion(v, nn, tareaDur.unit) : f.fecha_hasta,
+    }));
+  };
+  // Aplica una duración: guarda el valor y recalcula "hasta" desde "fecha_desde"
+  const aplicarDuracion = (n: string, unit: 'meses' | 'anios') => {
+    setTareaDur({ n, unit });
+    const nn = Number(n);
+    setFormTarea(f => ({
+      ...f,
+      fecha_hasta: (f.fecha_desde && n && nn > 0) ? calcHastaPorDuracion(f.fecha_desde, nn, unit) : f.fecha_hasta,
+    }));
+  };
+
   // ─── RENDER ───────────────────────────────────────────────────────────────
 
   return (
@@ -1191,7 +1241,7 @@ export function SaludLaboralPage() {
                   <div style={fg}>
                     <label htmlFor="sl-tar-desde" style={lbl}>Fecha desde *</label>
                     <input id="sl-tar-desde" name="fecha_desde" className="input" type="date" value={formTarea.fecha_desde}
-                      onChange={e => setFormTarea(f => ({ ...f, fecha_desde: e.target.value }))} required />
+                      onChange={e => setDesdeConDuracion(e.target.value)} required />
                   </div>
                   <div style={fg}>
                     <label htmlFor="sl-tar-hasta" style={lbl}>
@@ -1201,6 +1251,19 @@ export function SaludLaboralPage() {
                     <input id="sl-tar-hasta" name="fecha_hasta" className="input" type="date" value={formTarea.fecha_hasta}
                       min={formTarea.fecha_desde || undefined}
                       onChange={e => setFormTarea(f => ({ ...f, fecha_hasta: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-tar-dur" style={lbl}>Duración (autocompleta “hasta”)</label>
+                    <div className="row" style={{ gap: 6 }}>
+                      <input id="sl-tar-dur" className="input" type="number" min={0} step={1} placeholder="N°"
+                        style={{ flex: '0 0 90px' }} value={tareaDur.n}
+                        onChange={e => aplicarDuracion(e.target.value, tareaDur.unit)} />
+                      <select className="input" value={tareaDur.unit}
+                        onChange={e => aplicarDuracion(tareaDur.n, e.target.value as 'meses' | 'anios')}>
+                        <option value="meses">Meses</option>
+                        <option value="anios">Años</option>
+                      </select>
+                    </div>
                   </div>
                   <div style={fg}>
                     <label htmlFor="sl-tar-turno" style={lbl}>Turno</label>
@@ -1229,6 +1292,13 @@ export function SaludLaboralPage() {
                       <option value="">— Sin vincular —</option>
                       {juntas.map(j => <option key={j.id} value={j.id}>{j.nombre || `Documento #${j.id}`}</option>)}
                     </select>
+                    {tareaSearch.selected && (
+                      <button type="button" className="btn" style={{ marginTop: 6, fontSize: '0.78rem' }}
+                        title="Abre el módulo de escaneo con este agente y tipo Junta Médica ya elegidos"
+                        onClick={() => navigate(`/app/escaneo-agente/${String(tareaSearch.selected!.dni).replace(/\D/g, '')}?tipo=dictamen_junta`)}>
+                        📷 Escanear junta médica
+                      </button>
+                    )}
                   </div>
                   <div style={fg}>
                     <label htmlFor="sl-tar-obs" style={lbl}>Observaciones</label>
@@ -1295,7 +1365,7 @@ export function SaludLaboralPage() {
                 <table style={tbl}>
                   <thead>
                     <tr>
-                      {['DNI','Apellido y Nombre','Servicio','Turno','Desde','Hasta','Días','Junta','Observaciones','Cargado por',''].map(h => <th key={h} style={th}>{h}</th>)}
+                      {['DNI','Apellido y Nombre','Servicio','Turno','Desde','Hasta','Días','Junta','Observaciones',''].map(h => <th key={h} style={th}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -1316,7 +1386,6 @@ export function SaludLaboralPage() {
                               : <span className="muted">—</span>}
                           </td>
                           <td style={{ ...td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.observaciones || <span className="muted">—</span>}</td>
-                          <td style={{ ...td, minWidth: 110 }}><div style={{ fontSize: '0.72rem' }}><div>{t.creado_por_email || '—'}</div><div className="muted">{fmt(t.creado_at)}</div></div></td>
                           <td style={{ ...td, whiteSpace: 'nowrap' }}>
                             {canCrud('tareas_livianas','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 8px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditTarea(t)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}
                             {isAdmin && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 8px', marginLeft: 4 }} onClick={() => handleDeleteTarea(t)} title="Eliminar">🗑️</button>}

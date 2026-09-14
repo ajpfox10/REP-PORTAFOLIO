@@ -2,7 +2,7 @@
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
@@ -192,6 +192,7 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
   const { dni: routeDni } = useParams<{ dni: string }>();
   const dniParam = dni || routeDni;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
 
   const [tab, setTab] = useState<Tab>('escanear');
@@ -203,6 +204,12 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
   // Tipo de documento y descripción
   const [tipoDoc, setTipoDoc]         = useState<string>('');
   const [descripcion, setDescripcion] = useState('');
+
+  // Preselección del tipo de documento vía ?tipo= (ej. desde Salud Laboral → junta médica)
+  const tipoParam = searchParams.get('tipo');
+  useEffect(() => {
+    if (tipoParam && TIPOS_DOCUMENTO.some(t => t.value === tipoParam)) setTipoDoc(tipoParam);
+  }, [tipoParam]);
 
   // Subcarpeta destino dentro del legajo (…\docu\<DNI>\<categoría>\<subdivisión>\)
   const [subCategoria, setSubCategoria] = useState('');

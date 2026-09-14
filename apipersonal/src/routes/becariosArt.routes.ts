@@ -12,6 +12,8 @@
 import { Router, Request, Response } from 'express';
 import { Sequelize, QueryTypes }      from 'sequelize';
 import { z }                          from 'zod';
+import fs                             from 'fs';
+import path                           from 'path';
 import { requirePermission }          from '../middlewares/rbacCrud';
 import { logger }                     from '../logging/logger';
 import { trackAction }                from '../logging/track';
@@ -240,6 +242,52 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
       }
       logger.error({ msg: '[becariosArt] cola error', err: err?.message });
       return res.status(500).json({ ok: false, error: 'Error al obtener la cola ART' });
+    }
+  });
+
+  // ── GET /cola/:dni/captura — sirve el screenshot del error de ProvinciART ──
+  // El script guarda logs/art/art_error_<dni>_<ts>.png y deja el path en last_error ("Captura: ..").
+  // Servimos ESE archivo si existe (path absoluto, la API lo lee del disco), con validación estricta
+  // del nombre para que sólo se pueda pedir una captura de ese DNI (no un path arbitrario).
+  router.get('/cola/:dni/captura', requirePermission('api:access'), async (req: Request, res: Response) => {
+    const dni = parseInt(req.params.dni, 10);
+    if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+    const nameRx = new RegExp(`^art_(error|lote_error)_${dni}_\\d+\\.png$`);
+
+    try {
+      // Candidatos de archivo: (1) el path exacto embebido en last_error; (2) el más nuevo en logs/art.
+      const candidatos: string[] = [];
+
+      const rows = await sequelize.query<{ last_error: string | null }>(
+        `SELECT last_error FROM art_alta_queue WHERE dni = :dni ORDER BY id DESC LIMIT 1`,
+        { replacements: { dni }, type: QueryTypes.SELECT }
+      );
+      const m = rows[0]?.last_error?.match(/Captura:\s*(.+\.png)/i);
+      if (m) candidatos.push(m[1].trim());
+
+      // Fallback: buscar el .png más reciente de ese DNI en el logs/art de esta API.
+      const dir = path.join(process.cwd(), 'logs', 'art');
+      try {
+        const nuevos = fs.readdirSync(dir)
+          .filter((f) => nameRx.test(f))
+          .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+          .sort((a, b) => b.t - a.t);
+        if (nuevos.length) candidatos.push(path.join(dir, nuevos[0].f));
+      } catch { /* dir puede no existir */ }
+
+      // Elegir el primer candidato válido: nombre correcto + existe en disco.
+      for (const c of candidatos) {
+        const base = path.basename(c);
+        if (!nameRx.test(base)) continue;
+        if (!fs.existsSync(c)) continue;
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.sendFile(path.resolve(c));
+      }
+      return res.status(404).json({ ok: false, error: 'No hay captura disponible para ese DNI' });
+    } catch (err: any) {
+      logger.error({ msg: '[becariosArt] captura error', dni, err: err?.message });
+      return res.status(500).json({ ok: false, error: 'Error al obtener la captura' });
     }
   });
 

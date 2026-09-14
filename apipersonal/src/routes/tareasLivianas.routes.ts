@@ -50,10 +50,18 @@ async function logAudit(
   } catch { /* silencioso */ }
 }
 
+// Parsea "YYYY-MM-DD" (o ISO) como día calendario en UTC, sin corrimiento por zona horaria.
+function toUtcDay(v: string): number {
+  const s = String(v).slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(v).getTime();
+}
+
 function calcDias(desde?: string | null, hasta?: string | null): number | null {
   if (!desde || !hasta) return null;
-  const d1 = new Date(desde).getTime();
-  const d2 = new Date(hasta).getTime();
+  const d1 = toUtcDay(desde);
+  const d2 = toUtcDay(hasta);
   if (isNaN(d1) || isNaN(d2) || d2 < d1) return null;
   return Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
 }

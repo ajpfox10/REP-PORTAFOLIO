@@ -2,6 +2,7 @@
 // Calculadora de Jubilación IPS — Leyes 10471/10430 · Decretos 598/2015, 58/2015, 1554/2022
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useNavigate }    from 'react-router-dom';
 import { Layout }         from '../../components/Layout';
 import { apiFetch }       from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
@@ -366,6 +367,7 @@ function HistorialCalculos({ historial, onCargar }: { historial: any[]; onCargar
 // ── Componente principal ──────────────────────────────────────────────────────
 export function HerramientasPage() {
   const toast = useToast();
+  const navigate = useNavigate();
 
   const [busqueda,    setBusqueda]    = useState('');
   const [sugerencias, setSugerencias] = useState<any[]>([]);
@@ -1210,6 +1212,14 @@ export function HerramientasPage() {
           </div>
 
           {agente && (
+            <button type="button" className="btn" style={{ marginTop: 12, fontSize: '0.8rem' }}
+              title="Abre el módulo de escaneo con este agente y tipo ANSES Jubilación ya elegidos"
+              onClick={() => navigate(`/app/escaneo-agente/${String(agente.dni).replace(/\D/g, '')}?tipo=anses_jubilacion`)}>
+              📷 Escanear ANSES
+            </button>
+          )}
+
+          {agente && (
             <div style={{ marginTop: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '12px 16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {([
@@ -1232,6 +1242,11 @@ export function HerramientasPage() {
                   ⚠ Período de beca detectado: {fmtFecha(agente.fecha_ingreso)} → {fmtFecha(agente.fecha_de_nombramiento)}
                 </div>
               )}
+              <button type="button" className="btn" style={{ marginTop: 12, fontSize: '0.8rem' }}
+                title="Abre el módulo de escaneo con este agente y tipo ANSES Jubilación ya elegidos"
+                onClick={() => navigate(`/app/escaneo-agente/${String(agente.dni).replace(/\D/g, '')}?tipo=anses_jubilacion`)}>
+                📷 Escanear ANSES
+              </button>
             </div>
           )}
         </div>

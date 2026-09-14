@@ -900,6 +900,29 @@ function RecMedicos({ dni }: RecMedicosProps) {
   );
 }
 
+// ─── Campo selector de agente (para carga a nivel sector) ─────────────────────
+// Se muestra dentro de los modales cuando se abren sin un agente fijo (desde el
+// tab de sector). El listado ya viene filtrado a no titulares por el que lo usa.
+function AgenteSelectorField({ agentes, value, onChange }: { agentes: any[]; value: any; onChange: (a: any) => void }) {
+  const lbl = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
+  const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
+  const sorted = [...agentes].sort((a, b) =>
+    `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`, 'es')
+  );
+  return (
+    <div className="js-field js-field-full">
+      <label style={lbl}>Agente *</label>
+      <select className="input" style={fld} value={value ? String(value.dni) : ''}
+        onChange={e => onChange(agentes.find(a => String(a.dni) === e.target.value) || null)}>
+        <option value="">— Seleccioná un agente —</option>
+        {sorted.map((a: any) => (
+          <option key={a.dni} value={String(a.dni)}>{a.apellido}, {a.nombre} · DNI {a.dni}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 // ─── Modal: Nuevo franco desde tab sector (con selector de agente) ────────────
 interface NuevoFrancoSectorModalProps {
   agentes: any[];
@@ -1232,14 +1255,17 @@ function FrancosAgente({ agente, sectorId, jefeNombre }: FrancosAgenteProps) {
 // ─── Panel Artículo 26 ────────────────────────────────────────────────────────
 interface Art26ModalProps {
   agente: any;
+  agentes?: any[];   // si viene, se muestra selector de agente (carga a nivel sector)
   sectorId: number | null;
   jefeNombre: string;
   record?: any; // si existe, es edición
   onClose: () => void;
   onSaved: () => void;
 }
-function Art26Modal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: Art26ModalProps) {
+function Art26Modal({ agente, agentes, sectorId, jefeNombre, record, onClose, onSaved }: Art26ModalProps) {
   const toast = useToast();
+  const [agenteSel, setAgenteSel] = useState<any>(null);
+  const ag = agente || agenteSel;
   const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     fecha:        record?.fecha?.slice(0, 10) || hoy,
@@ -1254,11 +1280,12 @@ function Art26Modal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: 
   const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
 
   const guardar = async () => {
+    if (!ag) { toast.error('Seleccioná un agente'); return; }
     if (!form.fecha) { toast.error('Ingresá la fecha'); return; }
     setSaving(true);
     try {
       const body = {
-        dni:          agente.dni,
+        dni:          ag.dni,
         fecha:        form.fecha,
         dias:         form.dias ? Number(form.dias) : null,
         motivo:       form.motivo || null,
@@ -1272,7 +1299,7 @@ function Art26Modal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: 
         toast.ok('Registro actualizado');
       } else {
         await apiFetch<any>('/articulo_26', { method: 'POST', body: JSON.stringify(body) });
-        toast.ok('Artículo 26 cargado', `${agente.apellido}, ${agente.nombre}`);
+        toast.ok('Artículo 26 cargado', `${ag.apellido}, ${ag.nombre}`);
       }
       onSaved();
       onClose();
@@ -1289,12 +1316,15 @@ function Art26Modal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: 
         <div className="js-modal-header">
           <div>
             <div className="js-modal-title">📋 {record ? 'Editar' : 'Nuevo'} Artículo 26</div>
-            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+            <div className="js-modal-sub">{ag ? `${ag.apellido}, ${ag.nombre} · DNI ${ag.dni}` : 'Seleccioná el agente del sector'}</div>
           </div>
           <button className="btn" onClick={onClose} type="button">✕</button>
         </div>
         <div className="js-modal-body">
           <div className="js-form-grid">
+            {!agente && agentes && (
+              <AgenteSelectorField agentes={agentes} value={agenteSel} onChange={setAgenteSel} />
+            )}
             <div className="js-field">
               <label htmlFor="a26-fecha" style={lbl}>Fecha *</label>
               <input id="a26-fecha" name="fecha" type="date" className="input" style={fld} value={form.fecha} min={!record ? hoy : undefined} onChange={e => set('fecha', e.target.value)} />
@@ -1481,14 +1511,17 @@ function Art26Agente({ agente, sectorId, jefeNombre }: Art26AgenteProps) {
 // ─── Panel Prácticas Profesionales ───────────────────────────────────────────
 interface PracticasModalProps {
   agente: any;
+  agentes?: any[];   // si viene, se muestra selector de agente (carga a nivel sector)
   sectorId: number | null;
   jefeNombre: string;
   record?: any;
   onClose: () => void;
   onSaved: () => void;
 }
-function PracticasModal({ agente, sectorId, jefeNombre, record, onClose, onSaved }: PracticasModalProps) {
+function PracticasModal({ agente, agentes, sectorId, jefeNombre, record, onClose, onSaved }: PracticasModalProps) {
   const toast = useToast();
+  const [agenteSel, setAgenteSel] = useState<any>(null);
+  const ag = agente || agenteSel;
   const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     fecha_desde: record?.fecha_desde?.slice(0, 10) || hoy,
@@ -1503,6 +1536,7 @@ function PracticasModal({ agente, sectorId, jefeNombre, record, onClose, onSaved
   const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
 
   const guardar = async () => {
+    if (!ag) { toast.error('Seleccioná un agente'); return; }
     if (!form.fecha_desde) { toast.error('Ingresá la fecha'); return; }
     const dias = Number(form.dias);
     if (!Number.isInteger(dias) || dias < 1 || dias > 10) {
@@ -1512,7 +1546,7 @@ function PracticasModal({ agente, sectorId, jefeNombre, record, onClose, onSaved
     setSaving(true);
     try {
       const body = {
-        dni: agente.dni,
+        dni: ag.dni,
         fecha_desde: form.fecha_desde,
         dias,
         motivo: form.motivo || null,
@@ -1526,7 +1560,7 @@ function PracticasModal({ agente, sectorId, jefeNombre, record, onClose, onSaved
         toast.ok('Práctica actualizada');
       } else {
         await apiFetch<any>('/practicas_profesionales', { method: 'POST', body: JSON.stringify(body) });
-        toast.ok('Práctica cargada', `${agente.apellido}, ${agente.nombre}`);
+        toast.ok('Práctica cargada', `${ag.apellido}, ${ag.nombre}`);
       }
       onSaved();
       onClose();
@@ -1543,12 +1577,15 @@ function PracticasModal({ agente, sectorId, jefeNombre, record, onClose, onSaved
         <div className="js-modal-header">
           <div>
             <div className="js-modal-title">🎒 {record ? 'Editar' : 'Nueva'} Práctica profesional</div>
-            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+            <div className="js-modal-sub">{ag ? `${ag.apellido}, ${ag.nombre} · DNI ${ag.dni}` : 'Seleccioná el agente del sector'}</div>
           </div>
           <button className="btn" onClick={onClose} type="button">✕</button>
         </div>
         <div className="js-modal-body">
           <div className="js-form-grid">
+            {!agente && agentes && (
+              <AgenteSelectorField agentes={agentes} value={agenteSel} onChange={setAgenteSel} />
+            )}
             <div className="js-field">
               <label htmlFor="prac-fecha" style={lbl}>Fecha desde *</label>
               <input id="prac-fecha" name="fecha_desde" type="date" className="input" style={fld} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
@@ -1722,6 +1759,7 @@ function PracticasAgente({ agente, sectorId, jefeNombre }: PracticasAgenteProps)
 // Reutilizamos un único modal y un único panel por tabla.
 interface MedModalProps {
   agente: any;
+  agentes?: any[];          // si viene, se muestra selector de agente (carga a nivel sector)
   sectorId: number | null;
   jefeNombre: string;
   endpoint: string;         // '/papcolpo' | '/examen' | '/prexamen' | '/permiso_salida'
@@ -1732,8 +1770,10 @@ interface MedModalProps {
   onClose: () => void;
   onSaved: () => void;
 }
-function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones, conHoras, record, onClose, onSaved }: MedModalProps) {
+function MedModal({ agente, agentes, sectorId, jefeNombre, endpoint, label, tipoOpciones, conHoras, record, onClose, onSaved }: MedModalProps) {
   const toast = useToast();
+  const [agenteSel, setAgenteSel] = useState<any>(null);
+  const ag = agente || agenteSel;
   const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     fecha:        record?.fecha?.slice(0, 10) || hoy,
@@ -1750,11 +1790,12 @@ function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones,
   const fld = { width: '100%', boxSizing: 'border-box' as const, fontSize: '0.84rem' };
 
   const guardar = async () => {
+    if (!ag) { toast.error('Seleccioná un agente'); return; }
     if (!form.fecha) { toast.error('Ingresá la fecha'); return; }
     setSaving(true);
     try {
       const body = conHoras ? {
-        dni:          agente.dni,
+        dni:          ag.dni,
         fecha:        form.fecha,
         hora_desde:   form.hora_desde || null,
         hora_hasta:   form.hora_hasta || null,
@@ -1763,7 +1804,7 @@ function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones,
         sector_id:    sectorId ?? null,
         jefe_nombre:  jefeNombre || null,
       } : {
-        dni:          agente.dni,
+        dni:          ag.dni,
         fecha:        form.fecha,
         tipo:         form.tipo || null,
         resultado:    form.resultado || null,
@@ -1776,7 +1817,7 @@ function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones,
         toast.ok('Registro actualizado');
       } else {
         await apiFetch<any>(endpoint, { method: 'POST', body: JSON.stringify(body) });
-        toast.ok(`${label} cargado`, `${agente.apellido}, ${agente.nombre}`);
+        toast.ok(`${label} cargado`, `${ag.apellido}, ${ag.nombre}`);
       }
       onSaved();
       onClose();
@@ -1793,12 +1834,15 @@ function MedModal({ agente, sectorId, jefeNombre, endpoint, label, tipoOpciones,
         <div className="js-modal-header">
           <div>
             <div className="js-modal-title">{record ? 'Editar' : 'Nuevo'} {label}</div>
-            <div className="js-modal-sub">{agente.apellido}, {agente.nombre} · DNI {agente.dni}</div>
+            <div className="js-modal-sub">{ag ? `${ag.apellido}, ${ag.nombre} · DNI ${ag.dni}` : 'Seleccioná el agente del sector'}</div>
           </div>
           <button className="btn" onClick={onClose} type="button">✕</button>
         </div>
         <div className="js-modal-body">
           <div className="js-form-grid">
+            {!agente && agentes && (
+              <AgenteSelectorField agentes={agentes} value={agenteSel} onChange={setAgenteSel} />
+            )}
             <div className="js-field">
               <label htmlFor="med-fecha" style={lbl}>Fecha *</label>
               <input id="med-fecha" name="fecha" type="date" className="input" style={fld} value={form.fecha} onChange={e => set('fecha', e.target.value)} />
@@ -2012,12 +2056,16 @@ interface MedTablaGlobalProps {
   servicios: any[];
   sectores: any[];
   conHoras?: boolean;
+  agentes: any[];            // no titulares del sector (ya filtrado por el que lo usa)
+  jefeNombre: string;
+  tipoOpciones: string[] | null;
 }
-function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal, servicios, sectores, conHoras }: MedTablaGlobalProps) {
+function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal, servicios, sectores, conHoras, agentes, jefeNombre, tipoOpciones }: MedTablaGlobalProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     setLoading(true);
     const url = isGlobal ? `${endpoint}?sort=-fecha` : `${endpoint}?sector_id=${sectorId}&sort=-fecha`;
     fetchAll(url)
@@ -2026,14 +2074,39 @@ function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal
       .finally(() => setLoading(false));
   }, [endpoint, sectorId, isGlobal]);
 
+  useEffect(() => { cargar(); }, [cargar]);
+
   return (
     <div className="card js-card">
-      <div className="js-section-title" style={{ marginBottom: 12 }}>
-        {emoji} {label}
-        <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
-          ({rows.length} registro{rows.length !== 1 ? 's' : ''} · {isGlobal ? 'todo el sistema' : 'este sector'})
-        </span>
+      <div className="js-section-header" style={{ marginBottom: 12 }}>
+        <div className="js-section-title">
+          {emoji} {label}
+          <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+            ({rows.length} registro{rows.length !== 1 ? 's' : ''} · {isGlobal ? 'todo el sistema' : 'este sector'})
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn js-btn-save" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+            onClick={() => setModalOpen(true)} disabled={agentes.length === 0}
+            title={agentes.length === 0 ? 'No hay agentes no titulares en el sector' : ''}>+ Nuevo</button>
+          <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+            onClick={cargar} disabled={loading}>🔄</button>
+        </div>
       </div>
+      {modalOpen && (
+        <MedModal
+          agente={null}
+          agentes={agentes}
+          sectorId={sectorId}
+          jefeNombre={jefeNombre}
+          endpoint={endpoint}
+          label={label}
+          tipoOpciones={tipoOpciones}
+          conHoras={conHoras}
+          onClose={() => setModalOpen(false)}
+          onSaved={cargar}
+        />
+      )}
       {loading ? (
         <div className="js-loading">🔄 Cargando…</div>
       ) : rows.length === 0 ? (
@@ -2084,12 +2157,15 @@ interface PracticasTablaGlobalProps {
   agentesMap: Record<string, any>;
   sectorId: number | null;
   isGlobal: boolean;
+  agentes: any[];            // no titulares del sector
+  jefeNombre: string;
 }
-function PracticasTablaGlobal({ agentesMap, sectorId, isGlobal }: PracticasTablaGlobalProps) {
+function PracticasTablaGlobal({ agentesMap, sectorId, isGlobal, agentes, jefeNombre }: PracticasTablaGlobalProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     setLoading(true);
     const url = isGlobal
       ? '/practicas_profesionales?sort=-fecha_desde'
@@ -2100,14 +2176,35 @@ function PracticasTablaGlobal({ agentesMap, sectorId, isGlobal }: PracticasTabla
       .finally(() => setLoading(false));
   }, [sectorId, isGlobal]);
 
+  useEffect(() => { cargar(); }, [cargar]);
+
   return (
     <div className="card js-card">
-      <div className="js-section-title" style={{ marginBottom: 12 }}>
-        🎒 Prácticas profesionales
-        <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
-          ({rows.length} registro{rows.length !== 1 ? 's' : ''} · {isGlobal ? 'todo el sistema' : 'este sector'})
-        </span>
+      <div className="js-section-header" style={{ marginBottom: 12 }}>
+        <div className="js-section-title">
+          🎒 Prácticas profesionales
+          <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+            ({rows.length} registro{rows.length !== 1 ? 's' : ''} · {isGlobal ? 'todo el sistema' : 'este sector'})
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn js-btn-save" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+            onClick={() => setModalOpen(true)} disabled={agentes.length === 0}
+            title={agentes.length === 0 ? 'No hay agentes no titulares en el sector' : ''}>+ Nueva</button>
+          <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+            onClick={cargar} disabled={loading}>🔄</button>
+        </div>
       </div>
+      {modalOpen && (
+        <PracticasModal
+          agente={null}
+          agentes={agentes}
+          sectorId={sectorId}
+          jefeNombre={jefeNombre}
+          onClose={() => setModalOpen(false)}
+          onSaved={cargar}
+        />
+      )}
       {loading ? (
         <div className="js-loading">🔄 Cargando...</div>
       ) : rows.length === 0 ? (
@@ -2251,6 +2348,7 @@ export function JefeServicioPage() {
   const [loadingFrancos,         setLoadingFrancos]         = useState(false);
   const [filtroFrancos,          setFiltroFrancos]          = useState<'todos' | 'PENDIENTE' | 'APROBADO' | 'TOMADO' | 'ANULADO'>('PENDIENTE');
   const [modalNuevoFrancoSector, setModalNuevoFrancoSector] = useState(false);
+  const [modalNuevoArt26,        setModalNuevoArt26]        = useState(false);
   const [savingFrancoId,         setSavingFrancoId]         = useState<number | null>(null);
 
   // ── Cargar maestros ───────────────────────────────────────────────────────
@@ -3600,12 +3698,27 @@ export function JefeServicioPage() {
 
             return (
               <div className="card js-card">
-                <div className="js-section-title" style={{ marginBottom: 12 }}>
-                  📋 Artículo 26 — Becados y Temporarios
-                  <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
-                    {registros.length} registros · {becados.length} agentes ({isGlobal ? 'todo el sistema' : 'este sector'})
-                  </span>
+                <div className="js-section-header" style={{ marginBottom: 12 }}>
+                  <div className="js-section-title">
+                    📋 Artículo 26 — Becados y Temporarios
+                    <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+                      {registros.length} registros · {becados.length} agentes ({isGlobal ? 'todo el sistema' : 'este sector'})
+                    </span>
+                  </div>
+                  <button className="btn js-btn-save" style={{ fontSize: '0.72rem', padding: '3px 9px' }}
+                    onClick={() => setModalNuevoArt26(true)} disabled={becados.length === 0}
+                    title={becados.length === 0 ? 'No hay agentes no titulares en el sector' : ''}>+ Nuevo Art.26</button>
                 </div>
+                {modalNuevoArt26 && (
+                  <Art26Modal
+                    agente={null}
+                    agentes={becados}
+                    sectorId={isGlobal ? null : sectorId}
+                    jefeNombre={u?.nombre || ''}
+                    onClose={() => setModalNuevoArt26(false)}
+                    onSaved={cargarDniConArt26}
+                  />
+                )}
                 {loadingAg ? (
                   <div className="js-loading">🔄 Cargando…</div>
                 ) : becados.length === 0 ? (
@@ -3688,16 +3801,22 @@ export function JefeServicioPage() {
               agentesMap={agentesMap}
               sectorId={isGlobal ? null : sectorId}
               isGlobal={isGlobal}
+              agentes={agentes.filter((a: any) => !esTitularSiape(a))}
+              jefeNombre={u?.nombre || ''}
             />
           )}
           {/* ── Tabs genéricos: Papcolpo / Examen / Pre-examen / Permiso salida ── */}
           {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen' || tab === 'permiso_salida') && (() => {
             const cfg = {
-              papcolpo:       { endpoint: '/papcolpo',       label: 'Pap / Colposcopía',           emoji: '🩺', conHoras: false },
-              examen:         { endpoint: '/examen',         label: 'Examen (Facultad)',           emoji: '🎓', conHoras: false },
-              prexamen:       { endpoint: '/prexamen',       label: 'Pre-examen (Facultad)',       emoji: '📝', conHoras: false },
-              permiso_salida: { endpoint: '/permiso_salida', label: 'Permiso de salida (Becados)', emoji: '🚪', conHoras: true },
+              papcolpo:       { endpoint: '/papcolpo',       label: 'Pap / Colposcopía',           emoji: '🩺', conHoras: false, tipoOpciones: ['PAP', 'COLPO', 'PAP_COLPO'] as string[] | null, soloBeca: false },
+              examen:         { endpoint: '/examen',         label: 'Examen (Facultad)',           emoji: '🎓', conHoras: false, tipoOpciones: null as string[] | null, soloBeca: false },
+              prexamen:       { endpoint: '/prexamen',       label: 'Pre-examen (Facultad)',       emoji: '📝', conHoras: false, tipoOpciones: null as string[] | null, soloBeca: false },
+              permiso_salida: { endpoint: '/permiso_salida', label: 'Permiso de salida (Becados)', emoji: '🚪', conHoras: true,  tipoOpciones: null as string[] | null, soloBeca: true },
             }[tab];
+
+            // Permiso de salida es solo para becados; el resto, cualquier no titular.
+            const agentesTab = agentes.filter((a: any) =>
+              !esTitularSiape(a) && (!cfg.soloBeca || revistaTag(a) === 'BECA'));
 
             return (
               <MedTablaGlobal
@@ -3710,6 +3829,9 @@ export function JefeServicioPage() {
                 servicios={servicios}
                 sectores={sectores}
                 conHoras={cfg.conHoras}
+                agentes={agentesTab}
+                jefeNombre={u?.nombre || ''}
+                tipoOpciones={cfg.tipoOpciones}
               />
             );
           })()}

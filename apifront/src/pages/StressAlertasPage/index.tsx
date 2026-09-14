@@ -11,14 +11,19 @@ import { useToast }      from '../../ui/toast';
 import { LicenciasPendientesContent } from '../LicenciasPendientesPage';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
+type EstadoCola = 'pendiente' | 'cargado' | 'omitido' | 'error' | string;
+
 interface StressAlerta {
-  dni:                   number;
-  nombre:                string;
-  ultimo_dia_vacaciones: string;
-  dias_transcurridos:    number;
-  ley:                   string;
-  servicio:              string;
-  dias_stress:           number | null;
+  dni:                number;
+  nombre:             string;
+  dias_transcurridos: number | null;
+  ley:                string;
+  servicio:           string;
+  dias_stress:        number | null;
+  licencia:           string | null;
+  estado:             EstadoCola;
+  motivo:             string | null;
+  actualizado_at:     string | null;
 }
 
 interface CargaEstado {
@@ -62,6 +67,16 @@ function stressTag(dias: number | null) {
   return <span style={S.tagBlue}>{dias} días</span>;
 }
 
+function estadoTag(estado: EstadoCola) {
+  switch (estado) {
+    case 'cargado':   return <span style={S.tagGreen}>✓ Cargado</span>;
+    case 'pendiente': return <span style={S.tagOrange}>⏳ Pendiente</span>;
+    case 'error':     return <span style={S.tagRed}>✕ Error</span>;
+    case 'omitido':   return <span style={{ ...S.tagBlue, background: '#1e293b', color: '#94a3b8' }}>Omitido</span>;
+    default:          return <span style={{ color: '#64748b' }}>{estado}</span>;
+  }
+}
+
 // ── Componente ────────────────────────────────────────────────────────────────
 export function StressAlertasContent() {
   const toast = useToast();
@@ -70,7 +85,8 @@ export function StressAlertasContent() {
   const [cargando,  setCargando]  = useState(false);
   const [cargado,   setCargado]   = useState(false);
   const [busqueda,  setBusqueda]  = useState('');
-  const [soloSinLey, setSoloSinLey] = useState(false);
+  // Vista por estado. Default = "faltantes" (pendiente+error+omitido): lo que requiere acción.
+  const [vista,     setVista]     = useState<'faltantes' | 'cargado' | 'todo'>('faltantes');
   const [carga,     setCarga]     = useState<CargaEstado | null>(null);
 
   // Estado de la carga automática en SIAPE (banner)
@@ -106,16 +122,18 @@ export function StressAlertasContent() {
     }
   }, [cargar]);
 
-  // Filtrado
+  // Filtrado por vista (estado) + búsqueda de texto
   const filtrados = datos.filter(r => {
-    if (soloSinLey && r.dias_stress !== null) return false;
+    if (vista === 'faltantes' && r.estado === 'cargado') return false;
+    if (vista === 'cargado'   && r.estado !== 'cargado') return false;
     if (!busqueda.trim()) return true;
     const q = busqueda.toLowerCase();
     return (
-      r.nombre.toLowerCase().includes(q)  ||
-      String(r.dni).includes(q)           ||
-      r.ley.toLowerCase().includes(q)     ||
-      r.servicio.toLowerCase().includes(q)
+      r.nombre.toLowerCase().includes(q)          ||
+      String(r.dni).includes(q)                   ||
+      (r.ley || '').toLowerCase().includes(q)     ||
+      (r.servicio || '').toLowerCase().includes(q)||
+      (r.motivo || '').toLowerCase().includes(q)
     );
   });
 
@@ -125,20 +143,24 @@ export function StressAlertasContent() {
     exportToExcel(
       `stress_alertas_${new Date().toISOString().slice(0, 10)}`,
       filtrados.map(r => ({
-        'DNI':                   r.dni,
-        'Apellido y Nombre':     r.nombre,
-        'Último día vacaciones': fmtFecha(r.ultimo_dia_vacaciones),
-        'Días transcurridos':    r.dias_transcurridos,
-        'Ley':                   r.ley,
-        'Servicio':              r.servicio,
-        'Días stress a cargar':  r.dias_stress ?? 'Sin dato',
+        'DNI':                  r.dni,
+        'Apellido y Nombre':    r.nombre,
+        'Días transcurridos':   r.dias_transcurridos ?? '',
+        'Ley':                  r.ley,
+        'Servicio':             r.servicio,
+        'Licencia':             r.licencia ?? '',
+        'Días stress a cargar': r.dias_stress ?? 'Sin dato',
+        'Estado':               r.estado,
+        'Motivo':               r.motivo ?? '',
       }))
     );
   };
 
-  const sinStress   = filtrados.filter(r => r.dias_stress === null).length;
-  const conStress   = filtrados.filter(r => r.dias_stress !== null).length;
-  const criticos    = filtrados.filter(r => r.dias_transcurridos >= 90).length;
+  // Conteos por estado (sobre TODOS los datos de la cola, no sobre el filtro)
+  const nPend    = datos.filter(r => r.estado === 'pendiente').length;
+  const nError   = datos.filter(r => r.estado === 'error').length;
+  const nOmit    = datos.filter(r => r.estado === 'omitido').length;
+  const nCargado = datos.filter(r => r.estado === 'cargado').length;
 
   return (
     <>
@@ -196,21 +218,25 @@ export function StressAlertasContent() {
             🏖️ Stress Post-Vacacional
           </h1>
           <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0 }}>
-            Agentes que completaron su licencia anual (Cant. Días = 0), sin ANUAL COMPLEMENTARIA cargada,
-            con más de 40 días desde el último día de vacaciones.
+            Refleja la cola de carga del robot SIAPE: cada agente con su estado
+            (pendiente / cargado / omitido / error) y su motivo. Misma lógica y umbral que la carga automática.
           </p>
         </div>
 
-        {/* ─ Resumen ─ */}
+        {/* ─ Resumen por estado ─ */}
         {cargado && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
-              { label: 'Total alertas',       val: filtrados.length, color: '#e2e8f0' },
-              { label: 'Con stress calculado',val: conStress,  color: '#86efac' },
-              { label: 'Sin ley en DB',       val: sinStress,  color: '#fdba74' },
-              { label: 'Críticos (≥90 días)', val: criticos,   color: '#fca5a5' },
-            ].map(({ label, val, color }) => (
-              <div key={label} style={S.card}>
+              { label: 'Pendientes de cargar', val: nPend,    color: '#fdba74', vista: 'faltantes' as const },
+              { label: 'Con error en SIAPE',   val: nError,   color: '#fca5a5', vista: 'faltantes' as const },
+              { label: 'Omitidos (a revisar)', val: nOmit,    color: '#93c5fd', vista: 'faltantes' as const },
+              { label: 'Ya cargados',          val: nCargado, color: '#86efac', vista: 'cargado'   as const },
+            ].map(({ label, val, color, vista: v }) => (
+              <div
+                key={label}
+                onClick={() => setVista(v)}
+                style={{ ...S.card, cursor: 'pointer', marginBottom: 0 }}
+              >
                 <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: 6 }}>{label}</div>
                 <div style={{ fontSize: '1.9rem', fontWeight: 800, color }}>{val}</div>
               </div>
@@ -232,15 +258,27 @@ export function StressAlertasContent() {
             />
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.84rem', marginTop: 18 }}>
-            <input
-              type="checkbox"
-              checked={soloSinLey}
-              onChange={e => setSoloSinLey(e.target.checked)}
-              style={{ width: 16, height: 16 }}
-            />
-            Solo sin ley en DB
-          </label>
+          <div style={{ marginTop: 18 }}>
+            <label style={S.label}>Vista</label>
+            <div style={{ display: 'flex', gap: 0, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, overflow: 'hidden' }}>
+              {([
+                { k: 'faltantes', t: 'Faltantes' },
+                { k: 'cargado',   t: 'Cargados' },
+                { k: 'todo',      t: 'Todo' },
+              ] as const).map(({ k, t }) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setVista(k)}
+                  style={{
+                    cursor: 'pointer', border: 'none', padding: '7px 14px', fontSize: '0.82rem', fontWeight: 600,
+                    background: vista === k ? '#1e40af' : '#1e293b',
+                    color: vista === k ? '#dbeafe' : '#94a3b8',
+                  }}
+                >{t}</button>
+              ))}
+            </div>
+          </div>
 
           <button
             style={{ ...S.btn, background: cargando ? '#374151' : '#1e40af', color: '#93c5fd', marginTop: 18 }}
@@ -282,7 +320,7 @@ export function StressAlertasContent() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.81rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-                    {['Apellido y Nombre', 'DNI', 'Último día vac.', 'Días transcurridos', 'Ley', 'Servicio', 'Stress a cargar'].map(h => (
+                    {['Apellido y Nombre', 'DNI', 'Estado', 'Días transcurridos', 'Ley', 'Servicio', 'Stress a cargar', 'Motivo'].map(h => (
                       <th key={h} style={{
                         textAlign: 'left', padding: '7px 10px',
                         color: '#64748b', fontWeight: 700,
@@ -307,11 +345,11 @@ export function StressAlertasContent() {
                       <td style={{ padding: '8px 10px', color: '#94a3b8', fontFamily: 'monospace' }}>
                         {r.dni}
                       </td>
-                      <td style={{ padding: '8px 10px', color: '#e2e8f0', whiteSpace: 'nowrap' }}>
-                        {fmtFecha(r.ultimo_dia_vacaciones)}
+                      <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                        {estadoTag(r.estado)}
                       </td>
                       <td style={{ padding: '8px 10px' }}>
-                        {diasTag(r.dias_transcurridos)}
+                        {r.dias_transcurridos == null ? <span style={{ color: '#64748b' }}>—</span> : diasTag(r.dias_transcurridos)}
                       </td>
                       <td style={{ padding: '8px 10px', color: '#94a3b8', fontSize: '0.78rem' }}>
                         {r.ley}
@@ -321,6 +359,9 @@ export function StressAlertasContent() {
                       </td>
                       <td style={{ padding: '8px 10px' }}>
                         {stressTag(r.dias_stress)}
+                      </td>
+                      <td style={{ padding: '8px 10px', color: '#94a3b8', fontSize: '0.75rem', maxWidth: 260 }}>
+                        {r.motivo || '—'}
                       </td>
                     </tr>
                   ))}

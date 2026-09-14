@@ -235,18 +235,40 @@ def _login_robusto():
         raise RuntimeError("Pantalla de login pero no encuentro Usuario/INGRESAR.")
     log(f"Logueando como {F.SIAPE_USER}...")
     cerrar_modales()
-    # Login por WM_CHAR (sin depender del foco del SO): request_focus(Usuario) +
-    # WM type, TAB por WM a Contraseña, WM type, INGRESAR por accion JAB.
+    # Login por WM_CHAR (sin depender del foco del SO). ROBUSTO: enfoco el campo
+    # Contraseña DIRECTO (por role="password text", como el login viejo) en vez de
+    # saltar por TAB -> el TAB por WM a veces no avanzaba y usuario+contraseña
+    # caian juntos en el campo Usuario (SIAPE quedaba plantado en el login). Releo
+    # el campo Usuario (legible) y reintento si quedo pisado. En el login SI uso
+    # el foreground fuerte (min/restore): aca no hay arbol JAB de carga que romper.
     hwnd = _hwnd_siape()
-    try:
-        usr.request_focus()
-    except Exception:
-        pass
-    time.sleep(PAUSA_CORTA)
-    _wm_type(F.SIAPE_USER, hwnd)
-    _wm_tab(hwnd)                                 # Usuario -> Contraseña
-    _wm_type(F.SIAPE_PASS, hwnd)
-    time.sleep(PAUSA_CORTA)
+    pwd, _p = F._jab_buscar(role="password text", timeout=8)   # sin nombre: por rol
+    for i in range(4):
+        _forzar_frente_seguro()
+        try:
+            usr.request_focus()
+        except Exception:
+            pass
+        time.sleep(PAUSA_CORTA)
+        _wm_type(F.SIAPE_USER, hwnd)             # WM_CHAR (autolimpia el campo)
+        if pwd is not None:
+            try:
+                pwd.request_focus()              # foco DIRECTO a Contraseña (no TAB)
+            except Exception:
+                pass
+            time.sleep(PAUSA_CORTA)
+            _wm_type(F.SIAPE_PASS, hwnd)
+        else:                                    # fallback: sin campo password -> TAB
+            _wm_tab(hwnd)
+            _wm_type(F.SIAPE_PASS, hwnd)
+        time.sleep(PAUSA_CORTA)
+        vu = (F._jab_read_text(usr) or "").strip()
+        if vu == str(F.SIAPE_USER).strip():      # Usuario quedo limpio (no user+pass)
+            break
+        log(f"   reintento login ({i+1}/4): campo Usuario quedo '{vu}'")
+        cerrar_modales()
+    else:
+        raise RuntimeError("Login: no logre dejar el Usuario limpio (se pisaba con la contraseña).")
     if not _click(btn):                          # INGRESAR por accion JAB
         pyautogui.press("enter")
     time.sleep(PAUSA_LARGA)
@@ -570,28 +592,42 @@ def _limpiar_campo():
     time.sleep(0.1)
 
 
-def set_anio_dias(frame, anio, dias):
-    """Enfoca Año con request_focus y salta a C.Días con TAB (el foco a C.Días
-    directo no anda -> el valor caia en Año). Con SIAPE al frente forzado, el
-    teclado aterriza. Este es el metodo que funciono en el test de 2."""
+def set_anio_dias(frame, anio, dias, intentos=4):
+    """Escribe Año y salta a C.Días con TAB (el foco directo a C.Días no anda ->
+    el valor caia en Año), con SIAPE al frente para que el teclado aterrice.
+    ROBUSTO: reintenta releyendo AMBAS celdas (las dos son legibles por JAB); el
+    salto por WM-TAB a veces no aterriza (SIAPE no quedaba al frente / el TAB no
+    avanzaba) y los valores caian vacios o pisados juntos en Año. Si tras los
+    reintentos no verifica, deja el estado como esta y verificar() del caller lo
+    reporta y NO guarda. Uso _frente_liviano (NO el foreground min/restore, que
+    rompe el arbol JAB a mitad de carga)."""
     # Año/C.Días estan en la ventana PRINCIPAL (no en un modal): hay que traerla
     # al frente para que el WM aterrice (los modales Buscador/Licencias se
     # enfocaban solos, por eso DNI/licencia andan sin esto).
-    _frente_liviano()
-    ael, _a = _celda_anio(frame)
-    if not ael:
-        raise RuntimeError("No encuentro la celda Año.")
-    log(f"   Año={anio}")
-    try:
-        ael.request_focus()          # el cursor de Forms suele caer en Año tras la licencia
-    except Exception:
-        pass
-    time.sleep(PAUSA_CORTA)
-    _wm_type(anio)                   # WM_CHAR
-    log(f"   C.Días={dias} (WM-TAB Año->C.Días)")
-    _wm_tab()                        # TAB por WM con lParam bien armado (sin foco del SO)
-    _wm_type(dias)
-    time.sleep(PAUSA_CORTA)
+    anio_s, dias_s = str(anio), str(dias)
+    ultimo = ""
+    for i in range(intentos):
+        _frente_liviano()
+        ael, _a = _celda_anio(frame)
+        if not ael:
+            raise RuntimeError("No encuentro la celda Año.")
+        try:
+            ael.request_focus()      # el cursor de Forms suele caer en Año tras la licencia
+        except Exception:
+            pass
+        time.sleep(PAUSA_CORTA)
+        _wm_type(anio_s)             # WM_CHAR (autolimpia el campo con BACKSPACE/DELETE)
+        _wm_tab()                    # TAB por WM con lParam bien armado (sin foco del SO)
+        _wm_type(dias_s)
+        time.sleep(PAUSA_CORTA)
+        va = (F._jab_read_text(_celda_anio(frame)[0]) or "").strip()
+        vd = (F._jab_read_text(_celda_dias(frame)[0]) or "").strip()
+        if va == anio_s and vd == dias_s:
+            log(f"   Año={anio_s} / C.Días={dias_s}" + (f" (OK al intento {i+1})" if i else ""))
+            return
+        ultimo = f"Año='{va}' C.Días='{vd}'"
+        log(f"   reintento Año/C.Días ({i+1}/{intentos}): lei {ultimo} (esp {anio_s}/{dias_s})")
+    log(f"   Año/C.Días NO verificado tras {intentos} intentos: {ultimo}")
 
 
 def verificar(frame, anio, dias, licencia):

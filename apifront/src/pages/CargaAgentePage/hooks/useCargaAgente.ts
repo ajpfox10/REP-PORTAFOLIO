@@ -99,7 +99,12 @@ function extractNombre(row: any): string {
   return String(row.id ?? '');
 }
 
-export type SavedMode = 'create' | 'edit' | 'reentry';
+export type SavedMode = 'create' | 'edit' | 'reentry' | 'cambio';
+
+// Estado que dispara el flujo de cambio de ocupacion (cierra el tramo vigente y
+// abre uno nuevo) en vez de una edicion en el lugar. Vive como opcion del
+// selector de estado, pero solo se ofrece en modo edicion.
+export const ESTADO_CAMBIO_OCUPACION = 'CAMBIO DE OCUPACION';
 
 export function useCargaAgente() {
   const toast = useToast();
@@ -297,7 +302,43 @@ export function useCargaAgente() {
     const dniNum = Number(form.dni.replace(/\D/g, ''));
 
     try {
-      if (editMode) {
+      if (editMode && form.estado_empleo === ESTADO_CAMBIO_OCUPACION) {
+        // ── CAMBIO DE OCUPACIÓN: cierra el tramo vigente y abre uno nuevo ────────
+        // No es una edición en el lugar: es un hito de carrera. El backend cierra
+        // el tramo actual (estado CAMBIO DE OCUPACION + fecha_egreso) y clona uno
+        // nuevo ACTIVO el día siguiente con todos los datos laborales de acá.
+        const cambioPayload: Record<string, any> = {
+          apellido: form.apellido.trim().toUpperCase(),
+          nombre:   form.nombre.trim().toUpperCase(),
+          // fecha_egreso = fecha de cierre del tramo viejo (default backend: hoy).
+          ...(form.fecha_egreso      ? { fecha_egreso:       form.fecha_egreso }                 : {}),
+          ...(form.ley_id            ? { ley_id:             Number(form.ley_id) }               : {}),
+          ...(form.planta_id         ? { planta_id:          Number(form.planta_id) }            : {}),
+          ...(form.categoria_id      ? { categoria_id:       Number(form.categoria_id) }         : {}),
+          ...(form.funcion_id        ? { funcion_id:         Number(form.funcion_id) }           : {}),
+          ...(form.ocupacion_id      ? { ocupacion_id:       Number(form.ocupacion_id) }         : {}),
+          ...(form.regimen_horario_id? { regimen_horario_id: Number(form.regimen_horario_id) }   : {}),
+          ...(form.reparticion_id    ? { reparticion_id:     Number(form.reparticion_id) }       : {}),
+          ...(form.legajo            ? { legajo:             Number(form.legajo) }               : {}),
+          ...(form.decreto_designacion ? { decreto_designacion: form.decreto_designacion }       : {}),
+          ...(form.salario_mensual   ? { salario_mensual:    parseFloat(form.salario_mensual) }  : {}),
+          ...(form.servicio_id ? {
+            servicios: [{
+              servicio_id: Number(form.servicio_id),
+              ...(form.sector_id ? { sector_id: Number(form.sector_id) } : {}),
+            }],
+          } : {}),
+        };
+        const cRes = await apiFetch<any>(`/agentes-v2/${dniNum}/cambio-ocupacion`, {
+          method: 'POST',
+          body: JSON.stringify(cambioPayload),
+        });
+        if (!cRes?.ok) throw new Error(cRes?.error || 'Error al registrar el cambio de ocupación');
+        avisarDestino(cRes?.data);
+        setSavedDni(dniNum);
+        setSavedMode('cambio');
+
+      } else if (editMode) {
         // ── MODO EDICIÓN: PATCH /personal/:dni ──────────────────────────────────
         const payload: Record<string, any> = {
           apellido: form.apellido.trim().toUpperCase(),
@@ -483,8 +524,11 @@ export function useCargaAgente() {
       }
 
       setSaved(true);
+      const cambioOcup = editMode && form.estado_empleo === ESTADO_CAMBIO_OCUPACION;
       toast.ok(
-        editMode ? 'Agente actualizado correctamente' : reentryMode ? 'Reingreso registrado correctamente' : 'Agente creado correctamente',
+        cambioOcup ? 'Cambio de ocupación registrado' :
+        editMode ? 'Agente actualizado correctamente' :
+        reentryMode ? 'Reingreso registrado correctamente' : 'Agente creado correctamente',
         `DNI ${dniNum}`
       );
     } catch (e: any) {

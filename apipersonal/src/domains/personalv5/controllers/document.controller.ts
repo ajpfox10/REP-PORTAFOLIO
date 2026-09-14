@@ -30,6 +30,10 @@ const idParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+// Usuarios habilitados para eliminar documentos (baja + borrado del archivo).
+// 25 = ALEX DANIEL ARCE, 26 = ORNELLA JORGELINA ACOSTA ANGULO.
+const DELETE_ALLOWED_USER_IDS = new Set<number>([25, 26]);
+
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 export class DocumentController {
@@ -127,8 +131,12 @@ export class DocumentController {
       res.status(400).json({ ok: false, error: 'ID invalido' });
       return;
     }
+    const userId = (req as any).auth?.principalId ?? 0;
+    if (!DELETE_ALLOWED_USER_IDS.has(Number(userId))) {
+      res.status(403).json({ ok: false, error: 'No tenés permiso para eliminar documentos.' });
+      return;
+    }
     try {
-      const userId = (req as any).auth?.principalId ?? 0;
       await this.service.softDelete(paramParsed.data.id, userId);
       res.json({ ok: true });
     } catch (err: any) {

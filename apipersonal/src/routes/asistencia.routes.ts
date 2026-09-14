@@ -1746,6 +1746,14 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       const period = req.query.periodo ? parsePeriodoMes(String(req.query.periodo)) : null;
 
+      // tipo: 'ausente' (default) â†’ novedades AUSENTE (comportamiento histÃ³rico).
+      //       'presente'          â†’ dÃ­as marcados PRESENTE por el jefe en SIAPE.
+      // El resto del pipeline (expandir a dÃ­as + cruce con reloj) es idÃ©ntico:
+      // solo cambia quÃ© novedades del SIAP se conservan.
+      const tipo = String(req.query.tipo || 'ausente').toLowerCase() === 'presente'
+        ? 'presente'
+        : 'ausente';
+
       // â”€â”€ 1. Leer SIAP â†’ expandir a dÃ­as individuales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const DOW_KEYS2 = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'] as const;
       const DOW_LABELS2 = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
@@ -1764,8 +1772,10 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         siapRaw = siapRaw.map(r => clipRowToPeriod(r, period)).filter(Boolean) as any[];
       }
 
-      // Solo ausentes
-      siapRaw = siapRaw.filter((r: any) => normNovedad(r.novedad).includes('AUSENTE'));
+      // Filtrar segÃºn tipo. "PRESENTE CON RETENCION DE TAREAS" tambiÃ©n cuenta
+      // como presente (contiene 'PRESENTE').
+      const palabraFiltro = tipo === 'presente' ? 'PRESENTE' : 'AUSENTE';
+      siapRaw = siapRaw.filter((r: any) => normNovedad(r.novedad).includes(palabraFiltro));
 
       // â”€â”€ 1b. Leer horarios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // Para cada DNI: guarda la entrada por dÃ­a y si es guardia rotativa 18-06
