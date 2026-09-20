@@ -102,7 +102,9 @@ function Section({
   title: string; children: React.ReactNode;
   rows?: any[]; filename?: string; loading?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Arranca colapsada: la página tiene muchas secciones y cada una calcula
+  // sobre miles de filas. Se abren de a una haciendo clic en el título.
+  const [collapsed, setCollapsed] = useState(true);
   return (
     <div className="card" style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: collapsed ? 0 : 14 }}>
@@ -187,6 +189,249 @@ function agrupar(
   return Object.entries(map)
     .map(([nombre, total]) => ({ nombre, total }))
     .sort((a, b) => b.total - a.total);
+}
+
+// DNIs que en algún tramo de su carrera figuran con alguna de esas leyes.
+// Tanto la beca de vacunación como la residencia son LEYES del catálogo, no
+// ocupaciones ni servicios: se las busca por nombre para no clavar el id, así
+// una ley renombrada o una nueva del mismo tipo sigue entrando.
+// Se excluye a la PERSONA entera, no sólo el tramo: si alguien entró por la
+// beca o por la residencia y después quedó en planta, sus tramos salen todos.
+function dnisConLey(agentes: any[], leyes: Record<number, string>, patron: RegExp): Set<string> {
+  const ids = new Set(
+    Object.entries(leyes)
+      .filter(([, nombre]) => patron.test(String(nombre)))
+      .map(([id]) => Number(id)),
+  );
+  const out = new Set<string>();
+  if (!ids.size) return out;
+  for (const a of agentes) {
+    if (a.ley_id != null && ids.has(Number(a.ley_id))) out.add(String(a.dni));
+  }
+  return out;
+}
+
+// Los dos grupos que se pueden sacar de los conteos de ingresos. Cada uno mira
+// toda la carrera del agente, no sólo el tramo del ingreso.
+const RE_VACUNACION = /vacun/i;   // Programa de Beca Vacunacion
+const RE_RESIDENTES = /residente/i; // RESIDENTES y PRE-RESIDENTES
+
+// Dos tildes independientes: se pueden usar por separado o juntos, y el
+// gráfico se recalcula con cada uno. Compartidos por las dos secciones de
+// ingresos, así tildar en una se refleja en la otra.
+function FiltrosIngresos({
+  sinVacunacion, onSinVacunacion, excluidosVacunacion,
+  sinResidentes, onSinResidentes, excluidosResidentes,
+}: {
+  sinVacunacion: boolean; onSinVacunacion: (v: boolean) => void; excluidosVacunacion: number;
+  sinResidentes: boolean; onSinResidentes: (v: boolean) => void; excluidosResidentes: number;
+}) {
+  const chk = (activo: boolean, onChange: (v: boolean) => void, texto: string, excluidos: number) => (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem' }}>
+      <input type="checkbox" checked={activo} onChange={e => onChange(e.target.checked)}
+        style={{ width: 16, height: 16, cursor: 'pointer' }} />
+      <span style={{ color: activo ? '#fca5a5' : 'rgba(255,255,255,0.75)' }}>{texto}</span>
+      <span className="muted" style={{ fontSize: '0.72rem' }}>({excluidos})</span>
+    </label>
+  );
+  return (
+    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 12 }}>
+      {chk(sinVacunacion, onSinVacunacion, 'Sin becas de vacunación', excluidosVacunacion)}
+      {chk(sinResidentes, onSinResidentes, 'Sin residentes',          excluidosResidentes)}
+    </div>
+  );
+}
+
+// ─── Retención de residentes ─────────────────────────────────────────────────
+// Un residente "se quedó" cuando, después de cerrar su tramo de residencia,
+// arranca otro tramo con una ley distinta (planta, guardia, otra beca).
+//
+// Se agrupa por año de EGRESO de la residencia, no por año del nuevo cargo: la
+// pregunta es "de los que terminaron en tal año, cuántos siguieron acá", y en
+// la práctica el nuevo tramo arranca al día siguiente del cierre.
+//
+// Sólo entran las residencias con fecha de egreso cargada: una residencia
+// todavía abierta no terminó, así que no se le puede pedir retención.
+function retencionResidentes(agentes: any[], leyes: Record<number, string>) {
+  const idsResidente = new Set(
+    Object.entries(leyes)
+      .filter(([, nombre]) => RE_RESIDENTES.test(String(nombre)))
+      .map(([id]) => Number(id)),
+  );
+  const esResidente = (a: any) => a.ley_id != null && idsResidente.has(Number(a.ley_id));
+  const iso = (v: any) => (v ? String(v).slice(0, 10) : '');
+
+  // Tramos NO residentes por DNI, para buscar el cargo posterior.
+  const otrosPorDni: Record<string, string[]> = {};
+  for (const a of agentes) {
+    if (esResidente(a) || !a.fecha_ingreso) continue;
+    (otrosPorDni[String(a.dni)] ??= []).push(iso(a.fecha_ingreso));
+  }
+
+  const porAnio: Record<string, { terminaron: number; quedaron: number }> = {};
+  const detalle: any[] = [];
+  // Residencias sin fecha de egreso: no terminaron (o falta cargar la fecha),
+  // así que no entran en ningún año. Se muestran aparte para que se vea que el
+  // denominador no es el total de residentes.
+  let abiertas = 0;
+
+  for (const r of agentes) {
+    if (!esResidente(r)) continue;
+    if (!r.fecha_egreso) { abiertas++; continue; }
+    const egreso = iso(r.fecha_egreso);
+    const anio   = egreso.slice(0, 4);
+    if (!anio) continue;
+
+    // ¿Arrancó algún cargo no-residente desde el cierre en adelante?
+    const quedo = (otrosPorDni[String(r.dni)] ?? []).some(desde => desde >= egreso);
+
+    porAnio[anio] ??= { terminaron: 0, quedaron: 0 };
+    porAnio[anio].terminaron++;
+    if (quedo) porAnio[anio].quedaron++;
+
+    detalle.push({
+      Año: anio, DNI: r.dni, 'Fin de residencia': egreso,
+      'Se quedó': quedo ? 'Sí' : 'No',
+    });
+  }
+
+  const filas = Object.entries(porAnio)
+    .map(([anio, v]) => ({
+      anio,
+      terminaron: v.terminaron,
+      quedaron:   v.quedaron,
+      pct:        v.terminaron ? Math.round((v.quedaron / v.terminaron) * 100) : 0,
+    }))
+    .sort((a, b) => Number(a.anio) - Number(b.anio));
+
+  const tot = filas.reduce(
+    (acc, f) => ({ terminaron: acc.terminaron + f.terminaron, quedaron: acc.quedaron + f.quedaron }),
+    { terminaron: 0, quedaron: 0 },
+  );
+
+  return {
+    filas, detalle, abiertas,
+    total: { ...tot, pct: tot.terminaron ? Math.round((tot.quedaron / tot.terminaron) * 100) : 0 },
+  };
+}
+
+function RetencionResidentes({ agentes, leyes }: { agentes: any[]; leyes: Record<number, string> }) {
+  const { filas, detalle, total, abiertas } = retencionResidentes(agentes, leyes);
+  if (!filas.length) return null;
+
+  const maxTerm = Math.max(...filas.map(f => f.terminaron), 1);
+  const rows = [
+    ...filas.map(f => ({ Año: f.anio, Terminaron: f.terminaron, 'Se quedaron': f.quedaron, 'Retención %': f.pct })),
+    { Año: 'TOTAL', Terminaron: total.terminaron, 'Se quedaron': total.quedaron, 'Retención %': total.pct },
+    ...detalle,
+  ];
+
+  return (
+    <Section title="🎓 Residentes que se quedaron después de la residencia"
+      rows={rows} filename="retencion_residentes">
+      <div className="muted" style={{ fontSize: '0.74rem', marginBottom: 12, lineHeight: 1.4 }}>
+        Por año de fin de residencia. Cuenta a quien, al cerrar la residencia, arrancó
+        otro cargo en el hospital con una ley distinta. Las residencias sin fecha de
+        egreso cargada no entran.
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
+              <th style={thSt}>Año</th>
+              <th style={{ ...thSt, textAlign: 'right' }}>Terminaron</th>
+              <th style={{ ...thSt, textAlign: 'right' }}>Se quedaron</th>
+              <th style={{ ...thSt, width: '40%' }}>Retención</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map(f => (
+              <tr key={f.anio} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <td style={{ ...tdSt, fontWeight: 700, color: '#93c5fd' }}>{f.anio}</td>
+                <td style={{ ...tdSt, textAlign: 'right' }}>{f.terminaron}</td>
+                <td style={{ ...tdSt, textAlign: 'right', fontWeight: 700, color: f.quedaron ? '#86efac' : '#64748b' }}>
+                  {f.quedaron}
+                </td>
+                <td style={tdSt}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${(f.terminaron / maxTerm) * 100}%`, height: '100%',
+                        background: 'rgba(255,255,255,0.12)', position: 'relative',
+                      }}>
+                        <div style={{
+                          width: `${f.pct}%`, height: '100%', background: '#16a34a', borderRadius: 99,
+                        }} />
+                      </div>
+                    </div>
+                    <span style={{ minWidth: 34, textAlign: 'right', color: f.pct ? '#86efac' : '#64748b' }}>
+                      {f.pct}%
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)' }}>
+              <td style={{ ...tdSt, fontWeight: 800 }}>TOTAL</td>
+              <td style={{ ...tdSt, textAlign: 'right', fontWeight: 800 }}>{total.terminaron}</td>
+              <td style={{ ...tdSt, textAlign: 'right', fontWeight: 800, color: '#86efac' }}>{total.quedaron}</td>
+              <td style={{ ...tdSt, color: '#86efac', fontWeight: 800 }}>{total.pct}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {abiertas > 0 && (
+        <div className="muted" style={{ fontSize: '0.74rem', marginTop: 10 }}>
+          {abiertas} residencias sin fecha de egreso: siguen en curso o falta cargarla.
+          No entran en la cuenta.
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ─── Bajas reales ────────────────────────────────────────────────────────────
+// Un tramo cerrado NO es una salida del hospital: la carrera se modela con
+// varios tramos por DNI, así que un cambio de ley o un nombramiento cierra un
+// tramo y abre otro al día siguiente. Contar todos los cierres infla las bajas
+// (en 2025, 77 de 136 eran continuidades).
+//
+// Criterio: es baja cuando cerró el tramo y en el MISMO año calendario no
+// abrió ningún otro. Si volvió en un año posterior, la baja de aquel año vale
+// igual, porque ese año efectivamente se fue.
+function bajasRealesPorAnio(agentes: any[]) {
+  const iso = (v: any) => (v ? String(v).slice(0, 10) : '');
+
+  // Aperturas de tramo por DNI, para ver si volvió dentro del año.
+  const aperturasPorDni: Record<string, Array<{ id: any; desde: string }>> = {};
+  for (const a of agentes) {
+    if (!a.fecha_ingreso) continue;
+    (aperturasPorDni[String(a.dni)] ??= []).push({ id: a.id, desde: iso(a.fecha_ingreso) });
+  }
+
+  const porAnio: Record<string, number> = {};
+  let continuidades = 0;
+  let sinFecha = 0;
+
+  for (const b of agentes) {
+    if (b.estado_empleo !== 'BAJA') continue;
+    const egreso = iso(b.fecha_egreso);
+    if (!egreso) { sinFecha++; continue; }
+    const anio = egreso.slice(0, 4);
+
+    const volvio = (aperturasPorDni[String(b.dni)] ?? []).some(
+      n => n.id !== b.id && n.desde >= egreso && n.desde.slice(0, 4) === anio,
+    );
+    if (volvio) { continuidades++; continue; }
+
+    porAnio[anio] = (porAnio[anio] ?? 0) + 1;
+  }
+
+  const filas = Object.entries(porAnio)
+    .map(([anio, total]) => ({ anio, total }))
+    .sort((a, b) => Number(a.anio) - Number(b.anio));
+
+  return { filas, continuidades, sinFecha, total: filas.reduce((acc, f) => acc + f.total, 0) };
 }
 
 function agruparPorAnio(arr: any[], campo: string): { anio: string; total: number }[] {
@@ -539,10 +784,12 @@ function IngresosAnioProf({
   agentes,
   servicios,
   catalogos,
+  filtros,
 }: {
   agentes: any[];
   servicios: any[];
   catalogos: { ocupacion: Record<number, string>; servicio: Record<number, string> };
+  filtros: React.ReactNode;
 }) {
   const [filtAnio, setFiltAnio] = useState('');
   const [filtProf, setFiltProf] = useState('');
@@ -613,6 +860,7 @@ function IngresosAnioProf({
   return (
     <Section title="📊 Ingresos por año, profesión y servicio"
       rows={exportRows} filename="ingresos_anio_profesion_servicio">
+      {filtros}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
         <select style={selSt} value={filtAnio} onChange={e => setFiltAnio(e.target.value)}>
           <option value="">Todos los años</option>
@@ -716,6 +964,10 @@ export function EstadisticasPage() {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ loaded: 0, total: 0, step: '' });
   const [stats, setStats] = useState<Stats | null>(null);
+  // Sacan de los conteos de ingresos a quienes pasaron por la beca de
+  // vacunación o por la residencia, en cualquier tramo de su carrera.
+  const [sinVacunacion, setSinVacunacion] = useState(false);
+  const [sinResidentes, setSinResidentes] = useState(false);
   const loaded = useRef(false);
 
   const cargar = useCallback(async (force = false) => {
@@ -725,7 +977,11 @@ export function EstadisticasPage() {
     setProgress({ loaded: 0, total: 0, step: '' });
 
     try {
-      // ── Catálogos (sin paginación, son pequeños) ──
+      // ── Catálogos (PAGINACIÓN COMPLETA) ──
+      // OJO: pedirlos con ?limit=500&page=1 truncaba silenciosamente los grandes
+      // (ocupaciones son ~946) y todo agente cuya ocupación quedaba fuera de esa
+      // primera página se mostraba como '(sin profesión)'. fetchAll agota la
+      // paginación; los catálogos chicos siguen resolviéndose en un solo request.
       setProgress(p => ({ ...p, step: 'Cargando catálogos…' }));
       // Nombres CORRECTOS de las tablas según el schema de la BD:
       //   plantas, sexos, categorias (PK=ID), regimenes_horarios, ocupaciones
@@ -734,16 +990,16 @@ export function EstadisticasPage() {
         rPlanta, rSexo, rCategoria, rRegimen, rOcupacion,
         rLey, rJefaturas, rReparticiones, rServicios, rDependencias,
       ] = await Promise.allSettled([
-        apiFetch<any>('/plantas?limit=500&page=1'),
-        apiFetch<any>('/sexos?limit=500&page=1'),
-        apiFetch<any>('/categorias?limit=500&page=1'),
-        apiFetch<any>('/regimenes_horarios?limit=500&page=1'),
-        apiFetch<any>('/ocupaciones?limit=500&page=1'),
-        apiFetch<any>('/ley?limit=500&page=1'),
-        apiFetch<any>('/jefaturas?limit=500&page=1'),
-        apiFetch<any>('/reparticiones?limit=500&page=1'),
-        apiFetch<any>('/servicios?limit=500&page=1'),
-        apiFetch<any>('/dependencias?limit=500&page=1'),
+        fetchAll<any>('/plantas'),
+        fetchAll<any>('/sexos'),
+        fetchAll<any>('/categorias'),
+        fetchAll<any>('/regimenes_horarios'),
+        fetchAll<any>('/ocupaciones'),
+        fetchAll<any>('/ley'),
+        fetchAll<any>('/jefaturas'),
+        fetchAll<any>('/reparticiones'),
+        fetchAll<any>('/servicios'),
+        fetchAll<any>('/dependencias'),
       ]);
 
       const buildMap = (
@@ -762,7 +1018,7 @@ export function EstadisticasPage() {
 
       // Mapa dependencia_id → nombre del HOSPITAL (dependencia padre, o ella misma si es raíz).
       // Permite totalizar agentes por hospital sumando sus UPA hijas.
-      const depRows = rDependencias.status === 'fulfilled' ? (rDependencias.value?.data || rDependencias.value || []) : [];
+      const depRows: any[] = rDependencias.status === 'fulfilled' ? (rDependencias.value ?? []) : [];
       const depNombre: Record<number, string> = {};
       for (const d of depRows) depNombre[Number(d.id)] = String(d.nombre ?? d.id);
       const mapaHospital: Record<number, string> = {};
@@ -929,9 +1185,31 @@ export function EstadisticasPage() {
   const serviciosActuales = servicios.filter(s => !s.fecha_hasta);
   const porServicioActual = agrupar(serviciosActuales, 'servicio_nombre').slice(0, 30);
 
+  // Becas de vacunación y residencias: se las puede sacar de los conteos de
+  // ingresos. El plan de vacunación metió cientos de altas en un año puntual y
+  // las residencias entran en camada todos los años; las dos cosas tapaban la
+  // lectura del resto de la serie.
+  // Sin useMemo a propósito: este bloque corre después del return temprano de
+  // "cargando", así que un hook acá cambiaría la cantidad de hooks entre renders.
+  const dnisVacunacion = dnisConLey(agentes, catalogos.ley, RE_VACUNACION);
+  const dnisResidentes = dnisConLey(agentes, catalogos.ley, RE_RESIDENTES);
+  const agentesIngresos = agentes.filter(a =>
+    (!sinVacunacion || !dnisVacunacion.has(String(a.dni))) &&
+    (!sinResidentes || !dnisResidentes.has(String(a.dni))));
+
+  const filtrosIngresos = (
+    <FiltrosIngresos
+      sinVacunacion={sinVacunacion} onSinVacunacion={setSinVacunacion} excluidosVacunacion={dnisVacunacion.size}
+      sinResidentes={sinResidentes} onSinResidentes={setSinResidentes} excluidosResidentes={dnisResidentes.size}
+    />
+  );
+
   // Ingresos por año
-  const ingresosPorAnio = agruparPorAnio(agentes, 'fecha_ingreso');
-  const bajasPorAnio = agruparPorAnio(bajas, 'fecha_baja');
+  const ingresosPorAnio = agruparPorAnio(agentesIngresos, 'fecha_ingreso');
+  // El cierre del tramo es fecha_egreso: en agentes no hay ninguna fecha_baja,
+  // así que antes esto agrupaba sobre un campo inexistente y no se veía nada.
+  const bajasInfo = bajasRealesPorAnio(agentes);
+  const bajasPorAnio = bajasInfo.filas;
 
   // Nacimientos por mes
   const cumplePorMes = Array.from({ length: 12 }, (_, i) => {
@@ -1204,9 +1482,10 @@ export function EstadisticasPage() {
       {/* ── Ingresos por año ── */}
       {ingresosPorAnio.length > 0 && (
         <Section title="📅 Ingresos por año" rows={ingresosPorAnio} filename="estadisticas_ingresos_por_anio">
+          {filtrosIngresos}
           {ingresosPorAnio.map((d, i) => (
             <BarRow key={d.anio} label={d.anio} value={d.total}
-              max={Math.max(...ingresosPorAnio.map(x => x.total), 1)} color="#2563eb" total={agentes.length} />
+              max={Math.max(...ingresosPorAnio.map(x => x.total), 1)} color="#2563eb" total={agentesIngresos.length} />
           ))}
         </Section>
       )}
@@ -1214,9 +1493,14 @@ export function EstadisticasPage() {
       {/* ── Bajas por año ── */}
       {bajasPorAnio.length > 0 && (
         <Section title="📉 Bajas por año" rows={bajasPorAnio} filename="estadisticas_bajas_por_anio">
+          <div className="muted" style={{ fontSize: '0.74rem', marginBottom: 10, lineHeight: 1.4 }}>
+            Sólo salidas: cerró el tramo y en el mismo año no abrió otro.
+            {bajasInfo.continuidades > 0 && ` Quedan afuera ${bajasInfo.continuidades} cierres por cambio de ley o nombramiento, que siguieron trabajando.`}
+            {bajasInfo.sinFecha > 0 && ` Otras ${bajasInfo.sinFecha} no tienen fecha de egreso cargada.`}
+          </div>
           {bajasPorAnio.map((d, i) => (
             <BarRow key={d.anio} label={d.anio} value={d.total}
-              max={Math.max(...bajasPorAnio.map(x => x.total), 1)} color="#ef4444" total={bajas.length} />
+              max={Math.max(...bajasPorAnio.map(x => x.total), 1)} color="#ef4444" total={bajasInfo.total} />
           ))}
         </Section>
       )}
@@ -1325,7 +1609,11 @@ export function EstadisticasPage() {
       )}
 
       {/* ── Ingresos por año, profesión y servicio ── */}
-      <IngresosAnioProf agentes={agentes} servicios={servicios} catalogos={catalogos} />
+      <IngresosAnioProf agentes={agentesIngresos} servicios={servicios} catalogos={catalogos}
+        filtros={filtrosIngresos} />
+
+      {/* ── Retención de residentes ── */}
+      <RetencionResidentes agentes={agentes} leyes={catalogos.ley} />
 
       {/* ── Estructura organizacional ── */}
       <EstructuraOrgSection />

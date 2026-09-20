@@ -170,7 +170,7 @@ export function ResolucionesPage() {
   const puedeEliminarArchivos = [25, 26].includes(Number(session?.user?.id));
 
   // ── Código de bypass (leído del env, nunca hardcodeado) ────────────────────
-  const BYPASS_CODE = (import.meta as any)?.env?.VITE_SCAN_BYPASS_CODE || '';
+  const BYPASS_CODE = import.meta.env.VITE_SCAN_BYPASS_CODE || '';
 
   // ── Búsqueda agente ────────────────────────────────────────────────────────
   const [dniInput,  setDniInput]  = useState('');

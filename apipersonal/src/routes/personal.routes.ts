@@ -20,6 +20,7 @@ import { buildPersonalHistorialRouter } from './personal.historial.routes';
 import { invalidate, personalTags, agenteTags } from '../infra/invalidateOnWrite';
 import { trackAction } from '../logging/track';
 import { logger } from '../logging/logger';
+import { seedReclamoHaberes } from './reclamosHaberes.routes';
 
 // ── RBAC helper ───────────────────────────────────────────────────────────────
 function requireCrudFor(table: string, action: 'read' | 'create' | 'update' | 'delete') {
@@ -489,6 +490,8 @@ export function buildPersonalRouter(sequelize: Sequelize) {
       const newServicioId = (data as any).servicio_id;
       const newSectorId   = (data as any).sector_id;
       let fechaCierreVinculacion: string | null = null;
+      // Baja recien cargada -> sembrar pendiente de reclamo de haberes (best-effort, post-commit)
+      let reclamoHaberesBaja: { fechaBaja: any } | null = null;
 
       for (const [k, v] of Object.entries(data)) {
         if (PERSONAL_COLS.includes(k)) personalFields[k] = v;
@@ -548,6 +551,10 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           }
           if (egresoResultante && estadoResultante !== 'ACTIVO') {
             fechaCierreVinculacion = egresoResultante;
+          }
+          // Transicion a BAJA (antes no lo era): marcar para sembrar el reclamo de haberes
+          if (estadoResultante === 'BAJA' && agenteActual[0].estado_empleo !== 'BAJA') {
+            reclamoHaberesBaja = { fechaBaja: egresoResultante };
           }
 
           const setCols = Object.keys(agenteFields).map(k => `${k} = :${k}`).join(', ');
@@ -629,6 +636,15 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         }
 
         await t.commit();
+
+        // Siembra del pendiente de reclamo de haberes (post-commit, best-effort:
+        // nunca debe romper la baja ya confirmada). fecha_baja = fecha_egreso, o hoy si no vino.
+        if (reclamoHaberesBaja) {
+          await seedReclamoHaberes(sequelize, {
+            dni,
+            fechaBaja: reclamoHaberesBaja.fechaBaja || new Date(),
+          }).catch((e) => logger.error({ msg: '[personal] seed reclamo haberes error', dni, err: e?.message }));
+        }
 
         // Invalidar cache
         await invalidate([...personalTags.all(String(dni)), ...agenteTags.all(String(dni))], 'personal.patch').catch(() => {});

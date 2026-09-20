@@ -22,7 +22,9 @@ import { EstadisticasPage } from '../pages/EstadisticasPage';
 import { OrganigramaPage } from '../pages/OrganigramaPage';
 import { ComparadorPage } from '../pages/ComparadorPage';
 import { ComparadorSiapePage } from '../pages/ComparadorSiapePage';
+import { Art26MinisterioPage } from '../pages/Art26MinisterioPage';
 import { LicenciasConsultorioPage } from '../pages/LicenciasConsultorioPage';
+import { HorariosExtendidosPage } from '../pages/HorariosExtendidosPage';
 import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
@@ -379,11 +381,31 @@ export function App() {
               }
             />
             <Route
+              path="/app/art26-ministerio"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <Art26MinisterioPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/licencias-consultorio"
               element={
                 <Private>
                   <Guard anyOf={['app:licencias-consultorio:access', 'crud:*:*']}>
                     <LicenciasConsultorioPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/horarios-extendidos"
+              element={
+                <Private>
+                  <Guard anyOf={['app:horarios-extendidos:access', 'crud:*:*']}>
+                    <HorariosExtendidosPage />
                   </Guard>
                 </Private>
               }

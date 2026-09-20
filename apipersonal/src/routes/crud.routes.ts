@@ -146,7 +146,7 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     const ley = String(row.ley_nombre || '').toLowerCase();
     const planta = String(row.planta_nombre || '').toUpperCase();
     // Planta explícitamente temporal → NO titular (aunque sea 10430)
-    const plantaTemporal = planta.includes('TEMPORARI') || planta.includes('INTERIN') || planta.includes('BECA');
+    const plantaTemporal = planta.includes('TEMPORARI') || planta.includes('INTERIN') || planta.includes('BECA') || planta.includes('HONOREM');
     const titularSiape = ley.includes('10471')
       ? planta === 'PERMANENTE'
       : ley.includes('10430') ? !plantaTemporal : false;

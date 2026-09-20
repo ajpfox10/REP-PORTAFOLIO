@@ -79,6 +79,10 @@ export function Layout({ title, children, showBack }: {
   const isJefeConsultorio =
     hasPerm('app:licencias-consultorio:access') && !hasPerm('crud:*:*');
 
+  const canSeeHorariosExtendidos = hasPerm('app:horarios-extendidos:access') || hasPerm('crud:*:*');
+  const isNutricion =
+    hasPerm('app:horarios-extendidos:access') && !hasPerm('crud:*:*');
+
   const isGestionTurnos =
     hasPerm('app:gestion_turnos:access') && !hasPerm('crud:*:*');
 
@@ -140,6 +144,11 @@ export function Layout({ title, children, showBack }: {
             {isKiosk ? null : isJefeConsultorio ? (
               <>
                 {navLink('/app/licencias-consultorio', '🩺 Licencias de Consultorio')}
+                {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
+              </>
+            ) : isNutricion ? (
+              <>
+                {navLink('/app/horarios-extendidos', '⏱️ Turnos de más de 10 horas')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
               </>
             ) : isGestionTurnos ? (
@@ -230,6 +239,7 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/ausencias-fichajes', '🕵️ Ausentes vs Fichajes')}
                       {navLink('/app/sin-fichaje-salida', '🚪 Sin fichaje de salida')}
                       {isAdmin && navLink('/app/comparador-siape', '📋 SIAPE vs Novedades')}
+                      {isAdmin && navLink('/app/art26-ministerio', '📋 Art. 26 → MS (FC)')}
                       {(hasPerm('crud:fc_cert_reemplazos:read') || isAdmin) && navLink('/app/fc-cert-reemplazos', '📋 FC / Cert. / Reemplazos')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
                       {navLink('/app/alertas', '🔔 Alertas')}
@@ -268,6 +278,7 @@ export function Layout({ title, children, showBack }: {
                           </div>
                           {canSeeSaludLaboral && navLink('/app/salud-laboral', '🏥 Salud Laboral')}
                           {canSeeLicenciasConsultorio && navLink('/app/licencias-consultorio', '🩺 Licencias de Consultorio')}
+                          {canSeeHorariosExtendidos && navLink('/app/horarios-extendidos', '⏱️ Turnos de más de 10 horas')}
                           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
                         </>
                       )}

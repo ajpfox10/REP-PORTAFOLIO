@@ -21,6 +21,8 @@ const ALERT_KEYS = [
   'concursos',
   'alertasAgente',
   'cumpleanos',
+  'reclamosHaberes',
+  'jubilacionCarga',
 ] as const;
 
 type DashboardAlertKey = typeof ALERT_KEYS[number];

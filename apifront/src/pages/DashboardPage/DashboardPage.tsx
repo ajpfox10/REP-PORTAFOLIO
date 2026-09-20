@@ -14,7 +14,9 @@ import { FicheroBanner } from '../FicheroPage';
 import { GuarderiaAlertaBanner } from '../GuarderiaPage';
 import { AlertasAgenteDashboardBanner } from '../AlertasAgentePage';
 import { CumpleanosDashboardBanner } from '../AlertasPage/CumpleanosBanner';
+import { ReclamosHaberesDashboardBanner } from '../AlertasPage/ReclamosHaberesBanner';
 import { ConcursosFuncionesBanner } from '../ConcursosPage/ConcursosFuncionesExamenes';
+import { JubilacionCargaBanner } from '../HerramientasPage/JubilacionCargaBanner';
 import { DashboardAlertSlot, useDashboardAlertsConfig } from './components/DashboardAlertSlot';
 import type { DashboardAlertKey } from './components/DashboardAlertSlot';
 import './styles/DashboardPage.css';
@@ -223,9 +225,14 @@ export function DashboardPage() {
   const canSeeResidentes = hasPerm('app:residentes:access') || hasPerm('crud:*:*');
   const canSeeSamo = hasPerm('app:samo:access') || hasPerm('crud:*:*');
   const canSeeAlertasAgente = hasPerm('api:access');
+  // Mismo permiso que pide el endpoint /jubilacion/alerta-carga
+  const canSeeJubilacionCarga = hasPerm('crud:jubilacion_calculos:read') || hasPerm('crud:*:*');
   const canSeeLicenciasConsultorio = hasPerm('app:licencias-consultorio:access') || hasPerm('crud:*:*');
   const isJefeConsultorio =
     hasPerm('app:licencias-consultorio:access') && !hasPerm('crud:*:*');
+  const canSeeHorariosExtendidos = hasPerm('app:horarios-extendidos:access') || hasPerm('crud:*:*');
+  const isNutricion =
+    hasPerm('app:horarios-extendidos:access') && !hasPerm('crud:*:*');
 
   const isSaludLaboral =
     canSeeSaludLaboral &&
@@ -347,6 +354,35 @@ export function DashboardPage() {
     );
   }
 
+  if (isNutricion) {
+    return (
+      <Layout title="Panel">
+        <div style={{ marginBottom: 6 }}>
+          <div
+            className="muted"
+            style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}
+          >
+            Horarios
+          </div>
+          <div className="grid">
+            <Tile
+              to="/app/horarios-extendidos"
+              title="⏱️ Turnos de más de 10 horas"
+              desc="Agentes que en el Excel de horarios tienen algún turno de más de 10 h."
+              accent="#f59e0b"
+            />
+            <Tile
+              to="/app/mi-cuenta"
+              title="👤 Mi cuenta"
+              desc="Perfil, permisos y cambio de contraseña."
+              accent="#0ea5e9"
+            />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   if (isSaludLaboral) {
     return (
       <Layout title="Panel">
@@ -455,7 +491,9 @@ export function DashboardPage() {
       {hasPerm('crud:*:*') && alert('jefaturas', <JefedeptosAlertaBanner />)}
       {hasPerm('crud:*:*') && alert('concursos', <ConcursosFuncionesBanner />)}
       {canSeeAlertasAgente && alert('cumpleanos', <CumpleanosDashboardBanner />)}
+      {canSeeAlertasAgente && alert('reclamosHaberes', <ReclamosHaberesDashboardBanner />)}
       {canSeeAlertasAgente && alert('alertasAgente', <AlertasAgenteDashboardBanner />)}
+      {canSeeJubilacionCarga && alert('jubilacionCarga', <JubilacionCargaBanner />)}
 
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -537,6 +575,9 @@ export function DashboardPage() {
             )}
             {canSeeLicenciasConsultorio && (
               <Tile to="/app/licencias-consultorio" title="🩺 Licencias de Consultorio" desc="Licencias de médicos (Ley 10471 y becados médicos) según SIAPE." accent="#0d9488" />
+            )}
+            {canSeeHorariosExtendidos && (
+              <Tile to="/app/horarios-extendidos" title="⏱️ Turnos de más de 10 horas" desc="Agentes que en el Excel de horarios tienen algún turno de más de 10 h." accent="#f59e0b" />
             )}
             {canSeeSamo && (
               <Tile to="/app/samo" title="🏥 SAMO" desc="Gestión y seguimiento de licencias médicas del personal." accent="#0d9488" />
