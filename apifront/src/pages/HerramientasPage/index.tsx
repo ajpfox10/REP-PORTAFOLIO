@@ -218,6 +218,60 @@ const CRONOGRAMA_JUBILACION = [
   { baja: '31 de diciembre',  presenta: 'Del 1 al 10 de septiembre',               nombrado: 'Enero (año siguiente)', jubilado: 'Febrero' },
 ];
 
+// Opciones de corte que ofrece el backend (GET /jubilacion/cortes): el que
+// corresponde hoy segun el cronograma y los cuatro anteriores. No hay opcion
+// posterior: el corte se puede atrasar, nunca adelantar.
+export interface OpcionCorte {
+  mesCorte: string;
+  anioBaja: number;
+  fechaBaja: string;
+  papelesDesde: string;
+  papelesHasta: string;
+  vigente: boolean;
+}
+
+const fmtISO = (iso: string) => {
+  const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return iso || '';
+  return new Date(y, m - 1, d).toLocaleDateString('es-AR');
+};
+
+const MES_LABEL: Record<string, string> = {
+  MARZO: 'Marzo', JUNIO: 'Junio', SEPTIEMBRE: 'Septiembre', DICIEMBRE: 'Diciembre',
+};
+
+const opcionLabel = (o: OpcionCorte) =>
+  `${MES_LABEL[o.mesCorte] ?? o.mesCorte} ${o.anioBaja}${o.vigente ? ' \u2014 corresponde' : ' (atrasado)'}`;
+
+// Selector de corte. Arranca en el vigente; los anteriores quedan disponibles
+// para registrar un tramite que se esta regularizando.
+function SelectorCorte({ opciones, value, onChange, label = 'Fecha (mes de corte)' }: {
+  opciones: OpcionCorte[];
+  value: string;
+  onChange: (mesCorte: string) => void;
+  label?: string;
+}) {
+  const elegida = opciones.find(o => o.mesCorte === value);
+  const huerfana = value && !elegida; // corte guardado que ya no esta en la lista
+  return (
+    <div>
+      <label style={S.label}>{label}</label>
+      <select style={S.select} value={value} onChange={e => onChange(e.target.value)}>
+        {opciones.length === 0 && <option value="">Cargando...</option>}
+        {huerfana && <option value={value}>{MES_LABEL[value] ?? value} (cargado)</option>}
+        {opciones.map(o => (
+          <option key={`${o.mesCorte}-${o.anioBaja}`} value={o.mesCorte}>{opcionLabel(o)}</option>
+        ))}
+      </select>
+      {elegida && (
+        <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: 3, lineHeight: 1.35 }}>
+          Baja {fmtISO(elegida.fechaBaja)} \u00b7 papeles del {fmtISO(elegida.papelesDesde)} al {fmtISO(elegida.papelesHasta)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Se muestra en la calculadora y en Posibles Jubilados.
 function CronogramaJubilacion() {
   return (
@@ -251,6 +305,63 @@ function CronogramaJubilacion() {
       <div style={{ marginTop: 10, fontSize: '0.74rem', color: '#64748b' }}>
         Los papeles se presentan del 1 al 10 del mes que cae tres meses antes del mes de baja.
         Fechas de referencia: si el IPS cambia el cronograma hay que actualizar esta tabla.
+      </div>
+    </div>
+  );
+}
+
+// Pasos del tramite jubilatorio, en el orden en que se cargan.
+// El value tiene que coincidir con el enum de posibles_jubilados_checklist.
+const ITEMS_CHECKLIST: Array<{ value: string; label: string }> = [
+  { value: 'DOCUMENTACION', label: 'Documentación' },
+  { value: 'IFGRA',         label: 'IFGRA'          },
+  { value: 'SIAPE',         label: 'SIAPE'          },
+  { value: 'INTRANET',      label: 'Intranet'       },
+  { value: 'RESOLUCION',    label: 'Resolución'     },
+];
+
+// Cuadro de tildes de una ficha. Cada paso muestra quien lo tildo y cuando.
+function ChecklistTramite({ pj, guardando, onToggle }: {
+  pj: any;
+  guardando: string | null;
+  onToggle: (id: number, item: string, tildado: boolean) => void;
+}) {
+  const hechos: Record<string, any> = {};
+  for (const t of (pj.checklist ?? [])) hechos[t.item] = t;
+  const completos = ITEMS_CHECKLIST.every(i => hechos[i.value]);
+
+  return (
+    <div style={{
+      marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.07)',
+    }}>
+      <div style={{ ...S.label, marginBottom: 6 }}>
+        Carga del trámite
+        {completos && <span style={{ color: '#86efac', marginLeft: 8 }}>✓ completa</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        {ITEMS_CHECKLIST.map(item => {
+          const hecho = !!hechos[item.value];
+          const busy  = guardando === `${pj.id}:${item.value}`;
+          return (
+            <label key={item.value} style={{ ...S.chkRow, marginTop: 0, opacity: busy ? 0.5 : 1 }}>
+              <input
+                type="checkbox"
+                style={S.chk}
+                checked={hecho}
+                disabled={busy}
+                onChange={e => onToggle(pj.id, item.value, e.target.checked)}
+              />
+              <span style={{ fontSize: '0.8rem', color: hecho ? '#86efac' : '#94a3b8', fontWeight: hecho ? 700 : 400 }}>
+                {item.label}
+              </span>
+              {hecho && hechos[item.value].por && (
+                <span style={{ fontSize: '0.68rem', color: '#475569' }}>
+                  {hechos[item.value].por}
+                </span>
+              )}
+            </label>
+          );
+        })}
       </div>
     </div>
   );
@@ -416,7 +527,9 @@ export function HerramientasPage() {
   const [pjBuscando,    setPjBuscando]    = useState(false);
   const pjTimer                           = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pjAgente,      setPjAgente]      = useState<any | null>(null);
-  const [pjMesCorte,    setPjMesCorte]    = useState('MARZO');
+  const [pjMesCorte,    setPjMesCorte]    = useState('');
+  const [pjCortes,      setPjCortes]      = useState<OpcionCorte[]>([]);
+  const [pjChkGuardando, setPjChkGuardando] = useState<string | null>(null);
   const [pjLista,       setPjLista]       = useState<any[]>([]);
   const [pjCargando,    setPjCargando]    = useState(false);
   const [pjFiltro,      setPjFiltro]      = useState('');
@@ -450,7 +563,7 @@ export function HerramientasPage() {
   const [ctEditMotivo,  setCtEditMotivo]  = useState('');
   const [ctEditObs,     setCtEditObs]     = useState('');
   const [ctPromoverId,  setCtPromoverId]  = useState<number | null>(null);
-  const [ctPromMesCorte,setCtPromMesCorte]= useState('MARZO');
+  const [ctPromMesCorte,setCtPromMesCorte]= useState('');
 
   // ── Búsqueda ──────────────────────────────────────────────────────────────
   const onBusquedaChange = useCallback((q: string) => {
@@ -853,6 +966,19 @@ export function HerramientasPage() {
     setPjAgente(ag);
   }, []);
 
+  // Opciones de corte: las calcula el backend desde el cronograma del IPS.
+  const cargarCortes = useCallback(async () => {
+    try {
+      const res = await apiFetch<any>('/jubilacion/cortes');
+      const ops: OpcionCorte[] = res?.data ?? [];
+      setPjCortes(ops);
+      // El backend dice cual arranca elegido (normalmente el vigente).
+      const def = res?.sugerido?.mesCorte ?? ops.find(o => o.vigente)?.mesCorte ?? '';
+      setPjMesCorte(prev => prev || def);
+      setCtPromMesCorte(prev => prev || def);
+    } catch { /* el selector queda vacio y el backend igual decide el corte */ }
+  }, []);
+
   const cargarPosibles = useCallback(async () => {
     setPjCargando(true);
     try {
@@ -869,7 +995,11 @@ export function HerramientasPage() {
     try {
       const res = await apiFetch<any>('/jubilacion/posibles', {
         method: 'POST',
-        body: JSON.stringify({ dni: pjAgente.dni, mes_corte: pjMesCorte }),
+        body: JSON.stringify({
+          dni: pjAgente.dni,
+          // Sin valor elegido, el backend usa el corte que corresponde hoy.
+          ...(pjMesCorte ? { mes_corte: pjMesCorte } : {}),
+        }),
       });
       if (res?.ok) {
         toast.ok(`${pjAgente.apellido}, ${pjAgente.nombre} agregado al registro`);
@@ -884,14 +1014,45 @@ export function HerramientasPage() {
     } finally { setPjGuardando(false); }
   }, [pjAgente, cargarPosibles, toast]);
 
+  // Tilda / destilda un paso del tramite. Refresca la lista para traer quien lo
+  // tildo, que lo pone el backend con el usuario del token.
+  const pjToggleChecklist = useCallback(async (id: number, item: string, tildado: boolean) => {
+    setPjChkGuardando(`${id}:${item}`);
+    try {
+      const res = await apiFetch<any>(`/jubilacion/posibles/${id}/checklist`, {
+        method: 'PUT',
+        body: JSON.stringify({ item, tildado }),
+      });
+      if (res?.ok) {
+        setPjLista((prev: any[]) => prev.map((p: any) =>
+          p.id === id ? { ...p, checklist: res.checklist, items_faltantes: res.items_faltantes } : p));
+      } else {
+        toast.error(res?.error ?? 'No se pudo guardar el tilde');
+      }
+    } catch (e: any) {
+      toast.error('Error: ' + e?.message);
+    } finally { setPjChkGuardando(null); }
+  }, [toast]);
+
   const abrirPjEdit = useCallback((pj: any) => {
     setPjEditId(pj.id);
     setPjEditEstado(pj.estado);
-    setPjEditMesCorte(pj.mes_corte ?? 'MARZO');
+    setPjEditMesCorte(pj.mes_corte ?? pjCortes.find(o => o.vigente)?.mesCorte ?? '');
     setPjEditObs(pj.observaciones ?? '');
     setPjEditFPapeles(toInputDate(pj.fecha_presentacion_papeles));
     setPjEditFJubilacion(toInputDate(pj.fecha_jubilacion));
-  }, []);
+  }, [pjCortes]);
+
+  // Cambiar el corte en la edicion reescribe las dos fechas del cronograma:
+  // son datos derivados, no se cargan a mano salvo excepcion.
+  const cambiarCorteEdit = useCallback((mesCorte: string) => {
+    setPjEditMesCorte(mesCorte);
+    const o = pjCortes.find(x => x.mesCorte === mesCorte);
+    if (o) {
+      setPjEditFPapeles(o.papelesDesde);
+      setPjEditFJubilacion(o.fechaBaja);
+    }
+  }, [pjCortes]);
 
   const guardarPjEdit = useCallback(async (id: number) => {
     setPjGuardando(true);
@@ -1121,8 +1282,8 @@ export function HerramientasPage() {
 
   // Cargar lista al entrar al tab
   useEffect(() => {
-    if (tab === 'posibles') cargarPosibles();
-    if (tab === 'citas')    cargarCitas();
+    if (tab === 'posibles') { cargarPosibles(); cargarCortes(); }
+    if (tab === 'citas')    { cargarCitas();    cargarCortes(); }
   }, [tab, ctRango]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -2243,14 +2404,8 @@ export function HerramientasPage() {
 
                               {ctPromoverId === c.id && (
                                 <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 12, display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
-                                  <div style={{ width: 170 }}>
-                                    <label style={S.label}>Fecha (mes de corte)</label>
-                                    <select style={S.select} value={ctPromMesCorte} onChange={e => setCtPromMesCorte(e.target.value)}>
-                                      <option value="MARZO">Marzo</option>
-                                      <option value="JUNIO">Junio</option>
-                                      <option value="SEPTIEMBRE">Septiembre</option>
-                                      <option value="DICIEMBRE">Diciembre</option>
-                                    </select>
+                                  <div style={{ width: 240 }}>
+                                    <SelectorCorte opciones={pjCortes} value={ctPromMesCorte} onChange={setCtPromMesCorte} />
                                   </div>
                                   <button style={{ ...S.btn, background: ctGuardando ? '#374151' : '#166534', color: '#86efac' }}
                                     onClick={() => promoverCita(c.id)} disabled={ctGuardando}>
@@ -2322,14 +2477,8 @@ export function HerramientasPage() {
                     <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{pjAgente.apellido}, {pjAgente.nombre}</span>
                     <span style={{ color: '#64748b', marginLeft: 10, fontSize: '0.78rem' }}>DNI {pjAgente.dni} · {pjAgente.ley_nombre ?? '—'}</span>
                   </div>
-                  <div style={{ width: 150 }}>
-                    <label style={S.label}>Fecha</label>
-                    <select style={S.select} value={pjMesCorte} onChange={e => setPjMesCorte(e.target.value)}>
-                      <option value="MARZO">Marzo</option>
-                      <option value="JUNIO">Junio</option>
-                      <option value="SEPTIEMBRE">Septiembre</option>
-                      <option value="DICIEMBRE">Diciembre</option>
-                    </select>
+                  <div style={{ width: 230 }}>
+                    <SelectorCorte opciones={pjCortes} value={pjMesCorte} onChange={setPjMesCorte} label="Fecha (mes de corte)" />
                   </div>
                   <button
                     style={{ ...S.btn, background: pjGuardando ? '#374151' : '#166534', color: '#86efac', padding: '7px 18px' }}
@@ -2408,15 +2557,7 @@ export function HerramientasPage() {
                                 <option value="DESCARTADO">Descartado</option>
                               </select>
                             </div>
-                            <div>
-                              <label style={S.label}>Fecha</label>
-                              <select style={S.select} value={pjEditMesCorte} onChange={e => setPjEditMesCorte(e.target.value)}>
-                                <option value="MARZO">Marzo</option>
-                                <option value="JUNIO">Junio</option>
-                                <option value="SEPTIEMBRE">Septiembre</option>
-                                <option value="DICIEMBRE">Diciembre</option>
-                              </select>
-                            </div>
+                            <SelectorCorte opciones={pjCortes} value={pjEditMesCorte} onChange={cambiarCorteEdit} label="Fecha (mes de corte)" />
                             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
                               <button style={{ ...S.btn, background: pjGuardando ? '#374151' : '#166534', color: '#86efac', flex: 1 }}
                                 onClick={() => guardarPjEdit(pj.id)} disabled={pjGuardando}>
@@ -2439,7 +2580,7 @@ export function HerramientasPage() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                               <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
-                                Cada fecha cargada avisa en el legajo del agente y el aviso queda hasta que la fecha pase.
+                                Las dos fechas salen del cronograma al elegir el corte. Cada una avisa en el legajo del agente y el aviso queda hasta que la fecha pase.
                               </span>
                             </div>
                           </div>
@@ -2501,6 +2642,7 @@ export function HerramientasPage() {
                           </div>
                         </div>
                       )}
+                      <ChecklistTramite pj={pj} guardando={pjChkGuardando} onToggle={pjToggleChecklist} />
                     </div>
                   ))}
                 </div>

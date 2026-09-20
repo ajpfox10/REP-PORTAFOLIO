@@ -38,8 +38,9 @@ DB = F.DB
 FRAME_TA = "Administración de Tiempo Acumulado"
 FRAME_BUS = "Buscador de Personas"
 FRAME_LIC = "Licencias y Permisos"
-Y_FILA1 = 244          # primera fila de la grilla (del volcado)
-Y_TOL = 12
+Y_FILA1 = 299          # primera fila de la grilla (mapeado 2026-09-14 20:21: los
+                       # '...' de fila 1 estan en y=299; antes 244 -> no los hallaba)
+Y_TOL = 16
 USAR_PLUS = False      # --plus: reusar la pantalla con el + verde entre agentes
 
 
@@ -129,15 +130,15 @@ def _forzar_frente_seguro(w=None, timeout=8):
         u.SystemParametersInfoW(0x2001, 0, 0, 0)   # SPI_SETFOREGROUNDLOCKTIMEOUT=0
     except Exception:
         pass
-    # UN solo ciclo minimizar+restaurar (fuerza el frente al restaurar). NADA de
-    # ALT (abre el menu del sistema). Ojo: nunca dejar la ventana minimizada.
+    # NO minimizar: ya NO hace falta (la contraseña ahora es WM_CHAR, independiente del
+    # foreground). El min/restore rompia el estado de la ventana -> tras el login el
+    # selector no aparecia. Dejo la ventana MAXIMIZADA, igual que cuando el usuario lo
+    # hace a mano (asi el selector post-login aparece normal). NADA de ALT.
     try:
         if win32gui.IsIconic(hwnd):
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-        time.sleep(0.15)
-        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        time.sleep(0.25)
+        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+        time.sleep(0.3)
     except Exception:
         pass
     deadline = time.time() + timeout
@@ -223,55 +224,119 @@ def _tipear(el, texto):
     time.sleep(PAUSA_CORTA)
 
 
+_LOGIN_STATE = {"intentado": False}
+
+
 def _login_robusto():
-    """Login SIN coordenadas: request_focus por campo + teclado. Reemplaza al
-    _hacer_login de francos, que llenaba por _jab_click_bounds y metia usuario y
-    contraseña juntos en el campo Usuario."""
+    """Login de UN SOLO intento, sin loops. Escribe Usuario, salta a Contraseña,
+    escribe la pass con TECLADO REAL (WM_CHAR perdia ~2 chars -> entraba corta y
+    SIAPE la rechazaba) y aprieta INGRESAR una vez. Si SIAPE la rechaza la pantalla
+    vuelve a 'login' y asegurar_sesion nos llamaria de nuevo -> en esa 2da llamada
+    levantamos RuntimeError para NO quedar en loop escribiendo usuario+contraseña."""
+    if _LOGIN_STATE["intentado"]:
+        raise RuntimeError(
+            "Login rechazado: ya intente UNA vez y SIAPE sigue en la pantalla de "
+            "login (credenciales incorrectas o INGRESAR no tomo). NO reintento para "
+            "no quedar en loop. Revisa SIAPE_USER / SIAPE_PASS en el .env.")
+    _LOGIN_STATE["intentado"] = True
     if not F.SIAPE_USER or not F.SIAPE_PASS:
         raise RuntimeError("Falta SIAPE_USER o SIAPE_PASS en .env.")
     usr, _u = F._jab_buscar(nombre="Usuario", role="text", timeout=20)
     btn, _b = F._jab_buscar(nombre="INGRESAR", role="push button", timeout=20)
     if not (usr and btn):
         raise RuntimeError("Pantalla de login pero no encuentro Usuario/INGRESAR.")
-    log(f"Logueando como {F.SIAPE_USER}...")
+    log(f"Logueando como {F.SIAPE_USER} (un solo intento)...")
     cerrar_modales()
-    # Login por WM_CHAR (sin depender del foco del SO). ROBUSTO: enfoco el campo
-    # Contraseña DIRECTO (por role="password text", como el login viejo) en vez de
-    # saltar por TAB -> el TAB por WM a veces no avanzaba y usuario+contraseña
-    # caian juntos en el campo Usuario (SIAPE quedaba plantado en el login). Releo
-    # el campo Usuario (legible) y reintento si quedo pisado. En el login SI uso
-    # el foreground fuerte (min/restore): aca no hay arbol JAB de carga que romper.
     hwnd = _hwnd_siape()
-    pwd, _p = F._jab_buscar(role="password text", timeout=8)   # sin nombre: por rol
-    for i in range(4):
-        _forzar_frente_seguro()
-        try:
-            usr.request_focus()
-        except Exception:
-            pass
-        time.sleep(PAUSA_CORTA)
-        _wm_type(F.SIAPE_USER, hwnd)             # WM_CHAR (autolimpia el campo)
-        if pwd is not None:
+    _forzar_frente_seguro()
+    u2, _up = F._jab_buscar(nombre="Usuario", role="text", timeout=6)
+    p2, _pp = F._jab_buscar(role="password text", timeout=6)
+    usr_el = u2 or usr
+    # --- Usuario --- (el foco arranca aca; WM_CHAR autolimpia y escribe)
+    try:
+        usr_el.request_focus()
+    except Exception:
+        pass
+    time.sleep(PAUSA_CORTA)
+    _wm_type(F.SIAPE_USER, hwnd)
+    # --- foco a Contraseña con TAB nativo (mueve el foco de verdad) + respiro ---
+    _wm_tab(hwnd)
+    time.sleep(1.0)
+    # --- Contraseña por WM_CHAR (PostMessage), IGUAL que el Usuario (que SI entra).
+    # pyautogui dejaba la Contraseña VACIA porque SIAPE no quedaba al frente. WM_CHAR
+    # no depende del frente ni de la sesion. Lento (0.15/letra) para no perder letras,
+    # tras el respiro de 1s post-TAB (el foco ya esta en Contraseña).
+    import win32api as _wa
+    import win32con as _wc2
+    for _ in range(15):                               # limpiar por las dudas
+        _wa.PostMessage(hwnd, _wc2.WM_KEYDOWN, _wc2.VK_BACK, 0)
+        _wa.PostMessage(hwnd, _wc2.WM_KEYUP, _wc2.VK_BACK, 0)
+    time.sleep(0.3)
+    for _ch in str(F.SIAPE_PASS):
+        _wa.PostMessage(hwnd, _wc2.WM_CHAR, ord(_ch), 0)
+        time.sleep(0.15)
+    time.sleep(PAUSA_CORTA)
+    vu = (F._jab_read_text(usr_el) or "").strip()
+    log(f"   listo para INGRESAR: Usuario='{vu}' (pass WM_CHAR lento)")
+    # --- INGRESAR: por ACCION JAB del boton (como eRreH), que lo ACTIVA sin depender
+    # del pixel ni del foco. El clic fisico en bounds "no fallaba" pero NO activaba el
+    # boton -> el form quedaba lleno y quieto. Sumo Enter (el foco esta en Contraseña)
+    # y clic fisico como ultimo recurso. Reubico el boton vivo. ---
+    b2, _b2 = F._jab_buscar(nombre="INGRESAR", role="push button", timeout=6)
+    target = b2 or btn
+    if not _click(target):                # accion JAB (simulate=False y si no, True)
+        if _b2 is not None:
             try:
-                pwd.request_focus()              # foco DIRECTO a Contraseña (no TAB)
+                F._jab_click_bounds(_b2)
             except Exception:
                 pass
-            time.sleep(PAUSA_CORTA)
-            _wm_type(F.SIAPE_PASS, hwnd)
-        else:                                    # fallback: sin campo password -> TAB
-            _wm_tab(hwnd)
-            _wm_type(F.SIAPE_PASS, hwnd)
-        time.sleep(PAUSA_CORTA)
-        vu = (F._jab_read_text(usr) or "").strip()
-        if vu == str(F.SIAPE_USER).strip():      # Usuario quedo limpio (no user+pass)
-            break
-        log(f"   reintento login ({i+1}/4): campo Usuario quedo '{vu}'")
-        cerrar_modales()
-    else:
-        raise RuntimeError("Login: no logre dejar el Usuario limpio (se pisaba con la contraseña).")
-    if not _click(btn):                          # INGRESAR por accion JAB
-        pyautogui.press("enter")
-    time.sleep(PAUSA_LARGA)
+    pyautogui.press("enter")              # submit por teclado (el foco quedo en Contraseña)
+    # (1) Espera QUIETA LARGA sin tocar el JAB: engancharse/caminar el arbol durante
+    # la transicion post-login crashea el applet. Con el login OK (sesion activa) la
+    # transicion SI ocurre -> hay que esperar que el selector quede 100% estable antes
+    # de re-enganchar (la corrida que anduvo, 20:07, era selector ya estable).
+    time.sleep(35)
+    # (1b) RESTAURAR la ventana (una vez, ya estable): el selector abre MINIMIZADO tras
+    # el login del robot -> el JAB no lo encuentra por titulo ('no java window found').
+    # Con el selector ya estable (35s), restaurar+enganchar es seguro (la sonda lo
+    # probo sobre el selector estable del usuario).
+    try:
+        import win32gui as _wg3
+        import win32con as _wc3
+        _w3 = F._buscar_ventana_siape()
+        _h3 = getattr(_w3, "_hWnd", None) if _w3 else None
+        if _h3 and _wg3.IsIconic(_h3):
+            _wg3.ShowWindow(_h3, _wc3.SW_RESTORE)
+            time.sleep(2)
+    except Exception:
+        pass
+    # (2) RESETEAR el driver JAB: el cacheado apunta al contexto de LOGIN (ya liberado
+    # tras entrar). Sin reset, el proximo estado_siape camina ese contexto muerto y
+    # crashea SIAPE. Con reset, el proximo _jab_driver crea uno FRESCO sobre el
+    # selector ya restaurado y visible.
+    try:
+        F._jab_reset_driver()
+    except Exception:
+        pass
+    # (2) Tiro el driver JAB cacheado (apunta al contexto de LOGIN ya liberado). El
+    # proximo estado_siape crea uno FRESCO sobre la ventana nueva -> no crashea.
+    try:
+        F._jab_reset_driver()
+    except Exception:
+        pass
+    # (3) RESTAURO la ventana si quedo minimizada: minimizada, TODO cae en bounds
+    # -32000 y _bounds_ok descarta hasta el boton RRHH -> estado 'desconocido'.
+    try:
+        import win32gui as _wg
+        import win32con as _wc
+        _w = F._buscar_ventana_siape()
+        _h = getattr(_w, "_hWnd", None) if _w else None
+        if _h and _wg.IsIconic(_h):
+            _wg.ShowWindow(_h, _wc.SW_RESTORE)
+            time.sleep(1.0)
+    except Exception:
+        pass
+    time.sleep(2)
 
 
 def _entrar_erreh_robusto():
@@ -321,6 +386,42 @@ F._hacer_login = _login_robusto
 F._entrar_erreh = _entrar_erreh_robusto
 F.cerrar_dialogo_jab = _cerrar_dialogo_accion
 
+# RESTAURAR la ventana ANTES de cada chequeo de estado. El selector post-login abre
+# MINIMIZADO -> el JAB no lo halla por titulo ('no java window found') y todo cae en
+# bounds -32000. Restaurarlo (win32, ve las minimizadas) lo destraba. Ahora es SEGURO
+# porque _login_robusto ya espero 35s: la transicion termino y la ventana esta estable
+# (antes crasheaba por restaurar EN plena transicion).
+_estado_siape_orig = F.estado_siape
+_diag_win = {"hecho": False}
+
+def _estado_siape_diag(*a, **k):
+    try:
+        import win32gui as _wg
+        import win32con as _wc
+        _w = F._buscar_ventana_siape()
+        _h = getattr(_w, "_hWnd", None) if _w else None
+        if _h:
+            if _wg.IsIconic(_h):
+                _wg.ShowWindow(_h, _wc.SW_RESTORE)
+                time.sleep(0.6)
+        elif not _diag_win["hecho"]:
+            # No encuentro la ventana de SIAPE por titulo -> vuelco TODOS los titulos
+            # y los procesos java, para saber como se llama realmente post-login.
+            _diag_win["hecho"] = True
+            try:
+                import pygetwindow as _gw
+                log("   [DIAG-WIN] SIAPE no encontrada por titulo. Ventanas abiertas:")
+                for _t in _gw.getAllTitles():
+                    if _t and _t.strip():
+                        log(f"      [DIAG-WIN] '{_t}'")
+            except Exception as _e:
+                log(f"   [DIAG-WIN] fallo: {_e}")
+    except Exception:
+        pass
+    return _estado_siape_orig(*a, **k)
+
+F.estado_siape = _estado_siape_diag
+
 
 def _find(frame, *, name=None, role=None, desc=None,
           x_min=None, x_max=None, y_min=None, y_max=None):
@@ -358,13 +459,28 @@ def _find_frame(nombre, timeout=25):
     return None
 
 
-def _fila1(frame, x_min, x_max):
-    """El '...' de la PRIMERA fila. Usa banda_y (poda del walk) = camino rapido
-    de francos, no el walk completo de la grilla."""
-    return F._jab_buscar(nombre="...", role="push button",
-                         banda_y=(Y_FILA1 - Y_TOL, Y_FILA1 + Y_TOL),
-                         x_min=x_min, x_max=x_max,
-                         y_min=Y_FILA1 - Y_TOL, y_max=Y_FILA1 + Y_TOL, timeout=40)
+def _fila1(frame, col_idx):
+    """El '...' de la fila 1 de la columna `col_idx` (0=persona, 1=estructura,
+    2=licencia). POR ESTRUCTURA, sin coordenadas hardcodeadas: junta todos los
+    push button '...' de la grilla, los agrupa por su X real (las columnas, sea cual
+    sea la posicion/tamano de la ventana) y devuelve el de arriba (min Y = fila 1) de
+    la columna pedida. Reemplaza el mapeo fijo por X/Y que se rompia al moverse la
+    ventana."""
+    # POR ORDEN DE ARBOL, CERO coordenadas: en el recorrido los '...' aparecen
+    # agrupados por columna (persona, luego estructura, luego licencia), y dentro de
+    # cada grupo el PRIMERO es la fila 1. Detecto el inicio de cada grupo (un '...'
+    # que sigue a algo que NO es '...') y tomo ese primero. col_idx elige la columna.
+    primeros = []
+    prev_puntos = False
+    for _el, _d, info in F._jab_walk(root=frame, max_depth=20, max_segundos=30):
+        es_puntos = (info.get("role") == "push button"
+                     and (info.get("name") or "").strip() == "...")
+        if es_puntos and not prev_puntos:
+            primeros.append(_el)                       # 1er '...' de una columna
+        prev_puntos = es_puntos
+    if col_idx < len(primeros):
+        return primeros[col_idx], None
+    return None, None
 
 
 # =================== DB ===================
@@ -473,42 +589,133 @@ def abrir_ta(timeout=40):
 
 
 # =================== pasos de carga ===================
+_dump_ta = {"hecho": False}
+
+
+def _dump_ta_grid(frame):
+    """DIAG (una vez): vuelca el arbol de la grilla de Tiempo Acumulado con bounds,
+    para ubicar el '...' de persona (rol/nombre/posicion reales)."""
+    if _dump_ta["hecho"]:
+        return
+    _dump_ta["hecho"] = True
+    log("   [DIAG-TA] arbol de Tiempo Acumulado (rol | name | desc | ok | bounds):")
+    try:
+        n = 0
+        for el, d, info in F._jab_walk(root=frame, max_depth=20, max_segundos=40):
+            n += 1
+            rol = info.get("role") or ""
+            nom = (info.get("name") or "").strip()
+            desc = (info.get("description") or "").strip()
+            b = info.get("bounds") or {}
+            log(f"      [DIAG-TA] {rol} | '{nom}' | '{desc}' | ok={F._bounds_ok(info)} | {b}")
+            if n >= 130:
+                break
+        log(f"   [DIAG-TA] total volcados = {n}")
+    except Exception as e:
+        log(f"   [DIAG-TA] fallo: {e}")
+
+
+_dump_bus = {"hecho": False}
+
+
+def _dump_buscador(bf):
+    """DIAG (una vez): vuelca radios/text/botones del Buscador con nombre y bounds,
+    para ubicar el campo DNI real."""
+    if _dump_bus["hecho"]:
+        return
+    _dump_bus["hecho"] = True
+    log("   [DIAG-BUS] arbol del Buscador (rol | name | ok | bounds):")
+    try:
+        n = 0
+        for _el, _d, info in F._jab_walk(root=bf, max_depth=20, max_segundos=25):
+            n += 1
+            rol = info.get("role") or ""
+            if rol not in ("radio button", "text", "push button", "combo box"):
+                continue
+            nom = (info.get("name") or "").strip()
+            b = info.get("bounds") or {}
+            log(f"      [DIAG-BUS] {rol} | '{nom}' | ok={F._bounds_ok(info)} | {b}")
+            if n >= 90:
+                break
+        log(f"   [DIAG-BUS] total nodos recorridos = {n}")
+    except Exception as e:
+        log(f"   [DIAG-BUS] fallo: {e}")
+
+
 def buscar_persona(frame, dni):
     log("   abro '...' de persona (fila 1)")
-    el, _i = _fila1(frame, 95, 130)          # '...' persona, primera fila
+    _dump_ta_grid(frame)                      # DIAG: mapear la grilla una vez
+    el, _i = _fila1(frame, 0)                # '...' persona (columna 0), fila 1
     if not el:
         raise RuntimeError("No encuentro el '...' de persona de la fila 1.")
     _click(el)                                # accion pura primero (metodo A)
     bf = _find_frame(FRAME_BUS, timeout=25)
     if not bf:
         raise RuntimeError("No abrio el Buscador de Personas.")
+    _dump_buscador(bf)                        # DIAG: mapear el Buscador una vez
     log("   Buscador abierto -> radio Documento")
-    rel, _r = F._jab_buscar(empieza="Documento", role="radio button",
-                            banda_y=(280, 300), timeout=25)
-    _click(rel)
+    # radio "Documento" POR NOMBRE, scopeado al Buscador, SIN banda de coords (el
+    # diablo MDI se ubica en cualquier posicion -> la banda vieja no coincidia).
+    rel = None
+    _r = None
+    for _el, _d, info in F._jab_walk(root=bf, max_depth=20, max_segundos=20):
+        if info.get("role") != "radio button":
+            continue
+        if (info.get("name") or "").strip().startswith("Documento"):
+            rel = _el
+            _r = info
+            break
+    if not rel:
+        raise RuntimeError("No encuentro el radio 'Documento' en el Buscador.")
+    if not _click(rel):
+        _click(rel, simulate=True)
     time.sleep(PAUSA_CORTA)
     log("   escribo DNI")
-    cel, _c = F._jab_buscar(role="text", x_min=545, x_max=560,
-                            banda_y=(283, 297), y_min=283, y_max=297, timeout=25)
-    if not cel:
+    # DNI POR ORDEN DE ARBOL (mapeado 15/09): el encabezado del Buscador es
+    # [Apellido text][DNI-tipo text][boton '...'][DNI-NUMERO text][BUSCAR]. El numero
+    # de documento es el PRIMER text DESPUES del boton '...' (y antes de BUSCAR). Antes
+    # buscaba tras el radio 'Documento', pero el radio va DESPUES de los text en el
+    # arbol -> no hallaba ninguno.
+    dni_field = None
+    visto_puntos = False
+    for _el, _d, info in F._jab_walk(root=bf, max_depth=20, max_segundos=25):
+        rol = info.get("role")
+        nom = (info.get("name") or "").strip()
+        if rol == "push button" and nom == "...":
+            visto_puntos = True
+            continue
+        if rol == "push button" and nom == "BUSCAR":
+            break
+        if visto_puntos and rol == "text":
+            dni_field = _el
+            break
+    if not dni_field:
         raise RuntimeError("No encuentro el campo de DNI en el Buscador.")
-    _tipear(cel, dni)
+    _tipear(dni_field, dni)
     log("   BUSCAR")
-    bel, _b = F._jab_buscar(nombre="BUSCAR", role="push button",
-                            banda_y=(265, 290), timeout=25)
-    if not _click(bel):
+    _rb = _find(bf, name="BUSCAR", role="push button")       # por nombre, scopeado
+    bel = _rb[0] if _rb else None
+    if not bel or not _click(bel):
         raise RuntimeError("No pude clickear BUSCAR.")
     time.sleep(PAUSA_LARGA)
     cerrar_modales()
     log("   selecciono primer resultado")
-    fel, _f = F._jab_buscar(nombre="APELLIDO Y NOMBRE", role="text",
-                            banda_y=(363, 380), y_min=363, y_max=380, timeout=20)
-    if fel:
-        _click(fel, simulate=True)
+    # primer resultado = la PRIMERA celda 'APELLIDO Y NOMBRE' en orden de arbol (fila 1
+    # de la grilla de resultados). Cero coordenadas.
+    primera = None
+    for _el, _d, info in F._jab_walk(root=bf, max_depth=20, max_segundos=20):
+        if info.get("role") != "text":
+            continue
+        if (info.get("name") or "").strip().upper() != "APELLIDO Y NOMBRE":
+            continue
+        primera = _el
+        break
+    if primera:
+        _click(primera, simulate=True)
         time.sleep(PAUSA_CORTA)
-    ael, _a = F._jab_buscar(nombre="ACEPTAR", role="push button",
-                            banda_y=(640, 665), timeout=20)
-    if not _click(ael):
+    _ra = _find(bf, name="ACEPTAR", role="push button")      # por nombre, scopeado
+    ael = _ra[0] if _ra else None
+    if not ael or not _click(ael):
         raise RuntimeError("No pude ACEPTAR en el Buscador.")
     time.sleep(PAUSA_LARGA)
     cerrar_modales()
@@ -532,7 +739,7 @@ def _label_licencia_exacta(lf, licencia):
 
 def elegir_licencia(frame, licencia):
     log(f"   abro '...' de licencia -> {licencia}")
-    el, _i = _fila1(frame, 740, 760)         # '...' licencia, primera fila
+    el, _i = _fila1(frame, 2)                # '...' licencia (columna 2), fila 1
     if not _click(el):                        # accion pura primero (metodo A)
         raise RuntimeError("No pude abrir el picker de Licencia.")
     lf = _find_frame(FRAME_LIC, timeout=20)
@@ -570,19 +777,25 @@ def elegir_licencia(frame, licencia):
 
 
 def _celda_anio(frame):
-    return _find(frame, name="Año", role="text",
-                 y_min=Y_FILA1 - Y_TOL, y_max=Y_FILA1 + Y_TOL)
+    # PRIMER text 'Año' en orden de arbol = fila 1 (cero coordenadas).
+    return _find(frame, name="Año", role="text")
 
 
 def _celda_dias(frame):
-    # el nombre trae salto de linea ("C. Días\nx Ley"); busco por posicion x=824
-    return _find(frame, role="text", x_min=820, x_max=880,
-                 y_min=Y_FILA1 - Y_TOL, y_max=Y_FILA1 + Y_TOL)
+    # el nombre trae salto de linea ("C. Días\nx Ley"): busco por NOMBRE (contiene
+    # 'Días'/'x Ley'), primer match en orden de arbol = fila 1. Cero coordenadas.
+    for el, _d, info in F._jab_walk(root=frame, max_depth=20, max_segundos=25):
+        if info.get("role") != "text":
+            continue
+        nom = info.get("name") or ""
+        if ("Día" in nom) or ("Dia" in nom) or ("x Ley" in nom):
+            return el, info
+    return None, None
 
 
 def _celda_lic(frame):
-    return _find(frame, name="Licencia / Permiso", role="text",
-                 y_min=Y_FILA1 - Y_TOL, y_max=Y_FILA1 + Y_TOL)
+    # PRIMER text 'Licencia / Permiso' en orden de arbol = fila 1 (cero coordenadas).
+    return _find(frame, name="Licencia / Permiso", role="text")
 
 
 def _limpiar_campo():
@@ -608,13 +821,19 @@ def set_anio_dias(frame, anio, dias, intentos=4):
     ultimo = ""
     for i in range(intentos):
         _frente_liviano()
+        _wm_key(0x1B, 0x01)          # Escape por WM: cierra cualquier menu que haya
+        time.sleep(0.2)              # quedado abierto (roba el foco del teclado)
         ael, _a = _celda_anio(frame)
         if not ael:
             raise RuntimeError("No encuentro la celda Año.")
-        try:
-            ael.request_focus()      # el cursor de Forms suele caer en Año tras la licencia
-        except Exception:
-            pass
+        # FOCO por CLIC en la celda (request_focus en celdas Forms no enfoca -> el
+        # tipeo caia en el frame/menu y no aterrizaba). El clic simulate usa los bounds
+        # vivos de la celda.
+        if not _click(ael, simulate=True):
+            try:
+                ael.request_focus()
+            except Exception:
+                pass
         time.sleep(PAUSA_CORTA)
         _wm_type(anio_s)             # WM_CHAR (autolimpia el campo con BACKSPACE/DELETE)
         _wm_tab()                    # TAB por WM con lParam bien armado (sin foco del SO)
@@ -742,12 +961,51 @@ def cargar_uno(dni, anio, dias, licencia, primero=True):
 
 
 # =================== main ===================
+def _pre_login_sin_jab():
+    """Abre SIAPE y loguea SIN tocar el JAB (Usuario/Contraseña por WM_CHAR + Enter).
+    Asi el bridge JAB NO queda enganchado al Java del login; el primer JABDriver se
+    crea despues, sobre la ventana de la APP."""
+    import win32api as _wa
+    import win32con as _wc2
+    log("Pre-login SIN JAB (abrir + WM_CHAR + Enter)...")
+    F.abrir_siape_si_falta()
+    for _ in range(60):                       # esperar la ventana de login (por titulo)
+        if F._buscar_ventana_siape():
+            break
+        time.sleep(1)
+    time.sleep(8)                             # que renderice el login
+    hwnd = _hwnd_siape()
+    if not hwnd:
+        log("   pre-login: no encuentro la ventana; dejo que asegurar_sesion resuelva.")
+        return
+    _forzar_frente_seguro()                   # maximizar/frente (win32, sin JAB)
+    time.sleep(PAUSA_CORTA)
+    _wm_type(F.SIAPE_USER, hwnd)              # Usuario (campo enfocado por defecto)
+    _wm_tab(hwnd)                             # -> Contraseña
+    time.sleep(1.0)
+    for _ in range(15):                       # limpiar Contraseña
+        _wa.PostMessage(hwnd, _wc2.WM_KEYDOWN, _wc2.VK_BACK, 0)
+        _wa.PostMessage(hwnd, _wc2.WM_KEYUP, _wc2.VK_BACK, 0)
+    time.sleep(0.3)
+    for _ch in str(F.SIAPE_PASS):             # Contraseña por WM_CHAR
+        _wa.PostMessage(hwnd, _wc2.WM_CHAR, ord(_ch), 0)
+        time.sleep(0.15)
+    time.sleep(PAUSA_CORTA)
+    _wa.PostMessage(hwnd, _wc2.WM_KEYDOWN, _wc2.VK_RETURN, 0)   # INGRESAR = Enter
+    _wa.PostMessage(hwnd, _wc2.WM_KEYUP, _wc2.VK_RETURN, 0)
+    log("   pre-login enviado (Usuario+Contraseña+Enter, sin JAB). Espero la app 35s...")
+    time.sleep(35)                            # que cargue la app, SIN tocar JAB
+    _LOGIN_STATE["intentado"] = True          # si igual cae en login, que no re-loopee
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--dni", type=int)
     ap.add_argument("--limit", type=int)
     ap.add_argument("--solo-abrir", action="store_true")
+    ap.add_argument("--solo-login", action="store_true",
+                    help="ETAPA 1: abre SIAPE, loguea y SALE limpio (deja el selector)")
     ap.add_argument("--plus", action="store_true", help="reusar pantalla con el + verde (mas rapido)")
     args = ap.parse_args()
     global USAR_PLUS
@@ -763,6 +1021,34 @@ def main():
     if pyautogui is None:
         raise RuntimeError("Falta pyautogui")
     pyautogui.FAILSAFE = F.SIAPE_PYAUTOGUI_FAILSAFE
+
+    if args.solo_login:
+        # ETAPA 1 (diseno de robots separados): abrir SIAPE, loguear y SALIR LIMPIO,
+        # SIN volver a caminar el JAB post-login (eso es lo que crashea en la
+        # transicion). Deja SIAPE en el selector para que la ETAPA 2 (proceso nuevo)
+        # se enganche a una ventana YA estable.
+        if not F._buscar_ventana_siape():
+            F.abrir_siape_si_falta()
+        F._activar_ventana(F._buscar_ventana_siape())
+        for _ in range(40):                       # esperar la pantalla de login
+            try:
+                if F.estado_siape() == F.ESTADO_LOGIN:
+                    break
+            except Exception:
+                pass
+            time.sleep(1)
+        F._hacer_login()                          # _login_robusto (1 intento)
+        log("--solo-login: login hecho; salgo limpio (SIAPE queda en el selector).")
+        return
+
+    # PRE-LOGIN SIN JAB: si SIAPE no esta abierto, abrirlo y loguear por WM_CHAR+Enter
+    # SIN inicializar el puente JAB. CLAVE: el bug era que el robot enganchaba el JAB
+    # sobre la ventana de LOGIN; tras entrar, SIAPE abre la app (otro Java) y el bridge
+    # quedaba pegado al login -> 'no java window'. Logueando sin JAB, el PRIMER
+    # JABDriver lo crea asegurar_sesion DESPUES, sobre la app (como cuando el usuario
+    # abre SIAPE a mano y el robot engancha directo la app).
+    if not F._buscar_ventana_siape():
+        _pre_login_sin_jab()
 
     asegurar_sesion(); cerrar_modales(); ventana_siape()
     pyautogui.PAUSE = PAUSA_CORTA

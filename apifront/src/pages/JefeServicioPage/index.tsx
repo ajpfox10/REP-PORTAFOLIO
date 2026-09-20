@@ -85,9 +85,9 @@ const esTitularSiape = (a: any): boolean => {
   const ley = String(a?.ley_nombre || '').toLowerCase();
   const planta = String(a?.planta_nombre || '').toUpperCase();
   // Planta explícitamente temporal → NO titular (aunque sea 10430)
-  const plantaTemporal = planta.includes('TEMPORARI') || planta.includes('INTERIN') || planta.includes('BECA');
+  const plantaTemporal = planta.includes('TEMPORARI') || planta.includes('INTERIN') || planta.includes('BECA') || planta.includes('HONOREM');
   if (ley.includes('10471')) return planta === 'PERMANENTE';
-  if (ley.includes('10430')) return !plantaTemporal; // 10430 permanente o sin dato = titular; temporario/interino/beca = no titular
+  if (ley.includes('10430')) return !plantaTemporal; // 10430 permanente o sin dato = titular; temporario/interino/beca/ad honorem = no titular
   return false;
 };
 

@@ -8,12 +8,13 @@ import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
 import { AdmsConsole } from './adms/components/AdmsConsole';
 import { updateAdmsDispositivo, pullFichadasDispositivo } from './adms/services/admsApi';
-import type { DbPreview, Dispositivo, EstadoFichero, ExportarRangoResult, FicheroConfig } from './types';
+import type { DbPreview, Dispositivo, EstadoFichero, ExportarRangoResult, FicheroConfig, FicheroPendientes } from './types';
 import {
   getFicheroConfig,
   getFicheroDbPreview,
   getFicheroDispositivos,
   getFicheroEstado,
+  getFicheroPendientes,
   getFicheroRedActiva,
   postFicheroAction,
   postFicheroExportar,
@@ -44,7 +45,14 @@ export function FicheroPage() {
   const [exportando, setExportando] = useState(false);
   const [accionReloj, setAccionReloj] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<'monitor' | 'adms' | 'exportar' | 'continu' | 'config'>('monitor');
+  const [tab, setTab] = useState<'monitor' | 'adms' | 'pendientes' | 'exportar' | 'continu' | 'config'>('monitor');
+
+  // Fichadas sin marca de subida
+  const [pendientes, setPendientes] = useState<FicheroPendientes | null>(null);
+  const [pendError, setPendError] = useState<string | null>(null);
+  const [pendCargando, setPendCargando] = useState(false);
+  const [pendDesde, setPendDesde] = useState('');
+  const [pendHasta, setPendHasta] = useState('');
   const [ultimaAct, setUltimaAct] = useState<Date | null>(null);
 
   // Rango de exportación puntual
@@ -126,6 +134,28 @@ export function FicheroPage() {
     timerRef.current = setInterval(cargarEstado, REFRESH_MS);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [cargarEstado]);
+
+  const cargarPendientes = useCallback(async () => {
+    setPendCargando(true);
+    setPendError(null);
+    try {
+      const r = await getFicheroPendientes({
+        desde: pendDesde || undefined,
+        hasta: pendHasta || undefined,
+        detalle: true,
+      });
+      setPendientes(r);
+      if (!pendDesde) setPendDesde(r.desde);
+    } catch (e: any) {
+      setPendError(e?.message ?? String(e));
+    } finally {
+      setPendCargando(false);
+    }
+  }, [pendDesde, pendHasta]);
+
+  useEffect(() => {
+    if (tab === 'pendientes' && !pendientes && !pendError) void cargarPendientes();
+  }, [tab, pendientes, pendError, cargarPendientes]);
 
   // Cuando se abre la tab "exportar", cargar preview de la DB
   useEffect(() => {
@@ -308,10 +338,11 @@ export function FicheroPage() {
 
       {/* Tabs */}
       <div style={S.tabs}>
-        {(['monitor', 'adms', 'exportar', 'continu', 'config'] as const).map(t => (
+        {(['monitor', 'adms', 'pendientes', 'exportar', 'continu', 'config'] as const).map(t => (
           <button key={t} style={{ ...S.tab, ...(tab === t ? S.tabActive : {}), ...(t === 'continu' && config?.modoContinu ? S.tabContinu : {}) }} onClick={() => setTab(t)}>
             {t === 'monitor'  ? '📊 Monitor'
            : t === 'adms'     ? 'ADMS'
+           : t === 'pendientes' ? (pendientes && pendientes.total > 0 ? `⚠️ Sin subir (${pendientes.total})` : '✅ Sin subir')
            : t === 'exportar' ? '📅 Exportar por rango'
            : t === 'continu'  ? (config?.modoContinu ? '🔄 Continuo ●' : '🔄 Continuo desde fecha')
            :                    '⚙️ Configuración'}
@@ -493,6 +524,107 @@ export function FicheroPage() {
       {tab === 'adms' && <AdmsConsole active={tab === 'adms'} />}
 
       {/* ══════════════════ TAB EXPORTAR ═════════════════════════════════════ */}
+      {/* ══════════════════ TAB SIN SUBIR ════════════════════════════════════ */}
+      {tab === 'pendientes' && (
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: '1rem' }}>Fichadas sin subir</h3>
+            <label style={{ fontSize: "0.8rem", color: "#6b7280", display: "flex", flexDirection: "column", gap: 3 }}>Desde
+              <input type="date" style={{ ...S.input, width: 150 }} value={pendDesde} onChange={e => setPendDesde(e.target.value)} />
+            </label>
+            <label style={{ fontSize: "0.8rem", color: "#6b7280", display: "flex", flexDirection: "column", gap: 3 }}>Hasta
+              <input type="date" style={{ ...S.input, width: 150 }} value={pendHasta} onChange={e => setPendHasta(e.target.value)} />
+            </label>
+            <button className="btn" onClick={() => void cargarPendientes()} disabled={pendCargando}>
+              {pendCargando ? 'Buscando…' : '🔍 Buscar'}
+            </button>
+            <button
+              className="btn"
+              disabled={accionando || !pendientes?.total}
+              onClick={async () => {
+                setAccionando(true);
+                try {
+                  const r = await postFicheroAction('forzar');
+                  if (r?.ok) {
+                    toast.ok('Ciclo lanzado', 'Las pendientes entran en el próximo archivo.');
+                    setTimeout(() => void cargarPendientes(), 8000);
+                  }
+                } catch (e: any) {
+                  toast.error('No se pudo lanzar el ciclo', e?.message ?? String(e));
+                } finally {
+                  setAccionando(false);
+                }
+              }}
+            >
+              ⬆️ Subir ahora
+            </button>
+          </div>
+
+          <p style={{ margin: '0 0 14px', fontSize: '0.8rem', color: '#6b7280' }}>
+            Son las fichadas que están en el reloj y en la base pero que nunca entraron en un archivo
+            confirmado por el SFTP. El piso del ciclo automático es <strong>{pendientes?.piso ?? '—'}</strong>:
+            nada anterior a esa fecha se sube solo.
+          </p>
+
+          {pendError && <div style={S.alertaRed}>⚠ {pendError}</div>}
+
+          {pendientes && !pendError && (
+            pendientes.total === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', color: '#16a34a', fontWeight: 600 }}>
+                ✅ No hay fichadas sin subir en el rango.
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 24, marginBottom: 14, fontSize: '0.9rem' }}>
+                  <span><strong style={{ color: '#dc2626', fontSize: '1.2rem' }}>{pendientes.total}</strong> fichadas</span>
+                  <span><strong style={{ fontSize: '1.2rem' }}>{pendientes.agentes}</strong> agentes</span>
+                </div>
+
+                <table style={{ ...S.tabla, marginBottom: 20, fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}><Th>Día</Th><Th>Reloj</Th><Th>Cantidad</Th></tr>
+                  </thead>
+                  <tbody>
+                    {pendientes.porDia.map((d, i) => (
+                      <tr key={`${d.dia}-${d.sn}-${i}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <Td>{d.dia.split('-').reverse().join('/')}</Td>
+                        <Td>{d.sn}</Td>
+                        <Td style={{ fontWeight: 600 }}>{d.cantidad}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <table style={{ ...S.tabla, fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      <Th>DNI</Th><Th>Nombre</Th>
+                      <Th>Fecha y hora</Th><Th>E/S</Th><Th>Reloj</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendientes.data.map(f => (
+                      <tr key={f.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <Td>{f.dni}</Td>
+                        <Td>{f.nombre}</Td>
+                        <Td>{f.checktime}</Td>
+                        <Td style={{ fontWeight: 600, color: f.tipo === 'E' ? '#16a34a' : '#dc2626' }}>{f.tipo}</Td>
+                        <Td>{f.sn}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {pendientes.data.length >= 2000 && (
+                  <p style={{ fontSize: '0.78rem', color: '#6b7280' }}>
+                    Se muestran las primeras 2000. Achicá el rango para ver el resto.
+                  </p>
+                )}
+              </>
+            )
+          )}
+        </div>
+      )}
+
       {tab === 'exportar' && (
         <div style={{ maxWidth: 700 }}>
 

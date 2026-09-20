@@ -16,15 +16,25 @@ module.exports = {
       max_restarts: 10,
       min_uptime: '10s',
       exp_backoff_restart_delay: 200
-    }
+    },
 
-    // 2026-08-31: se quitaron 'cobertura-backend-dev' y 'cobertura-salud'.
-    // Los dos corrian `dotnet run` sobre C:/apps/cobertura-salud/backend y
-    // peleaban por el puerto 8510, que ya sirve backend.exe fuera de PM2.
-    // Resultado: AddressInUseException en bucle, 13.142 y 13.421 reinicios
-    // y ~185 MB de logs repetidos. El backend lo maneja backend.exe.
-    //
-    // Si algun dia se quiere que PM2 sea el dueno del backend: primero frenar
-    // backend.exe, y dejar UNA sola entrada, nunca dos sobre el mismo puerto.
+    // 2026-09-15: se repone 'cobertura-salud' bajo PM2 como UNICO dueno del 8510.
+    // Corre backend.exe DIRECTO (compilado WinExe = sin ventana), NO `dotnet run`,
+    // asi no hay proceso hijo ni doble binding. NUNCA levantar backend.exe aparte
+    // ademas de este: seria doble binding al 8510 (AddressInUseException en bucle).
+    {
+      name: 'cobertura-salud',
+      cwd: 'C:/apps/cobertura-salud/backend',
+      script: 'C:/apps/cobertura-salud/backend/bin/Debug/net8.0/backend.exe',
+      env: {
+        ASPNETCORE_ENVIRONMENT: 'Production'
+      },
+      watch: false,
+      autorestart: true,
+      // Si falla de entrada (puerto tomado), PM2 se rinde en vez de reintentar para siempre.
+      max_restarts: 10,
+      min_uptime: '10s',
+      exp_backoff_restart_delay: 200
+    }
   ]
 };
