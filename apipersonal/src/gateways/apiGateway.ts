@@ -60,6 +60,7 @@ import { buildLicenciasRouter } from '../routes/licencias.routes';
 import { buildComparacionSiapeRouter } from '../routes/comparacionSiape.routes';
 import { buildArticulo26IntranetRouter } from '../routes/articulo26Intranet.routes';
 import { buildLicenciasConsultorioRouter } from '../routes/licenciasConsultorio.routes';
+import { buildHorariosExtendidosRouter } from '../routes/horariosExtendidos.routes';
 import { buildIntranetRouter } from '../domains/personalv5/routes/intranet.routes';
 import { buildResidentesRouter } from '../routes/residentes.routes';
 import { buildFcCertReemplazosRouter } from '../routes/fcCertReemplazos.routes';
@@ -68,6 +69,7 @@ import { buildTramitesDocumentalesRouter } from '../routes/tramitesDocumentales.
 import { buildJefaturasRouter }      from '../routes/jefaturas.routes';
 import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
 import { buildCumpleanosAlertasRouter } from '../routes/cumpleanosAlertas.routes';
+import { buildReclamosHaberesRouter } from '../routes/reclamosHaberes.routes';
 import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
 import { buildDashboardAlertsRouter } from '../routes/dashboardAlerts.routes';
 import { buildUserScanMusicRouter } from '../routes/userScanMusic.routes';
@@ -191,6 +193,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter());
   app.use(`${apiPrefix}/articulo-26-intranet`, ...protect, buildArticulo26IntranetRouter(sequelize));
   app.use(`${apiPrefix}/licencias-consultorio`, ...protect, requireAny(['app:licencias-consultorio:access', 'crud:*:*']), buildLicenciasConsultorioRouter(sequelize));
+  app.use(`${apiPrefix}/horarios-extendidos`, ...protect, requireAny(['app:horarios-extendidos:access', 'crud:*:*']), buildHorariosExtendidosRouter());
   app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter(sequelize));
   app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
   app.use(`${apiPrefix}/fc-cert-reemplazos`, ...protect, buildFcCertReemplazosRouter(sequelize));
@@ -210,6 +213,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   // ── Alertas por agente (RRHH interno) ────────────────────────────────────
   app.use(`${apiPrefix}/alertas-agente`, ...protect, buildAlertasAgenteRouter(sequelize));
   app.use(`${apiPrefix}/alertas-cumpleanos`, ...protect, buildCumpleanosAlertasRouter(sequelize));
+  app.use(`${apiPrefix}/reclamos-haberes`, ...protect, buildReclamosHaberesRouter(sequelize));
   app.use(`${apiPrefix}/dashboard-alerts`, ...protect, buildDashboardAlertsRouter(sequelize));
   app.use(`${apiPrefix}/becarios-art`,   ...protect, buildBecariosArtRouter(sequelize));
 

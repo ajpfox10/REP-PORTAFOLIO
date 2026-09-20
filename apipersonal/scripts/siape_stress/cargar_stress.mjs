@@ -17,7 +17,10 @@ const env = readEnv(path.join(ROOT, '.env'));
 const HOY = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })();
 const ANIO = HOY.getFullYear() - 1;                 // "año anterior al en curso"
 const UMBRAL = Number.parseInt(env.STRESS_UMBRAL_DIAS ?? '', 10) || 35;  // dias para la CARGA (disparo). Configurable en .env: STRESS_UMBRAL_DIAS
-const LEY_12 = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+const LEY_10430 = new Set([1, 3]);                          // por antiguedad (escala 6/9/12/14)
+const LEY_10471 = new Set([4, 5]);                          // proporcional 1 dia/mes hasta 12; <6 meses NO carga
+const LEY_RESID = new Set([11]);                            // RESIDENTES -> 12 fijo
+const LEY_BECAS = new Set([6, 7, 8, 9, 10, 12, 13]);        // becas -> profesional=12 ; si no, por antiguedad
 // Variante de licencia por ley:
 const VAR_10430 = new Set([1, 3]);                          // solo LEY 10430 -> "ANUAL COMPLEMENTARIA 10430"
 const VAR_PLAIN = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13]); // 10471 + TODAS las becas + RESIDENTES -> "ANUAL COMPLEMENTARIA"
@@ -51,18 +54,40 @@ function parseDateStr(val) {
   const d = new Date(s);
   return isNaN(d) ? null : d;
 }
-function calcularStress(leyId, fechaIngreso) {
+function quitarAcentos(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+// Escala por antiguedad (10430 y becas NO profesionales). anios desde el ingreso ORIGINAL.
+function escalaAntiguedad(anios) {
+  if (anios == null) return null;
+  if (anios < 5) return 6;
+  if (anios < 10) return 9;
+  if (anios < 20) return 12;
+  return 14;
+}
+// "Profesional" (beca => 12 fijo): arte de curar + licenciados/as en enfermeria.
+// Los AUXILIAR (ej. AUXILIAR FARMACIA) NO son profesionales.
+const RE_ARTE = /(MEDIC|KINESIOLOG|BIOQUIMIC|FARMACEUTIC|ODONTOLOG|PSICOLOG|NUTRICION|FONOAUDIOLOG|OBSTETR)/;
+function esProfesional(ocupacion) {
+  const n = quitarAcentos(ocupacion).toUpperCase();
+  if (/AUXILIAR/.test(n)) return false;
+  if (n.startsWith('MD.') || n.startsWith('MD ')) return true;   // MD. TOCOGINECOLOGIA
+  if (RE_ARTE.test(n)) return true;
+  if (/ENFERMER/.test(n) && (/LICENCIAD/.test(n) || /UNIVERSITARI/.test(n))) return true; // Lic./univ. en enfermeria
+  return false;
+}
+// dias de ANUAL COMPLEMENTARIA (stress) segun regimen y antiguedad. ingresoOriginal = tramo mas antiguo.
+function calcularStress(leyId, ocupacion, ingresoOriginal) {
   if (!leyId) return null;
-  if (LEY_12.has(leyId)) return 12;
-  if (fechaIngreso) {
-    const fi = new Date(fechaIngreso);
-    if (fi.getFullYear() < 1900) return null;
-    const anios = (HOY - fi) / (365.25 * 24 * 3600 * 1000);
-    if (anios < 5) return 6;
-    if (anios < 10) return 9;
-    if (anios < 20) return 12;
-    return 14;
+  const fi = ingresoOriginal ? new Date(ingresoOriginal) : null;
+  const anios = (fi && fi.getFullYear() >= 1900) ? (HOY - fi) / (365.25 * 24 * 3600 * 1000) : null;
+  if (LEY_10430.has(leyId)) return escalaAntiguedad(anios);         // 10430 -> antiguedad
+  if (LEY_10471.has(leyId)) {                                        // 10471 -> proporcional 1/mes hasta 12
+    if (anios == null) return null;
+    const meses = anios * 12;
+    if (meses < 6) return null;                                      // <6 meses -> no se carga
+    return Math.min(12, Math.floor(meses));
   }
+  if (LEY_RESID.has(leyId)) return 12;                               // residentes -> 12 fijo
+  if (LEY_BECAS.has(leyId)) return esProfesional(ocupacion) ? 12 : escalaAntiguedad(anios);
   return null;
 }
 function variante(leyId) {
@@ -130,12 +155,20 @@ async function build(dniFilter = null, force = false) {
 
   const dnis = elegibles.map(e => e.dni);
   const agMap = new Map();
+  const ingMap = new Map();   // ingreso ORIGINAL (tramo mas antiguo) por dni -> antiguedad real
   if (dnis.length) {
+    // ley/ocupacion del tramo ACTIVO (id mas alto)
     const [ag] = await cn.query(
-      `SELECT a.dni, a.ley_id, l.nombre AS ley, a.fecha_ingreso
-       FROM agentes a LEFT JOIN ley l ON a.ley_id=l.id
+      `SELECT a.dni, a.ley_id, l.nombre AS ley, o.nombre AS ocupacion
+       FROM agentes a LEFT JOIN ley l ON a.ley_id=l.id LEFT JOIN ocupaciones o ON o.id=a.ocupacion_id
        WHERE a.dni IN (?) AND a.deleted_at IS NULL ORDER BY a.id DESC`, [dnis]);
     for (const r of ag) if (!agMap.has(r.dni)) agMap.set(r.dni, r);
+    // antiguedad = ingreso mas antiguo de toda la carrera (no el ultimo tramo)
+    const [ings] = await cn.query(
+      `SELECT dni, MIN(fecha_ingreso) AS ing FROM agentes
+       WHERE dni IN (?) AND deleted_at IS NULL AND fecha_ingreso IS NOT NULL AND YEAR(fecha_ingreso) > 1900
+       GROUP BY dni`, [dnis]);
+    for (const r of ings) ingMap.set(r.dni, r.ing);
   }
 
   const [led] = await cn.query(`SELECT dni FROM stress_cargados WHERE anio=?`, [ANIO]);
@@ -148,7 +181,7 @@ async function build(dniFilter = null, force = false) {
     const ag = agMap.get(e.dni);
     const leyId = ag?.ley_id ?? null;
     const ley = ag?.ley ?? '(sin ley)';
-    const dias = calcularStress(leyId, ag?.fecha_ingreso ? new Date(ag.fecha_ingreso) : null);
+    const dias = calcularStress(leyId, ag?.ocupacion, ingMap.get(e.dni) ?? null);
     const lic = variante(leyId);
     let estado = 'pendiente', motivo = null;
     if (yaCargado.has(e.dni)) { estado = 'cargado'; motivo = 'ya en ledger'; dup++; }

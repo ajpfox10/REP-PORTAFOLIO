@@ -88,3 +88,23 @@ export interface ExportarRangoResult {
   alias?: string | null;
   error?: string;
 }
+
+// Fichadas sin marca de subida (lo que el Ministerio no recibio)
+export interface FicheroPendienteFila {
+  id: number;
+  dni: string;
+  nombre: string;
+  checktime: string;
+  tipo: 'E' | 'S';
+  sn: string;
+}
+
+export interface FicheroPendientes {
+  piso: string;
+  desde: string;
+  hasta: string | null;
+  total: number;
+  agentes: number;
+  porDia: { dia: string; sn: string; cantidad: number }[];
+  data: FicheroPendienteFila[];
+}

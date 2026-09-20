@@ -22,7 +22,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import net from 'net';
-import mysql, { RowDataPacket } from 'mysql2/promise';
+import mysql, { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import SftpClient from 'ssh2-sftp-client';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
@@ -64,6 +64,7 @@ interface RangoFechas {
   horaHasta:   string | null;   // "HH:mm"
   sn?:          string | null;   // reloj/fichero especifico; null = todos
   sns?:         string[] | null; // grupo manual de relojes/ficheros
+  idDesde?:     number | null;   // cursor por checkinout.id (solo ciclo automatico); null = bootstrap desde fechaDesde
 }
 
 interface LogEntry {
@@ -99,11 +100,14 @@ interface FicheroPendienteSubida {
   rangoDesde?:   string | null;
   rangoHasta?:   string | null;
   error?:        string | null;
+  maxId?:        number | null;   // max checkinout.id del archivo (legacy, se mantiene por compatibilidad)
+  ids?:          number[];        // ids de checkinout del archivo, para marcarlos cuando el reintento suba
 }
 
 interface FicheroEstadoPersistido {
   autoStart?: boolean;
   ultimoChecktimeSubido?: string | null;
+  ultimoIdSubido?: number | null;   // cursor por checkinout.id (orden de insercion): captura backfills con fecha vieja
   ultimoArchivoExitoso?: string | null;
   ultimaSubidaExitosa?: string | null;
   ultimoIntentoEn?: string | null;
@@ -330,86 +334,114 @@ function normalizarChecktime(value: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s) ? s : null;
 }
 
+// ─── Marca de subida por fila (checkinout.subido_en) ──────────────────────────
+// Reemplaza al cursor por id: el cursor es una inferencia y se saltea filas
+// (volcados de memoria de un reloj con fecha vieja, carreras entre inserciones
+// concurrentes). La marca por fila es un hecho: o esta o no esta.
+
+let columnasSubidoListas = false;
+
+// Tope de fichadas que el ciclo automatico acepta mandar de una. Ver el chequeo en ejecutarCiclo.
+const MAX_POR_CICLO_AUTOMATICO = 3000;
+
+export async function asegurarColumnasSubido(
+  conn: Awaited<ReturnType<typeof conectarMySQL>>,
+  forzar = false,
+): Promise<void> {
+  if (columnasSubidoListas && !forzar) return;
+
+  // MySQL 8 no soporta ADD COLUMN IF NOT EXISTS (eso es MariaDB): hay que preguntar antes.
+  const [cols] = await conn.query<RowDataPacket[]>(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'checkinout'
+        AND COLUMN_NAME IN ('subido_en', 'subido_archivo')`
+  );
+  const existentes = new Set(cols.map(c => String(c.COLUMN_NAME)));
+  const faltan: string[] = [];
+  if (!existentes.has('subido_en')) faltan.push('ADD COLUMN subido_en DATETIME NULL');
+  if (!existentes.has('subido_archivo')) faltan.push('ADD COLUMN subido_archivo VARCHAR(80) NULL');
+  if (faltan.length) {
+    await conn.query(`ALTER TABLE checkinout ${faltan.join(', ')}`);
+    logger.info({ msg: 'fichero: columnas de subida creadas en checkinout', columnas: faltan.length });
+  }
+
+  const [idx] = await conn.query<RowDataPacket[]>(
+    `SELECT INDEX_NAME FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'checkinout'
+        AND INDEX_NAME = 'idx_checkinout_subido'`
+  );
+  if (!idx.length) {
+    // (subido_en, checktime) sirve para el WHERE subido_en IS NULL AND checktime >= piso
+    await conn.query('ALTER TABLE checkinout ADD INDEX idx_checkinout_subido (subido_en, checktime)');
+    logger.info({ msg: 'fichero: indice idx_checkinout_subido creado' });
+  }
+
+  columnasSubidoListas = true;
+}
+
+// Marca las filas efectivamente subidas. Se llama SOLO despues de que el SFTP
+// confirmo el archivo: si la subida falla no se marca nada y entran solas al ciclo siguiente.
+async function marcarComoSubidas(
+  cfg: FicheroConfig,
+  ids: number[],
+  archivo: string,
+): Promise<number> {
+  if (!ids.length) return 0;
+  const conn = await conectarMySQL(cfg);
+  try {
+    await asegurarColumnasSubido(conn);
+    let marcadas = 0;
+    // De a 1000 para no armar un IN gigante
+    for (let i = 0; i < ids.length; i += 1000) {
+      const lote = ids.slice(i, i + 1000);
+      const [r] = await conn.query<ResultSetHeader>(
+        `UPDATE checkinout SET subido_en = ?, subido_archivo = ?
+          WHERE id IN (${lote.map(() => '?').join(',')}) AND subido_en IS NULL`,
+        [fmtIso(new Date()), archivo.slice(0, 80), ...lote]
+      );
+      marcadas += r.affectedRows ?? 0;
+    }
+    return marcadas;
+  } finally {
+    try { await conn.end(); } catch { /* noop */ }
+  }
+}
+
+// Piso de fecha del ciclo automatico. Sin piso habria que barrer las ~980k filas
+// historicas (todas con subido_en NULL) y se reenviaria la historia entera.
+// Tope duro de 60 dias hacia atras.
+function pisoSubida(cfg: FicheroConfig): string {
+  const tope = new Date();
+  tope.setDate(tope.getDate() - 60);
+  const topeIso = fmtIso(tope);
+
+  const estado = cargarEstadoPersistido();
+  const candidato = inicioContinuoCfg(cfg)
+    ?? normalizarChecktime(estado.ultimoChecktimeSubido)
+    ?? topeIso;
+
+  return candidato < topeIso ? topeIso : candidato;
+}
+
 function inicioContinuoCfg(cfg: FicheroConfig): string | null {
   if (!cfg.modoContinu || !cfg.fechaDesdeContinu) return null;
   const hora = cfg.horaDesdeContinu || '00:00';
   return `${cfg.fechaDesdeContinu} ${hora}:00`;
 }
 
-function restarMinutosChecktime(checktime: string, minutos: number): string {
-  const d = parsearDateLocal(checktime);
-  d.setMinutes(d.getMinutes() - minutos);
-  return fmtIso(d);
-}
-
-function rangoDesdeChecktime(
-  checktime: string,
-  cfg: FicheroConfig,
-): Pick<RangoFechas, 'fechaDesde' | 'horaDesde' | 'fechaHasta' | 'horaHasta' | 'sn' | 'sns'> {
+function crearRangoAutomatico(cfg: FicheroConfig): RangoFechas | null {
+  // El ciclo automatico ya no usa cursor: selecciona por checkinout.subido_en IS NULL.
+  // El rango solo aporta el piso de fecha (para no barrer la historia entera) y el
+  // filtro de relojes configurado.
+  const piso = pisoSubida(cfg);
   return {
-    fechaDesde: checktime.slice(0, 10),
-    horaDesde: checktime.slice(11, 16),
+    fechaDesde: piso.slice(0, 10),
+    horaDesde: piso.slice(11, 16),
     fechaHasta: null,
     horaHasta: null,
     sn: cfg.continuoModo === 'uno' ? cfg.continuoSn : null,
     sns: cfg.continuoModo === 'grupo' ? cfg.continuoSns : null,
   };
-}
-
-function detectarCursorDesdeUltimoArchivoExitoso(cfg: FicheroConfig): { checktime: string; archivo: string } | null {
-  const entradas = parsearLog();
-  const dir = outputDirAbs(cfg);
-
-  for (let i = entradas.length - 1; i >= 0; i--) {
-    const e = entradas[i];
-    if (!e.exitoso || !e.nombreArchivo) continue;
-    const fileName = safeFicheroName(e.nombreArchivo.endsWith('.txt') ? e.nombreArchivo : `${e.nombreArchivo}.txt`);
-    if (!fileName) continue;
-    const filePath = path.join(dir, fileName);
-    if (!fs.existsSync(filePath)) continue;
-
-    try {
-      const rows = parseFicheroTxt(fs.readFileSync(filePath, 'utf-8'));
-      const max = rows
-        .map(row => normalizarChecktime(row.checktime))
-        .filter((v): v is string => !!v)
-        .sort()
-        .pop();
-      if (max) return { checktime: max, archivo: e.nombreArchivo };
-    } catch (err: any) {
-      logger.warn({ msg: 'fichero: no se pudo reconstruir cursor desde archivo', archivo: filePath, error: err?.message ?? String(err) });
-    }
-  }
-
-  return null;
-}
-
-function crearRangoAutomatico(cfg: FicheroConfig): RangoFechas | null {
-  const estado = cargarEstadoPersistido();
-  let cursor = normalizarChecktime(estado.ultimoChecktimeSubido);
-
-  if (!cursor) {
-    const detectado = detectarCursorDesdeUltimoArchivoExitoso(cfg);
-    if (detectado) {
-      cursor = detectado.checktime;
-      guardarEstadoPersistido({
-        ultimoChecktimeSubido: detectado.checktime,
-        ultimoArchivoExitoso: detectado.archivo,
-        ultimoError: null,
-      });
-      logger.info({ msg: 'fichero: cursor reconstruido desde ultimo archivo exitoso', archivo: detectado.archivo, checktime: detectado.checktime });
-    }
-  }
-
-  const inicioContinuo = inicioContinuoCfg(cfg);
-  let desde = cursor
-    ? restarMinutosChecktime(cursor, Number((env as any).FICHERO_CURSOR_OVERLAP_MIN || 10))
-    : inicioContinuo;
-
-  if (inicioContinuo && desde && desde < inicioContinuo) desde = inicioContinuo;
-  if (!desde) return null;
-
-  return rangoDesdeChecktime(desde, cfg);
 }
 
 // ─── Helpers de fecha ─────────────────────────────────────────────────────────
@@ -697,7 +729,9 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
   let   totalRegistros = 0;
   let   nombreArchivo = `${nombreArchivoBase}_${cfg.sufijo}`;
   let   maxChecktimeSubido: string | null = null;
+  let   maxIdSubido: number | null = null;
   let   archivoLocalGenerado: string | null = null;
+  let   idsDelLote: number[] = [];
 
   try {
     // 1. Verificar red
@@ -710,6 +744,7 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
 
     // 2. Conectar MySQL (dateStrings: true)
     const conn = await conectarMySQL(cfg);
+    await asegurarColumnasSubido(conn);
 
     if (debeRecuperarCaida && recuperarDesdeMs && !recuperacionEnCurso) {
       recuperacionEnCurso = true;
@@ -751,20 +786,41 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
       nombreArchivo = `${nombreArchivoBase}_${safeNamePart(filtroReloj.alias || filtroReloj.sn)}_${cfg.sufijo}`;
     }
 
-    // 3. Armar query con o sin filtro de rango
+    // 3. Armar query
     let query: string;
     let queryParams: (string | number)[];
 
-    if (rango && (rango.fechaDesde || rango.fechaHasta)) {
+    if (opciones.automatico && rango) {
+      // ── Ciclo automatico: todo lo que todavia no tiene marca de subida ──
+      // No hay cursor: se pregunta fila por fila. Asi entran tambien las fichadas que
+      // un reloj vuelca tarde con fecha vieja, y nada se puede saltear por un borde de ciclo.
+      const piso = `${rango.fechaDesde} ${rango.horaDesde ?? '00:00'}:00`;
+      const conds: string[] = ['ci.subido_en IS NULL', 'ci.checktime >= ?'];
+      const params: (string | number)[] = [piso];
+      if (Array.isArray(rango.sns) && rango.sns.length > 0) {
+        const uniq = [...new Set(rango.sns.map(s => String(s).trim()).filter(Boolean))];
+        if (uniq.length) { conds.push(`ci.SN IN (${uniq.map(() => '?').join(', ')})`); params.push(...uniq); }
+      } else if (rango.sn) {
+        conds.push('ci.SN = ?'); params.push(rango.sn);
+      }
+      query = `SELECT ci.id, ui.badgenumber, ci.checktime, ci.checktype, ui.name
+                 FROM checkinout ci
+                 INNER JOIN userinfo ui ON ci.userid = ui.userid
+                 WHERE ${conds.join(' AND ')}
+                 ORDER BY ci.checktime ASC
+                 LIMIT ?`;
+      queryParams = [...params, cfg.limite];
+    } else if (rango && (rango.fechaDesde || rango.fechaHasta)) {
+      // ── Exportacion manual por rango de fechas ──
       const { where, params } = buildWhereRango(rango);
-      query = `SELECT ui.badgenumber, ci.checktime, ci.checktype, ui.name
+      query = `SELECT ci.id, ui.badgenumber, ci.checktime, ci.checktype, ui.name
                  FROM checkinout ci
                  INNER JOIN userinfo ui ON ci.userid = ui.userid
                  ${where}
                  ORDER BY ci.checktime DESC`;
       queryParams = params;
     } else {
-      query = `SELECT ui.badgenumber, ci.checktime, ci.checktype, ui.name
+      query = `SELECT ci.id, ui.badgenumber, ci.checktime, ci.checktype, ui.name
                  FROM checkinout ci
                  INNER JOIN userinfo ui ON ci.userid = ui.userid
                  ORDER BY ci.checktime DESC
@@ -774,12 +830,26 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
 
     const [rows] = await conn.query<RowDataPacket[]>(query, queryParams);
     await conn.end();
+
+    // Valvula de seguridad: un ciclo automatico normal mueve decenas de fichadas.
+    // Cientos o miles significan que las marcas de subida no estan puestas
+    // (falta correr scripts/backfillSubidoFichero.mjs) y mandarlas seria volcar
+    // historia ya entregada al Ministerio. Mejor frenar y que quede el error a la vista.
+    if (opciones.automatico && rows.length > MAX_POR_CICLO_AUTOMATICO) {
+      throw new Error(
+        `Ciclo frenado: ${rows.length} fichadas sin marca de subida (tope ${MAX_POR_CICLO_AUTOMATICO}). ` +
+        'Corre scripts/backfillSubidoFichero.mjs o subi el rango a mano desde Exportar.'
+      );
+    }
+
     totalRegistros = rows.length;
     maxChecktimeSubido = rows
       .map(row => normalizarChecktime(row.checktime))
       .filter((v): v is string => !!v)
       .sort()
       .pop() ?? null;
+    maxIdSubido = rows.length ? Math.max(...rows.map(r => Number(r.id) || 0)) : null;
+    idsDelLote = rows.map(r => Number(r.id)).filter(n => Number.isFinite(n) && n > 0);
 
     // 4. Generar archivo local
     const dir = path.isAbsolute(cfg.outputDir)
@@ -850,7 +920,14 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
 
     if (existe) {
       exitoso = true;
-      logger.info({ msg: 'fichero: subido OK', remotePath, registros: totalRegistros });
+      // Recien ahora, con el archivo confirmado del otro lado, se marcan las filas.
+      // Si algo falla antes de esta linea, nada queda marcado y vuelven en el proximo ciclo.
+      try {
+        const marcadas = await marcarComoSubidas(cfg, idsDelLote, nombreArchivo);
+        logger.info({ msg: 'fichero: subido OK', remotePath, registros: totalRegistros, marcadas });
+      } catch (e: any) {
+        logger.error({ msg: 'fichero: subio pero no se pudo marcar checkinout', archivo: nombreArchivo, error: e?.message ?? String(e) });
+      }
     } else {
       errorMsg = 'Archivo no encontrado en el servidor tras la subida';
     }
@@ -884,6 +961,7 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
         guardarEstadoPersistido({
           autoStart: true,
           ultimoChecktimeSubido: maxChecktimeSubido,
+          ultimoIdSubido: maxIdSubido,
           ultimoArchivoExitoso: nombreArchivo,
           ultimaSubidaExitosa: fmtIso(fechaSubida),
           ultimoIntentoEn: fmtIso(fechaCreacion),
@@ -904,6 +982,8 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
                 rangoDesde: rangoDesdeLog ?? null,
                 rangoHasta: rangoHastaLog ?? null,
                 error: errorMsg || null,
+                maxId: maxIdSubido,
+                ids: idsDelLote,
               }
             : cargarEstadoPersistido().pendienteSubida ?? null,
         });
@@ -942,6 +1022,15 @@ async function reintentarSubidaPendiente(cfg: FicheroConfig): Promise<boolean> {
       .pop() ?? estado.ultimoChecktimeSubido ?? null;
     const fechaSubidaOk = fmtIso(new Date());
 
+    if (pendiente.ids?.length) {
+      try {
+        const marcadas = await marcarComoSubidas(cfg, pendiente.ids, pendiente.archivo);
+        logger.info({ msg: 'fichero: pendiente marcado en checkinout', archivo: pendiente.archivo, marcadas });
+      } catch (e: any) {
+        logger.error({ msg: 'fichero: pendiente subio pero no se pudo marcar', archivo: pendiente.archivo, error: e?.message ?? String(e) });
+      }
+    }
+
     escribirLog({
       fechaCreacion: fmtIso(fechaIntento),
       nombreArchivo: pendiente.archivo,
@@ -955,6 +1044,7 @@ async function reintentarSubidaPendiente(cfg: FicheroConfig): Promise<boolean> {
     guardarEstadoPersistido({
       autoStart: true,
       ultimoChecktimeSubido: maxChecktimeSubido,
+      ultimoIdSubido: pendiente.maxId ?? estado.ultimoIdSubido ?? null,
       ultimoArchivoExitoso: pendiente.archivo,
       ultimaSubidaExitosa: fechaSubidaOk,
       ultimoIntentoEn: fmtIso(fechaIntento),
@@ -1006,24 +1096,7 @@ function iniciarTimer(options: { persistirAutoStart?: boolean; ejecutarAhora?: b
     guardarEstadoPersistido({ autoStart: true, ultimoError: null });
   }
   ultimaEjecucionMs = Date.now();   // permite mostrar el countdown desde el primer momento
-  timer = setInterval(() => {
-    ejecutarCicloAutomatico();
-    return;
-    // Relee config en cada tick para respetar cambios de modo sin reiniciar el timer
-    const c = cargarConfig();
-    let rango: RangoFechas | null = null;
-    if (c.modoContinu && c.fechaDesdeContinu) {
-      rango = {
-        fechaDesde: c.fechaDesdeContinu,
-        horaDesde:  c.horaDesdeContinu ?? null,
-        fechaHasta: null,   // hasta ahora (sin límite de fecha)
-        horaHasta:  null,
-        sn: c.continuoModo === 'uno' ? c.continuoSn : null,
-        sns: c.continuoModo === 'grupo' ? c.continuoSns : null,
-      };
-    }
-    ejecutarCiclo(rango);
-  }, cfg.intervaloMin * 60 * 1000);
+  timer = setInterval(() => ejecutarCicloAutomatico(), cfg.intervaloMin * 60 * 1000);
   if (options.ejecutarAhora) {
     setTimeout(() => ejecutarCicloAutomatico(), 1000);
   }
@@ -1105,8 +1178,74 @@ export function buildFicheroRouter(): Router {
 
   // POST /fichero/forzar — ciclo inmediato sin filtro de fecha
   router.post('/forzar', admin, (_req: Request, res: Response) => {
-    ejecutarCiclo(null);
+    // Mismo camino que el timer: selecciona por subido_en IS NULL.
+    // (Antes llamaba a ejecutarCiclo(null), que caia en la rama legacy "ultimos N" por fecha DESC.)
+    ejecutarCicloAutomatico();
     res.json({ ok: true, msg: 'Ciclo iniciado en segundo plano' });
+  });
+
+  // GET /fichero/pendientes — fichadas sin marca de subida (lo que el Ministerio no recibio)
+  // Query: desde?, hasta?, detalle=1 para traer las filas ademas del resumen
+  router.get('/pendientes', admin, async (req: Request, res: Response) => {
+    const cfg = cargarConfig();
+    const piso = pisoSubida(cfg);
+    const desde = String(req.query.desde ?? '').trim() || piso.slice(0, 10);
+    const hasta = String(req.query.hasta ?? '').trim() || null;
+    const detalle = String(req.query.detalle ?? '') === '1';
+    let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
+    try {
+      conn = await conectarMySQL(cfg);
+      await asegurarColumnasSubido(conn);
+
+      const conds = ['ci.subido_en IS NULL', 'ci.checktime >= ?'];
+      const params: string[] = [`${desde} 00:00:00`];
+      if (hasta) { conds.push('ci.checktime <= ?'); params.push(`${hasta} 23:59:59`); }
+      const where = `WHERE ${conds.join(' AND ')}`;
+
+      const [tot] = await conn.query<RowDataPacket[]>(
+        `SELECT COUNT(*) AS total, COUNT(DISTINCT ci.userid) AS agentes FROM checkinout ci ${where}`, params
+      );
+      const [porDia] = await conn.query<RowDataPacket[]>(
+        `SELECT DATE(ci.checktime) AS dia, ci.SN, COUNT(*) AS n
+           FROM checkinout ci ${where}
+          GROUP BY DATE(ci.checktime), ci.SN
+          ORDER BY dia DESC, ci.SN`, params
+      );
+
+      let filas: RowDataPacket[] = [];
+      if (detalle) {
+        const [d] = await conn.query<RowDataPacket[]>(
+          `SELECT ci.id, ui.badgenumber AS dni, ui.name, ci.checktime, ci.checktype, ci.SN
+             FROM checkinout ci INNER JOIN userinfo ui ON ui.userid = ci.userid
+             ${where}
+             ORDER BY ci.checktime ASC
+             LIMIT 2000`, params
+        );
+        filas = d;
+      }
+      await conn.end(); conn = null;
+
+      return res.json({
+        ok: true,
+        piso,
+        desde,
+        hasta,
+        total: Number(tot[0]?.total ?? 0),
+        agentes: Number(tot[0]?.agentes ?? 0),
+        porDia: porDia.map(r => ({ dia: String(r.dia).slice(0, 10), sn: r.SN, cantidad: Number(r.n) })),
+        data: filas.map(r => ({
+          id: r.id,
+          dni: String(r.dni ?? '').trim(),
+          nombre: String(r.name ?? '').trim(),
+          checktime: r.checktime,
+          tipo: (r.checktype == 0 || r.checktype === '0') ? 'E' : 'S',
+          sn: r.SN,
+        })),
+      });
+    } catch (err: any) {
+      if (conn) { try { await conn.end(); } catch { /* noop */ } }
+      return res.status(503).json({ ok: false, error: err?.message ?? String(err) });
+    }
   });
 
   // POST /fichero/exportar — exportar rango explícito de fecha/hora

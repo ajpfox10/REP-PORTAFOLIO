@@ -6,6 +6,7 @@ import type {
   ExportarRangoPayload,
   ExportarRangoResult,
   FicheroConfig,
+  FicheroPendientes,
 } from '../types';
 
 export async function getFicheroDispositivos(): Promise<{ data: Dispositivo[]; warning?: string }> {
@@ -56,4 +57,14 @@ export async function postFicheroExportar(payload: ExportarRangoPayload): Promis
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+export async function getFicheroPendientes(params: { desde?: string; hasta?: string; detalle?: boolean } = {}): Promise<FicheroPendientes> {
+  const qs = new URLSearchParams();
+  if (params.desde) qs.set('desde', params.desde);
+  if (params.hasta) qs.set('hasta', params.hasta);
+  if (params.detalle) qs.set('detalle', '1');
+  const res = await apiFetch<{ ok: boolean; error?: string } & FicheroPendientes>(`/fichero/pendientes?${qs.toString()}`);
+  if (!res?.ok) throw new Error(res?.error ?? 'No se pudieron leer las fichadas pendientes');
+  return res;
 }

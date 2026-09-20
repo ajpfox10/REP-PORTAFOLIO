@@ -11,6 +11,10 @@
  *   PUT  /jubilacion/:id
  *   DELETE /jubilacion/:id
  *   GET/POST/PATCH/DELETE /jubilacion/posibles
+ *   PUT  /jubilacion/posibles/:id/checklist
+ *   POST /jubilacion/posibles/:id/alerta-ok
+ *   GET  /jubilacion/alerta-carga
+ *   GET  /jubilacion/cortes
  *   GET/POST/PATCH/DELETE /jubilacion/citas
  *   POST /jubilacion/citas/:id/promover
  */
@@ -26,6 +30,11 @@ import { can }                        from '../middlewares/rbacCrud';
 import { env }                        from '../config/env';
 import { logger }                     from '../logging/logger';
 import { leerListadoANSES }           from '../services/ansesPdf.service';
+import {
+  ITEMS_CHECKLIST, periodoVigente, alertaVencida, itemsFaltantes, fechaLocalISO,
+  corteVigente, corteSugerido, opcionesCorte, corteEsPosteriorAlVigente,
+  type MesCorte,
+} from '../services/jubilacionCarga.service';
 
 // ── RBAC ──────────────────────────────────────────────────────────────────────
 function rbac(table: string, action: 'read' | 'create' | 'update' | 'delete') {
@@ -902,6 +911,69 @@ async function ensurePosiblesColumns(sequelize: Sequelize) {
   posiblesColsReady.add(sequelize);
 }
 
+// ── Checklist de carga + OK de la alerta: tablas idempotentes en runtime ──────
+// (DDL canónica en scripts/migrations/045__jubilacion_checklist_carga.sql)
+//
+// posibles_jubilados_checklist: una fila por paso TILDADO. Destildar borra la
+// fila, así el estado es siempre "lo que está hecho" y queda quién lo hizo.
+//
+// posibles_jubilados_alerta_ok: los acuses de la alerta de carga. Se guardan
+// todos (varios usuarios pueden dar OK del mismo período); el OK esconde el
+// banner sólo para quien lo dio y sólo por ese día. La alerta se cierra de
+// verdad cuando están los cinco pasos tildados.
+const checklistTablesReady = new WeakSet<Sequelize>();
+
+async function ensureChecklistTables(sequelize: Sequelize) {
+  if (checklistTablesReady.has(sequelize)) return;
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS posibles_jubilados_checklist (
+      id                  bigint unsigned NOT NULL AUTO_INCREMENT,
+      posible_jubilado_id bigint unsigned NOT NULL,
+      item                enum('DOCUMENTACION','IFGRA','SIAPE','INTRANET','RESOLUCION') NOT NULL,
+      tildado_por         bigint unsigned NULL,
+      tildado_por_nombre  varchar(190)    NULL,
+      created_at          timestamp       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at          timestamp       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_pj_checklist (posible_jubilado_id, item),
+      INDEX idx_pj_checklist_pj (posible_jubilado_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS posibles_jubilados_alerta_ok (
+      id                  bigint unsigned NOT NULL AUTO_INCREMENT,
+      posible_jubilado_id bigint unsigned NOT NULL,
+      periodo             varchar(24)     NOT NULL,
+      usuario_id          bigint unsigned NULL,
+      usuario_nombre      varchar(190)    NULL,
+      created_at          timestamp       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      INDEX idx_pj_ok_pj      (posible_jubilado_id, periodo),
+      INDEX idx_pj_ok_usuario (usuario_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  checklistTablesReady.add(sequelize);
+}
+
+// Ítems tildados de varios registros de una: id → [{ item, por, cuando }]
+async function traerChecklist(sequelize: Sequelize, ids: number[]) {
+  const mapa: Record<number, any[]> = {};
+  if (!ids.length) return mapa;
+  const rows = await sequelize.query(
+    `SELECT posible_jubilado_id, item, tildado_por_nombre,
+            DATE_FORMAT(created_at, '%Y-%m-%d') AS tildado_el
+     FROM posibles_jubilados_checklist
+     WHERE posible_jubilado_id IN (:ids)`,
+    { replacements: { ids }, type: QueryTypes.SELECT },
+  ) as any[];
+  for (const r of rows) {
+    (mapa[Number(r.posible_jubilado_id)] ??= []).push({
+      item: r.item, por: r.tildado_por_nombre, el: r.tildado_el,
+    });
+  }
+  return mapa;
+}
+
 // ── Alertas del trámite jubilatorio ───────────────────────────────────────────
 // Cada fecha cargada en posibles_jubilados genera una alerta en el banner del
 // agente (alertas_agente). Se pone urgente cuando faltan 15 días o menos y, si la
@@ -1385,6 +1457,41 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
 
   // ── POSIBLES JUBILADOS ────────────────────────────────────────────────────────
 
+  // El corte no se elige libre: se puede atrasar, nunca adelantar respecto del
+  // que corresponde hoy. El anio sale de fecha_jubilacion (fin del trimestre).
+  function corteFueraDeRango(mesCorte: any, fechaJubilacion: any): string | null {
+    if (!mesCorte) return null;
+    const anio = fechaJubilacion
+      ? Number(String(fechaJubilacion).slice(0, 4))
+      : corteVigente().anioBaja;
+    if (!Number.isFinite(anio)) return null;
+    if (!corteEsPosteriorAlVigente(mesCorte as MesCorte, anio, new Date())) return null;
+    const vig = corteVigente();
+    return `El corte ${mesCorte} ${anio} es posterior al que corresponde hoy `
+         + `(${vig.mesCorte} ${vig.anioBaja}, papeles del ${vig.papelesDesde} al ${vig.papelesHasta}). `
+         + `Se puede atrasar, no adelantar.`;
+  }
+
+  // GET /jubilacion/cortes - opciones para los selectores del front.
+  // Devuelve el corte que corresponde hoy y los cuatro anteriores, cada uno con
+  // su fecha de baja y su ventana de papeles ya calculadas.
+  router.get(
+    '/cortes',
+    rbac('jubilacion_calculos', 'read'),
+    async (_req: Request, res: Response) => {
+      const opciones = opcionesCorte(new Date());
+      const sug      = corteSugerido(new Date());
+      return res.json({
+        ok: true,
+        data: opciones,
+        vigente:  opciones.find((o) => o.vigente),
+        // El que arranca elegido en el selector: normalmente el vigente, salvo
+        // que corra una excepcion con fecha de vencimiento.
+        sugerido: { mesCorte: sug.mesCorte, anioBaja: sug.anioBaja },
+      });
+    },
+  );
+
   // GET /jubilacion/posibles
   router.get(
     '/posibles',
@@ -1425,7 +1532,15 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
            ORDER BY estado ASC, apellido ASC, nombre ASC`,
           { replacements: repl, type: QueryTypes.SELECT },
         );
-        return res.json({ ok: true, data: rows, total: (rows as any[]).length });
+        // Checklist de carga de cada registro (Documentación → Resolución)
+        await ensureChecklistTables(sequelize);
+        const checklist = await traerChecklist(sequelize, (rows as any[]).map((r) => Number(r.id)));
+        const data = (rows as any[]).map((r) => {
+          const tildados = checklist[Number(r.id)] ?? [];
+          return { ...r, checklist: tildados, items_faltantes: itemsFaltantes(tildados.map((t: any) => t.item)) };
+        });
+
+        return res.json({ ok: true, data, total: data.length });
       } catch (err: any) {
         logger.error({ msg: '[posibles_jubilados] list error', err: err?.message });
         return res.status(500).json({ ok: false, error: err?.message });
@@ -1441,7 +1556,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       const schema = z.object({
         dni:                   z.number().int().positive(),
         tipo_jubilacion:       z.string().max(50).optional().nullable(),
-        mes_corte:             z.enum(['MARZO','JUNIO','SEPTIEMBRE','DICIEMBRE']),
+        mes_corte:             z.enum(['MARZO','JUNIO','SEPTIEMBRE','DICIEMBRE']).optional(),
         estado:                z.enum(['IDENTIFICADO','EN_TRAMITE','JUBILADO','DESCARTADO']).default('IDENTIFICADO'),
         fecha_presentacion_papeles: dateStr.optional().nullable(),
         fecha_jubilacion:           dateStr.optional().nullable(),
@@ -1455,6 +1570,19 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       const authUser = (req as any).auth;
       const userId   = authUser?.principalId ?? null;
       const userName = authUser?.nombre ? `${authUser.apellido ?? ''} ${authUser.nombre}`.trim() : null;
+
+      // Sin mes de corte, va al que corresponde hoy. Las dos fechas del tramite
+      // salen del cronograma y quedan editables despues.
+      const sug = corteSugerido();
+      const mesCorte = body.mes_corte ?? sug.mesCorte;
+      const opcion   = body.mes_corte
+        ? opcionesCorte(new Date()).find((o) => o.mesCorte === body.mes_corte)
+        : sug;
+      const fPapeles = body.fecha_presentacion_papeles ?? opcion?.papelesDesde ?? null;
+      const fJubil   = body.fecha_jubilacion           ?? opcion?.fechaBaja    ?? null;
+
+      const fueraDeRango = corteFueraDeRango(mesCorte, fJubil);
+      if (fueraDeRango) return res.status(400).json({ ok: false, error: fueraDeRango });
 
       try {
         await ensurePosiblesColumns(sequelize);
@@ -1495,9 +1623,9 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
               ocupacion_nombre:       ag.ocupacion_nombre ?? null,
               es_insalubre:           ag.ocupacion_es_insalubre ? 1 : 0,
               tipo_jubilacion:        body.tipo_jubilacion       ?? null,
-              mes_corte:              body.mes_corte,
-              fecha_presentacion_papeles: body.fecha_presentacion_papeles ?? null,
-              fecha_jubilacion:           body.fecha_jubilacion           ?? null,
+              mes_corte:              mesCorte,
+              fecha_presentacion_papeles: fPapeles,
+              fecha_jubilacion:           fJubil,
               estado:                 body.estado,
               observaciones:          body.observaciones         ?? null,
               jubilacion_calculo_id:  body.jubilacion_calculo_id ?? null,
@@ -1544,6 +1672,11 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       const sets: string[] = ['modificado_por = :modificado_por', 'modificado_por_nombre = :modificado_por_nombre'];
       const repl: Record<string, any> = { id, modificado_por: userId, modificado_por_nombre: userName };
 
+      if (body.mes_corte) {
+        const fueraDeRango = corteFueraDeRango(body.mes_corte, body.fecha_jubilacion);
+        if (fueraDeRango) return res.status(400).json({ ok: false, error: fueraDeRango });
+      }
+
       if (body.estado               !== undefined) { sets.push('estado = :estado');                              repl.estado = body.estado; }
       if (body.tipo_jubilacion      !== undefined) { sets.push('tipo_jubilacion = :tipo_jubilacion');            repl.tipo_jubilacion = body.tipo_jubilacion; }
       if (body.mes_corte            !== undefined) { sets.push('mes_corte = :mes_corte');                        repl.mes_corte = body.mes_corte; }
@@ -1583,6 +1716,184 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         return res.json({ ok: true });
       } catch (err: any) {
         logger.error({ msg: '[posibles_jubilados] delete error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+    },
+  );
+
+  // PUT /jubilacion/posibles/:id/checklist - tilda o destilda un paso del tramite
+  router.put(
+    '/posibles/:id/checklist',
+    rbac('jubilacion_calculos', 'update'),
+    async (req: Request, res: Response) => {
+      const id = parseInt(req.params.id, 10);
+      if (!id || isNaN(id)) return res.status(400).json({ ok: false, error: 'ID invalido' });
+
+      const schema = z.object({
+        item:    z.enum(ITEMS_CHECKLIST),
+        tildado: z.boolean(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues });
+
+      const { item, tildado } = parsed.data;
+      const authUser = (req as any).auth;
+      const userId   = authUser?.principalId ?? null;
+      const userName = authUser?.nombre ? `${authUser.apellido ?? ''} ${authUser.nombre}`.trim() : null;
+
+      try {
+        await ensureChecklistTables(sequelize);
+
+        const existe = await sequelize.query(
+          `SELECT id FROM posibles_jubilados WHERE id = :id AND deleted_at IS NULL LIMIT 1`,
+          { replacements: { id }, type: QueryTypes.SELECT },
+        ) as any[];
+        if (!existe.length) return res.status(404).json({ ok: false, error: 'Registro no encontrado' });
+
+        if (tildado) {
+          // Re-tildar no pisa quien lo hizo la primera vez.
+          await sequelize.query(
+            `INSERT IGNORE INTO posibles_jubilados_checklist
+               (posible_jubilado_id, item, tildado_por, tildado_por_nombre)
+             VALUES (:id, :item, :userId, :userName)`,
+            { replacements: { id, item, userId, userName }, type: QueryTypes.INSERT },
+          );
+        } else {
+          await sequelize.query(
+            `DELETE FROM posibles_jubilados_checklist
+             WHERE posible_jubilado_id = :id AND item = :item`,
+            { replacements: { id, item }, type: QueryTypes.DELETE },
+          );
+        }
+
+        const mapa = await traerChecklist(sequelize, [id]);
+        const tildados = mapa[id] ?? [];
+        return res.json({
+          ok: true,
+          checklist: tildados,
+          items_faltantes: itemsFaltantes(tildados.map((t: any) => t.item)),
+        });
+      } catch (err: any) {
+        logger.error({ msg: '[posibles_jubilados] checklist error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+    },
+  );
+
+  // POST /jubilacion/posibles/:id/alerta-ok - acuse de la alerta de carga.
+  // No cierra la alerta: solo la esconde para quien dio OK y solo hasta manana.
+  router.post(
+    '/posibles/:id/alerta-ok',
+    rbac('jubilacion_calculos', 'update'),
+    async (req: Request, res: Response) => {
+      const id = parseInt(req.params.id, 10);
+      if (!id || isNaN(id)) return res.status(400).json({ ok: false, error: 'ID invalido' });
+
+      const authUser = (req as any).auth;
+      const userId   = authUser?.principalId ?? null;
+      const userName = authUser?.nombre ? `${authUser.apellido ?? ''} ${authUser.nombre}`.trim() : null;
+
+      try {
+        await ensurePosiblesColumns(sequelize);
+        await ensureChecklistTables(sequelize);
+
+        const rows = await sequelize.query(
+          `SELECT id, mes_corte, DATE_FORMAT(fecha_jubilacion, '%Y-%m-%d') AS fecha_jubilacion
+           FROM posibles_jubilados WHERE id = :id AND deleted_at IS NULL LIMIT 1`,
+          { replacements: { id }, type: QueryTypes.SELECT },
+        ) as any[];
+        if (!rows.length) return res.status(404).json({ ok: false, error: 'Registro no encontrado' });
+        if (!rows[0].mes_corte) {
+          return res.status(400).json({ ok: false, error: 'El registro no tiene mes de corte cargado' });
+        }
+
+        const per = periodoVigente(rows[0].mes_corte as MesCorte, new Date(), rows[0].fecha_jubilacion);
+        await sequelize.query(
+          `INSERT INTO posibles_jubilados_alerta_ok
+             (posible_jubilado_id, periodo, usuario_id, usuario_nombre)
+           VALUES (:id, :periodo, :userId, :userName)`,
+          { replacements: { id, periodo: per.periodo, userId, userName }, type: QueryTypes.INSERT },
+        );
+        return res.json({ ok: true, periodo: per.periodo });
+      } catch (err: any) {
+        logger.error({ msg: '[posibles_jubilados] alerta-ok error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+    },
+  );
+
+  // GET /jubilacion/alerta-carga - alimenta el banner del dashboard.
+  // Entra un agente cuando: el tramite sigue abierto, tiene mes de corte, el
+  // periodo vigente ya paso su punto medio y le falta tildar algun paso.
+  // El OK del usuario que mira lo saca de SU banner hasta el dia siguiente.
+  router.get(
+    '/alerta-carga',
+    rbac('jubilacion_calculos', 'read'),
+    async (req: Request, res: Response) => {
+      const authUser = (req as any).auth;
+      const userId   = authUser?.principalId ?? null;
+
+      try {
+        await ensurePosiblesColumns(sequelize);
+        await ensureChecklistTables(sequelize);
+
+        const rows = await sequelize.query(
+          `SELECT id, dni, apellido, nombre, mes_corte, estado,
+                  DATE_FORMAT(fecha_jubilacion, '%Y-%m-%d') AS fecha_jubilacion
+           FROM posibles_jubilados
+           WHERE deleted_at IS NULL
+             AND estado IN ('IDENTIFICADO','EN_TRAMITE')
+             AND mes_corte IS NOT NULL
+           ORDER BY apellido ASC, nombre ASC`,
+          { type: QueryTypes.SELECT },
+        ) as any[];
+        if (!rows.length) return res.json({ ok: true, data: [], total: 0 });
+
+        const ids = rows.map((r) => Number(r.id));
+        const checklist = await traerChecklist(sequelize, ids);
+
+        // OK del periodo: todos (para mostrar quienes avisaron) y los de hoy del
+        // usuario que consulta (para esconderle el banner).
+        const oks = await sequelize.query(
+          `SELECT posible_jubilado_id, periodo, usuario_id, usuario_nombre,
+                  DATE_FORMAT(created_at, '%Y-%m-%d') AS dia
+           FROM posibles_jubilados_alerta_ok
+           WHERE posible_jubilado_id IN (:ids)`,
+          { replacements: { ids }, type: QueryTypes.SELECT },
+        ) as any[];
+
+        const hoyISO = fechaLocalISO();
+        const data: any[] = [];
+
+        for (const r of rows) {
+          const per = periodoVigente(r.mes_corte as MesCorte, new Date(), r.fecha_jubilacion);
+          if (!alertaVencida(per)) continue;
+
+          const tildados = checklist[Number(r.id)] ?? [];
+          const faltan   = itemsFaltantes(tildados.map((t: any) => t.item));
+          if (!faltan.length) continue; // tramite cargado completo: no molesta mas
+
+          const delPeriodo = oks.filter((o) => Number(o.posible_jubilado_id) === Number(r.id)
+                                            && o.periodo === per.periodo);
+          // El propio OK de hoy esconde la fila para este usuario, no para el resto.
+          const yoAviseHoy = userId != null
+            && delPeriodo.some((o) => Number(o.usuario_id) === Number(userId) && o.dia === hoyISO);
+          if (yoAviseHoy) continue;
+
+          data.push({
+            id: r.id, dni: r.dni, apellido: r.apellido, nombre: r.nombre,
+            mes_corte: r.mes_corte, estado: r.estado,
+            periodo: per.periodo,
+            fecha_alerta: per.fechaAlerta,
+            items_faltantes: faltan,
+            items_hechos: tildados.map((t: any) => t.item),
+            ok_dados: delPeriodo.map((o) => ({ por: o.usuario_nombre, el: o.dia })),
+          });
+        }
+
+        return res.json({ ok: true, data, total: data.length });
+      } catch (err: any) {
+        logger.error({ msg: '[posibles_jubilados] alerta-carga error', err: err?.message });
         return res.status(500).json({ ok: false, error: err?.message });
       }
     },
@@ -1798,8 +2109,20 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       const userId   = authUser?.principalId ?? null;
       const userName = authUser?.nombre ? `${authUser.apellido ?? ''} ${authUser.nombre}`.trim() : null;
 
+      // Mismo criterio que el alta manual: corte automatico y fechas del
+      // cronograma, salvo que manden un corte anterior a proposito.
+      const sugProm      = corteSugerido();
+      const mesCorteProm = body.mes_corte ?? sugProm.mesCorte;
+      const opcionProm   = body.mes_corte
+        ? opcionesCorte(new Date()).find((o) => o.mesCorte === body.mes_corte)
+        : sugProm;
+
+      const fueraDeRangoProm = corteFueraDeRango(mesCorteProm, opcionProm?.fechaBaja ?? null);
+      if (fueraDeRangoProm) return res.status(400).json({ ok: false, error: fueraDeRangoProm });
+
       try {
         await ensureCitasTable(sequelize);
+        await ensurePosiblesColumns(sequelize);
 
         const citaRows = await sequelize.query(
           `SELECT id, dni, apellido, nombre, observaciones
@@ -1827,11 +2150,13 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           const [insertResult] = await sequelize.query(
             `INSERT INTO posibles_jubilados
                (dni, apellido, nombre, fecha_nacimiento, fecha_ingreso, ley_nombre, ocupacion_nombre,
-                es_insalubre, tipo_jubilacion, mes_corte, estado, observaciones,
+                es_insalubre, tipo_jubilacion, mes_corte,
+                fecha_presentacion_papeles, fecha_jubilacion, estado, observaciones,
                 creado_por, creado_por_nombre)
              VALUES
                (:dni, :apellido, :nombre, :fecha_nacimiento, :fecha_ingreso, :ley_nombre, :ocupacion_nombre,
-                :es_insalubre, :tipo_jubilacion, :mes_corte, 'IDENTIFICADO', :observaciones,
+                :es_insalubre, :tipo_jubilacion, :mes_corte,
+                :fecha_presentacion_papeles, :fecha_jubilacion, 'IDENTIFICADO', :observaciones,
                 :creado_por, :creado_por_nombre)`,
             {
               replacements: {
@@ -1844,7 +2169,9 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
                 ocupacion_nombre:  ag.ocupacion_nombre ?? null,
                 es_insalubre:      ag.ocupacion_es_insalubre ? 1 : 0,
                 tipo_jubilacion:   body.tipo_jubilacion ?? null,
-                mes_corte:         body.mes_corte       ?? null,
+                mes_corte:         mesCorteProm,
+                fecha_presentacion_papeles: opcionProm?.papelesDesde ?? null,
+                fecha_jubilacion:           opcionProm?.fechaBaja    ?? null,
                 observaciones:     body.observaciones   ?? cita.observaciones ?? null,
                 creado_por:        userId,
                 creado_por_nombre: userName,

@@ -1,10 +1,11 @@
 {
   "autoStart": true,
   "ultimoError": null,
-  "actualizadoEn": "2026-09-13 22:38:00",
-  "ultimoChecktimeSubido": "2026-09-13 22:00:03",
-  "ultimoArchivoExitoso": "026_Fichadas_260913_2237_048350",
-  "ultimaSubidaExitosa": "2026-09-13 22:37:59",
-  "ultimoIntentoEn": "2026-09-13 22:37:58",
-  "pendienteSubida": null
+  "actualizadoEn": "2026-09-15 16:09:44",
+  "ultimoChecktimeSubido": "2026-09-15 16:08:19",
+  "ultimoArchivoExitoso": "026_Fichadas_260915_1609_048350",
+  "ultimaSubidaExitosa": "2026-09-15 16:09:43",
+  "ultimoIntentoEn": "2026-09-15 16:09:43",
+  "pendienteSubida": null,
+  "ultimoIdSubido": 1065190
 }

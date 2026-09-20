@@ -580,8 +580,12 @@ def asegurar_sesion(timeout=None):
             continue
         desconocidos += 1
         if desconocidos == 1:
-            log("No reconozco la pantalla de SiAPe; espero unos segundos por si esta cargando.")
-        if desconocidos > 8:
+            log("No reconozco la pantalla de SiAPe; espero (sin cortar) a que cargue...")
+        # SIN corte rapido: espero hasta el timeout general (abajo) por si SIAPE
+        # tarda en cargar la pantalla post-login. El limite lo pone el `while` de
+        # arriba (SIAPE_SESION_TIMEOUT).
+        limite_desc = int(os.environ.get("SIAPE_DESCONOCIDO_MAX", "100000") or "100000")
+        if desconocidos > limite_desc:
             raise RuntimeError(
                 "SiAPe quedo en una pantalla que no reconozco (ni login, ni selector de modulo, "
                 "ni eRreH). Dejalo en el menu principal de eRreH y volve a correr."
