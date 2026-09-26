@@ -311,6 +311,11 @@ const schema = z.object({
   // Carpeta con PDFs de licencias anuales (ANUAL + NOVEDADES) para la comparación
   LICENCIAS_PDF_DIR: strish(""),
 
+  // Residencias — corte anual (MM-DD) en que se evalua quien termino la residencia
+  // y dias de anticipacion con que empieza a avisar el banner del dashboard.
+  RESIDENCIAS_CORTE_MMDD: strish("08-31"),
+  RESIDENCIAS_AVISO_DIAS: intish(0),
+
   // Módulo Fichero
   FICHERO_LOG_PATH: strish(""),          // legacy, ya no se usa (el log lo gestiona el módulo)
   // MySQL del reloj biométrico (si no se completa aquí, se puede configurar desde la UI)

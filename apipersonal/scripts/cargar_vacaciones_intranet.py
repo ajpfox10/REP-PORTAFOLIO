@@ -18,6 +18,10 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright, Error as PWError
 
+# Mapeo por tabla `mapeo_novedades` (+ regla de CIE) y registro en script_runs
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mapeo_novedades as MN
+
 # Forzar UTF-8 en la consola: evita que print() de '→', acentos, etc. crashee
 # en CMD con codepage cp1252 (UnicodeEncodeError 'charmap').
 try:
@@ -28,7 +32,6 @@ except Exception:
 
 EXCEL_PATH  = r"D:\G\comparacion\errores_siape.xlsx"   # fallback si no se pasa --excel
 LOG_PATH    = r"D:\G\comparacion\resultado_carga.xlsx"
-MAPEO_PATH  = r"C:\apps\personaldev\apifront\mapeo.asistencia.json"
 URL_LOGIN   = "https://sistemas.ms.gba.gov.ar/intranet/login.php"
 URL_PLANTEL = "https://sistemas.ms.gba.gov.ar/partenovedades/web/app.php/plantel/"
 BASE_URL    = "https://sistemas.ms.gba.gov.ar"
@@ -45,19 +48,16 @@ def fmt_fecha(val):
     return val.strftime("%d/%m/%Y")
 
 def build_mapa_inverso():
-    with open(MAPEO_PATH, encoding="utf-8") as f:
-        mapeo = json.load(f)
-    inverso = {}
-    for key, siap_vals in mapeo.items():
-        partes = key.split("-", 1)
-        label = f"{partes[0]} - {partes[1]}" if len(partes) == 2 else key
-        for val in siap_vals:
-            if val not in inverso:
-                inverso[val.upper()] = label
-    return inverso
+    """Mapeo de CARGA desde la tabla mapeo_novedades: {(novedad_siape_norm, codigo_cie): label}.
+    codigo_cie '' = regla general; con CIE = regla para esa enfermedad (gana al cargar)."""
+    return MN.cargar_mapa_carga()
 
 # Enfermedades SIN justificar (JUSTIFICADO=NO en SIAPE.xlsx) se cargan con esta
 # opción. OJO: "JUSTIFICCIÓN" es la ortografía real del desplegable de la Intranet.
+# Motivo con el que el comparador marca el EXAMEN que falta tras un PRE-EXAMEN
+# (art. 59 Dec. 4161/96: el examen es el día siguiente al último de pre-examen)
+MOTIVO_EXAMEN_AUTO = "EXAMEN_AUTOMATICO_TRAS_PREEXAMEN"
+
 LABEL_ENF_PENDIENTE = "E - LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)"
 
 SIAPE_DIR = r"D:\G\comparacion\SIAPE"
@@ -108,12 +108,20 @@ def es_medica_sin_justificar(siap):
         or "ENFERMEDAD DE FAMILIAR" in s
     )
 
-def agrupar_por_dni(filas, mapa, justificados=None):
+def agrupar_por_dni(filas, mapa, justificados=None, licencias=None, stats=None):
     grupos = defaultdict(list)
     sin_mapeo = []
+    stats = stats if stats is not None else {}
+    stats.setdefault("por_cie", [])
+    stats.setdefault("medicas_sin_cie", 0)
     for f in filas:
         siap = str(f["Nov. SIAP"]).strip().upper()
-        label = mapa.get(siap)
+        label, cie, por_cie = MN.elegir_label(mapa, licencias, f["DNI"], siap, f["Desde SIAP"], f["Hasta SIAP"])
+        if por_cie:
+            print(f"    {f['Nombre']}: {siap} CIE {cie} → se carga como {label}")
+            stats["por_cie"].append(f"{f['Nombre']} CIE {cie} → {label}")
+        elif es_medica_sin_justificar(siap) and not cie:
+            stats["medicas_sin_cie"] += 1
         if not label:
             sin_mapeo.append(f"{f['Nombre']} — {siap}")
             continue
@@ -132,13 +140,17 @@ def agrupar_por_dni(filas, mapa, justificados=None):
             if j == "NO":
                 label = LABEL_ENF_PENDIENTE
                 print(f"    {f['Nombre']}: {siap} sin justificar → se carga como E-PENDIENTE")
+                stats["e_pendiente"] = stats.get("e_pendiente", 0) + 1
 
         grupos[f["DNI"]].append({
             "nombre": f["Nombre"],
             "label":  label,
             "desde":  desde,
             "hasta":  hasta,
+            # fila EXAMEN que agregó el comparador porque faltaba tras un pre-examen
+            "auto":   str(f.get("Motivo", "")).strip() == MOTIVO_EXAMEN_AUTO,
         })
+    stats["sin_mapeo"] = len(sin_mapeo)
     if sin_mapeo:
         print(f"  SIN MAPEO ({len(sin_mapeo)} filas):")
         for s in sin_mapeo:
@@ -190,9 +202,13 @@ def cargar_log_existente():
     except Exception:
         return ok_set, []
 
+SCRIPT_ID = None  # lo fija main() segun la dependencia (detalle en script_run_items)
+
 def guardar_log(registros):
     df = pd.DataFrame(registros, columns=["Nombre", "DNI", "Novedad", "Desde", "Hasta", "Estado", "Detalle"])
     df.to_excel(LOG_PATH, index=False)
+    if SCRIPT_ID:
+        MN.items_desde_registros(SCRIPT_ID, registros)
 
 def es_error_superposicion(mensaje):
     return "SUPERPONE" in _sin_acentos(mensaje or "")
@@ -769,6 +785,24 @@ def detectar_dependencia(filas):
             return dep_de_fila(fila)
     return "HOSPITAL"
 
+def resumen_run(ok, err, stats):
+    """Texto para la pagina Robots SIAPE (columna Detalle)."""
+    partes = [f"{ok} cargadas OK", f"{err} con error"]
+    por_cie = stats.get("por_cie") or []
+    partes.append(f"{len(por_cie)} enfermedades cargadas por CIE")
+    if stats.get("examen_auto_ok"):
+        partes.append(f"{stats['examen_auto_ok']} exámenes automáticos tras pre-examen")
+    if stats.get("e_pendiente"):
+        partes.append(f"{stats['e_pendiente']} como E-pendiente (sin justificar)")
+    if stats.get("medicas_sin_cie"):
+        partes.append(f"{stats['medicas_sin_cie']} médicas sin licencia/CIE (regla general)")
+    if stats.get("sin_mapeo"):
+        partes.append(f"{stats['sin_mapeo']} sin mapeo")
+    txt = " · ".join(partes)
+    if por_cie:
+        txt += " | " + "; ".join(por_cie)
+    return txt
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", action="store_true")
@@ -786,7 +820,11 @@ def main():
         global LOG_PATH
         LOG_PATH = args.log_path
 
+    t0 = time.time()
     mapa   = build_mapa_inverso()
+    licencias = MN.cargar_licencias()
+    print(f"Mapeo (tabla mapeo_novedades): {len(mapa)} reglas de carga, "
+          f"{sum(1 for (_n, c) in mapa if c)} por CIE · licencias con CIE: {len(licencias)} agentes")
     filas  = cargar_filas(excel_path, test_mode=args.test)
     justificados = cargar_justificados()
     if justificados:
@@ -807,9 +845,15 @@ def main():
         print("No quedan filas para esta dependencia.")
         sys.exit(0)
 
-    grupos = agrupar_por_dni(filas, mapa, justificados)
+    stats = {}
+    grupos = agrupar_por_dni(filas, mapa, justificados, licencias, stats)
+    script_id = f"intranet_carga_novedades_{MN.sufijo_dep(dependencia)}"
+    script_desc = f"Carga de novedades en Intranet MS ({dependencia})"
 
     ya_ok, registros = cargar_log_existente()
+    global SCRIPT_ID
+    SCRIPT_ID = script_id
+    MN.items_desde_registros(script_id, registros, inicio=len(registros))
     if ya_ok:
         print(f"Log existente: {len(ya_ok)} novedades ya cargadas (se saltean)")
 
@@ -817,6 +861,7 @@ def main():
 
     ok_count = sum(1 for r in registros if r.get("Estado") == "OK")
     err_count = sum(1 for r in registros if r.get("Estado") != "OK")
+    ok_inicio, err_inicio = ok_count, err_count
 
     with sync_playwright() as p:
         browser, page = nueva_pagina(p)
@@ -827,6 +872,8 @@ def main():
         except Exception as e:
             print(f"ERROR en login: {e}")
             browser.close()
+            MN.registrar_run(script_id, script_desc, "error", motivo=f"Login: {e}",
+                             archivo=LOG_PATH, duracion_seg=int(time.time() - t0))
             return
         print("Sesión iniciada.\n")
 
@@ -925,6 +972,9 @@ def main():
                             ok_count += 1
                             ya_ok.add(log_clave(dni, nov["label"], nov["desde"], nov["hasta"]))
                             estado, detalle = "OK", msg_err or ""
+                            if nov.get("auto"):
+                                stats["examen_auto_ok"] = stats.get("examen_auto_ok", 0) + 1
+                                detalle = ("Examen automático tras pre-examen. " + detalle).strip()
                         else:
                             if es_error_superposicion(msg_err):
                                 msg_err = detalle_superposicion(page, nov["label"], nov["desde"], nov["hasta"], msg_err, historial_url)
@@ -981,6 +1031,10 @@ def main():
 
         print(f"\nResultado total: {ok_count} OK, {err_count} errores.")
         print(f"Log guardado en: {LOG_PATH}")
+        MN.registrar_run(script_id, script_desc, "ok",
+                         motivo=resumen_run(ok_count - ok_inicio, err_count - err_inicio, stats),
+                         filas=ok_count - ok_inicio, archivo=LOG_PATH,
+                         duracion_seg=int(time.time() - t0))
         try:
             browser.close()
         except Exception:

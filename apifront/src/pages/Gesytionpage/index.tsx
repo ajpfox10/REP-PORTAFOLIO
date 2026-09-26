@@ -1,5 +1,6 @@
 // src/pages/GestionPage/index.tsx
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
@@ -812,6 +813,7 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export function GestionPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { hasPerm } = useAuth();
   const canEdit = hasPerm('personal:write') || hasPerm('crud:*:*') || hasPerm('crud:personal:update');
 
@@ -982,6 +984,17 @@ export function GestionPage() {
             )}
 
             <AgenteInfoCard row={row} />
+
+            {row?.dni && (
+              <button
+                className="btn"
+                type="button"
+                style={{ width: '100%' }}
+                onClick={() => navigate(`/app/escaneo-agente/${String(row.dni).replace(/\D/g, '')}`)}
+              >
+                📷 Escanear documento — {row.apellido}, {row.nombre}
+              </button>
+            )}
 
             {row?.dni && relacionados.length > 0 && (
               <div className="card gp-card-14" style={{

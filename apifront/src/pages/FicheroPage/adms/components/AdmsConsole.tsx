@@ -306,6 +306,18 @@ function DeviceCard(props: {
             </span>
           )}
         </div>
+        {device.caidoDesde && (
+          <div style={{ marginTop: 4 }}>
+            <span style={{
+              ...S.badge, fontSize: '0.68rem',
+              background: device.alertaCaidaLarga ? '#fee2e2' : '#ffedd5',
+              color: device.alertaCaidaLarga ? '#b91c1c' : '#c2410c',
+            }}>
+              🔻 caído desde {device.caidoDesde.slice(0, 16).replace('T', ' ')}
+              {device.alertaCaidaLarga ? ' · +24hs' : ''}
+            </span>
+          </div>
+        )}
         <div style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: 4 }}>
           {device.sn}{device.ip ? ` · ${device.ip}` : ''}
         </div>

@@ -63,6 +63,7 @@ import { buildLicenciasConsultorioRouter } from '../routes/licenciasConsultorio.
 import { buildHorariosExtendidosRouter } from '../routes/horariosExtendidos.routes';
 import { buildIntranetRouter } from '../domains/personalv5/routes/intranet.routes';
 import { buildResidentesRouter } from '../routes/residentes.routes';
+import { buildResidenciasRouter } from '../routes/residencias.routes';
 import { buildFcCertReemplazosRouter } from '../routes/fcCertReemplazos.routes';
 import { buildNombramientoRouter } from '../routes/nombramiento.routes';
 import { buildTramitesDocumentalesRouter } from '../routes/tramitesDocumentales.routes';
@@ -70,6 +71,7 @@ import { buildJefaturasRouter }      from '../routes/jefaturas.routes';
 import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
 import { buildCumpleanosAlertasRouter } from '../routes/cumpleanosAlertas.routes';
 import { buildReclamosHaberesRouter } from '../routes/reclamosHaberes.routes';
+import { buildScriptRunsRouter } from '../routes/scriptRuns.routes';
 import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
 import { buildDashboardAlertsRouter } from '../routes/dashboardAlerts.routes';
 import { buildUserScanMusicRouter } from '../routes/userScanMusic.routes';
@@ -190,15 +192,17 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
   app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
   app.use(`${apiPrefix}/licencias`,          ...protect, buildLicenciasRouter(sequelize));
-  app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter());
+  app.use(`${apiPrefix}/comparacion-siape`, ...protect, buildComparacionSiapeRouter(sequelize));
   app.use(`${apiPrefix}/articulo-26-intranet`, ...protect, buildArticulo26IntranetRouter(sequelize));
   app.use(`${apiPrefix}/licencias-consultorio`, ...protect, requireAny(['app:licencias-consultorio:access', 'crud:*:*']), buildLicenciasConsultorioRouter(sequelize));
   app.use(`${apiPrefix}/horarios-extendidos`, ...protect, requireAny(['app:horarios-extendidos:access', 'crud:*:*']), buildHorariosExtendidosRouter());
   app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter(sequelize));
   app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
+  app.use(`${apiPrefix}/residencias`,        ...protect, buildResidenciasRouter(sequelize));
   app.use(`${apiPrefix}/fc-cert-reemplazos`, ...protect, buildFcCertReemplazosRouter(sequelize));
   app.use(`${apiPrefix}/nombramiento`,       ...protect, buildNombramientoRouter(sequelize));
   app.use(`${apiPrefix}/tramites-documentales`, ...protect, buildTramitesDocumentalesRouter(sequelize));
+  app.use(`${apiPrefix}/script-runs`,        ...protect, buildScriptRunsRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)

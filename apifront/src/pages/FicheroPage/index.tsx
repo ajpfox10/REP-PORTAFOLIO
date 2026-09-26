@@ -145,7 +145,6 @@ export function FicheroPage() {
         detalle: true,
       });
       setPendientes(r);
-      if (!pendDesde) setPendDesde(r.desde);
     } catch (e: any) {
       setPendError(e?.message ?? String(e));
     } finally {
@@ -562,8 +561,8 @@ export function FicheroPage() {
 
           <p style={{ margin: '0 0 14px', fontSize: '0.8rem', color: '#6b7280' }}>
             Son las fichadas que están en el reloj y en la base pero que nunca entraron en un archivo
-            confirmado por el SFTP. El piso del ciclo automático es <strong>{pendientes?.piso ?? '—'}</strong>:
-            nada anterior a esa fecha se sube solo.
+            confirmado por el SFTP. El ciclo automático las sube solo en la próxima pasada,
+            sin importar la fecha de la fichada.
           </p>
 
           {pendError && <div style={S.alertaRed}>⚠ {pendError}</div>}

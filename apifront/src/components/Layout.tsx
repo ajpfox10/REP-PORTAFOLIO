@@ -268,6 +268,7 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/escaneo', '🖨 Escaneo')}
                       {canSeeResidentesRotacion && navLink('/app/residentes-rotacion', '🔄 Residentes Rotación')}
                       {canSeeResidentes && navLink('/app/residentes', '🩺 Residentes')}
+                      {hasPerm('crud:*:*') && navLink('/app/duracion-residencias', '🎓 Duración de Residencias')}
 
                       <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
 

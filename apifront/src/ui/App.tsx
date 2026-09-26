@@ -35,6 +35,7 @@ import { SaludLaboralPage } from '../pages/SaludLaboralPage';
 import { EmbarazadasPage } from '../pages/EmbarazadasPage';
 import { GuarderiaPage } from '../pages/GuarderiaPage';
 import { ResidentesRotacionPage } from '../pages/ResidentesRotacionPage';
+import { DuracionResidenciasPage } from '../pages/DuracionResidenciasPage';
 import { ResidentesPage } from '../pages/ResidentesPage';
 import { AsistenciaPage } from '../pages/AsistenciaPage';
 import { AusentismoPage } from '../pages/AusentismoPage';
@@ -66,6 +67,7 @@ import { PresentesTurnoPage } from '../pages/PresentesTurnoPage';
 import { EstructuraPage } from '../pages/EstructuraPage';
 import { FcCertReemplazosPage } from '../pages/FcCertReemplazosPage';
 import { BecariosArtPage }      from '../pages/BecariosArtPage';
+import { ScriptsSiapePage }     from '../pages/ScriptsSiapePage';
 import { TramitesDocumentalesPage } from '../pages/TramitesDocumentalesPage';
 import { CargaSiapePage } from '../pages/CargaSiapePage';
 
@@ -282,6 +284,16 @@ export function App() {
                 <Private>
                   <Guard anyOf={['app:residentes:access', 'crud:*:*']}>
                     <ResidentesPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/duracion-residencias"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <DuracionResidenciasPage />
                   </Guard>
                 </Private>
               }
@@ -773,6 +785,17 @@ export function App() {
                 <Private>
                   <Guard anyOf={['crud:becarios_art:read', 'crud:*:*']}>
                     <BecariosArtPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/scripts-siape"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <ScriptsSiapePage />
                   </Guard>
                 </Private>
               }

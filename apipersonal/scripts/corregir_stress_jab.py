@@ -26,6 +26,7 @@ import sys
 import time
 
 import cargar_stress_jab as R
+MN = R.MN  # detalle por agente para la pagina Robots (script_run_items)
 import cargar_francos_siape as F
 from cargar_francos_siape import log, PAUSA_CORTA, PAUSA_MEDIA
 
@@ -84,6 +85,8 @@ def traer(cn, solo_dni=None, limit=None):
 
 
 def marcar(cn, dni, anio, estado, motivo=None):
+    MN.registrar_item("siape_corrector_stress", dni, None, "ANUAL COMPLEMENTARIA (corrección)",
+                      f"año {anio}", None, estado, motivo)
     with cn.cursor() as c:
         c.execute("UPDATE cola_correccion_stress SET estado=%s, motivo=%s WHERE dni=%s AND anio=%s",
                   (estado, motivo, dni, anio))

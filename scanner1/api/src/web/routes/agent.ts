@@ -129,11 +129,15 @@ r.post("/heartbeat", asyncRoute(async (req, res) => {
 
   if (capabilities && typeof capabilities === "object") {
     // Upsert en device_capabilities
+    // MERGE_PATCH y no reemplazo: el descubrimiento guarda acá datos que el
+    // agente no manda (escl_port, wsd_scan_url) y se perdían en el 1er heartbeat.
+    const caps = JSON.stringify(capabilities)
     await pool.query(
       `INSERT INTO device_capabilities (device_id, capabilities_json)
        VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE capabilities_json=VALUES(capabilities_json), updated_at=now()`,
-      [device_id, JSON.stringify(capabilities)]
+       ON DUPLICATE KEY UPDATE
+         capabilities_json=JSON_MERGE_PATCH(COALESCE(capabilities_json, '{}'), ?), updated_at=now()`,
+      [device_id, caps, caps]
     ).catch(() => {})
   }
 
