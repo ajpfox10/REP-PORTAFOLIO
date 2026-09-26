@@ -4,9 +4,9 @@
 // FLUJO:
 //  GET  /asistencia/config          â†’ directorio configurado en .env
 //  GET  /asistencia/archivos        â†’ lista los .xlsx/.xltx de EXCEL_ASISTENCIA_DIR
-//  GET  /asistencia/mapeo           â†’ devuelve el mapeo actual de novedades (del JSON en disco)
-//  PUT  /asistencia/mapeo           â†’ guarda el mapeo editado (persiste en disco)
-//  DELETE /asistencia/mapeo         â†’ restaura el mapeo por defecto
+//  GET  /asistencia/mapeo           â†’ devuelve el mapeo actual de novedades (tabla mapeo_novedades)
+//  PUT  /asistencia/mapeo           â†’ guarda el mapeo editado (tabla mapeo_novedades, reglas generales)
+//  DELETE /asistencia/mapeo         â†’ restaura el mapeo de la carga inicial (migración 055)
 //  POST /asistencia/comparar        â†’ compara usando los archivos del directorio
 //  GET  /asistencia/ausentes28      â†’ ausentes cÃ³digo 28 cruzados con fichajes y horarios
 //
@@ -23,6 +23,7 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import mysql, { RowDataPacket } from 'mysql2/promise';
+import { loadMapeoTabla, saveMapeoTabla, restaurarMapeoTabla } from '../services/mapeoNovedades';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
@@ -273,181 +274,18 @@ function listResultadoCargaFiles(): string[] {
     .map(f => path.join(dir, f));
 }
 
-const DEFAULT_MAPEO: Record<string, string[]> = {
-  '08-DESCANSO ANUAL': [
-    'ANUAL',
-    '08-DESCANSO ANUAL',
-  ],
-
-  '29-COMPLEMENTARIA': [
-    'ANUAL COMPLEMENTARIA',
-    '29-COMPLEMENTARIA',
-  ],
-
-  '291-LICENCIA ANUAL COMPLEMENTARIA LEY 10430 Y MODIF.': [
-    'ANUAL COMPLEMENTARIA 10430',
-    '291-LICENCIA ANUAL COMPLEMENTARIA LEY 10430 Y MODIF.',
-  ],
-
-  '93-LICENCIA COMPLEMENT.ANT.DENEGADA': [
-    'ANUAL COMPLEMENTARIA',
-    '93-LICENCIA COMPLEMENT.ANT.DENEGADA',
-  ],
-
-  '81-LICENCIA ANTERIOR DENEGADA': [
-    'ANUAL',
-    '81-LICENCIA ANTERIOR DENEGADA',
-  ],
-
-  '01-POR RAZONES DE ENFERMEDAD': [
-    'ENFERMEDAD',
-    '01-POR RAZONES DE ENFERMEDAD',
-  ],
-
-  '1R-ENFERMEDAD DE RIESGO': [
-    'ENFERMEDAD',
-    '1R-ENFERMEDAD DE RIESGO',
-  ],
-
-  // Una licencia "pendiente de justificaciÃ³n" todavÃ­a no tiene tipo definido:
-  // al justificarse puede resolverse como enfermedad propia, de familiar/niÃ±o, etc.
-  // Por eso engancha con cualquier novedad de enfermedad del SIAP.
-  'E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÃ“N)': [
-    'ENFERMEDAD',
-    'ENFERMEDAD DE FAMILIAR O NIÃ‘O/A O ADOLESCENTE',
-    'ATENCION FAMILIAR ENFERMO',
-    'E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÃ“N)',
-  ],
-
-  '05-POR ATENCION DE FAMILIAR ENFERMO': [
-    'ENFERMEDAD DE FAMILIAR O NIÃ‘O/A O ADOLESCENTE',
-    'ATENCION FAMILIAR ENFERMO',
-    '05-POR ATENCION DE FAMILIAR ENFERMO',
-  ],
-
-  '04-POR ACCIDENTE DE TRABAJO': [
-    'ACCIDENTE DE TRABAJO',
-    '04-POR ACCIDENTE DE TRABAJO',
-  ],
-
-  '06-POR MATERNIDAD': [
-    'MATERNIDAD',
-    'NACIMIENTO',
-    '06-POR MATERNIDAD',
-  ],
-
-  'RN1-RECIEN NACIDO': [
-    'NACIMIENTO',
-    'CUIDADO RECIEN NACIDO/A',
-    'RN1-RECIEN NACIDO',
-  ],
-
-  'VV-MUJER VICTIMA DE VIOLENCIA DE GENERO': [
-    'MUJER VICTIMA DE VIOLENCIA',
-    'PARA MUJERES VICTIMAS DE VIOLENCIA',
-    'VIOLENCIA DE GENERO',
-    'VICTIMA DE VIOLENCIA DE GENERO',
-    'VV-MUJER VICTIMA DE VIOLENCIA DE GENERO',
-  ],
-
-  '18-POR EXAMEN': [
-    'EXAMEN',
-    'INTEGRACION DE MESA EXAMINADORA',
-    '18-POR EXAMEN',
-  ],
-
-  '17-POR PRE-EXAMEN': [
-    'PRE-EXAMEN',
-    '17-POR PRE-EXAMEN',
-  ],
-
-  'DF-EXAMEN DE PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA': [
-    'PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA',
-    'DF-EXAMEN DE PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA',
-  ],
-
-  'PC-PREVENCION CANCER GENITO MAMARIO DE PROSTATO Y/O COLON': [
-    'EX.MED.PREV.CANCER MAMARIO/PROSTATA/COLON',
-    'PC-PREVENCION CANCER GENITO MAMARIO DE PROSTATO Y/O COLON',
-  ],
-
-  '14-DUELO FAMILIAR DIRECTO': [
-    'DUELO DIRECTO',
-    '14-DUELO FAMILIAR DIRECTO',
-  ],
-
-  '15-DUELO FAMILIAR INDIRECTO': [
-    'DUELO INDIRECTO',
-    '15-DUELO FAMILIAR INDIRECTO',
-  ],
-
-  '16-POR MATRIMONIO': [
-    'MATRIMONIO',
-    '16-POR MATRIMONIO',
-  ],
-
-  '22-ACTIVIDAD GREMIAL': [
-    'PERMISO GREMIAL DIAS',
-    'COMISION',
-    '22-ACTIVIDAD GREMIAL',
-  ],
-
-  '44-PERMISO CITACIONES ORG.OFICIAL': [
-    'CITACION ORG.OFICIALES',
-    '44-PERMISO CITACIONES ORG.OFICIAL',
-  ],
-
-  '261-POR CAUSAS PARTICULARES': [
-    'CAUSAS PARTICULARES',
-    '261-POR CAUSAS PARTICULARES',
-  ],
-};
+// El mapeo de novedades vive en la tabla `mapeo_novedades` (services/mapeoNovedades.ts):
+// es el mismo que usan el comparador SIAPE y los robots de carga en la Intranet.
 
 const DEFAULT_SKIP_NOVEDADES: string[] = [
   // ejemplos de novedades a omitir (si hiciera falta)
 ];
 
-function getMapeoFile(dir: string) {
-  return path.join(dir, 'mapeo.asistencia.json');
-}
-
-function loadMapeo(dir: string): Record<string, string[]> {
-  const fp = getMapeoFile(dir);
-
-  if (!fs.existsSync(fp)) {
-    return DEFAULT_MAPEO;
-  }
-
-  try {
-    const raw = fs.readFileSync(fp, 'utf8');
-    const json = JSON.parse(raw);
-
-    if (json && typeof json === 'object' && !Array.isArray(json)) {
-      // Las claves "__*" son configuraciÃ³n (p.ej. __aprueba_jefe), no equivalencias.
-      const soloMapeo = Object.fromEntries(
-        Object.entries(json).filter(([k]) => !k.startsWith('__')),
-      ) as Record<string, string[]>;
-      // El JSON del editor NO debe pisar el mapeo base: se fusiona.
-      // AsÃ­ no se pierden equivalencias crÃ­ticas para detectar RANGO_DISTINTO.
-      return mergeMapeo(DEFAULT_MAPEO, soloMapeo);
-    }
-
-    return DEFAULT_MAPEO;
-  } catch {
-    return DEFAULT_MAPEO;
-  }
-}
-
-
-
-function saveMapeo(dir: string, mapeo: Record<string, string[]>) {
-  const fp = getMapeoFile(dir);
-  fs.writeFileSync(fp, JSON.stringify(mapeo, null, 2), 'utf8');
-}
-
-function deleteMapeo(dir: string) {
-  const fp = getMapeoFile(dir);
-  if (fs.existsSync(fp)) fs.unlinkSync(fp);
+// Mapeo normalizado (claves y valores con normNovedad, cada código incluye su
+// propio nombre) — misma forma que devolvía antes el JSON fusionado.
+async function loadMapeo(sequelize?: import('sequelize').Sequelize): Promise<Record<string, string[]>> {
+  if (!sequelize) throw new Error('Sin conexión a DB: el mapeo de novedades está en la tabla mapeo_novedades');
+  return mergeMapeo({}, await loadMapeoTabla(sequelize));
 }
 
 function parseDate(val: any): Date | null {
@@ -1173,34 +1011,34 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  router.get('/mapeo', requirePermission('api:access'), (_req: Request, res: Response) => {
+  router.get('/mapeo', requirePermission('api:access'), async (_req: Request, res: Response) => {
     try {
-      const dir = getDir();
-      const mapeo = loadMapeo(dir);
+      if (!sequelize) throw new Error('Sin conexión a DB');
+      const mapeo = await loadMapeoTabla(sequelize);
       return res.json({ ok: true, mapeo });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }
   });
 
-  router.put('/mapeo', requirePermission('api:access'), (req: Request, res: Response) => {
+  router.put('/mapeo', requirePermission('api:access'), async (req: Request, res: Response) => {
     try {
-      const dir = getDir();
+      if (!sequelize) throw new Error('Sin conexión a DB');
       const mapeo = req.body?.mapeo;
       if (!mapeo || typeof mapeo !== 'object') {
         return res.status(400).json({ ok: false, error: 'Body invÃ¡lido: { mapeo: {...} }' });
       }
-      saveMapeo(dir, mapeo);
+      await saveMapeoTabla(sequelize, mapeo);
       return res.json({ ok: true });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }
   });
 
-  router.delete('/mapeo', requirePermission('api:access'), (_req: Request, res: Response) => {
+  router.delete('/mapeo', requirePermission('api:access'), async (_req: Request, res: Response) => {
     try {
-      const dir = getDir();
-      deleteMapeo(dir);
+      if (!sequelize) throw new Error('Sin conexión a DB');
+      await restaurarMapeoTabla(sequelize);
       return res.json({ ok: true });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
@@ -1265,7 +1103,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const dir   = getDir();
       const files = listExcelFiles(dir);
       const auto  = findAutoFiles(files);
-      const mapeo = loadMapeo(dir);
+      const mapeo = await loadMapeo(sequelize);
 
       const skip: string[] = Array.isArray(req.body?.skipNovedades)
         ? req.body.skipNovedades
@@ -3413,7 +3251,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         return res.status(400).json({ ok: false, error: 'LICENCIAS_PDF_DIR no configurado o no existe' });
       }
 
-      const mapeo = loadMapeo(env.EXCEL_ASISTENCIA_DIR || dir);
+      const mapeo = await loadMapeo(sequelize);
 
       const { compararLicencias } = await import('../services/parseLicenciasPdf.js');
       const resultado = await compararLicencias(dir, mapeo);

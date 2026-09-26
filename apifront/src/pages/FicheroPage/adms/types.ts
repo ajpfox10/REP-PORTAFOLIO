@@ -31,6 +31,8 @@ export interface AdmsDispositivo {
   huellas: number | null;
   fichadas: number | null;
   pushVersion: string | number | null;
+  caidoDesde?: string | null;
+  alertaCaidaLarga?: boolean;
 }
 
 export interface AdmsDeviceStructure {

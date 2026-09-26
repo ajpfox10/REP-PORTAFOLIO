@@ -21,6 +21,11 @@ import time
 
 import pymysql
 
+import os  # para ubicar mapeo_novedades.py
+# detalle por agente para la pagina Robots (script_run_items)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mapeo_novedades as MN
+
 import cargar_francos_siape as F
 from cargar_francos_siape import (
     log, PAUSA_CORTA, PAUSA_MEDIA, PAUSA_LARGA,
@@ -503,6 +508,8 @@ def traer(cn, solo_dni=None, limit=None):
 
 
 def marcar(cn, dni, anio, estado, motivo=None, dias=None, licencia=None):
+    MN.registrar_item("siape_carga_stress", dni, None, licencia or "ANUAL COMPLEMENTARIA",
+                      f"año {anio}", f"{dias} días" if dias is not None else None, estado, motivo)
     with cn.cursor() as c:
         c.execute("UPDATE cola_carga_stress SET estado=%s, motivo=%s WHERE dni=%s AND anio=%s",
                   (estado, motivo, dni, anio))

@@ -6,6 +6,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useToast } from '../../ui/toast';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
+import { getApiBaseUrl } from '../../api/env';
+import { loadSession, saveSession } from '../../auth/session';
 import { TIPOS_DOCUMENTO, GROUP_LABELS } from '../EscaneoPage/documentTypes';
 import { SUBCARPETAS_PRESETS, presetSubdivisiones } from '../EscaneoPage/subcarpetas';
 import '../EscaneoPage/styles/EscaneoPage.css';
@@ -19,11 +21,7 @@ function getScannerHeaders(): Record<string, string> {
   const cfg = (window as any).__RUNTIME_CONFIG__ || {};
   const tenant = cfg.scannerTenantId || (import.meta as any)?.env?.VITE_SCANNER_TENANT_ID || '1';
   const runtimeToken = cfg.scannerToken || (import.meta as any)?.env?.VITE_SCANNER_TOKEN || '';
-  let sessionToken = '';
-  try {
-    const raw = localStorage.getItem('personalv5.session') || sessionStorage.getItem('personalv5.session') || '';
-    sessionToken = JSON.parse(raw || '{}')?.accessToken || '';
-  } catch {}
+  const sessionToken = loadSession()?.accessToken || '';
   const token = runtimeToken || sessionToken;
   return {
     'x-tenant': tenant,
@@ -31,8 +29,47 @@ function getScannerHeaders(): Record<string, string> {
   };
 }
 
+// El scanner1 valida el token de sesión de personalv5 (PERSONAL_JWT_SECRET), pero acá
+// lo leíamos crudo de localStorage sin refrescarlo nunca: si pasaba un rato (ej. cargando
+// la calculadora de jubilación) antes de escanear, llegaba vencido y el scanner1 tiraba
+// "Token inválido o expirado". apiFetch ya resuelve esto para apipersonal; acá lo
+// replicamos a mano porque estas llamadas van directo del browser al scanner1.
+let scannerRefreshPromise: Promise<boolean> | null = null;
+
+async function refreshPersonalSessionForScanner(): Promise<boolean> {
+  if (scannerRefreshPromise) return scannerRefreshPromise;
+  scannerRefreshPromise = (async () => {
+    const s = loadSession();
+    if (!s) return false;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(s.refreshToken ? { refreshToken: s.refreshToken } : {}),
+      });
+      const body = await res.json().catch(() => null);
+      const accessToken = body?.data?.accessToken;
+      if (!res.ok || !accessToken) return false;
+      saveSession({
+        ...s,
+        accessToken,
+        refreshToken: typeof body?.data?.refreshToken === 'string' ? body.data.refreshToken : s.refreshToken,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  })().finally(() => { scannerRefreshPromise = null; });
+  return scannerRefreshPromise;
+}
+
+function isScannerAuthError(status: number, body: any): boolean {
+  return status === 401 || body?.error === 'invalid_token' || body?.error === 'missing_token';
+}
+
 async function scannerFetch<T = any>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${getScannerBase()}${path}`, {
+  const doFetch = () => fetch(`${getScannerBase()}${path}`, {
     ...opts,
     headers: {
       'content-type': 'application/json',
@@ -40,8 +77,17 @@ async function scannerFetch<T = any>(path: string, opts?: RequestInit): Promise<
       ...(opts?.headers || {}),
     },
   });
+  let res = await doFetch();
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
+    if (isScannerAuthError(res.status, e) && await refreshPersonalSessionForScanner()) {
+      res = await doFetch();
+      if (!res.ok) {
+        const e2 = await res.json().catch(() => ({}));
+        throw new Error(e2?.message || e2?.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
     throw new Error(e?.message || e?.error || `HTTP ${res.status}`);
   }
   return res.json();
@@ -49,10 +95,14 @@ async function scannerFetch<T = any>(path: string, opts?: RequestInit): Promise<
 
 async function loadScanImage(storageKey: string, timeoutMs = 20_000): Promise<string> {
   const url = `${getScannerBase()}/v1/documents/files/${storageKey}`;
+  const doFetch = (signal: AbortSignal) => fetch(url, { headers: getScannerHeaders(), signal });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { headers: getScannerHeaders(), signal: controller.signal });
+    let res = await doFetch(controller.signal);
+    if ((res.status === 401) && await refreshPersonalSessionForScanner()) {
+      res = await doFetch(controller.signal);
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     return URL.createObjectURL(blob);

@@ -38,7 +38,7 @@ echo ================================================================
 REM 0. Generar .env.production desde .env (cambia solo NODE_ENV)
 echo [0/6] Generando .env.production...
 cd /d %SRC%
-powershell -Command "(Get-Content '%SRC%\.env') -replace '^NODE_ENV=.*','NODE_ENV=production' | Set-Content '%SRC%\.env.production'"
+powershell -Command "(Get-Content '%SRC%\.env') -replace '^NODE_ENV=.*','NODE_ENV=production' -replace '^FICHERO_SUBIDA_DESHABILITADA=.*','FICHERO_SUBIDA_DESHABILITADA=0' | Set-Content '%SRC%\.env.production'"
 echo    .env.production generado OK
 
 REM 1. Build en source

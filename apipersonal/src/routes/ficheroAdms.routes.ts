@@ -7,6 +7,8 @@ import net from 'net';
 import multer from 'multer';
 import { sequelize } from '../db/sequelize';
 import { trackAction } from '../logging/track';
+import { logger } from '../logging/logger';
+import { env } from '../config/env';
 import { getAdmsRuntimeEvents } from '../services/admsRuntime';
 import {
   addAdmsAudioFile,
@@ -166,6 +168,35 @@ export function commandForDevice(command: string, pushVersion: unknown): string 
       .replace('DATA DELETE FINGERTMP', 'DATA DEL_FP');
   }
   return command;
+}
+
+// Freno duro por entorno, igual criterio que fichero.routes.ts: con esta bandera
+// prendida la instancia no debe hablarle a relojes reales (dev/replica).
+function subidaDeshabilitadaAdms(): boolean {
+  return String((env as any).FICHERO_SUBIDA_DESHABILITADA ?? process.env.FICHERO_SUBIDA_DESHABILITADA ?? '') === '1';
+}
+
+// ─── Watcher de caídas de relojes ──────────────────────────────────────────────
+// Agrega a `iclock` la marca de "desde cuándo está caído" y "ya se avisó una vez".
+// Se persiste en la tabla (no en memoria del proceso) para sobrevivir reinicios
+// de pm2 y caídas de red largas (la zona es inestable, pueden durar más de un día).
+let columnasCaidaListas = false;
+async function asegurarColumnasCaida(conn: Connection): Promise<void> {
+  if (columnasCaidaListas) return;
+  const [cols] = await conn.query<RowDataPacket[]>(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'iclock'
+        AND COLUMN_NAME IN ('caido_desde', 'alertado_en')`
+  );
+  const existentes = new Set(cols.map(c => String(c.COLUMN_NAME)));
+  const faltan: string[] = [];
+  if (!existentes.has('caido_desde')) faltan.push('ADD COLUMN caido_desde DATETIME NULL');
+  if (!existentes.has('alertado_en')) faltan.push('ADD COLUMN alertado_en DATETIME NULL');
+  if (faltan.length) {
+    await conn.query(`ALTER TABLE iclock ${faltan.join(', ')}`);
+    logger.info({ msg: 'fichero-adms: columnas de caida creadas en iclock', columnas: faltan.length });
+  }
+  columnasCaidaListas = true;
 }
 
 async function appendDeviceCommand(
@@ -676,11 +707,236 @@ export function buildSmsCommands(input: {
   }
 }
 
+// ─── PULL fichadas por rango — lógica compartida entre el botón manual y el
+// watcher automático de caídas (ver más abajo) ─────────────────────────────────
+interface PullFichadasResultado {
+  ok: boolean;
+  sn: string;
+  desde: string;
+  hasta: string;
+  modo: 'adms_relectura' | 'tcp';
+  queryId?: number;
+  totalReloj?: number | null;
+  attendanceSize?: number | null;
+  enRango: number;
+  insertadas: number;
+  duplicadas: number;
+  advertencia?: string;
+  error?: string;
+  httpStatus?: number;
+}
+
+async function ejecutarPullFichadas(
+  conn: Connection,
+  sn: string,
+  desde: string,
+  hasta: string,
+): Promise<PullFichadasResultado> {
+  const base = { sn, desde, hasta, modo: 'tcp' as const, enRango: 0, insertadas: 0, duplicadas: 0 };
+  const [rows] = await conn.query<RowDataPacket[]>(
+    'SELECT SN, Alias, IPAddress, PushVersion FROM iclock WHERE SN = ? LIMIT 1', [sn]
+  );
+  if (!rows.length) return { ...base, ok: false, httpStatus: 404, error: `Reloj ${sn} no encontrado` };
+  const ip = String(rows[0].IPAddress || '');
+  if (!ip) return { ...base, ok: false, httpStatus: 400, error: 'El reloj no tiene IP registrada' };
+
+  // Importar zkteco-js dinámicamente
+  let ZKTeco: any;
+  try {
+    ZKTeco = (await import('zkteco-js' as any)).default ?? (await import('zkteco-js' as any));
+  } catch {
+    return { ...base, ok: false, httpStatus: 503, error: 'zkteco-js no disponible — npm install zkteco-js' };
+  }
+
+  const device = new ZKTeco(ip, 4370, 5200, 5000);
+  await device.createSocket();
+  let attendanceSize: number | null = null;
+  try {
+    const sizeRaw = await device.getAttendanceSize?.();
+    const sizeNum = Number(sizeRaw);
+    attendanceSize = Number.isFinite(sizeNum) ? sizeNum : null;
+  } catch {
+    attendanceSize = null;
+  }
+
+  if (attendanceSize == null || attendanceSize > 30_000) {
+    try { await device.disconnect(); } catch { /* noop */ }
+    const queryCommand = `DATA QUERY ATTLOG StartTime=${desde}\tEndTime=${hasta}`;
+    const queryId = await appendDeviceCommand(conn, sn, queryCommand, rows[0].PushVersion);
+    await conn.query('UPDATE iclock SET LastActivity = ? WHERE SN = ?', [mysqlNow(), sn]);
+    return {
+      ...base,
+      ok: true,
+      modo: 'adms_relectura',
+      queryId,
+      totalReloj: attendanceSize,
+      advertencia: 'El reloj tiene demasiadas fichadas para descarga TCP completa; se encolo DATA QUERY ATTLOG por rango. Las fichadas entraran cuando el reloj procese el comando ADMS.',
+    };
+  }
+
+  let allLogs: any[] = [];
+  try {
+    const result = await device.getAttendances();
+    allLogs = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+  } finally {
+    try { await device.disconnect(); } catch { /* noop */ }
+  }
+
+  // zkteco-js devuelve: { user_id: string, record_time: string(Date.toString()), type: number, state: number }
+  // Normalizar a fecha MySQL: "YYYY-MM-DD HH:MM:SS"
+  function normalizeFechaZk(val: any): string {
+    if (!val) return '';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '';
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  // Filtrar por rango de fecha — acepta cualquier campo de fecha posible
+  const desdeTs = new Date(desde.replace(' ', 'T')).getTime();
+  const hastaTs = new Date(hasta.replace(' ', 'T')).getTime();
+  const filtered = allLogs.filter((r: any) => {
+    const raw = r.record_time ?? r.recordTime ?? r.checktime ?? r.timestamp ?? '';
+    const t = new Date(raw).getTime();
+    return !Number.isNaN(t) && t >= desdeTs && t <= hastaTs;
+  });
+
+  // Helper local para obtener/crear userid por PIN
+  async function getOrCreateUser(pin: string): Promise<number> {
+    const [users] = await conn.query<RowDataPacket[]>(
+      'SELECT userid FROM userinfo WHERE badgenumber = ? LIMIT 1', [pin]
+    );
+    if (users[0]?.userid) return Number(users[0].userid);
+    const now = mysqlNow();
+    const [ins2] = await conn.query<any>(
+      `INSERT INTO userinfo (badgenumber, name, defaultdeptid, Password, Card, Privilege, AccGroup, TimeZones, SN, UTime, DelTag)
+       VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [pin, ' ', '', '', 0, 1, '', sn, now]
+    );
+    return ins2.insertId;
+  }
+
+  let insertadas = 0;
+  let duplicadas = 0;
+  for (const r of filtered) {
+    // user_id es el campo de zkteco-js (PIN del usuario)
+    const pin      = String(r.user_id ?? r.deviceUserId ?? r.userSn ?? r.pin ?? '').replace(/\D/g, '').replace(/^0+/, '');
+    const rawTime  = r.record_time ?? r.recordTime ?? r.checktime ?? r.timestamp ?? '';
+    const checktime = normalizeFechaZk(rawTime);
+    const checktype = Number(r.type ?? r.verifyType ?? r.inOutStatus ?? 0);
+    const verifycode = r.state ?? r.verifyMode ?? null;
+    if (!pin || !checktime) continue;
+    try {
+      const userid = await getOrCreateUser(pin);
+      const [ins] = await conn.query<any>(
+        `INSERT IGNORE INTO checkinout (userid, checktime, checktype, verifycode, SN)
+         VALUES (?, ?, ?, ?, ?)`,
+        [userid, checktime, checktype, verifycode, sn]
+      );
+      if ((ins?.affectedRows ?? 0) > 0) insertadas++;
+      else duplicadas++;
+    } catch { /* skip */ }
+  }
+
+  await conn.query('UPDATE iclock SET LastActivity = ? WHERE SN = ?', [mysqlNow(), sn]);
+
+  return { ...base, ok: true, totalReloj: allLogs.length, attendanceSize, enRango: filtered.length, insertadas, duplicadas };
+}
+
+// ─── Watcher automático de caídas ───────────────────────────────────────────────
+// Corre cada 5 min. Si un reloj (no pausado a propósito) pasa de offline a online,
+// dispara el mismo catch-up que el botón manual "Traer fichadas faltantes" para
+// el rango exacto en que estuvo caído. El punto de partida (`caido_desde`) se
+// persiste en `iclock` para sobrevivir reinicios del backend y caídas de días.
+const CAIDA_ALERTA_MS = 24 * 60 * 60 * 1000; // aviso único a las 24hs sin recuperar
+let watcherCaidasIniciado = false;
+
+async function revisarCaidasRelojes<TConfig extends FicheroAdmsConfig>(
+  deps: FicheroAdmsDeps<TConfig>
+): Promise<void> {
+  const { cargarConfig, conectarMySQL, parsearDateLocal } = deps;
+  const cfg = cargarConfig();
+  let conn: Connection | null = null;
+  try {
+    conn = await conectarMySQL(cfg);
+    await asegurarColumnasCaida(conn);
+
+    const [devices] = await conn.query<RowDataPacket[]>(
+      `SELECT SN, Alias, IPAddress, LastActivity, State, caido_desde, alertado_en
+         FROM iclock
+        WHERE (DelTag IS NULL OR DelTag = 0)`
+    );
+
+    for (const d of devices) {
+      const sn = String(d.SN);
+      const alias = d.Alias || sn;
+      const ip = String(d.IPAddress || '').trim();
+      // Pausado a propósito: no es una caída real, y ya tiene su propio flujo de
+      // recuperación manual (reanudar + relectura). No lo tocamos.
+      if (Number(d.State) === 0) continue;
+      if (!ip) continue;
+
+      const protocolo = await checkZkProtocol(ip, 1500);
+      const online = protocolo.online === true;
+
+      if (online) {
+        if (d.caido_desde) {
+          const desde = String(d.caido_desde).slice(0, 19).replace('T', ' ');
+          const hasta = mysqlNow();
+          try {
+            const resultado = await ejecutarPullFichadas(conn, sn, desde, hasta);
+            await conn.query('UPDATE iclock SET caido_desde = NULL, alertado_en = NULL WHERE SN = ?', [sn]);
+            logger.info({ msg: 'fichero-adms: recuperacion automatica de reloj caido', sn, alias, desde, hasta, resultado });
+            trackAction('adms_watcher_recuperacion', { sn, alias, desde, hasta, resultado });
+          } catch (err: any) {
+            logger.error({ msg: 'fichero-adms: fallo el catch-up automatico', sn, alias, error: err?.message ?? String(err) });
+          }
+        }
+        continue;
+      }
+
+      // Offline real
+      if (!d.caido_desde) {
+        await conn.query('UPDATE iclock SET caido_desde = ? WHERE SN = ?', [mysqlNow(), sn]);
+        logger.info({ msg: 'fichero-adms: reloj detectado caido', sn, alias });
+        continue;
+      }
+
+      if (!d.alertado_en) {
+        const caidoDesdeMs = parsearDateLocal(String(d.caido_desde)).getTime();
+        if (Number.isFinite(caidoDesdeMs) && Date.now() - caidoDesdeMs >= CAIDA_ALERTA_MS) {
+          await conn.query('UPDATE iclock SET alertado_en = ? WHERE SN = ?', [mysqlNow(), sn]);
+          logger.error({ msg: 'fichero-adms: reloj lleva mas de 24hs caido', sn, alias, caidoDesde: d.caido_desde });
+          trackAction('adms_watcher_alerta_caida_larga', { sn, alias, caidoDesde: d.caido_desde });
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.error({ msg: 'fichero-adms: error en watcher de caidas', error: err?.message ?? String(err) });
+  } finally {
+    if (conn) { try { await conn.end(); } catch { /* noop */ } }
+  }
+}
+
+function iniciarWatcherCaidas<TConfig extends FicheroAdmsConfig>(deps: FicheroAdmsDeps<TConfig>): void {
+  if (watcherCaidasIniciado) return;
+  watcherCaidasIniciado = true;
+  if (subidaDeshabilitadaAdms()) {
+    logger.info({ msg: 'fichero-adms: watcher de caidas omitido', razon: 'FICHERO_SUBIDA_DESHABILITADA=1' });
+    return;
+  }
+  const INTERVALO_MS = 5 * 60 * 1000;
+  const correr = () => { void revisarCaidasRelojes(deps); };
+  setTimeout(correr, 15_000);
+  setInterval(correr, INTERVALO_MS);
+}
+
 export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
   router: Router,
   deps: FicheroAdmsDeps<TConfig>
 ): void {
   const { admin, cargarConfig, conectarMySQL, parsearDateLocal } = deps;
+  iniciarWatcherCaidas(deps);
 
   router.get('/adms/comunicacion', admin, async (req: Request, res: Response) => {
     const limit = clampInt(req.query.limit, 100, 1, 500);
@@ -1392,8 +1648,10 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
     try {
       conn = await conectarMySQL(cfg);
+      await asegurarColumnasCaida(conn);
       const [rows] = await conn.query<RowDataPacket[]>(
-        `SELECT SN, Alias, LastActivity, State, IPAddress, FWVersion, UserCount, FPCount, TransactionCount, PushVersion
+        `SELECT SN, Alias, LastActivity, State, IPAddress, FWVersion, UserCount, FPCount, TransactionCount, PushVersion,
+                caido_desde, alertado_en
            FROM iclock
           WHERE DelTag IS NULL OR DelTag = 0
           ORDER BY LastActivity DESC, Alias, SN`
@@ -1434,6 +1692,8 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
           huellas: r.FPCount ?? null,
           fichadas: r.TransactionCount ?? null,
           pushVersion: r.PushVersion ?? null,
+          caidoDesde: r.caido_desde || null,
+          alertaCaidaLarga: Boolean(r.alertado_en),
         };
       });
 
@@ -3095,134 +3355,15 @@ export function registerFicheroAdmsRoutes<TConfig extends FicheroAdmsConfig>(
     let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
     try {
       conn = await conectarMySQL(cfg);
-      const [rows] = await conn.query<RowDataPacket[]>(
-        'SELECT SN, Alias, IPAddress FROM iclock WHERE SN = ? LIMIT 1', [sn]
-      );
-      if (!rows.length) { await conn.end(); return res.status(404).json({ ok: false, error: `Reloj ${sn} no encontrado` }); }
-      const ip = String(rows[0].IPAddress || '');
-      if (!ip) { await conn.end(); return res.status(400).json({ ok: false, error: 'El reloj no tiene IP registrada' }); }
-
-      // Importar zkteco-js dinámicamente
-      let ZKTeco: any;
-      try {
-        ZKTeco = (await import('zkteco-js' as any)).default ?? (await import('zkteco-js' as any));
-      } catch {
-        await conn.end();
-        return res.status(503).json({ ok: false, error: 'zkteco-js no disponible — npm install zkteco-js' });
-      }
-
-      const device = new ZKTeco(ip, 4370, 5200, 5000);
-      await device.createSocket();
-      let attendanceSize: number | null = null;
-      try {
-        const sizeRaw = await device.getAttendanceSize?.();
-        const sizeNum = Number(sizeRaw);
-        attendanceSize = Number.isFinite(sizeNum) ? sizeNum : null;
-      } catch {
-        attendanceSize = null;
-      }
-
-      if (attendanceSize == null || attendanceSize > 30_000) {
-        try { await device.disconnect(); } catch { /* noop */ }
-        const queryCommand = `DATA QUERY ATTLOG StartTime=${desde}\tEndTime=${hasta}`;
-        const queryId = await appendDeviceCommand(conn, sn, queryCommand, rows[0].PushVersion);
-        await conn.query('UPDATE iclock SET LastActivity = ? WHERE SN = ?', [mysqlNow(), sn]);
-        await conn.end(); conn = null;
-        trackAction('adms_pull_fichadas_relectura', { sn, desde, hasta, attendanceSize, queryId }, { id: (req as any).auth?.principalId ?? undefined });
-        return res.json({
-          ok: true,
-          sn,
-          desde,
-          hasta,
-          modo: 'adms_relectura',
-          queryId,
-          totalReloj: attendanceSize,
-          enRango: 0,
-          insertadas: 0,
-          duplicadas: 0,
-          advertencia: 'El reloj tiene demasiadas fichadas para descarga TCP completa; se encolo DATA QUERY ATTLOG por rango. Las fichadas entraran cuando el reloj procese el comando ADMS.',
-        });
-      }
-
-      let allLogs: any[] = [];
-      try {
-        const result = await device.getAttendances();
-        allLogs = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
-      } finally {
-        try { await device.disconnect(); } catch { /* noop */ }
-      }
-
-      // zkteco-js devuelve: { user_id: string, record_time: string(Date.toString()), type: number, state: number }
-      // Normalizar a fecha MySQL: "YYYY-MM-DD HH:MM:SS"
-      function normalizeFechaZk(val: any): string {
-        if (!val) return '';
-        const d = new Date(val);
-        if (Number.isNaN(d.getTime())) return '';
-        const p = (n: number) => String(n).padStart(2, '0');
-        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-      }
-
-      // Filtrar por rango de fecha — acepta cualquier campo de fecha posible
-      const desdeTs = new Date(desde.replace(' ', 'T')).getTime();
-      const hastaTs = new Date(hasta.replace(' ', 'T')).getTime();
-      const filtered = allLogs.filter((r: any) => {
-        const raw = r.record_time ?? r.recordTime ?? r.checktime ?? r.timestamp ?? '';
-        const t = new Date(raw).getTime();
-        return !Number.isNaN(t) && t >= desdeTs && t <= hastaTs;
-      });
-
-      // Helper local para obtener/crear userid por PIN
-      async function getOrCreateUser(pin: string): Promise<number> {
-        const [users] = await conn!.query<RowDataPacket[]>(
-          'SELECT userid FROM userinfo WHERE badgenumber = ? LIMIT 1', [pin]
-        );
-        if (users[0]?.userid) return Number(users[0].userid);
-        const now = mysqlNow();
-        const [ins2] = await conn!.query<any>(
-          `INSERT INTO userinfo (badgenumber, name, defaultdeptid, Password, Card, Privilege, AccGroup, TimeZones, SN, UTime, DelTag)
-           VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 0)`,
-          [pin, ' ', '', '', 0, 1, '', sn, now]
-        );
-        return ins2.insertId;
-      }
-
-      let insertadas = 0;
-      let duplicadas = 0;
-      for (const r of filtered) {
-        // user_id es el campo de zkteco-js (PIN del usuario)
-        const pin      = String(r.user_id ?? r.deviceUserId ?? r.userSn ?? r.pin ?? '').replace(/\D/g, '').replace(/^0+/, '');
-        const rawTime  = r.record_time ?? r.recordTime ?? r.checktime ?? r.timestamp ?? '';
-        const checktime = normalizeFechaZk(rawTime);
-        const checktype = Number(r.type ?? r.verifyType ?? r.inOutStatus ?? 0);
-        const verifycode = r.state ?? r.verifyMode ?? null;
-        if (!pin || !checktime) continue;
-        try {
-          const userid = await getOrCreateUser(pin);
-          const [ins] = await conn.query<any>(
-            `INSERT IGNORE INTO checkinout (userid, checktime, checktype, verifycode, SN)
-             VALUES (?, ?, ?, ?, ?)`,
-            [userid, checktime, checktype, verifycode, sn]
-          );
-          if ((ins?.affectedRows ?? 0) > 0) insertadas++;
-          else duplicadas++;
-        } catch { /* skip */ }
-      }
-
-      // Actualizar LastActivity
-      await conn.query('UPDATE iclock SET LastActivity = ? WHERE SN = ?', [mysqlNow(), sn]);
+      const r = await ejecutarPullFichadas(conn, sn, desde, hasta);
       await conn.end(); conn = null;
-
-      // Debug: muestra rango de fechas del reloj
-      const fechas = allLogs.map((r: any) => new Date(r.record_time ?? '').getTime()).filter((t: number) => !Number.isNaN(t)).sort((a: number, b: number) => a - b);
-      const muestra = {
-        total: allLogs.length,
-        primeraFecha: fechas.length ? new Date(fechas[0]).toISOString() : null,
-        ultimaFecha:  fechas.length ? new Date(fechas[fechas.length - 1]).toISOString() : null,
-        primerRegistro: allLogs[0] ? { keys: Object.keys(allLogs[0]), record_time: allLogs[0].record_time, user_id: allLogs[0].user_id } : null,
-      };
-
-      trackAction('adms_pull_fichadas', { sn, desde, hasta, total: filtered.length, insertadas, duplicadas }, { id: (req as any).auth?.principalId ?? undefined });
-      return res.json({ ok: true, sn, desde, hasta, totalReloj: allLogs.length, attendanceSize, enRango: filtered.length, insertadas, duplicadas, debug_muestra: muestra });
+      if (!r.ok) return res.status(r.httpStatus ?? 503).json(r);
+      trackAction(
+        r.modo === 'adms_relectura' ? 'adms_pull_fichadas_relectura' : 'adms_pull_fichadas',
+        r,
+        { id: (req as any).auth?.principalId ?? undefined }
+      );
+      return res.json(r);
     } catch (err: any) {
       if (conn) { try { await conn.end(); } catch { /* noop */ } }
       return res.status(503).json({ ok: false, error: err?.message ?? String(err) });

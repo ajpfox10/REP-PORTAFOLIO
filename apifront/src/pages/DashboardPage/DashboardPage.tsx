@@ -14,6 +14,7 @@ import { FicheroBanner } from '../FicheroPage';
 import { GuarderiaAlertaBanner } from '../GuarderiaPage';
 import { AlertasAgenteDashboardBanner } from '../AlertasAgentePage';
 import { CumpleanosDashboardBanner } from '../AlertasPage/CumpleanosBanner';
+import { ResidenciasBajaBanner } from '../DuracionResidenciasPage/ResidenciasBajaBanner';
 import { ReclamosHaberesDashboardBanner } from '../AlertasPage/ReclamosHaberesBanner';
 import { ConcursosFuncionesBanner } from '../ConcursosPage/ConcursosFuncionesExamenes';
 import { JubilacionCargaBanner } from '../HerramientasPage/JubilacionCargaBanner';
@@ -494,6 +495,7 @@ export function DashboardPage() {
       {canSeeAlertasAgente && alert('reclamosHaberes', <ReclamosHaberesDashboardBanner />)}
       {canSeeAlertasAgente && alert('alertasAgente', <AlertasAgenteDashboardBanner />)}
       {canSeeJubilacionCarga && alert('jubilacionCarga', <JubilacionCargaBanner />)}
+      {hasPerm('crud:*:*') && <ResidenciasBajaBanner />}
 
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -561,6 +563,7 @@ export function DashboardPage() {
           <Tile to="/app/admin" title="🛠️ Administración" desc="Gestión administrativa del sistema, usuarios y solicitudes de acceso." accent="#dc2626" />
           <Tile to="/app/fichero" title="📤 Módulo Fichero" desc="Monitor de archivos de fichadas: archivos creados, estado de subida SFTP y alerta de red caída." accent="#f59e0b" />
           <Tile to="/app/fichero-biometria-lab" title="Prueba fichero lógica nueva" desc="Transferencia y pruebas ADMS de usuario, huellas, rostro/cara, palma y mensajes entre relojes." accent="#0f766e" />
+          <Tile to="/app/scripts-siape" title="🤖 Robots SIAPE" desc="Estado de la última corrida de cada script de automatización (exportaciones, cargas, descargas)." accent="#eab308" />
         </div>
       </div>
 

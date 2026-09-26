@@ -21,9 +21,11 @@
 export const ITEMS_CHECKLIST = [
   'DOCUMENTACION',
   'IFGRA',
+  'EXPEDIENTE_GDEBA',
   'SIAPE',
   'INTRANET',
   'RESOLUCION',
+  'EXPEDIENTE_IPS',
 ] as const;
 
 export type ItemChecklist = typeof ITEMS_CHECKLIST[number];

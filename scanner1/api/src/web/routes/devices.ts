@@ -7,6 +7,7 @@ import net from "net"
 import os from "os"
 import http from "http"
 import https from "https"
+import { randomUUID } from "crypto"
 import { validate } from "../validate.js"
 import { createDeviceSchema, paginationSchema } from "../../shared/index.js"
 import { pool } from "../../db/mysql.js"
@@ -213,16 +214,20 @@ r.post("/discover", async (req, res) => {
     const key = buildDeviceKey(dev)
     const hostname = dev.hostname || dev.ip || null
     const [existing] = await pool.query(
-      "SELECT id FROM devices WHERE tenant_id=? AND (device_key=? OR hostname=? OR (hostname IS NULL AND name=?))",
+      "SELECT id, name FROM devices WHERE tenant_id=? AND (device_key=? OR hostname=? OR (hostname IS NULL AND name=?))",
       [tenant_id, key, hostname, dev.name]
     )
     const existingRows = existing as any[]
     if (existingRows.length) {
       const existingId = existingRows[0].id
+      // Un nombre genérico ("WSD Device (ip)") no debe pisar uno ya identificado:
+      // así perdimos el nombre real del equipo cuando cambió de modelo.
+      const keepName = isGenericDeviceName(dev.name) && !isGenericDeviceName(existingRows[0].name)
       await pool.query(
         "UPDATE devices SET hostname=COALESCE(?,hostname), name=COALESCE(?,name), updated_at=now() WHERE id=?",
-        [hostname, dev.name || null, existingId]
+        [hostname, keepName ? null : (dev.name || null), existingId]
       ).catch(() => {})
+      await saveDiscoveredCapabilities(existingId, dev)
       updatedDevices.push({ id: existingId, ...dev })
       continue
     }
@@ -231,21 +236,42 @@ r.post("/discover", async (req, res) => {
       [tenant_id, dev.name || dev.ip || "Device", dev.driver || "wia", key, hostname]
     )
     const newId = Number((result as any).insertId)
-    // Guardar escl_port en capabilities si viene del mDNS SRV record
-    const esclPort = (dev.raw as any)?.escl_port
-    if (esclPort) {
-      await pool.query(
-        `INSERT INTO device_capabilities (device_id, capabilities_json)
-         VALUES (?, ?) ON DUPLICATE KEY UPDATE
-         capabilities_json = JSON_MERGE_PATCH(COALESCE(capabilities_json, '{}'), ?)`,
-        [newId, JSON.stringify({ escl_port: esclPort }), JSON.stringify({ escl_port: esclPort })]
-      ).catch(() => {})
-    }
+    await saveDiscoveredCapabilities(newId, dev)
     newDevices.push({ id: newId, ...dev })
   }
 
   res.json({ devices: found, registered: newDevices.length, updated: updatedDevices.length, diagnostics })
 })
+
+// Nombre que no identifica al equipo: el genérico del WSD o la IP pelada.
+function isGenericDeviceName(name?: string | null): boolean {
+  const value = String(name || "").trim()
+  if (!value) return true
+  return /^(wsd device|device|scanner|unknown)\b/i.test(value)
+    || /^(kyocera|olivetti)?\s*\d{1,3}(\.\d{1,3}){3}$/i.test(value)
+    || /^\d{1,3}(\.\d{1,3}){3}$/.test(value)
+}
+
+// Datos del descubrimiento que el agente no puede averiguar solo (puerto eSCL
+// real del SRV mDNS, endpoint WSD de escaneo) + modelo/fabricante.
+async function saveDiscoveredCapabilities(deviceId: number, dev: DiscoveredDevice): Promise<void> {
+  const patch: Record<string, any> = {}
+  const esclPort = (dev.raw as any)?.escl_port
+  const wsdScanUrl = (dev.raw as any)?.wsd_scan_url
+  if (esclPort) patch.escl_port = esclPort
+  if (wsdScanUrl) patch.wsd_scan_url = wsdScanUrl
+  if (dev.model) patch.model = dev.model
+  if (dev.manufacturer) patch.manufacturer = dev.manufacturer
+  if (!Object.keys(patch).length) return
+
+  const json = JSON.stringify(patch)
+  await pool.query(
+    `INSERT INTO device_capabilities (device_id, capabilities_json)
+     VALUES (?, ?) ON DUPLICATE KEY UPDATE
+     capabilities_json = JSON_MERGE_PATCH(COALESCE(capabilities_json, '{}'), ?)`,
+    [deviceId, json, json]
+  ).catch(() => {})
+}
 
 // ── POST /v1/devices/probe-ip ─────────────────────────────────────────────────
 r.post("/probe-ip", async (req, res) => {
@@ -995,14 +1021,17 @@ async function discoverWSD(targetIps?: string[]): Promise<DiscoveredDevice[]> {
 
     const metaUrl = resp.xaddrs.find(u => /^https?:\/\//i.test(u))
       || `http://${resp.ip}:5357/`
+    const epr = extractEndpointReference(resp.xml)
+    let scanUrl = ""
 
     if (!name || !model) {
       console.log(`[WSD] fetching metadata from ${metaUrl}`)
       try {
-        const meta = await fetchWsdMetadata(metaUrl)
+        const meta = await fetchWsdMetadata(metaUrl, epr)
         if (meta.name) name = meta.name
         if (meta.model) model = meta.model
         if (meta.manufacturer) manufacturer = meta.manufacturer
+        if (meta.scanUrl) scanUrl = meta.scanUrl
         console.log(`[WSD] metadata for ${resp.ip}: name="${name}" model="${model}" mfr="${manufacturer}"`)
       } catch (e: any) {
         console.warn(`[WSD] metadata fetch failed for ${resp.ip}:`, e.message)
@@ -1014,6 +1043,8 @@ async function discoverWSD(targetIps?: string[]): Promise<DiscoveredDevice[]> {
       return
     }
 
+    // Los Kyocera/Olivetti devuelven "MARCA:MODELO:UBICACION" — lo dejamos legible
+    if (name) name = name.replace(/:/g, " ").replace(/\s+/g, " ").trim()
     if (!name) name = model || `WSD Device (${resp.ip})`
 
     found.push({
@@ -1027,7 +1058,7 @@ async function discoverWSD(targetIps?: string[]): Promise<DiscoveredDevice[]> {
       confidence: 90,
       manufacturer: manufacturer || guessManufacturer(name + " " + (model || "")) || null,
       model: model || null,
-      raw: { xaddrs: resp.xaddrs, xml: resp.xml.slice(0, 500) },
+      raw: { xaddrs: resp.xaddrs, xml: resp.xml.slice(0, 500), wsd_scan_url: scanUrl || undefined },
     })
   }))
 
@@ -1048,6 +1079,14 @@ function buildWsDiscoveryProbe(): Buffer {
   <e:Body><d:Probe/></e:Body>
 </e:Envelope>`
   return Buffer.from(xml)
+}
+
+// Dirección lógica del equipo (uuid:…) que viaja en el EndpointReference del
+// ProbeMatch: es el "To" que exige el WS-Transfer Get de metadata.
+function extractEndpointReference(xml: string): string | null {
+  const block = xml.match(/<[^>]*:?EndpointReference[^>]*>[\s\S]*?<\/[^>]*:?EndpointReference>/i)?.[0]
+  const addr = (block || xml).match(/<[^>]*:?Address[^>]*>\s*((?:urn:)?uuid:[^<\s]+)/i)?.[1]
+  return addr?.trim() || null
 }
 
 function extractXAddrs(xml: string): string[] {
@@ -1077,7 +1116,84 @@ function isPrintOrScanWsdResponse(
   return /scan|scanner|print|printer|wprt|pwg|escl|airprint|ipp|mfp|kyocera|olivetti|ricoh|brother|canon|epson|xerox|lexmark|hewlett|(^|\s)hp(\s|$)/.test(haystack)
 }
 
-async function fetchWsdMetadata(url: string): Promise<{ name: string; model: string; manufacturer: string }> {
+// Metadata WSD. Los Kyocera/Olivetti rechazan el mex GetMetadata y exigen un
+// WS-Transfer Get dirigido al EndpointReference (el uuid: del ProbeMatch), no a
+// la URL del XAddrs — sin eso el equipo queda como "WSD Device (ip)" sin modelo.
+async function fetchWsdMetadata(
+  url: string,
+  epr?: string | null
+): Promise<{ name: string; model: string; manufacturer: string; scanUrl: string }> {
+  if (epr) {
+    const viaTransfer = await postWsdSoap(url, buildWsTransferGet(url, epr))
+    if (viaTransfer) {
+      const meta = parseWsdMetadataXml(viaTransfer)
+      if (meta.name || meta.model) return meta
+    }
+  }
+  const viaMex = await fetchWsdMetadataMex(url)
+  return { ...viaMex, scanUrl: "" }
+}
+
+function buildWsTransferGet(url: string, epr: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+ xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">
+  <s:Header>
+    <a:To>${epr}</a:To>
+    <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>
+    <a:MessageID>urn:uuid:${randomUUID()}</a:MessageID>
+    <a:ReplyTo><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>
+  </s:Header>
+  <s:Body></s:Body>
+</s:Envelope>`
+}
+
+function parseWsdMetadataXml(xml: string): { name: string; model: string; manufacturer: string; scanUrl: string } {
+  // El EndpointReference del servicio de escaneo viene dentro de su <Hosted>
+  let scanUrl = ""
+  for (const block of xml.match(/<[^>]*:?Hosted[^>]*>[\s\S]*?<\/[^>]*:?Hosted>/g) || []) {
+    if (!/ScannerServiceType|WSDScanner/i.test(block)) continue
+    scanUrl = (block.match(/<[^>]*:?Address[^>]*>\s*(https?:\/\/[^<\s]+)/i) || [])[1] || ""
+    if (scanUrl) break
+  }
+  return {
+    name: extractXmlField(xml, ["FriendlyName", "devprof:FriendlyName", "wsdp:FriendlyName"]),
+    model: extractXmlField(xml, ["ModelName", "devprof:ModelName", "wsdp:ModelName", "Model"]),
+    manufacturer: extractXmlField(xml, ["Manufacturer", "devprof:Manufacturer", "wsdp:Manufacturer"]),
+    scanUrl,
+  }
+}
+
+function postWsdSoap(url: string, body: string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const parsed = new URL(url)
+      const mod = parsed.protocol === "https:" ? https : http
+      const req = (mod as any).request({
+        hostname: parsed.hostname,
+        port: Number(parsed.port) || (parsed.protocol === "https:" ? 5358 : 5357),
+        path: parsed.pathname || "/",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/soap+xml; charset=utf-8",
+          "Content-Length": Buffer.byteLength(body),
+        },
+        timeout: 2500,
+        rejectUnauthorized: false,
+      }, (res: any) => {
+        let data = ""
+        res.on("data", (chunk: any) => { data += chunk })
+        res.on("end", () => resolve(res.statusCode && res.statusCode < 400 ? data : ""))
+      })
+      req.on("error", (e: any) => { console.warn(`[WSD] HTTP error ${url}:`, e.message); resolve("") })
+      req.on("timeout", () => { req.destroy(); resolve("") })
+      req.write(body)
+      req.end()
+    } catch (e: any) { console.warn(`[WSD] postWsdSoap error:`, e.message); resolve("") }
+  })
+}
+
+async function fetchWsdMetadataMex(url: string): Promise<{ name: string; model: string; manufacturer: string }> {
   const empty = { name: "", model: "", manufacturer: "" }
   return new Promise((resolve) => {
     try {
@@ -1408,8 +1524,8 @@ async function probeSingleIp(ip: string): Promise<DiscoveredDevice | null> {
 
 function guessManufacturer(text: string): string | null {
   const lower = text.toLowerCase()
-  if (lower.includes("kyocera")) return "Kyocera"
-  if (lower.includes("olivetti")) return "Olivetti"
+  if (lower.includes("kyocera") || lower.includes("taskalfa") || lower.includes("ecosys")) return "Kyocera"
+  if (lower.includes("olivetti") || lower.includes("d-copia")) return "Olivetti"
   if (lower.includes("hewlett") || lower.includes(" hp ") || lower.startsWith("hp")) return "HP"
   if (lower.includes("canon")) return "Canon"
   if (lower.includes("brother")) return "Brother"

@@ -5,7 +5,7 @@
 // Lee:
 //   LICENCIAS_PDF_DIR\MINISTERIO\*.xls[x]   → archivo ministerio
 //   LICENCIAS_PDF_DIR\SIAPE\*.xlsx           → archivo SIAP
-//   EXCEL_ASISTENCIA_DIR\mapeo.asistencia.json  → mapeo de novedades (mismo que el comparador)
+//   tabla mapeo_novedades                    → mapeo de novedades (único: comparador, Asistencia y robots)
 //
 // Clave de join: LEGAJO (cuando disponible) → fallback DNI
 // Lógica de comparación reutiliza las mismas funciones que asistencia.routes.ts
@@ -16,6 +16,8 @@ import fs from 'fs';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { Sequelize } from 'sequelize';
+import { loadMapeoTabla } from '../services/mapeoNovedades';
 
 let XLSX: any;
 try { XLSX = require('xlsx'); } catch { XLSX = null; }
@@ -91,49 +93,8 @@ function overlap(s1: Date, e1: Date, s2: Date, e2: Date) {
 
 // ── Mapeo ─────────────────────────────────────────────────────────────────────
 
-const DEFAULT_MAPEO: Record<string, string[]> = {
-  '08-DESCANSO ANUAL': ['ANUAL'],
-  '29-COMPLEMENTARIA': ['ANUAL COMPLEMENTARIA'],
-  '291-LICENCIA ANUAL COMPLEMENTARIA LEY 10430 Y MODIF.': ['ANUAL COMPLEMENTARIA 10430'],
-  '93-LICENCIA COMPLEMENT.ANT.DENEGADA': ['ANUAL COMPLEMENTARIA'],
-  '81-LICENCIA ANTERIOR DENEGADA': ['ANUAL'],
-  '01-POR RAZONES DE ENFERMEDAD': ['ENFERMEDAD'],
-  '1R-ENFERMEDAD DE RIESGO': ['ENFERMEDAD'],
-  'E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCION)': ['ENFERMEDAD', 'ENFERMEDAD DE FAMILIAR O NIÑO/A O ADOLESCENTE'],
-  '05-POR ATENCION DE FAMILIAR ENFERMO': ['ENFERMEDAD DE FAMILIAR O NIÑO/A O ADOLESCENTE'],
-  '04-POR ACCIDENTE DE TRABAJO': ['ACCIDENTE DE TRABAJO'],
-  '06-POR MATERNIDAD': ['MATERNIDAD', 'NACIMIENTO', 'CUIDADO RECIEN NACIDO/A'],
-  'RN1-RECIEN NACIDO': ['NACIMIENTO', 'CUIDADO RECIEN NACIDO/A'],
-  '312-PATERNIDAD/CORRESPONSAL PARENTAL NACIMIENTO MULTIPLE': ['NACIMIENTO CORRESPONSABLE PARENTAL MULTIPLE'],
-  '14-DUELO FAMILIAR DIRECTO': ['DUELO DIRECTO'],
-  '15-DUELO FAMILIAR INDIRECTO': ['DUELO INDIRECTO', 'DUELO DIRECTO'],
-  '16-POR MATRIMONIO': ['MATRIMONIO'],
-  '18-POR EXAMEN': ['EXAMEN', 'INTEGRACION DE MESA EXAMINADORA'],
-  '17-POR PRE-EXAMEN': ['PRE-EXAMEN'],
-  '22-ACTIVIDAD GREMIAL': ['PERMISO GREMIAL DIAS', 'COMISION'],
-  '261-POR CAUSAS PARTICULARES': ['CAUSAS PARTICULARES'],
-  '44-PERMISO CITACIONES ORG.OFICIAL': ['CITACION ORG.OFICIALES'],
-};
-
-function loadMapeo(): Record<string, string[]> {
-  const dir = (env as any).EXCEL_ASISTENCIA_DIR as string;
-  if (!dir) return DEFAULT_MAPEO;
-  const fp = path.join(dir, 'mapeo.asistencia.json');
-  if (!fs.existsSync(fp)) return DEFAULT_MAPEO;
-  try {
-    const json = JSON.parse(fs.readFileSync(fp, 'utf8'));
-    // Fusionar: el JSON del disco extiende el DEFAULT sin pisarlo
-    const out: Record<string, string[]> = { ...DEFAULT_MAPEO };
-    for (const [k, arr] of Object.entries(json as Record<string, string[]>)) {
-      const kk = normNovedad(k);
-      if (!kk) continue;
-      out[kk] = Array.from(new Set([...(out[kk] || []), ...(arr || []).map(normNovedad)].filter(Boolean)));
-    }
-    return out;
-  } catch {
-    return DEFAULT_MAPEO;
-  }
-}
+// El mapeo vive en la tabla `mapeo_novedades` (services/mapeoNovedades.ts):
+// es el mismo que usan Asistencia y los robots de carga en la Intranet.
 
 // ── Dependencia (E5/E6 del SIAP) ─────────────────────────────────────────────
 
@@ -161,6 +122,8 @@ export interface AgRow {
   dependencia: string;
   ley: string;
   justificado: string;
+  /** fila generada por el sistema (no viene del Excel): va como motivo al cargar */
+  auto?: string;
 }
 
 export function findExcelInDir(dir: string): string | null {
@@ -255,6 +218,44 @@ export function parseExcelSiape(fp: string): AgRow[] {
     rows.push({ legajo, dni, nombre, novedad, desde, hasta, dependencia, ley, justificado });
   }
   return rows;
+}
+
+// ── Examen automático tras pre-examen ────────────────────────────────────────
+// Todo PRE-EXAMEN tiene que estar seguido por un EXAMEN el día siguiente a que
+// termina (caiga donde caiga: sábado, domingo o feriado). Si el agente no lo
+// tiene cargado en SIAPE, se agrega la fila EXAMEN para ese día y pasa por la
+// comparación como cualquier otra: si el Ministerio ya lo tiene coincide, si no
+// queda SOLO_SIAP con motivo EXAMEN_AUTOMATICO_TRAS_PREEXAMEN y el robot la carga.
+
+export const MOTIVO_EXAMEN_AUTO = 'EXAMEN_AUTOMATICO_TRAS_PREEXAMEN';
+
+export function examenesAutomaticos(siap: AgRow[]): AgRow[] {
+  const DIA = 86400000;
+  const cubre = (r: AgRow, t: number) => {
+    const d = r.desde ? toUTCMid(r.desde).getTime() : NaN;
+    const h = r.hasta ? toUTCMid(r.hasta).getTime() : d;
+    return d <= t && t <= h;
+  };
+  const porDni: Record<string, AgRow[]> = {};
+  for (const r of siap) if (r.dni) (porDni[r.dni] ||= []).push(r);
+
+  const out: AgRow[] = [];
+  const hechos = new Set<string>();
+  for (const pre of siap) {
+    if (normNovedad(pre.novedad) !== 'PRE-EXAMEN' || !pre.dni) continue;
+    const fin = pre.hasta ?? pre.desde;
+    if (!fin) continue;
+    const dia = toUTCMid(fin).getTime() + DIA;
+    const delAgente = porDni[pre.dni] || [];
+    // pre-examen de varios días partido en filas: el día siguiente sigue siendo pre-examen
+    if (delAgente.some(r => normNovedad(r.novedad) === 'PRE-EXAMEN' && cubre(r, dia))) continue;
+    if (delAgente.some(r => normNovedad(r.novedad) === 'EXAMEN' && cubre(r, dia))) continue;
+    const k = `${pre.dni}|${dia}`;
+    if (hechos.has(k)) continue;
+    hechos.add(k);
+    out.push({ ...pre, novedad: 'EXAMEN', desde: new Date(dia), hasta: new Date(dia), justificado: 'SI', auto: MOTIVO_EXAMEN_AUTO });
+  }
+  return out;
 }
 
 // ── Comparación ───────────────────────────────────────────────────────────────
@@ -443,7 +444,7 @@ function comparar(ministerio: AgRow[], siap: AgRow[], mapeo: Record<string, stri
                        Object.keys(mapeoN).includes(novNorm);
     if (!tieneMapeo) continue;
 
-    const motivoSiap = motivoBecario(s.ley, s.novedad, s.desde, s.hasta) ?? 'EN_SIAP_SIN_MINISTERIO';
+    const motivoSiap = s.auto ?? motivoBecario(s.ley, s.novedad, s.desde, s.hasta) ?? 'EN_SIAP_SIN_MINISTERIO';
     resultados.push({
       legajo:             s.legajo,
       dni:                s.dni,
@@ -473,7 +474,7 @@ const CACHE_TTL = 5 * 60 * 1000;
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
-export function buildComparacionSiapeRouter() {
+export function buildComparacionSiapeRouter(sequelize: Sequelize) {
   const router = Router();
 
   router.get('/', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
@@ -497,9 +498,11 @@ export function buildComparacionSiapeRouter() {
       if (!minFile)  return res.status(404).json({ ok: false, error: `No se encontró Excel en ${minDir}` });
       if (!siapFile) return res.status(404).json({ ok: false, error: `No se encontró Excel en ${siapDir}` });
 
-      const mapeo      = loadMapeo();
+      const mapeo      = await loadMapeoTabla(sequelize);
       const ministerio = parseExcelMinisterio(minFile);
-      const siap       = parseExcelSiape(siapFile);
+      const siapExcel  = parseExcelSiape(siapFile);
+      const examenesAuto = examenesAutomaticos(siapExcel);
+      const siap       = [...siapExcel, ...examenesAuto];
       const resultado  = comparar(ministerio, siap, mapeo);
 
       const coincidentes    = resultado.filter(r => r.estado === 'COINCIDENTE');
@@ -519,6 +522,8 @@ export function buildComparacionSiapeRouter() {
           rango_distinto: rangoDist.length,
           no_coincidentes: noCoincidentes.length,
           solo_siap:      soloSiap.length,
+          examenes_automaticos: examenesAuto.length,
+          examenes_automaticos_a_cargar: soloSiap.filter(r => r.motivo === MOTIVO_EXAMEN_AUTO).length,
         },
         archivos: {
           ministerio: path.basename(minFile),

@@ -25,6 +25,11 @@ from pathlib import Path
 import pandas as pd
 from playwright.sync_api import sync_playwright
 
+# detalle por agente para la pagina Robots (script_run_items)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mapeo_novedades as MN
+SCRIPT_ID = "intranet_carga_ausentes"
+
 USUARIO = os.environ.get("INTRANET_USER", "xxxxxxx")
 CHROME_PROFILE_DIR = os.environ.get("INTRANET_CHROME_PROFILE", r"D:\G\comparacion\intranet_chrome_profile")
 BASE_URL = "https://sistemas.ms.gba.gov.ar"
@@ -188,6 +193,7 @@ def guardar_log(registros, log_path):
     df = pd.DataFrame(registros, columns=["Nombre", "DNI", "Novedad", "Desde", "Hasta", "Estado", "Detalle"])
     Path(log_path).parent.mkdir(parents=True, exist_ok=True)
     df.to_excel(log_path, index=False)
+    MN.items_desde_registros(SCRIPT_ID, registros)
 
 
 def es_error_superposicion(mensaje):
@@ -746,6 +752,7 @@ def main():
 
     grupos = agrupar_por_dni(filas)
     ya_ok, registros = cargar_log_existente(log_path)
+    MN.items_desde_registros(SCRIPT_ID, registros, inicio=len(registros))
 
     print(f"Fuente: {args.siape_path}")
     print(f"Dependencia del run: {dependencia}")
