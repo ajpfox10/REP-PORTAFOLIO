@@ -344,6 +344,13 @@ let columnasSubidoListas = false;
 // Tope de fichadas que el ciclo automatico acepta mandar de una. Ver el chequeo en ejecutarCiclo.
 const MAX_POR_CICLO_AUTOMATICO = 3000;
 
+// Freno duro por entorno. Con FICHERO_SUBIDA_DESHABILITADA=1 la instancia queda viva
+// (API, consola ADMS, todo) pero NO genera ni sube archivos al Ministerio.
+// Sirve para que dev y prod compartan base sin que dev le hable al SFTP real.
+function subidaDeshabilitada(): boolean {
+  return String((env as any).FICHERO_SUBIDA_DESHABILITADA ?? process.env.FICHERO_SUBIDA_DESHABILITADA ?? '') === '1';
+}
+
 export async function asegurarColumnasSubido(
   conn: Awaited<ReturnType<typeof conectarMySQL>>,
   forzar = false,
@@ -407,36 +414,13 @@ async function marcarComoSubidas(
   }
 }
 
-// Piso de fecha del ciclo automatico. Sin piso habria que barrer las ~980k filas
-// historicas (todas con subido_en NULL) y se reenviaria la historia entera.
-// Tope duro de 60 dias hacia atras.
-function pisoSubida(cfg: FicheroConfig): string {
-  const tope = new Date();
-  tope.setDate(tope.getDate() - 60);
-  const topeIso = fmtIso(tope);
-
-  const estado = cargarEstadoPersistido();
-  const candidato = inicioContinuoCfg(cfg)
-    ?? normalizarChecktime(estado.ultimoChecktimeSubido)
-    ?? topeIso;
-
-  return candidato < topeIso ? topeIso : candidato;
-}
-
-function inicioContinuoCfg(cfg: FicheroConfig): string | null {
-  if (!cfg.modoContinu || !cfg.fechaDesdeContinu) return null;
-  const hora = cfg.horaDesdeContinu || '00:00';
-  return `${cfg.fechaDesdeContinu} ${hora}:00`;
-}
-
 function crearRangoAutomatico(cfg: FicheroConfig): RangoFechas | null {
-  // El ciclo automatico ya no usa cursor: selecciona por checkinout.subido_en IS NULL.
-  // El rango solo aporta el piso de fecha (para no barrer la historia entera) y el
-  // filtro de relojes configurado.
-  const piso = pisoSubida(cfg);
+  // El ciclo automatico no usa cursor ni piso de fecha: sube toda fila con
+  // checkinout.subido_en IS NULL, de cualquier fecha (la historia previa a sep/2026
+  // se marco como HISTORICO_PREVIO). El rango solo aporta el filtro de relojes.
   return {
-    fechaDesde: piso.slice(0, 10),
-    horaDesde: piso.slice(11, 16),
+    fechaDesde: null,
+    horaDesde: null,
     fechaHasta: null,
     horaHasta: null,
     sn: cfg.continuoModo === 'uno' ? cfg.continuoSn : null,
@@ -715,6 +699,9 @@ async function encolarRelecturaPorCaida(
 async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { automatico?: boolean } = {}): Promise<{
   ok: boolean; registros: number; archivo: string; error?: string; sn?: string | null; alias?: string | null;
 }> {
+  if (subidaDeshabilitada()) {
+    return { ok: false, registros: 0, archivo: '', error: 'Subida deshabilitada en esta instancia (FICHERO_SUBIDA_DESHABILITADA=1)' };
+  }
   if (enEjecucion) return { ok: false, registros: 0, archivo: '', error: 'Ya hay un ciclo en ejecución' };
   enEjecucion = true;
   ultimaEjecucionMs = Date.now();   // registrar cuándo arrancó este ciclo
@@ -794,9 +781,8 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
       // ── Ciclo automatico: todo lo que todavia no tiene marca de subida ──
       // No hay cursor: se pregunta fila por fila. Asi entran tambien las fichadas que
       // un reloj vuelca tarde con fecha vieja, y nada se puede saltear por un borde de ciclo.
-      const piso = `${rango.fechaDesde} ${rango.horaDesde ?? '00:00'}:00`;
-      const conds: string[] = ['ci.subido_en IS NULL', 'ci.checktime >= ?'];
-      const params: (string | number)[] = [piso];
+      const conds: string[] = ['ci.subido_en IS NULL'];
+      const params: (string | number)[] = [];
       if (Array.isArray(rango.sns) && rango.sns.length > 0) {
         const uniq = [...new Set(rango.sns.map(s => String(s).trim()).filter(Boolean))];
         if (uniq.length) { conds.push(`ci.SN IN (${uniq.map(() => '?').join(', ')})`); params.push(...uniq); }
@@ -997,6 +983,7 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
 async function reintentarSubidaPendiente(cfg: FicheroConfig): Promise<boolean> {
   const estado = cargarEstadoPersistido();
   const pendiente = estado.pendienteSubida;
+  if (subidaDeshabilitada()) return false;
   if (!pendiente?.archivo || !pendiente.path) return false;
 
   const fechaIntento = new Date();
@@ -1087,6 +1074,10 @@ function ejecutarCicloAutomatico(): void {
 }
 
 function iniciarTimer(options: { persistirAutoStart?: boolean; ejecutarAhora?: boolean; motivo?: string } = {}): void {
+  if (subidaDeshabilitada()) {
+    logger.warn({ msg: 'fichero: timer no arranca, subida deshabilitada en esta instancia' });
+    return;
+  }
   if (timer) clearInterval(timer);
   const cfg = cargarConfig();
   corriendo = true;
@@ -1120,6 +1111,10 @@ function programarAutoArranqueFichero(): void {
   if (autoArranqueEvaluado) return;
   autoArranqueEvaluado = true;
 
+  if (subidaDeshabilitada()) {
+    logger.info({ msg: 'fichero: autoarranque omitido', razon: 'FICHERO_SUBIDA_DESHABILITADA=1' });
+    return;
+  }
   const cfg = cargarConfig();
   const estado = cargarEstadoPersistido();
   const debeArrancar = estado.autoStart ?? Boolean(cfg.modoContinu && cfg.fechaDesdeContinu);
@@ -1188,8 +1183,7 @@ export function buildFicheroRouter(): Router {
   // Query: desde?, hasta?, detalle=1 para traer las filas ademas del resumen
   router.get('/pendientes', admin, async (req: Request, res: Response) => {
     const cfg = cargarConfig();
-    const piso = pisoSubida(cfg);
-    const desde = String(req.query.desde ?? '').trim() || piso.slice(0, 10);
+    const desde = String(req.query.desde ?? '').trim() || null;
     const hasta = String(req.query.hasta ?? '').trim() || null;
     const detalle = String(req.query.detalle ?? '') === '1';
     let conn: Awaited<ReturnType<typeof conectarMySQL>> | null = null;
@@ -1197,8 +1191,9 @@ export function buildFicheroRouter(): Router {
       conn = await conectarMySQL(cfg);
       await asegurarColumnasSubido(conn);
 
-      const conds = ['ci.subido_en IS NULL', 'ci.checktime >= ?'];
-      const params: string[] = [`${desde} 00:00:00`];
+      const conds = ['ci.subido_en IS NULL'];
+      const params: string[] = [];
+      if (desde) { conds.push('ci.checktime >= ?'); params.push(`${desde} 00:00:00`); }
       if (hasta) { conds.push('ci.checktime <= ?'); params.push(`${hasta} 23:59:59`); }
       const where = `WHERE ${conds.join(' AND ')}`;
 
@@ -1227,7 +1222,6 @@ export function buildFicheroRouter(): Router {
 
       return res.json({
         ok: true,
-        piso,
         desde,
         hasta,
         total: Number(tot[0]?.total ?? 0),

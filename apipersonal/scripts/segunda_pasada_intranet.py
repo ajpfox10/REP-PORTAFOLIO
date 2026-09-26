@@ -14,6 +14,10 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 
+# Registro de la corrida en script_runs (pagina Robots SIAPE)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mapeo_novedades as MN
+
 # Forzar UTF-8 en la consola: evita que print() de '→', acentos, etc. crashee
 # en CMD con codepage cp1252 (UnicodeEncodeError 'charmap').
 try:
@@ -26,7 +30,7 @@ LOG_PATH  = r"D:\G\comparacion\resultado_carga.xlsx"
 URL_LOGIN   = "https://sistemas.ms.gba.gov.ar/intranet/login.php"
 URL_PLANTEL = "https://sistemas.ms.gba.gov.ar/partenovedades/web/app.php/plantel/"
 BASE_URL    = "https://sistemas.ms.gba.gov.ar"
-USUARIO     = os.environ.get("INTRANET_USER", "xxxxxxx")
+USUARIO     = os.environ.get("INTRANET_USER", "PEVERIAJ")
 CHROME_PROFILE_DIR = os.environ.get("INTRANET_CHROME_PROFILE", r"D:\G\comparacion\intranet_chrome_profile")
 SIAPE_DIR = r"D:\G\comparacion\SIAPE"
 LABEL_ENF_PENDIENTE = "E - LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)"
@@ -293,12 +297,12 @@ def login(page, password, dependencia="HOSPITAL"):
 def cambiar_dependencia(page, dependencia):
     """Cambia la dependencia de la sesión (perfil multidependencia).
     Opera el modal 'Cambiar Dependencia' DIRECTO por JS (sirve visible u oculto)
-    y verifica contra el chip del header 'xxxxxxx (codigo)'.
+    y verifica contra el chip del header 'PEVERIAJ (codigo)'.
     Si el cambio no se confirma, ABORTA (para no cargar en la dependencia equivocada).
     """
     codigo = MAPA_DEP_CODIGO.get(dependencia.upper(), "1701")
 
-    # ¿Ya estamos en la dependencia pedida? El header muestra "xxxxxxx (1701)"
+    # ¿Ya estamos en la dependencia pedida? El header muestra "PEVERIAJ (1701)"
     try:
         if f"({codigo})" in page.content():
             print(f"  Ya en dependencia {dependencia} ({codigo})")
@@ -734,6 +738,11 @@ def main():
 
     password    = args.password or os.environ.get("INTRANET_PASS") or input("Contraseña: ")
     dependencia = args.dependencia.upper()
+    t0 = time.time()
+    script_id = f"intranet_segunda_pasada_{MN.sufijo_dep(dependencia)}"
+    global SCRIPT_ID
+    SCRIPT_ID = script_id
+    script_desc = f"Segunda pasada Intranet MS ({dependencia})"
 
     df = pd.read_excel(args.excel_path)
     # Acepta columnas de resultado_carga.xlsx: Nombre, DNI, Novedad, Desde, Hasta
@@ -776,6 +785,8 @@ def main():
         except Exception as e:
             print(f"ERROR en login: {e}")
             browser.close()
+            MN.registrar_run(script_id, script_desc, "error", motivo=f"Login: {e}",
+                             archivo=LOG_PATH, duracion_seg=int(time.time() - t0))
             return
         print("Sesión iniciada.\n")
 
@@ -895,13 +906,25 @@ def main():
         err_count = sum(1 for r in registros if str(r.get("Estado", "")).upper() != "OK")
         print(f"\nResultado de esta pasada: {run_ok_count} OK, {run_err_count} errores, {run_skip_count} ya OK/saltadas.")
         print(f"Log completo: {ok_count} OK, {err_count} errores.")
+        e_pend = sum(1 for novs in grupos.values() for n in novs if n["label"] == LABEL_ENF_PENDIENTE)
+        MN.registrar_run(
+            script_id, script_desc, "ok",
+            motivo=(f"{run_ok_count} reintentos OK · {run_err_count} siguen con error · "
+                    f"{run_skip_count} ya estaban OK" + (f" · {e_pend} como E-pendiente" if e_pend else "")),
+            filas=run_ok_count, archivo=LOG_PATH, duracion_seg=int(time.time() - t0))
         try:
             browser.close()
         except Exception:
             pass
 
+SCRIPT_ID = None  # lo fija main(); cada reintento va al detalle de la corrida
+
 def _actualizar_registro(registros, dni, label, desde, hasta, estado, detalle):
     """Actualiza la fila existente en el log o agrega una nueva."""
+    if SCRIPT_ID:
+        nombre = next((r.get("Nombre") for r in registros
+                       if str(r.get("DNI")) == str(dni) and r.get("Nombre")), None)
+        MN.registrar_item(SCRIPT_ID, dni, nombre, label, desde, hasta, estado, detalle)
     for r in registros:
         try:
             if (int(r["DNI"]) == dni and str(r["Novedad"]) == label

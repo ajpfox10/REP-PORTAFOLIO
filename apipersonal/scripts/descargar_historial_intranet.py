@@ -27,7 +27,7 @@ except Exception:
 
 URL_LOGIN   = "https://sistemas.ms.gba.gov.ar/intranet/login.php"
 URL_PLANTEL = "https://sistemas.ms.gba.gov.ar/partenovedades/web/app.php/plantel/"
-USUARIO     = os.environ.get("INTRANET_USER", "xxxxxxx")
+USUARIO     = os.environ.get("INTRANET_USER", "PEVERIAJ")
 CHROME_PROFILE_DIR = os.environ.get("INTRANET_CHROME_PROFILE", r"D:\G\comparacion\intranet_chrome_profile")
 
 COLUMNAS = ["DNI", "Nombre", "Origen", "Legajo", "Apellido y Nombre", "Parte",

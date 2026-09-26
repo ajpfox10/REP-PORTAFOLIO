@@ -244,6 +244,8 @@ export function EscaneoPage() {
   const [selectedDevice, setSelectedDevice] = useState<number | null>(null);
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [discovering, setDiscovering]       = useState(false);
+  const [renamingDevice, setRenamingDevice] = useState<{ id: number; nombre: string } | null>(null);
+  const [savingRename, setSavingRename]     = useState(false);
   const [paperStatus, setPaperStatus]       = useState<PaperStatus | null>(null);
   const [loadingPaperStatus, setLoadingPaperStatus] = useState(false);
   const [flatbedPromptDismissed, setFlatbedPromptDismissed] = useState(false);
@@ -367,6 +369,24 @@ export function EscaneoPage() {
       toast.error('Error al descubrir', e?.message);
     } finally { setDiscovering(false); }
   }, [cargarDevices]);
+
+  const guardarNombreDispositivo = useCallback(async () => {
+    if (!renamingDevice) return;
+    const nombre = renamingDevice.nombre.trim();
+    if (!nombre) { toast.error('Nombre vacío', 'Escribí un nombre para el equipo'); return; }
+    setSavingRename(true);
+    try {
+      await scannerFetch(`/v1/devices/${renamingDevice.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: nombre }),
+      });
+      setDevices(prev => prev.map(d => (d.id === renamingDevice.id ? { ...d, name: nombre } : d)));
+      setRenamingDevice(null);
+      toast.ok('Nombre actualizado', nombre);
+    } catch (e: any) {
+      toast.error('No se pudo renombrar', e?.message);
+    } finally { setSavingRename(false); }
+  }, [renamingDevice]);
 
   const cargarJobs = useCallback(async (silencioso = false) => {
     if (!silencioso) setLoadingJobs(true);
@@ -1645,7 +1665,35 @@ export function EscaneoPage() {
                     <div className="scan-device-header">
                       <span className={`scan-dot-lg${online ? ' online' : ''}`} />
                       <div>
-                        <div className="scan-device-title">{d.name}</div>
+                        {renamingDevice?.id === d.id ? (
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input
+                              className="input"
+                              value={renamingDevice.nombre}
+                              autoFocus
+                              onChange={e => setRenamingDevice({ id: d.id, nombre: e.target.value })}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') guardarNombreDispositivo();
+                                if (e.key === 'Escape') setRenamingDevice(null);
+                              }}
+                              style={{ fontSize: '0.85rem', minWidth: 200 }}
+                            />
+                            <button className="btn" disabled={savingRename} onClick={guardarNombreDispositivo}>
+                              {savingRename ? '…' : 'Guardar'}
+                            </button>
+                            <button className="btn" onClick={() => setRenamingDevice(null)}>Cancelar</button>
+                          </div>
+                        ) : (
+                          <div className="scan-device-title">
+                            {d.name}
+                            <button
+                              className="btn"
+                              title="Renombrar equipo"
+                              onClick={() => setRenamingDevice({ id: d.id, nombre: d.name })}
+                              style={{ marginLeft: 8, padding: '0 6px', fontSize: '0.75rem' }}
+                            >✏️</button>
+                          </div>
+                        )}
                         {caps?.model && (
                           <div className="muted" style={{ fontSize: '0.78rem' }}>
                             {caps.manufacturer} {caps.model}

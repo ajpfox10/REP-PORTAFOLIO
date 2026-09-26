@@ -195,26 +195,57 @@ function agrupar(
 // Tanto la beca de vacunación como la residencia son LEYES del catálogo, no
 // ocupaciones ni servicios: se las busca por nombre para no clavar el id, así
 // una ley renombrada o una nueva del mismo tipo sigue entrando.
-// Se excluye a la PERSONA entera, no sólo el tramo: si alguien entró por la
-// beca o por la residencia y después quedó en planta, sus tramos salen todos.
-function dnisConLey(agentes: any[], leyes: Record<number, string>, patron: RegExp): Set<string> {
-  const ids = new Set(
+// Se mira la ley DEL TRAMO que se está contando, no la de la persona. Antes se
+// excluía al DNI entero si tenía algún tramo con esa ley, y eso se llevaba
+// puestos ingresos que nada tenían que ver: en 2025, de 22 filas que sacaba
+// "sin becas de vacunación", 20 eran pases a Beca de Contingencia de gente que
+// había entrado por vacunación años antes.
+function leyIdsQueMatchean(leyes: Record<number, string>, patron: RegExp): Set<number> {
+  return new Set(
     Object.entries(leyes)
       .filter(([, nombre]) => patron.test(String(nombre)))
       .map(([id]) => Number(id)),
   );
-  const out = new Set<string>();
-  if (!ids.size) return out;
-  for (const a of agentes) {
-    if (a.ley_id != null && ids.has(Number(a.ley_id))) out.add(String(a.dni));
-  }
-  return out;
 }
 
-// Los dos grupos que se pueden sacar de los conteos de ingresos. Cada uno mira
-// toda la carrera del agente, no sólo el tramo del ingreso.
+const tramoTieneLey = (a: any, ids: Set<number>) =>
+  a.ley_id != null && ids.has(Number(a.ley_id));
+
+// Los dos grupos que se pueden sacar de los conteos de ingresos.
 const RE_VACUNACION = /vacun/i;   // Programa de Beca Vacunacion
 const RE_RESIDENTES = /residente/i; // RESIDENTES y PRE-RESIDENTES
+
+// ─── Profesional vs no profesional ──────────────────────────────────────────
+// Regla del hospital: la 10471 es escalafón profesional y la 10430 no, sin
+// mirar la ocupación. Para todo el resto (becas, residentes, IRAB, art. 48,
+// reemplazos, horas cátedra, tramos sin ley) el escalafón no lo dice: se
+// resuelve por el título que figura en la ocupación.
+const sinAcentos = (v: any) => String(v ?? '')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+
+const RE_LEY_PROFESIONAL    = /10471/;
+const RE_LEY_NO_PROFESIONAL = /10430/;
+
+// Títulos universitarios. Ojo: "ENFERMERA PROFESIONAL" NO entra (es título
+// terciario); sí entran "LICENCIADO EN ENFERMERIA" y las universitarias.
+const RE_OCUP_PROFESIONAL = new RegExp([
+  'MEDIC', '^MD\.', 'LICENCIAD', 'BIOQUIMIC', 'FARMACEUTIC', 'ODONTOLOG',
+  'INGENIER', 'PSICOLOG', 'KINESIOLOG', 'NUTRICION', 'VETERINARI', 'OBSTETR',
+  'FONOAUDIOLOG', 'BIOLOG', 'UNIVERSITARI', 'RESIDENTE', 'CONCURRENTE',
+  'TRABAJO SOCIAL', 'ABOGAD', 'CONTADOR', 'ANESTESIOLOG', 'TRAUMATOLOG',
+  'TOCOGINECOLOG', 'PEDIATRA',
+].join('|'));
+
+type TipoProf = 'Profesional' | 'No profesional' | '(sin dato)';
+
+function clasificarProfesional(leyNombre: string, ocupNombre: string): TipoProf {
+  const ley = sinAcentos(leyNombre);
+  if (RE_LEY_PROFESIONAL.test(ley))    return 'Profesional';
+  if (RE_LEY_NO_PROFESIONAL.test(ley)) return 'No profesional';
+  const ocup = sinAcentos(ocupNombre);
+  if (!ocup || ocup === '(SIN PROFESION)' || ocup === 'ASIGANAR') return '(sin dato)';
+  return RE_OCUP_PROFESIONAL.test(ocup) ? 'Profesional' : 'No profesional';
+}
 
 // Dos tildes independientes: se pueden usar por separado o juntos, y el
 // gráfico se recalcula con cada uno. Compartidos por las dos secciones de
@@ -222,9 +253,11 @@ const RE_RESIDENTES = /residente/i; // RESIDENTES y PRE-RESIDENTES
 function FiltrosIngresos({
   sinVacunacion, onSinVacunacion, excluidosVacunacion,
   sinResidentes, onSinResidentes, excluidosResidentes,
+  soloPrimerIngreso, onSoloPrimerIngreso, excluidosContinuaciones,
 }: {
   sinVacunacion: boolean; onSinVacunacion: (v: boolean) => void; excluidosVacunacion: number;
   sinResidentes: boolean; onSinResidentes: (v: boolean) => void; excluidosResidentes: number;
+  soloPrimerIngreso: boolean; onSoloPrimerIngreso: (v: boolean) => void; excluidosContinuaciones: number;
 }) {
   const chk = (activo: boolean, onChange: (v: boolean) => void, texto: string, excluidos: number) => (
     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem' }}>
@@ -238,6 +271,7 @@ function FiltrosIngresos({
     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 12 }}>
       {chk(sinVacunacion, onSinVacunacion, 'Sin becas de vacunación', excluidosVacunacion)}
       {chk(sinResidentes, onSinResidentes, 'Sin residentes',          excluidosResidentes)}
+      {chk(soloPrimerIngreso, onSoloPrimerIngreso, 'Solo primer ingreso (sin nombramientos)', excluidosContinuaciones)}
     </div>
   );
 }
@@ -410,6 +444,9 @@ function bajasRealesPorAnio(agentes: any[]) {
   }
 
   const porAnio: Record<string, number> = {};
+  // Desglose por ocupación del tramo que se cerró (con la que se fue), para
+  // abrir el año en el gráfico. Clave: id de ocupación como string, '' si falta.
+  const detalle: Record<string, Record<string, number>> = {};
   let continuidades = 0;
   let sinFecha = 0;
 
@@ -425,13 +462,15 @@ function bajasRealesPorAnio(agentes: any[]) {
     if (volvio) { continuidades++; continue; }
 
     porAnio[anio] = (porAnio[anio] ?? 0) + 1;
+    const ocu = String(b.ocupacion_id ?? '');
+    (detalle[anio] ??= {})[ocu] = ((detalle[anio] ?? {})[ocu] ?? 0) + 1;
   }
 
   const filas = Object.entries(porAnio)
     .map(([anio, total]) => ({ anio, total }))
     .sort((a, b) => Number(a.anio) - Number(b.anio));
 
-  return { filas, continuidades, sinFecha, total: filas.reduce((acc, f) => acc + f.total, 0) };
+  return { filas, detalle, continuidades, sinFecha, total: filas.reduce((acc, f) => acc + f.total, 0) };
 }
 
 function agruparPorAnio(arr: any[], campo: string): { anio: string; total: number }[] {
@@ -454,6 +493,14 @@ const thSt: React.CSSProperties = {
   fontSize: '0.7rem', whiteSpace: 'nowrap', fontWeight: 600,
 };
 const tdSt: React.CSSProperties = { padding: '4px 9px', verticalAlign: 'middle' };
+
+// Cabecera fija para tablas con scroll propio. El sticky va en cada <th> (con
+// border-collapse el <tr> no lo respeta) y el fondo tiene que ser OPACO, si no
+// las filas se ven por detrás al scrollear.
+const thStFijo: React.CSSProperties = {
+  ...thSt, position: 'sticky', top: 0, zIndex: 2, background: '#151a2b',
+  boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.08)',
+};
 
 // ─── EditSelect: select inline con guardar/cancelar ──────────────────────────
 function EditSelect({
@@ -784,16 +831,21 @@ function IngresosAnioProf({
   agentes,
   servicios,
   catalogos,
+  personalMap,
   filtros,
 }: {
   agentes: any[];
   servicios: any[];
-  catalogos: { ocupacion: Record<number, string>; servicio: Record<number, string> };
+  catalogos: { ocupacion: Record<number, string>; servicio: Record<number, string>; ley: Record<number, string> };
+  personalMap: Record<string, { apellido: string; nombre: string }>;
   filtros: React.ReactNode;
 }) {
-  const [filtAnio, setFiltAnio] = useState('');
+  const [filtDesde, setFiltDesde] = useState('');   // rango de años, ambos inclusive
+  const [filtHasta, setFiltHasta] = useState('');
   const [filtProf, setFiltProf] = useState('');
   const [filtSvc,  setFiltSvc]  = useState('');
+  const [filtTipo, setFiltTipo] = useState('');
+  const [abierta,  setAbierta]  = useState<string | null>(null);   // clave de la fila expandida
 
   // Construir mapa dni → nombre de servicio usando servicio_id → catalogos.servicio
   const dniServicio: Record<string, string> = {};
@@ -810,18 +862,32 @@ function IngresosAnioProf({
   }
 
   const map: Record<string, number> = {};
+  const dnisPorClave: Record<string, string[]> = {};
   for (const a of agentes) {
     if (!a.fecha_ingreso) continue;
     const anio  = String(new Date(a.fecha_ingreso).getFullYear());
     const prof  = catalogos.ocupacion[a.ocupacion_id] ?? '(sin profesión)';
     const svc   = dniServicio[String(a.dni)] ?? '(sin servicio)';
-    const key   = `${anio}|||${prof}|||${svc}`;
+    const tipo  = clasificarProfesional(catalogos.ley[a.ley_id] ?? '', prof);
+    const key   = `${anio}|||${prof}|||${svc}|||${tipo}`;
     map[key] = (map[key] || 0) + 1;
+    (dnisPorClave[key] ||= []).push(String(a.dni));
   }
 
+  // dni → apellido y nombre, ordenado alfabéticamente
+  const gentePorClave = (key: string) =>
+    [...new Set(dnisPorClave[key] ?? [])]
+      .map(dni => ({
+        dni,
+        apellido: personalMap[dni]?.apellido || '—',
+        nombre:   personalMap[dni]?.nombre   || '',
+      }))
+      .sort((a, b) => a.apellido.localeCompare(b.apellido, 'es') ||
+                      a.nombre.localeCompare(b.nombre, 'es'));
+
   const filas = Object.entries(map).map(([k, total]) => {
-    const [anio, profesion, servicio] = k.split('|||');
-    return { anio, profesion, servicio, total };
+    const [anio, profesion, servicio, tipo] = k.split('|||');
+    return { key: k, anio, profesion, servicio, tipo: tipo as TipoProf, total };
   }).sort((a, b) =>
     Number(b.anio) - Number(a.anio) ||
     a.servicio.localeCompare(b.servicio, 'es') ||
@@ -832,11 +898,25 @@ function IngresosAnioProf({
   const profs = [...new Set(filas.map(f => f.profesion))].sort();
   const svcs  = [...new Set(filas.map(f => f.servicio))].sort();
 
+  // Rango inclusive en las dos puntas. Si se elige al revés (desde 2026 hasta
+  // 2019) se ordena solo, así no devuelve vacío.
+  const desdeN = filtDesde ? Number(filtDesde) : -Infinity;
+  const hastaN = filtHasta ? Number(filtHasta) : Infinity;
+  const anioMin = Math.min(desdeN, hastaN);
+  const anioMax = Math.max(desdeN, hastaN);
+
   const filtradas = filas.filter(f =>
-    (!filtAnio || f.anio === filtAnio) &&
+    (Number(f.anio) >= anioMin && Number(f.anio) <= anioMax) &&
     (!filtProf || f.profesion === filtProf) &&
-    (!filtSvc  || f.servicio  === filtSvc)
+    (!filtSvc  || f.servicio  === filtSvc) &&
+    (!filtTipo || f.tipo      === filtTipo)
   );
+
+  // Totales por tipo (profesional / no profesional), sobre lo filtrado
+  const TIPOS: TipoProf[] = ['Profesional', 'No profesional', '(sin dato)'];
+  const totalesPorTipo: Record<string, number> = {};
+  for (const f of filtradas) totalesPorTipo[f.tipo] = (totalesPorTipo[f.tipo] || 0) + f.total;
+  const totalIngresos = filtradas.reduce((acc, f) => acc + f.total, 0);
 
   // Totales por servicio
   const totalesPorSvc: Record<string, number> = {};
@@ -847,7 +927,10 @@ function IngresosAnioProf({
     .sort((a, b) => b[1] - a[1]);
 
   const exportRows = [
-    ...filtradas.map(f => ({ Año: f.anio, Profesión: f.profesion, Servicio: f.servicio, Total: f.total })),
+    ...filtradas.flatMap(f => gentePorClave(f.key).map(g => ({
+      Año: f.anio, Profesión: f.profesion, Tipo: f.tipo, Servicio: f.servicio, Total: f.total,
+      DNI: g.dni, Apellido: g.apellido, Nombre: g.nombre,
+    }))),
     ...totalesSvc.map(([svc, tot]) => ({ Año: 'TOTAL', Profesión: '', Servicio: svc, Total: tot })),
   ];
 
@@ -862,8 +945,14 @@ function IngresosAnioProf({
       rows={exportRows} filename="ingresos_anio_profesion_servicio">
       {filtros}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-        <select style={selSt} value={filtAnio} onChange={e => setFiltAnio(e.target.value)}>
-          <option value="">Todos los años</option>
+        <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)' }}>Años</span>
+        <select style={{ ...selSt, maxWidth: 120 }} value={filtDesde} onChange={e => setFiltDesde(e.target.value)}>
+          <option value="">Desde: el primero</option>
+          {anios.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)' }}>a</span>
+        <select style={{ ...selSt, maxWidth: 120 }} value={filtHasta} onChange={e => setFiltHasta(e.target.value)}>
+          <option value="">Hasta: el último</option>
           {anios.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         <select style={selSt} value={filtProf} onChange={e => setFiltProf(e.target.value)}>
@@ -874,33 +963,101 @@ function IngresosAnioProf({
           <option value="">Todos los servicios</option>
           {svcs.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select style={selSt} value={filtTipo} onChange={e => setFiltTipo(e.target.value)}>
+          <option value="">Profesionales y no profesionales</option>
+          {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
         <span className="muted" style={{ fontSize: '0.72rem' }}>
-          {filtradas.reduce((s, f) => s + f.total, 0)} ingresos · {filtradas.length} combinaciones
+          {totalIngresos} ingresos · {filtradas.length} combinaciones
         </span>
+      </div>
+
+      {/* Desglose profesional / no profesional */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        {TIPOS.filter(t => totalesPorTipo[t]).map(t => {
+          const n = totalesPorTipo[t];
+          const pct = totalIngresos ? Math.round((n / totalIngresos) * 100) : 0;
+          const color = t === 'Profesional' ? '#38bdf8' : t === 'No profesional' ? '#fbbf24' : '#94a3b8';
+          return (
+            <div key={t} style={{
+              padding: '6px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.05)',
+              border: `1px solid ${color}44`, fontSize: '0.76rem',
+            }}>
+              <span style={{ color, fontWeight: 700, fontSize: '0.95rem' }}>{n}</span>
+              <span style={{ marginLeft: 6 }}>{t}</span>
+              <span className="muted" style={{ marginLeft: 6, fontSize: '0.7rem' }}>{pct}%</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Tabla principal: año × profesión × servicio */}
       <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto', marginBottom: 16 }}>
         <table style={{ width: '100%', fontSize: '0.78rem', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
-              <th style={thSt}>Año</th>
-              <th style={thSt}>Profesión</th>
-              <th style={thSt}>Servicio</th>
-              <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
+            <tr>
+              <th style={thStFijo}>Año</th>
+              <th style={thStFijo}>Profesión</th>
+              <th style={thStFijo}>Tipo</th>
+              <th style={thStFijo}>Servicio</th>
+              <th style={{ ...thStFijo, textAlign: 'right' }}>Total</th>
             </tr>
           </thead>
           <tbody>
-            {filtradas.map((f, i) => (
-              <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                <td style={{ ...tdSt, fontWeight: 600, color: '#93c5fd' }}>{f.anio}</td>
-                <td style={tdSt}>{f.profesion}</td>
-                <td style={{ ...tdSt, color: 'rgba(255,255,255,0.65)' }}>{f.servicio}</td>
-                <td style={{ ...tdSt, textAlign: 'right', fontWeight: 700 }}>{f.total}</td>
-              </tr>
-            ))}
+            {filtradas.map((f, i) => {
+              const open  = abierta === f.key;
+              const gente = open ? gentePorClave(f.key) : [];
+              return (
+                <React.Fragment key={i}>
+                  <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer',
+                               background: open ? 'rgba(255,255,255,0.05)' : undefined }}
+                      title="Ver apellido y nombre de los agentes"
+                      onClick={() => setAbierta(open ? null : f.key)}>
+                    <td style={{ ...tdSt, fontWeight: 600, color: '#93c5fd' }}>{f.anio}</td>
+                    <td style={tdSt}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)', marginRight: 6 }}>{open ? '▲' : '▼'}</span>
+                      {f.profesion}
+                    </td>
+                    <td style={{ ...tdSt, fontSize: '0.72rem',
+                      color: f.tipo === 'Profesional' ? '#38bdf8'
+                           : f.tipo === 'No profesional' ? '#fbbf24' : 'rgba(255,255,255,0.4)' }}>
+                      {f.tipo}
+                    </td>
+                    <td style={{ ...tdSt, color: 'rgba(255,255,255,0.65)' }}>{f.servicio}</td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: 700 }}>{f.total}</td>
+                  </tr>
+                  {open && (
+                    <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <td colSpan={5} style={{ padding: '6px 12px 10px 28px' }}>
+                        <table style={{ width: '100%', fontSize: '0.74rem', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ ...thSt, width: 110 }}>DNI</th>
+                              <th style={thSt}>Apellido</th>
+                              <th style={thSt}>Nombre</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {gente.map(g => (
+                              <tr key={g.dni} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                <td style={{ ...tdSt, color: 'rgba(255,255,255,0.5)' }}>{g.dni}</td>
+                                <td style={{ ...tdSt, fontWeight: 600 }}>{g.apellido}</td>
+                                <td style={tdSt}>{g.nombre}</td>
+                              </tr>
+                            ))}
+                            {gente.length === 0 && (
+                              <tr><td colSpan={3} style={{ ...tdSt, color: 'rgba(255,255,255,0.3)' }}>Sin datos</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
             {filtradas.length === 0 && (
-              <tr><td colSpan={4} style={{ padding: 24, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>Sin resultados</td></tr>
+              <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>Sin resultados</td></tr>
             )}
           </tbody>
         </table>
@@ -936,6 +1093,61 @@ function IngresosAnioProf({
   );
 }
 
+// ─── BajasPorAnioChart: barras por año; cada año se abre haciendo clic y
+// muestra con qué profesiones se fueron. La ocupación es la del tramo que se
+// cerró (con la que se fue), no la que tenga hoy el DNI en otro tramo.
+function BajasPorAnioChart({ filas, detalle, total, ocupaciones }: {
+  filas: { anio: string; total: number }[];
+  detalle: Record<string, Record<string, number>>;
+  total: number;
+  ocupaciones: Record<number, string>;
+}) {
+  const [abierto, setAbierto] = useState<string | null>(null);
+  const max = Math.max(...filas.map(x => x.total), 1);
+
+  const profesionesDe = (anio: string) =>
+    Object.entries(detalle[anio] ?? {})
+      .map(([id, tot]) => ({
+        nombre: (id && ocupaciones[Number(id)]) || '(sin profesión)',
+        total: tot,
+      }))
+      .sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre, 'es'));
+
+  return (
+    <>
+      {filas.map(d => {
+        const open  = abierto === d.anio;
+        const profs = open ? profesionesDe(d.anio) : [];
+        const maxP  = Math.max(...profs.map(x => x.total), 1);
+        return (
+          <div key={d.anio}>
+            <div onClick={() => setAbierto(open ? null : d.anio)}
+              title="Ver con qué profesiones se fueron ese año"
+              style={{ cursor: 'pointer' }}>
+              <BarRow label={`${open ? '▾' : '▸'} ${d.anio}`} value={d.total}
+                max={max} color="#ef4444" total={total} />
+            </div>
+            {open && (
+              <div style={{
+                margin: '2px 0 12px 26px', paddingLeft: 12,
+                borderLeft: '2px solid rgba(239,68,68,0.35)',
+              }}>
+                <div className="muted" style={{ fontSize: '0.7rem', marginBottom: 5 }}>
+                  {profs.length} profesion{profs.length === 1 ? '' : 'es'} · {d.total} baja{d.total === 1 ? '' : 's'} en {d.anio}
+                </div>
+                {profs.map(p => (
+                  <BarRow key={p.nombre} label={p.nombre} value={p.total}
+                    max={maxP} color="#fca5a5" total={d.total} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 // ─── ESTADO GLOBAL ────────────────────────────────────────────────────────────
 interface Stats {
   agentes: any[];
@@ -968,6 +1180,7 @@ export function EstadisticasPage() {
   // vacunación o por la residencia, en cualquier tramo de su carrera.
   const [sinVacunacion, setSinVacunacion] = useState(false);
   const [sinResidentes, setSinResidentes] = useState(false);
+  const [soloPrimerIngreso, setSoloPrimerIngreso] = useState(false);
   const loaded = useRef(false);
 
   const cargar = useCallback(async (force = false) => {
@@ -1191,16 +1404,55 @@ export function EstadisticasPage() {
   // lectura del resto de la serie.
   // Sin useMemo a propósito: este bloque corre después del return temprano de
   // "cargando", así que un hook acá cambiaría la cantidad de hooks entre renders.
-  const dnisVacunacion = dnisConLey(agentes, catalogos.ley, RE_VACUNACION);
-  const dnisResidentes = dnisConLey(agentes, catalogos.ley, RE_RESIDENTES);
-  const agentesIngresos = agentes.filter(a =>
-    (!sinVacunacion || !dnisVacunacion.has(String(a.dni))) &&
-    (!sinResidentes || !dnisResidentes.has(String(a.dni))));
+  const idsVacunacion = leyIdsQueMatchean(catalogos.ley, RE_VACUNACION);
+  const idsResidentes = leyIdsQueMatchean(catalogos.ley, RE_RESIDENTES);
+  // Los tramos cerrados por cambio de DNI / de ocupación son el MISMO ingreso que
+  // el tramo nuevo que los reemplaza: si se cuentan, el ingreso aparece dos veces
+  // (y el tramo viejo queda "(sin servicio)", porque el servicio cuelga del DNI nuevo).
+  const TRAMOS_CONTINUADOS = new Set(['CAMBIO DE DNI', 'CAMBIO DE OCUPACION']);
+  const agentesTramos = agentes.filter(a => !TRAMOS_CONTINUADOS.has(String(a.estado_empleo)));
+
+  // Primero se sacan los tramos que los tildes excluyen, y RECIÉN DESPUÉS se
+  // busca el primer tramo de cada DNI. El orden importa: VIDAL entró por
+  // residencia en 2020 y quedó nombrada en 10471 en 2025. Al revés, "sin
+  // residentes" le borraba el tramo de residencia (que era su primer tramo) y
+  // con él a la persona entera, así que su nombramiento tampoco aparecía. Con
+  // este orden, su ingreso pasa a ser el tramo de 2025, que es lo que se quiere
+  // ver: los que se quedaron después de la residencia.
+  const tramosVisibles = agentesTramos.filter(a =>
+    (!sinVacunacion || !tramoTieneLey(a, idsVacunacion)) &&
+    (!sinResidentes || !tramoTieneLey(a, idsResidentes)));
+
+  // La carrera se modela con varios tramos por DNI encadenados (beca → nombramiento
+  // → titularización), y cada tramo trae su propia fecha_ingreso. Contarlos todos
+  // cuenta a la misma persona una vez por cada nombramiento: en 2025 son 133 filas
+  // para 57 ingresos reales.
+  const primerTramoIds = new Set<number>();
+  const porDni: Record<string, any[]> = {};
+  for (const a of tramosVisibles) {
+    if (!a.fecha_ingreso) continue;
+    (porDni[String(a.dni)] ??= []).push(a);
+  }
+  for (const tramos of Object.values(porDni)) {
+    const primero = [...tramos].sort((x, y) =>
+      String(x.fecha_ingreso).localeCompare(String(y.fecha_ingreso)) || Number(x.id) - Number(y.id))[0];
+    primerTramoIds.add(Number(primero.id));
+  }
+  const continuaciones = Object.values(porDni).reduce((n, t) => n + t.length - 1, 0);
+
+  const esPrimerIngreso = (a: any) => !a.fecha_ingreso || primerTramoIds.has(Number(a.id));
+  const agentesIngresos = soloPrimerIngreso ? tramosVisibles.filter(esPrimerIngreso) : tramosVisibles;
+
+  // Cuántos tramos saca cada tilde (el número entre paréntesis del filtro)
+  const cuentaTramos = (ids: Set<number>) =>
+    agentesTramos.filter(a => a.fecha_ingreso && tramoTieneLey(a, ids)).length;
 
   const filtrosIngresos = (
     <FiltrosIngresos
-      sinVacunacion={sinVacunacion} onSinVacunacion={setSinVacunacion} excluidosVacunacion={dnisVacunacion.size}
-      sinResidentes={sinResidentes} onSinResidentes={setSinResidentes} excluidosResidentes={dnisResidentes.size}
+      sinVacunacion={sinVacunacion} onSinVacunacion={setSinVacunacion} excluidosVacunacion={cuentaTramos(idsVacunacion)}
+      sinResidentes={sinResidentes} onSinResidentes={setSinResidentes} excluidosResidentes={cuentaTramos(idsResidentes)}
+      soloPrimerIngreso={soloPrimerIngreso} onSoloPrimerIngreso={setSoloPrimerIngreso}
+      excluidosContinuaciones={continuaciones}
     />
   );
 
@@ -1497,11 +1749,10 @@ export function EstadisticasPage() {
             Sólo salidas: cerró el tramo y en el mismo año no abrió otro.
             {bajasInfo.continuidades > 0 && ` Quedan afuera ${bajasInfo.continuidades} cierres por cambio de ley o nombramiento, que siguieron trabajando.`}
             {bajasInfo.sinFecha > 0 && ` Otras ${bajasInfo.sinFecha} no tienen fecha de egreso cargada.`}
+            {' '}Clic en un año para ver con qué profesiones se fueron.
           </div>
-          {bajasPorAnio.map((d, i) => (
-            <BarRow key={d.anio} label={d.anio} value={d.total}
-              max={Math.max(...bajasPorAnio.map(x => x.total), 1)} color="#ef4444" total={bajasInfo.total} />
-          ))}
+          <BajasPorAnioChart filas={bajasPorAnio} detalle={bajasInfo.detalle}
+            total={bajasInfo.total} ocupaciones={catalogos.ocupacion} />
         </Section>
       )}
 
@@ -1610,7 +1861,7 @@ export function EstadisticasPage() {
 
       {/* ── Ingresos por año, profesión y servicio ── */}
       <IngresosAnioProf agentes={agentesIngresos} servicios={servicios} catalogos={catalogos}
-        filtros={filtrosIngresos} />
+        personalMap={personalMap} filtros={filtrosIngresos} />
 
       {/* ── Retención de residentes ── */}
       <RetencionResidentes agentes={agentes} leyes={catalogos.ley} />

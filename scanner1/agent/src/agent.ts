@@ -457,7 +457,9 @@ function getKyoceraOriginalSize(value?: string | null): string {
 
 // Extrae el contenido de un bloque XML <ns:Name>…</ns:Name> (namespace opcional)
 function extractXmlBlock(xml: string, name: string): string | null {
-  const re = new RegExp(`<(?:[A-Za-z0-9_.-]+:)?${name}[^>]*>([\\s\\S]*?)</(?:[A-Za-z0-9_.-]+:)?${name}>`, "i")
+  // El nombre tiene que cerrar en ">" o seguir con un atributo: si no, buscar
+  // "Platen" o "ADF" engancharía <PlatenResolutions> o <ADFFront>.
+  const re = new RegExp(`<(?:[A-Za-z0-9_.-]+:)?${name}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[A-Za-z0-9_.-]+:)?${name}>`, "i")
   const m = xml.match(re)
   return m ? m[1] : null
 }
@@ -478,18 +480,25 @@ function readEsclMaxArea(xml: string, feeder: boolean): { width: number; height:
   return null
 }
 
+// Tamaños del catálogo que entran en un área máxima dada (en mm). Algunos equipos
+// (Olivetti/Kyocera por WSD) publican el área apaisada, así que probamos ambas
+// orientaciones antes de descartar un tamaño.
+function paperSizesFittingMm(maxWmm: number, maxHmm: number): string[] {
+  const TOL = 3 // mm de tolerancia
+  const fits = PAPER_ORDER.filter((k) => {
+    const d = PAPER_CATALOG[k]
+    const normal   = d.widthMm <= maxWmm + TOL && d.heightMm <= maxHmm + TOL
+    const rotated  = d.heightMm <= maxWmm + TOL && d.widthMm <= maxHmm + TOL
+    return normal || rotated
+  })
+  return fits.length ? fits : ["A4"]
+}
+
 // Tamaños del catálogo que entran en el área máxima del equipo. Sin datos → fallback.
 function derivePaperSizesFromCaps(xml: string, feeder: boolean): string[] {
   const max = readEsclMaxArea(xml, feeder)
   if (!max) return ["A4", "Letter", "Legal"]
-  const maxWmm = max.width  / 300 * 25.4
-  const maxHmm = max.height / 300 * 25.4
-  const TOL = 3 // mm de tolerancia
-  const fits = PAPER_ORDER.filter((k) => {
-    const d = PAPER_CATALOG[k]
-    return d.widthMm <= maxWmm + TOL && d.heightMm <= maxHmm + TOL
-  })
-  return fits.length ? fits : ["A4"]
+  return paperSizesFittingMm(max.width / 300 * 25.4, max.height / 300 * 25.4)
 }
 
 // ── 2. eSCL / AirScan ────────────────────────────────────────────────────────
@@ -1718,8 +1727,8 @@ function parseNameCapabilities(dev: DeviceRow, online = true): DeviceCapabilitie
 
 function guessManufacturer(text: string): string | null {
   const lower = text.toLowerCase()
-  if (lower.includes("kyocera")) return "Kyocera"
-  if (lower.includes("olivetti")) return "Olivetti"
+  if (lower.includes("kyocera") || lower.includes("taskalfa") || lower.includes("ecosys")) return "Kyocera"
+  if (lower.includes("olivetti") || lower.includes("d-copia")) return "Olivetti"
   if (lower.includes("hewlett") || lower.includes(" hp ") || lower.startsWith("hp")) return "HP"
   if (lower.includes("canon")) return "Canon"
   if (lower.includes("brother")) return "Brother"
@@ -1871,6 +1880,106 @@ async function fetchEsclCapabilities(ip: string, esclPort?: number | null): Prom
   return null
 }
 
+// ── Capacidades por WSD-Scan ─────────────────────────────────────────────────
+// Para equipos que NO hablan eSCL (p. ej. Olivetti d-COPIA 6004MF con AirScan
+// deshabilitado): el mismo servicio WSD que usamos para escanear publica sus
+// capacidades reales (ADF, dúplex, resoluciones, colores y área máxima).
+function buildGetScannerElementsXml(base: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope
+  xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+  xmlns:scan="http://schemas.microsoft.com/windows/2006/08/wdp/scan">
+  <s:Header>
+    <a:To>${base}/</a:To>
+    <a:Action>http://schemas.microsoft.com/windows/2006/08/wdp/scan/GetScannerElements</a:Action>
+    <a:MessageID>urn:uuid:${Math.random().toString(16).slice(2)}-${Date.now()}</a:MessageID>
+    <a:ReplyTo><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>
+  </s:Header>
+  <s:Body>
+    <scan:GetScannerElementsRequest>
+      <scan:RequestedElements>
+        <scan:Name>scan:ScannerDescription</scan:Name>
+        <scan:Name>scan:ScannerConfiguration</scan:Name>
+      </scan:RequestedElements>
+    </scan:GetScannerElementsRequest>
+  </s:Body>
+</s:Envelope>`
+}
+
+/** WSD-Scan expresa las medidas en milésimas de pulgada */
+function readWsdMaxArea(xml: string, tags: string[]): { widthMm: number; heightMm: number } | null {
+  for (const tag of tags) {
+    const block = extractXmlBlock(xml, tag)
+    if (!block) continue
+    const w = Number(firstXmlValue(block, ["Width"]) || "")
+    const h = Number(firstXmlValue(block, ["Height"]) || "")
+    if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
+      return { widthMm: w / 1000 * 25.4, heightMm: h / 1000 * 25.4 }
+  }
+  return null
+}
+
+function parseWsdCapabilitiesXml(xml: string, fallbackName: string): DeviceCapabilities {
+  const platenBlock = extractXmlBlock(xml, "Platen")
+  const adfBlock    = extractXmlBlock(xml, "ADF")
+  const platen = !!platenBlock
+  const feeder = !!adfBlock
+  const duplex = /<(?:[A-Za-z0-9_.-]+:)?ADFSupportsDuplex>(?:true|1)</i.test(xml)
+
+  // Las resoluciones viven en <Widths>/<Heights> (cristal) o sueltas dentro de
+  // <ADFResolutions> — tomamos los anchos, que es lo que manda el perfil.
+  const resScope = extractXmlBlock(xml, "PlatenResolutions")
+    || extractXmlBlock(xml, "ADFResolutions")
+    || ""
+  const widthsBlock = extractXmlBlock(resScope, "Widths") || resScope
+  const resolutions = uniqueSortedNumbers(xmlValues(widthsBlock, "Width").map(Number))
+
+  const colorModes = [...new Set(
+    xmlValues(xml, "ColorEntry").map((entry) => {
+      const v = entry.toLowerCase()
+      if (v.includes("blackandwhite") || v.includes("lineart")) return "blackwhite"
+      if (v.includes("gray") || v.includes("grey")) return "grayscale"
+      return "color"
+    })
+  )]
+
+  const area = readWsdMaxArea(xml, feeder
+    ? ["ADFMaximumSize", "PlatenMaximumSize"]
+    : ["PlatenMaximumSize", "ADFMaximumSize"])
+
+  const scannerName = firstXmlValue(xml, ["ScannerName"])
+  const location    = firstXmlValue(xml, ["ScannerLocation"])
+  const model       = [scannerName, location].filter(Boolean).join(" - ") || fallbackName
+
+  return {
+    model,
+    manufacturer: guessManufacturer(`${scannerName || ""} ${fallbackName}`),
+    sources: platen ? (feeder ? ["flatbed", "adf"] : ["flatbed"]) : (feeder ? ["adf"] : ["flatbed"]),
+    resolutions: resolutions.length ? resolutions : [200, 300],
+    paper_sizes: area ? paperSizesFittingMm(area.widthMm, area.heightMm) : ["A4", "Letter", "Legal"],
+    color_modes: colorModes.length ? colorModes : ["color", "grayscale"],
+    duplex,
+    max_pages_adf: feeder ? 50 : null,
+    online: true,
+    processing: getSoftwareProcessingCapabilities(),
+  }
+}
+
+async function fetchWsdCapabilities(ip: string, fallbackName: string): Promise<DeviceCapabilities | null> {
+  const action = "http://schemas.microsoft.com/windows/2006/08/wdp/scan/GetScannerElements"
+  for (const port of [5357, 5358]) {
+    const base = `http://${ip}:${port}`
+    try {
+      const xml = await httpPostSoap(base, buildGetScannerElementsXml(base), action, 4000)
+      if (!/ScannerConfiguration|PlatenMaximumSize|ADFSupportsDuplex/i.test(xml)) continue
+      console.log(`[wsd-caps] ${ip}:${port} → capacidades leídas por WSD`)
+      return parseWsdCapabilitiesXml(xml, fallbackName)
+    } catch {}
+  }
+  return null
+}
+
 async function detectDeviceCapabilities(dev: DeviceRow): Promise<DeviceCapabilities> {
   const cached = capabilityCache.get(dev.id)
   if (cached && (Date.now() - cached.at) < 5 * 60_000) return cached.caps
@@ -1883,7 +1992,12 @@ async function detectDeviceCapabilities(dev: DeviceRow): Promise<DeviceCapabilit
     caps = parseNameCapabilities(dev, true)
   } else if (host && host !== "127.0.0.1" && host !== HOSTNAME) {
     online = await isDeviceReachable(host)
-    if (online) caps = await fetchEsclCapabilities(host, dev.escl_port ?? null)
+    if (online) {
+      caps = await fetchEsclCapabilities(host, dev.escl_port ?? null)
+      // Sin eSCL (AirScan apagado o no soportado) las capacidades reales salen
+      // del propio servicio WSD que después usamos para escanear.
+      if (!caps) caps = await fetchWsdCapabilities(host, dev.name || host)
+    }
   }
 
   if (!caps) {

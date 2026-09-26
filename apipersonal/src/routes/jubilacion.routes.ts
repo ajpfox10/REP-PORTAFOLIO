@@ -14,6 +14,9 @@
  *   PUT  /jubilacion/posibles/:id/checklist
  *   POST /jubilacion/posibles/:id/alerta-ok
  *   GET  /jubilacion/alerta-carga
+ *   GET/PUT /jubilacion/anses/:dni
+ *   GET  /jubilacion/proyeccion
+ *   GET  /jubilacion/proyeccion/estructura
  *   GET  /jubilacion/cortes
  *   GET/POST/PATCH/DELETE /jubilacion/citas
  *   POST /jubilacion/citas/:id/promover
@@ -98,6 +101,20 @@ function parseDate(s: string | null | undefined): Date | null {
   const parts = String(s).split('T')[0].split('-').map(Number);
   if (parts.length < 3 || parts.some(isNaN)) return null;
   return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+// Las planillas viejas usan 01/11/1111 (y variantes) como centinela de "no se
+// sabe". Tomarlas como fecha real haría, por ejemplo, que un agente figure
+// nombrado desde el año 1111 y aparezca con 900 años de servicio.
+function fechaLegajo(v: any): string | null {
+  if (!v) return null;
+  const d = parseDate(String(v));
+  return d && d.getFullYear() >= 1900 ? String(v).split('T')[0] : null;
+}
+
+// Fecha local a ISO (YYYY-MM-DD) sin pasar por UTC.
+function fechaISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function addDias(d: Date, n: number): Date {
@@ -898,6 +915,10 @@ async function ensurePosiblesColumns(sequelize: Sequelize) {
   const cols: [string, string][] = [
     ['fecha_presentacion_papeles', 'date NULL AFTER mes_corte'],
     ['fecha_jubilacion',           'date NULL AFTER fecha_presentacion_papeles'],
+    ['expediente_ips',             'varchar(60) NULL AFTER fecha_jubilacion'],
+    ['expediente_gdeba',           'varchar(60) NULL AFTER expediente_ips'],
+    ['ifgra_1',                    'varchar(60) NULL AFTER expediente_gdeba'],
+    ['ifgra_2',                    'varchar(60) NULL AFTER ifgra_1'],
   ];
   for (const [column, definition] of cols) {
     const found = await sequelize.query(
@@ -920,7 +941,7 @@ async function ensurePosiblesColumns(sequelize: Sequelize) {
 // posibles_jubilados_alerta_ok: los acuses de la alerta de carga. Se guardan
 // todos (varios usuarios pueden dar OK del mismo período); el OK esconde el
 // banner sólo para quien lo dio y sólo por ese día. La alerta se cierra de
-// verdad cuando están los cinco pasos tildados.
+// verdad cuando están todos los pasos tildados.
 const checklistTablesReady = new WeakSet<Sequelize>();
 
 async function ensureChecklistTables(sequelize: Sequelize) {
@@ -929,7 +950,7 @@ async function ensureChecklistTables(sequelize: Sequelize) {
     CREATE TABLE IF NOT EXISTS posibles_jubilados_checklist (
       id                  bigint unsigned NOT NULL AUTO_INCREMENT,
       posible_jubilado_id bigint unsigned NOT NULL,
-      item                enum('DOCUMENTACION','IFGRA','SIAPE','INTRANET','RESOLUCION') NOT NULL,
+      item                enum('DOCUMENTACION','IFGRA','EXPEDIENTE_GDEBA','SIAPE','INTRANET','RESOLUCION','EXPEDIENTE_IPS') NOT NULL,
       tildado_por         bigint unsigned NULL,
       tildado_por_nombre  varchar(190)    NULL,
       created_at          timestamp       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -952,7 +973,57 @@ async function ensureChecklistTables(sequelize: Sequelize) {
       INDEX idx_pj_ok_usuario (usuario_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  // La tabla puede venir de antes de los pasos EXPEDIENTE_IPS / EXPEDIENTE_GDEBA:
+  // el CREATE IF NOT EXISTS no la toca, así que se amplía el enum a mano. Se
+  // compara contra el último valor agregado, que es el que falta en las viejas.
+  const colItem = await sequelize.query(
+    `SHOW COLUMNS FROM posibles_jubilados_checklist LIKE 'item'`,
+    { type: QueryTypes.SELECT },
+  ) as any[];
+  if (colItem.length && !String(colItem[0].Type ?? '').includes('EXPEDIENTE_GDEBA')) {
+    await sequelize.query(
+      `ALTER TABLE posibles_jubilados_checklist
+         MODIFY item enum('DOCUMENTACION','IFGRA','EXPEDIENTE_GDEBA','SIAPE','INTRANET','RESOLUCION','EXPEDIENTE_IPS') NOT NULL`,
+    );
+  }
   checklistTablesReady.add(sequelize);
+}
+
+// ── Pasos del checklist que piden número al tildarse ─────────────────────────
+// Cada número va a dos lados: la columna de posibles_jubilados (el dato del
+// trámite, el que se ve en la ficha) y una fila en `expedientes` del agente,
+// que es donde los mira la página de Resoluciones/Expedientes.
+const CAMPOS_NUMERO: Record<string, Array<{ columna: string; caratula: string }>> = {
+  IFGRA: [
+    { columna: 'ifgra_1', caratula: 'JUBILACION - INFORME GRAFICO 1' },
+    { columna: 'ifgra_2', caratula: 'JUBILACION - INFORME GRAFICO 2' },
+  ],
+  EXPEDIENTE_GDEBA: [{ columna: 'expediente_gdeba', caratula: 'JUBILACION - EXPEDIENTE GDEBA' }],
+  EXPEDIENTE_IPS:   [{ columna: 'expediente_ips',   caratula: 'JUBILACION - EXPEDIENTE IPS'   }],
+};
+
+// Alta idempotente en `expedientes`: si el agente ya tiene ese número cargado
+// no se duplica (mismo criterio que los trámites documentales).
+async function registrarExpedienteAgente(
+  sequelize: Sequelize,
+  opts: { dni: number; numero: string; caratula: string; userId: number | null },
+) {
+  const numero = opts.numero.trim();
+  if (!numero) return;
+  const existe = await sequelize.query(
+    `SELECT id FROM expedientes
+      WHERE dni = :dni AND numero = :numero AND deleted_at IS NULL LIMIT 1`,
+    { replacements: { dni: opts.dni, numero }, type: QueryTypes.SELECT },
+  ) as any[];
+  if (existe.length) return;
+  await sequelize.query(
+    `INSERT INTO expedientes (dni, numero, caratula, fecha, estado, created_by, created_at)
+     VALUES (:dni, :numero, :caratula, CURDATE(), 'En trámite', :userId, NOW())`,
+    {
+      replacements: { dni: opts.dni, numero, caratula: opts.caratula, userId: opts.userId },
+      type: QueryTypes.INSERT,
+    },
+  );
 }
 
 // Ítems tildados de varios registros de una: id → [{ item, por, cuando }]
@@ -1129,6 +1200,147 @@ function conTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     const t = setTimeout(() => reject(new Error(`${label}: se agotó el tiempo (${ms}ms)`)), ms);
     p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
   });
+}
+
+// ── Ficha ANSES por agente ────────────────────────────────────────────────────
+// Los tramos de ANSES se guardaban sólo adentro de cada cálculo. Para poder
+// proyectar el padrón entero hace falta tenerlos por agente, así que viven en
+// jubilacion_anses (DDL canónica en scripts/migrations/049__jubilacion_anses.sql,
+// creación idempotente en runtime como el resto del módulo).
+const ansesTableReady = new WeakSet<Sequelize>();
+
+async function ensureAnsesTable(sequelize: Sequelize) {
+  if (ansesTableReady.has(sequelize)) return;
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS jubilacion_anses (
+      id                    bigint unsigned NOT NULL AUTO_INCREMENT,
+      dni                   int             NOT NULL,
+      servicios             json            NULL,
+      tiene_datos           tinyint(1)      NOT NULL DEFAULT 1,
+      origen                enum('PDF','MANUAL') NOT NULL DEFAULT 'MANUAL',
+      archivo_origen        varchar(500)    NULL,
+      fecha_lectura         date            NULL,
+      observaciones         text            NULL,
+      creado_por            bigint unsigned NULL,
+      creado_por_nombre     varchar(190)    NULL,
+      modificado_por        bigint unsigned NULL,
+      modificado_por_nombre varchar(190)    NULL,
+      created_at            timestamp       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at            timestamp       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      deleted_at            datetime        NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_jub_anses_dni (dni),
+      INDEX idx_jub_anses_deleted_at (deleted_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  ansesTableReady.add(sequelize);
+}
+
+const ansesFichaSchema = z.object({
+  servicios:      z.array(servicioANSESSchema).max(40).default([]),
+  tiene_datos:    z.boolean().optional(),
+  origen:         z.enum(['PDF', 'MANUAL']).optional().default('MANUAL'),
+  archivo_origen: z.string().max(500).optional().nullable(),
+  observaciones:  z.string().max(2000).optional().nullable(),
+});
+
+// MySQL devuelve JSON ya parseado o como string según driver/versión.
+function parseJSON<T>(v: any, fallback: T): T {
+  if (v == null) return fallback;
+  if (typeof v !== 'string') return v as T;
+  try { return JSON.parse(v) as T; } catch { return fallback; }
+}
+
+// ── Proyección por servicio ───────────────────────────────────────────────────
+// Padrón activo con su destino actual (servicio → repartición → dependencia) y
+// todo lo que necesita el motor de cálculo. El tramo de agentes es el último
+// abierto; el pase de servicio, el último sin fecha_hasta.
+const SQL_PROYECCION_BASE = `
+  SELECT p.dni, p.apellido, p.nombre, p.fecha_nacimiento,
+         a.id AS agente_id, a.fecha_ingreso, a.fecha_de_nombramiento,
+         (jf.id IS NOT NULL) AS es_jefe,
+         l.id AS ley_id, l.nombre AS ley_nombre,
+         o.nombre AS ocupacion_nombre,
+         COALESCE(o.es_insalubre, 0) AS ocupacion_es_insalubre,
+         srv.id AS servicio_id, srv.nombre AS servicio_nombre,
+         rep.id AS reparticion_id, rep.reparticion_nombre AS reparticion_nombre,
+         dep.id AS dependencia_id, dep.nombre AS dependencia_nombre,
+         CASE
+           WHEN l.nombre LIKE '%beca%'        THEN 'BECADO'
+           WHEN l.nombre LIKE '%residente%'   THEN 'RESIDENTE'
+           WHEN l.nombre LIKE '%concurrente%' THEN 'CONCURRENTE'
+           WHEN l.id = 14                     THEN 'ARTICULO_48'
+           ELSE 'NORMAL'
+         END AS situacion_sugerida
+  FROM personal p
+  -- El tramo activo, no el de id más alto: los tramos de BAJA de la carrera
+  -- se cargan después y a veces tienen id mayor que el activo.
+  JOIN agentes a ON a.id = (
+    SELECT id FROM agentes
+    WHERE dni = p.dni AND deleted_at IS NULL
+    ORDER BY (estado_empleo = 'ACTIVO') DESC, fecha_ingreso DESC, id DESC LIMIT 1)
+  LEFT JOIN ley l          ON l.id = a.ley_id
+  LEFT JOIN ocupaciones o  ON o.id = a.ocupacion_id AND o.deleted_at IS NULL
+  LEFT JOIN agentes_servicios ags ON ags.id = (
+    SELECT id FROM agentes_servicios
+    WHERE dni = p.dni AND deleted_at IS NULL AND fecha_hasta IS NULL
+    ORDER BY id DESC LIMIT 1)
+  -- El jefe cuenta en el servicio que conduce aunque su pase figure en otro
+  -- (p. ej. jefa de Farmacia asignada a Dirección Asociada).
+  LEFT JOIN jefaturas jf ON jf.id = (
+    SELECT id FROM jefaturas
+    WHERE dni = p.dni AND deleted_at IS NULL AND servicio_id IS NOT NULL
+      AND (fecha_hasta IS NULL OR fecha_hasta >= CURDATE())
+    ORDER BY id DESC LIMIT 1)
+  LEFT JOIN servicios     srv ON srv.id = COALESCE(jf.servicio_id, ags.servicio_id) AND srv.deleted_at IS NULL
+  LEFT JOIN reparticiones rep ON rep.id = srv.reparticion_id  AND rep.deleted_at IS NULL
+  LEFT JOIN dependencias  dep ON dep.id = rep.dependencia_id  AND dep.deleted_at IS NULL
+  WHERE p.deleted_at IS NULL AND a.deleted_at IS NULL AND a.estado_empleo = 'ACTIVO'`;
+
+type ResultadoCalculo = ReturnType<typeof calcular>;
+
+type CorteProyeccion = 'CUMPLE' | 'HASTA_6M' | 'HASTA_12M' | 'MAS_ADELANTE' | 'NO_COMPUTA' | 'SIN_DATOS';
+
+// Primera fecha en la que el agente cumple edad + servicios.
+//
+// El requisito es monótono en el tiempo (un día más nunca aleja de cumplirlo:
+// suma edad y suma servicio), así que se puede bisecar. El límite superior sale
+// de lo que el propio motor dice que falta — edad y servicio en días reales —
+// y se duplica si se quedó corto (el prorrateo puede mover el requisito).
+const TOPE_PROYECCION_DIAS = 40 * 365;
+
+function proyectarFechaCumple(
+  base: Date,
+  calcEn: (fecha: Date) => ResultadoCalculo,
+  resBase: ResultadoCalculo,
+): { fecha: Date | null; resultado: ResultadoCalculo } {
+  const cumple = (r: ResultadoCalculo) => !!r.tipo_jubilacion;
+  if (cumple(resBase)) return { fecha: base, resultado: resBase };
+
+  const faltaEdad = toDias(resBase.falta_edad);
+  const faltaServ = toDias(resBase.falta_servicio_comun);
+  let span = Math.max(faltaEdad, faltaServ, 30) + 60;
+
+  let hiRes = calcEn(addDias(base, Math.min(span, TOPE_PROYECCION_DIAS)));
+  while (!cumple(hiRes) && span < TOPE_PROYECCION_DIAS) {
+    span = Math.min(span * 2, TOPE_PROYECCION_DIAS);
+    hiRes = calcEn(addDias(base, span));
+  }
+  if (!cumple(hiRes)) return { fecha: null, resultado: resBase };
+
+  let lo = 0;
+  let hi = span;
+  let mejor = hiRes;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const r   = calcEn(addDias(base, mid));
+    if (cumple(r)) { hi = mid; mejor = r; } else { lo = mid + 1; }
+  }
+  return { fecha: addDias(base, lo), resultado: mejor };
+}
+
+function mesesDespues(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -1472,6 +1684,492 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
          + `Se puede atrasar, no adelantar.`;
   }
 
+  // GET /jubilacion/anses/:dni - ficha ANSES guardada del agente
+  router.get(
+    '/anses/:dni',
+    rbac('jubilacion_calculos', 'read'),
+    async (req: Request, res: Response) => {
+      const dni = parseInt(req.params.dni, 10);
+      if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      try {
+        await ensureAnsesTable(sequelize);
+        const rows = await sequelize.query(
+          `SELECT id, dni, servicios, tiene_datos, origen, archivo_origen,
+                  DATE_FORMAT(fecha_lectura, '%Y-%m-%d') AS fecha_lectura,
+                  observaciones, creado_por_nombre, modificado_por_nombre, updated_at
+           FROM jubilacion_anses WHERE dni = :dni AND deleted_at IS NULL LIMIT 1`,
+          { replacements: { dni }, type: QueryTypes.SELECT },
+        );
+        const row = (rows as any[])[0] ?? null;
+        return res.json({
+          ok: true,
+          data: row ? { ...row, servicios: parseJSON(row.servicios, []) } : null,
+        });
+      } catch (err: any) {
+        logger.error({ msg: '[jubilacion] anses get error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+    },
+  );
+
+  // PUT /jubilacion/anses/:dni - guarda (o pisa) la ficha ANSES del agente.
+  // Es lo que alimenta la proyección del padrón: sin esto los tramos de ANSES
+  // sólo existen adentro de un cálculo guardado.
+  router.put(
+    '/anses/:dni',
+    rbac('jubilacion_calculos', 'update'),
+    async (req: Request, res: Response) => {
+      const dni = parseInt(req.params.dni, 10);
+      if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const parsed = ansesFichaSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues });
+
+      const body     = parsed.data;
+      const authUser = (req as any).auth;
+      const userId   = authUser?.id ?? null;
+      const userName = authUser?.nombre ? `${authUser.apellido ?? ''} ${authUser.nombre}`.trim() : null;
+      const tieneDatos = body.tiene_datos ?? body.servicios.length > 0;
+
+      try {
+        await ensureAnsesTable(sequelize);
+        const existe = await sequelize.query(
+          `SELECT dni FROM personal WHERE dni = :dni AND deleted_at IS NULL LIMIT 1`,
+          { replacements: { dni }, type: QueryTypes.SELECT },
+        );
+        if (!(existe as any[]).length)
+          return res.status(404).json({ ok: false, error: `Agente DNI ${dni} no encontrado` });
+
+        await sequelize.query(
+          `INSERT INTO jubilacion_anses
+             (dni, servicios, tiene_datos, origen, archivo_origen, fecha_lectura,
+              observaciones, creado_por, creado_por_nombre, modificado_por, modificado_por_nombre)
+           VALUES (:dni, :servicios, :tiene_datos, :origen, :archivo, CURDATE(),
+              :obs, :uid, :uname, :uid, :uname)
+           ON DUPLICATE KEY UPDATE
+             servicios = VALUES(servicios), tiene_datos = VALUES(tiene_datos),
+             origen = VALUES(origen), archivo_origen = VALUES(archivo_origen),
+             fecha_lectura = VALUES(fecha_lectura), observaciones = VALUES(observaciones),
+             modificado_por = VALUES(modificado_por), modificado_por_nombre = VALUES(modificado_por_nombre),
+             deleted_at = NULL`,
+          {
+            replacements: {
+              dni,
+              servicios:   JSON.stringify(body.servicios),
+              tiene_datos: tieneDatos ? 1 : 0,
+              origen:      body.origen,
+              archivo:     body.archivo_origen ?? null,
+              obs:         body.observaciones ?? null,
+              uid:         userId,
+              uname:       userName,
+            },
+          },
+        );
+        return res.json({ ok: true });
+      } catch (err: any) {
+        logger.error({ msg: '[jubilacion] anses put error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+    },
+  );
+
+  // GET /jubilacion/proyeccion/estructura
+  // Catálogos para los selectores de la pestaña Proyección. Van por acá (y no
+  // por /dependencias) para que no haga falta permiso de CRUD de catálogos.
+  router.get(
+    '/proyeccion/estructura',
+    rbac('jubilacion_calculos', 'read'),
+    async (_req: Request, res: Response) => {
+      try {
+        const [dependencias, reparticiones, servicios, leyes] = await Promise.all([
+          sequelize.query(
+            `SELECT id, nombre FROM dependencias WHERE deleted_at IS NULL ORDER BY nombre`,
+            { type: QueryTypes.SELECT }),
+          sequelize.query(
+            `SELECT id, reparticion_nombre AS nombre, dependencia_id
+             FROM reparticiones WHERE deleted_at IS NULL ORDER BY reparticion_nombre`,
+            { type: QueryTypes.SELECT }),
+          sequelize.query(
+            `SELECT id, nombre, reparticion_id FROM servicios WHERE deleted_at IS NULL ORDER BY nombre`,
+            { type: QueryTypes.SELECT }),
+          sequelize.query(
+            `SELECT id, nombre FROM ley WHERE deleted_at IS NULL ORDER BY nombre`,
+            { type: QueryTypes.SELECT }),
+        ]);
+        return res.json({ ok: true, data: { dependencias, reparticiones, servicios, leyes } });
+      } catch (err: any) {
+        logger.error({ msg: '[jubilacion] estructura error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+    },
+  );
+
+  // GET /jubilacion/proyeccion
+  // Barre el padrón activo y proyecta, agente por agente, cuándo cumple los
+  // requisitos jubilatorios. Usa el MISMO motor que la calculadora: por cada
+  // agente se corre el cálculo parado en la fecha elegida y después se bisecta
+  // la primera fecha en la que da positivo.
+  //
+  // De dónde salen los datos de cada agente, en orden de preferencia:
+  //   1. su último cálculo guardado (lo que el operador confirmó a mano),
+  //   2. la ficha ANSES (jubilacion_anses) + lo que se deduce del legajo,
+  //   3. sólo el legajo (marca `sin_datos_anses`: la proyección puede ser tardía,
+  //      nunca temprana, porque los aportes de ANSES sólo suman).
+  router.get(
+    '/proyeccion',
+    rbac('jubilacion_calculos', 'read'),
+    async (req: Request, res: Response) => {
+      const num = (v: any) => {
+        const n = parseInt(String(v ?? ''), 10);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      const dependenciaId = num(req.query.dependencia_id);
+      const reparticionId = num(req.query.reparticion_id);
+      const servicioId    = num(req.query.servicio_id);
+      const leyId         = num(req.query.ley_id);
+      const q             = String(req.query.q ?? '').trim();
+      const fechaParam    = String(req.query.fecha ?? '').trim();
+      const fechaBase     = (/^\d{4}-\d{2}-\d{2}$/.test(fechaParam) ? parseDate(fechaParam) : null) ?? today();
+
+      const where: string[] = [];
+      const repl: Record<string, any> = {};
+      if (dependenciaId) { where.push('dep.id = :dependenciaId'); repl.dependenciaId = dependenciaId; }
+      if (reparticionId) { where.push('rep.id = :reparticionId'); repl.reparticionId = reparticionId; }
+      if (servicioId)    { where.push('srv.id = :servicioId');    repl.servicioId    = servicioId; }
+      if (leyId)         { where.push('l.id = :leyId');           repl.leyId         = leyId; }
+      if (q) {
+        where.push('(p.apellido LIKE :q OR p.nombre LIKE :q OR CONCAT(p.apellido, " ", p.nombre) LIKE :q OR p.dni LIKE :q)');
+        repl.q = `%${q}%`;
+      }
+
+      try {
+        await ensureAnsesTable(sequelize);
+
+        const agentes = await sequelize.query(
+          `${SQL_PROYECCION_BASE}${where.length ? ` AND ${where.join(' AND ')}` : ''}
+           ORDER BY dep.nombre, rep.reparticion_nombre, srv.nombre, p.apellido, p.nombre`,
+          { replacements: repl, type: QueryTypes.SELECT },
+        ) as any[];
+
+        // Fichas ANSES y últimos cálculos: dos lecturas para todo el padrón,
+        // no una por agente.
+        const [fichas, calculos, enPosibles] = await Promise.all([
+          sequelize.query(
+            `SELECT dni, servicios, tiene_datos FROM jubilacion_anses WHERE deleted_at IS NULL`,
+            { type: QueryTypes.SELECT }) as Promise<any[]>,
+          sequelize.query(
+            `SELECT c.dni, c.situacion_revista, c.beca_aporto, c.ips_aporto,
+                    c.es_insalubre_ips, c.diferencial_2pct_pagado,
+                    c.servicios_anses, c.servicios_externos, c.resoluciones_manuales
+             FROM jubilacion_calculos c
+             JOIN (SELECT dni, MAX(id) AS mx FROM jubilacion_calculos
+                   WHERE deleted_at IS NULL GROUP BY dni) u ON u.mx = c.id`,
+            { type: QueryTypes.SELECT }) as Promise<any[]>,
+          sequelize.query(
+            `SELECT dni, estado FROM posibles_jubilados WHERE deleted_at IS NULL`,
+            { type: QueryTypes.SELECT }) as Promise<any[]>,
+        ]);
+
+        const fichaPorDni    = new Map(fichas.map((f) => [Number(f.dni), f]));
+        const calculoPorDni  = new Map(calculos.map((c) => [Number(c.dni), c]));
+        const posiblePorDni  = new Map(enPosibles.map((r) => [Number(r.dni), String(r.estado)]));
+
+        // Toda la carrera, no sólo el tramo activo: los tramos cerrados (BAJA)
+        // también son servicio en la caja IPS.
+        const dnis = agentes.map((ag) => Number(ag.dni));
+        const tramos = dnis.length ? await sequelize.query(
+          `SELECT a.id, a.dni, a.fecha_ingreso, a.fecha_de_nombramiento, a.fecha_egreso,
+                  COALESCE(o.es_insalubre, 0) AS es_insalubre, l.nombre AS ley_nombre
+           FROM agentes a
+           LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id AND o.deleted_at IS NULL
+           LEFT JOIN ley l ON l.id = a.ley_id
+           WHERE a.deleted_at IS NULL AND a.dni IN (:dnis)
+           ORDER BY a.dni, a.fecha_ingreso`,
+          { replacements: { dnis }, type: QueryTypes.SELECT }) as any[] : [];
+        const tramosPorDni = new Map<number, any[]>();
+        for (const t of tramos) {
+          const k = Number(t.dni);
+          if (!tramosPorDni.has(k)) tramosPorDni.set(k, []);
+          tramosPorDni.get(k)!.push(t);
+        }
+
+        const corte6  = mesesDespues(fechaBase, 6);
+        const corte12 = mesesDespues(fechaBase, 12);
+
+        const data = agentes.map((ag) => {
+          const dni   = Number(ag.dni);
+          const calc  = calculoPorDni.get(dni) ?? null;
+          const ficha = fichaPorDni.get(dni) ?? null;
+
+          // Tramos ANSES: el cálculo guardado manda; si no hay, la ficha.
+          const ansesCalc  = calc ? parseJSON<any[]>(calc.servicios_anses, []) : [];
+          const ansesFicha = ficha ? parseJSON<any[]>(ficha.servicios, []) : [];
+          const serviciosAnses = ansesCalc.length ? ansesCalc : ansesFicha;
+          // "Sin datos" es no haberlo mirado nunca. Una ficha con tiene_datos=0
+          // es un agente que ya se revisó y no tiene aportes en ANSES.
+          const tieneAnses = serviciosAnses.length > 0 || (ficha ? !ficha.tiene_datos : false);
+
+          // Centinelas del legajo (01/11/1111) fuera: si entran, el motor toma
+          // al agente como nombrado hace nueve siglos.
+          const fNacimiento  = fechaLegajo(ag.fecha_nacimiento);
+          const fIngreso     = fechaLegajo(ag.fecha_ingreso);
+          const fNombramiento = fechaLegajo(ag.fecha_de_nombramiento);
+
+          const situacion = String(calc?.situacion_revista ?? ag.situacion_sugerida ?? 'NORMAL');
+
+          // Tramos anteriores al activo → servicios IPS. Mismas reglas que el
+          // tramo activo: la beca (ingreso → nombramiento) sólo si está pagada;
+          // antes de Jun/2015 común salvo ocupación insalubre o 2% pagado;
+          // desde Jun/2015 insalubre.
+          const agenteId = Number(ag.agente_id);
+          const anteriores = (tramosPorDni.get(dni) ?? []).filter((t) => Number(t.id) !== agenteId);
+          const tramosAnteriores = (conPago: boolean) => {
+            const becaPagada = conPago || (calc ? !!calc.beca_aporto : false);
+            const dosPct     = conPago || (calc ? !!calc.diferencial_2pct_pagado : false);
+            const out: Array<{ organismo: string; fecha_desde: string; fecha_hasta: string; es_insalubre: boolean; caja: 'IPS' }> = [];
+            for (const t of anteriores) {
+              const ing = parseDate(fechaLegajo(t.fecha_ingreso));
+              const nom = parseDate(fechaLegajo(t.fecha_de_nombramiento));
+              let hasta = parseDate(fechaLegajo(t.fecha_egreso));
+              // Sin egreso: la carrera se encadena, cierra el día antes del activo.
+              if (!hasta && fIngreso) {
+                const sig = parseDate(fIngreso)!;
+                hasta = new Date(sig.getFullYear(), sig.getMonth(), sig.getDate() - 1);
+              }
+              if (!ing || !hasta || hasta < ing) continue;
+              const ley = String(t.ley_nombre ?? '');
+              const esBecaLey = /beca|residente|concurrente/i.test(ley);
+              if (esBecaLey && !becaPagada) continue;
+              const insalOcup = !!Number(t.es_insalubre) || (calc ? !!calc.es_insalubre_ips : false);
+              const label = `Tramo anterior${ley ? ` (${ley})` : ''}`;
+              const push = (d: Date, h: Date, insal: boolean) => {
+                if (h >= d) out.push({ organismo: label, fecha_desde: fechaISO(d), fecha_hasta: fechaISO(h), es_insalubre: insal, caja: 'IPS' });
+              };
+              let desdeNomb = ing;
+              if (nom && nom > ing) {
+                const finBeca = nom <= hasta ? new Date(nom.getFullYear(), nom.getMonth(), nom.getDate() - 1) : hasta;
+                if (becaPagada) push(ing, finBeca, true);
+                desdeNomb = nom;
+              }
+              if (desdeNomb > hasta) continue;
+              const finAntes15 = new Date(FECHA_CORTE.getFullYear(), FECHA_CORTE.getMonth(), FECHA_CORTE.getDate() - 1);
+              if (desdeNomb < FECHA_CORTE) push(desdeNomb, hasta < FECHA_CORTE ? hasta : finAntes15, insalOcup || dosPct);
+              if (hasta >= FECHA_CORTE) push(desdeNomb > FECHA_CORTE ? desdeNomb : FECHA_CORTE, hasta, true);
+            }
+            return out;
+          };
+          // `conPago` simula el reconocimiento de servicios, con los mismos flags
+          // que se tildan a mano en la calculadora:
+          //   · beca_aporto / ips_aporto → el tiempo de beca, residencia o
+          //     concurrencia pasa a computar;
+          //   · diferencial_2pct_pagado → el tramo anterior a Jun/2015 pasa de
+          //     común a insalubre (el cargo deudor del 2%).
+          // La insalubridad no se supone: sale de la ocupación del legajo (o del
+          // cálculo guardado, si el operador la corrigió). Si la ocupación ya es
+          // insalubre el 2% no aplica — ese tiempo computa insalubre igual — así
+          // que el flag queda sin efecto y no infla la proyección.
+          const armarInput = (fecha: Date, conPago = false) => ({
+            fecha_nacimiento:        fNacimiento,
+            fecha_ingreso_ips:       fIngreso,
+            fecha_nombramiento_ips:  fNombramiento,
+            situacion_revista:       situacion,
+            beca_aporto:             conPago ? true : (calc ? !!calc.beca_aporto : false),
+            ips_aporto:              conPago ? true : defaultIpsAporto(situacion, calc ? !!calc.ips_aporto : undefined),
+            es_insalubre_ips:        calc ? !!calc.es_insalubre_ips : !!Number(ag.ocupacion_es_insalubre),
+            diferencial_2pct_pagado: conPago ? true : (calc ? !!calc.diferencial_2pct_pagado : false),
+            fecha_calculo:           fechaISO(fecha),
+            servicios_anses:         serviciosAnses,
+            servicios_externos:      [
+              ...(calc ? parseJSON<any[]>(calc.servicios_externos, []) : []),
+              ...tramosAnteriores(conPago),
+            ],
+            resoluciones_manuales:   calc ? parseJSON<Record<string, string>>(calc.resoluciones_manuales, {}) : {},
+          });
+
+          const resBase = calcular(armarInput(fechaBase) as any);
+
+          // Sin fecha de nacimiento o sin ingreso no hay nada que proyectar:
+          // el motor no puede resolver ni la edad ni los servicios.
+          const proyectable = !!fNacimiento && !!(fIngreso || fNombramiento);
+          // Beca / residencia / concurrencia sin aportes: no acumulan servicio
+          // para IPS, así que no hay fecha que proyectar. Van a su propio grupo
+          // en vez de caer en "más adelante", que sugeriría que algún día llegan.
+          const sinAportes = resBase.sin_aportes;
+          const proy = proyectable && !sinAportes
+            ? proyectarFechaCumple(fechaBase, (f) => calcular(armarInput(f) as any), resBase)
+            : { fecha: null, resultado: resBase };
+
+          const fechaCumple = proy.fecha;
+          const clasificar = (f: Date | null, noComputa: boolean): CorteProyeccion => {
+            if (!proyectable)        return 'SIN_DATOS';
+            if (noComputa)           return 'NO_COMPUTA';
+            if (!f)                  return 'MAS_ADELANTE';
+            if (f <= fechaBase)      return 'CUMPLE';
+            if (f <= corte6)         return 'HASTA_6M';
+            if (f <= corte12)        return 'HASTA_12M';
+            return 'MAS_ADELANTE';
+          };
+          const corte = clasificar(fechaCumple, sinAportes);
+
+          // ── Escenario "si paga los aportes" ────────────────────────────────
+          // Tiene sentido calcularlo cuando hay tiempo que hoy no computa como
+          // debería. Son dos deudas distintas y pueden darse juntas:
+          //   · aportes de beca / residencia / concurrencia: ese tiempo no
+          //     computa como servicio hasta que se reconoce;
+          //   · cargo deudor del 2%: el tiempo anterior a Jun/2015 computa, pero
+          //     como común. Pagando el diferencial pasa a insalubre y entra en el
+          //     prorrateo, así que no suma días de almanaque pero sí acerca la
+          //     fecha. Sólo existe en ocupaciones NO insalubres — si la ocupación
+          //     es insalubre el motor no genera cargo deudor.
+          // Por eso la ganancia se mide en los dos ejes: días crudos de servicio
+          // y días prorrateados. Con mirar sólo los crudos el 2% nunca aparecía.
+          const cargoDeudor2pct = !!resBase.cargo_deudor_2pct;
+          const hayTiempoImpago = sinAportes || (resBase.tiene_beca && !resBase.beca_aporto) || cargoDeudor2pct;
+          const servicioDias = (r: ResultadoCalculo) =>
+            toDias(r.total_comun) + toDias(r.total_insalubre);
+
+          let pagoPosible        = false;
+          let periodoAReconocer: { anios: number; meses: number; dias: number } | null = null;
+          let fechaCumpleConPago: Date | null = null;
+          let corteConPago: CorteProyeccion | null = null;
+          let tipoConPago: string | null = null;
+
+          if (proyectable && hayTiempoImpago) {
+            const resPago     = calcular(armarInput(fechaBase, true) as any);
+            const ganancia    = servicioDias(resPago) - servicioDias(resBase);
+            const gananciaPro = toDias(resPago.total_prorateado) - toDias(resBase.total_prorateado);
+            if (ganancia > 0 || gananciaPro > 0) {
+              pagoPosible       = true;
+              // Lo que se reconoce como servicio nuevo. El 2% no suma acá: lo que
+              // aporta es el período del cargo deudor, que viaja aparte.
+              periodoAReconocer = ganancia > 0 ? fromDias(ganancia) : null;
+              const proyPago = proyectarFechaCumple(
+                fechaBase, (f) => calcular(armarInput(f, true) as any), resPago);
+              fechaCumpleConPago = proyPago.fecha;
+              corteConPago       = clasificar(proyPago.fecha, false);
+              tipoConPago        = proyPago.resultado.tipo_jubilacion;
+            }
+          }
+
+          return {
+            dni,
+            apellido:            ag.apellido,
+            nombre:              ag.nombre,
+            fecha_nacimiento:    fNacimiento,
+            fecha_ingreso:       fIngreso,
+            fecha_nombramiento:  fNombramiento,
+            // Beca = ingreso → nombramiento. Computa sólo si figura como pagada
+            // (cálculo guardado) o en el escenario "con pago".
+            tiene_beca:          !!resBase.tiene_beca,
+            beca_aporto:         !!resBase.beca_aporto,
+            es_jefe:             !!Number(ag.es_jefe),
+            tramos_anteriores:   anteriores
+              .map((t) => ({
+                desde: fechaLegajo(t.fecha_ingreso),
+                hasta: fechaLegajo(t.fecha_egreso),
+                ley:   t.ley_nombre ?? null,
+              }))
+              .filter((t) => t.desde),
+            ley_id:              ag.ley_id,
+            ley_nombre:          ag.ley_nombre,
+            ocupacion_nombre:    ag.ocupacion_nombre,
+            servicio_id:         ag.servicio_id,
+            servicio_nombre:     ag.servicio_nombre,
+            reparticion_id:      ag.reparticion_id,
+            reparticion_nombre:  ag.reparticion_nombre,
+            dependencia_id:      ag.dependencia_id,
+            dependencia_nombre:  ag.dependencia_nombre,
+            situacion_revista:   situacion,
+            edad:                resBase.edad_actual,
+            antiguedad_ips:      resBase.servicio_ips_ajustado,
+            total_comun:         resBase.total_comun,
+            total_insalubre:     resBase.total_insalubre,
+            total_prorateado:    resBase.total_prorateado,
+            cumple_edad:         resBase.cumple_edad,
+            cumple_servicio:     resBase.cumple_servicio,
+            falta_edad:          resBase.falta_edad,
+            falta_servicio:      resBase.falta_servicio,
+            tipo_jubilacion:     resBase.tipo_jubilacion,
+            // Régimen con el que llegaría a cumplir (el de la fecha proyectada).
+            tipo_al_cumplir:     proy.resultado.tipo_jubilacion,
+            caja_jubilatoria:    resBase.caja_jubilatoria,
+            fecha_cumple:        fechaCumple ? fechaISO(fechaCumple) : null,
+            dias_para_cumplir:   fechaCumple ? Math.max(0, calDias(fechaBase, fechaCumple)) : null,
+            corte,
+            // Reconocimiento de servicios: qué pasaría si paga los aportes del
+            // tiempo de beca / residencia / concurrencia.
+            pago_posible:          pagoPosible,
+            periodo_a_reconocer:   periodoAReconocer,
+            // Cargo deudor del 2%: la insalubridad sale de la ocupación, así que
+            // esto sólo aparece en ocupaciones comunes con servicio anterior a
+            // Jun/2015. Es lo mismo que la calculadora muestra como
+            // "puede pagar el 2%".
+            cargo_deudor_2pct:     cargoDeudor2pct,
+            cargo_deudor_periodo:  cargoDeudor2pct ? resBase.cargo_deudor_periodo : null,
+            es_insalubre_ocupacion: !!Number(ag.ocupacion_es_insalubre),
+            es_insalubre_efectivo:  !!resBase.es_insalubre_efectivo,
+            fecha_cumple_con_pago: fechaCumpleConPago ? fechaISO(fechaCumpleConPago) : null,
+            corte_con_pago:        corteConPago,
+            tipo_al_cumplir_con_pago: tipoConPago,
+            sin_aportes:         sinAportes,
+            sin_datos_anses:     !tieneAnses,
+            origen_datos:        calc ? 'CALCULO' : 'ESTIMADO',
+            estado_posible:      posiblePorDni.get(dni) ?? null,
+          };
+        });
+
+        // Totales generales y por servicio, sobre el conjunto ya filtrado.
+        const vacio = () => ({
+          cumple: 0, hasta_6m: 0, hasta_12m: 0, mas_adelante: 0,
+          no_computa: 0, sin_datos: 0, total: 0,
+        });
+        const sumar = (acc: ReturnType<typeof vacio>, corte: string) => {
+          acc.total++;
+          if (corte === 'CUMPLE')          acc.cumple++;
+          else if (corte === 'HASTA_6M')   acc.hasta_6m++;
+          else if (corte === 'HASTA_12M')  acc.hasta_12m++;
+          else if (corte === 'NO_COMPUTA') acc.no_computa++;
+          else if (corte === 'SIN_DATOS')  acc.sin_datos++;
+          else                             acc.mas_adelante++;
+          return acc;
+        };
+
+        const resumen = data.reduce((acc, r) => sumar(acc, r.corte), vacio());
+        const porServicioMap = new Map<string, any>();
+        for (const r of data) {
+          const key = String(r.servicio_id ?? 'SIN');
+          if (!porServicioMap.has(key)) {
+            porServicioMap.set(key, {
+              servicio_id:        r.servicio_id,
+              servicio_nombre:    r.servicio_nombre ?? '(sin servicio asignado)',
+              reparticion_nombre: r.reparticion_nombre,
+              dependencia_nombre: r.dependencia_nombre,
+              ...vacio(),
+            });
+          }
+          sumar(porServicioMap.get(key), r.corte);
+        }
+        const porServicio = Array.from(porServicioMap.values()).sort(
+          (a, b) => (b.cumple + b.hasta_6m) - (a.cumple + a.hasta_6m) ||
+                    String(a.servicio_nombre).localeCompare(String(b.servicio_nombre)),
+        );
+
+        return res.json({
+          ok: true,
+          fecha:     fechaISO(fechaBase),
+          fecha_6m:  fechaISO(corte6),
+          fecha_12m: fechaISO(corte12),
+          total: data.length,
+          resumen,
+          por_servicio: porServicio,
+          data,
+        });
+      } catch (err: any) {
+        logger.error({ msg: '[jubilacion] proyeccion error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message });
+      }
+    },
+  );
+
   // GET /jubilacion/cortes - opciones para los selectores del front.
   // Devuelve el corte que corresponde hoy y los cuatro anteriores, cada uno con
   // su fecha de baja y su ventana de papeles ya calculadas.
@@ -1525,6 +2223,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
                   ley_nombre, ocupacion_nombre, es_insalubre, tipo_jubilacion, mes_corte,
                   DATE_FORMAT(fecha_presentacion_papeles, '%Y-%m-%d') AS fecha_presentacion_papeles,
                   DATE_FORMAT(fecha_jubilacion,           '%Y-%m-%d') AS fecha_jubilacion,
+                  expediente_ips, expediente_gdeba, ifgra_1, ifgra_2,
                   estado, observaciones, jubilacion_calculo_id,
                   creado_por_nombre, modificado_por_nombre, created_at, updated_at
            FROM posibles_jubilados
@@ -1560,6 +2259,10 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         estado:                z.enum(['IDENTIFICADO','EN_TRAMITE','JUBILADO','DESCARTADO']).default('IDENTIFICADO'),
         fecha_presentacion_papeles: dateStr.optional().nullable(),
         fecha_jubilacion:           dateStr.optional().nullable(),
+        expediente_ips:        z.string().max(60).optional().nullable(),
+        expediente_gdeba:      z.string().max(60).optional().nullable(),
+        ifgra_1:               z.string().max(60).optional().nullable(),
+        ifgra_2:               z.string().max(60).optional().nullable(),
         observaciones:         z.string().max(2000).optional().nullable(),
         jubilacion_calculo_id: z.number().int().positive().optional().nullable(),
       });
@@ -1605,12 +2308,12 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           `INSERT INTO posibles_jubilados
              (dni, apellido, nombre, fecha_nacimiento, fecha_ingreso, ley_nombre, ocupacion_nombre,
               es_insalubre, tipo_jubilacion, mes_corte, fecha_presentacion_papeles, fecha_jubilacion,
-              estado, observaciones, jubilacion_calculo_id,
+              expediente_ips, expediente_gdeba, estado, observaciones, jubilacion_calculo_id,
               creado_por, creado_por_nombre)
            VALUES
              (:dni, :apellido, :nombre, :fecha_nacimiento, :fecha_ingreso, :ley_nombre, :ocupacion_nombre,
               :es_insalubre, :tipo_jubilacion, :mes_corte, :fecha_presentacion_papeles, :fecha_jubilacion,
-              :estado, :observaciones, :jubilacion_calculo_id,
+              :expediente_ips, :expediente_gdeba, :estado, :observaciones, :jubilacion_calculo_id,
               :creado_por, :creado_por_nombre)`,
           {
             replacements: {
@@ -1626,6 +2329,8 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
               mes_corte:              mesCorte,
               fecha_presentacion_papeles: fPapeles,
               fecha_jubilacion:           fJubil,
+              expediente_ips:         body.expediente_ips        ?? null,
+              expediente_gdeba:       body.expediente_gdeba      ?? null,
               estado:                 body.estado,
               observaciones:          body.observaciones         ?? null,
               jubilacion_calculo_id:  body.jubilacion_calculo_id ?? null,
@@ -1658,6 +2363,10 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         mes_corte:             z.enum(['MARZO','JUNIO','SEPTIEMBRE','DICIEMBRE']).optional().nullable(),
         fecha_presentacion_papeles: dateStr.optional().nullable(),
         fecha_jubilacion:           dateStr.optional().nullable(),
+        expediente_ips:        z.string().max(60).optional().nullable(),
+        expediente_gdeba:      z.string().max(60).optional().nullable(),
+        ifgra_1:               z.string().max(60).optional().nullable(),
+        ifgra_2:               z.string().max(60).optional().nullable(),
         observaciones:         z.string().max(2000).optional().nullable(),
         jubilacion_calculo_id: z.number().int().positive().optional().nullable(),
       });
@@ -1682,6 +2391,10 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       if (body.mes_corte            !== undefined) { sets.push('mes_corte = :mes_corte');                        repl.mes_corte = body.mes_corte; }
       if (body.fecha_presentacion_papeles !== undefined) { sets.push('fecha_presentacion_papeles = :fecha_presentacion_papeles'); repl.fecha_presentacion_papeles = body.fecha_presentacion_papeles; }
       if (body.fecha_jubilacion     !== undefined) { sets.push('fecha_jubilacion = :fecha_jubilacion');          repl.fecha_jubilacion = body.fecha_jubilacion; }
+      if (body.expediente_ips       !== undefined) { sets.push('expediente_ips = :expediente_ips');              repl.expediente_ips = body.expediente_ips || null; }
+      if (body.expediente_gdeba     !== undefined) { sets.push('expediente_gdeba = :expediente_gdeba');          repl.expediente_gdeba = body.expediente_gdeba || null; }
+      if (body.ifgra_1              !== undefined) { sets.push('ifgra_1 = :ifgra_1');                            repl.ifgra_1 = body.ifgra_1 || null; }
+      if (body.ifgra_2              !== undefined) { sets.push('ifgra_2 = :ifgra_2');                            repl.ifgra_2 = body.ifgra_2 || null; }
       if (body.observaciones        !== undefined) { sets.push('observaciones = :observaciones');                repl.observaciones = body.observaciones; }
       if (body.jubilacion_calculo_id !== undefined) { sets.push('jubilacion_calculo_id = :jubilacion_calculo_id'); repl.jubilacion_calculo_id = body.jubilacion_calculo_id; }
 
@@ -1732,20 +2445,31 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       const schema = z.object({
         item:    z.enum(ITEMS_CHECKLIST),
         tildado: z.boolean(),
+        // Solo para los pasos con numero (IFGRA y los dos expedientes):
+        // { <columna de posibles_jubilados>: '<numero>' }.
+        numeros: z.record(z.string().max(60)).optional().nullable(),
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues });
 
-      const { item, tildado } = parsed.data;
+      const { item, tildado, numeros } = parsed.data;
+      const campos = CAMPOS_NUMERO[item] ?? [];
+      // Lo tipeado, ya limpio, columna por columna.
+      const valores: Record<string, string> = {};
+      for (const c of campos) valores[c.columna] = String((numeros ?? {})[c.columna] ?? '').trim();
+      if (campos.length && tildado && campos.some(c => !valores[c.columna])) {
+        return res.status(400).json({ ok: false, error: `Faltan los numeros de ${item}` });
+      }
       const authUser = (req as any).auth;
       const userId   = authUser?.principalId ?? null;
       const userName = authUser?.nombre ? `${authUser.apellido ?? ''} ${authUser.nombre}`.trim() : null;
 
       try {
         await ensureChecklistTables(sequelize);
+        await ensurePosiblesColumns(sequelize);
 
         const existe = await sequelize.query(
-          `SELECT id FROM posibles_jubilados WHERE id = :id AND deleted_at IS NULL LIMIT 1`,
+          `SELECT id, dni FROM posibles_jubilados WHERE id = :id AND deleted_at IS NULL LIMIT 1`,
           { replacements: { id }, type: QueryTypes.SELECT },
         ) as any[];
         if (!existe.length) return res.status(404).json({ ok: false, error: 'Registro no encontrado' });
@@ -1766,12 +2490,34 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           );
         }
 
+        // Los pasos con numero lo llevan a la ficha y, al tildar, tambien a
+        // `expedientes` del agente. Destildar limpia la ficha; la fila de
+        // expedientes queda (es el registro del agente, se borra desde ahi).
+        if (campos.length) {
+          const sets = campos.map(c => `${c.columna} = :${c.columna}`).join(', ');
+          const repl: any = { id };
+          for (const c of campos) repl[c.columna] = tildado ? valores[c.columna] : null;
+          await sequelize.query(
+            `UPDATE posibles_jubilados SET ${sets} WHERE id = :id`,
+            { replacements: repl, type: QueryTypes.UPDATE },
+          );
+          if (tildado) {
+            const dni = Number(existe[0].dni);
+            for (const c of campos) {
+              await registrarExpedienteAgente(sequelize, {
+                dni, numero: valores[c.columna], caratula: c.caratula, userId,
+              });
+            }
+          }
+        }
+
         const mapa = await traerChecklist(sequelize, [id]);
         const tildados = mapa[id] ?? [];
         return res.json({
           ok: true,
           checklist: tildados,
           items_faltantes: itemsFaltantes(tildados.map((t: any) => t.item)),
+          ...Object.fromEntries(campos.map(c => [c.columna, tildado ? valores[c.columna] : null])),
         });
       } catch (err: any) {
         logger.error({ msg: '[posibles_jubilados] checklist error', err: err?.message });
@@ -1843,7 +2589,6 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
            FROM posibles_jubilados
            WHERE deleted_at IS NULL
              AND estado IN ('IDENTIFICADO','EN_TRAMITE')
-             AND mes_corte IS NOT NULL
            ORDER BY apellido ASC, nombre ASC`,
           { type: QueryTypes.SELECT },
         ) as any[];
@@ -1866,15 +2611,26 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         const data: any[] = [];
 
         for (const r of rows) {
-          const per = periodoVigente(r.mes_corte as MesCorte, new Date(), r.fecha_jubilacion);
-          if (!alertaVencida(per)) continue;
-
           const tildados = checklist[Number(r.id)] ?? [];
-          const faltan   = itemsFaltantes(tildados.map((t: any) => t.item));
+          const hechos   = tildados.map((t: any) => t.item);
+          const faltan   = itemsFaltantes(hechos);
           if (!faltan.length) continue; // tramite cargado completo: no molesta mas
 
+          // Dos motivos distintos para entrar al banner:
+          //   IFGRA → apenas se agrega el agente, hasta que se carguen los dos
+          //           informes graficos. No espera al cronograma.
+          //   CARGA → el resto de los pasos, cuando el periodo vigente ya paso
+          //           su punto medio (esto necesita mes de corte).
+          const faltaIfgra = faltan.includes('IFGRA');
+          const per = r.mes_corte
+            ? periodoVigente(r.mes_corte as MesCorte, new Date(), r.fecha_jubilacion)
+            : null;
+          if (!faltaIfgra && (!per || !alertaVencida(per))) continue;
+          const motivo  = faltaIfgra ? 'IFGRA' : 'CARGA';
+          const periodo = per?.periodo ?? 'SIN-CORTE';
+
           const delPeriodo = oks.filter((o) => Number(o.posible_jubilado_id) === Number(r.id)
-                                            && o.periodo === per.periodo);
+                                            && o.periodo === periodo);
           // El propio OK de hoy esconde la fila para este usuario, no para el resto.
           const yoAviseHoy = userId != null
             && delPeriodo.some((o) => Number(o.usuario_id) === Number(userId) && o.dia === hoyISO);
@@ -1883,10 +2639,11 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           data.push({
             id: r.id, dni: r.dni, apellido: r.apellido, nombre: r.nombre,
             mes_corte: r.mes_corte, estado: r.estado,
-            periodo: per.periodo,
-            fecha_alerta: per.fechaAlerta,
+            motivo,
+            periodo,
+            fecha_alerta: per?.fechaAlerta ?? null,
             items_faltantes: faltan,
-            items_hechos: tildados.map((t: any) => t.item),
+            items_hechos: hechos,
             ok_dados: delPeriodo.map((o) => ({ por: o.usuario_nombre, el: o.dia })),
           });
         }

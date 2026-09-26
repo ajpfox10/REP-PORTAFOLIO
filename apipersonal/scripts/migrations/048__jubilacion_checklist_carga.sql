@@ -1,7 +1,7 @@
 -- 048__jubilacion_checklist_carga.sql
 --
 -- Checklist de carga del trámite jubilatorio (Documentación → IFGRA → SIAPE →
--- Intranet → Resolución) y acuses de la alerta de carga.
+-- Intranet → Resolución → Expediente IPS) y acuses de la alerta de carga.
 --
 -- Las dos tablas también se crean solas en runtime desde jubilacion.routes.ts
 -- (ensureChecklistTables). Esta es la DDL canónica, para tenerla versionada.
@@ -9,7 +9,7 @@
 CREATE TABLE IF NOT EXISTS posibles_jubilados_checklist (
   id                  bigint unsigned NOT NULL AUTO_INCREMENT,
   posible_jubilado_id bigint unsigned NOT NULL,
-  item                enum('DOCUMENTACION','IFGRA','SIAPE','INTRANET','RESOLUCION') NOT NULL,
+  item                enum('DOCUMENTACION','IFGRA','SIAPE','INTRANET','RESOLUCION','EXPEDIENTE_IPS') NOT NULL,
   tildado_por         bigint unsigned NULL,
   tildado_por_nombre  varchar(190)    NULL,
   created_at          timestamp       NOT NULL DEFAULT CURRENT_TIMESTAMP,

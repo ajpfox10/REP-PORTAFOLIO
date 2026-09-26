@@ -46,6 +46,10 @@ from pathlib import Path
 
 import pymysql
 
+# detalle por agente para la pagina Robots (script_run_items)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mapeo_novedades as MN
+
 try:
     import pyautogui
 except ImportError:
@@ -679,12 +683,41 @@ def _jab_set_text(el, value):
             return False
 
 
+# Calibracion de click, cacheada por proceso. La escala fisica real de la
+# ventana de SiAPe NO es constante entre sesiones (se confirmo en vivo el
+# 2026-09-25: la misma formula w.width/1296.0 dio 1.5 un dia y ~1.25 otro dia,
+# pero la escala REAL necesaria ese segundo dia era ~1.0 con offset -8 en Y -
+# virtualizacion de DPI de Windows sobre esta ventana Java especifica, no
+# arreglable con una formula fija). offset_x/offset_y son correcciones
+# EMPIRICAS que se ajustan solas la primera vez que un click verificado
+# (`_jab_click_bounds_verificado`) detecta que fallo. Ver
+# `siape_mapping_exportaciones_2026-09-22.md` seccion "Hallazgo 2026-09-25".
+_CLICK_CAL = {"offset_x": 0.0, "offset_y": 0.0}
+
+
+def _click_transform():
+    """Devuelve (scale_x, scale_y, origen_x, origen_y) para convertir bounds
+    logicos de JAB a pixeles fisicos de pantalla, con la correccion empirica
+    acumulada (si hubo alguna) sumada al origen."""
+    w = _buscar_ventana_siape()
+    if w and w.width and w.height:
+        scale_x = w.width / 1296.0
+        scale_y = w.height / 736.0
+        origen_x = w.left + _CLICK_CAL["offset_x"]
+        origen_y = w.top + _CLICK_CAL["offset_y"]
+    else:
+        scale_x = scale_y = SIAPE_JAB_SCALE
+        origen_x = _CLICK_CAL["offset_x"]
+        origen_y = _CLICK_CAL["offset_y"]
+    return scale_x, scale_y, origen_x, origen_y
+
+
 def _jab_bounds_center(info):
     bounds = info.get("bounds") or {}
-    return (
-        int((bounds.get("x", 0) + (bounds.get("width", 0) / 2)) * SIAPE_JAB_SCALE),
-        int((bounds.get("y", 0) + (bounds.get("height", 0) / 2)) * SIAPE_JAB_SCALE),
-    )
+    scale_x, scale_y, origen_x, origen_y = _click_transform()
+    cx = bounds.get("x", 0) + bounds.get("width", 0) / 2
+    cy = bounds.get("y", 0) + bounds.get("height", 0) / 2
+    return (int(origen_x + cx * scale_x), int(origen_y + cy * scale_y))
 
 
 def _doble_click_bounds(info):
@@ -703,6 +736,43 @@ def _jab_click_bounds(info):
     x, y = _jab_bounds_center(info)
     pyautogui.click(x, y)
     time.sleep(PAUSA_CORTA)
+
+
+def _jab_click_bounds_verificado(info, nombre_esperado, role="text", timeout=6):
+    """Como `_jab_click_bounds`, pero verifica por JAB que el elemento que
+    quedo con foco ('enfocado') es realmente `nombre_esperado`. Si cayo en
+    otro (tipico: la escala esta mal calculada ese dia), calcula la
+    correccion en Y a partir del bound real donde cayo el foco vs el bound
+    esperado, la guarda en `_CLICK_CAL` (para TODOS los clicks siguientes de
+    este proceso) y reintenta una vez. Devuelve True si termino enfocado en
+    el elemento correcto."""
+    bounds_objetivo = info.get("bounds") or {}
+    for intento in range(2):
+        _jab_click_bounds(info)
+        time.sleep(PAUSA_CORTA)
+        foco_info = None
+        for _el, _depth, cand in _jab_walk(max_depth=24, max_segundos=timeout):
+            if "enfocado" in (cand.get("states") or []):
+                foco_info = cand
+                break
+        nombre_foco = (foco_info or {}).get("name") or ""
+        if nombre_foco.strip() == nombre_esperado.strip():
+            return True
+        if intento == 0 and foco_info:
+            bounds_foco = foco_info.get("bounds") or {}
+            y_objetivo = bounds_objetivo.get("y")
+            y_foco = bounds_foco.get("y")
+            if y_objetivo is not None and y_foco is not None and y_foco != y_objetivo:
+                _, _scale_y, _ox, _oy = _click_transform()
+                delta_logico = y_objetivo - y_foco
+                _CLICK_CAL["offset_y"] += delta_logico * _scale_y
+                log(
+                    f"AVISO: click cayo en '{nombre_foco}' en vez de '{nombre_esperado}'; "
+                    f"corrijo offset_y en {delta_logico * _scale_y:+.1f}px y reintento."
+                )
+                continue
+        break
+    return False
 
 
 def _jab_set_text_by_bounds(info, value):
@@ -1805,6 +1875,10 @@ def main():
         else:
             marcar_procesado(cn, r["id"], errores)
             log(f"   -> {cargados} cargado(s), {len(errores)} salteado(s). procesado=1")
+            MN.registrar_item("siape_carga_francos", r["dni"], r.get("nombre"), r.get("tipo") or "FRANCO",
+                              f"{r['fecha_desde']:%d/%m/%Y}", f"{r['fecha_hasta']:%d/%m/%Y}",
+                              "ok" if not errores else ("error" if not cargados else "aviso"),
+                              f"{cargados} día(s) cargado(s)" + (f"; no cargados: {'; '.join(errores)}" if errores else ""))
 
     cn.close()
     log("Listo.")

@@ -1,7 +1,7 @@
 // src/pages/HerramientasPage/index.tsx
 // Calculadora de Jubilación IPS — Leyes 10471/10430 · Decretos 598/2015, 58/2015, 1554/2022
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { Fragment, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useNavigate }    from 'react-router-dom';
 import { Layout }         from '../../components/Layout';
 import { apiFetch }       from '../../api/http';
@@ -9,6 +9,7 @@ import { searchPersonal } from '../../api/searchPersonal';
 import { exportToExcel }  from '../../utils/export';
 import { useToast }                     from '../../ui/toast';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
+import { ITEMS_CHECKLIST, FormNumeros, camposDeItem } from './ChecklistNumeros';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface ServicioANSES {
@@ -181,6 +182,105 @@ function proximasBajas(desdeISO: string, cuantas = 4): string[] {
   return out;
 }
 
+// ── Proyección por servicio ───────────────────────────────────────────────────
+// Una fila por agente activo, con la fecha en la que cumple los requisitos
+// jubilatorios (la calcula el backend con el mismo motor que la calculadora).
+type CorteProy = 'CUMPLE' | 'HASTA_6M' | 'HASTA_12M' | 'MAS_ADELANTE' | 'NO_COMPUTA' | 'SIN_DATOS';
+
+interface FilaProyeccion {
+  dni:                number;
+  apellido:           string;
+  nombre:             string;
+  fecha_nacimiento:   string | null;
+  fecha_ingreso:      string | null;
+  fecha_nombramiento?: string | null;
+  tiene_beca?:        boolean;
+  beca_aporto?:       boolean;
+  es_jefe?:           boolean;
+  tramos_anteriores?: Array<{ desde: string | null; hasta: string | null; ley: string | null }>;
+  ley_id:             number | null;
+  ley_nombre:         string | null;
+  ocupacion_nombre:   string | null;
+  servicio_id:        number | null;
+  servicio_nombre:    string | null;
+  reparticion_id:     number | null;
+  reparticion_nombre: string | null;
+  dependencia_id:     number | null;
+  dependencia_nombre: string | null;
+  situacion_revista:  string;
+  edad:               Periodo | null;
+  antiguedad_ips:     Periodo;
+  total_comun:        Periodo;
+  total_insalubre:    Periodo;
+  total_prorateado:   Periodo;
+  cumple_edad:        boolean;
+  cumple_servicio:    boolean;
+  falta_edad:         Periodo;
+  falta_servicio:     Periodo;
+  tipo_jubilacion:    string | null;
+  tipo_al_cumplir:    string | null;
+  caja_jubilatoria:   'IPS' | 'ANSES';
+  fecha_cumple:       string | null;
+  dias_para_cumplir:  number | null;
+  corte:              CorteProy;
+  // Escenario "si paga los aportes" (reconocimiento de servicios de beca,
+  // residencia o concurrencia). Sólo viene cuando hay tiempo impago.
+  pago_posible:             boolean;
+  periodo_a_reconocer:      Periodo | null;
+  cargo_deudor_2pct:        boolean;
+  cargo_deudor_periodo:     Periodo | null;
+  es_insalubre_ocupacion:   boolean;
+  es_insalubre_efectivo:    boolean;
+  fecha_cumple_con_pago:    string | null;
+  corte_con_pago:           CorteProy | null;
+  tipo_al_cumplir_con_pago: string | null;
+  sin_aportes:        boolean;
+  sin_datos_anses:    boolean;
+  origen_datos:       'CALCULO' | 'ESTIMADO';
+  estado_posible:     string | null;
+}
+
+interface EstructuraProy {
+  dependencias:  Array<{ id: number; nombre: string }>;
+  reparticiones: Array<{ id: number; nombre: string; dependencia_id: number | null }>;
+  servicios:     Array<{ id: number; nombre: string; reparticion_id: number | null }>;
+  leyes:         Array<{ id: number; nombre: string }>;
+}
+
+const CORTE_LABEL: Record<CorteProy, string> = {
+  CUMPLE:       'Ya está en condiciones',
+  HASTA_6M:     'Dentro de 6 meses',
+  HASTA_12M:    'Dentro de 12 meses',
+  MAS_ADELANTE: 'Más adelante',
+  NO_COMPUTA:   'No computa aportes',
+  SIN_DATOS:    'Sin datos para proyectar',
+};
+
+const CORTE_COLOR: Record<CorteProy, { bg: string; fg: string }> = {
+  CUMPLE:       { bg: '#14532d', fg: '#86efac' },
+  HASTA_6M:     { bg: '#713f12', fg: '#fef08a' },
+  HASTA_12M:    { bg: '#0c1a4a', fg: '#93c5fd' },
+  MAS_ADELANTE: { bg: '#1e293b', fg: '#94a3b8' },
+  NO_COMPUTA:   { bg: '#2e1065', fg: '#d8b4fe' },
+  SIN_DATOS:    { bg: '#450a0a', fg: '#fca5a5' },
+};
+
+// Tipo corto para la tabla (el largo, con los requisitos, va en TIPOS_JUBILACION)
+const TIPO_CORTO: Record<string, string> = {
+  ORDINARIA:             'Ordinaria',
+  AGOTAMIENTO_PREMATURO: 'Agot. prematuro',
+  PRORRATEO:             'Prorrateo',
+};
+
+// Qué es lo que este agente tendría que pagar, en texto corto. Son dos deudas
+// distintas: los aportes del tiempo de beca / residencia / concurrencia (que
+// suma servicio nuevo) y el diferencial del 2% anterior a Jun/2015 (que no suma
+// días pero pasa ese tramo de común a insalubre). Pueden darse las dos juntas.
+const descPago = (f: FilaProyeccion): string => [
+  f.periodo_a_reconocer ? fmtPeriodo(f.periodo_a_reconocer) : null,
+  f.cargo_deudor_2pct   ? `el 2% de ${fmtPeriodo(f.cargo_deudor_periodo)}` : null,
+].filter(Boolean).join(' + ');
+
 const S: Record<string, React.CSSProperties> = {
   card:      { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: 20, marginBottom: 16 },
   label:     { fontSize: '0.68rem', textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.45)', fontWeight: 600, marginBottom: 4, display: 'block' },
@@ -312,23 +412,20 @@ function CronogramaJubilacion() {
 
 // Pasos del tramite jubilatorio, en el orden en que se cargan.
 // El value tiene que coincidir con el enum de posibles_jubilados_checklist.
-const ITEMS_CHECKLIST: Array<{ value: string; label: string }> = [
-  { value: 'DOCUMENTACION', label: 'Documentación' },
-  { value: 'IFGRA',         label: 'IFGRA'          },
-  { value: 'SIAPE',         label: 'SIAPE'          },
-  { value: 'INTRANET',      label: 'Intranet'       },
-  { value: 'RESOLUCION',    label: 'Resolución'     },
-];
-
 // Cuadro de tildes de una ficha. Cada paso muestra quien lo tildo y cuando.
+// Los pasos de expediente (GDEBA / IPS) no se tildan derecho: primero piden el
+// numero, y recien al confirmar se manda el PUT.
 function ChecklistTramite({ pj, guardando, onToggle }: {
   pj: any;
   guardando: string | null;
-  onToggle: (id: number, item: string, tildado: boolean) => void;
+  onToggle: (id: number, item: string, tildado: boolean, numeros?: Record<string, string>) => void;
 }) {
   const hechos: Record<string, any> = {};
   for (const t of (pj.checklist ?? [])) hechos[t.item] = t;
   const completos = ITEMS_CHECKLIST.every(i => hechos[i.value]);
+
+  // Paso esperando que se carguen sus numeros.
+  const [pidiendo, setPidiendo] = useState<string | null>(null);
 
   return (
     <div style={{
@@ -349,10 +446,16 @@ function ChecklistTramite({ pj, guardando, onToggle }: {
                 style={S.chk}
                 checked={hecho}
                 disabled={busy}
-                onChange={e => onToggle(pj.id, item.value, e.target.checked)}
+                onChange={e => {
+                  if (e.target.checked && item.campos) setPidiendo(item.value);
+                  else onToggle(pj.id, item.value, e.target.checked);
+                }}
               />
               <span style={{ fontSize: '0.8rem', color: hecho ? '#86efac' : '#94a3b8', fontWeight: hecho ? 700 : 400 }}>
                 {item.label}
+                {hecho && (item.campos ?? []).filter(c => pj[c.columna]).map(c => (
+                  <span key={c.columna} style={{ color: '#7dd3fc', fontWeight: 400 }}> · {pj[c.columna]}</span>
+                ))}
               </span>
               {hecho && hechos[item.value].por && (
                 <span style={{ fontSize: '0.68rem', color: '#475569' }}>
@@ -363,6 +466,16 @@ function ChecklistTramite({ pj, guardando, onToggle }: {
           );
         })}
       </div>
+
+      {pidiendo && (
+        <FormNumeros
+          item={pidiendo}
+          valores={pj}
+          guardando={guardando === `${pj.id}:${pidiendo}`}
+          onGuardar={numeros => { onToggle(pj.id, pidiendo, true, numeros); setPidiendo(null); }}
+          onCancelar={() => setPidiendo(null)}
+        />
+      )}
     </div>
   );
 }
@@ -476,6 +589,117 @@ function HistorialCalculos({ historial, onCargar }: { historial: any[]; onCargar
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
+// Paleta categórica (dark), orden fijo. El color sigue al servicio, no a su
+// posición en la tabla; del 9° en adelante van en gris.
+const SERIE_COLORES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+const SERIE_OTRO = '#64748b';
+
+interface SerieEvolucion {
+  key: string;
+  nombre: string;
+  color: string;
+  n: number;
+  puntos: Array<{ fecha: string; pct: number; cant: number }>;
+}
+
+function GraficoEvolucion({ series, umbral }: { series: SerieEvolucion[]; umbral: number }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const fechas = series[0]?.puntos.map(p => p.fecha) ?? [];
+  if (!fechas.length) return null;
+
+  const W = 900, H = 300;
+  const etiquetasFin = series.length <= 4;
+  const M = { top: 14, right: etiquetasFin ? 150 : 16, bottom: 28, left: 40 };
+  const iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+  const x = (i: number) => M.left + (fechas.length === 1 ? iw / 2 : (i / (fechas.length - 1)) * iw);
+  const y = (pct: number) => M.top + ih - (pct / 100) * ih;
+  const pasoX = Math.max(1, Math.ceil(fechas.length / 12));
+
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = svgRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const vx = ((e.clientX - r.left) / r.width) * W;
+    const i = Math.round(((vx - M.left) / iw) * (fechas.length - 1));
+    setHover(i >= 0 && i < fechas.length ? i : null);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {series.length >= 2 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginBottom: 8, fontSize: '0.74rem', color: '#cbd5e1' }}>
+          {series.map(s => (
+            <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 14, height: 3, borderRadius: 2, background: s.color }} />
+              {s.nombre}
+            </span>
+          ))}
+        </div>
+      )}
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%" role="img"
+        aria-label="Porcentaje del plantel en condiciones de jubilarse por año, por servicio"
+        onMouseMove={onMove} onMouseLeave={() => setHover(null)} style={{ display: 'block', overflow: 'visible' }}>
+        {[0, 25, 50, 75, 100].map(v => (
+          <g key={v}>
+            <line x1={M.left} x2={M.left + iw} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.07)" />
+            <text x={M.left - 8} y={y(v)} textAnchor="end" dominantBaseline="middle" fontSize="11" fill="#64748b">{v}%</text>
+          </g>
+        ))}
+        {fechas.map((f, i) => i % pasoX === 0 && (
+          <text key={f} x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="#64748b">{f.slice(0, 4)}</text>
+        ))}
+        <line x1={M.left} x2={M.left + iw} y1={y(umbral)} y2={y(umbral)}
+          stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={1} />
+        <text x={M.left + 4} y={y(umbral) - 5} fontSize="10.5" fill="#94a3b8">umbral {umbral}%</text>
+
+        {series.map(s => (
+          <polyline key={s.key} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+            points={s.puntos.map((p, i) => `${x(i)},${y(p.pct)}`).join(' ')} />
+        ))}
+
+        {etiquetasFin && series.map(s => {
+          const u = s.puntos[s.puntos.length - 1];
+          return (
+            <text key={s.key} x={x(s.puntos.length - 1) + 8} y={y(u.pct)} dominantBaseline="middle" fontSize="11" fill="#cbd5e1">
+              {u.pct}% · {s.nombre.length > 22 ? s.nombre.slice(0, 21) + '…' : s.nombre}
+            </text>
+          );
+        })}
+
+        {hover !== null && (
+          <g>
+            <line x1={x(hover)} x2={x(hover)} y1={M.top} y2={M.top + ih} stroke="rgba(255,255,255,0.25)" />
+            {series.map(s => (
+              <circle key={s.key} cx={x(hover)} cy={y(s.puntos[hover].pct)} r={4.5}
+                fill={s.color} stroke="#131a2a" strokeWidth={2} />
+            ))}
+          </g>
+        )}
+      </svg>
+      {hover !== null && (
+        <div style={{
+          position: 'absolute', top: 30, pointerEvents: 'none',
+          left: `${(x(hover) / W) * 100}%`,
+          transform: x(hover) > W * 0.6 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)',
+          background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8,
+          padding: '8px 10px', fontSize: '0.74rem', color: '#e2e8f0', minWidth: 190, zIndex: 2,
+          boxShadow: '0 6px 18px rgba(0,0,0,0.4)',
+        }}>
+          <div style={{ color: '#94a3b8', marginBottom: 4 }}>al {fmtFecha(fechas[hover])}</div>
+          {[...series].sort((a, b) => b.puntos[hover].pct - a.puntos[hover].pct).map(s => (
+            <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color, flexShrink: 0 }} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{s.nombre}</span>
+              <b>{s.puntos[hover].pct}%</b>
+              <span style={{ color: '#64748b' }}>{s.puntos[hover].cant}/{s.n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HerramientasPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -502,6 +726,10 @@ export function HerramientasPage() {
   const [revision,   setRevision]   = useState<RevisionPdfANSES | null>(null);
   const archivoRef                  = useRef<HTMLInputElement | null>(null);
 
+  // Ficha ANSES persistida del agente (jubilacion_anses): alimenta la proyección.
+  const [fichaAnses,     setFichaAnses]     = useState<any | null>(null);
+  const [fichaGuardando, setFichaGuardando] = useState(false);
+
   // Resoluciones manuales de empates: key = "IPS|ANSES_0" etc., value = id del ganador
   const [resolucionesManuales, setResolucionesManuales] = useState<Record<string, string>>({});
 
@@ -519,7 +747,37 @@ export function HerramientasPage() {
   const [cargadoDe,     setCargadoDe]     = useState<{ fecha: string; por: string | null } | null>(null);
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
-  const [tab, setTab] = useState<'calculadora' | 'posibles' | 'citas'>('calculadora');
+  const [tab, setTab] = useState<'calculadora' | 'proyeccion' | 'percentil' | 'posibles' | 'citas'>('calculadora');
+
+  // ── Proyección por servicio — estado ──────────────────────────────────────
+  // El backend devuelve el padrón activo entero proyectado a la fecha elegida;
+  // los filtros (dependencia / repartición / servicio / ley / texto) se aplican
+  // acá, sobre lo ya traído, así cambiar de servicio no vuelve a calcular.
+  const [pyFecha,       setPyFecha]       = useState(TODAY_ISO);
+  const [pyDep,         setPyDep]         = useState('');
+  const [pyRep,         setPyRep]         = useState('');
+  const [pySrv,         setPySrv]         = useState('');
+  const [pyLey,         setPyLey]         = useState('');
+  const [pyQ,           setPyQ]           = useState('');
+  const [pyCorte,       setPyCorte]       = useState<CorteProy | 'TODOS'>('TODOS');
+  const [pyEstructura,  setPyEstructura]  = useState<EstructuraProy | null>(null);
+  const [pyData,        setPyData]        = useState<FilaProyeccion[]>([]);
+  const [pyFechas,      setPyFechas]      = useState<{ fecha: string; fecha_6m: string; fecha_12m: string } | null>(null);
+  const [pyCargando,    setPyCargando]    = useState(false);
+  const [pyCorrido,     setPyCorrido]     = useState(false);
+  const [pyOrden,       setPyOrden]       = useState<'FECHA' | 'APELLIDO' | 'SERVICIO' | 'EDAD'>('FECHA');
+  const [pyVista,       setPyVista]       = useState<'AGENTES' | 'SERVICIOS'>('AGENTES');
+  const [pyAgregando,   setPyAgregando]   = useState<number | null>(null);
+  // Mira la proyección suponiendo que el agente paga los aportes del tiempo de
+  // beca / residencia / concurrencia (reconocimiento de servicios).
+  const [pyConPago,     setPyConPago]     = useState(false);
+  // Pestaña "Percentil por servicio": a qué fecha se llega al X% del plantel
+  // de cada servicio en condiciones de jubilarse (usa el mismo pyData).
+  const [pyUmbral,      setPyUmbral]      = useState(90);
+  const [pySrvAbierto,  setPySrvAbierto]  = useState<string | null>(null);
+  // Selección múltiple de servicios, propia de la pestaña Percentil. Cada uno
+  // con su ley ('' = todas): Laboratorio puede ir con Guardia y Farmacia con Planta.
+  const [pySrvs,        setPySrvs]        = useState<Array<{ srv: string; ley: string }>>([]);
 
   // ── Posibles Jubilados — estado ───────────────────────────────────────────
   const [pjBusqueda,    setPjBusqueda]    = useState('');
@@ -539,6 +797,10 @@ export function HerramientasPage() {
   const [pjEditObs,     setPjEditObs]     = useState('');
   const [pjEditFPapeles,   setPjEditFPapeles]   = useState('');
   const [pjEditFJubilacion,setPjEditFJubilacion]= useState('');
+  const [pjEditExpteIps,  setPjEditExpteIps]   = useState('');
+  const [pjEditExpteGdeba, setPjEditExpteGdeba] = useState('');
+  const [pjEditIfgra1,    setPjEditIfgra1]     = useState('');
+  const [pjEditIfgra2,    setPjEditIfgra2]     = useState('');
   const [pjSoloProximos,   setPjSoloProximos]   = useState(false);
   const [pjGuardando,   setPjGuardando]   = useState(false);
 
@@ -602,6 +864,17 @@ export function HerramientasPage() {
       setRevision(null);
       setPdfRuta('');
       setPdfOrigen('');
+
+      // Ficha ANSES guardada del agente: se precarga para no volver a leer el
+      // PDF. Si después se confirma un cálculo, ese manda sobre la ficha.
+      setFichaAnses(null);
+      try {
+        const fi = await apiFetch<any>(`/jubilacion/anses/${d.dni}`);
+        if (fi?.data) {
+          setFichaAnses(fi.data);
+          if ((fi.data.servicios ?? []).length) setServiciosAnses(fi.data.servicios);
+        }
+      } catch { /* sin ficha se carga a mano, como antes */ }
 
       const hist  = await apiFetch<any>(`/jubilacion/agente/${d.dni}`);
       const filas = hist?.data ?? [];
@@ -1016,16 +1289,25 @@ export function HerramientasPage() {
 
   // Tilda / destilda un paso del tramite. Refresca la lista para traer quien lo
   // tildo, que lo pone el backend con el usuario del token.
-  const pjToggleChecklist = useCallback(async (id: number, item: string, tildado: boolean) => {
+  const pjToggleChecklist = useCallback(async (id: number, item: string, tildado: boolean, numeros?: Record<string, string>) => {
     setPjChkGuardando(`${id}:${item}`);
+    // Los pasos con numero devuelven ademas sus columnas ya guardadas.
+    const campos = camposDeItem(item);
     try {
       const res = await apiFetch<any>(`/jubilacion/posibles/${id}/checklist`, {
         method: 'PUT',
-        body: JSON.stringify({ item, tildado }),
+        body: JSON.stringify({ item, tildado, ...(campos.length ? { numeros: numeros ?? {} } : {}) }),
       });
       if (res?.ok) {
         setPjLista((prev: any[]) => prev.map((p: any) =>
-          p.id === id ? { ...p, checklist: res.checklist, items_faltantes: res.items_faltantes } : p));
+          p.id === id
+            ? {
+                ...p,
+                checklist: res.checklist,
+                items_faltantes: res.items_faltantes,
+                ...Object.fromEntries(campos.map(c => [c.columna, res[c.columna] ?? null])),
+              }
+            : p));
       } else {
         toast.error(res?.error ?? 'No se pudo guardar el tilde');
       }
@@ -1041,6 +1323,10 @@ export function HerramientasPage() {
     setPjEditObs(pj.observaciones ?? '');
     setPjEditFPapeles(toInputDate(pj.fecha_presentacion_papeles));
     setPjEditFJubilacion(toInputDate(pj.fecha_jubilacion));
+    setPjEditExpteIps(pj.expediente_ips ?? '');
+    setPjEditExpteGdeba(pj.expediente_gdeba ?? '');
+    setPjEditIfgra1(pj.ifgra_1 ?? '');
+    setPjEditIfgra2(pj.ifgra_2 ?? '');
   }, [pjCortes]);
 
   // Cambiar el corte en la edicion reescribe las dos fechas del cronograma:
@@ -1065,6 +1351,10 @@ export function HerramientasPage() {
           observaciones:              pjEditObs,
           fecha_presentacion_papeles: pjEditFPapeles    || null,
           fecha_jubilacion:           pjEditFJubilacion || null,
+          expediente_ips:             pjEditExpteIps.trim() || null,
+          expediente_gdeba:           pjEditExpteGdeba.trim() || null,
+          ifgra_1:                    pjEditIfgra1.trim() || null,
+          ifgra_2:                    pjEditIfgra2.trim() || null,
         }),
       });
       if (res?.ok) {
@@ -1077,7 +1367,7 @@ export function HerramientasPage() {
     } catch (e: any) {
       toast.error('Error: ' + e?.message);
     } finally { setPjGuardando(false); }
-  }, [pjEditEstado, pjEditMesCorte, pjEditObs, pjEditFPapeles, pjEditFJubilacion, cargarPosibles, toast]);
+  }, [pjEditEstado, pjEditMesCorte, pjEditObs, pjEditFPapeles, pjEditFJubilacion, pjEditExpteIps, pjEditExpteGdeba, pjEditIfgra1, pjEditIfgra2, cargarPosibles, toast]);
 
   const eliminarPosible = useCallback(async (id: number) => {
     if (!window.confirm('¿Eliminar este registro?')) return;
@@ -1093,6 +1383,432 @@ export function HerramientasPage() {
       toast.error('Error: ' + e?.message);
     }
   }, [cargarPosibles, toast]);
+
+  // ── Ficha ANSES del agente ────────────────────────────────────────────────
+  // Los tramos de ANSES se guardan aparte del cálculo para que la proyección
+  // del padrón pueda usarlos (antes vivían sólo adentro de un cálculo guardado).
+  const guardarFichaAnses = useCallback(async () => {
+    if (!agente) return;
+    setFichaGuardando(true);
+    try {
+      const validos = serviciosAnses.filter(a => a.fecha_desde && a.fecha_hasta);
+      const res = await apiFetch<any>(`/jubilacion/anses/${agente.dni}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          servicios:   validos,
+          // Sin líneas, se registra que ya se revisó y no tiene aportes.
+          tiene_datos: validos.length > 0,
+          origen:      revision ? 'PDF' : 'MANUAL',
+          ...(pdfOrigen ? { archivo_origen: pdfOrigen } : {}),
+        }),
+      });
+      if (res?.ok) {
+        toast.ok(validos.length
+          ? `Ficha ANSES guardada (${validos.length} línea/s)`
+          : 'Se registró que el agente no tiene aportes en ANSES');
+        setFichaAnses({ servicios: validos, tiene_datos: validos.length > 0 });
+      } else {
+        toast.error(res?.error ?? 'No se pudo guardar la ficha ANSES');
+      }
+    } catch (e: any) {
+      toast.error('Error al guardar la ficha ANSES: ' + e?.message);
+    } finally { setFichaGuardando(false); }
+  }, [agente, serviciosAnses, revision, pdfOrigen, toast]);
+
+  // ── Proyección por servicio — funciones ───────────────────────────────────
+  const cargarEstructuraProy = useCallback(async () => {
+    try {
+      const res = await apiFetch<any>('/jubilacion/proyeccion/estructura');
+      if (res?.data) setPyEstructura(res.data);
+    } catch { /* sin catálogos los selectores quedan vacíos, la tabla igual anda */ }
+  }, []);
+
+  // El cálculo del padrón entero es caro: se corre a pedido y cuando cambia la
+  // fecha de corte, nunca al tipear en los filtros.
+  const correrProyeccion = useCallback(async () => {
+    setPyCargando(true);
+    try {
+      const res = await apiFetch<any>(`/jubilacion/proyeccion?fecha=${encodeURIComponent(pyFecha)}`);
+      if (!res?.ok) { toast.error(res?.error ?? 'Error al proyectar'); return; }
+      setPyData(res.data ?? []);
+      setPyFechas({ fecha: res.fecha, fecha_6m: res.fecha_6m, fecha_12m: res.fecha_12m });
+      setPyCorrido(true);
+    } catch (e: any) {
+      toast.error('Error al proyectar: ' + e?.message);
+    } finally { setPyCargando(false); }
+  }, [pyFecha, toast]);
+
+  // Repartición y servicio se acotan a lo que cuelga de lo elegido arriba.
+  const pyReparticiones = useMemo(() => {
+    const todas = pyEstructura?.reparticiones ?? [];
+    return pyDep ? todas.filter(r => String(r.dependencia_id ?? '') === pyDep) : todas;
+  }, [pyEstructura, pyDep]);
+
+  const pyServicios = useMemo(() => {
+    const todos = pyEstructura?.servicios ?? [];
+    if (pyRep) return todos.filter(s => String(s.reparticion_id ?? '') === pyRep);
+    if (pyDep) {
+      const ids = new Set(pyReparticiones.map(r => String(r.id)));
+      return todos.filter(s => ids.has(String(s.reparticion_id ?? '')));
+    }
+    return todos;
+  }, [pyEstructura, pyDep, pyRep, pyReparticiones]);
+
+  // Con el escenario de pago activo, la fila se mira por su fecha y su corte
+  // "si paga"; si ese agente no tiene nada que pagar, queda como está.
+  const corteDe  = useCallback((f: FilaProyeccion): CorteProy =>
+    (pyConPago && f.pago_posible && f.corte_con_pago ? f.corte_con_pago : f.corte), [pyConPago]);
+  const fechaDe  = useCallback((f: FilaProyeccion): string | null =>
+    (pyConPago && f.pago_posible ? f.fecha_cumple_con_pago : f.fecha_cumple), [pyConPago]);
+  const tipoDe   = useCallback((f: FilaProyeccion): string | null =>
+    (pyConPago && f.pago_posible ? f.tipo_al_cumplir_con_pago : f.tipo_al_cumplir), [pyConPago]);
+
+  const pyFiltrada = useMemo(() => {
+    const q = pyQ.trim().toLowerCase();
+    const filas = pyData.filter(f => {
+      if (pyDep   && String(f.dependencia_id ?? '') !== pyDep) return false;
+      if (pyRep   && String(f.reparticion_id ?? '') !== pyRep) return false;
+      if (pySrv   && String(f.servicio_id ?? '')    !== pySrv) return false;
+      if (pyLey   && String(f.ley_id ?? '')         !== pyLey) return false;
+      if (pyCorte !== 'TODOS' && corteDe(f) !== pyCorte)       return false;
+      if (q) {
+        const txt = `${f.apellido} ${f.nombre} ${f.dni}`.toLowerCase();
+        if (!txt.includes(q)) return false;
+      }
+      return true;
+    });
+    const porFecha = (a: FilaProyeccion, b: FilaProyeccion) => {
+      // Sin fecha proyectada van al fondo.
+      const fa = fechaDe(a), fb = fechaDe(b);
+      if (!fa && !fb) return 0;
+      if (!fa) return 1;
+      if (!fb) return -1;
+      return fa.localeCompare(fb);
+    };
+    const porNombre = (a: FilaProyeccion, b: FilaProyeccion) =>
+      `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`);
+    const cmp = {
+      FECHA:    (a: FilaProyeccion, b: FilaProyeccion) => porFecha(a, b) || porNombre(a, b),
+      APELLIDO: porNombre,
+      SERVICIO: (a: FilaProyeccion, b: FilaProyeccion) =>
+        String(a.servicio_nombre ?? '').localeCompare(String(b.servicio_nombre ?? '')) || porFecha(a, b),
+      EDAD:     (a: FilaProyeccion, b: FilaProyeccion) =>
+        (b.edad?.anios ?? 0) - (a.edad?.anios ?? 0) || porNombre(a, b),
+    }[pyOrden];
+    return [...filas].sort(cmp);
+  }, [pyData, pyDep, pyRep, pySrv, pyLey, pyQ, pyCorte, pyOrden, corteDe, fechaDe]);
+
+  // Los totales acompañan al filtro, salvo el de corte: las tarjetas tienen que
+  // seguir mostrando los cinco grupos aunque se esté mirando uno solo.
+  const pyBase = useMemo(() => {
+    const q = pyQ.trim().toLowerCase();
+    return pyData.filter(f => {
+      if (pyDep && String(f.dependencia_id ?? '') !== pyDep) return false;
+      if (pyRep && String(f.reparticion_id ?? '') !== pyRep) return false;
+      if (pySrv && String(f.servicio_id ?? '')    !== pySrv) return false;
+      if (pyLey && String(f.ley_id ?? '')         !== pyLey) return false;
+      if (q && !`${f.apellido} ${f.nombre} ${f.dni}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [pyData, pyDep, pyRep, pySrv, pyLey, pyQ]);
+
+  const pyResumen = useMemo(() => {
+    const acc: Record<CorteProy, number> = {
+      CUMPLE: 0, HASTA_6M: 0, HASTA_12M: 0, MAS_ADELANTE: 0, NO_COMPUTA: 0, SIN_DATOS: 0,
+    };
+    let sinAnses = 0;
+    let conPago  = 0;
+    let deudor2  = 0;
+    for (const f of pyBase) {
+      acc[corteDe(f)]++;
+      if (f.sin_datos_anses)   sinAnses++;
+      if (f.pago_posible)      conPago++;
+      if (f.cargo_deudor_2pct) deudor2++;
+    }
+    return { ...acc, total: pyBase.length, sin_anses: sinAnses, con_pago: conPago, deudor_2pct: deudor2 };
+  }, [pyBase, corteDe]);
+
+  const pyPorServicio = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const f of pyBase) {
+      const key = String(f.servicio_id ?? 'SIN');
+      if (!m.has(key)) {
+        m.set(key, {
+          servicio_id: f.servicio_id,
+          servicio_nombre: f.servicio_nombre ?? '(sin servicio asignado)',
+          dependencia_nombre: f.dependencia_nombre,
+          CUMPLE: 0, HASTA_6M: 0, HASTA_12M: 0, MAS_ADELANTE: 0, NO_COMPUTA: 0, SIN_DATOS: 0, total: 0,
+        });
+      }
+      const g = m.get(key);
+      g[corteDe(f)]++; g.total++;
+    }
+    return Array.from(m.values()).sort(
+      (a, b) => (b.CUMPLE + b.HASTA_6M) - (a.CUMPLE + a.HASTA_6M) ||
+                String(a.servicio_nombre).localeCompare(String(b.servicio_nombre)),
+    );
+  }, [pyBase, corteDe]);
+
+  // Fecha en la que se alcanza el X% (pyUmbral) del plantel de un servicio en
+  // condiciones de jubilarse. Se excluyen del cálculo (numerador y denominador)
+  // los agentes que no computan aportes o no tienen datos para proyectar:
+  // el porcentaje es sobre el plantel proyectable, no sobre la nómina completa.
+  // Espera `fechas` ordenadas. `alcanzan` cuenta a todos los que cumplen hasta
+  // esa fecha (incluye empates), por eso el % real puede superar el umbral.
+  const fechaPercentil = useCallback((fechas: string[], umbral: number) => {
+    const n = fechas.length;
+    if (!n) return { fecha: null as string | null, alcanzan: 0, pct: 0 };
+    const idx = Math.min(n - 1, Math.max(0, Math.ceil((umbral / 100) * n) - 1));
+    const fecha = fechas[idx];
+    const alcanzan = fechas.filter(x => x <= fecha).length;
+    return { fecha, alcanzan, pct: Math.round(alcanzan / n * 100) };
+  }, []);
+
+  // La del último cálculo, no la del input: si cambió y no se recalculó, se
+  // sigue midiendo contra lo que realmente se proyectó.
+  const pyFechaCorte = pyFechas?.fecha ?? pyFecha;
+
+  const leyCorta = useCallback((id: string) =>
+    (pyEstructura?.leyes.find(l => String(l.id) === id)?.nombre ?? `Ley ${id}`).replace(/^LEY\s*/i, ''),
+  [pyEstructura]);
+
+  // Cada agente con el grupo (fila) al que pertenece. Sin servicios elegidos:
+  // un grupo por servicio y rige el filtro de ley general. Con servicios
+  // elegidos: un grupo por par servicio+ley de la selección.
+  const pctGrupos = useMemo(() => {
+    const out: Array<{ f: FilaProyeccion; key: string; nombre: string }> = [];
+    for (const f of pyData) {
+      if (pyDep && String(f.dependencia_id ?? '') !== pyDep) continue;
+      if (pyRep && String(f.reparticion_id ?? '') !== pyRep) continue;
+      const srv = String(f.servicio_id ?? '');
+      const ley = String(f.ley_id ?? '');
+      if (!pySrvs.length) {
+        if (pyLey && ley !== pyLey) continue;
+        out.push({ f, key: srv || 'SIN', nombre: f.servicio_nombre ?? '(sin servicio asignado)' });
+        continue;
+      }
+      for (const sel of pySrvs) {
+        if (sel.srv !== srv || (sel.ley && sel.ley !== ley)) continue;
+        out.push({
+          f, key: `${sel.srv}|${sel.ley}`,
+          nombre: `${f.servicio_nombre ?? ''} · ${sel.ley ? leyCorta(sel.ley) : 'todas las leyes'}`,
+        });
+      }
+    }
+    return out;
+  }, [pyData, pyDep, pyRep, pyLey, pySrvs, leyCorta]);
+
+  // Agentes únicos (un agente puede caer en dos grupos si se repite el servicio).
+  const pctBase = useMemo(() => {
+    const vistos = new Set<number>();
+    return pctGrupos.filter(({ f }) => !vistos.has(f.dni) && !!vistos.add(f.dni)).map(({ f }) => f);
+  }, [pctGrupos]);
+
+  const pyPercentilPorServicio = useMemo(() => {
+    const m = new Map<string, {
+      key: string; servicio_id: number | null; servicio_nombre: string; dependencia_nombre: string | null;
+      fechas: string[]; excluidos: number; total: number;
+    }>();
+    for (const { f, key, nombre } of pctGrupos) {
+      if (!m.has(key)) {
+        m.set(key, {
+          key,
+          servicio_id: f.servicio_id,
+          servicio_nombre: nombre,
+          dependencia_nombre: f.dependencia_nombre,
+          fechas: [], excluidos: 0, total: 0,
+        });
+      }
+      const g = m.get(key)!;
+      g.total++;
+      const corte = corteDe(f);
+      const fecha = fechaDe(f);
+      if (corte === 'NO_COMPUTA' || corte === 'SIN_DATOS' || !fecha) {
+        g.excluidos++;
+      } else {
+        g.fechas.push(fecha);
+      }
+    }
+    const filas = Array.from(m.values()).map(g => {
+      g.fechas.sort();
+      const p = fechaPercentil(g.fechas, pyUmbral);
+      const alCorte = g.fechas.filter(x => x <= pyFechaCorte).length;
+      return {
+        key:                g.key,
+        servicio_id:        g.servicio_id,
+        servicio_nombre:    g.servicio_nombre,
+        dependencia_nombre: g.dependencia_nombre,
+        total:              g.total,
+        proyectables:       g.fechas.length,
+        excluidos:          g.excluidos,
+        fecha_umbral:       p.fecha,
+        alcanzan:           p.alcanzan,
+        pct:                p.pct,
+        al_corte:           alCorte,
+        pct_corte:          g.fechas.length ? Math.round(alCorte / g.fechas.length * 100) : 0,
+        fechas:             g.fechas,
+      };
+    });
+    filas.sort((a, b) => {
+      if (!a.fecha_umbral && !b.fecha_umbral) return a.servicio_nombre.localeCompare(b.servicio_nombre);
+      if (!a.fecha_umbral) return 1;
+      if (!b.fecha_umbral) return -1;
+      return a.fecha_umbral.localeCompare(b.fecha_umbral);
+    });
+    return filas;
+  }, [pctGrupos, corteDe, fechaDe, pyUmbral, fechaPercentil, pyFechaCorte]);
+
+  const pyAgentesPorServicio = useMemo(() => {
+    const m = new Map<string, FilaProyeccion[]>();
+    for (const { f, key } of pctGrupos) {
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(f);
+    }
+    for (const lista of m.values()) {
+      lista.sort((a, b) => {
+        const fa = fechaDe(a), fb = fechaDe(b);
+        if (!fa && !fb) return a.apellido.localeCompare(b.apellido);
+        if (!fa) return 1;
+        if (!fb) return -1;
+        return fa.localeCompare(fb);
+      });
+    }
+    return m;
+  }, [pctGrupos, fechaDe]);
+
+  const pyPercentilTotal = useMemo(() => {
+    const fechas: string[] = [];
+    let excluidos = 0;
+    for (const f of pctBase) {
+      const corte = corteDe(f);
+      const fecha = fechaDe(f);
+      if (corte === 'NO_COMPUTA' || corte === 'SIN_DATOS' || !fecha) excluidos++;
+      else fechas.push(fecha);
+    }
+    fechas.sort();
+    const p = fechaPercentil(fechas, pyUmbral);
+    const alCorte = fechas.filter(x => x <= pyFechaCorte).length;
+    return {
+      total: pctBase.length,
+      proyectables: fechas.length,
+      excluidos,
+      fecha_umbral: p.fecha,
+      alcanzan: p.alcanzan,
+      pct: p.pct,
+      al_corte: alCorte,
+      pct_corte: fechas.length ? Math.round(alCorte / fechas.length * 100) : 0,
+      fechas,
+    };
+  }, [pctBase, corteDe, fechaDe, pyUmbral, fechaPercentil, pyFechaCorte]);
+
+  // Año a año desde la fecha del cálculo hasta que cumple todo el plantel
+  // proyectable (tope 40 años, el mismo horizonte que usa el motor).
+  const pyEvolucion = useMemo(() => {
+    const { fechas } = pyPercentilTotal;
+    const n = fechas.length;
+    if (!n) return [];
+    const [y, resto] = [Number(pyFechaCorte.slice(0, 4)), pyFechaCorte.slice(4, 10)];
+    const out: Array<{ fecha: string; cantidad: number; pct: number }> = [];
+    for (let k = 0; k <= 40; k++) {
+      const fecha = `${y + k}${resto}`;
+      const cantidad = fechas.filter(x => x <= fecha).length;
+      out.push({ fecha, cantidad, pct: Math.round(cantidad / n * 100) });
+      if (cantidad === n) break;
+    }
+    return out;
+  }, [pyPercentilTotal, pyFechaCorte]);
+
+  const pyEvolSeries = useMemo((): SerieEvolucion[] => {
+    const filas = pyPercentilPorServicio.filter(g => g.proyectables > 0);
+    // Índice de color estable: orden de selección, o alfabético si no hay selección.
+    const orden = pySrvs.length
+      ? pySrvs.map(s => `${s.srv}|${s.ley}`)
+      : [...filas].sort((a, b) => a.servicio_nombre.localeCompare(b.servicio_nombre)).map(g => g.key);
+    return filas
+      .map(g => {
+        const idx = orden.indexOf(g.key);
+        return {
+          key: g.key,
+          nombre: g.servicio_nombre,
+          color: idx >= 0 && idx < SERIE_COLORES.length ? SERIE_COLORES[idx] : SERIE_OTRO,
+          n: g.proyectables,
+          idx,
+          puntos: pyEvolucion.map(e => {
+            const cant = g.fechas.filter(x => x <= e.fecha).length;
+            return { fecha: e.fecha, cant, pct: Math.round(cant / g.proyectables * 100) };
+          }),
+        };
+      })
+      .sort((a, b) => a.idx - b.idx);
+  }, [pyPercentilPorServicio, pyEvolucion, pySrvs]);
+
+  const pyPercentilExportar = useCallback(() => {
+    if (!pyPercentilPorServicio.length) { toast.error('No hay filas para exportar'); return; }
+    exportToExcel(`percentil_${pyUmbral}_jubilacion_${pyFechas?.fecha ?? pyFecha}`, pyPercentilPorServicio.map(g => ({
+      Servicio:                       g.servicio_nombre,
+      Dependencia:                    g.dependencia_nombre ?? '',
+      [`En condiciones al ${fmtFecha(pyFechaCorte)}`]: g.al_corte,
+      [`% al ${fmtFecha(pyFechaCorte)}`]: g.proyectables ? `${g.pct_corte}%` : '',
+      'Plantel total':                g.total,
+      'Plantel proyectable':          g.proyectables,
+      'Excluidos (no computa/sin datos)': g.excluidos,
+      [`Fecha en que se alcanza el ${pyUmbral}%`]: fmtFecha(g.fecha_umbral),
+      'Agentes en condiciones a esa fecha': g.alcanzan,
+      '% del plantel proyectable':    g.proyectables ? `${g.pct}%` : '',
+    })));
+  }, [pyPercentilPorServicio, pyUmbral, pyFechas, pyFecha, pyFechaCorte, toast]);
+
+  const pyExportar = useCallback(() => {
+    if (!pyFiltrada.length) { toast.error('No hay filas para exportar'); return; }
+    exportToExcel(`proyeccion_jubilacion_${pyFechas?.fecha ?? pyFecha}`, pyFiltrada.map(f => ({
+      DNI:              f.dni,
+      Apellido:         f.apellido,
+      Nombre:           f.nombre,
+      Dependencia:      f.dependencia_nombre ?? '',
+      Repartición:      f.reparticion_nombre ?? '',
+      Servicio:         f.servicio_nombre ?? '',
+      Ley:              f.ley_nombre ?? '',
+      Ocupación:        f.ocupacion_nombre ?? '',
+      Nacimiento:       fmtFecha(f.fecha_nacimiento),
+      Ingreso:          fmtFecha(f.fecha_ingreso),
+      Edad:             fmtPeriodo(f.edad),
+      'Antigüedad IPS': fmtPeriodo(f.antiguedad_ips),
+      'Total prorrateado': fmtPeriodo(f.total_prorateado),
+      Situación:        CORTE_LABEL[corteDe(f)],
+      'Cumple el':      fmtFecha(fechaDe(f)),
+      Régimen:          TIPO_CORTO[tipoDe(f) ?? ''] ?? '',
+      'Tiempo impago':  f.pago_posible && f.periodo_a_reconocer ? fmtPeriodo(f.periodo_a_reconocer) : '',
+      Insalubre:        f.es_insalubre_ocupacion ? 'Sí (ocupación)' : 'No',
+      'Cargo deudor 2%': f.cargo_deudor_2pct ? fmtPeriodo(f.cargo_deudor_periodo) : '',
+      'Cumple si paga': f.pago_posible ? fmtFecha(f.fecha_cumple_con_pago) : '',
+      'Falta edad':     fmtPeriodo(f.falta_edad),
+      'Falta servicio': fmtPeriodo(f.falta_servicio),
+      'Datos ANSES':    f.sin_datos_anses ? 'SIN CARGAR' : 'Cargados',
+      Origen:           f.origen_datos === 'CALCULO' ? 'Cálculo guardado' : 'Estimado del legajo',
+      'En Posibles':    f.estado_posible ?? '',
+    })));
+  }, [pyFiltrada, pyFechas, pyFecha, corteDe, fechaDe, tipoDe, toast]);
+
+  const pyAgregarPosible = useCallback(async (f: FilaProyeccion) => {
+    setPyAgregando(f.dni);
+    try {
+      const res = await apiFetch<any>('/jubilacion/posibles', {
+        method: 'POST',
+        body: JSON.stringify({
+          dni: f.dni,
+          ...(tipoDe(f) ? { tipo_jubilacion: tipoDe(f) } : {}),
+        }),
+      });
+      if (res?.ok) {
+        toast.ok(`${f.apellido}, ${f.nombre} agregado a Posibles Jubilados`);
+        setPyData(prev => prev.map(r => r.dni === f.dni ? { ...r, estado_posible: 'IDENTIFICADO' } : r));
+      } else {
+        toast.error(res?.error ?? 'No se pudo agregar');
+      }
+    } catch (e: any) {
+      toast.error('Error al agregar: ' + e?.message);
+    } finally { setPyAgregando(null); }
+  }, [tipoDe, toast]);
 
   // ── Agenda de citas — helpers ─────────────────────────────────────────────
   const ctEstadoLabel = (e: string) => {
@@ -1284,6 +2000,10 @@ export function HerramientasPage() {
   useEffect(() => {
     if (tab === 'posibles') { cargarPosibles(); cargarCortes(); }
     if (tab === 'citas')    { cargarCitas();    cargarCortes(); }
+    if (tab === 'proyeccion' || tab === 'percentil') {
+      if (!pyEstructura) cargarEstructuraProy();
+      if (!pyCorrido)    correrProyeccion();
+    }
   }, [tab, ctRango]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1292,7 +2012,7 @@ export function HerramientasPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 0 40px' }}>
         {/* ─ Tab switcher ─ */}
         <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          {(['calculadora', 'citas', 'posibles'] as const).map(t => (
+          {(['calculadora', 'proyeccion', 'percentil', 'citas', 'posibles'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '10px 22px', fontSize: '0.9rem', fontWeight: tab === t ? 700 : 400,
@@ -1300,7 +2020,11 @@ export function HerramientasPage() {
               borderBottom: tab === t ? '2px solid #7c3aed' : '2px solid transparent',
               marginBottom: -1, transition: 'color 0.15s',
             }}>
-              {t === 'calculadora' ? '⚖️ Calculadora' : t === 'citas' ? '🗓️ Agenda de citas' : '📋 Posibles Jubilados'}
+              {t === 'calculadora' ? '⚖️ Calculadora'
+                : t === 'proyeccion' ? '📊 Proyección por servicio'
+                : t === 'percentil' ? '📈 Percentil por servicio'
+                : t === 'citas' ? '🗓️ Agenda de citas'
+                : '📋 Posibles Jubilados'}
             </button>
           ))}
         </div>
@@ -1517,9 +2241,29 @@ export function HerramientasPage() {
             <div style={S.card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div style={S.h3}>3. Servicios en ANSES (Nación)</div>
-                <button style={{ ...S.btn, background: '#1e40af', color: '#fff', padding: '6px 14px', fontSize: '0.78rem' }}
-                  onClick={agregarAnses}>+ Agregar línea ANSES</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={{
+                    ...S.btn, background: '#166534', color: '#fff', padding: '6px 14px', fontSize: '0.78rem',
+                    opacity: fichaGuardando || !agente ? 0.5 : 1,
+                  }}
+                    disabled={fichaGuardando || !agente}
+                    title="Guarda estos tramos en la ficha del agente para que los use la proyección por servicio"
+                    onClick={guardarFichaAnses}>
+                    {fichaGuardando ? 'Guardando…' : '💾 Guardar ficha ANSES'}
+                  </button>
+                  <button style={{ ...S.btn, background: '#1e40af', color: '#fff', padding: '6px 14px', fontSize: '0.78rem' }}
+                    onClick={agregarAnses}>+ Agregar línea ANSES</button>
+                </div>
               </div>
+
+              {fichaAnses && (
+                <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 10 }}>
+                  Ficha ANSES guardada{fichaAnses.fecha_lectura ? ` el ${fmtFecha(fichaAnses.fecha_lectura)}` : ''}
+                  {fichaAnses.tiene_datos === false || fichaAnses.tiene_datos === 0
+                    ? ' — registrado como «sin aportes en ANSES»'
+                    : ` — ${(fichaAnses.servicios ?? []).length} línea/s`}
+                </div>
+              )}
 
               {/* Lectura automática del listado de ANSES */}
               <div
@@ -2157,6 +2901,841 @@ export function HerramientasPage() {
         )}
         </>)}
 
+        {/* ─ Tab: Proyección por servicio ─ */}
+        {tab === 'proyeccion' && (
+          <>
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: 4 }}>📊 Proyección por servicio</h1>
+              <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                Todo el padrón activo, proyectado con el mismo motor de la calculadora: quién está en condiciones
+                hoy, a 6 meses, a 12 meses o a la fecha que elijas.
+              </p>
+            </div>
+
+            {/* ─ Filtros ─ */}
+            <div style={S.card}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+                <div>
+                  <label style={S.label}>Fecha del cálculo</label>
+                  <input type="date" style={S.input} value={pyFecha}
+                    onChange={e => setPyFecha(e.target.value)} />
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                    {([['Hoy', 0], ['+6 meses', 6], ['+1 año', 12]] as const).map(([lbl, m]) => (
+                      <button key={lbl} style={{
+                        ...S.btn, padding: '3px 10px', fontSize: '0.7rem',
+                        background: 'rgba(255,255,255,0.07)', color: '#cbd5e1',
+                      }} onClick={() => {
+                        const base = new Date();
+                        setPyFecha(toISODate(new Date(base.getFullYear(), base.getMonth() + m, base.getDate())));
+                      }}>{lbl}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={S.label}>Dependencia</label>
+                  <select style={S.select} value={pyDep}
+                    onChange={e => { setPyDep(e.target.value); setPyRep(''); setPySrv(''); }}>
+                    <option value="">Todas</option>
+                    {(pyEstructura?.dependencias ?? []).map(d => (
+                      <option key={d.id} value={String(d.id)}>{d.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Repartición</label>
+                  <select style={S.select} value={pyRep}
+                    onChange={e => { setPyRep(e.target.value); setPySrv(''); }}>
+                    <option value="">Todas</option>
+                    {pyReparticiones.map(r => (
+                      <option key={r.id} value={String(r.id)}>{r.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Servicio</label>
+                  <select style={S.select} value={pySrv} onChange={e => setPySrv(e.target.value)}>
+                    <option value="">Todos</option>
+                    {pyServicios.map(s => (
+                      <option key={s.id} value={String(s.id)}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Ley</label>
+                  <select style={S.select} value={pyLey} onChange={e => setPyLey(e.target.value)}>
+                    <option value="">Todas</option>
+                    {(pyEstructura?.leyes ?? []).map(l => (
+                      <option key={l.id} value={String(l.id)}>{l.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Agente</label>
+                  <input style={S.input} placeholder="Apellido, nombre o DNI"
+                    value={pyQ} onChange={e => setPyQ(e.target.value)} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button style={{ ...S.btn, background: '#7c3aed', color: '#fff', opacity: pyCargando ? 0.6 : 1 }}
+                  disabled={pyCargando} onClick={correrProyeccion}>
+                  {pyCargando ? 'Calculando…' : '🔄 Recalcular a esta fecha'}
+                </button>
+                <button style={{ ...S.btn, background: '#166534', color: '#fff' }}
+                  onClick={pyExportar} disabled={!pyFiltrada.length}>
+                  📊 Exportar Excel
+                </button>
+                {(pyDep || pyRep || pySrv || pyLey || pyQ || pyCorte !== 'TODOS') && (
+                  <button style={{ ...S.btn, background: 'rgba(255,255,255,0.07)', color: '#cbd5e1' }}
+                    onClick={() => { setPyDep(''); setPyRep(''); setPySrv(''); setPyLey(''); setPyQ(''); setPyCorte('TODOS'); }}>
+                    Limpiar filtros
+                  </button>
+                )}
+                <label style={{ ...S.chkRow, marginTop: 0, fontSize: '0.78rem', color: '#d8b4fe' }}>
+                  <input type="checkbox" style={S.chk} checked={pyConPago}
+                    onChange={e => setPyConPago(e.target.checked)} />
+                  <span title="Reconocimiento de servicios: el agente paga lo que debe — los aportes del tiempo de beca, residencia o concurrencia, y el diferencial del 2% del período anterior a Jun/2015 en las ocupaciones no insalubres">
+                    Contar beca/residencia y el 2% como aportes pagados
+                  </span>
+                </label>
+                {pyFechas && (
+                  <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                    Parado al {fmtFecha(pyFechas.fecha)} · 6 meses = {fmtFecha(pyFechas.fecha_6m)} ·
+                    12 meses = {fmtFecha(pyFechas.fecha_12m)}
+                  </span>
+                )}
+              </div>
+              {pyFecha !== (pyFechas?.fecha ?? '') && pyCorrido && (
+                <div style={{ fontSize: '0.74rem', color: '#fdba74', marginTop: 8 }}>
+                  ⚠️ La fecha cambió: apretá «Recalcular» para actualizar la proyección.
+                </div>
+              )}
+            </div>
+
+            {/* ─ Tarjetas de corte ─ */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
+              {(['CUMPLE', 'HASTA_6M', 'HASTA_12M', 'MAS_ADELANTE', 'NO_COMPUTA', 'SIN_DATOS'] as CorteProy[]).map(c => {
+                const activo = pyCorte === c;
+                return (
+                  <button key={c} onClick={() => setPyCorte(activo ? 'TODOS' : c)} style={{
+                    textAlign: 'left', cursor: 'pointer', borderRadius: 12, padding: '14px 16px',
+                    background: activo ? CORTE_COLOR[c].bg : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${activo ? CORTE_COLOR[c].fg : 'rgba(255,255,255,0.10)'}`,
+                    color: '#e2e8f0',
+                  }}>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: CORTE_COLOR[c].fg, lineHeight: 1.1 }}>
+                      {pyResumen[c]}
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: 2 }}>{CORTE_LABEL[c]}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {pyResumen.sin_anses > 0 && (
+              <div style={{
+                background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.25)',
+                borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: '0.78rem', color: '#fde68a',
+              }}>
+                ⚠️ {pyResumen.sin_anses} de {pyResumen.total} agentes no tienen servicios de ANSES cargados.
+                Para ellos la proyección sale sólo del legajo IPS: los aportes de ANSES sólo suman, así que
+                la fecha real puede ser <b>anterior</b> a la proyectada, nunca posterior.
+              </div>
+            )}
+
+            {pyResumen.NO_COMPUTA > 0 && (
+              <div style={{
+                background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)',
+                borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: '0.78rem', color: '#d8b4fe',
+              }}>
+                ℹ️ {pyResumen.NO_COMPUTA} agentes están en beca, residencia o concurrencia sin aportes al IPS:
+                ese tiempo no acumula servicio, así que hoy no tienen fecha de jubilación que proyectar.
+                Tildá «contar beca/residencia y el 2% como aportes pagados» para ver en qué fecha
+                quedarían en condiciones si reconocen esos servicios.
+              </div>
+            )}
+
+            {!pyConPago && pyResumen.deudor_2pct > 0 && (
+              <div style={{
+                background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)',
+                borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: '0.78rem', color: '#a5b4fc',
+              }}>
+                📌 {pyResumen.deudor_2pct} de {pyResumen.total} agentes tienen cargo deudor del 2%: la ocupación
+                no es insalubre y tienen servicio anterior a Jun/2015, así que ese tramo computa como común.
+                Pagando el diferencial pasa a insalubre y entra en el prorrateo — no suma días, pero adelanta
+                la fecha. Está contemplado en el escenario «con pago de aportes».
+              </div>
+            )}
+
+            {pyConPago && (
+              <div style={{
+                background: 'rgba(168,85,247,0.10)', border: '1px solid rgba(168,85,247,0.30)',
+                borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: '0.78rem', color: '#d8b4fe',
+              }}>
+                💰 Escenario «con pago de aportes»: {pyResumen.con_pago} de {pyResumen.total} agentes tienen
+                algo impago — aportes de beca/residencia, el diferencial del 2%, o las dos cosas. Para ellos las
+                fechas y los cortes de abajo suponen que lo pagan; el resto se muestra igual que siempre.
+              </div>
+            )}
+
+            {/* ─ Vista ─ */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {(['AGENTES', 'SERVICIOS'] as const).map(v => (
+                <button key={v} onClick={() => setPyVista(v)} style={{
+                  ...S.btn, padding: '5px 14px', fontSize: '0.76rem',
+                  background: pyVista === v ? '#7c3aed' : 'rgba(255,255,255,0.07)',
+                  color: pyVista === v ? '#fff' : '#cbd5e1',
+                }}>{v === 'AGENTES' ? 'Por agente' : 'Resumen por servicio'}</button>
+              ))}
+              {pyVista === 'AGENTES' && (
+                <>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: 8 }}>Ordenar por</span>
+                  <select style={{ ...S.select, width: 'auto', padding: '4px 8px', fontSize: '0.76rem' }}
+                    value={pyOrden} onChange={e => setPyOrden(e.target.value as any)}>
+                    <option value="FECHA">Fecha en que cumple</option>
+                    <option value="APELLIDO">Apellido</option>
+                    <option value="SERVICIO">Servicio</option>
+                    <option value="EDAD">Edad</option>
+                  </select>
+                </>
+              )}
+              <span style={{ fontSize: '0.74rem', color: '#64748b', marginLeft: 'auto' }}>
+                {pyFiltrada.length} agente/s
+              </span>
+            </div>
+
+            <div style={S.card}>
+              {pyCargando && (
+                <p style={{ textAlign: 'center', color: '#94a3b8', padding: '30px 0', fontSize: '0.85rem' }}>
+                  Proyectando el padrón… (se calcula agente por agente, puede demorar unos segundos)
+                </p>
+              )}
+
+              {!pyCargando && pyVista === 'SERVICIOS' && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                        <th style={{ padding: '8px 6px' }}>Servicio</th>
+                        <th style={{ padding: '8px 6px' }}>Dependencia</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Hoy</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>6 meses</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>12 meses</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Más adelante</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Plantel</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pyPorServicio.map(g => (
+                        <tr key={String(g.servicio_id ?? 'SIN')} style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                          <td style={{ padding: '8px 6px', fontWeight: 600 }}>{g.servicio_nombre}</td>
+                          <td style={{ padding: '8px 6px', color: '#94a3b8' }}>{g.dependencia_nombre ?? '—'}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: g.CUMPLE ? '#86efac' : '#475569', fontWeight: 700 }}>{g.CUMPLE}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: g.HASTA_6M ? '#fef08a' : '#475569' }}>{g.HASTA_6M}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: g.HASTA_12M ? '#93c5fd' : '#475569' }}>{g.HASTA_12M}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: '#64748b' }}>{g.MAS_ADELANTE + g.NO_COMPUTA + g.SIN_DATOS}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: '#cbd5e1' }}>{g.total}</td>
+                        </tr>
+                      ))}
+                      {!pyPorServicio.length && (
+                        <tr><td colSpan={7} style={{ padding: '24px 0', textAlign: 'center', color: '#64748b' }}>
+                          Sin datos para los filtros elegidos
+                        </td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {!pyCargando && pyVista === 'AGENTES' && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                        <th style={{ padding: '8px 6px' }}>Agente</th>
+                        <th style={{ padding: '8px 6px' }}>Servicio</th>
+                        <th style={{ padding: '8px 6px' }}>Edad</th>
+                        <th style={{ padding: '8px 6px' }}>Antigüedad</th>
+                        <th style={{ padding: '8px 6px' }}>Cumple</th>
+                        <th style={{ padding: '8px 6px' }}>Régimen</th>
+                        <th style={{ padding: '8px 6px' }}>Falta</th>
+                        <th style={{ padding: '8px 6px' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pyFiltrada.map(f => {
+                        const corte = corteDe(f);
+                        const col   = CORTE_COLOR[corte];
+                        return (
+                          <tr key={f.dni} style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                            <td style={{ padding: '8px 6px' }}>
+                              <div style={{ fontWeight: 600 }}>{f.apellido}, {f.nombre}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                DNI {f.dni} · {f.ley_nombre ?? 'sin ley'}
+                                {f.sin_datos_anses && <span style={{ color: '#fbbf24' }}> · sin ANSES</span>}
+                                {f.origen_datos === 'CALCULO' && <span style={{ color: '#a78bfa' }}> · con cálculo</span>}
+                                {f.estado_posible && <span style={{ color: '#86efac' }}> · en Posibles</span>}
+                              </div>
+                            </td>
+                            <td style={{ padding: '8px 6px', color: '#cbd5e1' }}>
+                              <div>{f.servicio_nombre ?? '—'}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{f.dependencia_nombre ?? ''}</div>
+                            </td>
+                            <td style={{ padding: '8px 6px', color: f.cumple_edad ? '#86efac' : '#cbd5e1' }}>
+                              {f.edad ? `${f.edad.anios} a` : '—'}
+                            </td>
+                            <td style={{ padding: '8px 6px', color: f.cumple_servicio ? '#86efac' : '#cbd5e1' }}>
+                              {fmtPeriodo(f.total_prorateado)}
+                            </td>
+                            <td style={{ padding: '8px 6px' }}>
+                              <span style={{
+                                background: col.bg, color: col.fg, borderRadius: 6,
+                                padding: '3px 8px', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap',
+                              }}>
+                                {corte === 'CUMPLE' ? 'Ya cumple'
+                                  : corte === 'NO_COMPUTA' ? 'Sin aportes'
+                                  : corte === 'SIN_DATOS' ? 'Sin datos'
+                                  : fechaDe(f) ? fmtFecha(fechaDe(f)) : '+40 años'}
+                              </span>
+                              {/* Qué pasaría si paga, cuando se está mirando el escenario sin pago */}
+                              {!pyConPago && f.pago_posible && (
+                                <div style={{ fontSize: '0.68rem', color: '#d8b4fe', marginTop: 3 }}
+                                  title="Lo que hoy no computa como debería: aportes de beca / residencia / concurrencia y/o el diferencial del 2% anterior a Jun/2015">
+                                  si paga {descPago(f)}:{' '}
+                                  {f.fecha_cumple_con_pago ? fmtFecha(f.fecha_cumple_con_pago) : '+40 años'}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 6px', color: '#94a3b8' }}>
+                              {TIPO_CORTO[tipoDe(f) ?? ''] ?? '—'}
+                            </td>
+                            <td style={{ padding: '8px 6px', fontSize: '0.72rem', color: '#64748b' }}>
+                              {corte === 'CUMPLE' ? '—'
+                               : corte === 'NO_COMPUTA' ? 'No acumula servicio'
+                               : (pyConPago && f.pago_posible) ? (
+                                 <span title="Lo que falta está calculado sobre la situación actual; en este escenario lo impago ya se cuenta como pagado">
+                                   con {descPago(f)} pagados
+                                 </span>
+                               ) : (
+                                <>
+                                  {!f.cumple_edad && <div>Edad: {fmtPeriodo(f.falta_edad)}</div>}
+                                  {!f.cumple_servicio && <div>Servicio: {fmtPeriodo(f.falta_servicio)}</div>}
+                                </>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
+                              <button style={{
+                                ...S.btn, padding: '4px 10px', fontSize: '0.72rem',
+                                background: 'rgba(124,58,237,0.25)', color: '#d8b4fe',
+                              }} title="Abrir este agente en la calculadora"
+                                onClick={() => { setTab('calculadora'); seleccionarAgente(f); }}>
+                                ⚖️
+                              </button>
+                              {!f.estado_posible && (
+                                <button style={{
+                                  ...S.btn, padding: '4px 10px', fontSize: '0.72rem', marginLeft: 6,
+                                  background: 'rgba(22,101,52,0.35)', color: '#86efac',
+                                  opacity: pyAgregando === f.dni ? 0.5 : 1,
+                                }} disabled={pyAgregando === f.dni}
+                                  title="Agregar al registro de Posibles Jubilados"
+                                  onClick={() => pyAgregarPosible(f)}>
+                                  ➕
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!pyFiltrada.length && (
+                        <tr><td colSpan={8} style={{ padding: '24px 0', textAlign: 'center', color: '#64748b' }}>
+                          {pyCorrido ? 'Sin agentes para los filtros elegidos' : 'Apretá «Recalcular» para proyectar el padrón'}
+                        </td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ─ Tab: Percentil por servicio ─ */}
+        {tab === 'percentil' && (
+          <>
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: 4 }}>📈 Percentil por servicio</h1>
+              <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                Para cada servicio (y el total), la fecha en la que el {pyUmbral}% del plantel proyectable
+                queda en condiciones de jubilarse. Usa el mismo padrón y el mismo motor que «Proyección por
+                servicio» — quedan excluidos del cálculo los agentes que no computan aportes o no tienen
+                datos para proyectar.
+              </p>
+            </div>
+
+            {/* ─ Filtros (comparten datos con "Proyección por servicio") ─ */}
+            <div style={S.card}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+                <div>
+                  <label style={S.label}>Fecha del cálculo</label>
+                  <input type="date" style={S.input} value={pyFecha}
+                    onChange={e => setPyFecha(e.target.value)} />
+                </div>
+                <div>
+                  <label style={S.label}>Dependencia</label>
+                  <select style={S.select} value={pyDep}
+                    onChange={e => { setPyDep(e.target.value); setPyRep(''); setPySrv(''); }}>
+                    <option value="">Todas</option>
+                    {(pyEstructura?.dependencias ?? []).map(d => (
+                      <option key={d.id} value={String(d.id)}>{d.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Repartición</label>
+                  <select style={S.select} value={pyRep}
+                    onChange={e => { setPyRep(e.target.value); setPySrv(''); }}>
+                    <option value="">Todas</option>
+                    {pyReparticiones.map(r => (
+                      <option key={r.id} value={String(r.id)}>{r.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Servicios</label>
+                  <select style={S.select} value=""
+                    onChange={e => {
+                      const v = e.target.value;
+                      // Entra con la ley elegida en el filtro de al lado; después se cambia en la etiqueta.
+                      if (v) setPySrvs(prev => prev.some(s => s.srv === v && s.ley === pyLey) ? prev : [...prev, { srv: v, ley: pyLey }]);
+                    }}>
+                    <option value="">{pySrvs.length ? '+ Agregar otro servicio…' : 'Todos (agregar servicio…)'}</option>
+                    {pyServicios.map(s => (
+                      <option key={s.id} value={String(s.id)}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>{pySrvs.length ? 'Ley del próximo servicio' : 'Ley'}</label>
+                  <select style={S.select} value={pyLey} onChange={e => setPyLey(e.target.value)}>
+                    <option value="">Todas</option>
+                    {(pyEstructura?.leyes ?? []).map(l => (
+                      <option key={l.id} value={String(l.id)}>{l.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Umbral</label>
+                  <select style={S.select} value={pyUmbral} onChange={e => setPyUmbral(Number(e.target.value))}>
+                    {[25, 50, 75, 90, 95].map(p => (
+                      <option key={p} value={p}>{p}% del plantel</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {pySrvs.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+                  {pySrvs.map((sel, i) => {
+                    const nombre = pyEstructura?.servicios.find(s => String(s.id) === sel.srv)?.nombre ?? `Servicio ${sel.srv}`;
+                    return (
+                      <span key={`${sel.srv}|${sel.ley}|${i}`} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(167,139,250,0.4)',
+                        color: '#ddd6fe', borderRadius: 999, padding: '3px 6px 3px 12px', fontSize: '0.76rem',
+                      }}>
+                        {nombre}
+                        <select value={sel.ley} title="Ley de este servicio"
+                          onChange={e => {
+                            const ley = e.target.value;
+                            setPySrvs(prev => prev.map((x, j) => j === i ? { ...x, ley } : x));
+                          }}
+                          style={{
+                            background: 'rgba(0,0,0,0.35)', color: '#ddd6fe', border: '1px solid rgba(167,139,250,0.35)',
+                            borderRadius: 999, padding: '1px 6px', fontSize: '0.72rem', cursor: 'pointer',
+                          }}>
+                          <option value="">Todas las leyes</option>
+                          {(pyEstructura?.leyes ?? []).map(l => (
+                            <option key={l.id} value={String(l.id)}>{l.nombre.replace(/^LEY\s*/i, '')}</option>
+                          ))}
+                        </select>
+                        <button title="Quitar" onClick={() => setPySrvs(prev => prev.filter((_, j) => j !== i))} style={{
+                          background: 'rgba(255,255,255,0.1)', border: 'none', color: '#ddd6fe',
+                          borderRadius: 999, width: 18, height: 18, cursor: 'pointer', lineHeight: '16px', padding: 0,
+                        }}>×</button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button style={{ ...S.btn, background: '#7c3aed', color: '#fff', opacity: pyCargando ? 0.6 : 1 }}
+                  disabled={pyCargando} onClick={correrProyeccion}>
+                  {pyCargando ? 'Calculando…' : '🔄 Recalcular a esta fecha'}
+                </button>
+                <button style={{ ...S.btn, background: '#166534', color: '#fff' }}
+                  onClick={pyPercentilExportar} disabled={!pyPercentilPorServicio.length}>
+                  📊 Exportar Excel
+                </button>
+                {(pyDep || pyRep || pySrvs.length > 0 || pyLey) && (
+                  <button style={{ ...S.btn, background: 'rgba(255,255,255,0.07)', color: '#cbd5e1' }}
+                    onClick={() => { setPyDep(''); setPyRep(''); setPySrvs([]); setPyLey(''); }}>
+                    Limpiar filtros
+                  </button>
+                )}
+                <label style={{ ...S.chkRow, marginTop: 0, fontSize: '0.78rem', color: '#d8b4fe' }}>
+                  <input type="checkbox" style={S.chk} checked={pyConPago}
+                    onChange={e => setPyConPago(e.target.checked)} />
+                  <span>Contar beca/residencia y el 2% como aportes pagados</span>
+                </label>
+                {pyFechas && (
+                  <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                    Parado al {fmtFecha(pyFechas.fecha)}
+                  </span>
+                )}
+              </div>
+              {pyFecha !== (pyFechas?.fecha ?? '') && pyCorrido && (
+                <div style={{ fontSize: '0.74rem', color: '#fdba74', marginTop: 8 }}>
+                  ⚠️ La fecha cambió: apretá «Recalcular» para actualizar la proyección.
+                </div>
+              )}
+            </div>
+
+            <div style={{
+              background: pyConPago ? 'rgba(168,85,247,0.10)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${pyConPago ? 'rgba(168,85,247,0.30)' : 'rgba(255,255,255,0.10)'}`,
+              borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: '0.78rem',
+              color: pyConPago ? '#d8b4fe' : '#cbd5e1', lineHeight: 1.5,
+            }}>
+              {pyConPago
+                ? <>💰 <b>Escenario con pago:</b> se supone que cada agente paga la beca/residencia (el tiempo entre ingreso y nombramiento computa) y el 2% (lo anterior a Jun/2015 pasa a insalubre).</>
+                : <>📋 <b>Escenario sin pago:</b> la beca/residencia (ingreso → nombramiento) <b>no computa</b> salvo que un cálculo guardado la marque como pagada, y lo anterior a Jun/2015 es común salvo que la ocupación sea insalubre. Desde Jun/2015 todo computa insalubre.</>}
+              {' '}Hacé click en un servicio para ver agente por agente cómo se calculó.
+            </div>
+
+            {/* ─ Total ─ */}
+            <div style={{
+              ...S.card, marginBottom: 16, display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+            }}>
+              <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                    TOTAL · en condiciones al {fmtFecha(pyFechaCorte)}
+                  </div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#86efac' }}>
+                    {pyPercentilTotal.proyectables ? `${pyPercentilTotal.pct_corte}%` : '—'}
+                  </div>
+                  {pyPercentilTotal.proyectables > 0 && (
+                    <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: 2 }}>
+                      {pyPercentilTotal.al_corte} de {pyPercentilTotal.proyectables} agentes del plantel filtrado
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                    Fecha en que se llega al {pyUmbral}%
+                  </div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#93c5fd' }}>
+                    {fmtFecha(pyPercentilTotal.fecha_umbral)}
+                  </div>
+                  {pyPercentilTotal.proyectables > 0 && (
+                    <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: 2 }}>
+                      {pyPercentilTotal.pct}% · {pyPercentilTotal.alcanzan} de {pyPercentilTotal.proyectables} agentes
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: '0.76rem', color: '#64748b', textAlign: 'right' }}>
+                {pyPercentilTotal.proyectables} de {pyPercentilTotal.total} agentes proyectables
+                {pyPercentilTotal.excluidos > 0 && <> · {pyPercentilTotal.excluidos} excluidos (no computa/sin datos)</>}
+              </div>
+            </div>
+
+            {/* ─ Evolución por servicio ─ */}
+            {pyEvolucion.length > 0 && pyPercentilPorServicio.length > 0 && (
+              <div style={{ ...S.card, marginBottom: 16 }}>
+                <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: 10 }}>
+                  EVOLUCIÓN POR SERVICIO · % de cada plantel en condiciones, año a año
+                </div>
+                {pyEvolSeries.length > 0 && pyEvolSeries.length <= SERIE_COLORES.length && (
+                  <div style={{ marginBottom: 16 }}>
+                    <GraficoEvolucion series={pyEvolSeries} umbral={pyUmbral} />
+                  </div>
+                )}
+                {pyEvolSeries.length > SERIE_COLORES.length && (
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginBottom: 12 }}>
+                    El gráfico compara hasta {SERIE_COLORES.length} servicios: elegí los que quieras en «Servicios».
+                  </div>
+                )}
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', fontSize: '0.76rem', minWidth: '100%' }}>
+                    <thead>
+                      <tr style={{ color: '#94a3b8' }}>
+                        <th style={{
+                          padding: '6px 8px', textAlign: 'left', position: 'sticky', left: 0,
+                          background: '#111827', minWidth: 200,
+                        }}>Servicio</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>Proy.</th>
+                        {pyEvolucion.map(e => (
+                          <th key={e.fecha} style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {e.fecha.slice(0, 4)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pyPercentilPorServicio.map(g => (
+                        <tr key={g.key} style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                          <td style={{
+                            padding: '6px 8px', fontWeight: 600, position: 'sticky', left: 0, background: '#111827',
+                          }}>{g.servicio_nombre}</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', color: '#94a3b8' }}>{g.proyectables}</td>
+                          {pyEvolucion.map(e => {
+                            if (!g.proyectables) {
+                              return <td key={e.fecha} style={{ padding: '6px 8px', textAlign: 'right', color: '#475569' }}>—</td>;
+                            }
+                            const cant = g.fechas.filter(x => x <= e.fecha).length;
+                            const pct  = Math.round(cant / g.proyectables * 100);
+                            return (
+                              <td key={e.fecha} title={`${cant} de ${g.proyectables} al ${fmtFecha(e.fecha)}`} style={{
+                                padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap',
+                                color: pct >= pyUmbral ? '#86efac' : pct > 0 ? '#e2e8f0' : '#475569',
+                                fontWeight: pct >= pyUmbral ? 700 : 400,
+                              }}>
+                                {pct}%
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 8 }}>
+                  Cada columna es al {fmtFecha(pyFechaCorte).split('/').slice(0, 2).join('/')} de ese año.
+                  En verde, los que ya pasaron el {pyUmbral}%. Pasá el mouse para ver la cantidad.
+                </div>
+              </div>
+            )}
+
+            {/* ─ Evolución año a año ─ */}
+            {pyEvolucion.length > 0 && (
+              <div style={{ ...S.card, marginBottom: 16 }}>
+                <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: 10 }}>
+                  EVOLUCIÓN · % del plantel filtrado en condiciones, año a año
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(118px, 1fr))', gap: 8 }}>
+                  {pyEvolucion.map((e, i) => {
+                    const sube = i > 0 && e.cantidad > pyEvolucion[i - 1].cantidad;
+                    return (
+                      <div key={e.fecha} style={{
+                        borderRadius: 10, padding: '8px 10px',
+                        background: e.pct >= pyUmbral ? 'rgba(34,197,94,0.10)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${e.pct >= pyUmbral ? 'rgba(134,239,172,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                      }}>
+                        <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>al {fmtFecha(e.fecha)}</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: sube || i === 0 ? '#86efac' : '#64748b' }}>
+                          {e.pct}%
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                          {e.cantidad} de {pyPercentilTotal.proyectables}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={S.card}>
+              {pyCargando && (
+                <p style={{ textAlign: 'center', color: '#94a3b8', padding: '30px 0', fontSize: '0.85rem' }}>
+                  Proyectando el padrón… (se calcula agente por agente, puede demorar unos segundos)
+                </p>
+              )}
+              {!pyCargando && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                        <th style={{ padding: '8px 6px' }}>Servicio</th>
+                        <th style={{ padding: '8px 6px' }}>Dependencia</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Plantel</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Proyectable</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Excluidos</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Al {fmtFecha(pyFechaCorte)}</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>Llega al {pyUmbral}%</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right' }}>En condiciones a esa fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pyPercentilPorServicio.map(g => {
+                        const key = g.key;
+                        const abierto = pySrvAbierto === key;
+                        return (
+                        <Fragment key={key}>
+                        <tr onClick={() => setPySrvAbierto(abierto ? null : key)} style={{
+                          borderTop: '1px solid rgba(255,255,255,0.07)', cursor: 'pointer',
+                          background: abierto ? 'rgba(124,58,237,0.12)' : undefined,
+                        }}>
+                          <td style={{ padding: '8px 6px', fontWeight: 600 }}>
+                            <span style={{ color: '#a78bfa', marginRight: 6 }}>{abierto ? '▾' : '▸'}</span>
+                            {g.servicio_nombre}
+                          </td>
+                          <td style={{ padding: '8px 6px', color: '#94a3b8' }}>{g.dependencia_nombre ?? '—'}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right' }}>{g.total}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: '#94a3b8' }}>{g.proyectables}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: g.excluidos ? '#d8b4fe' : '#475569' }}>
+                            {g.excluidos}
+                          </td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right' }}>
+                            {g.proyectables ? (
+                              <>
+                                <b style={{ color: '#86efac' }}>{g.pct_corte}%</b>
+                                <span style={{ color: '#94a3b8' }}> · {g.al_corte} de {g.proyectables}</span>
+                              </>
+                            ) : '—'}
+                          </td>
+                          <td style={{
+                            padding: '8px 6px', textAlign: 'right', fontWeight: 700,
+                            color: g.fecha_umbral ? '#93c5fd' : '#64748b',
+                          }}>
+                            {fmtFecha(g.fecha_umbral)}
+                          </td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right' }}>
+                            {g.proyectables ? (
+                              <>
+                                <b style={{ color: '#86efac' }}>{g.pct}%</b>
+                                <span style={{ color: '#94a3b8' }}> · {g.alcanzan} de {g.proyectables}</span>
+                              </>
+                            ) : '—'}
+                          </td>
+                        </tr>
+                        {abierto && (
+                          <tr>
+                            <td colSpan={8} style={{ padding: '4px 0 14px', background: 'rgba(0,0,0,0.18)' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
+                                <thead>
+                                  <tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                                    <th style={{ padding: '6px' }}>Agente</th>
+                                    <th style={{ padding: '6px' }}>Ocupación / régimen</th>
+                                    <th style={{ padding: '6px' }}>Nacimiento</th>
+                                    <th style={{ padding: '6px' }}>Ingreso</th>
+                                    <th style={{ padding: '6px' }}>Nombramiento</th>
+                                    <th style={{ padding: '6px' }}>Beca</th>
+                                    <th style={{ padding: '6px' }}>Servicio computado</th>
+                                    <th style={{ padding: '6px' }}>Falta</th>
+                                    <th style={{ padding: '6px' }}>Cumple el</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(pyAgentesPorServicio.get(key) ?? []).map(f => {
+                                    const corte = corteDe(f);
+                                    const fecha = fechaDe(f);
+                                    const excluido = corte === 'NO_COMPUTA' || corte === 'SIN_DATOS' || !fecha;
+                                    const cuenta = !excluido && !!g.fecha_umbral && fecha! <= g.fecha_umbral;
+                                    const beca = f.tiene_beca === undefined ? '—'
+                                      : !f.tiene_beca ? 'No tiene'
+                                      : f.beca_aporto ? 'Pagada · computa'
+                                      : pyConPago ? 'Impaga · se supone pagada'
+                                      : 'Impaga · NO computa';
+                                    return (
+                                      <tr key={f.dni} style={{
+                                        borderTop: '1px solid rgba(255,255,255,0.05)',
+                                        opacity: excluido ? 0.55 : 1,
+                                      }}>
+                                        <td style={{ padding: '6px' }}>
+                                          <div style={{ fontWeight: 600 }}>
+                                            {f.apellido}, {f.nombre}
+                                            {f.es_jefe && (
+                                              <span style={{
+                                                marginLeft: 6, fontSize: '0.66rem', padding: '1px 6px', borderRadius: 6,
+                                                background: 'rgba(250,204,21,0.15)', color: '#fde68a', fontWeight: 700,
+                                              }}>Jefe/a</span>
+                                            )}
+                                          </div>
+                                          <div style={{ color: '#64748b' }}>DNI {f.dni}{f.origen_datos === 'CALCULO' ? ' · cálculo guardado' : ''}</div>
+                                        </td>
+                                        <td style={{ padding: '6px' }}>
+                                          <div>{f.ocupacion_nombre ?? '—'}</div>
+                                          <div style={{ color: f.es_insalubre_ocupacion ? '#86efac' : '#fdba74' }}>
+                                            {f.es_insalubre_efectivo
+                                              ? (f.es_insalubre_ocupacion ? 'Insalubre (ocupación)' : 'Insalubre (cálculo guardado)')
+                                              : 'Común hasta 5/2015 · insalubre desde 6/2015'}
+                                          </div>
+                                          {f.cargo_deudor_2pct && (
+                                            <div style={{ color: '#a5b4fc' }}>
+                                              2% {pyConPago ? 'se supone pagado' : 'impago'} ({fmtPeriodo(f.cargo_deudor_periodo)})
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '6px' }}>
+                                          {fmtFecha(f.fecha_nacimiento)}
+                                          <div style={{ color: '#64748b' }}>{fmtPeriodo(f.edad)}</div>
+                                        </td>
+                                        <td style={{ padding: '6px' }}>
+                                          {fmtFecha(f.fecha_ingreso)}
+                                          {(f.tramos_anteriores ?? []).map((t, i) => (
+                                            <div key={i} style={{ color: '#93c5fd', fontSize: '0.68rem' }}>
+                                              + {fmtFecha(t.desde)}–{fmtFecha(t.hasta)}{t.ley ? ` (${t.ley.replace(/^LEY\s*/i, '')})` : ''}
+                                            </div>
+                                          ))}
+                                        </td>
+                                        <td style={{ padding: '6px' }}>{fmtFecha(f.fecha_nombramiento)}</td>
+                                        <td style={{ padding: '6px', color: beca.startsWith('Impaga · NO') ? '#fca5a5' : '#cbd5e1' }}>
+                                          {beca}
+                                          {f.tiene_beca && f.periodo_a_reconocer && (
+                                            <div style={{ color: '#64748b' }}>{fmtPeriodo(f.periodo_a_reconocer)}</div>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '6px' }}>
+                                          <div>Común {fmtPeriodo(f.total_comun)}</div>
+                                          <div>Insalubre {fmtPeriodo(f.total_insalubre)}</div>
+                                          <div style={{ color: '#94a3b8' }}>Prorrateado {fmtPeriodo(f.total_prorateado)}</div>
+                                        </td>
+                                        <td style={{ padding: '6px' }}>
+                                          <div>Edad {f.cumple_edad ? '✓' : fmtPeriodo(f.falta_edad)}</div>
+                                          <div>Servicio {f.cumple_servicio ? '✓' : fmtPeriodo(f.falta_servicio)}</div>
+                                        </td>
+                                        <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
+                                          {excluido ? (
+                                            <span style={{ color: CORTE_COLOR[corte].fg }}>
+                                              {corte === 'NO_COMPUTA' || corte === 'SIN_DATOS' ? CORTE_LABEL[corte] : 'Sin fecha'} · excluido
+                                            </span>
+                                          ) : (
+                                            <>
+                                              <b style={{ color: cuenta ? '#86efac' : '#e2e8f0' }}>{fmtFecha(fecha)}</b>
+                                              <div style={{ color: '#64748b' }}>
+                                                {TIPO_CORTO[tipoDe(f) ?? ''] ?? ''}{cuenta ? ` · entra en el ${pyUmbral}%` : ''}
+                                              </div>
+                                            </>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                        );
+                      })}
+                      {!pyPercentilPorServicio.length && (
+                        <tr><td colSpan={8} style={{ padding: '24px 0', textAlign: 'center', color: '#64748b' }}>
+                          {pyCorrido ? 'Sin agentes para los filtros elegidos' : 'Apretá «Recalcular» para proyectar el padrón'}
+                        </td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         {/* ─ Tab: Agenda de citas ─ */}
         {tab === 'citas' && (
           <div>
@@ -2578,11 +4157,35 @@ export function HerramientasPage() {
                               <input type="date" style={S.input} value={pjEditFJubilacion}
                                 onChange={e => setPjEditFJubilacion(e.target.value)} />
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                              <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
-                                Las dos fechas salen del cronograma al elegir el corte. Cada una avisa en el legajo del agente y el aviso queda hasta que la fecha pase.
-                              </span>
+                            <div>
+                              <label style={S.label}>Expediente IPS</label>
+                              <input type="text" style={S.input} value={pjEditExpteIps} maxLength={60}
+                                onChange={e => setPjEditExpteIps(e.target.value)}
+                                placeholder="Nº de expediente..." />
                             </div>
+                            <div>
+                              <label style={S.label}>Expediente GDEBA</label>
+                              <input type="text" style={S.input} value={pjEditExpteGdeba} maxLength={60}
+                                onChange={e => setPjEditExpteGdeba(e.target.value)}
+                                placeholder="EX-23756257-GDEBA-2026" />
+                            </div>
+                            <div>
+                              <label style={S.label}>Informe gráfico 1</label>
+                              <input type="text" style={S.input} value={pjEditIfgra1} maxLength={60}
+                                onChange={e => setPjEditIfgra1(e.target.value)}
+                                placeholder="IF-2026-..." />
+                            </div>
+                            <div>
+                              <label style={S.label}>Informe gráfico 2</label>
+                              <input type="text" style={S.input} value={pjEditIfgra2} maxLength={60}
+                                onChange={e => setPjEditIfgra2(e.target.value)}
+                                placeholder="IF-2026-..." />
+                            </div>
+                          </div>
+                          <div style={{ marginBottom: 10 }}>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
+                              Las dos fechas salen del cronograma al elegir el corte. Cada una avisa en el legajo del agente y el aviso queda hasta que la fecha pase.
+                            </span>
                           </div>
                           <div>
                             <label style={S.label}>Observaciones</label>
@@ -2618,6 +4221,18 @@ export function HerramientasPage() {
                                     🏁 Jubilación: {fmtFecha(pj.fecha_jubilacion)}{sufijoDias(diasHasta(pj.fecha_jubilacion))}
                                   </span>
                                 )}
+                              </div>
+                            )}
+                            {(pj.ifgra_1 || pj.ifgra_2) && (
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: '0.74rem', color: '#a5b4fc', marginBottom: 3 }}>
+                                {pj.ifgra_1 && <span>📊 Informe gráfico 1: <strong>{pj.ifgra_1}</strong></span>}
+                                {pj.ifgra_2 && <span>📊 Informe gráfico 2: <strong>{pj.ifgra_2}</strong></span>}
+                              </div>
+                            )}
+                            {(pj.expediente_gdeba || pj.expediente_ips) && (
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: '0.74rem', color: '#7dd3fc', marginBottom: 3 }}>
+                                {pj.expediente_gdeba && <span>📁 Expediente GDEBA: <strong>{pj.expediente_gdeba}</strong></span>}
+                                {pj.expediente_ips   && <span>📁 Expediente IPS: <strong>{pj.expediente_ips}</strong></span>}
                               </div>
                             )}
                             {pj.observaciones && (
