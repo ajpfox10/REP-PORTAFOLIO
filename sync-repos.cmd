@@ -12,8 +12,8 @@ set "DRY="
 if /i "%MODE%"=="dry" set "DRY=/L"
 
 REM Carpetas y archivos que NO se copian
-set "XD=node_modules dist .git .claude .cache logs tmp coverage .vs fichadas"
-set "XF=.env* CLAUDE.md reformas.txt PENDIENTES.txt fichadas_log.txt *fichad*.txt attlog*.txt *.log *.err *.jpg *.jpeg Thumbs.db .DS_Store"
+set "XD=node_modules dist .git .claude .cache logs tmp coverage .vs fichadas bin obj __pycache__ .playwright .chrome-debug chrome-dev-visible chrome-dev-visible-2 storage uploads capturas screenshots .venv venv"
+set "XF=.env* CLAUDE.md reformas.txt PENDIENTES.txt fichadas_log.txt *fichad*.txt attlog*.txt *.log *.err *.jpg *.jpeg Thumbs.db .DS_Store fichero_config.json *.bak *.bak_* *.pyc *.pem *.key *.pfx *.p12 id_rsa* *.pdf *.csv *.xlsx *.xls *.webp *.bmp"
 
 echo ================================================================
 echo   SYNC personaldev -^> D:\Repositorios   (modo: %MODE%)
@@ -56,9 +56,9 @@ echo === VETERINARIAPROD ===
 robocopy "C:\apps\VETERINARIAPROD" "D:\Repositorios\VETERINARIAPROD" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
 
 echo.
-echo === Sanitizar credenciales en los .py copiados (usuario/clave -^> xxxxxxx) ===
+echo === Redactar secretos conocidos (C:\apps\sync-secretos.txt) y claves en .py ===
 if defined DRY echo   [dry] omitido en modo prueba
-if not defined DRY powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='D:\Repositorios\apipersonal\scripts'; if(Test-Path $d){ $q=[char]34; $sq=[char]39; $pat='(?im)^(\s*(?:USUARIO|USER|CLAVE|PASS|PASSWORD|PWD)\s*=\s*)([' + $sq + $q + ']).*?\2'; Get-ChildItem $d -Filter *.py -File | ForEach-Object { $p=$_.FullName; $c=Get-Content -Raw -Encoding UTF8 $p; $o=$c; $c=$c -replace 'xxxxxxx','xxxxxxx'; $c=$c -replace $pat,'${1}${2}xxxxxxx${2}'; if($c -ne $o){ [System.IO.File]::WriteAllText($p,$c,(New-Object System.Text.UTF8Encoding($false))); Write-Host ('  redactado: '+$_.Name) } else { Write-Host ('  sin cambios: '+$_.Name) } } }"
+if not defined DRY powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0sync-guard.ps1" -Mode Redact
 
 echo.
 echo ================================================================

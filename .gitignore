@@ -55,3 +55,46 @@ attlog*.txt
 !apipersonal/src/templates/**/*.png
 !apipersonal/src/templates/**/*.jpg
 !apipersonal/src/templates/**/*.jpeg
+
+# --- credenciales / artefactos que nunca deben subir (ver sync-guard.ps1) ---
+fichero_config.json
+**/fichero_config.json
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+# salida de compilacion .NET y cache de Python
+**/bin/Debug/
+**/bin/Release/
+**/obj/
+__pycache__/
+**/__pycache__/
+*.pyc
+# backups sueltos (suelen tener la version sin redactar)
+*.bak
+*.bak_*
+# perfiles de Chrome de pruebas (cookies, logins, historial)
+.chrome-debug/
+**/.chrome-debug/
+chrome-dev-visible*/
+**/chrome-dev-visible*/
+# documentos, planillas y archivos subidos/escaneados (datos personales)
+*.pdf
+**/*.pdf
+!apipersonal/assets/legajo/*.pdf
+*.csv
+**/*.csv
+*.xlsx
+*.xls
+*.webp
+*.bmp
+**/storage/
+**/uploads/
+**/capturas/
+**/screenshots/
+# entornos virtuales de Python
+.venv/
+**/.venv/
+venv/
+**/venv/

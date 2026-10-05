@@ -18,6 +18,16 @@ if errorlevel 1 (
 
 git add -A
 
+echo [INFO] Revisando credenciales en lo que se va a subir...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0sync-guard.ps1" -Mode Scan
+if errorlevel 1 (
+  git reset -q
+  echo.
+  echo [ERROR] Push CANCELADO: no se commiteo ni se subio nada.
+  pause
+  exit /b 1
+)
+
 git diff --cached --quiet
 if not errorlevel 1 (
   echo [OK] No hay cambios para commitear.
