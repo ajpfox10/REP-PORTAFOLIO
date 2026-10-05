@@ -2393,6 +2393,8 @@ export function JefeServicioPage() {
   // Pases activos del servicio propio del jefe (para obtener fecha_desde en el modal)
   const [pasesServicioPropio,    setPasesServicioPropio]    = useState<any[]>([]);
   // Modal de detalle al doble-click en un número del desglose
+  // Todos los agentes ACTIVOS por DNI (filtra los pases de enfermería y da nombre a los del otro servicio)
+  const [activosPorDni, setActivosPorDni] = useState<Record<string, any>>({});
   const [enfermeriaModal, setEnfermeriaModal] = useState<null|{titulo:string;filas:{apellido:string;nombre:string;ocupacion:string;servicio:string;sector:string;fechaDesde:string}[]}>(null);
 
   const cargarEnfermeria = useCallback(async () => {
@@ -2466,6 +2468,7 @@ export function JefeServicioPage() {
           fetchAll(`/agentes_servicios`),
           fetchAll(`/agentes_sectores`),
         ]);
+        setActivosPorDni(Object.fromEntries(todos.map((a: any) => [String(a.dni), a])));
         const activos = pasesServicio.filter((p: any) => !p.fecha_hasta);
         const dnisConServicio = new Set(activos.map((p: any) => String(p.dni)));
         setDniConServicio(dnisConServicio);
@@ -2500,6 +2503,7 @@ export function JefeServicioPage() {
         setDniSectorActivo(mapaSecActivo);
         setPasesServicioPropio(pasesActivos);
         const todos = await fetchAll(`/personal/search?estado_empleo=ACTIVO`);
+        setActivosPorDni(Object.fromEntries(todos.map((a: any) => [String(a.dni), a])));
         setAgentesAsignados(todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
         setAgentes(         todos.filter((a: any) =>  dnisConServicio.has(String(a.dni))));
       }
@@ -2989,10 +2993,14 @@ export function JefeServicioPage() {
             const otroSvc    = isGlobal ? 'DPTO ENFERMERÍA'    : (servicioId === 24 ? 'DPTO ENFERMERÍA'    : 'SALA DE ENFERMERÍA');
             const colA       = isGlobal ? 'SALA' : 'Míos';
             const colB       = isGlobal ? 'DPTO' : 'Otros';
-            const propiosList = isGlobal ? enfermeriaS24Pases : agentesAsignados;
+            // Solo agentes ACTIVOS (un pase abierto de alguien en BAJA no cuenta)
+            const esActivo = (p: any) => !!activosPorDni[String(p.dni)];
+            const salaActivos  = enfermeriaS24Pases.filter(esActivo);
+            const otrosActivos = enfermeriaOtrosPases.filter(esActivo);
+            const propiosList = isGlobal ? salaActivos : agentesAsignados;
             const propiosSectorMap = isGlobal ? dniSectorActivoS24 : dniSectorActivo;
             const totalPropios = propiosList.length;
-            const totalOtros   = enfermeriaOtrosPases.length;
+            const totalOtros   = otrosActivos.length;
             const totalGral    = totalPropios + totalOtros;
 
             const getSectorNombre = (id: string) => {
@@ -3009,7 +3017,7 @@ export function JefeServicioPage() {
               if (!porNombre[nom]) porNombre[nom] = { propios: 0, otros: 0 };
               porNombre[nom].propios++;
             }
-            for (const p of enfermeriaOtrosPases) {
+            for (const p of otrosActivos) {
               const sec = dniSectorActivoOtros[String(p.dni)];
               if (!sec) continue;
               const nom = getSectorNombre(String(sec));
@@ -3021,20 +3029,20 @@ export function JefeServicioPage() {
             // Sin sector — lista de nombres (solo admin)
             const dniToNombre: Record<string, string> = {};
             if (isGlobal) {
-              for (const a of agentesAsignados) {
+              for (const a of Object.values(activosPorDni) as any[]) {
                 dniToNombre[String(a.dni)] = [a.apellido, a.nombre].filter(Boolean).join(', ') || `DNI ${a.dni}`;
               }
             }
             const sinSectorSala = isGlobal
-              ? enfermeriaS24Pases.filter((p: any) => !dniSectorActivoS24[String(p.dni)]).map((p: any) => dniToNombre[String(p.dni)] || `DNI ${p.dni}`)
+              ? salaActivos.filter((p: any) => !dniSectorActivoS24[String(p.dni)]).map((p: any) => dniToNombre[String(p.dni)] || `DNI ${p.dni}`)
               : [];
             const sinSectorDpto = isGlobal
-              ? enfermeriaOtrosPases.filter((p: any) => !dniSectorActivoOtros[String(p.dni)]).map((p: any) => dniToNombre[String(p.dni)] || `DNI ${p.dni}`)
+              ? otrosActivos.filter((p: any) => !dniSectorActivoOtros[String(p.dni)]).map((p: any) => dniToNombre[String(p.dni)] || `DNI ${p.dni}`)
               : [];
             const sinSectorTotal = isGlobal
               ? sinSectorSala.length + sinSectorDpto.length
               : (propiosList.filter((a: any) => !propiosSectorMap[String(a.dni)]).length) +
-                (enfermeriaOtrosPases.filter((p: any) => !dniSectorActivoOtros[String(p.dni)]).length);
+                (otrosActivos.filter((p: any) => !dniSectorActivoOtros[String(p.dni)]).length);
 
             const rowSt: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.8rem' };
             const numSt: React.CSSProperties = { fontWeight: 700, minWidth: 36, textAlign: 'right' };
@@ -3042,12 +3050,12 @@ export function JefeServicioPage() {
 
             // ── openModal: construye la lista de agentes para el modal ──────────
             const dniToAgente: Record<string, any> = {};
-            for (const a of agentesAsignados) dniToAgente[String(a.dni)] = a;
-            const propiosPases = isGlobal ? enfermeriaS24Pases : pasesServicioPropio;
+            for (const [dni, a] of Object.entries(activosPorDni)) dniToAgente[dni] = a;
+            const propiosPases = isGlobal ? salaActivos : pasesServicioPropio;
             const dniToFechaPropio: Record<string, string> = {};
             for (const p of propiosPases) dniToFechaPropio[String(p.dni)] = p.fecha_desde || '';
             const dniToFechaOtros: Record<string, string> = {};
-            for (const p of enfermeriaOtrosPases) dniToFechaOtros[String(p.dni)] = p.fecha_desde || '';
+            for (const p of otrosActivos) dniToFechaOtros[String(p.dni)] = p.fecha_desde || '';
 
             const openModal = (sectorNom: string | null, col: 'sala' | 'dpto' | 'total') => {
               const matchIds = sectorNom
@@ -3073,7 +3081,7 @@ export function JefeServicioPage() {
                 }
               }
               if (col === 'dpto' || col === 'total') {
-                for (const p of enfermeriaOtrosPases) {
+                for (const p of otrosActivos) {
                   const dniStr = String(p.dni);
                   if (!inSector(dniStr, dniSectorActivoOtros)) continue;
                   const a = dniToAgente[dniStr] || {};
@@ -3125,9 +3133,9 @@ export function JefeServicioPage() {
                       <div key={nom} style={rowSt}>
                         <span style={{ color: 'rgba(255,255,255,0.75)', flex: 1 }}>{nom}</span>
                         <div style={colsSt}>
-                          <span style={{ ...numSt, ...clickNum, color: propios ? '#86efac' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => propios && openModal(nom, 'sala')}>{propios}</span>
-                          <span style={{ ...numSt, ...clickNum, color: otros   ? '#93c5fd' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => otros   && openModal(nom, 'dpto')}>{otros}</span>
-                          <span style={{ ...numSt, ...clickNum, color: '#fbbf24' }} title="Doble-click para ver detalle" onDoubleClick={() => openModal(nom, 'total')}>{propios + otros}</span>
+                          <span style={{ ...numSt, ...clickNum, color: propios ? '#86efac' : 'rgba(255,255,255,0.2)' }} title="Click para ver los agentes" onClick={() => propios && openModal(nom, 'sala')}>{propios}</span>
+                          <span style={{ ...numSt, ...clickNum, color: otros   ? '#93c5fd' : 'rgba(255,255,255,0.2)' }} title="Click para ver los agentes" onClick={() => otros   && openModal(nom, 'dpto')}>{otros}</span>
+                          <span style={{ ...numSt, ...clickNum, color: '#fbbf24' }} title="Click para ver los agentes" onClick={() => openModal(nom, 'total')}>{propios + otros}</span>
                         </div>
                       </div>
                     ))}
@@ -3137,15 +3145,15 @@ export function JefeServicioPage() {
                         <div style={colsSt}>
                           {isGlobal
                             ? <>
-                                <span style={{ ...numSt, ...clickNum, color: sinSectorSala.length ? '#f87171' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => sinSectorSala.length && openModal(null, 'sala')}>{sinSectorSala.length}</span>
-                                <span style={{ ...numSt, ...clickNum, color: sinSectorDpto.length ? '#f87171' : 'rgba(255,255,255,0.2)' }} title="Doble-click para ver detalle" onDoubleClick={() => sinSectorDpto.length && openModal(null, 'dpto')}>{sinSectorDpto.length}</span>
+                                <span style={{ ...numSt, ...clickNum, color: sinSectorSala.length ? '#f87171' : 'rgba(255,255,255,0.2)' }} title="Click para ver los agentes" onClick={() => sinSectorSala.length && openModal(null, 'sala')}>{sinSectorSala.length}</span>
+                                <span style={{ ...numSt, ...clickNum, color: sinSectorDpto.length ? '#f87171' : 'rgba(255,255,255,0.2)' }} title="Click para ver los agentes" onClick={() => sinSectorDpto.length && openModal(null, 'dpto')}>{sinSectorDpto.length}</span>
                               </>
                             : <>
                                 <span style={{ ...numSt, color: 'rgba(255,255,255,0.2)' }}>—</span>
                                 <span style={{ ...numSt, color: 'rgba(255,255,255,0.2)' }}>—</span>
                               </>
                           }
-                          <span style={{ ...numSt, ...clickNum, color: '#f87171' }} title="Doble-click para ver detalle" onDoubleClick={() => openModal(null, 'total')}>{sinSectorTotal}</span>
+                          <span style={{ ...numSt, ...clickNum, color: '#f87171' }} title="Click para ver los agentes" onClick={() => openModal(null, 'total')}>{sinSectorTotal}</span>
                         </div>
                       </div>
                     )}
@@ -3187,7 +3195,7 @@ export function JefeServicioPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: '#a5b4fc' }}>{enfermeriaModal.titulo}</div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>{enfermeriaModal.filas.length} agente{enfermeriaModal.filas.length !== 1 ? 's' : ''} · doble-click fuera para cerrar</div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>{enfermeriaModal.filas.length} agente{enfermeriaModal.filas.length !== 1 ? 's' : ''} · click fuera para cerrar</div>
                   </div>
                   <button type="button" onClick={() => setEnfermeriaModal(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1.2rem', cursor: 'pointer', lineHeight: 1 }}>✕</button>
                 </div>

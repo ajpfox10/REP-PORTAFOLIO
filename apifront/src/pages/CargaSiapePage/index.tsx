@@ -3,7 +3,8 @@ import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 
-export function CargaSiapePage() {
+/** Contenido de Carga SiAPe (sin Layout): su pagina y la pestaña del Comparador SIAPE. */
+export function CargaSiapeContent() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [lastMessage, setLastMessage] = useState<string | null>(null);
@@ -35,7 +36,6 @@ export function CargaSiapePage() {
   };
 
   return (
-    <Layout title="Carga SiAPe" showBack>
       <div className="card" style={{ maxWidth: 760 }}>
         <div className="h2" style={{ marginBottom: 8 }}>Carga de compensatorios</div>
         <p className="muted" style={{ marginTop: 0 }}>
@@ -54,6 +54,13 @@ export function CargaSiapePage() {
           {lastMessage && <span className="muted">{lastMessage}</span>}
         </div>
       </div>
+  );
+}
+
+export function CargaSiapePage() {
+  return (
+    <Layout title="Carga SiAPe" showBack>
+      <CargaSiapeContent />
     </Layout>
   );
 }

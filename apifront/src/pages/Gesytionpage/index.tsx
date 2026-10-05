@@ -28,6 +28,8 @@ import { PedidoModal } from './components/modals/PedidoModal';
 import { CellModal } from './components/modals/CellModal';
 import { DocViewerModal } from './components/modals/DocViewerModal';
 import { ExpedientesModal } from './components/modals/ExpedientesModal';
+import { LicenciasMedicasModal, contarLicenciasMedicas } from './components/modals/LicenciasMedicasModal';
+import { ANIO_ACTUAL, type Resp as RespLicenciasMedicas } from '../LicenciasMedicasControlPage/shared';
 import { GestionDocumentPreview }        from './components/components/GestionDocumentPreview';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
 
@@ -676,6 +678,7 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
             {renderCatalogSelect('sexo_id', 'SEXO')}
             {renderText('nacionalidad', 'NACIONALIDAD')}
             {renderText('mp', 'MATRÍCULA (MP)')}
+            {/* la especialidad tiene historial: se cambia con fechas en la pestaña "Especialidades" de la ficha */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label htmlFor="gp-edit-domicilio" style={labelStyle}>CALLE (DOMICILIO)</label>
               <input id="gp-edit-domicilio" name="domicilio" className="input" value={form.domicilio || ''} style={fieldStyle}
@@ -844,6 +847,11 @@ export function GestionPage() {
   const [modalExpedientes, setModalExpedientes] = useState(false);
   const [expedientesCount, setExpedientesCount] = useState(0);
 
+  // Licencias médicas no otorgadas (solo admin: el endpoint exige crud:*:*)
+  const isAdmin = hasPerm('crud:*:*');
+  const [modalLicMed, setModalLicMed] = useState(false);
+  const [licMedCount, setLicMedCount] = useState<{ noOtorgadas: number; debenReclamar: number } | null>(null);
+
   useEffect(() => { setRow(agenteSearch.row); }, [agenteSearch.row]);
   useEffect(() => { setLoading(agenteSearch.loading); }, [agenteSearch.loading]);
 
@@ -866,6 +874,17 @@ export function GestionPage() {
       .then(rows => setExpedientesCount(rows.length))
       .catch(() => setExpedientesCount(0));
   }, [dnisKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset licencias médicas al cambiar agente: cuenta las del año en curso (incluye DNIs anteriores)
+  useEffect(() => {
+    setLicMedCount(null);
+    setModalLicMed(false);
+    if (!isAdmin || !dnis.length) return;
+    const params = new URLSearchParams({ desde: `${ANIO_ACTUAL}-01-01`, hasta: `${ANIO_ACTUAL}-12-31`, dni: dnisKey });
+    apiFetch<RespLicenciasMedicas>(`/licencias-medicas-control?${params.toString()}`)
+      .then(res => setLicMedCount(res?.ok ? contarLicenciasMedicas(res.data) : null))
+      .catch(() => setLicMedCount(null));
+  }, [dnisKey, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Foto: la del DNI nuevo puede estar vacía; si falla, probamos los DNIs anteriores.
   useEffect(() => {
@@ -983,7 +1002,7 @@ export function GestionPage() {
               <MatchesList matches={matches} onSelect={loadByDni} />
             )}
 
-            <AgenteInfoCard row={row} />
+            <AgenteInfoCard row={row} onChanged={onAgenteEdited} />
 
             {row?.dni && (
               <button
@@ -1020,6 +1039,8 @@ export function GestionPage() {
                 citacionesActivas={citacionesActivas}
                 onOpenExpedientes={() => setModalExpedientes(true)}
                 expedientesCount={expedientesCount}
+                onOpenLicenciasMedicas={isAdmin ? () => setModalLicMed(true) : undefined}
+                licenciasMedicas={licMedCount}
               />
             )}
           </div>
@@ -1121,6 +1142,16 @@ export function GestionPage() {
           dnis={dnis}
           onClose={() => setModalExpedientes(false)}
           onCountChange={n => setExpedientesCount(n)}
+        />
+      )}
+
+      {/* ── Modal licencias médicas no otorgadas ── */}
+      {modalLicMed && row && (
+        <LicenciasMedicasModal
+          row={row}
+          dnis={dnis}
+          onClose={() => setModalLicMed(false)}
+          onCountChange={setLicMedCount}
         />
       )}
     </Layout>

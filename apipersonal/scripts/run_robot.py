@@ -13,6 +13,10 @@ de SIAPE / mismo perfil de Chrome de la Intranet). Cada uno toma un lock de
 MySQL (GET_LOCK) de su recurso y, si esta ocupado, espera su turno hasta
 ESPERA_MAX_SEG; si no llega, registra error "no le toco el turno".
 
+SiAPe: cada robot lo cierra al salir (cargar_francos_siape.cerrar_siape via atexit).
+Por si alguno se corto de golpe, aca tambien se cierra antes de arrancar y al
+terminar (con el turno tomado nadie mas lo esta usando).
+
 Solo ejecuta comandos de la tabla (no recibe comandos arbitrarios).
 
 Uso:
@@ -32,11 +36,36 @@ import mapeo_novedades as MN  # conn() + registrar_run() + .env
 SCRIPTS_DIR = Path(__file__).resolve().parent
 LOGS_DIR = SCRIPTS_DIR / "logs"
 ESPERA_MAX_SEG = 3 * 60 * 60
+# del grupo SIAPE pero NO usan la ventana de SiAPe (Discoverer por Chrome)
+SIN_VENTANA_SIAPE = {"siape_tiempo_acumulado"}
 
 
 def recurso_de(cfg):
     """Robots que no pueden correr juntos comparten recurso."""
-    return "robots_intranet" if cfg.get("grupo") == "Intranet MS" else "robots_siape"
+    grupo = cfg.get("grupo")
+    if cfg.get("script") == "circuito_v2":
+        # lanza otros robots que toman sus propios turnos: si compartiera uno, se trabaria solo
+        return "robots_circuito"
+    if grupo == "Intranet MS" or str(cfg.get("script", "")).startswith("intranet_"):
+        # mismo perfil de Chrome de la Intranet (aunque esten en otro grupo, p.ej. 2.0)
+        return "robots_intranet"
+    if grupo == "ProvinciART":          # portal ART por Chrome: no toca SiAPe
+        return "robots_art"
+    if cfg.get("script") == "comparacion_siape_ministerio_v2":   # solo lee Excel + base
+        return "robots_comparacion"
+    return "robots_siape"
+
+
+def _limpiar_siape(cuando):
+    """Cierra un SiAPe que haya quedado abierto (robot anterior cortado de golpe,
+    o uno que no llego a cerrarlo). Con el turno tomado nadie mas lo esta usando."""
+    try:
+        import cargar_francos_siape as F
+        if F._pids_siape():
+            print(f"SiAPe abierto {cuando}: lo cierro.")
+            F.cerrar_siape()
+    except Exception as e:
+        print(f"AVISO: no pude cerrar SiAPe {cuando}: {e}")
 
 
 def _ultima_fila(cur, script):
@@ -88,6 +117,10 @@ def main():
     if esperado > 5:
         print(f"Espero su turno {esperado}s ({recurso}).")
 
+    usa_siape = recurso == "robots_siape" and script not in SIN_VENTANA_SIAPE
+    if usa_siape:
+        _limpiar_siape("antes de arrancar")
+
     t0 = time.time()
     lineas = []
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
@@ -108,6 +141,8 @@ def main():
             lineas.append(f"No se pudo lanzar: {e}")
             log.write(lineas[-1] + "\n")
     dur = int(time.time() - t0)
+    if usa_siape:
+        _limpiar_siape("al terminar")
     try:
         with cn_lock.cursor() as cur:
             cur.execute("SELECT RELEASE_LOCK(%s)", (recurso,))

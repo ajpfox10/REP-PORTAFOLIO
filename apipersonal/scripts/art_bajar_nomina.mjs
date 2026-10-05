@@ -55,10 +55,20 @@ async function parseGrid(page, html) {
 }
 
 async function bajarEstablecimiento(page, estabId, label) {
-  const url1 = `${GRID}?cuil=&nombre=&establecimiento=${estabId}&frm=formNominaTrabajadores&pagina=1&ob=3&`;
-  const r1 = await page.request.get(url1, { timeout: 60000 });
+  // Primero el POST que hace el boton BUSCAR (reindexarBusqueda=s): registra la busqueda en la
+  // sesion. Sin esto (cambio del portal, sep/2026) los GET paginados devuelven la grilla vacia.
+  const r1 = await page.request.post(GRID, {
+    form: { reindexarBusqueda: 's', cuil: '', nombre: '', establecimiento: String(estabId), frm: 'formNominaTrabajadores' },
+    timeout: 60000,
+  });
   const html1 = await r1.text();
   const p1 = await parseGrid(page, html1);
+  if (!p1.rows.length) {   // diagnostico: el portal devolvio algo que no es la grilla
+    const dump = path.join(appRoot, 'logs', 'art_capture', `nomina_grid_vacia_${estabId}.html`);
+    await fs.mkdir(path.dirname(dump), { recursive: true });
+    await fs.writeFile(dump, html1, 'utf8');
+    console.log(`  AVISO: grilla sin filas (HTTP ${r1.status()}); respuesta guardada en ${dump}`);
+  }
   const maxPage = p1.maxPage;
   const map = new Map();
   for (const r of p1.rows) map.set(r.cuil, r);

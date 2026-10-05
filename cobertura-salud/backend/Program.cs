@@ -49,6 +49,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
+    // Rol "control": supervisa los controles diarios y gestiona usuarios (no admins).
+    options.AddPolicy("ControlOrAdmin", policy => policy.RequireRole("admin", "control"));
+    options.AddPolicy("ControlOnly", policy => policy.RequireRole("control"));
 });
 
 var app = builder.Build();
@@ -100,12 +103,16 @@ app.MapGet("/api/auth/me", [Authorize] (ClaimsPrincipal principal) =>
 app.MapGet("/api/sss/credenciales", [Authorize] (AppSettings s) =>
     Results.Ok(new { username = s.SssUsername, password = s.SssPassword }));
 
-app.MapGet("/api/usuarios", [Authorize(Policy = "AdminOnly")] async (Db db) =>
+// Credencial institucional de IOMA (Consulta Afiliados) para el login automatico.
+app.MapGet("/api/ioma/credenciales", [Authorize] (AppSettings s) =>
+    Results.Ok(new { username = s.IomaUsername, password = s.IomaPassword }));
+
+app.MapGet("/api/usuarios", [Authorize(Policy = "ControlOrAdmin")] async (Db db) =>
 {
     await using var conn = await db.OpenAsync();
     var users = new List<UserDto>();
     await using var cmd = new MySqlCommand(
-        "SELECT id, username, role, activo, created_at FROM usuarios ORDER BY username", conn);
+        "SELECT id, username, role, activo, created_at, baja_at FROM usuarios ORDER BY activo DESC, username", conn);
     await using var reader = await cmd.ExecuteReaderAsync();
     while (await reader.ReadAsync())
     {
@@ -114,12 +121,13 @@ app.MapGet("/api/usuarios", [Authorize(Policy = "AdminOnly")] async (Db db) =>
             reader.GetString("username"),
             reader.GetString("role"),
             reader.GetInt32("activo") == 1,
-            reader.GetDateTime("created_at")));
+            reader.GetDateTime("created_at"),
+            reader.IsDBNull(reader.GetOrdinal("baja_at")) ? null : reader.GetDateTime("baja_at")));
     }
     return Results.Ok(new { data = users });
 });
 
-app.MapPost("/api/usuarios", [Authorize(Policy = "AdminOnly")] async Task<Results<Created, BadRequest<ErrorResponse>, Conflict<ErrorResponse>>> (
+app.MapPost("/api/usuarios", [Authorize(Policy = "ControlOrAdmin")] async Task<Results<Created, BadRequest<ErrorResponse>, Conflict<ErrorResponse>>> (
     UserCreateRequest request,
     ClaimsPrincipal principal,
     Db db) =>
@@ -130,6 +138,8 @@ app.MapPost("/api/usuarios", [Authorize(Policy = "AdminOnly")] async Task<Result
     if (username.Length < 3) return TypedResults.BadRequest(new ErrorResponse("Usuario obligatorio, minimo 3 caracteres"));
     if (password.Length < 8) return TypedResults.BadRequest(new ErrorResponse("Contrasena obligatoria, minimo 8 caracteres"));
     if (role is null) return TypedResults.BadRequest(new ErrorResponse("Rol invalido"));
+    if (role == "admin" && CurrentUser.From(principal).Role != "admin")
+        return TypedResults.BadRequest(new ErrorResponse("Solo un admin puede crear administradores"));
 
     await using var conn = await db.OpenAsync();
     try
@@ -150,7 +160,7 @@ app.MapPost("/api/usuarios", [Authorize(Policy = "AdminOnly")] async Task<Result
     return TypedResults.Created($"/api/usuarios/{username}");
 });
 
-app.MapPatch("/api/usuarios/{id:int}", [Authorize(Policy = "AdminOnly")] async Task<Results<Ok, BadRequest<ErrorResponse>, NotFound<ErrorResponse>>> (
+app.MapPatch("/api/usuarios/{id:int}", [Authorize(Policy = "ControlOrAdmin")] async Task<Results<Ok, BadRequest<ErrorResponse>, NotFound<ErrorResponse>>> (
     int id,
     UserPatchRequest request,
     ClaimsPrincipal principal,
@@ -159,14 +169,28 @@ app.MapPatch("/api/usuarios/{id:int}", [Authorize(Policy = "AdminOnly")] async T
     var current = CurrentUser.From(principal);
     var updates = new List<string>();
     await using var conn = await db.OpenAsync();
+
+    // El rol control no puede tocar cuentas admin.
+    string? targetRole;
+    await using (var q = new MySqlCommand("SELECT role FROM usuarios WHERE id = @id", conn))
+    {
+        q.Parameters.AddWithValue("@id", id);
+        targetRole = await q.ExecuteScalarAsync() as string;
+    }
+    if (targetRole is null) return TypedResults.NotFound(new ErrorResponse("Usuario no encontrado"));
+    if (current.Role != "admin" && targetRole == "admin")
+        return TypedResults.BadRequest(new ErrorResponse("Solo un admin puede modificar administradores"));
+
     await using var cmd = new MySqlCommand { Connection = conn };
 
     if (request.Role is not null)
     {
         var role = NormalizeRole(request.Role);
         if (role is null) return TypedResults.BadRequest(new ErrorResponse("Rol invalido"));
-        if (id == current.Id && role != "admin")
-            return TypedResults.BadRequest(new ErrorResponse("No se puede quitar el rol admin del usuario actual"));
+        if (id == current.Id && role != current.Role)
+            return TypedResults.BadRequest(new ErrorResponse("No se puede cambiar el rol del usuario actual"));
+        if (role == "admin" && current.Role != "admin")
+            return TypedResults.BadRequest(new ErrorResponse("Solo un admin puede asignar el rol admin"));
         updates.Add("role = @role");
         cmd.Parameters.AddWithValue("@role", role);
     }
@@ -174,8 +198,10 @@ app.MapPatch("/api/usuarios/{id:int}", [Authorize(Policy = "AdminOnly")] async T
     {
         var activo = request.Activo.Value ? 1 : 0;
         if (id == current.Id && activo == 0)
-            return TypedResults.BadRequest(new ErrorResponse("No se puede desactivar el usuario actual"));
+            return TypedResults.BadRequest(new ErrorResponse("No se puede dar de baja el usuario actual"));
+        // Baja logica: el usuario y todas sus consultas quedan guardados; solo no puede ingresar.
         updates.Add("activo = @activo");
+        updates.Add(activo == 0 ? "baja_at = COALESCE(baja_at, NOW())" : "baja_at = NULL");
         cmd.Parameters.AddWithValue("@activo", activo);
     }
     if (!string.IsNullOrWhiteSpace(request.Password))
@@ -474,7 +500,73 @@ app.MapPost("/api/desktop/recorrido", [Authorize] async Task<Results<Ok<DesktopR
     return TypedResults.Ok(new DesktopRecorridoResponse(consultaId, user.Username, resultados.Count));
 });
 
-app.MapGet("/api/reporte", [Authorize(Policy = "AdminOnly")] async (string? usuario, string? dni, string? cuil, string? desde, string? hasta, Db db) =>
+// Control diario: cada consulta (documento) con el usuario que la hizo, el
+// resultado por fuente y la clasificacion general (con / sin obra social).
+app.MapGet("/api/control", [Authorize(Policy = "ControlOnly")] async (string? desde, string? hasta, string? usuario, string? documento, Db db) =>
+{
+    DateTime desdeDt = DateTime.TryParse(desde, out var d1) ? d1.Date : DateTime.Today;
+    DateTime hastaDt = (DateTime.TryParse(hasta, out var d2) ? d2.Date : desdeDt).AddDays(1);
+    var filtros = new List<string> { "c.created_at >= @desde", "c.created_at < @hasta" };
+    if (!string.IsNullOrWhiteSpace(usuario)) filtros.Add("u.username = @usuario");
+    if (!string.IsNullOrWhiteSpace(documento)) filtros.Add("(c.dni LIKE @doc OR c.cuil LIKE @doc)");
+
+    await using var conn = await db.OpenAsync();
+    await using var cmd = new MySqlCommand($"""
+        SELECT c.id, c.created_at, u.username, u.activo, c.dni, c.cuil, c.apellido,
+               p.nombre AS fuente, p.resultado, p.estado
+        FROM consultas c
+        JOIN usuarios u ON u.id = c.creado_por
+        LEFT JOIN consulta_pasos p ON p.consulta_id = c.id
+        WHERE {string.Join(" AND ", filtros)}
+        ORDER BY c.created_at DESC, c.id DESC, p.orden
+        LIMIT 20000
+        """, conn);
+    cmd.Parameters.AddWithValue("@desde", desdeDt);
+    cmd.Parameters.AddWithValue("@hasta", hastaDt);
+    if (!string.IsNullOrWhiteSpace(usuario)) cmd.Parameters.AddWithValue("@usuario", usuario.Trim());
+    if (!string.IsNullOrWhiteSpace(documento)) cmd.Parameters.AddWithValue("@doc", "%" + documento.Trim() + "%");
+
+    var orden = new List<long>();
+    var mapa = new Dictionary<long, ControlRow>();
+    await using (var reader = await cmd.ExecuteReaderAsync())
+    {
+        while (await reader.ReadAsync())
+        {
+            var cid = reader.GetInt64("id");
+            if (!mapa.TryGetValue(cid, out var row))
+            {
+                row = new ControlRow(
+                    cid,
+                    reader.GetDateTime("created_at"),
+                    reader.GetString("username"),
+                    reader.GetInt32("activo") == 1,
+                    reader.IsDBNull(reader.GetOrdinal("dni")) ? null : reader.GetString("dni"),
+                    reader.IsDBNull(reader.GetOrdinal("cuil")) ? null : reader.GetString("cuil"),
+                    reader.IsDBNull(reader.GetOrdinal("apellido")) ? null : reader.GetString("apellido"),
+                    "sin_determinar",
+                    new List<ControlFuente>());
+                mapa[cid] = row;
+                orden.Add(cid);
+            }
+            if (!reader.IsDBNull(reader.GetOrdinal("fuente")))
+            {
+                row.Fuentes.Add(new ControlFuente(
+                    reader.GetString("fuente"),
+                    reader.IsDBNull(reader.GetOrdinal("resultado")) ? null : reader.GetString("resultado"),
+                    reader.GetString("estado")));
+            }
+        }
+    }
+
+    var data = orden.Select(cid =>
+    {
+        var r = mapa[cid];
+        return r with { Cobertura = ClasificarCobertura(r.Fuentes) };
+    }).ToList();
+    return Results.Ok(new { desde = desdeDt, hasta = hastaDt.AddDays(-1), data });
+});
+
+app.MapGet("/api/reporte", [Authorize(Policy = "ControlOrAdmin")] async (string? usuario, string? dni, string? cuil, string? desde, string? hasta, Db db) =>
 {
     await using var conn = await db.OpenAsync();
     var filtros = new List<string>();
@@ -530,7 +622,20 @@ app.Run();
 static string? NormalizeRole(string? role)
 {
     role = (role ?? "user").Trim().ToLowerInvariant();
-    return role is "admin" or "user" ? role : null;
+    return role is "admin" or "user" or "control" ? role : null;
+}
+
+// "con_obra_social" si alguna fuente dio cobertura/aportes/afiliado; "sin_obra_social"
+// si ninguna la dio y al menos una la descarto; si no, "sin_determinar".
+static string ClasificarCobertura(IEnumerable<ControlFuente> fuentes)
+{
+    var resultados = fuentes.Select(f => (f.Resultado ?? "").ToLowerInvariant()).ToList();
+    if (resultados.Any(r => r.Contains("con cobertura") || r.Contains("aportes") || r == "afiliado"))
+        return "con_obra_social";
+    if (resultados.Any(r => r.Contains("sin cobertura") || r.Contains("no posee") || r.Contains("no registra")
+        || r.Contains("sin pagos") || r == "sin_cobertura"))
+        return "sin_obra_social";
+    return "sin_determinar";
 }
 
 static object? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
@@ -594,7 +699,9 @@ sealed record AppSettings(
     string SuperUsername,
     string SuperPassword,
     string SssUsername,
-    string SssPassword)
+    string SssPassword,
+    string IomaUsername,
+    string IomaPassword)
 {
     public static AppSettings FromEnvironment()
     {
@@ -619,7 +726,9 @@ sealed record AppSettings(
             Environment.GetEnvironmentVariable("SUPERUSER_USERNAME") ?? "superusuario",
             Environment.GetEnvironmentVariable("SUPERUSER_PASSWORD") ?? "SUPERUSUARIO0987",
             Environment.GetEnvironmentVariable("SSS_USERNAME") ?? "",
-            Environment.GetEnvironmentVariable("SSS_PASSWORD") ?? "");
+            Environment.GetEnvironmentVariable("SSS_PASSWORD") ?? "",
+            Environment.GetEnvironmentVariable("IOMA_USERNAME") ?? "",
+            Environment.GetEnvironmentVariable("IOMA_PASSWORD") ?? "");
     }
 
     static string Required(string key) =>
@@ -711,6 +820,33 @@ sealed class Db(AppSettings settings)
         {
             await using var cmd = new MySqlCommand(statement, conn);
             await cmd.ExecuteNonQueryAsync();
+        }
+
+        // Rol "control" y baja logica de usuarios (fecha de baja; nunca se borran).
+        await using (var alter = new MySqlCommand(
+            "ALTER TABLE usuarios MODIFY role ENUM('admin','user','control') NOT NULL DEFAULT 'user'", conn))
+            await alter.ExecuteNonQueryAsync();
+        await using (var hasBaja = new MySqlCommand("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'baja_at'
+            """, conn))
+        {
+            if (Convert.ToInt32(await hasBaja.ExecuteScalarAsync()) == 0)
+            {
+                await using var add = new MySqlCommand("ALTER TABLE usuarios ADD COLUMN baja_at TIMESTAMP NULL", conn);
+                await add.ExecuteNonQueryAsync();
+            }
+        }
+
+        // Usuario supervisor "control": se crea una sola vez (si luego le cambian la
+        // clave o lo dan de baja, se respeta).
+        await using (var control = new MySqlCommand("""
+            INSERT IGNORE INTO usuarios (username, password_hash, role, activo)
+            VALUES ('control', @hash, 'control', 1)
+            """, conn))
+        {
+            control.Parameters.AddWithValue("@hash", BCrypt.Net.BCrypt.HashPassword("control123", 12));
+            await control.ExecuteNonQueryAsync();
         }
 
         var hash = BCrypt.Net.BCrypt.HashPassword(settings.AdminPassword, 12);
@@ -1758,10 +1894,13 @@ sealed record CurrentUser(int Id, string Username, string Role)
 }
 
 sealed record UserRecord(int Id, string Username, string PasswordHash, string Role, int Activo, DateTime CreatedAt);
-sealed record UserDto(int Id, string Username, string Role, bool Activo, DateTime CreatedAt)
+sealed record UserDto(int Id, string Username, string Role, bool Activo, DateTime CreatedAt, DateTime? BajaAt = null)
 {
     public static UserDto From(UserRecord user) => new(user.Id, user.Username, user.Role, user.Activo == 1, user.CreatedAt);
 }
+sealed record ControlFuente(string Fuente, string? Resultado, string Estado);
+sealed record ControlRow(long ConsultaId, DateTime Fecha, string Usuario, bool UsuarioActivo,
+    string? Dni, string? Cuil, string? Apellido, string Cobertura, List<ControlFuente> Fuentes);
 
 sealed record LoginRequest(string? Username, string? Password);
 sealed record LoginResponse(string Token, UserDto User);

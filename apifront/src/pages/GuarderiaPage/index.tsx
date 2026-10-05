@@ -16,6 +16,7 @@ interface EmbarazadaPendiente {
   apellido?: string;
   nombre?: string;
   ley_nombre?: string;
+  planta_nombre?: string;
 }
 
 interface GuarderiaRow {
@@ -68,6 +69,82 @@ function fmt(d?: string | null): string {
 function esNombrada(ley?: string | null): boolean {
   if (!ley) return true; // sin dato: mostrar igual
   return !ley.toUpperCase().includes('BECA');
+}
+
+// ley · planta, resaltado si es beca / temporaria / interina (no titular)
+function LeyPlantaTag({ ley, planta }: { ley?: string | null; planta?: string | null }) {
+  const txt = [ley, planta].filter(Boolean).join(' · ');
+  if (!txt) return <span className="muted" style={{ fontSize: '0.78rem' }}>sin ley</span>;
+  const noTitular = /BECA|TEMPORARI|INTERIN/i.test(txt);
+  return (
+    <span style={{
+      fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, padding: '1px 7px',
+      background: noTitular ? 'rgba(249,115,22,0.2)' : 'rgba(148,163,184,0.15)',
+      color: noTitular ? '#fb923c' : '#cbd5e1',
+    }}>{txt}</span>
+  );
+}
+
+type AuditInfo = { id: number | null; email: string | null; nombre: string | null };
+
+// Aviso de guardería a la embarazada pendiente (mig 061, distinto de alerta_45_* que es pre-parto)
+async function marcarEmbGuarderiaAvisada(id: number, audit: AuditInfo) {
+  await apiFetch(`/embarazadas/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      guarderia_avisada: 1,
+      guarderia_avisada_fecha: new Date().toISOString(),
+      guarderia_avisada_usuario_id: audit.id,
+      guarderia_avisada_usuario_email: audit.email,
+      guarderia_avisada_usuario_nombre: audit.nombre,
+      updated_by: audit.id,
+    }),
+  });
+}
+
+// Baja lógica del registro de embarazo: PATCH deleted_at (el DELETE genérico del CRUD borra la fila)
+async function quitarEmbarazada(id: number, audit: AuditInfo) {
+  await apiFetch(`/embarazadas/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ deleted_at: new Date().toISOString(), updated_by: audit.id }),
+  });
+}
+
+function BotonesEmbPendiente({ e, audit, onDone }: { e: EmbarazadaPendiente; audit: AuditInfo; onDone: (id: number) => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<'' | 'avisar' | 'quitar'>('');
+  const nombre = e.apellido ? `${e.apellido}, ${e.nombre}` : `DNI ${e.dni}`;
+  const avisar = async () => {
+    setBusy('avisar');
+    try {
+      await marcarEmbGuarderiaAvisada(e.id, audit);
+      toast.ok('Avisada', `${nombre} marcada como avisada.`);
+      onDone(e.id);
+    } catch (err: any) { toast.error('Error', err?.message); }
+    finally { setBusy(''); }
+  };
+  const quitar = async () => {
+    if (!window.confirm(`¿Quitar el registro de embarazo de ${nombre}?`)) return;
+    setBusy('quitar');
+    try {
+      await quitarEmbarazada(e.id, audit);
+      toast.ok('Quitada', `${nombre} quitada de embarazadas.`);
+      onDone(e.id);
+    } catch (err: any) { toast.error('Error', err?.message); }
+    finally { setBusy(''); }
+  };
+  return (
+    <>
+      <button className="btn" type="button" disabled={!!busy} onClick={avisar}
+        style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(16,185,129,0.2)', color: '#34d399' }}>
+        {busy === 'avisar' ? '...' : '✓ Avisada'}
+      </button>
+      <button className="btn" type="button" disabled={!!busy} onClick={quitar} title="Quitar registro de embarazo"
+        style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(239,68,68,0.15)', color: '#f87171' }}>
+        {busy === 'quitar' ? '...' : '🗑 Quitar'}
+      </button>
+    </>
+  );
 }
 
 // alerta: a los 45 días del nacimiento, no avisada, nombrada
@@ -140,6 +217,11 @@ export function GuarderiaAlertaBanner() {
   const [dismissed, setDismissed] = useState(false);
   const [showAllEmb, setShowAllEmb] = useState(false);
   const logged = useRef(false);
+  const audit: AuditInfo = {
+    id: (session?.user as any)?.id ?? null,
+    email: session?.user?.email ?? null,
+    nombre: (session?.user as any)?.nombre ?? null,
+  };
 
   useEffect(() => {
     (async () => {
@@ -176,7 +258,7 @@ export function GuarderiaAlertaBanner() {
         const pendientes = embarazadas
           .filter(r => {
             const dni = String(r.dni).replace(/\D/g, '');
-            if (!dni || dniConGuarderia.has(dni)) return false;
+            if (!dni || dniConGuarderia.has(dni) || r.guarderia_avisada) return false;
             const dias = diasDesdeFpp(r.fecha_probable_parto);
             if (dias === null || dias < 90) return false; // solo si ya pasaron 90 días de la FPP
             const p = nameMap.get(dni);
@@ -193,6 +275,7 @@ export function GuarderiaAlertaBanner() {
               apellido: p?.apellido,
               nombre: p?.nombre,
               ley_nombre: p?.ley_nombre,
+              planta_nombre: p?.planta_nombre,
             };
           });
         if (!enAl.length && !pendientes.length) return;
@@ -240,6 +323,9 @@ export function GuarderiaAlertaBanner() {
                   <span className="muted">·</span>
                   <span>DNI {a.dni}</span>
                   <span className="muted">FPP: {fmt(a.fecha_probable_parto)}</span>
+                  <LeyPlantaTag ley={a.ley_nombre} planta={a.planta_nombre} />
+                  <BotonesEmbPendiente e={a} audit={audit}
+                    onDone={id => setEmbarazadasSinGuarderia(prev => prev.filter(x => x.id !== id))} />
                 </div>
               ))}
               {embarazadasSinGuarderia.length > 8 && (
@@ -275,7 +361,7 @@ export function GuarderiaAlertaBanner() {
           })}
         </div>
         <div style={{ marginTop: 8, fontSize: '0.75rem' }} className="muted">
-          Ir a <a href="/app/guarderia" style={{ color: '#eab308', textDecoration: 'underline' }}>Guardería y Salario</a> para marcar como avisadas.
+          Ir a <a href="/app/guarderia" style={{ color: '#eab308', textDecoration: 'underline' }}>Guardería y Salario</a> para gestionar los trámites de guardería.
         </div>
       </div>
       <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: '1.1rem', padding: 0 }} onClick={() => setDismissed(true)} title="Cerrar">✕</button>
@@ -362,7 +448,7 @@ export function GuarderiaPage() {
       const pendientes: EmbarazadaPendiente[] = embData
         .filter(r => {
           const dni = String(r.dni).replace(/\D/g, '');
-          if (dniConGuarderia.has(dni)) return false;
+          if (dniConGuarderia.has(dni) || r.guarderia_avisada) return false;
           const p = nameMap.get(dni);
           return esNombrada(p?.ley_nombre);
         })
@@ -377,6 +463,7 @@ export function GuarderiaPage() {
             apellido: p?.apellido,
             nombre: p?.nombre,
             ley_nombre: p?.ley_nombre,
+            planta_nombre: p?.planta_nombre,
           };
         });
       setEmbarazadasPendientes(pendientes);
@@ -598,7 +685,7 @@ export function GuarderiaPage() {
                   <span style={{ fontWeight: 600 }}>{e.apellido ? `${e.apellido}, ${e.nombre}` : `DNI ${e.dni}`}</span>
                   <span className="muted">·</span>
                   <span className="muted" style={{ fontSize: '0.78rem' }}>DNI {e.dni}</span>
-                  {e.ley_nombre && <span className="muted" style={{ fontSize: '0.78rem' }}>{e.ley_nombre}</span>}
+                  <LeyPlantaTag ley={e.ley_nombre} planta={e.planta_nombre} />
                   {diasFpp !== null && (
                     <span style={{
                       background: diasFpp < 0 ? 'rgba(239,68,68,0.2)' : 'rgba(139,92,246,0.2)',
@@ -613,6 +700,8 @@ export function GuarderiaPage() {
                     onClick={() => { search.loadByDni(e.dni); setTab('cargar'); }}>
                     ➕ Cargar guardería
                   </button>
+                  <BotonesEmbPendiente e={e} audit={auditInfo}
+                    onDone={id => setEmbarazadasPendientes(prev => prev.filter(x => x.id !== id))} />
                 </div>
               );
             })}

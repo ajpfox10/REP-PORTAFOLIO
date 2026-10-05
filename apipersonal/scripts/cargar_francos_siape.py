@@ -282,7 +282,30 @@ def _activar_ventana(w):
     return w.left, w.top
 
 
+_CIERRE_AL_SALIR = {"registrado": False}
+
+
+def _cerrar_siape_al_salir():
+    """El robot que toca SiAPe lo cierra al terminar (ok, error o Ctrl+C), asi el
+    proximo arranca con login limpio. SIAPE_CERRAR_AL_FINAL=false lo deja abierto."""
+    if _CIERRE_AL_SALIR["registrado"]:
+        return
+    if os.environ.get("SIAPE_CERRAR_AL_FINAL", "true").strip().lower() in ("0", "false", "no"):
+        return
+    import atexit
+
+    def _cerrar():
+        try:
+            cerrar_siape()
+        except Exception as e:
+            log(f"AVISO: no pude cerrar SiAPe al salir: {e}")
+
+    atexit.register(_cerrar)
+    _CIERRE_AL_SALIR["registrado"] = True
+
+
 def abrir_siape_si_falta():
+    _cerrar_siape_al_salir()
     w = _buscar_ventana_siape()
     if w:
         return _activar_ventana(w)
@@ -306,6 +329,80 @@ def abrir_siape_si_falta():
             return _activar_ventana(w)
         time.sleep(1)
     raise RuntimeError(f"SiAPe no abrio dentro de {SIAPE_OPEN_TIMEOUT} segundos.")
+
+
+def _pids_siape():
+    """PIDs de los procesos duenos de ventanas de SiAPe (por titulo)."""
+    import win32gui
+    import win32process
+
+    pids = set()
+
+    def _cb(hwnd, _):
+        if VENTANA_SIAPE.lower() in (win32gui.GetWindowText(hwnd) or "").lower():
+            pids.add(win32process.GetWindowThreadProcessId(hwnd)[1])
+        return True
+
+    win32gui.EnumWindows(_cb, None)
+    pids.discard(0)
+    return pids
+
+
+def cerrar_siape(espera=10):
+    """
+    Cierra SiAPe para que el proximo robot arranque de cero (login limpio).
+    Primero WM_CLOSE a sus ventanas; si en `espera` s siguen vivas, mata SOLO los
+    procesos duenos de esas ventanas (y sus hijos). No toca otros Java.
+    Devuelve la cantidad de procesos que habia.
+    """
+    import win32con
+    import win32gui
+
+    pids = _pids_siape()
+    if not pids:
+        return 0
+    log(f"Cerrando SiAPe (pid {', '.join(map(str, sorted(pids)))})...")
+
+    def _cb(hwnd, _):
+        if VENTANA_SIAPE.lower() in (win32gui.GetWindowText(hwnd) or "").lower():
+            try:
+                win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+            except Exception:
+                pass
+        return True
+
+    win32gui.EnumWindows(_cb, None)
+    limite = time.time() + espera
+    while time.time() < limite and _pids_siape():
+        time.sleep(1)
+    vivos = {p for p in _pids_siape() | pids if _pid_vivo(p)}
+    for pid in vivos:
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                       capture_output=True, text=True)
+    limite = time.time() + 15             # el proceso tarda unos segundos en morir
+    while time.time() < limite and (_pids_siape() or any(_pid_vivo(p) for p in pids)):
+        time.sleep(1)
+    if _pids_siape() or any(_pid_vivo(p) for p in pids):
+        log("AVISO: SiAPe sigue abierto despues de cerrarlo.")
+    else:
+        log("SiAPe cerrado" + (" (forzado)." if vivos else "."))
+    return len(pids)
+
+
+def _pid_vivo(pid):
+    """Vivo de verdad (exit code STILL_ACTIVE). tasklist no sirve: si este proceso tiene el
+    JAB enganchado, el Java ya terminado sigue listado hasta que salimos."""
+    import ctypes
+
+    k = ctypes.windll.kernel32
+    h = k.OpenProcess(0x1000, False, pid)          # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        return bool(k.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == 259
+    finally:
+        k.CloseHandle(h)
 
 
 def _pegar_texto(texto):
@@ -553,6 +650,7 @@ def asegurar_sesion(timeout=None):
     asumir sesion abierta (SIAPE_SKIP_LOGIN) y clickear coordenadas a ciegas,
     mira el estado real en cada vuelta y actua en consecuencia.
     """
+    _cerrar_siape_al_salir()
     limite = time.time() + (timeout if timeout is not None else float(
         os.environ.get("SIAPE_SESION_TIMEOUT", "240") or "240"))
     if not _buscar_ventana_siape():
@@ -695,12 +793,45 @@ def _jab_set_text(el, value):
 _CLICK_CAL = {"offset_x": 0.0, "offset_y": 0.0}
 
 
+# Escala medida por sesion (05/10/2026): marco raiz que informa JAB vs rectangulo
+# real de la ventana. La formula fija w/1296 x h/736 solo vale con la ventana en
+# ese tamanio: en 1376x788 multiplicaba x1.07 y los clicks caian una fila abajo
+# (el exportador abrio "Novedades Rechazadas" en vez de "Novedades Por Periodo").
+# Se recalcula cuando la ventana cambia de lugar/tamanio.
+_ESCALA_JAB = {"clave": None, "valor": None}
+
+
+def _escala_medida(w):
+    clave = (w.left, w.top, w.width, w.height)
+    if _ESCALA_JAB["clave"] == clave:
+        return _ESCALA_JAB["valor"]
+    valor = None
+    try:
+        for _el, depth, info in _jab_walk(max_depth=0, max_segundos=5):
+            b = info.get("bounds") or {}
+            if depth == 0 and b.get("width") and b.get("height"):
+                sx, sy = w.width / b["width"], w.height / b["height"]
+                valor = (sx, sy, w.left - b.get("x", 0) * sx, w.top - b.get("y", 0) * sy)
+                log(f"Escala de clicks medida: ventana {w.width}x{w.height} @({w.left},{w.top}) / "
+                    f"JAB {b['width']}x{b['height']} @({b.get('x')},{b.get('y')}) -> {sx:.3f}x{sy:.3f}")
+            break
+    except Exception as e:
+        log(f"AVISO: no pude medir la escala de clicks ({e}); uso la formula fija.")
+    _ESCALA_JAB.update(clave=clave, valor=valor)
+    return valor
+
+
 def _click_transform():
     """Devuelve (scale_x, scale_y, origen_x, origen_y) para convertir bounds
     logicos de JAB a pixeles fisicos de pantalla, con la correccion empirica
     acumulada (si hubo alguna) sumada al origen."""
     w = _buscar_ventana_siape()
-    if w and w.width and w.height:
+    medida = _escala_medida(w) if (w and w.width and w.height) else None
+    if medida:
+        scale_x, scale_y, ox, oy = medida
+        origen_x = ox + _CLICK_CAL["offset_x"]
+        origen_y = oy + _CLICK_CAL["offset_y"]
+    elif w and w.width and w.height:
         scale_x = w.width / 1296.0
         scale_y = w.height / 736.0
         origen_x = w.left + _CLICK_CAL["offset_x"]

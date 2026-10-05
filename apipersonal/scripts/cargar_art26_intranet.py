@@ -1,4 +1,7 @@
 """
+SIN USO como programa desde 04/10/2026: lo reemplaza cargar_art26_intranet_v2.py (tablas).
+Sus funciones de Intranet (login, navegacion, carga FC) las usa la 2.0: NO borrar.
+
 Carga Artículo 26 (todos los estados) en la Intranet MS como novedad FC / FRANCO COMPENSATORIO.
 
 Fuente: Excel generado por el backend (POST /api/v1/articulo-26-intranet/generar-excel),

@@ -683,7 +683,8 @@ function FichoDeberModal({ agente, registros, onClose }: {
 }
 
 // ── Componente principal ───────────────────────────────────────────────────────
-export function SinFichajeSalidaPage() {
+/** Contenido de "Sin fichaje de salida" (sin Layout): su pagina y la pestaña de Ausentes vs Fichajes. */
+export function SinFichajeSalidaContent() {
   const { error: toastError } = useToast();
 
   const [archivos, setArchivos]           = useState<ArchivoInfo[]>([]);
@@ -1121,7 +1122,7 @@ export function SinFichajeSalidaPage() {
   };
 
   return (
-    <Layout title="Control de fichajes">
+    <>
 
       {/* ── Archivos y consulta ─────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 12 }}>
@@ -2045,6 +2046,14 @@ export function SinFichajeSalidaPage() {
         </div>
       )}
 
+    </>
+  );
+}
+
+export function SinFichajeSalidaPage() {
+  return (
+    <Layout title="Control de fichajes">
+      <SinFichajeSalidaContent />
     </Layout>
   );
 }

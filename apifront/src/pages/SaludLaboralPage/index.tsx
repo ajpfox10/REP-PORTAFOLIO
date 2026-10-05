@@ -26,6 +26,9 @@ interface Persona {
   dependencia_nombre?: string;
   servicio_nombre?: string;
   estado_empleo?: string;
+  // Becado que ya no está activo: se lo puede buscar para ver su historial,
+  // pero no se le pueden cargar ni editar días.
+  baja?: boolean;
 }
 
 interface ReconocimientoMedico {
@@ -141,6 +144,10 @@ function normalize(s: string) {
 function useAllBecados() {
   const toast = useToast();
   const [allBecados, setAllBecados] = useState<Persona[]>([]);
+  // Ex-becados (algún tramo ley becado, pero no ACTIVO hoy): solo consulta
+  const [historicos, setHistoricos] = useState<Persona[]>([]);
+  // Nombre de todo el personal, para que la tabla no pierda el nombre al dar de baja
+  const [nombresPorDni, setNombresPorDni] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
   const loaded = useRef(false);
 
@@ -168,7 +175,11 @@ function useAllBecados() {
             .filter(a => LEYES_BECADOS.includes(Number(a.ley_id)) && a.estado_empleo === 'ACTIVO')
             .map(a => String(a.dni))
         );
-        if (!dnisBecados.size) return;
+        const dnisExBecados = new Set(
+          agentes
+            .filter(a => LEYES_BECADOS.includes(Number(a.ley_id)) && !dnisBecados.has(String(a.dni)))
+            .map(a => String(a.dni))
+        );
 
         let all: any[] = [];
         let page = 1;
@@ -201,6 +212,33 @@ function useAllBecados() {
           });
         becados.sort((a, b) => a.apellido.localeCompare(b.apellido));
         setAllBecados(becados);
+
+        // Para los ex-becados se muestra la ley del último tramo becado
+        const ultimoBecado = new Map<string, any>();
+        for (const a of agentes) {
+          if (LEYES_BECADOS.includes(Number(a.ley_id))) ultimoBecado.set(String(a.dni), a);
+        }
+        const exBecados: Persona[] = all
+          .filter(p => dnisExBecados.has(String(p.dni)))
+          .map(p => {
+            const ag = ultimoBecado.get(String(p.dni));
+            return {
+              dni: p.dni,
+              apellido: p.apellido || '',
+              nombre: p.nombre || '',
+              cuil: p.cuil,
+              ley: ag?.ley_nombre,
+              dependencia_nombre: ag?.dependencia_nombre,
+              estado_empleo: ag?.estado_empleo,
+              baja: true,
+            };
+          });
+        exBecados.sort((a, b) => a.apellido.localeCompare(b.apellido));
+        setHistoricos(exBecados);
+
+        setNombresPorDni(new Map(
+          all.map(p => [String(p.dni).replace(/\D/g, ''), `${p.apellido || ''}, ${p.nombre || ''}`])
+        ));
       } catch (e: any) {
         toast.error('Error cargando becados', e?.message);
       } finally {
@@ -209,14 +247,16 @@ function useAllBecados() {
     })();
   }, []);
 
-  return { allBecados, loading };
+  return { allBecados, historicos, nombresPorDni, loading };
 }
 
 // ─── HOOK: buscador DNI + Apellido/Nombre (igual a GestionPage) ──────────────
 // mode='becados' filtra sobre lista local; mode='todos' usa API/searchPersonal
 
-function useLiveSearch(mode: 'becados' | 'todos', allBecados: Persona[]) {
+function useLiveSearch(mode: 'becados' | 'todos', allBecados: Persona[], historicos: Persona[] = []) {
   const toast = useToast();
+  // En modo becados también se encuentran los dados de baja (marcados baja: true)
+  const pool = mode === 'becados' ? [...allBecados, ...historicos] : allBecados;
   const [dni, setDni] = useState('');
   const [fullName, setFullName] = useState('');
   const [matches, setMatches] = useState<Persona[]>([]);
@@ -235,8 +275,11 @@ function useLiveSearch(mode: 'becados' | 'todos', allBecados: Persona[]) {
     setMatches([]); setSelected(null);
 
     if (mode === 'becados') {
-      const found = allBecados.find(b => String(b.dni).replace(/\D/g, '') === clean);
-      if (found) { setSelected(found); }
+      const found = pool.find(b => String(b.dni).replace(/\D/g, '') === clean);
+      if (found) {
+        setSelected(found);
+        if (found.baja) toast.error('Becado dado de baja', 'Solo consulta: no se le pueden cargar días.');
+      }
       else { toast.error('No encontrado', `Sin becado con DNI ${clean}`); }
     } else {
       setLoadingSearch(true);
@@ -260,7 +303,7 @@ function useLiveSearch(mode: 'becados' | 'todos', allBecados: Persona[]) {
 
     if (mode === 'becados') {
       const nq = normalize(q);
-      const filtered = allBecados.filter(b => {
+      const filtered = pool.filter(b => {
         const ape = normalize(b.apellido);
         const nom = normalize(b.nombre);
         return ape.includes(nq) || nom.includes(nq) || `${ape} ${nom}`.includes(nq);
@@ -301,10 +344,18 @@ export function SaludLaboralPage() {
   const [tab, setTab] = useState<Tab>('reconocimientos');
 
   // Lista de becados cargada una vez
-  const { allBecados, loading: loadingBecados } = useAllBecados();
+  const { allBecados, historicos, nombresPorDni, loading: loadingBecados } = useAllBecados();
 
-  // Buscador para reconocimientos (solo becados)
-  const recSearch = useLiveSearch('becados', allBecados);
+  // Buscador para reconocimientos (becados activos + dados de baja solo consulta)
+  const recSearch = useLiveSearch('becados', allBecados, historicos);
+  const dnisActivos = React.useMemo(
+    () => new Set(allBecados.map(b => String(b.dni).replace(/\D/g, ''))),
+    [allBecados]
+  );
+  // Dado de baja = no figura entre los becados activos (no se le cargan ni editan días)
+  const esBajaRec = (dni: string | number) =>
+    !loadingBecados && !dnisActivos.has(String(dni).replace(/\D/g, ''));
+  const recBloqueado = !!recSearch.selected?.baja;
   // Buscador para examen anual (todos los agentes)
   const examSearch = useLiveSearch('todos', allBecados);
 
@@ -393,6 +444,7 @@ export function SaludLaboralPage() {
   const handleSaveRec = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!recSearch.selected) { toast.error('Sin becado', 'Seleccioná un becado primero.'); return; }
+    if (recSearch.selected.baja) { toast.error('Becado dado de baja', 'No se le pueden cargar días.'); return; }
     // fecha_desde es opcional — solo requerida para el rol salud_laboral (no admin)
     const isSaludLaboral = canCrud('reconocimientos_medicos', 'create') && !isAdmin;
     if (isSaludLaboral && !formRec.ausentismo && !formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
@@ -446,6 +498,7 @@ export function SaludLaboralPage() {
   };
 
   const startEditRec = (r: ReconocimientoMedico) => {
+    if (esBajaRec(r.dni)) { toast.error('Becado dado de baja', 'No se pueden editar los días de un agente dado de baja.'); return; }
     if (!isAdmin && !isWithin24h(r.created_at)) { toast.error('Sin permiso', 'Solo podés editar dentro de las 24hs de carga.'); return; }
     setEditingRec(r);
     setFormRec({ fecha: r.fecha?.slice(0,10)||'', fecha_desde: r.fecha_desde?.slice(0,10)||'', fecha_hasta: r.fecha_hasta?.slice(0,10)||'', cantidad_dias: r.cantidad_dias!=null?String(r.cantidad_dias):'', tipo: r.tipo||'', resultado: r.resultado||'', observaciones: r.observaciones||'', ausentismo: false });
@@ -532,7 +585,8 @@ export function SaludLaboralPage() {
     if (recSearch.selected && String(recSearch.selected.dni).replace(/\D/g,'') === String(dni).replace(/\D/g,''))
       return `${recSearch.selected.apellido}, ${recSearch.selected.nombre}`;
     const b = allBecados.find(x => String(x.dni).replace(/\D/g,'') === String(dni).replace(/\D/g,''));
-    return b ? `${b.apellido}, ${b.nombre}` : dni;
+    if (b) return `${b.apellido}, ${b.nombre}`;
+    return nombresPorDni.get(String(dni).replace(/\D/g, '')) || dni;
   };
 
   // ══════════════ TAREAS LIVIANAS ══════════════
@@ -703,7 +757,7 @@ export function SaludLaboralPage() {
   // ─── RENDER ───────────────────────────────────────────────────────────────
 
   return (
-    <Layout title="🏥 Salud Laboral" showBack>
+    <Layout title="🏥 Salud Laboral" showBack fluid>
 
       {/* ── TABS ── */}
       <div className="card" style={{ padding: '6px 8px', marginBottom: 16 }}>
@@ -738,7 +792,7 @@ export function SaludLaboralPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div className="h2">Buscar becado</div>
               <span className="muted" style={{ fontSize: '0.78rem' }}>
-                {loadingBecados ? 'Cargando becados...' : `${allBecados.length} becados activos`}
+                {loadingBecados ? 'Cargando becados...' : `${allBecados.length} becados activos · ${historicos.length} dados de baja (solo consulta)`}
               </span>
             </div>
 
@@ -781,6 +835,7 @@ export function SaludLaboralPage() {
                     style={{ textAlign: 'left', justifyContent: 'flex-start' }}
                     onClick={() => recSearch.select(b)}>
                     <strong>{b.apellido}, {b.nombre}</strong>
+                    {b.baja && <span style={bajaBadge}>BAJA</span>}
                     <span className="muted" style={{ marginLeft: 8, fontSize: '0.8rem' }}>
                       DNI {b.dni}{b.ley ? ` · ${b.ley}` : ''}{b.dependencia_nombre ? ` · ${b.dependencia_nombre}` : ''}
                     </span>
@@ -793,7 +848,10 @@ export function SaludLaboralPage() {
             {recSearch.selected && (
               <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.3)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ fontWeight: 700 }}>{recSearch.selected.apellido}, {recSearch.selected.nombre}</div>
+                  <div style={{ fontWeight: 700 }}>
+                    {recSearch.selected.apellido}, {recSearch.selected.nombre}
+                    {recSearch.selected.baja && <span style={bajaBadge}>BAJA · solo consulta</span>}
+                  </div>
                   <div className="muted" style={{ fontSize: '0.82rem' }}>
                     DNI {recSearch.selected.dni}
                     {recSearch.selected.cuil ? ` · CUIL ${recSearch.selected.cuil}` : ''}
@@ -821,6 +879,7 @@ export function SaludLaboralPage() {
                               {recSearch.selected && <span style={{ fontWeight: 400, fontSize: '0.85rem', marginLeft: 8, color: 'rgba(255,255,255,0.5)' }}>— {recSearch.selected.apellido}, {recSearch.selected.nombre}</span>}
                           </div>
                           {!recSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un becado antes de cargar.</div>}
+                          {recBloqueado && <div style={alertStyle}>⛔ Agente dado de baja: no se le pueden cargar días.</div>}
                           <form onSubmit={handleSaveRec}>
 
                               {/* Checkbox ausentismo */}
@@ -894,9 +953,9 @@ export function SaludLaboralPage() {
                               )}
 
                               <div className="row" style={{ gap: 8, marginTop: 12 }}>
-                                  <button className="btn ok" type="submit" disabled={savingRec || !recSearch.selected}>
+                                  {!recBloqueado && <button className="btn ok" type="submit" disabled={savingRec || !recSearch.selected}>
                                       {savingRec ? 'Guardando...' : editingRec ? 'Actualizar' : 'Guardar'}
-                                  </button>
+                                  </button>}
                                   {editingRec && (
                                       <button className="btn" type="button" onClick={() => { setEditingRec(null); setFormRec({ fecha: '', fecha_desde: '', fecha_hasta: '', cantidad_dias: '', tipo: '', resultado: '', observaciones: '', ausentismo: false }); }}>
                                           Cancelar
@@ -932,11 +991,12 @@ export function SaludLaboralPage() {
                   </thead>
                   <tbody>
                     {recs.map(r => {
-                      const editable = isAdmin || isWithin24h(r.created_at);
+                      const baja = esBajaRec(r.dni);
+                      const editable = !baja && (isAdmin || isWithin24h(r.created_at));
                       return (
                         <tr key={r.id}>
                           <td style={{ ...td, whiteSpace: 'nowrap' }}><strong>{r.dni}</strong></td>
-                          <td style={{ ...td, minWidth: 160 }}>{getNombreRec(r.dni)}</td>
+                          <td style={{ ...td, minWidth: 160 }}>{getNombreRec(r.dni)}{baja && <span style={bajaBadge}>BAJA</span>}</td>
                           <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmt(r.fecha_desde)}</td>
                           <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmt(r.fecha_hasta)}</td>
                           <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'center' }}>{r.cantidad_dias != null ? <span style={{ fontWeight: 700, color: '#10b981' }}>{r.cantidad_dias}d</span> : <span className="muted">—</span>}</td>
@@ -968,7 +1028,7 @@ export function SaludLaboralPage() {
                               </button>
                             </td>
                           )}
-                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{canCrud('reconocimientos_medicos','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditRec(r)} title={editable ? 'Editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}</td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>{canCrud('reconocimientos_medicos','update') && <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px', opacity: editable ? 1 : 0.35 }} onClick={() => startEditRec(r)} title={editable ? 'Editar' : baja ? 'Agente dado de baja: no se puede editar' : 'Solo editable dentro de las 24hs'}>✏️</button>}</td>
                         </tr>
                       );
                     })}
@@ -1417,4 +1477,5 @@ const fg: React.CSSProperties = { display: 'flex', flexDirection: 'column' };
 const tbl: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' };
 const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, whiteSpace: 'nowrap' };
 const td: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'middle' };
+const bajaBadge: React.CSSProperties = { marginLeft: 8, padding: '1px 7px', borderRadius: 6, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', background: 'rgba(148,163,184,0.18)', border: '1px solid rgba(148,163,184,0.4)', color: 'rgba(226,232,240,0.85)', whiteSpace: 'nowrap' };
 const alertStyle: React.CSSProperties = { padding: '10px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem', color: 'rgba(245,158,11,0.9)' };

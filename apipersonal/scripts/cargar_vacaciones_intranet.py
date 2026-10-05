@@ -1,4 +1,6 @@
 r"""
+SIN USO desde 04/10/2026: lo reemplaza cargar_novedades_intranet_v2.py (tablas).
+
 Carga novedades SOLO_SIAP en la Intranet del Ministerio de Salud.
 - Agrupa por DNI, carga todas las novedades de cada agente
 - Re-login automático si la sesión expira

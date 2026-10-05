@@ -3,11 +3,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { useKiosk } from '../hooks/useKiosk';
+import { RobotsFallidosBanner } from './RobotsFallidosBanner';
 
-export function Layout({ title, children, showBack }: {
+export function Layout({ title, children, showBack, fluid }: {
   title: string;
   children: React.ReactNode;
   showBack?: boolean;
+  fluid?: boolean;
 }) {
   const nav = useNavigate();
   const loc = useLocation();
@@ -45,7 +47,7 @@ export function Layout({ title, children, showBack }: {
 
   const canWrite = hasPerm('personal:write') || hasPerm('crud:*:*');
   const isAdmin  = hasPerm('usuarios:write') || hasPerm('crud:*:*');
-  const isFluid  = title === 'Gestión';
+  const isFluid  = fluid || title === 'Gestión';
   const isActive = (p: string) => loc.pathname === p || loc.pathname.startsWith(p + '/');
 
   const isSamo =
@@ -82,6 +84,8 @@ export function Layout({ title, children, showBack }: {
   const canSeeHorariosExtendidos = hasPerm('app:horarios-extendidos:access') || hasPerm('crud:*:*');
   const isNutricion =
     hasPerm('app:horarios-extendidos:access') && !hasPerm('crud:*:*');
+
+  const canSeeJubilablesEstadistica = hasPerm('app:jubilables-estadistica:access') || hasPerm('crud:*:*');
 
   const isGestionTurnos =
     hasPerm('app:gestion_turnos:access') && !hasPerm('crud:*:*');
@@ -176,6 +180,7 @@ export function Layout({ title, children, showBack }: {
               <>
                 {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
                 {canSeeResidentes && navLink('/app/residentes', '🩺 Residentes')}
+                {canSeeJubilablesEstadistica && navLink('/app/jubilables-estadistica', '📈 Jubilables')}
                 {navLink('/app/mi-cuenta', '👤 Mi cuenta')}
               </>
             ) : isSaludLaboral ? (
@@ -260,6 +265,8 @@ export function Layout({ title, children, showBack }: {
                       {navLink('/app/alertas-agente', '🚨 Alertas por Agente')}
                       {hasPerm('app:director_ejecutivo:access') && navLink('/app/director', '🏛️ Dirección Ejecutiva')}
                       {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
+                      {canSeeJubilablesEstadistica && navLink('/app/jubilables-estadistica', '📈 Jubilables (estadística)')}
+                      {isAdmin && navLink('/app/licencias-medicas-control', '🩺 Licencias médicas pend./deneg.')}
                       {navLink('/app/concursos', '🏆 Concursos Ley 10471')}
                       {navLink('/app/buscador', '🔍 Buscador')}
                       {navLink('/app/comparador', '⚖️ Comparador')}
@@ -316,6 +323,9 @@ export function Layout({ title, children, showBack }: {
           </div>
         </div>
       </div>
+
+      {/* Solo en el dashboard (/app), no en cada página */}
+      {hasPerm('crud:*:*') && loc.pathname.replace(/\/$/, '') === '/app' && <RobotsFallidosBanner />}
 
       <div style={{ marginTop: 16 }}>{children}</div>
     </div>

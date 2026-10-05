@@ -8,6 +8,8 @@
 //   POST   /becarios-art             Alta (body: { dni, pagina })
 //   PATCH  /becarios-art/:dni        Actualizar pagina
 //   DELETE /becarios-art/:dni        Baja lógica (soft delete)
+//   GET    /becarios-art/establecimiento              Control "todos en Catán" (art_control_establecimiento)
+//   POST   /becarios-art/establecimiento/:dni/reintentar  Marca REINTENTAR para el robot
 
 import { Router, Request, Response } from 'express';
 import { Sequelize, QueryTypes }      from 'sequelize';
@@ -288,6 +290,56 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[becariosArt] captura error', dni, err: err?.message });
       return res.status(500).json({ ok: false, error: 'Error al obtener la captura' });
+    }
+  });
+
+  // ── GET /establecimiento — control "todos en Catán" (art_control_establecimiento) ──
+  // Lo llena el robot scripts/art_editar_establecimiento.mjs (1 fila por DNI, FK a personal).
+  // DEBE ir antes de /:dni. Si la tabla no existe todavía (robot nunca corrido), vacío.
+  router.get('/establecimiento', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      const resumenRows = await sequelize.query<{ estado: string; cant: number }>(
+        `SELECT estado, COUNT(*) AS cant FROM art_control_establecimiento GROUP BY estado`,
+        { type: QueryTypes.SELECT }
+      );
+      const resumen: Record<string, number> = {};
+      for (const r of resumenRows) resumen[r.estado] = Number(r.cant);
+      const rows = await sequelize.query<Record<string, any>>(`
+        SELECT c.dni, c.cuil, c.trabajador_id, c.establecimiento_destino, c.establecimientos_antes,
+               c.accion, c.estado, c.detalle, c.intentos, c.ultimo_intento,
+               p.apellido, p.nombre
+          FROM art_control_establecimiento c
+          LEFT JOIN personal p ON p.dni = c.dni
+         ORDER BY FIELD(c.estado, 'ERROR', 'PARCIAL', 'REINTENTAR', 'NO_EN_ART', 'OK', 'YA_OK'),
+                  p.apellido, p.nombre
+      `, { type: QueryTypes.SELECT });
+      return res.json({ ok: true, data: rows, resumen, total: rows.length });
+    } catch (err: any) {
+      if (err?.parent?.code === 'ER_NO_SUCH_TABLE' || /ER_NO_SUCH_TABLE|doesn't exist/i.test(err?.message || '')) {
+        return res.json({ ok: true, data: [], resumen: {}, total: 0 });
+      }
+      logger.error({ msg: '[becariosArt] establecimiento error', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'Error al obtener el control de establecimiento' });
+    }
+  });
+
+  // ── POST /establecimiento/:dni/reintentar — lo marca para la próxima pasada del robot ──
+  // Igual que el alta: la API NO abre el navegador; deja la fila en REINTENTAR y el robot
+  // "Reintentar pasar a Catán" (art_editar_establecimiento.mjs --pendientes --apply) la toma.
+  router.post('/establecimiento/:dni/reintentar', requirePermission('api:access'), async (req: Request, res: Response) => {
+    const dni = parseInt(req.params.dni, 10);
+    if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+    try {
+      const [, meta] = await sequelize.query(
+        `UPDATE art_control_establecimiento SET estado = 'REINTENTAR' WHERE dni = :dni`,
+        { replacements: { dni } }
+      ) as [unknown, any];
+      if (!(meta?.affectedRows ?? meta)) return res.json({ ok: false, error: 'Ese DNI no está en el control de establecimiento' });
+      trackAction('art_establecimiento_reintento', { dni });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      logger.error({ msg: '[becariosArt] establecimiento reintentar error', dni, err: err?.message });
+      return res.json({ ok: false, error: (err?.message || 'No se pudo marcar').slice(0, 400) });
     }
   });
 

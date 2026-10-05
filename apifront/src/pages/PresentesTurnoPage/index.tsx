@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { useAuth } from '../../auth/AuthProvider';
+import { AusentismoContent } from '../AusentismoPage';
 
 type Servicio = { id: number; nombre: string };
 type Archivo = { name: string };
@@ -176,6 +178,9 @@ function Modal({
 }
 
 export function PresentesTurnoPage() {
+  const { hasPerm } = useAuth();
+  const esAdmin = hasPerm('crud:*:*');   // Ausentismo era solo admin
+  const [pestana, setPestana] = useState<'presentes' | 'ausentismo'>('presentes');
   const toast = useToast();
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [archivos, setArchivos] = useState<Archivo[]>([]);
@@ -241,6 +246,24 @@ export function PresentesTurnoPage() {
 
   return (
     <Layout title="Presentes por turno" showBack>
+      {esAdmin && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button type="button" className="btn"
+            style={pestana === 'presentes' ? { background: 'rgba(99,102,241,0.25)', color: '#818cf8', fontWeight: 700 } : {}}
+            onClick={() => setPestana('presentes')}>
+            👥 Presentes por turno
+          </button>
+          <button type="button" className="btn"
+            style={pestana === 'ausentismo' ? { background: 'rgba(99,102,241,0.25)', color: '#818cf8', fontWeight: 700 } : {}}
+            onClick={() => setPestana('ausentismo')}>
+            📉 Ausentismo
+          </button>
+        </div>
+      )}
+
+      {pestana === 'ausentismo' && esAdmin && <AusentismoContent />}
+
+      {pestana === 'presentes' && (<>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="h2" style={{ marginBottom: 12 }}>Control por servicio y turno</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
@@ -342,6 +365,8 @@ export function PresentesTurnoPage() {
           </div>
         </>
       )}
+
+      </>)}
 
       {modal && <Modal title={modal.title} rows={modal.rows} mode={modal.mode} onClose={() => setModal(null)} />}
     </Layout>

@@ -10,13 +10,14 @@ import {
   Save,
   Search,
   ShieldCheck,
+  ClipboardCheck,
   UserPlus,
   Users
 } from 'lucide-vue-next'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const session = ref(JSON.parse(localStorage.getItem('cobertura_session') || 'null'))
-const view = ref('consulta')
+const view = ref(session.value?.user?.role === 'control' ? 'control' : 'consulta')
 const loading = ref(false)
 const message = ref('')
 const loginForm = ref({ username: 'admin', password: '' })
@@ -46,6 +47,116 @@ const fuentesLocal = [
 const fuentesDisponibles = computed(() => consultaForm.value.modo === 'local' ? fuentesLocal : fuentesRed)
 
 const isAdmin = computed(() => session.value?.user?.role === 'admin')
+const isControl = computed(() => session.value?.user?.role === 'control')
+// Supervisa controles y gestiona usuarios: admin o control.
+const puedeControlar = computed(() => isAdmin.value || isControl.value)
+const rolesAsignables = computed(() => isAdmin.value ? ['user', 'control', 'admin'] : ['user', 'control'])
+
+// ---- Control diario ----
+const hoyISO = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const controlFiltro = ref({ desde: hoyISO(), hasta: hoyISO(), usuario: '', documento: '' })
+const controlDatos = ref([])
+const controlAgrupar = ref('usuario') // usuario | cobertura | ninguno
+const controlCobertura = ref('') // '' | con_obra_social | sin_obra_social | sin_determinar
+const controlAbierto = ref({})
+const coberturaLabels = {
+  con_obra_social: 'Con obra social',
+  sin_obra_social: 'Sin obra social',
+  sin_determinar: 'Sin determinar'
+}
+const coberturaClase = { con_obra_social: 'consultado', sin_obra_social: 'error', sin_determinar: 'requiere_operador' }
+
+async function cargarControl() {
+  if (!isControl.value) return
+  loading.value = true
+  message.value = ''
+  try {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(controlFiltro.value)) if (v) q.set(k, v)
+    const data = await request('/control?' + q.toString())
+    controlDatos.value = data.data || []
+    controlAbierto.value = {}
+  } catch (error) {
+    message.value = error.message || 'No se pudo cargar el control'
+  } finally {
+    loading.value = false
+  }
+}
+
+function controlHoy() {
+  controlFiltro.value = { desde: hoyISO(), hasta: hoyISO(), usuario: '', documento: '' }
+  controlCobertura.value = ''
+  cargarControl()
+}
+
+const controlFiltrados = computed(() => controlCobertura.value
+  ? controlDatos.value.filter((r) => r.cobertura === controlCobertura.value)
+  : controlDatos.value)
+
+const controlTotales = computed(() => {
+  const t = { total: controlDatos.value.length, con_obra_social: 0, sin_obra_social: 0, sin_determinar: 0 }
+  for (const r of controlDatos.value) t[r.cobertura] = (t[r.cobertura] || 0) + 1
+  return t
+})
+
+// Resumen por usuario: cuantos documentos controlo cada uno y con que resultado.
+const controlPorUsuario = computed(() => {
+  const m = new Map()
+  for (const r of controlDatos.value) {
+    if (!m.has(r.usuario)) m.set(r.usuario, { usuario: r.usuario, activo: r.usuarioActivo, total: 0, con_obra_social: 0, sin_obra_social: 0, sin_determinar: 0 })
+    const u = m.get(r.usuario)
+    u.total++
+    u[r.cobertura]++
+  }
+  return [...m.values()].sort((a, b) => b.total - a.total)
+})
+
+const controlGrupos = computed(() => {
+  const filas = controlFiltrados.value
+  if (filas.length === 0) return []
+  if (controlAgrupar.value === 'ninguno') return [{ clave: 'todos', titulo: 'Todos los controles', filas }]
+  const claveDe = controlAgrupar.value === 'usuario' ? (r) => r.usuario : (r) => r.cobertura
+  const m = new Map()
+  for (const r of filas) {
+    const k = claveDe(r)
+    if (!m.has(k)) m.set(k, [])
+    m.get(k).push(r)
+  }
+  const orden = controlAgrupar.value === 'cobertura'
+    ? ['con_obra_social', 'sin_obra_social', 'sin_determinar'].filter((k) => m.has(k))
+    : [...m.keys()].sort()
+  return orden.map((k) => ({
+    clave: k,
+    titulo: controlAgrupar.value === 'cobertura' ? coberturaLabels[k] : `Usuario: ${k}`,
+    filas: m.get(k)
+  }))
+})
+
+function descargarControl() {
+  const filas = controlFiltrados.value
+  if (filas.length === 0) { message.value = 'No hay datos para exportar.'; return }
+  const esc = (v) => {
+    const s = String(v ?? '').replace(/\r?\n/g, ' ').trim()
+    return /[";]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const enc = ['N° consulta', 'Fecha', 'Usuario', 'DNI', 'CUIL', 'Apellido', 'Resultado', 'Detalle por fuente']
+  const lineas = filas.map((r) => [
+    r.consultaId, fecha(r.fecha), r.usuario, r.dni || '', r.cuil || '', r.apellido || '',
+    coberturaLabels[r.cobertura], r.fuentes.map((f) => `${f.fuente}: ${f.resultado || estadoLabel(f.estado)}`).join(' | ')
+  ].map(esc).join(';'))
+  const blob = new Blob(['\ufeff' + [enc.join(';'), ...lineas].join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `control-${controlFiltro.value.desde}_${controlFiltro.value.hasta}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) }
@@ -71,7 +182,13 @@ async function login() {
     })
     session.value = data
     localStorage.setItem('cobertura_session', JSON.stringify(data))
-    await cargarHistorial()
+    if (data.user?.role === 'control') {
+      view.value = 'control'
+      await cargarControl()
+    } else {
+      view.value = 'consulta'
+      await cargarHistorial()
+    }
   } catch (error) {
     message.value = error.message || 'No se pudo iniciar sesion'
   } finally {
@@ -195,13 +312,13 @@ async function resolverCaptcha() {
 }
 
 async function cargarUsuarios() {
-  if (!isAdmin.value) return
+  if (!puedeControlar.value) return
   const data = await request('/usuarios')
   usuarios.value = data.data || []
 }
 
 async function cargarReporte() {
-  if (!isAdmin.value) return
+  if (!puedeControlar.value) return
   const q = new URLSearchParams()
   if (reporteFiltro.value.usuario) q.set('usuario', reporteFiltro.value.usuario)
   if (reporteFiltro.value.dni) q.set('dni', reporteFiltro.value.dni)
@@ -274,13 +391,29 @@ async function crearUsuario() {
   }
 }
 
+async function cambiarEstadoUsuario(user, activo) {
+  const accion = activo ? 'reactivar' : 'dar de baja'
+  if (!window.confirm(`¿Confirmás ${accion} al usuario "${user.username}"? Sus datos y consultas se conservan.`)) return
+  loading.value = true
+  message.value = ''
+  try {
+    await request(`/usuarios/${user.id}`, { method: 'PATCH', body: JSON.stringify({ activo }) })
+    await cargarUsuarios()
+    message.value = activo ? `Usuario ${user.username} reactivado` : `Usuario ${user.username} dado de baja`
+  } catch (error) {
+    message.value = error.message || 'No se pudo cambiar el estado'
+  } finally {
+    loading.value = false
+  }
+}
+
 async function actualizarUsuario(user) {
   loading.value = true
   message.value = ''
   try {
     await request(`/usuarios/${user.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ role: user.role, activo: user.activo, password: user.newPassword || '' })
+      body: JSON.stringify({ role: user.role, password: user.newPassword || '' })
     })
     user.newPassword = ''
     await cargarUsuarios()
@@ -310,7 +443,8 @@ function fecha(value) {
 
 onMounted(async () => {
   if (session.value) {
-    await cargarHistorial().catch(() => {})
+    if (isControl.value) await cargarControl().catch(() => {})
+    else await cargarHistorial().catch(() => {})
   }
 })
 </script>
@@ -341,10 +475,11 @@ onMounted(async () => {
         <p>{{ session.user.username }} - {{ session.user.role }}</p>
       </div>
       <nav>
-        <button :class="{ active: view === 'consulta' }" @click="view = 'consulta'"><Search :size="17" /> Consulta</button>
-        <button :class="{ active: view === 'historial' }" @click="view = 'historial'; cargarHistorial()"><History :size="17" /> Historial</button>
-        <button v-if="isAdmin" :class="{ active: view === 'informe' }" @click="view = 'informe'; cargarReporte()"><History :size="17" /> Informe</button>
-        <button v-if="isAdmin" :class="{ active: view === 'usuarios' }" @click="view = 'usuarios'; cargarUsuarios()"><Users :size="17" /> Usuarios</button>
+        <button v-if="!isControl" :class="{ active: view === 'consulta' }" @click="view = 'consulta'"><Search :size="17" /> Consulta</button>
+        <button v-if="!isControl" :class="{ active: view === 'historial' }" @click="view = 'historial'; cargarHistorial()"><History :size="17" /> Historial</button>
+        <button v-if="isControl" :class="{ active: view === 'control' }" @click="view = 'control'; cargarControl()"><ClipboardCheck :size="17" /> Control diario</button>
+        <button v-if="puedeControlar" :class="{ active: view === 'informe' }" @click="view = 'informe'; cargarReporte()"><History :size="17" /> Informe</button>
+        <button v-if="puedeControlar" :class="{ active: view === 'usuarios' }" @click="view = 'usuarios'; cargarUsuarios()"><Users :size="17" /> Usuarios</button>
         <button @click="logout"><LogOut :size="17" /> Salir</button>
       </nav>
     </header>
@@ -540,7 +675,101 @@ onMounted(async () => {
       </table>
     </section>
 
-    <section v-if="view === 'informe' && isAdmin" class="panel" id="informe-panel">
+    <section v-if="view === 'control' && isControl" class="panel" id="control-panel">
+      <div class="panel-title">
+        <h2>Control diario de consultas</h2>
+        <div class="informe-acciones no-print">
+          <button class="ghost" @click="controlHoy"><RefreshCw :size="17" /> Hoy</button>
+          <button class="ghost" @click="imprimirReporte"><Printer :size="17" /> Imprimir</button>
+          <button class="ghost" @click="descargarControl"><Download :size="17" /> Descargar Excel</button>
+        </div>
+      </div>
+      <form class="user-create no-print" @submit.prevent="cargarControl">
+        <label class="inline-label">Desde <input v-model="controlFiltro.desde" type="date"></label>
+        <label class="inline-label">Hasta <input v-model="controlFiltro.hasta" type="date"></label>
+        <input v-model="controlFiltro.usuario" placeholder="Usuario (exacto)">
+        <input v-model="controlFiltro.documento" placeholder="DNI / CUIL">
+        <button class="primary" :disabled="loading"><Search :size="17" /> Buscar</button>
+      </form>
+
+      <div class="control-cards">
+        <button type="button" :class="['control-card', { active: controlCobertura === '' }]" @click="controlCobertura = ''">
+          <b>{{ controlTotales.total }}</b><span>Documentos controlados</span>
+        </button>
+        <button type="button" :class="['control-card', 'con', { active: controlCobertura === 'con_obra_social' }]" @click="controlCobertura = 'con_obra_social'">
+          <b>{{ controlTotales.con_obra_social }}</b><span>Con obra social</span>
+        </button>
+        <button type="button" :class="['control-card', 'sin', { active: controlCobertura === 'sin_obra_social' }]" @click="controlCobertura = 'sin_obra_social'">
+          <b>{{ controlTotales.sin_obra_social }}</b><span>Sin obra social</span>
+        </button>
+        <button type="button" :class="['control-card', 'ind', { active: controlCobertura === 'sin_determinar' }]" @click="controlCobertura = 'sin_determinar'">
+          <b>{{ controlTotales.sin_determinar }}</b><span>Sin determinar</span>
+        </button>
+      </div>
+
+      <h3 class="control-sub">Controles por usuario</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Usuario</th><th>Total</th><th>Con obra social</th><th>Sin obra social</th><th>Sin determinar</th><th class="no-print"></th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="u in controlPorUsuario" :key="u.usuario">
+              <td>{{ u.usuario }} <span v-if="!u.activo" class="status error">de baja</span></td>
+              <td><b>{{ u.total }}</b></td>
+              <td>{{ u.con_obra_social }}</td>
+              <td>{{ u.sin_obra_social }}</td>
+              <td>{{ u.sin_determinar }}</td>
+              <td class="no-print"><button class="ghost compact" @click="controlFiltro.usuario = u.usuario; cargarControl()">Ver solo</button></td>
+            </tr>
+            <tr v-if="controlPorUsuario.length === 0"><td colspan="6" class="empty">No hay controles en el periodo.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel-title control-sub">
+        <h3>Detalle de documentos controlados</h3>
+        <label class="inline-label no-print">Agrupar por
+          <select v-model="controlAgrupar">
+            <option value="usuario">Usuario</option>
+            <option value="cobertura">Obra social (con / sin)</option>
+            <option value="ninguno">Sin agrupar</option>
+          </select>
+        </label>
+      </div>
+      <p class="print-only informe-meta">Periodo: {{ controlFiltro.desde }} a {{ controlFiltro.hasta }}. {{ controlCobertura ? 'Filtro: ' + coberturaLabels[controlCobertura] + '.' : '' }} Generado: {{ fecha(new Date()) }}.</p>
+      <div v-for="g in controlGrupos" :key="g.clave" class="control-grupo">
+        <h4>{{ g.titulo }} <span class="control-count">({{ g.filas.length }})</span></h4>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Hora</th><th v-if="controlAgrupar !== 'usuario'">Usuario</th><th>DNI</th><th>CUIL</th><th>Apellido</th><th>Resultado</th><th>Detalle por fuente</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in g.filas" :key="r.consultaId">
+                <td>{{ fecha(r.fecha) }}</td>
+                <td v-if="controlAgrupar !== 'usuario'">{{ r.usuario }}</td>
+                <td>{{ r.dni || '-' }}</td>
+                <td>{{ r.cuil || '-' }}</td>
+                <td>{{ r.apellido || '-' }}</td>
+                <td><span :class="['status', coberturaClase[r.cobertura]]">{{ coberturaLabels[r.cobertura] }}</span></td>
+                <td>
+                  <button class="ghost compact no-print" @click="controlAbierto[r.consultaId] = !controlAbierto[r.consultaId]">
+                    {{ controlAbierto[r.consultaId] ? 'Ocultar' : `Ver ${r.fuentes.length} fuentes` }}
+                  </button>
+                  <ul v-if="controlAbierto[r.consultaId]" class="control-fuentes">
+                    <li v-for="(f, i) in r.fuentes" :key="i"><b>{{ f.fuente }}:</b> {{ f.resultado || estadoLabel(f.estado) }}</li>
+                  </ul>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p v-if="controlGrupos.length === 0" class="empty">Sin documentos para el filtro.</p>
+    </section>
+
+    <section v-if="view === 'informe' && puedeControlar" class="panel" id="informe-panel">
       <div class="panel-title">
         <h2>Informe general de consultas</h2>
         <div class="informe-acciones no-print">
@@ -578,20 +807,19 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-if="view === 'usuarios' && isAdmin" class="panel">
+    <section v-if="view === 'usuarios' && puedeControlar" class="panel">
       <div class="panel-title">
-        <h2>Usuarios y roles</h2>
-        <span>Admin administra; user consulta.</span>
+        <h2>Usuarios</h2>
+        <span>Dar de baja no borra datos: el usuario no puede ingresar, pero se conservan sus consultas.</span>
       </div>
 
       <form class="user-create" @submit.prevent="crearUsuario">
         <input v-model="nuevoUsuario.username" placeholder="Usuario">
-        <input v-model="nuevoUsuario.password" type="password" placeholder="Contrasena">
+        <input v-model="nuevoUsuario.password" type="password" placeholder="Contrasena (min. 8)">
         <select v-model="nuevoUsuario.role">
-          <option value="user">user</option>
-          <option value="admin">admin</option>
+          <option v-for="r in rolesAsignables" :key="r" :value="r">{{ r }}</option>
         </select>
-        <button class="primary"><UserPlus :size="17" /> Crear</button>
+        <button class="primary"><UserPlus :size="17" /> Dar de alta</button>
       </form>
 
       <table>
@@ -599,23 +827,38 @@ onMounted(async () => {
           <tr>
             <th>Usuario</th>
             <th>Rol</th>
-            <th>Activo</th>
+            <th>Estado</th>
+            <th>Alta</th>
             <th>Nueva contrasena</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in usuarios" :key="user.id">
+          <tr v-for="user in usuarios" :key="user.id" :class="{ 'fila-baja': !user.activo }">
             <td>{{ user.username }}</td>
             <td>
-              <select v-model="user.role">
-                <option value="user">user</option>
-                <option value="admin">admin</option>
+              <span v-if="user.role === 'admin' && !isAdmin">admin</span>
+              <select v-else v-model="user.role" :disabled="user.id === session.user.id">
+                <option v-for="r in rolesAsignables" :key="r" :value="r">{{ r }}</option>
               </select>
             </td>
-            <td><input v-model="user.activo" type="checkbox"></td>
-            <td><input v-model="user.newPassword" type="password" placeholder="Sin cambio"></td>
-            <td><button class="ghost compact" @click="actualizarUsuario(user)">Guardar</button></td>
+            <td>
+              <span v-if="user.activo" class="status consultado">Activo</span>
+              <span v-else class="status error">De baja{{ user.bajaAt ? ' desde ' + fecha(user.bajaAt) : '' }}</span>
+            </td>
+            <td>{{ fecha(user.createdAt) }}</td>
+            <td>
+              <input v-if="!(user.role === 'admin' && !isAdmin)" v-model="user.newPassword" type="password" placeholder="Sin cambio">
+            </td>
+            <td class="acciones-usuario">
+              <template v-if="!(user.role === 'admin' && !isAdmin)">
+                <button class="ghost compact" @click="actualizarUsuario(user)">Guardar</button>
+                <template v-if="user.id !== session.user.id">
+                  <button v-if="user.activo" class="ghost compact peligro" @click="cambiarEstadoUsuario(user, false)">Dar de baja</button>
+                  <button v-else class="ghost compact" @click="cambiarEstadoUsuario(user, true)">Reactivar</button>
+                </template>
+              </template>
+            </td>
           </tr>
         </tbody>
       </table>

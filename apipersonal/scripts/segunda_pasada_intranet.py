@@ -1,4 +1,7 @@
 r"""
+SIN USO desde 04/10/2026: en la 2.0 los errores se reintentan solos (y el boton
+"Reintentar errores" del Comparador los vuelve a PENDIENTE).
+
 Segunda pasada de carga en la Intranet.
 Lee filas ya procesadas (del resultado_carga.xlsx o Excel pasado por --excel)
 y reintenta cargar las que tienen ERROR.

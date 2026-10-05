@@ -178,6 +178,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
   const router = Router();
 
   // GET /intranet/resultado?dep=HOSPITAL|UPA+4|UPA+18
+  // SIN USO desde 04/10/2026 (Comparador 2.0 → GET /comparacion-v2/resultado)
   router.get('/resultado', async (req: Request, res: Response) => {
     const dep    = String(req.query.dep ?? 'HOSPITAL').toUpperCase().trim();
     const depKey = dep.replace('UPA4', 'UPA 4').replace('UPA18', 'UPA 18');
@@ -216,6 +217,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
   });
 
   // POST /intranet/exportar-pendientes
+  // SIN USO desde 04/10/2026 (la 2.0 toma los pendientes de las tablas)
   router.post('/exportar-pendientes', (req: Request, res: Response) => {
     const excelDir = process.env.LICENCIAS_PDF_DIR;
     if (!excelDir) { res.status(500).json({ error: 'LICENCIAS_PDF_DIR no configurado' }); return; }
@@ -245,6 +247,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
   });
 
   // POST /intranet/cargar-novedades — abre CMD visible
+  // SIN USO desde 04/10/2026 (Comparador 2.0 → POST /comparacion-v2/lanzar)
   router.post('/cargar-novedades', (req: Request, res: Response) => {
     const pass = process.env.INTRANET_PASS;
     if (!pass) { res.status(500).json({ error: 'INTRANET_PASS no configurado' }); return; }
@@ -274,6 +277,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
   });
 
   // POST /intranet/segunda-pasada — guarda Excel temporal y abre CMD
+  // SIN USO desde 04/10/2026 (Comparador 2.0 → POST /comparacion-v2/reintentar)
   router.post('/segunda-pasada', (req: Request, res: Response) => {
     const pass = process.env.INTRANET_PASS;
     if (!pass) { res.status(500).json({ error: 'INTRANET_PASS no configurado' }); return; }
@@ -314,6 +318,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
   });
 
   // GET /intranet/resultado-ausentes?dep=HOSPITAL|UPA+4|UPA+18
+  // SIN USO desde 04/10/2026 (los ausentes 2.0 van a novedades_carga_intranet)
   router.get('/resultado-ausentes', async (req: Request, res: Response) => {
     const dep = String(req.query.dep ?? 'HOSPITAL').toUpperCase().trim();
     const depKey = dep.replace('UPA4', 'UPA 4').replace('UPA18', 'UPA 18');
@@ -347,6 +352,7 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
   });
 
   // POST /intranet/cargar-ausentes: lee directo D:\G\comparacion\SIAPE\SIAPE.xlsx y abre CMD visible
+  // SIN USO desde 04/10/2026 (Comparador 2.0 → POST /comparacion-v2/lanzar)
   router.post('/cargar-ausentes', (req: Request, res: Response) => {
     const pass = process.env.INTRANET_PASS;
     if (!pass) { res.status(500).json({ error: 'INTRANET_PASS no configurado' }); return; }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../../../../api/http';
+import { EspecialidadesPanel } from './EspecialidadesPanel';
 
 // ─── Rolodex keyframes (inyectados una sola vez) ──────────────────────────────
 const ROLODEX_CSS = `
@@ -35,7 +36,7 @@ function useRolodexStyle() {
   }, []);
 }
 
-interface Props { row: any; }
+interface Props { row: any; onChanged?: () => void; }
 
 function fmt(fecha?: string | null) {
   if (!fecha) return null;
@@ -214,11 +215,12 @@ const TABS = [
   { key: 'cargos',    label: 'Cargos' },
   { key: 'servicios', label: 'Servicios' },
   { key: 'sectores',  label: 'Sectores' },
+  { key: 'especialidades', label: 'Especialidades' },
 ] as const;
 type TabKey = typeof TABS[number]['key'];
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function AgenteInfoCard({ row }: Props) {
+export function AgenteInfoCard({ row, onChanged }: Props) {
   const [tab, setTab]               = useState<TabKey>('info');
   const [displayedTab, setDisplayedTab] = useState<TabKey>('info');
   const [animClass, setAnimClass]   = useState('');
@@ -313,6 +315,7 @@ export function AgenteInfoCard({ row }: Props) {
                 <MiniCard label="Categoría"   value={row.categoria_nombre} />
                 <MiniCard label="Función"     value={row.funcion_nombre} />
                 <MiniCard label="Ocupación"   value={row.ocupacion_nombre} />
+                <MiniCard label="Especialidad" value={row.especialidad_nombre} />
                 <MiniCard label="Régimen"     value={row.regimen_horario_nombre} />
                 <MiniCard label="Estado"      value={row.estado_laboral} />
                 <MiniCard label="Ingreso"     value={fmt(row.fecha_ingreso_laboral)} />
@@ -345,6 +348,10 @@ export function AgenteInfoCard({ row }: Props) {
             loading
               ? <div style={{ padding: 12, color: '#64748b', fontSize: '0.82rem' }}>⏳ Cargando…</div>
               : <Carousel items={sectorItems} emptyMsg="Sin historial de sectores" />
+          )}
+
+          {displayedTab === 'especialidades' && (
+            <EspecialidadesPanel dni={row.dni} onChanged={onChanged} />
           )}
 
         </div>

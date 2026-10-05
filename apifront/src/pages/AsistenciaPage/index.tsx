@@ -229,6 +229,266 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
 const fmtFecha = (s: string) => (s && s.length === 10 && s[4] === "-" ? s.slice(2) : s);
 
 // ── Panel editor de mapeo ─────────────────────────────────────────────────────
+interface ReglaCie {
+  id: number;
+  novedad_siape: string;
+  codigo_cie: string;
+  novedad_ministerio: string;
+  observacion?: string | null;
+}
+
+// Reglas por CIE: en SIAPE la licencia viene como ENFERMEDAD y según el CIE se
+// carga en el Ministerio como 1R / 1RC / ... (sin regla → la general, 01).
+// Se graban al instante en mapeo_novedades (codigo_cie); las usan los robots de carga.
+function ReglasCieEditor({
+  reglas,
+  onChange,
+  novedadesMin,
+  mapeo,
+}: {
+  reglas: ReglaCie[];
+  onChange: (r: ReglaCie[]) => void;
+  novedadesMin: NovedadItem[];
+  mapeo: Record<string, string[]>;
+}) {
+  const toast = useToast();
+  const [siape, setSiape] = useState("ENFERMEDAD");
+  const [cies, setCies] = useState("");
+  const [min, setMin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [codigos, setCodigos] = useState<{ codigo: string; diagnostico: string; cantidad: number }[]>([]);
+  const [archivo, setArchivo] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState("");
+
+  // CIE que aparecen en LICENCIAS_MEDICAS.xlsx para esa novedad (ayuda para elegir)
+  useEffect(() => {
+    const nov = siape.trim();
+    if (!nov) return;
+    const t = setTimeout(() => {
+      apiFetch<any>(`/asistencia/mapeo-cie/codigos?novedad=${encodeURIComponent(nov)}`)
+        .then((r) => {
+          if (r?.ok) {
+            setCodigos(r.codigos ?? []);
+            setArchivo(r.archivo ?? null);
+          }
+        })
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [siape]);
+
+  // opciones de novedad Ministerio: las del mapeo + las del Excel del Ministerio
+  const opcionesMin = Array.from(
+    new Set([...Object.keys(mapeo ?? {}), ...novedadesMin.map((n) => n.name)])
+  ).sort();
+
+  const conRegla = new Map(
+    reglas
+      .filter((r) => norm(r.novedad_siape) === norm(siape))
+      .map((r) => [r.codigo_cie, r.novedad_ministerio])
+  );
+  const listaCie = cies
+    .split(/[,;\s]+/)
+    .map((c) => c.trim().toUpperCase())
+    .filter(Boolean);
+
+  const toggleCie = (c: string) => {
+    const set = new Set(listaCie);
+    if (set.has(c)) set.delete(c);
+    else set.add(c);
+    setCies(Array.from(set).join(", "));
+  };
+
+  const alta = async () => {
+    if (!siape.trim() || !min.trim() || !listaCie.length) return;
+    setBusy(true);
+    try {
+      const r = await apiFetch<any>("/asistencia/mapeo-cie", {
+        method: "POST",
+        body: JSON.stringify({ novedad_siape: siape.trim(), cies: listaCie, novedad_ministerio: min.trim() }),
+      });
+      if (!r?.ok) throw new Error(r?.error || "Error");
+      onChange(r.reglas ?? []);
+      setCies("");
+      toast.ok(
+        `Reglas por CIE guardadas: ${r.creadas}` +
+          (r.reemplazadas ? ` · ${r.reemplazadas} reemplazada(s)` : "") +
+          (r.ignoradas?.length ? ` · ignorado ${r.ignoradas.join(", ")} (relleno)` : "")
+      );
+    } catch (e: any) {
+      toast.error("No se pudo guardar", e?.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const baja = async (id: number) => {
+    try {
+      const r = await apiFetch<any>(`/asistencia/mapeo-cie/${id}`, { method: "DELETE" });
+      if (!r?.ok) throw new Error(r?.error || "Error");
+      onChange(r.reglas ?? []);
+    } catch (e: any) {
+      toast.error("No se pudo dar de baja", e?.message);
+    }
+  };
+
+  const lbl: React.CSSProperties = { fontSize: "0.67rem", color: "#94a3b8", marginBottom: 3 };
+  const fs: React.CSSProperties = { width: "100%", boxSizing: "border-box" as const, fontSize: "0.82rem" };
+  const f = norm(filtro);
+  const codigosVista = codigos.filter(
+    (c) => !f || norm(c.codigo).includes(f) || norm(c.diagnostico).includes(f)
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+        En SIAPE la licencia viene como <b>ENFERMEDAD</b>: el robot mira el CIE de la licencia
+        (LICENCIAS_MEDICAS.xlsx) y, si hay regla, la carga con esa novedad (ej. 1R). Sin regla → la
+        general (01). Se graba al instante.
+      </div>
+
+      {/* Reglas cargadas */}
+      <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid rgba(255,255,255,.08)", borderRadius: 8 }}>
+        {reglas.length === 0 ? (
+          <div style={{ fontSize: "0.76rem", color: "var(--muted)", padding: 8 }}>
+            No hay reglas por CIE: todo ENFERMEDAD se carga con la regla general.
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: "0.78rem" }}>
+            <thead>
+              <tr style={{ color: "#94a3b8", textAlign: "left" as const }}>
+                <th style={{ padding: "6px 8px" }}>NOVEDAD SIAPE</th>
+                <th style={{ padding: "6px 8px" }}>CIE</th>
+                <th style={{ padding: "6px 8px" }}>SE CARGA COMO</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {reglas.map((r) => (
+                <tr key={r.id} style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                  <td style={{ padding: "5px 8px" }}>{r.novedad_siape}</td>
+                  <td style={{ padding: "5px 8px", fontWeight: 700 }}>{r.codigo_cie}</td>
+                  <td style={{ padding: "5px 8px" }}>{r.novedad_ministerio}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "right" as const }}>
+                    <button
+                      className="btn"
+                      style={{ padding: "2px 8px", color: "var(--danger)", borderColor: "rgba(239,68,68,.4)" }}
+                      onClick={() => baja(r.id)}
+                      title="Dar de baja la regla"
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Alta */}
+      <div
+        style={{
+          borderTop: "1px solid rgba(255,255,255,.1)",
+          paddingTop: 10,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr auto",
+          gap: 8,
+          alignItems: "end",
+        }}
+      >
+        <div>
+          <label htmlFor="as-cie-siape" style={lbl}>NOVEDAD SIAPE</label>
+          <input id="as-cie-siape" className="input" style={fs} value={siape} onChange={(e) => setSiape(e.target.value)} />
+        </div>
+        <div>
+          <label htmlFor="as-cie-codigos" style={lbl}>CÓDIGOS CIE (separar con coma)</label>
+          <input
+            id="as-cie-codigos"
+            className="input"
+            style={fs}
+            placeholder="I21, I63, …"
+            value={cies}
+            onChange={(e) => setCies(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="as-cie-min" style={lbl}>SE CARGA COMO (MINISTERIO)</label>
+          <select
+            id="as-cie-min"
+            className="input"
+            style={{ ...fs, color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
+            value={min}
+            onChange={(e) => setMin(e.target.value)}
+          >
+            <option value="">— elegir —</option>
+            {opcionesMin.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          className="btn"
+          style={{ padding: "7px 16px", fontSize: "0.82rem", background: "#2563eb", color: "#fff", borderColor: "#1d4ed8" }}
+          disabled={busy || !siape.trim() || !min || !listaCie.length}
+          onClick={alta}
+        >
+          {busy ? "Guardando…" : "+ Agregar"}
+        </button>
+      </div>
+
+      {/* Ayuda: CIE que aparecen en el export del SIAPE */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={lbl}>
+            CIE DE “{siape || "—"}” EN {archivo ?? "LICENCIAS_MEDICAS (no encontrado)"} — clic para sumar/quitar ·
+            en verde los que ya tienen regla
+          </div>
+          <input
+            aria-label="Filtrar CIE o diagnóstico"
+            className="input"
+            style={{ ...fs, width: 220, marginLeft: "auto", padding: "3px 8px" }}
+            placeholder="filtrar código o diagnóstico…"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+          />
+        </div>
+        <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexWrap: "wrap" as const, gap: 4 }}>
+          {codigosVista.map((c) => {
+            const sel = listaCie.includes(c.codigo);
+            const ya = conRegla.get(c.codigo);
+            return (
+              <span
+                key={c.codigo}
+                onClick={() => toggleCie(c.codigo)}
+                title={`${c.diagnostico || "sin diagnóstico"}${ya ? ` · ya va como ${ya}` : ""}`}
+                style={{
+                  cursor: "pointer",
+                  fontSize: "0.74rem",
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  background: sel ? "rgba(37,99,235,.3)" : ya ? "rgba(16,185,129,.15)" : "rgba(15,23,42,.6)",
+                  border: sel
+                    ? "1px solid rgba(37,99,235,.6)"
+                    : ya
+                    ? "1px solid rgba(16,185,129,.4)"
+                    : "1px solid rgba(255,255,255,.06)",
+                  color: sel ? "#bfdbfe" : "var(--text)",
+                }}
+              >
+                <b>{c.codigo}</b> {c.diagnostico ? `· ${c.diagnostico.slice(0, 40)}` : ""}{" "}
+                <span style={{ opacity: 0.6 }}>({c.cantidad})</span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MapeoEditor({
   mapeo,
   onChange,
@@ -237,6 +497,8 @@ function MapeoEditor({
   saving,
   novedadesMin,
   novedadesSiap,
+  reglasCie,
+  onReglasCie,
 }: {
   mapeo: Record<string, string[]>;
   onChange: (m: Record<string, string[]>) => void;
@@ -245,10 +507,15 @@ function MapeoEditor({
   saving: boolean;
   novedadesMin: NovedadItem[];
   novedadesSiap: NovedadItem[];
+  reglasCie: ReglaCie[];
+  onReglasCie: (r: ReglaCie[]) => void;
 }) {
   const [newMin, setNewMin] = useState("");
   const [newSiapTags, setNewSiapTags] = useState<string[]>([]);
   const [siapInput, setSiapInput] = useState("");
+  const [vista, setVista] = useState<"MAPEO" | "SIN_MAPEAR" | "POR_CIE">("MAPEO");
+  const [selMin, setSelMin] = useState("");
+  const [selSiap, setSelSiap] = useState<string[]>([]);
 
   const fs: React.CSSProperties = {
     width: "100%",
@@ -261,9 +528,25 @@ function MapeoEditor({
     marginBottom: 3,
   };
 
-  const minSinMapear = novedadesMin.filter(
-    (n) => !Object.keys(mapeo ?? {}).includes(n.name)
+  const minMapeadas = new Set(Object.keys(mapeo ?? {}).map((k) => norm(k)));
+  const minSinMapear = novedadesMin.filter((n) => !minMapeadas.has(norm(n.name)));
+
+  // SIAP sin mapear: las del Excel SIAP que no figuran como equivalente en ninguna fila
+  const siapUsadas = new Set(
+    Object.values(mapeo ?? {}).flat().map((s) => norm(s))
   );
+  const siapSinMapear = novedadesSiap.filter((n) => !siapUsadas.has(norm(n.name)));
+
+  const vincular = () => {
+    if (!selMin || !selSiap.length) return;
+    const actuales = (mapeo ?? {})[selMin] ?? [];
+    onChange({
+      ...mapeo,
+      [selMin]: [...actuales, ...selSiap.filter((s) => !actuales.includes(s))],
+    });
+    setSelMin("");
+    setSelSiap([]);
+  };
 
   const updateEquivs = (key: string, val: string) => {
     onChange({
@@ -321,6 +604,129 @@ function MapeoEditor({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Pestañas del editor */}
+      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid rgba(255,255,255,.1)" }}>
+        {([
+          { key: "MAPEO", label: "Mapeo" },
+          { key: "SIN_MAPEAR", label: `Sin mapear (${minSinMapear.length} / ${siapSinMapear.length})` },
+          { key: "POR_CIE", label: `🩺 Por CIE (${reglasCie.length})` },
+        ] as const).map((t) => (
+          <button
+            key={t.key}
+            className="btn"
+            onClick={() => setVista(t.key)}
+            style={{
+              fontSize: "0.78rem",
+              padding: "6px 14px",
+              background: "transparent",
+              border: "none",
+              borderRadius: 0,
+              borderBottom: vista === t.key ? "2px solid #f59e0b" : "2px solid transparent",
+              color: vista === t.key ? "#fbbf24" : "#94a3b8",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {vista === "POR_CIE" && (
+        <ReglasCieEditor
+          reglas={reglasCie}
+          onChange={onReglasCie}
+          novedadesMin={novedadesMin}
+          mapeo={mapeo}
+        />
+      )}
+
+      {vista === "SIN_MAPEAR" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {novedadesMin.length === 0 && novedadesSiap.length === 0 ? (
+            <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+              Primero cargá las novedades de los Excel (botón de arriba).
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                Elegí una del Ministerio y una o varias del SIAP, y tocá “Vincular”. Después guardá.
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { titulo: "MINISTERIO", items: minSinMapear, esMin: true },
+                  { titulo: "SIAP", items: siapSinMapear, esMin: false },
+                ].map((col) => (
+                  <div key={col.titulo} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={lbl}>
+                      {col.titulo} SIN MAPEAR ({col.items.length})
+                    </div>
+                    <div
+                      style={{
+                        maxHeight: 320,
+                        overflowY: "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                        border: "1px solid rgba(255,255,255,.08)",
+                        borderRadius: 8,
+                        padding: 6,
+                      }}
+                    >
+                      {col.items.length === 0 && (
+                        <div style={{ fontSize: "0.75rem", color: "var(--ok)", padding: 6 }}>
+                          ✔ Nada sin mapear
+                        </div>
+                      )}
+                      {col.items.map((n) => {
+                        const sel = col.esMin ? selMin === n.name : selSiap.includes(n.name);
+                        return (
+                          <div
+                            key={n.name}
+                            onClick={() =>
+                              col.esMin
+                                ? setSelMin(sel ? "" : n.name)
+                                : setSelSiap((p) => (sel ? p.filter((x) => x !== n.name) : [...p, n.name]))
+                            }
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.78rem",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              background: sel ? "rgba(37,99,235,.25)" : "rgba(15,23,42,.6)",
+                              border: sel ? "1px solid rgba(37,99,235,.6)" : "1px solid transparent",
+                              color: sel ? "#bfdbfe" : "var(--text)",
+                            }}
+                          >
+                            <span>{n.name}</span>
+                            <span style={{ opacity: 0.6, whiteSpace: "nowrap" }}>{n.count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: "0.74rem", color: "#94a3b8" }}>
+                  {selMin || "—"} → {selSiap.length ? selSiap.join(", ") : "—"}
+                </span>
+                <button
+                  className="btn"
+                  style={{ padding: "7px 16px", fontSize: "0.82rem" }}
+                  disabled={!selMin || !selSiap.length}
+                  onClick={vincular}
+                >
+                  🔗 Vincular
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {vista === "MAPEO" && (<>
       {/* Aviso novedades sin mapear */}
       {novedadesMin.length > 0 && minSinMapear.length > 0 && (
         <div
@@ -483,7 +889,7 @@ function MapeoEditor({
 
                 <optgroup label="Ya mapeadas">
                   {novedadesMin
-                    .filter((n) => Object.keys(mapeo ?? {}).includes(n.name))
+                    .filter((n) => minMapeadas.has(norm(n.name)))
                     .map((n) => (
                       <option key={n.name} value={n.name}>
                         {n.name} ({n.count})
@@ -572,7 +978,9 @@ function MapeoEditor({
           </button>
         </div>
       </div>
+      </>)}
 
+      {vista !== "POR_CIE" && (
       <div
         style={{
           display: "flex",
@@ -600,6 +1008,7 @@ function MapeoEditor({
           {saving ? "⏳ Guardando y comparando…" : "💾 Guardar y re-comparar"}
         </button>
       </div>
+      )}
     </div>
   );
 }
@@ -628,6 +1037,7 @@ export function AsistenciaPage() {
 
   const [mapeo, setMapeo] = useState<Record<string, string[]>>({});
   const [mapeoFromDisk, setMapeoFromDisk] = useState(false);
+  const [reglasCie, setReglasCie] = useState<ReglaCie[]>([]);
   const [showMapeo, setShowMapeo] = useState(false);
   const [savingMapeo, setSavingMapeo] = useState(false);
 
@@ -685,12 +1095,22 @@ export function AsistenciaPage() {
           }
 
           // Autodetectar ministerios por nombre: MINISTERIOUPA18, MINISTERIOUPA4, MINISTERIO (hospital)
+          // Primero las rutas fijas que deja el robot de descarga (MINISTERIO\UPA18.xls, etc.)
+          const norm = (s: string) => s.replace(/\//g, "\\").toUpperCase();
+          const RUTAS_FIJAS: Record<string, string> = {
+            UPA18: "MINISTERIO\\UPA18.xls",
+            UPA4: "MINISTERIO\\UPA4.xls",
+            HOSPITAL: "MINISTERIO\\MINISTERIO.xls",
+          };
           setMinisterioEntries((prev) =>
             prev.map((entry) => {
               const key = entry.upa.replace(/\s+/g, "").toUpperCase(); // "UPA18" | "UPA4" | "HOSPITAL"
               let match = "";
 
-              if (key === "UPA18") {
+              const fija = RUTAS_FIJAS[key] && fileList.find((f) => norm(f.name) === norm(RUTAS_FIJAS[key]));
+              if (fija) {
+                match = fija.name;
+              } else if (key === "UPA18") {
                 const f = fileList.find((f) =>
                   f.name.toUpperCase().replace(/\s+/g, "").includes("MINISTERIOUPA18")
                 );
@@ -716,15 +1136,7 @@ export function AsistenciaPage() {
       })
       .catch(() => {});
 
-    // GET /asistencia/mapeo devuelve { ok, mapeo } (no r.data)
-    apiFetch<any>("/asistencia/mapeo")
-      .then((r) => {
-        if (r?.ok) {
-          setMapeo(r.mapeo ?? r.data ?? {});
-          setMapeoFromDisk(r.fromDisk ?? false);
-        }
-      })
-      .catch(() => {});
+    reloadMapeo();
   }, []);
 
   // Cargar novedades únicas de los Excel
@@ -750,6 +1162,21 @@ export function AsistenciaPage() {
       setLoadingNovedades(false);
     }
   }, [ministerioEntries, selectedSiap, toast]);
+
+  // Desde el Dashboard ("Mapeo de novedades") se llega con ?mapeo=1: abre el editor de mapeo
+  // y, cuando ya están los archivos, carga las novedades de los Excel para los desplegables.
+  const abrirMapeoPorUrl = React.useRef(new URLSearchParams(window.location.search).get("mapeo") === "1");
+  useEffect(() => {
+    if (!abrirMapeoPorUrl.current) return;
+    setShowMapeo(true);
+    const t = setTimeout(() => document.getElementById("editor-mapeo")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!abrirMapeoPorUrl.current || !selectedSiap) return;
+    abrirMapeoPorUrl.current = false;
+    loadNovedades();
+  }, [selectedSiap, loadNovedades]);
 
   const reloadArchivos = () => {
     apiFetch<any>("/asistencia/archivos")
@@ -832,6 +1259,19 @@ export function AsistenciaPage() {
     });
   };
 
+  // GET /asistencia/mapeo devuelve { ok, mapeo (solo reglas generales), reglasCie }
+  function reloadMapeo() {
+    return apiFetch<any>("/asistencia/mapeo")
+      .then((r) => {
+        if (r?.ok) {
+          setMapeo(r.mapeo ?? r.data ?? {});
+          setReglasCie(r.reglasCie ?? []);
+          setMapeoFromDisk(r.fromDisk ?? false);
+        }
+      })
+      .catch(() => {});
+  }
+
   const saveMapeo = async () => {
     setSavingMapeo(true);
     try {
@@ -858,7 +1298,7 @@ export function AsistenciaPage() {
     try {
       const r = await apiFetch<any>("/asistencia/mapeo", { method: "DELETE" });
       if (r?.ok) {
-        setMapeo(r.mapeo ?? r.data ?? {});
+        await reloadMapeo();
         setMapeoFromDisk(false);
         toast.ok("Mapeo restaurado al default");
       }
@@ -921,10 +1361,16 @@ export function AsistenciaPage() {
     : [];
 
   // "Pendiente de justificación": la novedad del Ministerio dice "PENDIENTE JUSTIFIC..."
-  // (ej. E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)) o el SIAP trae JUSTIFICADO = NO.
+  // (ej. E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)) o el SIAP trae una ENFERMEDAD
+  // con JUSTIFICADO = NO. En las demás licencias el tilde no significa nada (la mayoría se
+  // cargan sin tildar), igual que en el comparador del back.
+  const esEnfermedadSiap = (nov: string) => {
+    const n = nov.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+    return n === "ENFERMEDAD" || n.includes("ENFERMEDAD DE FAMILIAR") || n.includes("ATENCION FAMILIAR ENFERMO");
+  };
   const esPendienteJust = (r: CompareRow) =>
     /PENDIENTE\s*JUSTIFIC/.test((r.novedad_ministerio || "").toUpperCase()) ||
-    (r.justificado || "").toUpperCase() === "NO";
+    ((r.justificado || "").toUpperCase() === "NO" && esEnfermedadSiap(r.novedad_siap || ""));
 
   const pendientes = monthResults.filter(esPendienteJust);
 
@@ -1381,7 +1827,7 @@ export function AsistenciaPage() {
         </div>
 
         {/* ── EDITOR DE MAPEO ── */}
-        <div className="card gp-card-14" style={{ padding: 16 }}>
+        <div id="editor-mapeo" className="card gp-card-14" style={{ padding: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: showMapeo ? 12 : 0 }}>
             <div style={sh}>MAPEO DE NOVEDADES</div>
 
@@ -1431,6 +1877,8 @@ export function AsistenciaPage() {
               saving={savingMapeo}
               novedadesMin={novedadesMin}
               novedadesSiap={novedadesSiap}
+              reglasCie={reglasCie}
+              onReglasCie={setReglasCie}
             />
           )}
 
@@ -1746,12 +2194,12 @@ export function AsistenciaPage() {
                       { h: "NOV. SIAP", w: "10%" },
                       { h: "DESDE SIAP", w: "6%" },
                       { h: "HASTA SIAP", w: "6%" },
-                      { h: "DEP.", w: "5%" },
+                      { h: "DEP.", w: "8%" },
                       { h: "J.", w: "3%" },
                       { h: "ESTADO", w: "7%" },
-                      { h: "MOTIVO", w: "12%" },
+                      { h: "MOTIVO", w: "10%" },
                       { h: "CARGA", w: "6%" },
-                      { h: "DETALLE CARGA", w: "10%" },
+                      { h: "DETALLE CARGA", w: "9%" },
                     ].map(({ h, w }) => (
                       <th
                         key={h}
@@ -1835,10 +2283,16 @@ export function AsistenciaPage() {
                           {fmtFecha(r.fecha_hasta_siap)}
                         </td>
 
-                        <td style={{ padding: "4px 6px" }}>
+                        <td style={{ padding: "4px 6px", overflow: "hidden" }}>
                           {r.upa ? (
                             <span
+                              title={r.upa}
                               style={{
+                                display: "inline-block",
+                                maxWidth: "100%",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                verticalAlign: "middle",
                                 background: "rgba(99,102,241,.15)",
                                 border: "1px solid rgba(99,102,241,.35)",
                                 color: "#a5b4fc",

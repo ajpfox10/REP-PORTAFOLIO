@@ -7,6 +7,9 @@ import { Layout } from "../../components/Layout";
 import { useToast } from "../../ui/toast";
 import { apiFetch } from "../../api/http";
 import { exportToExcel } from "../../utils/export";
+import { SinFichajeSalidaContent } from "../SinFichajeSalidaPage";
+import { LicenciasMedicasTab, LicMedica, Becado } from "./LicenciasMedicasTab";
+import { AusentesPorFechaTab } from "./AusentesPorFechaTab";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 interface ArchivoInfo { name: string; }
@@ -39,6 +42,15 @@ interface AgenteDiaRow {
   horarioEntrada: string | null;
 }
 
+interface HorarioSemanalRow {
+  dow: number;            // 0 = domingo
+  entrada: string | null;
+  salida: string | null;
+  controlable: boolean;
+}
+
+const DIAS_HORARIO = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
 interface MetaSiap {
   total: number;
   conFichaje: number;
@@ -62,6 +74,8 @@ interface AusenteRow {
   entrada: string | null;
   salida: string | null;
   recMedico: string | null;
+  licMedica?: LicMedica | null;
+  becado?: Becado;
 }
 
 interface Meta {
@@ -85,9 +99,10 @@ type FiltroFichaje = "todos" | "con" | "sin";
 type FiltroDebia   = "todos" | "si" | "no" | "sininfo";
 
 export function AusenciasConFichajesPage() {
+  const [pestana, setPestana] = useState<"ausentes" | "sin_salida">("ausentes");
   const { error: toastError } = useToast();
 
-  const [tabActiva, setTabActiva] = useState<"ausentes28" | "siap" | "presente">("ausentes28");
+  const [tabActiva, setTabActiva] = useState<"ausentes28" | "siap" | "presente" | "licencias" | "porfecha">("ausentes28");
 
   // ── Archivos disponibles ──────────────────────────────────────────────────
   const [archivos, setArchivos] = useState<ArchivoInfo[]>([]);
@@ -146,11 +161,15 @@ export function AusenciasConFichajesPage() {
   const [modalNombre, setModalNombre] = useState("");
   const [modalDias,   setModalDias]   = useState<AgenteDiaRow[]>([]);
   const [modalLoading,setModalLoading]= useState(false);
+  const [modalHorario,setModalHorario]= useState<HorarioSemanalRow[]>([]);
+  const [modalFecha,  setModalFecha]  = useState<string | null>(null);
 
-  const abrirModal = useCallback(async (dni: string, nombre: string) => {
+  const abrirModal = useCallback(async (dni: string, nombre: string, fecha?: string) => {
     setModalDni(dni);
     setModalNombre(nombre);
+    setModalFecha(fecha ?? null);
     setModalDias([]);
+    setModalHorario([]);
     setModalLoading(true);
     try {
       const params = new URLSearchParams();
@@ -159,12 +178,13 @@ export function AusenciasConFichajesPage() {
       if (siapFile)       params.set("siapFile",       siapFile);
       if (ministerioFile) params.set("ministerioFile", ministerioFile);
       if (horariosFile)   params.set("horariosFile",   horariosFile);
-      const r = await apiFetch<{ ok: boolean; nombre: string; data: AgenteDiaRow[] }>(
+      const r = await apiFetch<{ ok: boolean; nombre: string; data: AgenteDiaRow[]; horarioSemanal?: HorarioSemanalRow[] }>(
         `/asistencia/agente-mes?${params}`
       );
       if (!r.ok) throw new Error((r as any).error ?? "Error");
       if (r.nombre) setModalNombre(r.nombre);
       setModalDias(r.data ?? []);
+      setModalHorario(r.horarioSemanal ?? []);
     } catch (e: any) {
       setModalDias([]);
     } finally {
@@ -183,15 +203,19 @@ export function AusenciasConFichajesPage() {
         const files: ArchivoInfo[] = r.files;
         setArchivos(files);
 
+        // Rutas predeterminadas fijas; si no existen, cae a la auto-detección por nombre
+        const norm = (s: string) => s.replace(/\//g, "\\").toUpperCase();
+        const exacto = (ruta: string) => files.find((f) => norm(f.name) === norm(ruta));
+
         // Auto-detectar ministerio (contiene "ministerio" en el nombre, sin "upa")
-        const autoMin = files.find((f) => {
+        const autoMin = exacto("MINISTERIO\\MINISTERIO.xls") ?? files.find((f) => {
           const u = f.name.toUpperCase();
           return u.includes("MINISTERIO") && !u.includes("UPA");
         }) ?? files.find((f) => f.name.toUpperCase().includes("MINISTERIO"));
         if (autoMin) setMinisterioFile(autoMin.name);
 
         // Auto-detectar SIAP (contiene "siap" o "siape")
-        const autoSiap = files.find((f) => f.name.toUpperCase().includes("SIAP"));
+        const autoSiap = exacto("SIAPE\\SIAPE.xlsx") ?? files.find((f) => f.name.toUpperCase().includes("SIAP"));
         if (autoSiap) setSiapFile(autoSiap.name);
 
         // Auto-detectar horarios (contiene "horario")
@@ -440,7 +464,23 @@ export function AusenciasConFichajesPage() {
   });
 
   return (
-    <Layout title="Ausentes 28 — Fichajes">
+    <Layout title="Ausentes 28 — Fichajes" fluid>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <button type="button" className="btn"
+          style={pestana === "ausentes" ? { background: "rgba(99,102,241,0.25)", color: "#818cf8", fontWeight: 700 } : {}}
+          onClick={() => setPestana("ausentes")}>
+          🕵️ Ausentes vs fichajes
+        </button>
+        <button type="button" className="btn"
+          style={pestana === "sin_salida" ? { background: "rgba(99,102,241,0.25)", color: "#818cf8", fontWeight: 700 } : {}}
+          onClick={() => setPestana("sin_salida")}>
+          🚪 Sin fichaje de salida
+        </button>
+      </div>
+
+      {pestana === "sin_salida" && <SinFichajeSalidaContent />}
+
+      {pestana === "ausentes" && (<>
 
       {/* ── Selección de archivos ──────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 12 }}>
@@ -473,12 +513,12 @@ export function AusenciasConFichajesPage() {
             </select>
           </div>
 
-          <div style={{ flex: "0 0 160px" }}>
+          {tabActiva !== "porfecha" && <div style={{ flex: "0 0 160px" }}>
             <label htmlFor="acf-periodo" className="muted" style={{ fontSize: "0.72rem", marginBottom: 4, display: "block" }}>Período</label>
             <input id="acf-periodo" name="periodo" type="month" className="input" value={periodo} onChange={(e) => setPeriodo(e.target.value)} style={{ width: "100%" }} />
-          </div>
+          </div>}
 
-          {tabActiva === "ausentes28" &&
+          {(tabActiva === "ausentes28" || tabActiva === "licencias") &&
             <button className="btn primary" onClick={cargar} disabled={loading || !ministerioFile} type="button" style={{ height: 36 }}>
               {loading ? "Cargando…" : loaded ? "↻ Recargar" : "Cargar"}
             </button>
@@ -507,7 +547,21 @@ export function AusenciasConFichajesPage() {
         <button style={tabStyle(tabActiva === "presente")} onClick={() => setTabActiva("presente")}>
           Presente sin fichaje
         </button>
+        <button style={tabStyle(tabActiva === "licencias")} onClick={() => setTabActiva("licencias")}>
+          Ausentes vs Licencias Médicas
+        </button>
+        <button style={tabStyle(tabActiva === "porfecha")} onClick={() => setTabActiva("porfecha")}>
+          Ausentes por fecha
+        </button>
       </div>
+
+      {tabActiva === "porfecha" && (
+        <AusentesPorFechaTab ministerioFile={ministerioFile} siapFile={siapFile} horariosFile={horariosFile} />
+      )}
+
+      {tabActiva === "licencias" && (
+        <LicenciasMedicasTab rows={rows} loaded={loaded} loading={loading} periodo={periodo} />
+      )}
 
       {tabActiva === "ausentes28" && <>
 
@@ -627,7 +681,7 @@ export function AusenciasConFichajesPage() {
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                   {["DNI", "Nombre", "Fecha", "Día", "Nov. Ministerio", "Nov. SIAP", "¿Debía venir?", "¿Fichó?", "Entrada", "Salida", "Rec. Médico"].map((h) => (
-                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding: "10px 8px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -637,12 +691,12 @@ export function AusenciasConFichajesPage() {
                 ) : rowsFiltradas.map((r, i) => (
                   <tr key={`${r.dni}-${r.fecha}-${i}`}
                     style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
-                    <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#94a3b8" }}>{r.dni}</td>
-                    <td style={{ padding: "8px 12px", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.nombre}>{r.nombre}</td>
-                    <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>{fmtFecha(r.fecha)}</td>
-                    <td style={{ padding: "8px 12px", color: "#94a3b8" }}>{r.diaSemana}</td>
-                    <td style={{ padding: "8px 12px", fontSize: "0.78rem", color: "#cbd5e1", maxWidth: 200 }}>{r.novedadMinisterio || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontSize: "0.78rem", maxWidth: 200 }}>
+                    <td style={{ padding: "7px 8px", fontFamily: "monospace", color: "#94a3b8" }}>{r.dni}</td>
+                    <td style={{ padding: "7px 8px", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.nombre}>{r.nombre}</td>
+                    <td style={{ padding: "7px 8px", whiteSpace: "nowrap" }}>{fmtFecha(r.fecha)}</td>
+                    <td style={{ padding: "7px 8px", color: "#94a3b8" }}>{r.diaSemana}</td>
+                    <td style={{ padding: "7px 8px", fontSize: "0.78rem", color: "#cbd5e1", maxWidth: 200 }}>{r.novedadMinisterio || "—"}</td>
+                    <td style={{ padding: "7px 8px", fontSize: "0.78rem", maxWidth: 200 }}>
                       {r.novedadSiap ? (
                         <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                           <span style={{ color: "#a5b4fc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.novedadSiap}</span>
@@ -651,19 +705,21 @@ export function AusenciasConFichajesPage() {
                         </span>
                       ) : <span style={{ color: "#475569" }}>—</span>}
                     </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <span style={{ ...badge, ...badgeDebia(r.debiaVenir) }}>
+                    <td style={{ padding: "7px 8px" }}>
+                      <span style={{ ...badge, ...badgeDebia(r.debiaVenir), cursor: "pointer" }}
+                        title="Ver horario del agente"
+                        onClick={() => abrirModal(r.dni, r.nombre, r.fecha)}>
                         {r.debiaVenir === true ? "Sí" : r.debiaVenir === false ? "No" : "—"}
                       </span>
                     </td>
-                    <td style={{ padding: "8px 12px" }}>
+                    <td style={{ padding: "7px 8px" }}>
                       <span style={{ ...badge, ...badgeFichaje(r.tieneFichaje) }}>
                         {r.tieneFichaje ? "Sí" : "No"}
                       </span>
                     </td>
-                    <td style={{ padding: "8px 12px", fontFamily: "monospace", color: r.entrada ? "#22c55e" : "#64748b" }}>{r.entrada ?? "—"}</td>
-                    <td style={{ padding: "8px 12px", fontFamily: "monospace", color: r.salida  ? "#60a5fa" : "#64748b" }}>{r.salida  ?? "—"}</td>
-                    <td style={{ padding: "8px 12px" }}>
+                    <td style={{ padding: "7px 8px", fontFamily: "monospace", color: r.entrada ? "#22c55e" : "#64748b" }}>{r.entrada ?? "—"}</td>
+                    <td style={{ padding: "7px 8px", fontFamily: "monospace", color: r.salida  ? "#60a5fa" : "#64748b" }}>{r.salida  ?? "—"}</td>
+                    <td style={{ padding: "7px 8px" }}>
                       {r.recMedico != null
                         ? <span style={{ ...badge, background: "rgba(168,85,247,0.18)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.35)" }} title={r.recMedico !== "Sí" ? r.recMedico : undefined}>
                             {r.recMedico !== "Sí" ? r.recMedico : "Sí"}
@@ -1017,6 +1073,35 @@ export function AusenciasConFichajesPage() {
               <button onClick={() => setModalDni(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "1.2rem" }}>✕</button>
             </div>
 
+            {/* Horario programado */}
+            {!modalLoading && (
+              <div style={{ padding: "10px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontWeight: 600, marginBottom: 6 }}>Horario programado</div>
+                {modalHorario.length === 0 ? (
+                  <div style={{ fontSize: "0.8rem", color: "#64748b" }}>Sin horario en el archivo de horarios.</div>
+                ) : (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {[1, 2, 3, 4, 5, 6, 0].map(dow => {
+                      const h = modalHorario.find(x => x.dow === dow);
+                      const esDiaFecha = modalFecha != null && new Date(modalFecha + "T00:00:00Z").getUTCDay() === dow;
+                      return (
+                        <div key={dow} style={{
+                          padding: "5px 10px", borderRadius: 8, fontSize: "0.78rem", minWidth: 92,
+                          background: h ? "rgba(251,146,60,0.12)" : "rgba(255,255,255,0.03)",
+                          border: esDiaFecha ? "1px solid #eab308" : "1px solid rgba(255,255,255,0.08)",
+                        }}>
+                          <div style={{ color: esDiaFecha ? "#eab308" : "#94a3b8", fontWeight: 600 }}>{DIAS_HORARIO[dow]}</div>
+                          <div style={{ fontFamily: "monospace", color: h ? "#fb923c" : "#475569" }}>
+                            {h ? (h.entrada || h.salida ? `${h.entrada ?? "?"} – ${h.salida ?? "?"}` : "Controlable") : "No trabaja"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Body */}
             <div style={{ overflowY: "auto", padding: "0 0 12px" }}>
               {modalLoading ? (
@@ -1033,7 +1118,9 @@ export function AusenciasConFichajesPage() {
                   <tbody>
                     {modalDias.map((d, i) => {
                       const esAusente = d.esAusente;
-                      const rowBg = esAusente
+                      const rowBg = d.fecha === modalFecha
+                        ? "rgba(99,102,241,0.22)"
+                        : esAusente
                         ? "rgba(234,179,8,0.12)"
                         : i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)";
                       const novSiapTxt = d.novedadesSiap.map(n => n.novedad + (n.justificado ? ` (${n.justificado})` : "")).join(" / ") || "—";
@@ -1057,6 +1144,7 @@ export function AusenciasConFichajesPage() {
           </div>
         </div>
       )}
+      </>)}
     </Layout>
   );
 }
