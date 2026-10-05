@@ -16,6 +16,7 @@ import { Sequelize, QueryTypes, Transaction } from 'sequelize';
 import { invalidate, agenteTags, personalTags } from '../../../infra/invalidateOnWrite';
 import { logger } from '../../../logging/logger';
 import { crearCarpetaDocuAgente } from './docuCarpeta.service';
+import { cambiarEspecialidad } from '../../../services/especialidadesAgente';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,9 @@ export interface AltaAgenteDto {
   provincia_id?: string;
   nacionalidad?: string;
   mp?: string;
+  /** Especialidad (catalogo especialidaddesmedicas). Abre un periodo en
+   *  agentes_especialidades desde fecha_ingreso (o hoy); si es la vigente, no hace nada. */
+  especialidad_id?: number | null;
   observaciones?: string;
 
   // Datos laborales (tabla: agentes)
@@ -201,7 +205,8 @@ export class AgenteService {
              domicilio = :domicilio, numerodomicilio = :numerodomicilio, piso = :piso, depto = :depto,
              cp = :cp, observacionesdireccion = :observacionesdireccion,
              localidad_id = :localidad_id, provincia_id = :provincia_id, nacionalidad = :nacionalidad,
-             mp = :mp, observaciones = :observaciones, updated_by = :actor, updated_at = NOW()
+             mp = :mp,
+             observaciones = :observaciones, updated_by = :actor, updated_at = NOW()
            WHERE dni = :dni AND deleted_at IS NULL`,
           {
             replacements: {
@@ -262,6 +267,17 @@ export class AgenteService {
         }
       );
       const agenteId = agenteResult?.insertId;
+
+      // Paso 3b: Especialidad (historial en agentes_especialidades). Si ya tiene otra
+      // vigente se cierra el dia anterior; si es la misma no se toca.
+      if (dto.especialidad_id) {
+        await cambiarEspecialidad(this.sequelize, {
+          dni: dto.dni,
+          especialidad_id: dto.especialidad_id,
+          fecha_desde: dto.fecha_ingreso || null,
+          actor: dto.actor ?? null,
+        }, t);
+      }
 
       // Paso 4: Insertar servicios si los hay
       if (dto.servicios && dto.servicios.length > 0) {
@@ -506,9 +522,25 @@ export class AgenteService {
         { replacements: { fechaCierre, agenteId: vigente[0].id }, transaction: t }
       );
 
-      // 3. Abrir el tramo nuevo dentro de la misma transaccion.
+      // 3. Datos personales actuales: alta() reescribe la fila de personal completa y
+      //    el cambio de ocupacion solo trae datos laborales (+ apellido/nombre). Lo que
+      //    no venga en el dto se toma de lo que ya esta cargado, para no pisarlo con NULL.
+      const [actual] = await this.sequelize.query<Record<string, any>>(
+        `SELECT DATE_FORMAT(fecha_nacimiento, '%Y-%m-%d') AS fecha_nacimiento,
+                sexo_id, cuil, email, telefono, domicilio, numerodomicilio, piso, depto, cp,
+                observacionesdireccion, localidad_id, provincia_id, nacionalidad, mp,
+                observaciones
+         FROM personal WHERE dni = :dni AND deleted_at IS NULL LIMIT 1`,
+        { replacements: { dni }, type: QueryTypes.SELECT, transaction: t }
+      );
+      const dtoConPersonal: AltaAgenteDto = { ...dto };
+      for (const [k, v] of Object.entries(actual ?? {})) {
+        if ((dtoConPersonal as any)[k] === undefined && v !== null) (dtoConPersonal as any)[k] = v;
+      }
+
+      // 4. Abrir el tramo nuevo dentro de la misma transaccion.
       const result = await this.alta(
-        { ...dto, dni, fecha_ingreso: fechaIngreso, fecha_egreso: undefined, estado_empleo: 'ACTIVO' },
+        { ...dtoConPersonal, dni, fecha_ingreso: fechaIngreso, fecha_egreso: undefined, estado_empleo: 'ACTIVO' },
         t
       );
 

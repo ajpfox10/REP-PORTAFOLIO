@@ -17,9 +17,13 @@ type Residencia = {
   activa: number;
   observaciones: string | null;
   residentes: number;
+  ocupacion_jefe_id: number | null;
+  ocupacion_jefe_nombre: string | null;
 };
 
-type EstadoResidente = 'CONTINUA' | 'DAR_DE_BAJA' | 'SIN_RESIDENCIA' | 'SIN_FECHA';
+type OcupacionJefe = { id: number; nombre: string };
+
+type EstadoResidente = 'CONTINUA' | 'DAR_DE_BAJA' | 'SIN_RESIDENCIA' | 'SIN_FECHA' | 'JEFE' | 'FIN_JEFATURA';
 
 type ResidenteFila = {
   dni: number;
@@ -34,8 +38,11 @@ type ResidenteFila = {
   anios_residencia: number | null;
   anios_cumplidos: number | null;
   anio_en_curso: number | null;
+  ocupacion_jefe_id: number | null;
+  ocupacion_jefe_nombre: string | null;
+  jefatura_desde: string | null;
   estado: EstadoResidente;
-  baja_estado: 'PENDIENTE' | 'BAJA' | 'NO_CORRESPONDE' | null;
+  baja_estado: 'PENDIENTE' | 'BAJA' | 'NO_CORRESPONDE' | 'JEFATURA' | null;
   baja_fecha: string | null;
   baja_observaciones: string | null;
   baja_resuelto_por: string | null;
@@ -48,7 +55,16 @@ const ESTADO_UI: Record<EstadoResidente, { label: string; color: string; bg: str
   DAR_DE_BAJA:    { label: 'Dar de baja',         color: '#fca5a5', bg: 'rgba(239,68,68,0.16)' },
   SIN_RESIDENCIA: { label: 'Sin residencia',      color: '#fcd34d', bg: 'rgba(234,179,8,0.14)' },
   SIN_FECHA:      { label: 'Sin fecha de inicio', color: '#fcd34d', bg: 'rgba(234,179,8,0.14)' },
+  JEFE:           { label: 'Jefe de residentes',  color: '#93c5fd', bg: 'rgba(59,130,246,0.16)' },
+  FIN_JEFATURA:   { label: 'Terminó la jefatura', color: '#fca5a5', bg: 'rgba(239,68,68,0.16)' },
 };
+
+function diaSiguiente(fecha: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha);
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function fmtFecha(f?: string | null) {
   if (!f) return '—';
@@ -72,6 +88,13 @@ export function DuracionResidenciasPage() {
   const [filtro, setFiltro] = useState<'TODOS' | EstadoResidente>('TODOS');
   const [busqueda, setBusqueda] = useState('');
   const [accionDni, setAccionDni] = useState<number | null>(null);
+  const [ocupacionesJefe, setOcupacionesJefe] = useState<OcupacionJefe[]>([]);
+
+  // modal "Pasar a jefatura"
+  const [jefaturaDe, setJefaturaDe] = useState<ResidenteFila | null>(null);
+  const [jefOcupacion, setJefOcupacion] = useState('');
+  const [jefCierre, setJefCierre] = useState('');
+  const [jefObs, setJefObs] = useState('');
 
   // alta de residencia
   const [nuevoNombre, setNuevoNombre] = useState('');
@@ -81,11 +104,13 @@ export function DuracionResidenciasPage() {
     setLoading(true);
     setError(null);
     try {
-      const [cat, res] = await Promise.all([
+      const [cat, res, ocj] = await Promise.all([
         apiFetch<any>('/residencias'),
         apiFetch<any>('/residencias/residentes'),
+        apiFetch<any>('/residencias/ocupaciones-jefe').catch(() => null),
       ]);
       setResidencias(Array.isArray(cat?.data) ? cat.data : []);
+      setOcupacionesJefe(Array.isArray(ocj?.data) ? ocj.data : []);
       setResidentes(Array.isArray(res?.data) ? res.data : []);
       setCorte(res?.corte || cat?.corte || null);
       setTotales(res?.totales || null);
@@ -166,6 +191,38 @@ export function DuracionResidenciasPage() {
     }
   };
 
+  const abrirJefatura = (r: ResidenteFila) => {
+    setJefaturaDe(r);
+    setJefOcupacion(r.ocupacion_jefe_id ? String(r.ocupacion_jefe_id) : '');
+    setJefCierre(corte?.fechaCorte || '');
+    setJefObs('');
+  };
+
+  const confirmarJefatura = async () => {
+    const r = jefaturaDe;
+    if (!r) return;
+    if (!jefOcupacion) { toast.error('Elegí el cargo de jefe de residentes'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(jefCierre)) { toast.error('Fecha de cierre inválida'); return; }
+    setAccionDni(r.dni);
+    try {
+      await apiFetch(`/residencias/jefatura/${r.dni}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ocupacion_id: Number(jefOcupacion),
+          fecha_cierre: jefCierre,
+          observaciones: jefObs.trim() || null,
+        }),
+      });
+      toast.ok(`${personaLabel(r)} pasó a jefe de residentes desde el ${fmtFecha(diaSiguiente(jefCierre))}`);
+      setJefaturaDe(null);
+      await cargar();
+    } catch (e: any) {
+      toast.error('No se pudo pasar a jefatura', e?.message || 'Error');
+    } finally {
+      setAccionDni(null);
+    }
+  };
+
   const noCorresponde = async (r: ResidenteFila) => {
     const obs = window.prompt(`¿Por qué no corresponde dar de baja a ${personaLabel(r)}?`, '');
     if (!obs || obs.trim().length < 5) {
@@ -230,6 +287,7 @@ export function DuracionResidenciasPage() {
                 ['Continúan', totales.continuan],
                 ['A dar de baja', totales.darDeBaja],
                 ['Dados de baja', totales.dadosDeBaja],
+                ['Jefes de residentes', totales.jefes ?? 0],
                 ['Sin residencia', totales.sinResidencia],
                 ['Sin fecha', totales.sinFecha],
               ].map(([label, valor]) => (
@@ -259,6 +317,7 @@ export function DuracionResidenciasPage() {
                   <th style={th}>Residencia</th>
                   <th style={th}>Años</th>
                   <th style={th}>Residentes</th>
+                  <th style={th}>Cargo de jefe</th>
                   <th style={th}>Observaciones</th>
                   <th style={th}></th>
                 </tr>
@@ -287,6 +346,22 @@ export function DuracionResidenciasPage() {
                       />
                     </td>
                     <td style={td}>{r.residentes}</td>
+                    <td style={td}>
+                      <select
+                        value={r.ocupacion_jefe_id ?? ''}
+                        style={{ maxWidth: 260 }}
+                        onChange={(e) => guardarCampo(
+                          r,
+                          { ocupacion_jefe_id: e.target.value ? Number(e.target.value) : null },
+                          'Cargo de jefe actualizado',
+                        )}
+                      >
+                        <option value="">— sin jefatura —</option>
+                        {ocupacionesJefe.map((o) => (
+                          <option key={o.id} value={o.id}>{o.nombre}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td style={td}>
                       <input
                         defaultValue={r.observaciones || ''}
@@ -346,6 +421,8 @@ export function DuracionResidenciasPage() {
                 <option value="TODOS">Todos</option>
                 <option value="DAR_DE_BAJA">A dar de baja</option>
                 <option value="CONTINUA">Continúan</option>
+                <option value="JEFE">Jefes de residentes</option>
+                <option value="FIN_JEFATURA">Terminó la jefatura</option>
                 <option value="SIN_RESIDENCIA">Sin residencia</option>
                 <option value="SIN_FECHA">Sin fecha de inicio</option>
               </select>
@@ -412,6 +489,9 @@ export function DuracionResidenciasPage() {
                         }}>
                           {r.baja_estado === 'BAJA' ? 'Dado de baja' : r.baja_estado === 'NO_CORRESPONDE' ? 'No corresponde' : ui.label}
                         </span>
+                        {r.jefatura_desde && (
+                          <div style={{ opacity: .6, fontSize: '.72rem' }}>Jefe desde {fmtFecha(r.jefatura_desde)}</div>
+                        )}
                         {r.baja_estado === 'BAJA' && (
                           <div style={{ opacity: .6, fontSize: '.72rem' }}>{fmtFecha(r.baja_fecha)}</div>
                         )}
@@ -420,13 +500,22 @@ export function DuracionResidenciasPage() {
                         )}
                       </td>
                       <td style={td}>
-                        {r.estado === 'DAR_DE_BAJA' && r.baja_estado !== 'BAJA' && (
+                        {(r.estado === 'DAR_DE_BAJA' || r.estado === 'FIN_JEFATURA')
+                          && r.baja_estado !== 'BAJA' && r.baja_estado !== 'JEFATURA' && (
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button
                               className="btn" type="button"
                               disabled={accionDni === r.dni}
                               onClick={() => darDeBaja(r)}
                             >Dar de baja</button>
+                            {r.estado === 'DAR_DE_BAJA' && (
+                              <button
+                                className="btn" type="button"
+                                disabled={accionDni === r.dni}
+                                onClick={() => abrirJefatura(r)}
+                                title="Cierra la residencia y abre la jefatura de residentes al día siguiente"
+                              >Pasar a jefatura</button>
+                            )}
                             {r.baja_estado !== 'NO_CORRESPONDE' && (
                               <button
                                 className="btn" type="button"
@@ -448,6 +537,69 @@ export function DuracionResidenciasPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal: pasar a jefatura de residentes */}
+      {jefaturaDe && (
+        <div
+          onClick={() => accionDni == null && setJefaturaDe(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div
+            className="card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ padding: 18, width: '100%', maxWidth: 480, display: 'grid', gap: 12 }}
+          >
+            <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>🎓 Pasar a jefatura de residentes</div>
+            <div style={{ fontSize: '.86rem', opacity: .8 }}>
+              {personaLabel(jefaturaDe)} · DNI {jefaturaDe.dni}
+              {jefaturaDe.residencia_nombre ? ` · ${jefaturaDe.residencia_nombre}` : ''}
+            </div>
+
+            <label style={{ display: 'grid', gap: 4, fontSize: '.82rem' }}>
+              Cargo
+              <select value={jefOcupacion} onChange={(e) => setJefOcupacion(e.target.value)}>
+                <option value="">— elegir —</option>
+                {ocupacionesJefe.map((o) => (
+                  <option key={o.id} value={o.id}>{o.nombre}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'grid', gap: 4, fontSize: '.82rem' }}>
+              Fecha de cierre de la residencia
+              <input type="date" value={jefCierre} onChange={(e) => setJefCierre(e.target.value)} />
+            </label>
+
+            <label style={{ display: 'grid', gap: 4, fontSize: '.82rem' }}>
+              Observaciones (opcional)
+              <input value={jefObs} onChange={(e) => setJefObs(e.target.value)} placeholder="Resolución, disposición…" />
+            </label>
+
+            {/^\d{4}-\d{2}-\d{2}$/.test(jefCierre) && (
+              <div style={{
+                padding: '8px 10px', borderRadius: 8, fontSize: '.8rem',
+                background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)',
+              }}>
+                Cierra la residencia al <b>{fmtFecha(jefCierre)}</b> (CAMBIO DE OCUPACION) y abre la jefatura
+                el <b>{fmtFecha(diaSiguiente(jefCierre))}</b> con la misma ley, planta y régimen.
+                Servicio y sector no cambian. Al corte siguiente avisa el fin de la jefatura.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn" type="button" disabled={accionDni != null} onClick={() => setJefaturaDe(null)}>
+                Cancelar
+              </button>
+              <button className="btn" type="button" disabled={accionDni != null} onClick={confirmarJefatura}>
+                {accionDni != null ? 'Guardando…' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

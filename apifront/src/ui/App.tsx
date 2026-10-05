@@ -25,6 +25,7 @@ import { ComparadorSiapePage } from '../pages/ComparadorSiapePage';
 import { Art26MinisterioPage } from '../pages/Art26MinisterioPage';
 import { LicenciasConsultorioPage } from '../pages/LicenciasConsultorioPage';
 import { HorariosExtendidosPage } from '../pages/HorariosExtendidosPage';
+import { JubilablesEstadisticaPage } from '../pages/JubilablesEstadisticaPage';
 import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
@@ -57,6 +58,8 @@ import { BajasGestionPage } from '../pages/BajasGestionPage';
 import { HistorialEstructuraPage } from '../pages/HistorialEstructuraPage';
 import { useKiosk, setKioskManual } from '../hooks/useKiosk';
 import { HerramientasPage }    from '../pages/HerramientasPage';
+import { LicenciasMedicasControlPage } from '../pages/LicenciasMedicasControlPage';
+import { CasosViolenciaPage } from '../pages/CasosViolenciaPage';
 import { ConcursosPage }         from '../pages/ConcursosPage';
 import { DirectorEjecutivoPage } from '../pages/DirectorEjecutivoPage';
 import { AlertasAgentePage }   from '../pages/AlertasAgentePage';
@@ -413,6 +416,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/jubilables-estadistica"
+              element={
+                <Private>
+                  <Guard anyOf={['app:jubilables-estadistica:access', 'crud:*:*']}>
+                    <JubilablesEstadisticaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/horarios-extendidos"
               element={
                 <Private>
@@ -752,6 +765,28 @@ export function App() {
                 <Private>
                   <Guard anyOf={['crud:jefedeptos:read', 'crud:*:*']}>
                     <JefedeptosPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/casos-violencia"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <CasosViolenciaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+
+            <Route
+              path="/app/licencias-medicas-control"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <LicenciasMedicasControlPage />
                   </Guard>
                 </Private>
               }

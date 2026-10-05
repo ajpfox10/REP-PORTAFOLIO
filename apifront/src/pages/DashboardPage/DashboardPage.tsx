@@ -66,8 +66,6 @@ function GroupTab({ to, children, tooltip }: {
 }
 
 function AsistenciaTile() {
-  const { hasPerm } = useAuth();
-  const esAdmin = hasPerm('crud:*:*');
   return (
     <div className="tile dash-group-tile" style={{ borderLeftColor: '#6366f1', borderLeftWidth: 3 }}>
       <Link className="dash-group-main" to="/app/asistencia">
@@ -77,53 +75,33 @@ function AsistenciaTile() {
       <div className="dash-group-tabs" role="tablist" aria-label="Herramientas de asistencia">
         <GroupTab
           to="/app/ausencias-fichajes"
-          tooltip="Unificado en Asistencia. Cruza agentes con código 28/inasistencia contra SIAP para ver si debían venir y si ficharon."
+          tooltip="Unificado en Asistencia. Cruza agentes con código 28/inasistencia contra SIAP para ver si debían venir y si ficharon. Adentro: sin fichaje de salida."
         >
           Ausentes vs Fichajes
         </GroupTab>
         <GroupTab
-          to="/app/sin-fichaje-salida"
-          tooltip="Unificado en Asistencia. Detecta jornadas con entrada biométrica sin salida registrada y cruza horarios/SIAP por UPA."
-        >
-          Sin fichaje de salida
-        </GroupTab>
-        <GroupTab
-          to="/app/stress-alertas"
-          tooltip="Unificado en Asistencia. Alertas post-vacacionales y licencias pendientes, con filtros por agente/servicio y exportación."
-        >
-          Stress Post-Vacacional
-        </GroupTab>
-        <GroupTab
           to="/app/reporte-servicio"
-          tooltip="Unificado en Asistencia. Resumen mensual por servicio: horas teóricas vs reales, fichajes diarios, feriados y semanas/mes."
+          tooltip="Unificado en Asistencia. Resumen mensual por servicio: horas teóricas vs reales, fichajes diarios, feriados y semanas/mes. Adentro: cruce de horarios, licencias y (admin) stress post-vacacional."
         >
           Reporte por Servicio
         </GroupTab>
         <GroupTab
           to="/app/presentes-turno"
-          tooltip="Unificado en Asistencia. Por servicio y fecha: esperados según Excel de horarios, quién fichó y quién no, con justificación SIAP/Ministerio."
+          tooltip="Unificado en Asistencia. Por servicio y fecha: esperados según Excel de horarios, quién fichó y quién no, con justificación SIAP/Ministerio. Adentro (admin): nivel de ausentismo."
         >
           Presentes por Turno
         </GroupTab>
-        {esAdmin && (
-          <GroupTab
-            to="/app/ausentismo"
-            tooltip="Nivel de ausentismo por dependencia, servicio y sector, abierto por régimen horario (guardia +12 hs vs planta). Separa ausencia no programada (enfermedad, familiar enfermo, ausente) de la programada. Exporta a Excel."
-          >
-            Ausentismo
-          </GroupTab>
-        )}
         <GroupTab
-          to="/app/comparador-siape"
-          tooltip="Compara los PDFs de licencias ANUAL del Ministerio contra las Novedades Intranet del Hospital. Detecta quién no tiene código 08."
+          to="/app/asistencia?mapeo=1"
+          tooltip="Qué novedad del Ministerio equivale a cuál de SIAPE. Lo usan el Comparador SIAPE vs Ministerio, Asistencia y los robots de carga en la Intranet."
         >
-          SIAPE vs Novedades
+          Mapeo de novedades
         </GroupTab>
         <GroupTab
-          to="/app/carga-siape"
-          tooltip="Abre SiAPe y carga los reconocimientos médicos pendientes por el flujo de compensatorios."
+          to="/app/comparador-siape"
+          tooltip="Comparador SIAPE vs Ministerio por DNI, resultados de carga en la Intranet y (pestaña) Carga SiAPe de compensatorios."
         >
-          Carga SiAPe
+          SIAPE vs Novedades
         </GroupTab>
       </div>
     </div>
@@ -555,6 +533,12 @@ export function DashboardPage() {
         <div className="grid">
           <EstructuraTile />
           <Tile to="/app/jefedeptos" title="🏛️ Historial Jefaturas" desc="Cargar y consultar el historial de quién ocupó cada jefatura. Alertas de vencimiento de cargos por concurso." accent="#6366f1" />
+          {hasPerm('crud:*:*') && (
+            <Tile to="/app/licencias-medicas-control" title="🩺 Licencias médicas pendientes y denegadas" desc="Licencias PENDIENTES y DENEGADAS del agente: si ese día le tocaba venir, si fichó y qué cargó el jefe en SIAPE. Quiénes deben reclamar." accent="#ef4444" />
+          )}
+          {hasPerm('crud:*:*') && (
+            <Tile to="/app/casos-violencia" title="🛡️ Casos de Violencia" desc="Registro de casos: expediente, agresor interno o externo, intervención del equipo de violencia, recomendaciones (DAVSAL, cambio de horario o sector) y todo lo remitido." accent="#be185d" />
+          )}
           <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación IPS para Leyes 10471 y 10430. Servicio nombrado, becas, ANSES, insalubridad y prorrateo." accent="#7c3aed" />
           <Tile to="/app/concursos" title="🏆 Concursos Ley 10471" desc="Concurso de ingreso por año, ley, servicio y agente. Concurso de funciones: Ley 10471 con más de 15 años de antigüedad. Exportación a Excel." accent="#6366f1" />
           <LegajoTile />

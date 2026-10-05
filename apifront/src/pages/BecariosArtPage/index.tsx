@@ -7,6 +7,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Layout }   from '../../components/Layout';
 import { apiFetch, apiFetchBlob } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { EstablecimientoArtTab } from './EstablecimientoArtTab';
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
 
@@ -252,6 +253,7 @@ export function BecariosArtPage() {
   const [loadingReg, setLoadingReg]     = useState(false);
   const [searchReg, setSearchReg]       = useState('');
   const [tabReg, setTabReg]             = useState<'todos' | 'automaticos'>('todos');
+  const [vista, setVista]               = useState<'altas' | 'establecimiento'>('altas');
 
   // detalle de dirección expandido (id del registro)
   const [expandDir, setExpandDir]       = useState<number | null>(null);
@@ -483,6 +485,20 @@ export function BecariosArtPage() {
             Alta de agentes en ART: pendientes, registrados y errores de la carga automática.
           </p>
         </div>
+
+        {/* ── Pestañas de la página ─────────────────────────────────────────── */}
+        <div style={S.tabs}>
+          <button style={{ ...S.tab, ...(vista === 'altas' ? S.tabActive : {}) }} onClick={() => setVista('altas')}>
+            Altas en ART
+          </button>
+          <button style={{ ...S.tab, ...(vista === 'establecimiento' ? S.tabActive : {}) }} onClick={() => setVista('establecimiento')}>
+            Establecimiento en ART (Catán)
+          </button>
+        </div>
+
+        {vista === 'establecimiento' && <EstablecimientoArtTab />}
+
+        {vista === 'altas' && (<>
 
         {/* ── Estado de la cola de carga automática (art_alta_queue) ─────────── */}
         {(cola.length > 0 || Object.keys(colaResumen).length > 0) && (
@@ -926,6 +942,7 @@ export function BecariosArtPage() {
           </div>
 
         </div>
+        </>)}
       </div>
 
       {/* Visor de la captura del error de ProvinciART */}

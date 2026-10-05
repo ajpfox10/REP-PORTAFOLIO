@@ -175,15 +175,15 @@ def leer_edicion(frame):
         rol = i.get("role")
         clave = None
         if rol == "text" and nom.endswith("Licencia-Permiso"):
-            clave = "licencia"
+            clave = "xxxxxxx"
         elif rol == "text" and nom in ("Año", "Ano", "A\ufffdo"):
-            clave = "anio"
+            clave = "xxxxxxx"
         elif rol == "text" and nom == "Desde":
-            clave = "desde"
+            clave = "xxxxxxx"
         elif rol == "text" and nom.strip().startswith("D") and nom.strip().endswith("as"):
-            clave = "dias"
+            clave = "xxxxxxx"
         elif rol == "text" and nom == "Hasta":
-            clave = "hasta"
+            clave = "xxxxxxx"
         elif rol == "check box" and nom.startswith("JUSTIFICADO"):
             st = i.get("states") or []
             st = st if isinstance(st, list) else [st]

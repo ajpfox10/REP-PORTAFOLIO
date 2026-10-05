@@ -23,7 +23,10 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import mysql, { RowDataPacket } from 'mysql2/promise';
-import { loadMapeoTabla, saveMapeoTabla, restaurarMapeoTabla } from '../services/mapeoNovedades';
+import {
+  loadMapeoTabla, saveMapeoTabla, restaurarMapeoTabla,
+  loadMapeoGeneral, listReglasCie, addReglasCie, bajaReglaCie, normCie,
+} from '../services/mapeoNovedades';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
@@ -441,15 +444,9 @@ function novedadesMinisterioSiapConectan(
     return minEsInasistencia || minEsPendienteJustificacion;
   }
 
-  if (!novedadesConectan(equivs, novSN)) return false;
-
-  if (novSN.includes('ANUAL COMPLEMENTARIA')) {
-    const minEsDenegada = novMN.includes('DENEGADA');
-    if (justS === 'NO' && !minEsDenegada) return false;
-    if (justS === 'SI' && minEsDenegada) return false;
-  }
-
-  return true;
+  // El tilde JUSTIFICADO solo cuenta para enfermedad: la ANUAL COMPLEMENTARIA se carga en SIAP
+  // sin tildar aunque esté otorgada, así que coincide por mapeo + fechas como el resto.
+  return novedadesConectan(equivs, novSN);
 }
 async function parseMinisterio(fp: string): Promise<any[]> {
   const wb = await loadWorkbook(fp);
@@ -992,6 +989,96 @@ function compareRowsSiapVsMinisterio(
 
   return out;
 }
+// Período pedido: rango libre desde/hasta (YYYY-MM-DD, puede cruzar meses) o, si no, el mes de `periodo`.
+function periodoDeQuery(q: any): { start: Date; end: Date } | null {
+  const iso = (v: any) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : null);
+  const desde = iso(q?.desde);
+  const hasta = iso(q?.hasta) ?? desde;
+  if (desde && hasta) {
+    const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
+    const toUtc = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+    return { start: toUtc(a), end: toUtc(b) };
+  }
+  return q?.periodo ? parsePeriodoMes(String(q.periodo)) : null;
+}
+
+// Población de Reconocimientos Médicos (Salud Laboral): becados = algún tramo en agentes con ley 6–13.
+// ACTIVO = tramo becado vigente (se le puede asignar turno); BAJA = ex-becado (solo consulta).
+// Mismas reglas que SaludLaboralPage (LEYES_BECADOS). Se exporta para validar los turnos.
+export const LEYES_BECADOS = [6, 7, 8, 9, 10, 11, 12, 13];
+export async function buscarBecados(
+  sequelize: import('sequelize').Sequelize | undefined,
+  dnis: string[],
+): Promise<Map<string, 'ACTIVO' | 'BAJA'>> {
+  const out = new Map<string, 'ACTIVO' | 'BAJA'>();
+  const nums = [...new Set(dnis.map(d => Number(d)).filter(n => n > 0))];
+  if (!sequelize || nums.length === 0) return out;
+  try {
+    const [rows] = await sequelize.query(
+      `SELECT dni, MAX(estado_empleo = 'ACTIVO') AS activo
+         FROM agentes
+        WHERE dni IN (${nums.map(() => '?').join(',')})
+          AND ley_id IN (${LEYES_BECADOS.join(',')})
+          AND deleted_at IS NULL
+        GROUP BY dni`,
+      { replacements: nums },
+    ) as [any[], unknown];
+    for (const r of rows) out.set(normDni(String(r.dni)), Number(r.activo) === 1 ? 'ACTIVO' : 'BAJA');
+  } catch (e: any) {
+    logger.warn({ msg: 'asistencia: error consultando becados', error: e?.message });
+  }
+  return out;
+}
+
+// Licencias que dio la médica de Salud Laboral (grilla Reconocimientos → reconocimientos_medicos)
+// para cada "dni|YYYY-MM-DD" de las filas. Si falla la consulta devuelve el mapa vacío.
+type LicMedica = { id: number; desde: string; hasta: string | null; tipo: string | null; resultado: string | null };
+async function buscarLicenciasMedicas(
+  sequelize: import('sequelize').Sequelize | undefined,
+  rows: Array<{ dni: string; fecha: string }>,
+): Promise<Map<string, LicMedica>> {
+  const out = new Map<string, LicMedica>();
+  if (!sequelize || rows.length === 0) return out;
+  try {
+    const dnis = [...new Set(rows.map(r => r.dni))];
+    const fechas = rows.map(r => r.fecha);
+    const minF = fechas.reduce((a, b) => (a < b ? a : b));
+    const maxF = fechas.reduce((a, b) => (a > b ? a : b));
+    const [recRows] = await sequelize.query(
+      `SELECT id, dni,
+              DATE_FORMAT(fecha_desde, '%Y-%m-%d') AS fecha_desde,
+              DATE_FORMAT(fecha_hasta, '%Y-%m-%d') AS fecha_hasta,
+              tipo, resultado
+         FROM reconocimientos_medicos
+        WHERE dni IN (${dnis.map(() => '?').join(',')})
+          AND deleted_at IS NULL
+          AND fecha_desde <= ?
+          AND (fecha_hasta >= ? OR fecha_hasta IS NULL)
+        ORDER BY fecha_desde DESC, id DESC`,
+      { replacements: [...dnis, maxF, minF] },
+    ) as [any[], unknown];
+    for (const rec of recRows) {
+      const dniRec = normDni(String(rec.dni));
+      const desde  = String(rec.fecha_desde ?? '').slice(0, 10);
+      const hasta  = rec.fecha_hasta ? String(rec.fecha_hasta).slice(0, 10) : maxF;
+      for (const row of rows) {
+        if (row.dni !== dniRec || row.fecha < desde || row.fecha > hasta) continue;
+        const key = `${row.dni}|${row.fecha}`;
+        if (!out.has(key)) {
+          out.set(key, {
+            id: Number(rec.id), desde, hasta: rec.fecha_hasta ? hasta : null,
+            tipo: String(rec.tipo ?? '').trim() || null,
+            resultado: String(rec.resultado ?? '').trim() || null,
+          });
+        }
+      }
+    }
+  } catch (e: any) {
+    logger.warn({ msg: 'asistencia: error consultando reconocimientos_medicos', error: e?.message });
+  }
+  return out;
+}
+
 export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize) {
   const router = Router();
 
@@ -1014,8 +1101,11 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
   router.get('/mapeo', requirePermission('api:access'), async (_req: Request, res: Response) => {
     try {
       if (!sequelize) throw new Error('Sin conexión a DB');
-      const mapeo = await loadMapeoTabla(sequelize);
-      return res.json({ ok: true, mapeo });
+      // el editor edita solo las reglas generales; las de CIE van aparte (pestaña "Por CIE")
+      // para que "Guardar" nunca las convierta en generales
+      const mapeo = await loadMapeoGeneral(sequelize);
+      const reglasCie = await listReglasCie(sequelize);
+      return res.json({ ok: true, mapeo, reglasCie });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }
@@ -1045,6 +1135,68 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
+
+  // ── Reglas por CIE: ENFERMEDAD + CIE -> se carga como 1R / 1RC / ... ──
+  router.get('/mapeo-cie', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      if (!sequelize) throw new Error('Sin conexion a DB');
+      return res.json({ ok: true, reglas: await listReglasCie(sequelize) });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  router.post('/mapeo-cie', requirePermission('api:access'), async (req: Request, res: Response) => {
+    try {
+      if (!sequelize) throw new Error('Sin conexion a DB');
+      const { novedad_siape, novedad_ministerio } = req.body || {};
+      const raw = req.body?.cies;
+      const cies: string[] = Array.isArray(raw) ? raw : String(raw || '').split(/[,;\s]+/);
+      const r = await addReglasCie(sequelize, novedad_siape, cies, novedad_ministerio);
+      return res.json({ ok: true, ...r, reglas: await listReglasCie(sequelize) });
+    } catch (err: any) {
+      return res.status(400).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  router.delete('/mapeo-cie/:id', requirePermission('api:access'), async (req: Request, res: Response) => {
+    try {
+      if (!sequelize) throw new Error('Sin conexion a DB');
+      const ok = await bajaReglaCie(sequelize, Number(req.params.id));
+      if (!ok) return res.status(404).json({ ok: false, error: 'Regla no encontrada' });
+      return res.json({ ok: true, reglas: await listReglasCie(sequelize) });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // CIE que aparecen en LICENCIAS_MEDICAS.xlsx (export SIAPE) para una novedad,
+  // con diagnostico y cantidad: ayuda para elegir cuales van como 1R / 1RC.
+  router.get('/mapeo-cie/codigos', requirePermission('api:access'), async (req: Request, res: Response) => {
+    try {
+      if (!XLSX_SJS) throw new Error('Falta dependencia "xlsx"');
+      const dir = getDir();
+      const lic = fs.readdirSync(dir).find(f => /\.xls[xm]?$/i.test(f) && !f.startsWith('~$') && /licencias?_?medicas/i.test(f));
+      if (!lic) return res.json({ ok: true, archivo: null, codigos: [] });
+      const nov = normNovedad(String(req.query.novedad || 'ENFERMEDAD'));
+      const wb = XLSX_SJS.readFile(path.join(dir, lic), { cellDates: false });
+      const rows: any[] = XLSX_SJS.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
+      const agg = new Map<string, { codigo: string; diagnostico: string; cantidad: number }>();
+      for (const r of rows) {
+        if (normNovedad(String(r.NOVEDAD || '')) !== nov) continue;
+        const codigo = normCie(r.CODIGO_OMS);
+        if (!codigo || codigo === '66666666' || !/[A-Z0-9]/.test(codigo)) continue;
+        const a = agg.get(codigo) || { codigo, diagnostico: String(r.DIAGNOSTICO || '').trim(), cantidad: 0 };
+        a.cantidad++;
+        if (!a.diagnostico && r.DIAGNOSTICO) a.diagnostico = String(r.DIAGNOSTICO).trim();
+        agg.set(codigo, a);
+      }
+      const codigos = [...agg.values()].sort((a, b) => b.cantidad - a.cantidad);
+      return res.json({ ok: true, archivo: lic, codigos });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
 
   router.get('/novedades', requirePermission('api:access'), async (req: Request, res: Response) => {
     if (!ExcelJS) {
@@ -1260,7 +1412,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         : autoHorarios?.fullPath ?? null;
 
       // â”€â”€ Periodo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      const period = req.query.periodo ? parsePeriodoMes(String(req.query.periodo)) : null;
+      const period = periodoDeQuery(req.query);
 
       // â”€â”€ 1. Leer MINISTERIO â†’ solo novedad 28 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const allMin = await parseMinisterio(ministerioFile);
@@ -1332,7 +1484,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       // â”€â”€ 3. Expandir rangos a dÃ­as individuales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // DOW (getUTCDay): 0=dom, 1=lun, 2=mar, 3=mie, 4=jue, 5=vie, 6=sab
       const DOW_KEYS: (keyof HorarioDia)[] = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
-      const DOW_LABELS = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
+      const DOW_LABELS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
       // â”€â”€ 3b. Leer SIAP (opcional) â†’ mapa DNI â†’ rangos con novedad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const autoSiap = files.find(f => f.name.toLowerCase().includes('siap'));
@@ -1481,39 +1633,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       }
 
       // â”€â”€ 5. Consultar reconocimientos_medicos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // recMedicoMap: "dni|YYYY-MM-DD" â†’ tipo (o "" si no tiene tipo)
-      const recMedicoMap = new Map<string, string>();
-      if (sequelize && expanded.length > 0) {
-        try {
-          const allDnisRec = [...new Set(expanded.map(r => r.dni))];
-          const allDatesRec = expanded.map(r => r.fecha);
-          const minDateRec = allDatesRec.reduce((a, b) => (a < b ? a : b));
-          const maxDateRec = allDatesRec.reduce((a, b) => (a > b ? a : b));
-          const [recRows] = await sequelize.query(
-            `SELECT dni, fecha_desde, fecha_hasta, tipo
-               FROM reconocimientos_medicos
-              WHERE dni IN (${allDnisRec.map(() => '?').join(',')})
-                AND fecha_desde <= ?
-                AND (fecha_hasta >= ? OR fecha_hasta IS NULL)`,
-            { replacements: [...allDnisRec, maxDateRec, minDateRec] },
-          ) as [any[], unknown];
-          for (const rec of recRows) {
-            const dniRec   = normDni(String(rec.dni));
-            const desde    = String(rec.fecha_desde ?? '').slice(0, 10);
-            const hasta    = rec.fecha_hasta ? String(rec.fecha_hasta).slice(0, 10) : maxDateRec;
-            const tipoRec  = String(rec.tipo ?? '').trim();
-            for (const row of expanded) {
-              if (row.dni !== dniRec) continue;
-              if (row.fecha >= desde && row.fecha <= hasta) {
-                const key = `${row.dni}|${row.fecha}`;
-                if (!recMedicoMap.has(key)) recMedicoMap.set(key, tipoRec);
-              }
-            }
-          }
-        } catch (e: any) {
-          logger.warn({ msg: 'ausentes28: error consultando reconocimientos_medicos', error: e?.message });
-        }
-      }
+      // licMedicaMap: "dni|YYYY-MM-DD" → licencia que dio la médica (grilla Reconocimientos de Salud Laboral)
+      const licMedicaMap = await buscarLicenciasMedicas(sequelize, expanded);
+      const becadosMap   = await buscarBecados(sequelize, expanded.map(r => r.dni));
 
       // â”€â”€ 6. Construir resultado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const data = expanded.map(r => {
@@ -1531,7 +1653,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           tieneFichaje:      fich !== undefined,
           entrada:           fich?.entrada ?? null,
           salida:            fich?.salida  ?? null,
-          recMedico:         recMedicoMap.has(recKey) ? (recMedicoMap.get(recKey) || 'SÃ­') : null,
+          recMedico:         licMedicaMap.has(recKey) ? (licMedicaMap.get(recKey)!.tipo || 'SÃ­') : null,
+          licMedica:         licMedicaMap.get(recKey) ?? null,
+          becado:            becadosMap.get(r.dni) ?? null,
         };
       });
 
@@ -1582,7 +1706,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         ? path.join(dir, String(req.query.horariosFile))
         : autoHorarios2?.fullPath ?? null;
 
-      const period = req.query.periodo ? parsePeriodoMes(String(req.query.periodo)) : null;
+      const period = periodoDeQuery(req.query);
 
       // tipo: 'ausente' (default) â†’ novedades AUSENTE (comportamiento histÃ³rico).
       //       'presente'          â†’ dÃ­as marcados PRESENTE por el jefe en SIAPE.
@@ -1594,7 +1718,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       // â”€â”€ 1. Leer SIAP â†’ expandir a dÃ­as individuales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const DOW_KEYS2 = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'] as const;
-      const DOW_LABELS2 = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
+      const DOW_LABELS2 = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
       let siapRaw = await parseSiap(siapFilePath);
       // deduplicar
@@ -1887,6 +2011,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         return diaEntrada[dow] !== null;
       };
 
+      const licMedicaMap2 = await buscarLicenciasMedicas(sequelize, expanded2);
+      const becadosMap2   = await buscarBecados(sequelize, expanded2.map(r => r.dni));
       const data2 = expanded2.map(r => {
         const fich   = fichajesMap2[r.dni]?.[r.fecha];
         const novMin = getMinisterioNovedad(r.dni, r.fecha);
@@ -1903,6 +2029,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           tieneFichaje:      fich !== undefined,
           entrada:           fich?.entrada ?? null,
           salida:            fich?.salida  ?? null,
+          licMedica:         licMedicaMap2.get(`${r.dni}|${r.fecha}`) ?? null,
+          becado:            becadosMap2.get(r.dni) ?? null,
         };
       });
 
@@ -1944,7 +2072,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const ministerioFilePath = req.query.ministerioFile
         ? path.join(dir, String(req.query.ministerioFile)) : auto.ministerio ?? null;
 
-      const DOW_LABELS3 = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
+      const DOW_LABELS3 = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
       // â”€â”€ Todos los dÃ­as del mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const dias: { fecha: string; diaSemana: string }[] = [];
@@ -2045,6 +2173,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       // â”€â”€ Horarios del agente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const DOW_HOR_KEYS = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
       const horarioPorDow: (string | null)[] = [null, null, null, null, null, null, null];
+      const horarioSemanal: { dow: number; entrada: string | null; salida: string | null; controlable: boolean }[] = [];
       const horariosFilePath2 = req.query.horariosFile
         ? path.join(dir, String(req.query.horariosFile))
         : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
@@ -2060,6 +2189,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           const colDniH2 = hdrH['nro_documento'] ?? hdrH['nro documento'] ?? hdrH['documento'] ?? 4;
           const colEnt  = DOW_HOR_KEYS.map(d => hdrH[`${d}_entrada`]       ?? 0);
           const colCtrl = DOW_HOR_KEYS.map(d => hdrH[`${d}_controlable`]   ?? 0);
+          const colSal  = DOW_HOR_KEYS.map(d => hdrH[`${d}_salida`]        ?? 0);
           const parseHoraH = (v: any): string | null => {
             const s = String(v ?? '').trim();
             const m = s.match(/^(\d{1,2}):(\d{2})/);
@@ -2072,7 +2202,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             for (let dow = 0; dow < 7; dow++) {
               const hora = colEnt[dow]  ? parseHoraH(r.getCell(colEnt[dow])?.value)  : null;
               const ctrl = colCtrl[dow] ? isSIH(r.getCell(colCtrl[dow])?.value)      : false;
-              horarioPorDow[dow] = hora ?? (ctrl ? 'SÃ­' : null);
+              const sal  = colSal[dow]  ? parseHoraH(r.getCell(colSal[dow])?.value)  : null;
+              horarioPorDow[dow] = hora ?? (ctrl ? 'Sí' : null);
+              if (hora || sal || ctrl) horarioSemanal.push({ dow, entrada: hora, salida: sal, controlable: ctrl });
             }
           });
         }
@@ -2111,7 +2243,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         if (found) nombre = String(found.nombre ?? '').trim();
       }
 
-      return res.json({ ok: true, dni, nombre, periodo: req.query.periodo, data, dbError: dbErr });
+      return res.json({ ok: true, dni, nombre, periodo: req.query.periodo, data, horarioSemanal, dbError: dbErr });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }
@@ -2632,7 +2764,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         allDias.push(cur.toISOString().slice(0,10));
         cur.setUTCDate(cur.getUTCDate() + 1);
       }
-      const DOW_LABELS_RS = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
+      const DOW_LABELS_RS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
       // â”€â”€ 6b. Post-procesamiento: turnos nocturnos y 24hs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // NO modifica fichajesMap. Construye fichajesNocturnoMap por encima,

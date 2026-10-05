@@ -14,6 +14,7 @@
 //     el comando nunca se edita desde acá.
 // GET  /script-runs/items?run_id= | script=&estado=&desde=&hasta=&limit=
 //   → detalle por agente/novedad (script_run_items): qué cargó y qué falló, con motivo.
+// GET  /script-runs/fallidos              → robots cuya ÚLTIMA corrida fue error (banner global)
 // POST /script-runs/ejecutar/:script      → corre ya (su tarea o run_robot.py directo)
 // POST /script-runs/deshabilitar-vieja/:script → deshabilita la tarea de Windows vieja
 //     (tarea_windows) para pasar el robot a su tarea propia sin que corra dos veces.
@@ -247,6 +248,26 @@ export function buildScriptRunsRouter(sequelize: Sequelize) {
         { type: QueryTypes.SELECT, replacements: repl },
       );
       return res.json({ ok: true, data });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Liviano (solo base, sin PowerShell): lo consulta el banner global cada pocos minutos.
+  router.get('/fallidos', requirePermission('crud:*:*'), async (_req: Request, res: Response) => {
+    try {
+      const rows = await sequelize.query<any>(
+        `SELECT sr.id AS run_id, sr.script, COALESCE(rc.descripcion, sr.descripcion, sr.script) AS descripcion,
+                sr.motivo, sr.actualizado_at, (rc.comando IS NOT NULL AND rc.comando <> '') AS lanzable
+           FROM script_runs sr
+           JOIN (SELECT script, MAX(id) AS max_id FROM script_runs GROUP BY script) last
+             ON last.script = sr.script AND last.max_id = sr.id
+           JOIN robots_config rc ON rc.script = sr.script AND rc.activo = 1
+          WHERE sr.estado = 'error'
+          ORDER BY rc.orden, sr.script`,
+        { type: QueryTypes.SELECT },
+      );
+      return res.json({ ok: true, data: rows.map(r => ({ ...r, lanzable: !!Number(r.lanzable) })) });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }

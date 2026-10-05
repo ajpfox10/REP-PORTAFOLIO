@@ -16,6 +16,7 @@ import { Router, Request, Response } from 'express';
 import { Sequelize, QueryTypes } from 'sequelize';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { invalidate, agenteTags, personalTags } from '../infra/invalidateOnWrite';
 
 const CENTINELA_ANIO = '1111';
 
@@ -31,7 +32,37 @@ const RESIDENCIAS_SEED: Array<{ nombre: string; anios: number; observaciones?: s
   { nombre: 'FONOAUDIOLOGIA', anios: 3 },
   { nombre: 'DERECHO Y SALUD', anios: 3, observaciones: 'Duracion a confirmar' },
   { nombre: 'PRE RESIDENTES', anios: 1, observaciones: 'Duracion a confirmar' },
+  { nombre: 'NEONATOLOGIA', anios: 4 },
+  { nombre: 'OBSTETRICIA', anios: 4 },
+  { nombre: 'BIOQUIMICA', anios: 3 },
+  { nombre: 'ENFERMERIA', anios: 3 },
+  { nombre: 'ENFERMERIA ESPECIALIZADA', anios: 3 },
 ];
+
+// Residencias que se agregaron despues del catalogo inicial (existian como
+// ocupaciones "RESIDENTE X n" pero no en el catalogo). Se insertan una sola vez,
+// cuando se agrega la columna ocupacion_jefe_id.
+const RESIDENCIAS_AGREGADAS = ['NEONATOLOGIA', 'OBSTETRICIA', 'BIOQUIMICA', 'ENFERMERIA', 'ENFERMERIA ESPECIALIZADA'];
+
+// Vinculo inicial residencia -> ocupacion "JEFE DE RESIDENTE(S) ..." (tabla ocupaciones).
+// Editable desde la pagina. TOCOGINECOLOGIA, DERECHO Y SALUD y PRE RESIDENTES no tienen cargo de jefe.
+const JEFE_OCUPACION_SEED: Record<string, number> = {
+  'TERAPIA INTENSIVA': 1197,
+  'CIRUGIA GENERAL': 1195,
+  'TRAUMATOLOGIA': 1188,
+  'CLINICA MEDICA': 1196,
+  'ANESTESIOLOGIA': 1204,
+  'TRABAJO SOCIAL': 1199,
+  'FONOAUDIOLOGIA': 1212,
+  'NEONATOLOGIA': 1170,
+  'OBSTETRICIA': 1175,
+  'BIOQUIMICA': 1198,
+  'ENFERMERIA': 1208,
+  'ENFERMERIA ESPECIALIZADA': 1216,
+};
+
+/** La jefatura de residentes dura 1 ciclo; al corte siguiente corresponde la baja. */
+const JEFATURA_ANIOS = 1;
 
 function normalizarResidencia(nombre: string): string {
   return String(nombre || '')
@@ -110,7 +141,9 @@ function getUser(req: Request) {
   };
 }
 
-export type EstadoResidente = 'CONTINUA' | 'DAR_DE_BAJA' | 'SIN_RESIDENCIA' | 'SIN_FECHA';
+export type EstadoResidente =
+  | 'CONTINUA' | 'DAR_DE_BAJA' | 'SIN_RESIDENCIA' | 'SIN_FECHA'
+  | 'JEFE' | 'FIN_JEFATURA';
 
 export function buildResidenciasRouter(sequelize: Sequelize) {
   const router = Router();
@@ -176,6 +209,57 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
       }
       logger.info({ msg: '[residencias] catalogo inicial cargado', residencias: RESIDENCIAS_SEED.length });
     }
+
+    await ensureJefatura();
+  }
+
+  async function columnaExiste(tabla: string, columna: string): Promise<boolean> {
+    const r = await sequelize.query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tabla AND COLUMN_NAME = :columna`,
+      { replacements: { tabla, columna }, type: QueryTypes.SELECT },
+    );
+    return Number(r[0]?.n) > 0;
+  }
+
+  // Jefatura de residentes: columnas y estado nuevos (idempotente, ver mig 057).
+  async function ensureJefatura() {
+    if (!(await columnaExiste('residencias', 'ocupacion_jefe_id'))) {
+      await sequelize.query(`ALTER TABLE residencias ADD COLUMN ocupacion_jefe_id INT NULL AFTER anios`);
+      // Primera vez: residencias que faltaban + vinculo con el cargo de jefe.
+      const catalogo = RESIDENCIAS_SEED.filter((r) => RESIDENCIAS_AGREGADAS.includes(r.nombre));
+      for (const r of catalogo) {
+        await sequelize.query(
+          `INSERT IGNORE INTO residencias (nombre, anios) VALUES (:nombre, :anios)`,
+          { replacements: { nombre: r.nombre, anios: r.anios } },
+        );
+      }
+      for (const [nombre, ocupacionId] of Object.entries(JEFE_OCUPACION_SEED)) {
+        await sequelize.query(
+          `UPDATE residencias SET ocupacion_jefe_id = :oid WHERE nombre = :nombre AND ocupacion_jefe_id IS NULL`,
+          { replacements: { nombre, oid: ocupacionId } },
+        );
+      }
+      logger.info({ msg: '[residencias] jefaturas vinculadas', residencias: Object.keys(JEFE_OCUPACION_SEED).length });
+    }
+    if (!(await columnaExiste('residentes_residencia', 'jefatura_desde'))) {
+      await sequelize.query(
+        `ALTER TABLE residentes_residencia
+           ADD COLUMN jefatura_desde DATE NULL AFTER fecha_inicio,
+           ADD COLUMN jefatura_ocupacion_id INT NULL AFTER jefatura_desde`,
+      );
+    }
+    const tipo = await sequelize.query<{ t: string }>(
+      `SELECT COLUMN_TYPE AS t FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'residencias_bajas' AND COLUMN_NAME = 'estado'`,
+      { type: QueryTypes.SELECT },
+    );
+    if (tipo[0]?.t && !tipo[0].t.includes("'JEFATURA'")) {
+      await sequelize.query(
+        `ALTER TABLE residencias_bajas
+           MODIFY estado ENUM('PENDIENTE','BAJA','NO_CORRESPONDE','JEFATURA') NOT NULL DEFAULT 'PENDIENTE'`,
+      );
+    }
   }
 
   function init() {
@@ -204,8 +288,11 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
     anios_residencia: number | null;
     anios_cumplidos: number | null;
     anio_en_curso: number | null;
+    ocupacion_jefe_id: number | null;
+    ocupacion_jefe_nombre: string | null;
+    jefatura_desde: string | null;
     estado: EstadoResidente;
-    baja_estado: 'PENDIENTE' | 'BAJA' | 'NO_CORRESPONDE' | null;
+    baja_estado: 'PENDIENTE' | 'BAJA' | 'NO_CORRESPONDE' | 'JEFATURA' | null;
     baja_fecha: string | null;
     baja_observaciones: string | null;
     baja_resuelto_por: string | null;
@@ -221,8 +308,9 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
           a.id AS agente_id, a.fecha_ingreso,
           oc.nombre AS ocupacion_nombre,
           COALESCE(srv.nombre, ags.nombre) AS servicio_nombre,
-          rr.residencia_id, rr.fecha_inicio,
+          rr.residencia_id, rr.fecha_inicio, rr.jefatura_desde,
           r.nombre AS residencia_nombre, r.anios AS anios_residencia,
+          r.ocupacion_jefe_id, ocj.nombre AS ocupacion_jefe_nombre,
           rb.estado AS baja_estado, rb.fecha_baja AS baja_fecha,
           rb.observaciones AS baja_observaciones, rb.resuelto_por_nombre AS baja_resuelto_por
         FROM personal p
@@ -243,6 +331,7 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
         LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
         LEFT JOIN residentes_residencia rr ON rr.dni = p.dni
         LEFT JOIN residencias r ON r.id = rr.residencia_id
+        LEFT JOIN ocupaciones ocj ON ocj.id = r.ocupacion_jefe_id
         LEFT JOIN residencias_bajas rb ON rb.dni = p.dni AND rb.ciclo = :ciclo
         WHERE p.deleted_at IS NULL
           AND a.estado_empleo = 'ACTIVO'
@@ -267,8 +356,13 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
       // Antiguedad: ciclos cerrados al corte.
       const aniosCumplidos = inicio ? ciclo - cicloDeIngreso(inicio) : null;
 
+      // Jefatura: dura JEFATURA_ANIOS ciclos contados desde que asumio.
+      const jefaturaDesde = fechaValida(r.jefatura_desde);
+      const aniosJefatura = jefaturaDesde ? ciclo - cicloDeIngreso(jefaturaDesde) : null;
+
       let estado: EstadoResidente;
-      if (!r.residencia_id || aniosResidencia == null) estado = 'SIN_RESIDENCIA';
+      if (jefaturaDesde) estado = (aniosJefatura as number) >= JEFATURA_ANIOS ? 'FIN_JEFATURA' : 'JEFE';
+      else if (!r.residencia_id || aniosResidencia == null) estado = 'SIN_RESIDENCIA';
       else if (aniosCumplidos == null) estado = 'SIN_FECHA';
       else if (aniosCumplidos >= aniosResidencia) estado = 'DAR_DE_BAJA';
       else estado = 'CONTINUA';
@@ -287,6 +381,9 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
         anios_residencia: aniosResidencia,
         anios_cumplidos: aniosCumplidos,
         anio_en_curso: aniosCumplidos == null ? null : Math.max(1, aniosCumplidos + 1),
+        ocupacion_jefe_id: r.ocupacion_jefe_id == null ? null : Number(r.ocupacion_jefe_id),
+        ocupacion_jefe_nombre: r.ocupacion_jefe_nombre ? String(r.ocupacion_jefe_nombre).trim() : null,
+        jefatura_desde: jefaturaDesde,
         estado,
         baja_estado: r.baja_estado ?? null,
         baja_fecha: r.baja_fecha ? String(r.baja_fecha).slice(0, 10) : null,
@@ -298,10 +395,15 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
     return { ciclo, fechaCorte, hoy, avisoDias: dias, residentes };
   }
 
+  /** Termino la residencia (o la jefatura) y hay que resolverlo en este ciclo. */
+  function correspondeBaja(r: FilaResidente) {
+    return r.estado === 'DAR_DE_BAJA' || r.estado === 'FIN_JEFATURA';
+  }
+
   /** Deja como PENDIENTE a los que cumplieron la residencia en este ciclo. */
   async function sembrarPendientes(ciclo: number, fechaCorte: string, residentes: FilaResidente[]) {
     for (const r of residentes) {
-      if (r.estado !== 'DAR_DE_BAJA' || r.baja_estado) continue;
+      if (!correspondeBaja(r) || r.baja_estado) continue;
       await sequelize.query(
         `INSERT INTO residencias_bajas
            (dni, ciclo, residencia_id, residencia_nombre, anios_cumplidos, anios_residencia, fecha_corte, estado)
@@ -327,8 +429,10 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
       await init();
       const rows = await sequelize.query<any>(
         `SELECT r.id, r.nombre, r.anios, r.activa, r.observaciones,
+                r.ocupacion_jefe_id, TRIM(ocj.nombre) AS ocupacion_jefe_nombre,
                 (SELECT COUNT(*) FROM residentes_residencia rr WHERE rr.residencia_id = r.id) AS residentes
          FROM residencias r
+         LEFT JOIN ocupaciones ocj ON ocj.id = r.ocupacion_jefe_id
          ORDER BY r.activa DESC, r.nombre ASC`,
         { type: QueryTypes.SELECT },
       );
@@ -384,6 +488,12 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
         sets.push('anios = :anios'); rep.anios = anios;
       }
       if (req.body?.activa !== undefined) { sets.push('activa = :activa'); rep.activa = req.body.activa ? 1 : 0; }
+      if (req.body?.ocupacion_jefe_id !== undefined) {
+        const oid = req.body.ocupacion_jefe_id == null || req.body.ocupacion_jefe_id === ''
+          ? null : Number(req.body.ocupacion_jefe_id);
+        if (oid != null && !Number.isFinite(oid)) return res.status(400).json({ ok: false, error: 'Cargo de jefe invalido' });
+        sets.push('ocupacion_jefe_id = :oid'); rep.oid = oid;
+      }
       if (req.body?.observaciones !== undefined) {
         sets.push('observaciones = :obs');
         rep.obs = req.body.observaciones ? String(req.body.observaciones).slice(0, 500) : null;
@@ -411,6 +521,22 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[residencias] desactivar error', error: err?.message });
       return res.status(500).json({ ok: false, error: err?.message || 'Error desactivando la residencia' });
+    }
+  });
+
+  // ── Cargos de jefe de residentes (ocupaciones) ─────────────────────────────
+  router.get('/ocupaciones-jefe', async (_req: Request, res: Response) => {
+    try {
+      const rows = await sequelize.query<any>(
+        `SELECT id, TRIM(nombre) AS nombre FROM ocupaciones
+         WHERE deleted_at IS NULL AND nombre LIKE '%JEF%RESID%'
+         ORDER BY nombre ASC`,
+        { type: QueryTypes.SELECT },
+      );
+      return res.json({ ok: true, data: rows });
+    } catch (err: any) {
+      logger.error({ msg: '[residencias] ocupaciones-jefe error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error listando cargos de jefe' });
     }
   });
 
@@ -459,8 +585,9 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
       const totales = {
         residentes: calc.residentes.length,
         continuan: calc.residentes.filter((r) => r.estado === 'CONTINUA').length,
-        darDeBaja: calc.residentes.filter((r) => r.estado === 'DAR_DE_BAJA' && r.baja_estado !== 'BAJA').length,
+        darDeBaja: calc.residentes.filter((r) => correspondeBaja(r) && !r.baja_estado?.match(/^(BAJA|JEFATURA)$/)).length,
         dadosDeBaja: calc.residentes.filter((r) => r.baja_estado === 'BAJA').length,
+        jefes: calc.residentes.filter((r) => r.estado === 'JEFE' || r.estado === 'FIN_JEFATURA').length,
         sinResidencia: calc.residentes.filter((r) => r.estado === 'SIN_RESIDENCIA').length,
         sinFecha: calc.residentes.filter((r) => r.estado === 'SIN_FECHA').length,
       };
@@ -470,7 +597,7 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
         const key = r.residencia_nombre || 'SIN RESIDENCIA';
         const cur = porResidencia.get(key) || { residencia: key, anios: r.anios_residencia, total: 0, darDeBaja: 0 };
         cur.total += 1;
-        if (r.estado === 'DAR_DE_BAJA' && r.baja_estado !== 'BAJA') cur.darDeBaja += 1;
+        if (correspondeBaja(r) && !r.baja_estado?.match(/^(BAJA|JEFATURA)$/)) cur.darDeBaja += 1;
         porResidencia.set(key, cur);
       }
 
@@ -494,7 +621,7 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
       const calc = await calcular(null);
       await sembrarPendientes(calc.ciclo, calc.fechaCorte, calc.residentes);
       const pendientes = calc.residentes.filter(
-        (r) => r.estado === 'DAR_DE_BAJA' && r.baja_estado !== 'BAJA' && r.baja_estado !== 'NO_CORRESPONDE',
+        (r) => correspondeBaja(r) && (!r.baja_estado || r.baja_estado === 'PENDIENTE'),
       );
       return res.json({
         ok: true,
@@ -559,6 +686,134 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
       await t.rollback();
       logger.error({ msg: '[residencias] baja error', error: err?.message });
       return res.status(500).json({ ok: false, error: err?.message || 'Error dando de baja al residente' });
+    }
+  });
+
+  // ── Pasar a jefatura de residentes ─────────────────────────────────────────
+  // Hito de carrera (igual que el cambio de ocupacion): cierra el tramo vigente
+  // con estado CAMBIO DE OCUPACION y abre uno nuevo ACTIVO al dia siguiente con
+  // los mismos datos laborales y la ocupacion "JEFE DE RESIDENTE(S) ...".
+  // No usa AgenteService.alta() porque reescribe la tabla personal con el DTO.
+  // El servicio/sector no se tocan: siguen abiertos por DNI.
+  router.post('/jefatura/:dni', async (req: Request, res: Response) => {
+    const user = getUser(req);
+    const t = await sequelize.transaction();
+    try {
+      await init();
+      const dni = Number(req.params.dni);
+      if (!Number.isFinite(dni)) { await t.rollback(); return res.status(400).json({ ok: false, error: 'DNI invalido' }); }
+
+      const { ciclo, fechaCorte } = resolverCiclo(req.body?.ciclo ? Number(req.body.ciclo) : null);
+      const fechaCierre = fechaValida(req.body?.fecha_cierre) || fechaCorte;
+      const [y, m, d] = fechaCierre.split('-').map(Number);
+      const sig = new Date(y, m - 1, d + 1);
+      const fechaJefatura = fechaLocal(sig.getFullYear(), sig.getMonth() + 1, sig.getDate());
+
+      const asignacion = await sequelize.query<any>(
+        `SELECT rr.residencia_id, rr.jefatura_desde, r.nombre, r.ocupacion_jefe_id
+         FROM residentes_residencia rr JOIN residencias r ON r.id = rr.residencia_id
+         WHERE rr.dni = :dni`,
+        { replacements: { dni }, type: QueryTypes.SELECT, transaction: t },
+      );
+      if (!asignacion[0]) {
+        await t.rollback();
+        return res.status(409).json({ ok: false, error: 'El agente no tiene una residencia asignada.' });
+      }
+      if (asignacion[0].jefatura_desde) {
+        await t.rollback();
+        return res.status(409).json({ ok: false, error: 'El agente ya es jefe de residentes.' });
+      }
+
+      const ocupacionId = req.body?.ocupacion_id ? Number(req.body.ocupacion_id) : Number(asignacion[0].ocupacion_jefe_id);
+      if (!Number.isFinite(ocupacionId) || ocupacionId <= 0) {
+        await t.rollback();
+        return res.status(400).json({
+          ok: false,
+          error: `La residencia ${asignacion[0].nombre} no tiene cargo de jefe vinculado: elegilo en el modal o en el catalogo.`,
+        });
+      }
+      const ocup = await sequelize.query<{ id: number }>(
+        `SELECT id FROM ocupaciones WHERE id = :id AND deleted_at IS NULL`,
+        { replacements: { id: ocupacionId }, type: QueryTypes.SELECT, transaction: t },
+      );
+      if (!ocup[0]) { await t.rollback(); return res.status(400).json({ ok: false, error: 'El cargo de jefe no existe.' }); }
+
+      const vigente = await sequelize.query<{ id: number; fecha_ingreso: string | null }>(
+        `SELECT id, fecha_ingreso FROM agentes
+         WHERE dni = :dni AND deleted_at IS NULL AND estado_empleo = 'ACTIVO' AND fecha_egreso IS NULL
+         ORDER BY id DESC LIMIT 1`,
+        { replacements: { dni }, type: QueryTypes.SELECT, transaction: t },
+      );
+      if (!vigente[0]?.id) {
+        await t.rollback();
+        return res.status(409).json({ ok: false, error: `El DNI ${dni} no tiene un tramo activo.` });
+      }
+      const ingresoVigente = fechaValida(vigente[0].fecha_ingreso);
+      if (ingresoVigente && fechaCierre < ingresoVigente) {
+        await t.rollback();
+        return res.status(400).json({ ok: false, error: `La fecha de cierre es anterior al ingreso del tramo (${ingresoVigente}).` });
+      }
+
+      // 1. Cierra la residencia.
+      await sequelize.query(
+        `UPDATE agentes SET estado_empleo = 'CAMBIO DE OCUPACION', fecha_egreso = :cierre,
+                updated_by = :uid, updated_at = NOW()
+         WHERE id = :id`,
+        { replacements: { cierre: fechaCierre, id: vigente[0].id, uid: user.id }, transaction: t },
+      );
+
+      // 2. Abre la jefatura copiando los datos laborales del tramo cerrado.
+      const [ins]: any = await sequelize.query(
+        `INSERT INTO agentes
+           (dni, planta_id, categoria_id, ocupacion_id, regimen_horario_id, ley_id, jefatura_id,
+            fecha_ingreso, fecha_egreso, fecha_de_nombramiento, fecha_de_tituralizacion, estado_empleo,
+            salario_mensual, legajo, estado, funcion_id, decreto_designacion, created_by, created_at, updated_at)
+         SELECT dni, planta_id, categoria_id, :ocup, regimen_horario_id, ley_id, jefatura_id,
+                :ingreso, NULL, fecha_de_nombramiento, fecha_de_tituralizacion, 'ACTIVO',
+                salario_mensual, legajo, estado, funcion_id, decreto_designacion, :uid, NOW(), NOW()
+         FROM agentes WHERE id = :id`,
+        { replacements: { ocup: ocupacionId, ingreso: fechaJefatura, id: vigente[0].id, uid: user.id }, transaction: t },
+      );
+
+      // 3. Marca la jefatura en la asignacion. Si la residencia no tenia fecha de
+      //    inicio propia se fija la del tramo cerrado, para no perder la antiguedad.
+      await sequelize.query(
+        `UPDATE residentes_residencia
+            SET jefatura_desde = :desde, jefatura_ocupacion_id = :ocup,
+                fecha_inicio = COALESCE(fecha_inicio, :inicio)
+          WHERE dni = :dni`,
+        { replacements: { dni, desde: fechaJefatura, ocup: ocupacionId, inicio: ingresoVigente }, transaction: t },
+      );
+
+      // 4. Resuelve la pendiente del ciclo (el banner deja de mostrarlo).
+      await sequelize.query(
+        `INSERT INTO residencias_bajas
+           (dni, ciclo, fecha_corte, estado, fecha_baja, observaciones, resuelto_por, resuelto_por_nombre, resuelto_at)
+         VALUES (:dni, :ciclo, :corte, 'JEFATURA', :cierre, :obs, :uid, :unombre, NOW())
+         ON DUPLICATE KEY UPDATE estado = 'JEFATURA', fecha_baja = VALUES(fecha_baja),
+                                 observaciones = VALUES(observaciones), resuelto_por = VALUES(resuelto_por),
+                                 resuelto_por_nombre = VALUES(resuelto_por_nombre), resuelto_at = NOW()`,
+        {
+          replacements: {
+            dni, ciclo, corte: fechaCorte, cierre: fechaCierre,
+            obs: req.body?.observaciones ? String(req.body.observaciones).slice(0, 500) : null,
+            uid: user.id, unombre: user.nombre,
+          },
+          transaction: t,
+        },
+      );
+
+      await t.commit();
+      await invalidate([...personalTags.all(dni), ...agenteTags.all(dni)], 'residencias.jefatura');
+      logger.info({ msg: '[residencias] pase a jefatura', dni, ciclo, cierre: fechaCierre, desde: fechaJefatura, ocupacionId, actor: user.id });
+      return res.json({
+        ok: true,
+        data: { dni, ciclo, fecha_cierre: fechaCierre, jefatura_desde: fechaJefatura, ocupacion_id: ocupacionId, agente_id: ins ?? null },
+      });
+    } catch (err: any) {
+      await t.rollback();
+      logger.error({ msg: '[residencias] jefatura error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error pasando a jefatura' });
     }
   });
 

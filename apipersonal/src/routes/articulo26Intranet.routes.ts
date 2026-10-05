@@ -1,12 +1,17 @@
 // src/routes/articulo26Intranet.routes.ts
-// Módulo "Art. 26 → Ministerio (FC)". Espeja el patrón de comparacion-siape:
-//   GET  /api/v1/articulo-26-intranet/control    → cruza articulo_26 (todos los estados) contra
-//                                                   el historial de la Intranet y el log de carga.
-//   POST /api/v1/articulo-26-intranet/generar-excel → escribe el Excel que consume el robot Playwright.
-//   GET  /api/v1/articulo-26-intranet/export.xlsx  → descarga ese mismo Excel.
+// Módulo "Art. 26 → Ministerio (FC)" — versión 2.0 (tablas):
+//   GET  /api/v1/articulo-26-intranet/control     → cruza articulo_26 contra el resultado de la carga
+//                                                    (tabla art26_carga_intranet) y, si está, el
+//                                                    historial de la Intranet (historial_intranet.xlsx).
+//   POST /api/v1/articulo-26-intranet/lanzar      → { dependencia } corre el robot 2.0 de esa dependencia.
+//   POST /api/v1/articulo-26-intranet/reintentar  → { ids } vuelve a PENDIENTE esos Art. 26 con error
+//                                                    (olvida las dependencias descartadas) y lanza los robots.
+//   GET  /api/v1/articulo-26-intranet/export.xlsx → descarga del listado (para mirar en Excel).
 //
-// El robot es scripts/cargar_art26_intranet.py, que carga cada fila como novedad
-// FC / FRANCO COMPENSATORIO en la Intranet MS y deja el log en <ART26_DIR>\resultado_carga_art26.xlsx.
+// El robot es scripts/cargar_art26_intranet_v2.py: toma los Art. 26 de la base, los carga como
+// FC / FRANCO COMPENSATORIO y anota cada resultado en art26_carga_intranet.
+// SIN USO (versión vieja): POST /generar-excel + scripts/cargar_art26_intranet.py con su
+// resultado_carga_art26.xlsx.
 
 import { Router, Request, Response } from 'express';
 import path from 'path';
@@ -15,6 +20,7 @@ import { Sequelize, QueryTypes } from 'sequelize';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { ejecutarAhora } from '../services/robotsTareasWindows';
 
 let XLSX: any;
 try { XLSX = require('xlsx'); } catch { XLSX = null; }
@@ -66,7 +72,38 @@ function art26Dir(): string {
 }
 const EXPORT_NAME    = 'art26_export.xlsx';
 const HISTORIAL_NAME = 'historial_intranet.xlsx';
-const LOG_NAME       = 'resultado_carga_art26.xlsx';
+const TABLA_CARGA    = 'art26_carga_intranet';
+const SUFIJO_DEP: Record<string, string> = { 'HOSPITAL': 'hospital', 'UPA 4': 'upa4', 'UPA 18': 'upa18' };
+const ESTADOS_NO_SE_CARGAN = ['ANULADO', 'RECHAZADO'];
+
+// Misma DDL que cargar_art26_intranet_v2.py / migración 064 (se crea sola en runtime).
+async function ensureTablaCarga(sequelize: Sequelize) {
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS ${TABLA_CARGA} (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      art26_id BIGINT UNSIGNED NOT NULL,
+      dni VARCHAR(12) NOT NULL,
+      nombre VARCHAR(160) NOT NULL DEFAULT '',
+      desde DATE NOT NULL,
+      hasta DATE NOT NULL,
+      estado_art26 VARCHAR(20) NOT NULL DEFAULT '',
+      dependencia_sugerida VARCHAR(20) NOT NULL DEFAULT 'HOSPITAL',
+      deps_descartadas VARCHAR(60) NOT NULL DEFAULT '',
+      dependencia VARCHAR(20) NULL,
+      estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+      label_intranet VARCHAR(200) NULL,
+      detalle VARCHAR(500) NULL,
+      intentos INT NOT NULL DEFAULT 0,
+      cargado_en DATETIME NULL,
+      creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_art26_carga_intranet__art26 (art26_id),
+      KEY idx_art26_carga_intranet__estado (estado, dependencia_sugerida),
+      CONSTRAINT fk_art26_carga_intranet__art26 FOREIGN KEY (art26_id)
+        REFERENCES articulo_26 (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+}
 
 // ── Modelo de fila ──────────────────────────────────────────────────────────
 
@@ -86,8 +123,11 @@ interface Art26Row {
   observaciones: string;
   estado: string;        // estado del Art.26 (PENDIENTE/APROBADO/...)
   jefe_nombre: string;
-  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR';
+  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR' | 'NO_SE_CARGA';
   detalle_ms: string;
+  carga_id: number | null;     // fila de art26_carga_intranet (para reintentar)
+  dependencia: string;         // donde se cargó / intentó
+  intentos: number;
 }
 
 async function fetchArt26(sequelize: Sequelize): Promise<Art26Row[]> {
@@ -122,6 +162,9 @@ async function fetchArt26(sequelize: Sequelize): Promise<Art26Row[]> {
       jefe_nombre: String(r.jefe_nombre ?? '').trim(),
       estado_ms: 'PENDIENTE',
       detalle_ms: '',
+      carga_id: null,
+      dependencia: '',
+      intentos: 0,
     };
   });
 }
@@ -165,24 +208,19 @@ function leerHistorial(fp: string): HistItem[] {
   }
 }
 
-// ── Lectura del log de carga del robot (opcional) ────────────────────────────
+// ── Resultado de la carga 2.0 (tabla) ────────────────────────────────────────
 
-interface LogItem { dni: string; desde: string; hasta: string; estado: string; detalle: string; }
+interface CargaItem { id: number; art26_id: number; estado: string; detalle: string; dependencia: string; intentos: number; }
 
-function leerLog(fp: string): LogItem[] {
-  if (!XLSX || !fs.existsSync(fp)) return [];
-  try {
-    const wb = XLSX.readFile(fp, { cellDates: false, raw: true });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const arr: any[] = XLSX.utils.sheet_to_json(ws, { raw: true });
-    return arr.map(r => ({
-      dni: normDni(r.DNI ?? r.dni),
-      desde: String(r.Desde ?? r.desde ?? '').trim(),
-      hasta: String(r.Hasta ?? r.hasta ?? '').trim(),
-      estado: String(r.Estado ?? r.estado ?? '').trim().toUpperCase(),
-      detalle: String(r.Detalle ?? r.detalle ?? '').trim(),
-    }));
-  } catch { return []; }
+async function leerCarga(sequelize: Sequelize): Promise<Record<number, CargaItem>> {
+  await ensureTablaCarga(sequelize);
+  const rows = await sequelize.query<any>(`
+    SELECT id, art26_id, estado, COALESCE(detalle, '') AS detalle,
+           COALESCE(dependencia, dependencia_sugerida) AS dependencia, intentos
+      FROM ${TABLA_CARGA}`, { type: QueryTypes.SELECT });
+  const out: Record<number, CargaItem> = {};
+  for (const r of rows) out[Number(r.art26_id)] = { ...r, id: Number(r.id), art26_id: Number(r.art26_id) };
+  return out;
 }
 
 // ── Construcción del Excel para el robot ─────────────────────────────────────
@@ -219,19 +257,26 @@ export function buildArticulo26IntranetRouter(sequelize: Sequelize) {
 
       const dir = art26Dir();
       const historial = leerHistorial(path.join(dir, HISTORIAL_NAME));
-      const log = leerLog(path.join(dir, LOG_NAME));
+      const carga = await leerCarga(sequelize);
 
       const histByDni: Record<string, HistItem[]> = {};
       for (const h of historial) if (h.dni) (histByDni[h.dni] = histByDni[h.dni] || []).push(h);
-      const logByClave: Record<string, LogItem> = {};
-      for (const l of log) logByClave[`${l.dni}|${l.desde}|${l.hasta}`] = l;
 
       for (const r of rows) {
-        // 1) log del robot manda: si quedó OK ya está cargado; si ERROR, se marca
-        const lg = logByClave[`${r.dni}|${r.desde_ddmm}|${r.hasta_ddmm}`];
-        if (lg) {
-          if (lg.estado === 'OK') { r.estado_ms = 'YA_EN_MS'; r.detalle_ms = lg.detalle || 'Cargado por el robot'; continue; }
-          r.estado_ms = 'ERROR'; r.detalle_ms = lg.detalle || 'El robot no pudo cargarla'; continue;
+        if (ESTADOS_NO_SE_CARGAN.includes(r.estado.toUpperCase())) {
+          r.estado_ms = 'NO_SE_CARGA'; r.detalle_ms = `Art. 26 ${r.estado.toLowerCase()}: no se carga`; continue;
+        }
+        if (!r.desde || r.desde.getUTCFullYear() < 2000) {   // mismo corte que el robot (fecha mal cargada)
+          r.estado_ms = 'NO_SE_CARGA'; r.detalle_ms = `Fecha inválida (${r.desde_ddmm || 'sin fecha'}): corregir el Art. 26`; continue;
+        }
+        // 1) el resultado del robot manda: OK = ya está cargado; error = se marca con su motivo
+        const cg = carga[r.id];
+        if (cg) {
+          r.carga_id = cg.id; r.dependencia = cg.dependencia; r.intentos = cg.intentos;
+          if (cg.estado === 'OK') { r.estado_ms = 'YA_EN_MS'; r.detalle_ms = cg.detalle || 'Cargado por el robot'; continue; }
+          if (cg.estado !== 'PENDIENTE' && cg.estado !== 'BAJA') {
+            r.estado_ms = 'ERROR'; r.detalle_ms = cg.detalle || 'El robot no pudo cargarla'; continue;
+          }
         }
         // 2) historial de la Intranet
         if (r.desde && r.hasta) {
@@ -258,6 +303,7 @@ export function buildArticulo26IntranetRouter(sequelize: Sequelize) {
         ya_en_ms:  rows.filter(r => r.estado_ms === 'YA_EN_MS').length,
         conflicto: rows.filter(r => r.estado_ms === 'CONFLICTO').length,
         error:     rows.filter(r => r.estado_ms === 'ERROR').length,
+        no_se_carga: rows.filter(r => r.estado_ms === 'NO_SE_CARGA').length,
         por_estado_art26: rows.reduce((acc: Record<string, number>, r) => {
           acc[r.estado || '—'] = (acc[r.estado || '—'] || 0) + 1; return acc;
         }, {}),
@@ -268,7 +314,7 @@ export function buildArticulo26IntranetRouter(sequelize: Sequelize) {
         resumen,
         fuentes: {
           historial: fs.existsSync(path.join(dir, HISTORIAL_NAME)) ? HISTORIAL_NAME : null,
-          log:       fs.existsSync(path.join(dir, LOG_NAME)) ? LOG_NAME : null,
+          log:       Object.keys(carga).length ? `tabla ${TABLA_CARGA}` : null,
           export:    fs.existsSync(path.join(dir, EXPORT_NAME)) ? EXPORT_NAME : null,
           dir,
         },
@@ -280,7 +326,45 @@ export function buildArticulo26IntranetRouter(sequelize: Sequelize) {
     }
   });
 
-  // POST /generar-excel — escribe el Excel que consume el robot
+  // POST /lanzar — corre el robot 2.0 de una dependencia
+  router.post('/lanzar', requirePermission(PERM), async (req: Request, res: Response) => {
+    try {
+      const dep = String(req.body?.dependencia ?? '').toUpperCase().replace(/\s+/g, ' ').trim().replace(/^UPA(\d)/, 'UPA $1');
+      if (!SUFIJO_DEP[dep]) return res.status(400).json({ ok: false, error: 'Dependencia inválida' });
+      const script = `intranet_carga_art26_v2_${SUFIJO_DEP[dep]}`;
+      const como = await ejecutarAhora(script);
+      return res.json({ ok: true, script, como, msg: `Robot ${script} lanzado (queda en la página Robots)` });
+    } catch (err: any) {
+      logger.error({ msg: 'Error lanzar Art.26 2.0', err });
+      return res.status(500).json({ ok: false, error: String(err?.message ?? err) });
+    }
+  });
+
+  // POST /reintentar — { ids: carga_id[] } vuelve a PENDIENTE (y olvida las dependencias
+  // descartadas) y lanza los robots de las dependencias sugeridas de esas filas.
+  router.post('/reintentar', requirePermission(PERM), async (req: Request, res: Response) => {
+    try {
+      const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
+        .map((x: any) => Number(x)).filter((x: number) => Number.isInteger(x) && x > 0);
+      if (!ids.length) return res.status(400).json({ ok: false, error: 'Sin filas para reintentar' });
+      await ensureTablaCarga(sequelize);
+      const filas = await sequelize.query<any>(
+        `SELECT id, dependencia_sugerida FROM ${TABLA_CARGA} WHERE id IN (:ids) AND estado NOT IN ('OK', 'BAJA')`,
+        { type: QueryTypes.SELECT, replacements: { ids } });
+      if (!filas.length) return res.json({ ok: true, msg: 'No hay filas con error para reintentar' });
+      await sequelize.query(
+        `UPDATE ${TABLA_CARGA} SET estado = 'PENDIENTE', deps_descartadas = '' WHERE id IN (:ids)`,
+        { replacements: { ids: filas.map(f => f.id) } });
+      const deps = [...new Set(filas.map(f => String(f.dependencia_sugerida)))].filter(d => SUFIJO_DEP[d]);
+      for (const d of deps) await ejecutarAhora(`intranet_carga_art26_v2_${SUFIJO_DEP[d]}`);
+      return res.json({ ok: true, filas: filas.length, msg: `${filas.length} Art. 26 vuelven a PENDIENTE · robots: ${deps.join(', ')}` });
+    } catch (err: any) {
+      logger.error({ msg: 'Error reintentar Art.26 2.0', err });
+      return res.status(500).json({ ok: false, error: String(err?.message ?? err) });
+    }
+  });
+
+  // SIN USO (versión vieja): POST /generar-excel — escribía el Excel que consumía cargar_art26_intranet.py
   router.post('/generar-excel', requirePermission(PERM), async (_req: Request, res: Response) => {
     try {
       if (!XLSX) return res.status(503).json({ ok: false, error: 'Módulo xlsx no disponible' });

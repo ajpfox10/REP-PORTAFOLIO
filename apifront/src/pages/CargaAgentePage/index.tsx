@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { useNavigate } from 'react-router-dom';
-import { useCargaAgente, ESTADO_EMPLEO_OPTS } from './hooks/useCargaAgente';
+import { useCargaAgente, ESTADO_EMPLEO_OPTS, ESTADO_CAMBIO_OCUPACION, addDaysIso } from './hooks/useCargaAgente';
 import { useCamera } from './hooks/useCamera';
 import { EscaneoAgentePage } from '../EscaneoAgentePage';
 import './styles/CargaAgente.css';
@@ -362,6 +362,55 @@ function StepLaboral({ form, setField, errors, cats, editMode }: any) {
         {sel('Categoría', 'categoria_id', cats.categoria)}
         {sel('Función', 'funcion_id', cats.funcion)}
         {sel('Ocupación', 'ocupacion_id', cats.ocupacion)}
+        {sel('Especialidad', 'especialidad_id', cats.especialidad)}
+        {editMode && (() => {
+          // Especialidad con historial: cambiarla cierra la vigente y abre la nueva.
+          const cambio = form.especialidad_id !== form.especialidad_original;
+          const fmtD = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
+          if (!cambio) {
+            return form.especialidad_original && form.especialidad_desde ? (
+              <div className="ca-field" style={{ alignSelf: 'end' }}>
+                <span className="ca-field-hint" style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                  Vigente desde {fmtD(form.especialidad_desde)} · el historial está en Gestión → Especialidades
+                </span>
+              </div>
+            ) : null;
+          }
+          if (form.estado_empleo === ESTADO_CAMBIO_OCUPACION) {
+            return (
+              <div className="ca-field" style={{ alignSelf: 'end' }}>
+                <span className="ca-field-hint" style={{ fontSize: '0.72rem', color: '#b45309' }}>
+                  La especialidad cambia junto con el cargo: la actual se cierra en la fecha de egreso y la nueva rige desde el día siguiente.
+                </span>
+              </div>
+            );
+          }
+          return (
+            <>
+              {form.especialidad_original && (
+                <div className="ca-field">
+                  <label htmlFor="ca-esp-cierre" className="ca-label required">Cierre de la especialidad actual</label>
+                  <input id="ca-esp-cierre" name="especialidad_fecha_cierre" className="ca-input" type="date"
+                    value={form.especialidad_fecha_cierre} min={form.especialidad_desde || undefined}
+                    onChange={e => {
+                      setField('especialidad_fecha_cierre', e.target.value);
+                      if (e.target.value) setField('especialidad_fecha_desde', addDaysIso(e.target.value, 1));
+                    }} />
+                  {errors.especialidad_fecha_cierre && <span className="ca-field-error">⚠ {errors.especialidad_fecha_cierre}</span>}
+                </div>
+              )}
+              {form.especialidad_id && (
+                <div className="ca-field">
+                  <label htmlFor="ca-esp-alta" className="ca-label required">Alta de la nueva especialidad</label>
+                  <input id="ca-esp-alta" name="especialidad_fecha_desde" className="ca-input" type="date"
+                    value={form.especialidad_fecha_desde}
+                    onChange={e => setField('especialidad_fecha_desde', e.target.value)} />
+                  {errors.especialidad_fecha_desde && <span className="ca-field-error">⚠ {errors.especialidad_fecha_desde}</span>}
+                </div>
+              )}
+            </>
+          );
+        })()}
         {sel('Régimen Horario', 'regimen_horario_id', cats.regimenHorario)}
 
         {/* ── Cascade org ── */}
@@ -534,6 +583,7 @@ function Resumen({ form, photo, cats }: any) {
     ['Categoría', fn(cats.categoria, form.categoria_id)],
     ['Función', fn(cats.funcion, form.funcion_id)],
     ['Ocupación', fn(cats.ocupacion, form.ocupacion_id)],
+    ['Especialidad', form.especialidad_id ? fn(cats.especialidad, form.especialidad_id) : '—'],
     ['Dependencia', fn(cats.dependencia, form.dependencia_id)],
     ['Decreto', form.decreto_designacion || '—'],
     ['Email', form.email || '—'],

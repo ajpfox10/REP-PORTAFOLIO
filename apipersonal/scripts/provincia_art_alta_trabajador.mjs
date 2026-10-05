@@ -114,7 +114,7 @@ function normalizeSexo(value) {
 // a una de esas opciones; cualquier otra nacionalidad → "Otros".
 function normalizeNacionalidad(value) {
   const raw = String(value || '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // saca acentos
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // saca acentos
     .toUpperCase().trim();
   if (!raw) return optEnv('ART_NACIONALIDAD_DEFAULT_TEXT', 'Argentina');
   if (raw.startsWith('ARGENTIN')) return 'Argentina';
@@ -438,7 +438,7 @@ async function setQueueStatus(conn, queueId, status, fields = {}) {
 
 // Quita tildes/diacríticos para comparar texto de forma robusta.
 function stripAccents(s) {
-  return String(s || '').normalize('NFD').replace(/[0300-036f]/g, '');
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 // Detecta si el domicilio es de CABA a partir de las variantes que guarda la base.
@@ -488,8 +488,13 @@ async function resolveProvinciaId(conn, row, dir) {
 
 function buildPayload(row, dir, provinciaId = null) {
   const ingresoArt = artIngresoDate(row.fecha_ingreso);
-  const email = row.email || dir?.email || '';
-  const telefono = normalizePhone(row.telefono || dir?.telefonos || '');
+  // Email inválido/ausente -> se tilda "Declaro NO poseer E-mail" (ART rechaza el alta con uno inválido).
+  const emailRaw = String(row.email || dir?.email || '').trim();
+  const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw : '';
+  // Teléfono: ART exige 10 dígitos y es obligatorio; si el dato no sirve va 1111111111
+  // (decisión RRHH 30/09/2026, para no frenar el alta por el teléfono).
+  let telefono = normalizePhone(row.telefono || dir?.telefonos || '');
+  if (telefono.length !== 10) telefono = optEnv('ART_TELEFONO_DEFAULT', '1111111111');
   // Domicilio DB-first: para agentes nuevos los datos vienen correctos de la base
   // (calle en domicilio, numero en numerodomicilio). La planilla Excel queda de fallback.
   let calle = String(row.domicilio || dir?.calle || '').trim();
@@ -642,8 +647,20 @@ async function selectById(page, id, value) {
           const val = String(option.value || '').trim().toUpperCase();
           return text === wanted || val === wanted || text.includes(wanted);
         });
-        if (!opt) return false;
-        el.value = opt.value;
+        let found = opt;
+        // Localidad con sufijo que ART no tiene ("LANUS OESTE" -> "LANUS"): se prueba acortando palabras.
+        if (!found && id === 'cbLocalidad') {
+          const words = wanted.split(/\s+/);
+          // Primeras k palabras ("LANUS OESTE" -> "LANUS") y últimas k ("CIUDAD DEL LIBERTADOR
+          // GENERAL SAN MARTIN" -> "GENERAL SAN MARTIN" / "SAN MARTIN"), de la más larga a la más corta.
+          const prueba = (w) => Array.from(el.options || []).find((o) => String(o.textContent || '').trim().toUpperCase() === w);
+          for (let k = words.length - 1; k >= 1 && !found; k--) {
+            found = prueba(words.slice(0, k).join(' ')) || prueba(words.slice(-k).join(' '));
+          }
+        }
+        if (!found) return false;
+        const opt2 = found;
+        el.value = opt2.value;
         el.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
       }, { id, value });
@@ -776,7 +793,29 @@ async function addEstablecimiento(page, busqueda) {
   await check.click({ timeout: 10000 });
 }
 
+// El establecimiento queda "cargado" para ART cuando el hidden #establecimientos (lo que manda
+// GUARDAR) deja de ser -1. Si se aprieta GUARDAR antes, ART rechaza con "Debe cargar al menos
+// un (1) establecimiento" aunque la fila ya se vea en la grilla (30/09/2026: 7 de 78).
+async function establecimientoCargado(page, timeoutMs) {
+  const hasta = Date.now() + timeoutMs;
+  while (Date.now() < hasta) {
+    const hidden = await page.evaluate(() => document.getElementById('establecimientos')?.value ?? '').catch(() => '');
+    if (hidden && hidden !== '-1') return true;
+    await page.waitForTimeout(500);
+  }
+  return false;
+}
+
 async function addEstablecimientoMapped(page, busqueda) {
+  await addEstablecimientoUnaVez(page, busqueda);
+  if (await establecimientoCargado(page, 10000)) return;
+  // No quedó registrado: se reintenta una vez (best-effort, igual se sigue a GUARDAR).
+  console.log(JSON.stringify({ warn: 'establecimiento sin registrar, reintento' }));
+  await addEstablecimientoUnaVez(page, busqueda);
+  await establecimientoCargado(page, 10000);
+}
+
+async function addEstablecimientoUnaVez(page, busqueda) {
   const addButton = page.locator('#altaEstablecimientos').or(page.getByText('AGREGAR ESTABLECIMIENTO', { exact: false })).or(page.getByText('Agregar establecimiento', { exact: false })).first();
   // Best-effort: intentamos cargar el establecimiento pero NUNCA cortamos aca.
   // Siempre seguimos a GUARDAR; si el establecimiento no quedo, ART lo avisara al guardar
@@ -892,7 +931,18 @@ async function clickNoSeMiCP(page) {
   await page.waitForTimeout(500);
 }
 
-async function submitAndConfirm(page) {
+// CP típico por localidad (zona del hospital) para corregir "El código postal no corresponde".
+const CP_POR_LOCALIDAD = {
+  'LA TABLADA': '1766', 'LOMAS DEL MIRADOR': '1752', 'VILLA LUZURIAGA': '1753', 'SAN JUSTO': '1754',
+  'RAFAEL CASTILLO': '1755', 'GREGORIO DE LAFERRERE': '1757', 'LAFERRERE': '1757', 'GONZALEZ CATAN': '1759',
+  'PONTEVEDRA': '1761', 'VIRREY DEL PINO': '1763', 'ISIDRO CASANOVA': '1765', 'CIUDAD MADERO': '1768',
+  'TAPIALES': '1770', 'VILLA CELINA': '1772', 'INGENIERO BUDGE': '1773', 'ALDO BONZI': '1774', 'CIUDAD EVITA': '1778',
+  'RAMOS MEJIA': '1704', 'HAEDO': '1706', 'MORON': '1708', 'CASTELAR': '1712', 'ITUZAINGO': '1714', 'MERLO': '1722',
+  'MARCOS PAZ': '1727', 'MORENO': '1744', 'EZEIZA': '1804', 'CAÑUELAS': '1814', 'LANUS': '1824', 'LANUS OESTE': '1824',
+  'LOMAS DE ZAMORA': '1832', 'MONTE GRANDE': '1842',
+};
+
+async function submitAndConfirm(page, payload = {}) {
   if (!envFlag('ART_SUBMIT_ENABLED', false)) {
     throw new Error('ART_SUBMIT_ENABLED no esta activo; no se envia el formulario');
   }
@@ -905,7 +955,8 @@ async function submitAndConfirm(page) {
   const timeoutMs = Number(process.env.ART_SUCCESS_TIMEOUT_MS || 30000);
   const graceMs = 2500;
   let triedNoCP = false;
-  const start = Date.now();
+  let triedCpLocalidad = false;
+  let start = Date.now();
 
   // Carrera: confirmacion de exito vs error de validacion visible (incluye iframes).
   // Si ART rechaza (CUIL invalido, CP, telefono, "debe cargar establecimiento"...),
@@ -924,11 +975,24 @@ async function submitAndConfirm(page) {
       const errs = await collectPageErrors(page);
       if (errs.length) {
         // Si el problema es el CP, clickeamos "No sé mi CP" y reintentamos guardar (una vez).
-        if (!triedNoCP && errs.some((e) => /c[oó]digo postal/i.test(e))) {
-          triedNoCP = true;
-          await clickNoSeMiCP(page);
+        // Si el problema es el CP: 1) el CP típico de la localidad (si es otro), 2) "No sé mi CP".
+        // Tras cada reintento se vuelve a esperar el margen, porque el texto rojo viejo queda en pantalla.
+        if (errs.some((e) => /c[oó]digo postal/i.test(e)) && (!triedCpLocalidad || !triedNoCP)) {
+          const cpLoc = CP_POR_LOCALIDAD[stripAccents(String(payload.localidad || '')).toUpperCase().trim()]
+            || CP_POR_LOCALIDAD[String(payload.localidad || '').toUpperCase().trim()];
+          const cpActual = (await page.inputValue('#txtCPostal').catch(() => '')).replace(/\D/g, '');
+          if (!triedCpLocalidad && cpLoc && cpLoc !== cpActual) {
+            triedCpLocalidad = true;
+            await page.fill('#txtCPostal', cpLoc).catch(() => undefined);
+            console.log(JSON.stringify({ info: 'CP corregido por localidad', de: cpActual, a: cpLoc }));
+          } else {
+            triedCpLocalidad = true; triedNoCP = true;
+            await clickNoSeMiCP(page);
+          }
+          await dismissModal(page);
           await submit.click({ timeout: 10000 }).catch(() => undefined);
           await page.waitForTimeout(800);
+          start = Date.now();
           continue;
         }
         throw new Error('ART rechazo el alta: ' + errs.join(' | '));
@@ -1057,7 +1121,7 @@ async function fillAltaTrabajadorMapped(page, payload) {
   });
   await _timed('telefono', dni, () => fillTelefonoPrincipal(page, payload));
   await _timed('establecimiento', dni, () => addEstablecimientoMapped(page, payload.establecimientoBusqueda));
-  await _timed('submit', dni, () => submitAndConfirm(page));
+  await _timed('submit', dni, () => submitAndConfirm(page, payload));
 }
 
 async function runBrowserMapped(payload) {

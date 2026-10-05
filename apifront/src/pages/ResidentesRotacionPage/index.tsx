@@ -33,7 +33,23 @@ interface Rotacion {
   nombre?: string;
 }
 
+interface SiapeRot {
+  rotacion_id: number; origen_dias: 'ROTACION' | 'HORARIO' | 'NINGUNO'; dias_semana: string; aviso: string | null;
+  total: number; vencidos: number; ok: number; ya_existia: number; error: number; sobra: number; pendiente: number; futuro: number;
+}
+interface SiapeDia {
+  id: number; rotacion_id: number; dni: number; fecha: string; estado: string; detalle: string | null;
+  intentos: number; cargado_en: string | null; futuro: number;
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+// Misma regla que scripts/cargar_rotaciones_siape.py (parsear_dias): acá solo para avisar en el form.
+const DIAS_ABREV: Record<string, number> = { lun: 0, mar: 1, mie: 2, jue: 3, vie: 4, sab: 5, dom: 6 };
+function diasEntendidos(texto: string): boolean {
+  const toks = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').match(/[a-z]+/g) || [];
+  return toks.some(t => t.length >= 3 && t.slice(0, 3) in DIAS_ABREV && !t.startsWith('marz'));
+}
 
 function fmt(d?: string | null): string {
   if (!d) return '—';
@@ -157,6 +173,44 @@ export function ResidentesRotacionPage() {
 
   useEffect(() => { loadRows(); }, [loadRows]);
 
+  // ── SIAPE (FC) ──
+  const [siapeRot, setSiapeRot] = useState<Map<number, SiapeRot>>(new Map());
+  const [siapeDias, setSiapeDias] = useState<SiapeDia[]>([]);
+  const [siapeUltima, setSiapeUltima] = useState<any>(null);
+  const [siapeBusy, setSiapeBusy] = useState(false);
+  const [verDiasDe, setVerDiasDe] = useState<number | null>(null);
+
+  const loadSiape = useCallback(async () => {
+    if (!canCrud('residentes_rotacion', 'read')) return;
+    try {
+      const res = await apiFetch<any>('/rotacion-siape/control');
+      setSiapeRot(new Map((res?.porRotacion || []).map((r: SiapeRot) => [Number(r.rotacion_id), r])));
+      setSiapeDias(res?.dias || []);
+      setSiapeUltima(res?.ultimaCorrida || null);
+    } catch { /* la columna SIAPE queda vacía */ }
+  }, [canCrud]);
+  useEffect(() => { loadSiape(); }, [loadSiape]);
+
+  const regenerarSiape = async () => {
+    try { await apiFetch('/rotacion-siape/generar', { method: 'POST' }); } catch { /* se regenera en la próxima carga */ }
+    await loadSiape();
+  };
+
+  const siapeAccion = async (accion: 'lanzar' | 'reintentar') => {
+    setSiapeBusy(true);
+    try {
+      const res = await apiFetch<any>(`/rotacion-siape/${accion}`, { method: 'POST', body: JSON.stringify({}) });
+      toast.ok('SIAPE', res?.msg || 'Listo');
+      await loadSiape();
+    } catch (e: any) { toast.error('Error', e?.message); }
+    finally { setSiapeBusy(false); }
+  };
+
+  const siapeTot = [...siapeRot.values()].reduce((a, r) => ({
+    pendiente: a.pendiente + Number(r.pendiente), ok: a.ok + Number(r.ok), error: a.error + Number(r.error),
+    ya: a.ya + Number(r.ya_existia), sobra: a.sobra + Number(r.sobra), futuro: a.futuro + Number(r.futuro),
+  }), { pendiente: 0, ok: 0, error: 0, ya: 0, sobra: 0, futuro: 0 });
+
   // Reset form cuando cambia agente
   useEffect(() => {
     setFechaDesde(''); setFechaHasta(''); setServicio(''); setObservaciones(''); setNrodegestion(''); setHorarios(''); setDias(''); setEditingId(null);
@@ -197,6 +251,7 @@ export function ResidentesRotacionPage() {
       search.clear();
       setEditingId(null);
       await loadRows();
+      await regenerarSiape();
     } catch (e: any) { toast.error('Error al guardar', e?.message); }
     finally { setSaving(false); }
   };
@@ -233,6 +288,7 @@ export function ResidentesRotacionPage() {
       });
       toast.ok('Eliminado', 'Rotación eliminada.');
       await loadRows();
+      await regenerarSiape();
     } catch (e: any) { toast.error('Error', e?.message); }
     finally { setDeletingId(null); }
   };
@@ -381,6 +437,12 @@ export function ResidentesRotacionPage() {
                   disabled={!!editingId && !isAdmin} />
               </div>
             </div>
+            {!(dias.trim() && diasEntendidos(dias)) && (
+              <div style={{ ...alertStyle, marginTop: 8, marginBottom: 0 }}>
+                {dias.trim() ? `⚠️ No entiendo los días "${dias}".` : '⚠️ Sin días cargados.'} Para SIAPE se van a usar los días de su horario (HORARIOS.xlsx).
+                Escribilos como "Lunes a Viernes", "Lunes y Jueves" o "martes".
+              </div>
+            )}
             <div style={{ marginTop: 12 }}>
               <label htmlFor="rr-obs" style={lbl}>Observaciones</label>
               <input id="rr-obs" name="observaciones" className="input" type="text" placeholder="Observaciones opcionales" style={{ width: '100%', boxSizing: 'border-box' }}
@@ -412,6 +474,38 @@ export function ResidentesRotacionPage() {
         </div>
       )}
 
+      {/* ── SIAPE (FC) ── */}
+      {canCrud('residentes_rotacion', 'read') && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <div className="h2">🤖 Carga en SIAPE (FRANCO COMPENSATORIO)</div>
+              <div className="muted" style={{ fontSize: '0.8rem', marginTop: 4 }}>
+                Solo los días de rotación ya vencidos · {siapeTot.pendiente} pendientes · {siapeTot.ok} cargados · {siapeTot.ya} ya existían
+                · <span style={{ color: siapeTot.error ? '#ef4444' : undefined }}>{siapeTot.error} con error</span>
+                {siapeTot.sobra > 0 && <> · <span style={{ color: '#f59e0b' }}>{siapeTot.sobra} sobran en SIAPE (borrar a mano)</span></>}
+                {' '}· {siapeTot.futuro} futuros
+              </div>
+              {siapeUltima && (
+                <div className="muted" style={{ fontSize: '0.75rem', marginTop: 2 }}>
+                  Última corrida: {siapeUltima.estado === 'ok' ? '✅' : '❌'} {new Date(siapeUltima.actualizado_at).toLocaleString('es-AR')}
+                  {siapeUltima.estado !== 'ok' && siapeUltima.motivo ? ` — ${String(siapeUltima.motivo).slice(0, 160)}` : ''}
+                </div>
+              )}
+            </div>
+            {canCrud('residentes_rotacion', 'create') && (
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn ok" type="button" disabled={siapeBusy || !siapeTot.pendiente}
+                  onClick={() => siapeAccion('lanzar')}>{siapeBusy ? '...' : `▶ Cargar en SIAPE (${siapeTot.pendiente})`}</button>
+                <button className="btn" type="button" disabled={siapeBusy || !siapeTot.error}
+                  onClick={() => siapeAccion('reintentar')}>↻ Reintentar errores ({siapeTot.error})</button>
+                <button className="btn" type="button" disabled={siapeBusy} onClick={regenerarSiape}>⟳</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── TABLA ── */}
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -438,14 +532,15 @@ export function ResidentesRotacionPage() {
             <table style={tbl}>
               <thead>
                 <tr>
-                  {['DNI', 'Apellido y Nombre', 'Servicio', 'Nro. Gestión', 'Horarios', 'Días', 'Desde', 'Hasta', 'Duración', 'Obs.', 'Cargado por', 'Modificado por', isAdmin ? 'Acciones' : ''].map(h => (
+                  {['DNI', 'Apellido y Nombre', 'Servicio', 'Nro. Gestión', 'Horarios', 'Días', 'Desde', 'Hasta', 'Duración', 'SIAPE', 'Obs.', 'Cargado por', 'Modificado por', isAdmin ? 'Acciones' : ''].map(h => (
                     <th key={h} style={th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rowsVisibles.map(r => (
-                  <tr key={r.id} style={r.deleted_at ? { opacity: 0.45 } : {}}>
+                  <React.Fragment key={r.id}>
+                  <tr style={r.deleted_at ? { opacity: 0.45 } : {}}>
                     <td style={td}><strong>{r.dni}</strong></td>
                     <td style={td}>{r.apellido ? `${r.apellido}, ${r.nombre}` : '—'}</td>
                     <td style={td}>{r.servicio || <span className="muted">—</span>}</td>
@@ -462,6 +557,10 @@ export function ResidentesRotacionPage() {
                       <span style={{ fontWeight: 600, color: '#10b981' }}>
                         {duracion(r.fecha_desde, r.fecha_hasta)}
                       </span>
+                    </td>
+                    <td style={td}>
+                      <SiapeCelda s={siapeRot.get(r.id)} borrada={!!r.deleted_at}
+                        onClick={() => setVerDiasDe(verDiasDe === r.id ? null : r.id)} />
                     </td>
                     <td style={{ ...td, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {r.observaciones || <span className="muted">—</span>}
@@ -504,6 +603,14 @@ export function ResidentesRotacionPage() {
                       </td>
                     )}
                   </tr>
+                  {verDiasDe === r.id && (
+                    <tr>
+                      <td colSpan={14} style={{ ...td, background: 'rgba(255,255,255,0.03)' }}>
+                        <SiapeDetalle s={siapeRot.get(r.id)} dias={siapeDias.filter(d => d.rotacion_id === r.id)} />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -515,6 +622,65 @@ export function ResidentesRotacionPage() {
         🔄 Rotación de residentes · Solo administradores pueden editar o eliminar registros
       </div>
     </Layout>
+  );
+}
+
+// ─── SIAPE ───────────────────────────────────────────────────────────────────
+
+const ESTADO_COLOR: Record<string, string> = {
+  OK: '#10b981', YA_EXISTIA: '#6366f1', ERROR: '#ef4444', SOBRA: '#f59e0b', PENDIENTE: 'rgba(255,255,255,0.55)',
+};
+
+function SiapeCelda({ s, borrada, onClick }: { s?: SiapeRot; borrada: boolean; onClick: () => void }) {
+  if (borrada || !s) return <span className="muted">—</span>;
+  if (s.origen_dias === 'NINGUNO') {
+    return <span title={s.aviso || ''} style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.75rem' }}>⚠️ Revisar días</span>;
+  }
+  if (!Number(s.total)) {
+    // UNIQUE dni+fecha: los días ya los tiene otra rotación del mismo agente que se superpone
+    return <span className="muted" title={`Días: ${s.dias_semana}`} style={{ fontSize: '0.72rem' }}>Cubierta por otra rotación</span>;
+  }
+  const hechos = Number(s.ok) + Number(s.ya_existia);
+  return (
+    <button type="button" className="btn" onClick={onClick} title={s.aviso || `Días: ${s.dias_semana}`}
+      style={{ fontSize: '0.72rem', padding: '3px 8px', whiteSpace: 'nowrap' }}>
+      <span style={{ color: hechos >= Number(s.vencidos) && Number(s.vencidos) > 0 ? '#10b981' : undefined }}>
+        {hechos}/{s.vencidos}
+      </span>
+      {Number(s.error) > 0 && <span style={{ color: '#ef4444' }}> · {s.error} err</span>}
+      {Number(s.sobra) > 0 && <span style={{ color: '#f59e0b' }}> · {s.sobra} sobran</span>}
+      {Number(s.futuro) > 0 && <span className="muted"> · +{s.futuro}</span>}
+      {s.origen_dias === 'HORARIO' && <span style={{ color: '#f59e0b' }}> · 🕑</span>}
+    </button>
+  );
+}
+
+function SiapeDetalle({ s, dias }: { s?: SiapeRot; dias: SiapeDia[] }) {
+  if (!s) return <div className="muted">Sin datos de SIAPE.</div>;
+  return (
+    <div style={{ fontSize: '0.78rem' }}>
+      <div style={{ marginBottom: 6 }}>
+        Días que se cargan: <strong>{s.dias_semana || '—'}</strong>
+        {s.origen_dias === 'HORARIO' && <span style={{ color: '#f59e0b' }}> (tomados del horario)</span>}
+        {s.aviso && <span className="muted"> · {s.aviso}</span>}
+      </div>
+      {!dias.length ? <div className="muted">No hay días para cargar.</div> : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {dias.map(d => (
+            <span key={d.id} title={`${d.estado}${d.detalle ? ' — ' + d.detalle : ''}${d.intentos ? ` (intentos: ${d.intentos})` : ''}`}
+              style={{
+                padding: '2px 6px', borderRadius: 6, border: `1px solid ${ESTADO_COLOR[d.estado] || '#888'}`,
+                color: ESTADO_COLOR[d.estado] || undefined, opacity: Number(d.futuro) ? 0.4 : 1,
+              }}>
+              {fmt(d.fecha)}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="muted" style={{ marginTop: 6, fontSize: '0.72rem' }}>
+        Verde = cargado · Violeta = ya existía en SIAPE · Rojo = error (pasá el mouse) · Naranja = sobra (borrar a mano en SIAPE) · Gris = pendiente · Tenue = futuro
+      </div>
+    </div>
   );
 }
 

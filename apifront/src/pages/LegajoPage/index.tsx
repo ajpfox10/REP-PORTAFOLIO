@@ -1,12 +1,13 @@
 // src/pages/LegajoPage/index.tsx
 // Legajo Personal — formulario oficial Provincia de Buenos Aires / Ministerio de Salud
 // 16 páginas del legajo con visualización + CRUD para las secciones editables
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Layout } from '../../components/Layout';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlob } from '../../api/http';
 import { searchPersonal }                from '../../api/searchPersonal';
 import { useToast }                     from '../../ui/toast';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
+import { ImportarFormulario } from './ImportarFormulario';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,26 @@ const val = (v: any): string => {
 };
 
 const bool = (v: any): string => (v ? 'Sí' : 'No');
+
+// Las fechas llegan como ISO completo; los <input type="date"> necesitan YYYY-MM-DD
+const normalizarFechas = (row: Record<string, any>): Record<string, any> => {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : v;
+  }
+  return out;
+};
+
+// Campos de legajo_datos_personales (mismo listado que el backend)
+const CAMPOS_DATOS_LEGAJO = [
+  'nro_legajo','reparticion',
+  'nac_pais','nac_provincia','nac_partido','estado_civil',
+  'clase','dist_militar','cedula_nro','cedula_expedida_por',
+  'carta_ciudadania','carta_otorgada_en','carta_fecha','carta_juez_federal',
+  'estudios_nivel','estudios_detalle','titulo_secundario','titulo_secundario_otorgado',
+  'titulo_universitario','titulo_universitario_otorgado','aptitud_especial',
+  'mil_presto','mil_arma','mil_especialidad','mil_grado','mil_destino','mil_motivo_excepcion',
+];
 
 // ─── sub-components ───────────────────────────────────────────────────────────
 
@@ -200,89 +221,405 @@ function FormField({ label, name, value, onChange, type = 'text', options }: {
 
 // ─── SECCIONES ────────────────────────────────────────────────────────────────
 
-function SeccionDatosPersonales({ d }: { d: any }) {
+// Pie de los modales: Cancelar + Guardar
+function PieModal({ onCancel, onSave, saving }: { onCancel: () => void; onSave: () => void; saving: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+      <button onClick={onCancel}
+        style={{ background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: 6,
+          padding: '7px 16px', cursor: 'pointer', color: '#fff', fontSize: '0.82rem' }}>
+        Cancelar
+      </button>
+      <BtnGuardar onClick={onSave} saving={saving} />
+    </div>
+  );
+}
+
+function SubTitulo({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ gridColumn: '1 / -1', fontSize: '0.72rem', fontWeight: 700, color: '#c084fc',
+      textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 6 }}>{children}</div>
+  );
+}
+
+// Pág 01-02 — Tapa + Datos Personales (formulario editable; lo de `personal` se muestra de referencia)
+function SeccionDatosPersonales({ d, dl, agente, dni, onRefresh }: {
+  d: any; dl: any | null; agente: any | null; dni: number; onRefresh: () => void;
+}) {
+  const toast = useToast();
+  const [form, setForm] = useState<Record<string, any>>(() => normalizarFechas(dl ?? {}));
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
   if (!d) return <div className="muted">Sin datos personales</div>;
+
+  const guardar = async () => {
+    setSaving(true);
+    try {
+      const body: Record<string, any> = {};
+      CAMPOS_DATOS_LEGAJO.forEach(k => { body[k] = form[k] ?? null; });
+      await apiFetch(`/legajo/datos-personales/${dni}`, {
+        method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' },
+      });
+      toast.ok('Datos personales guardados');
+      onRefresh();
+    } catch (e: any) {
+      toast.error('Error al guardar', e?.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const F = (label: string, name: string, type = 'text', options?: { value: string; label: string }[]) => (
+    <FormField label={label} name={name} value={form[name]} onChange={set} type={type} options={options} />
+  );
+
   return (
     <>
-      <Seccion titulo="Pág. 01-02 — Datos Personales">
+      <Seccion titulo="Del sistema (se corrigen en Carga de Agente)">
         <Grid>
           <Campo label="Apellido" value={val(d.apellido)} />
           <Campo label="Nombre/s" value={val(d.nombre)} />
           <Campo label="DNI" value={val(d.dni)} />
           <Campo label="CUIL" value={val(d.cuil)} />
-          <Campo label="Fecha de Nacimiento" value={fmtDate(d.fecha_nacimiento)} />
-          <Campo label="Sexo" value={val(d.sexo_nombre ?? d.sexo_id)} />
-          <Campo label="Estado Civil" value={val(d.estado_civil)} />
+          <Campo label="Fecha de Nacimiento" value={fmtDate(d.fecha_nacimiento ?? d.p_fecha_nacimiento)} />
+          <Campo label="Sexo" value={val(d.sexo_nombre ?? d.sexo)} />
           <Campo label="Nacionalidad" value={val(d.nacionalidad)} />
-          <Campo label="Localidad" value={val(d.localidad_nombre ?? d.localidad_id)} />
-          <Campo label="CP" value={val(d.cp)} />
-          <Campo label="Nro. Domicilio" value={val(d.numerodomicilio)} />
-          <Campo label="Depto / Piso" value={[d.depto, d.piso].filter(Boolean).join(' — ') || '—'} />
-          <Campo label="Categoría" value={val(d.categoria_nombre ?? d.categoria_id)} />
-          <Campo label="Planta" value={val(d.planta_nombre ?? d.planta_id)} />
-          <Campo label="Ocupación" value={val(d.ocupacion_nombre)} />
-          <Campo label="Régimen Horario" value={val(d.regimen_horario_nombre)} />
-          <Campo label="Observaciones" value={val(d.observaciones)} wide />
+          <Campo label="Legajo (sistema)" value={val(agente?.legajo ?? d.legajo)} />
+          <Campo label="Repartición (sistema)" value={val(d.reparticion ?? d.dependencia)} />
         </Grid>
+      </Seccion>
+
+      <Seccion titulo="Pág. 01-02 — Tapa y Datos Personales del formulario">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+          <SubTitulo>Tapa</SubTitulo>
+          {F('N° de legajo (si difiere del sistema)', 'nro_legajo')}
+          {F('Repartición (si difiere del sistema)', 'reparticion')}
+
+          <SubTitulo>a) Filiación</SubTitulo>
+          {F('Nacido en país', 'nac_pais')}
+          {F('Provincia', 'nac_provincia')}
+          {F('Partido', 'nac_partido')}
+          {F('Estado civil', 'estado_civil', 'select', [
+            { value: 'SOLTERO', label: 'Soltera/o' }, { value: 'CASADO', label: 'Casada/o' },
+            { value: 'VIUDO', label: 'Viuda/o' }, { value: 'SEPARADO', label: 'Separada/o' },
+          ])}
+
+          <SubTitulo>b) Identidad</SubTitulo>
+          {F('Clase', 'clase')}
+          {F('Dist. Militar', 'dist_militar')}
+          {F('C. de Identidad N°', 'cedula_nro')}
+          {F('Expedida por', 'cedula_expedida_por')}
+          {F('Carta de Ciudadanía', 'carta_ciudadania')}
+          {F('Otorgada en', 'carta_otorgada_en')}
+          {F('Fecha de otorgamiento', 'carta_fecha', 'date')}
+          {F('Juez Federal', 'carta_juez_federal')}
+
+          <SubTitulo>c) Aptitud</SubTitulo>
+          {F('Estudios cursados — Nivel', 'estudios_nivel', 'select', [
+            { value: 'PRIMARIO', label: 'Primario' }, { value: 'SECUNDARIO', label: 'Secundario o técnico' },
+            { value: 'UNIVERSITARIO', label: 'Universitario' },
+          ])}
+          {F('Detalle de estudios', 'estudios_detalle')}
+          {F('Título Secundario o Técnico', 'titulo_secundario')}
+          {F('Otorgado por', 'titulo_secundario_otorgado')}
+          {F('Título Universitario', 'titulo_universitario')}
+          {F('Otorgado por', 'titulo_universitario_otorgado')}
+          {F('Aptitud especial por Prof. u Oficio', 'aptitud_especial')}
+
+          <SubTitulo>d) Servicios militares</SubTitulo>
+          {F('¿Ha prestado servicios militares?', 'mil_presto', 'select', [
+            { value: '1', label: 'Sí' }, { value: '0', label: 'No' },
+          ])}
+          {F('Arma', 'mil_arma')}
+          {F('Especialidad', 'mil_especialidad')}
+          {F('Grado', 'mil_grado')}
+          {F('Destino', 'mil_destino')}
+          {F('Motivo de la Excepción', 'mil_motivo_excepcion')}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <BtnGuardar onClick={guardar} saving={saving} />
+        </div>
       </Seccion>
     </>
   );
 }
 
-function SeccionFojaServicios({ agente, servicios }: { agente: any; servicios: any[] }) {
+// Pág 03 — Rectificaciones (al dorso de datos personales)
+function SeccionRectificaciones({ rows, dni, onRefresh }: {
+  rows: any[]; dni: number; onRefresh: () => void;
+}) {
+  const crud = useCrud('legajo_rectificaciones', dni, onRefresh);
+  const f = crud.state.form;
+  return (
+    <Seccion titulo="Pág. 03 — Rectificaciones" accent="#d97706">
+      <BtnAgregar onClick={() => crud.open()} />
+      <TablaLista
+        cols={[
+          { key: 'seccion', label: 'Sección' },
+          { key: 'fecha', label: 'Fecha', fmt: fmtDate },
+          { key: 'norma_legal', label: 'Norma Legal' },
+          { key: 'texto', label: 'Rectificación' },
+        ]}
+        rows={rows}
+        onEdit={r => crud.open(r)}
+        onDelete={r => crud.remove(r)}
+      />
+      {crud.state.open && (
+        <Modal titulo={crud.state.editing ? 'Editar rectificación' : 'Agregar rectificación'} onClose={crud.close}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Sección" name="seccion" value={f.seccion} onChange={crud.setField} type="select"
+              options={[{ value: 'FILIACION', label: 'a) Filiación' }, { value: 'IDENTIDAD', label: 'b) Identidad' },
+                { value: 'APTITUD', label: 'c) Aptitud' }]} />
+            <FormField label="Fecha" name="fecha" value={f.fecha} onChange={crud.setField} type="date" />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FormField label="Norma Legal" name="norma_legal" value={f.norma_legal} onChange={crud.setField} />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FormField label="Rectificación" name="texto" value={f.texto} onChange={crud.setField} type="textarea" />
+          </div>
+          <PieModal onCancel={crud.close} saving={crud.state.saving}
+            onSave={() => (f.seccion ? crud.save() : alert('Elegí la sección'))} />
+        </Modal>
+      )}
+    </Seccion>
+  );
+}
+
+// Pág 06 — Foja de Servicios (carga manual; los tramos del sistema quedan de referencia)
+function SeccionFojaServicios({ rows, tramos, dni, onRefresh }: {
+  rows: any[]; tramos: any[]; dni: number; onRefresh: () => void;
+}) {
+  const crud = useCrud('legajo_foja_servicios', dni, onRefresh);
+  const f = crud.state.form;
   return (
     <>
       <Seccion titulo="Pág. 06 — Foja de Servicios" accent="#2563eb">
-        {agente ? (
-          <Grid>
-            <Campo label="Legajo" value={val(agente.legajo)} />
-            <Campo label="Fecha Ingreso" value={fmtDate(agente.fecha_ingreso)} />
-            <Campo label="Fecha Baja" value={fmtDate(agente.fecha_baja)} />
-            <Campo label="Estado Empleo" value={val(agente.estado_empleo)} />
-            <Campo label="Función" value={val(agente.funcion_nombre ?? agente.funcion_id)} />
-            <Campo label="Servicio" value={val(agente.servicio_nombre ?? agente.servicio_id)} />
-            <Campo label="Categoría" value={val(agente.categoria_nombre ?? agente.categoria_id)} />
-            <Campo label="Planta" value={val(agente.planta_nombre ?? agente.planta_id)} />
-            <Campo label="Régimen Horario" value={val(agente.regimen_horario_nombre)} />
-            <Campo label="Dependencia" value={val(agente.dependencia_nombre ?? agente.dependencia_id)} />
-            <Campo label="Repartición" value={val(agente.reparticion_nombre ?? agente.reparticion_id)} />
-          </Grid>
-        ) : (
-          <div className="muted" style={{ fontSize: '0.8rem' }}>Sin datos de agente</div>
-        )}
+        <BtnAgregar onClick={() => crud.open(undefined, { ministerio: 'SALUD' })} />
+        <TablaLista
+          cols={[
+            { key: 'resolucion', label: 'Resolución/Decreto' },
+            { key: 'fecha_ingreso', label: 'Ingreso/Posesión', fmt: fmtDate },
+            { key: 'ministerio', label: 'Ministerio' },
+            { key: 'dependencia', label: 'Dependencia' },
+            { key: 'cargo', label: 'Cargo' },
+            { key: 'grupo_ocupacional', label: 'G.O.' },
+            { key: 'categoria', label: 'Cat.' },
+            { key: 'regimen_horario', label: 'Régimen' },
+            { key: 'fecha_baja', label: 'Baja', fmt: fmtDate },
+            { key: 'motivo', label: 'Motivo' },
+          ]}
+          rows={rows}
+          onEdit={r => crud.open(r)}
+          onDelete={r => crud.remove(r)}
+        />
       </Seccion>
-      {servicios.length > 0 && (
-        <Seccion titulo="Historial de Servicios / Destinos" accent="#2563eb">
+      {tramos.length > 0 && (
+        <Seccion titulo="Referencia: tramos cargados en el sistema (no se imprimen)" accent="#64748b">
           <TablaLista
             cols={[
-              { key: 'dependencia_nombre', label: 'Dependencia', fmt: (v, r) => val(v ?? r.dependencia_id) },
-              { key: 'servicio_nombre', label: 'Servicio', fmt: (v, r) => val(v ?? r.servicio_id) },
-              { key: 'fecha_desde', label: 'Desde', fmt: fmtDate },
-              { key: 'fecha_hasta', label: 'Hasta', fmt: fmtDate },
-              { key: 'motivo', label: 'Motivo' },
+              { key: 'fecha_ingreso', label: 'Ingreso', fmt: fmtDate },
+              { key: 'fecha_egreso', label: 'Egreso', fmt: fmtDate },
+              { key: 'estado_empleo', label: 'Estado' },
+              { key: 'decreto_designacion', label: 'Decreto' },
+              { key: 'funcion_nombre', label: 'Función' },
+              { key: 'categoria_nombre', label: 'Categoría' },
+              { key: 'planta_nombre', label: 'Planta' },
+              { key: 'regimen_horario_nombre', label: 'Régimen' },
             ]}
-            rows={servicios}
+            rows={tramos}
           />
         </Seccion>
+      )}
+      {crud.state.open && (
+        <Modal titulo={crud.state.editing ? 'Editar renglón de foja' : 'Agregar renglón de foja'} onClose={crud.close}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Resolución o Decreto (con año)" name="resolucion" value={f.resolucion} onChange={crud.setField} />
+            <FormField label="Fecha de ingreso / posesión" name="fecha_ingreso" value={f.fecha_ingreso} onChange={crud.setField} type="date" />
+            <FormField label="Ministerio" name="ministerio" value={f.ministerio} onChange={crud.setField} />
+            <FormField label="Dependencia" name="dependencia" value={f.dependencia} onChange={crud.setField} />
+            <FormField label="Cargo" name="cargo" value={f.cargo} onChange={crud.setField} />
+            <FormField label="G.O. (grupo ocupacional)" name="grupo_ocupacional" value={f.grupo_ocupacional} onChange={crud.setField} />
+            <FormField label="Categoría" name="categoria" value={f.categoria} onChange={crud.setField} />
+            <FormField label="Régimen horario" name="regimen_horario" value={f.regimen_horario} onChange={crud.setField} />
+            <FormField label="Baja" name="fecha_baja" value={f.fecha_baja} onChange={crud.setField} type="date" />
+            <FormField label="Motivo" name="motivo" value={f.motivo} onChange={crud.setField} />
+          </div>
+          <PieModal onCancel={crud.close} onSave={crud.save} saving={crud.state.saving} />
+        </Modal>
       )}
     </>
   );
 }
 
-function SeccionBonificaciones({ rows }: { rows: any[] }) {
+// Pág 07 — Bonificaciones (3 bis)
+function SeccionBonificaciones({ rows, dni, onRefresh }: {
+  rows: any[]; dni: number; onRefresh: () => void;
+}) {
+  const crud = useCrud('bonificaciones', dni, onRefresh);
+  const f = crud.state.form;
   return (
     <Seccion titulo="Pág. 07 — Bonificaciones" accent="#0891b2">
+      <BtnAgregar onClick={() => crud.open()} />
       <TablaLista
         cols={[
-          { key: 'nombre', label: 'Nombre' },
-          { key: 'decreto_numero', label: 'Decreto' },
-          { key: 'norma_legal', label: 'Norma Legal' },
+          { key: 'norma_legal', label: 'Norma Legal / Autoridad', fmt: (v, r) => val(v ?? r.decreto_numero) },
+          { key: 'fecha', label: 'Fecha', fmt: fmtDate },
           { key: 'a_partir', label: 'A Partir', fmt: fmtDate },
-          { key: 'fecha_baja', label: 'Fecha Baja', fmt: fmtDate },
+          { key: 'fecha_baja', label: 'Baja', fmt: fmtDate },
+          { key: 'motivo', label: 'Motivo' },
           { key: 'expediente', label: 'Expediente' },
+          { key: 'anio', label: 'Año' },
         ]}
         rows={rows}
+        onEdit={r => crud.open(r)}
+        onDelete={r => crud.remove(r)}
       />
+      {crud.state.open && (
+        <Modal titulo={crud.state.editing ? 'Editar bonificación' : 'Agregar bonificación'} onClose={crud.close}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Norma legal y autoridad que la dicta" name="norma_legal" value={f.norma_legal} onChange={crud.setField} />
+            <FormField label="Fecha" name="fecha" value={f.fecha} onChange={crud.setField} type="date" />
+            <FormField label="A partir" name="a_partir" value={f.a_partir} onChange={crud.setField} type="date" />
+            <FormField label="Baja" name="fecha_baja" value={f.fecha_baja} onChange={crud.setField} type="date" />
+            <FormField label="Expediente N°" name="expediente" value={f.expediente} onChange={crud.setField} />
+            <FormField label="Año" name="anio" value={f.anio} onChange={crud.setField} type="number" />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FormField label="Motivo" name="motivo" value={f.motivo} onChange={crud.setField} />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FormField label="Observaciones" name="observaciones" value={f.observaciones} onChange={crud.setField} type="textarea" />
+          </div>
+          <PieModal onCancel={crud.close} onSave={crud.save} saving={crud.state.saving} />
+        </Modal>
+      )}
+    </Seccion>
+  );
+}
+
+// Pág 10 — Licencias concepto 06 (formulario 55/80)
+function SeccionLicencias06({ rows, dni, onRefresh }: {
+  rows: any[]; dni: number; onRefresh: () => void;
+}) {
+  const crud = useCrud('legajo_licencias_06', dni, onRefresh);
+  const f = crud.state.form;
+  return (
+    <Seccion titulo="Pág. 10 — Licencias Concepto 06 (form. 55/80)" accent="#0891b2">
+      <BtnAgregar onClick={() => crud.open(undefined, { concepto: '06' })} />
+      <TablaLista
+        cols={[
+          { key: 'codigo_trabajo', label: 'Cód.' },
+          { key: 'subconcepto', label: 'Subc.' },
+          { key: 'inciso', label: 'Inc.' },
+          { key: 'norma_numero', label: 'Norma', fmt: (_v, r) => [r.norma_codigo, r.norma_numero, r.norma_anio].filter(Boolean).join(' / ') || '—' },
+          { key: 'fecha_desde', label: 'Desde', fmt: fmtDate },
+          { key: 'fecha_hasta', label: 'Hasta', fmt: fmtDate },
+          { key: 'dias_con_sueldo', label: 'C/S' },
+          { key: 'dias_50', label: '50%' },
+          { key: 'dias_sin_sueldo', label: 'S/S' },
+          { key: 'acum_con_sueldo', label: 'Acum C/S' },
+          { key: 'acum_50', label: 'Acum 50%' },
+          { key: 'acum_sin_sueldo', label: 'Acum S/S' },
+        ]}
+        rows={rows}
+        onEdit={r => crud.open(r)}
+        onDelete={r => crud.remove(r)}
+      />
+      {crud.state.open && (
+        <Modal titulo={crud.state.editing ? 'Editar renglón 55/80' : 'Agregar renglón 55/80'} onClose={crud.close}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <SubTitulo>Dirección de Personal</SubTitulo>
+            <FormField label="Código de trabajo" name="codigo_trabajo" value={f.codigo_trabajo} onChange={crud.setField} />
+            <FormField label="Concepto" name="concepto" value={f.concepto} onChange={crud.setField} />
+            <FormField label="Subconcepto" name="subconcepto" value={f.subconcepto} onChange={crud.setField} />
+            <FormField label="Inciso" name="inciso" value={f.inciso} onChange={crud.setField} />
+            <FormField label="N° legajo Contaduría" name="legajo_contaduria" value={f.legajo_contaduria} onChange={crud.setField} />
+            <SubTitulo>Norma legal</SubTitulo>
+            <FormField label="Código" name="norma_codigo" value={f.norma_codigo} onChange={crud.setField} />
+            <FormField label="Número" name="norma_numero" value={f.norma_numero} onChange={crud.setField} />
+            <FormField label="Año" name="norma_anio" value={f.norma_anio} onChange={crud.setField} />
+            <div />
+            <SubTitulo>Período</SubTitulo>
+            <FormField label="Desde" name="fecha_desde" value={f.fecha_desde} onChange={crud.setField} type="date" />
+            <FormField label="Hasta" name="fecha_hasta" value={f.fecha_hasta} onChange={crud.setField} type="date" />
+            <div /><div />
+            <SubTitulo>Total de días tomados o concedidos</SubTitulo>
+            <FormField label="Con sueldo" name="dias_con_sueldo" value={f.dias_con_sueldo} onChange={crud.setField} type="number" />
+            <FormField label="Con 50 %" name="dias_50" value={f.dias_50} onChange={crud.setField} type="number" />
+            <FormField label="Sin sueldo" name="dias_sin_sueldo" value={f.dias_sin_sueldo} onChange={crud.setField} type="number" />
+            <div />
+            <SubTitulo>Acumulados</SubTitulo>
+            <FormField label="Con sueldo" name="acum_con_sueldo" value={f.acum_con_sueldo} onChange={crud.setField} type="number" />
+            <FormField label="Con 50 %" name="acum_50" value={f.acum_50} onChange={crud.setField} type="number" />
+            <FormField label="Sin sueldo" name="acum_sin_sueldo" value={f.acum_sin_sueldo} onChange={crud.setField} type="number" />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FormField label="Observaciones" name="observaciones" value={f.observaciones} onChange={crud.setField} type="textarea" />
+          </div>
+          <PieModal onCancel={crud.close} onSave={crud.save} saving={crud.state.saving} />
+        </Modal>
+      )}
+    </Seccion>
+  );
+}
+
+// Pág 13 — Domicilio (historial)
+function SeccionDomicilios({ rows, actual, dni, onRefresh }: {
+  rows: any[]; actual: any; dni: number; onRefresh: () => void;
+}) {
+  const crud = useCrud('legajo_domicilios', dni, onRefresh);
+  const f = crud.state.form;
+  // Prellena el renglón con el domicilio que figura hoy en el sistema (se puede editar antes de guardar)
+  const copiarActual = () => {
+    const calle = [actual?.domicilio, actual?.numerodomicilio,
+      actual?.piso ? `piso ${actual.piso}` : '', actual?.depto ? `depto ${actual.depto}` : '']
+      .filter(Boolean).join(' ');
+    crud.setField('calle_numero', calle || null);
+    crud.setField('telefono', actual?.telefono ?? null);
+    crud.setField('partido', actual?.municipio_nombre ?? null);
+    crud.setField('localidad', actual?.localidad_nombre ?? null);
+    crud.setField('codigo_partido', actual?.municipio_codigo ?? null);
+    crud.setField('codigo_localidad', actual?.localidad_codigo ?? null);
+  };
+  return (
+    <Seccion titulo="Pág. 13 — Domicilio" accent="#059669">
+      <BtnAgregar onClick={() => crud.open()} />
+      <TablaLista
+        cols={[
+          { key: 'expediente', label: 'Expediente' },
+          { key: 'fecha', label: 'Fecha', fmt: fmtDate },
+          { key: 'calle_numero', label: 'Calle y Número' },
+          { key: 'telefono', label: 'T.E.' },
+          { key: 'partido', label: 'Partido' },
+          { key: 'localidad', label: 'Localidad' },
+          { key: 'codigo_partido', label: 'Cód. Partido' },
+          { key: 'codigo_localidad', label: 'Cód. Localidad' },
+        ]}
+        rows={rows}
+        onEdit={r => crud.open(r)}
+        onDelete={r => crud.remove(r)}
+      />
+      {crud.state.open && (
+        <Modal titulo={crud.state.editing ? 'Editar domicilio' : 'Agregar domicilio'} onClose={crud.close}>
+          <button onClick={copiarActual}
+            style={{ background: 'rgba(124,58,237,0.25)', color: '#c084fc', border: 'none', borderRadius: 6,
+              padding: '4px 12px', cursor: 'pointer', fontSize: '0.76rem', marginBottom: 12 }}>
+            Copiar domicilio actual del sistema
+          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Expediente (letra y N°)" name="expediente" value={f.expediente} onChange={crud.setField} />
+            <FormField label="Fecha" name="fecha" value={f.fecha} onChange={crud.setField} type="date" />
+            <FormField label="Calle y número" name="calle_numero" value={f.calle_numero} onChange={crud.setField} />
+            <FormField label="T.E." name="telefono" value={f.telefono} onChange={crud.setField} />
+            <FormField label="Partido" name="partido" value={f.partido} onChange={crud.setField} />
+            <FormField label="Localidad" name="localidad" value={f.localidad} onChange={crud.setField} />
+            <FormField label="Código de partido" name="codigo_partido" value={f.codigo_partido} onChange={crud.setField} />
+            <FormField label="Código de localidad" name="codigo_localidad" value={f.codigo_localidad} onChange={crud.setField} />
+          </div>
+          <PieModal onCancel={crud.close} onSave={crud.save} saving={crud.state.saving} />
+        </Modal>
+      )}
     </Seccion>
   );
 }
@@ -296,8 +633,9 @@ function useCrud(table: string, dni: number, onRefresh: () => void) {
   const toast = useToast();
   const [state, setState] = useState<CrudState>(emptyCrud());
 
-  const open = (row?: any) => {
-    setState({ open: true, editing: row ?? null, form: row ? { ...row } : { dni }, saving: false });
+  const open = (row?: any, defaults?: Record<string, any>) => {
+    setState({ open: true, editing: row ?? null,
+      form: row ? normalizarFechas(row) : { dni, ...defaults }, saving: false });
   };
   const close = () => setState(emptyCrud());
   const setField = (k: string, v: any) =>
@@ -381,6 +719,7 @@ function SeccionFamilia({ rows, expedientes, dni, onRefresh }: {
           cols={[
             { key: 'parentesco', label: 'Parentesco' },
             { key: 'apellido_nombres', label: 'Apellido y Nombre' },
+            { key: 'dni_familiar', label: 'DNI' },
             { key: 'sexo', label: 'Sexo' },
             { key: 'fecha_nacimiento', label: 'F. Nacimiento', fmt: fmtDate },
             { key: 'vive', label: 'Vive', fmt: bool },
@@ -415,6 +754,8 @@ function SeccionFamilia({ rows, expedientes, dni, onRefresh }: {
               onChange={familia.setField} />
             <FormField label="Código" name="codigo" value={f.codigo} onChange={familia.setField} />
             <FormField label="Apellido y Nombre" name="apellido_nombres" value={f.apellido_nombres}
+              onChange={familia.setField} />
+            <FormField label="DNI del familiar" name="dni_familiar" value={f.dni_familiar}
               onChange={familia.setField} />
             <FormField label="Sexo" name="sexo" value={f.sexo} onChange={familia.setField}
               type="select" options={[{value:'M',label:'Masculino'},{value:'F',label:'Femenino'},{value:'X',label:'Otro'}]} />
@@ -687,31 +1028,39 @@ function SeccionIncompatibilidad({ data, dni, onRefresh }: {
   const crud = useCrud('legajo_incompatibilidad', dni, onRefresh);
   const f = crud.state.form;
   const d = data ?? {};
+  // registros viejos: un solo "otro cargo" con nivel → se muestra en su renglón
+  const cargoEn = (nivel: string, nuevo: any) => val(nuevo || (d.otro_cargo_nivel === nivel ? d.otro_cargo_lugar : null));
   return (
     <Seccion titulo="Pág. 14 — Declaración de Incompatibilidad" accent="#9333ea">
       {data ? (
         <>
           <Grid>
             <Campo label="Fecha Declaración" value={fmtDate(d.fecha_declaracion)} />
-            <Campo label="Tiene Jubilación" value={bool(d.tiene_jubilacion)} />
+            <Campo label="¿Jubilación, Pensión o Retiro?" value={d.tiene_jubilacion ? val(d.jubilacion_tipo ?? 'Sí') : 'No'} />
             {d.tiene_jubilacion ? (
               <>
-                <Campo label="Ley Jubilación" value={val(d.jubilacion_ley)} />
+                <Campo label="Ley número" value={val(d.jubilacion_ley)} />
                 <Campo label="Caja" value={val(d.jubilacion_caja)} />
-                <Campo label="Monto" value={fmtMoney(d.jubilacion_monto)} />
-                <Campo label="Fecha" value={fmtDate(d.jubilacion_fecha)} />
+                <Campo label="Monto mensual" value={fmtMoney(d.jubilacion_monto)} />
+                <Campo label="Fecha de otorgamiento" value={fmtDate(d.jubilacion_fecha)} />
               </>
             ) : null}
-            <Campo label="Otro Cargo" value={bool(d.otro_cargo)} />
+            <Campo label="¿Otro cargo?" value={bool(d.otro_cargo)} />
             {d.otro_cargo ? (
               <>
-                <Campo label="Nivel" value={val(d.otro_cargo_nivel)} />
+                <Campo label="Nacional" value={cargoEn('NACIONAL', d.cargo_nacional)} />
+                <Campo label="Provincial" value={cargoEn('PROVINCIAL', d.cargo_provincial)} />
+                <Campo label="Municipal" value={cargoEn('MUNICIPAL', d.cargo_municipal)} />
                 <Campo label="Lugar" value={val(d.otro_cargo_lugar)} />
+                <Campo label="Horario" value={val(d.otro_cargo_horario)} />
                 <Campo label="Monto" value={fmtMoney(d.otro_cargo_monto)} />
                 <Campo label="Fecha Ingreso" value={fmtDate(d.otro_cargo_fecha_ingreso)} />
               </>
             ) : null}
-            <Campo label="Otras Actividades" value={val(d.otras_actividades)} wide />
+            <Campo label="Otras Actividades (carácter)" value={val(d.otras_actividades)} />
+            <Campo label="Lugar" value={val(d.otras_actividades_lugar)} />
+            <Campo label="Monto" value={fmtMoney(d.otras_actividades_monto)} />
+            <Campo label="Fecha Ingreso" value={fmtDate(d.otras_actividades_fecha)} />
             <Campo label="Observaciones" value={val(d.observaciones)} wide />
           </Grid>
           <button onClick={() => crud.open(data)}
@@ -736,52 +1085,54 @@ function SeccionIncompatibilidad({ data, dni, onRefresh }: {
             <FormField label="Fecha Declaración" name="fecha_declaracion" value={f.fecha_declaracion}
               onChange={crud.setField} type="date" />
             <div />
-            <FormField label="Tiene Jubilación" name="tiene_jubilacion" value={f.tiene_jubilacion}
+            <SubTitulo>Jubilación, pensión o retiro</SubTitulo>
+            <FormField label="Tiene jubilación, pensión o retiro" name="tiene_jubilacion" value={f.tiene_jubilacion}
               onChange={crud.setField} type="checkbox" />
             {f.tiene_jubilacion ? (
               <>
-                <FormField label="Ley" name="jubilacion_ley" value={f.jubilacion_ley}
-                  onChange={crud.setField} />
-                <FormField label="Caja" name="jubilacion_caja" value={f.jubilacion_caja}
-                  onChange={crud.setField} />
-                <FormField label="Monto" name="jubilacion_monto" value={f.jubilacion_monto}
+                <FormField label="Tipo" name="jubilacion_tipo" value={f.jubilacion_tipo} onChange={crud.setField}
+                  type="select" options={['JUBILACION','PENSION','RETIRO'].map(v => ({ value: v, label: v }))} />
+                <FormField label="Ley número" name="jubilacion_ley" value={f.jubilacion_ley} onChange={crud.setField} />
+                <FormField label="Caja" name="jubilacion_caja" value={f.jubilacion_caja} onChange={crud.setField} />
+                <FormField label="Monto mensual" name="jubilacion_monto" value={f.jubilacion_monto}
                   onChange={crud.setField} type="number" />
-                <FormField label="Fecha" name="jubilacion_fecha" value={f.jubilacion_fecha}
+                <FormField label="Fecha de otorgamiento" name="jubilacion_fecha" value={f.jubilacion_fecha}
                   onChange={crud.setField} type="date" />
               </>
-            ) : null}
-            <FormField label="Otro Cargo" name="otro_cargo" value={f.otro_cargo}
+            ) : <div />}
+            <SubTitulo>Otro cargo</SubTitulo>
+            <FormField label="Desempeña algún otro cargo" name="otro_cargo" value={f.otro_cargo}
               onChange={crud.setField} type="checkbox" />
             {f.otro_cargo ? (
               <>
-                <FormField label="Nivel" name="otro_cargo_nivel" value={f.otro_cargo_nivel}
-                  onChange={crud.setField} type="select"
-                  options={['NACIONAL','PROVINCIAL','MUNICIPAL','NINGUNO'].map(v => ({ value: v, label: v }))} />
-                <FormField label="Lugar" name="otro_cargo_lugar" value={f.otro_cargo_lugar}
+                <div />
+                <FormField label="Nacional" name="cargo_nacional" value={f.cargo_nacional} onChange={crud.setField} />
+                <FormField label="Provincial" name="cargo_provincial" value={f.cargo_provincial} onChange={crud.setField} />
+                <FormField label="Municipal" name="cargo_municipal" value={f.cargo_municipal} onChange={crud.setField} />
+                <FormField label="Lugar donde lo desempeña" name="otro_cargo_lugar" value={f.otro_cargo_lugar}
                   onChange={crud.setField} />
-                <FormField label="Monto" name="otro_cargo_monto" value={f.otro_cargo_monto}
+                <FormField label="Horario" name="otro_cargo_horario" value={f.otro_cargo_horario} onChange={crud.setField} />
+                <FormField label="Monto sueldo, comisión u honorarios" name="otro_cargo_monto" value={f.otro_cargo_monto}
                   onChange={crud.setField} type="number" />
-                <FormField label="Fecha Ingreso" name="otro_cargo_fecha_ingreso"
+                <FormField label="Fecha de ingreso" name="otro_cargo_fecha_ingreso"
                   value={f.otro_cargo_fecha_ingreso} onChange={crud.setField} type="date" />
               </>
-            ) : null}
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <FormField label="Otras Actividades" name="otras_actividades" value={f.otras_actividades}
+            ) : <div />}
+            <SubTitulo>Otras actividades</SubTitulo>
+            <FormField label="Otras actividades (carácter)" name="otras_actividades" value={f.otras_actividades}
               onChange={crud.setField} />
+            <FormField label="Lugar donde las desempeña" name="otras_actividades_lugar" value={f.otras_actividades_lugar}
+              onChange={crud.setField} />
+            <FormField label="Monto sueldo, comisión u honorarios" name="otras_actividades_monto"
+              value={f.otras_actividades_monto} onChange={crud.setField} type="number" />
+            <FormField label="Fecha de ingreso" name="otras_actividades_fecha" value={f.otras_actividades_fecha}
+              onChange={crud.setField} type="date" />
           </div>
           <div style={{ marginTop: 12 }}>
             <FormField label="Observaciones" name="observaciones" value={f.observaciones}
               onChange={crud.setField} type="textarea" />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button onClick={crud.close}
-              style={{ background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: 6,
-                padding: '7px 16px', cursor: 'pointer', color: '#fff', fontSize: '0.82rem' }}>
-              Cancelar
-            </button>
-            <BtnGuardar onClick={crud.save} saving={crud.state.saving} />
-          </div>
+          <PieModal onCancel={crud.close} onSave={crud.save} saving={crud.state.saving} />
         </Modal>
       )}
     </Seccion>
@@ -885,29 +1236,56 @@ function SeccionBienes({ rows, dni, onRefresh }: {
 
 type TabKey =
   | 'datos'
+  | 'rectif'
+  | 'familia'
   | 'foja'
   | 'bonif'
-  | 'familia'
   | 'funcDest'
   | 'licencias'
+  | 'lic06'
   | 'concepto'
   | 'penas'
+  | 'domicilio'
   | 'incomp'
   | 'embargos'
   | 'bienes';
 
+// Hojas del PDF oficial (assets/legajo/plantilla_legajo.pdf en la API)
+const HOJAS_LEGAJO: { n: number; label: string }[] = [
+  { n: 1,  label: 'Tapa' },
+  { n: 2,  label: '1) Datos personales' },
+  { n: 3,  label: 'Rectificaciones' },
+  { n: 4,  label: '2) Familia' },
+  { n: 5,  label: '2 bis) Expedientes familia' },
+  { n: 6,  label: '3) Foja de servicios' },
+  { n: 7,  label: '3 bis) Bonificaciones' },
+  { n: 8,  label: '4) Función y destino' },
+  { n: 9,  label: '5) Licencias' },
+  { n: 10, label: '6) Licencias concepto 06' },
+  { n: 11, label: '7) Concepto y menciones' },
+  { n: 12, label: '8) Penas disciplinarias' },
+  { n: 13, label: '9) Domicilio' },
+  { n: 14, label: '10) Incompatibilidad' },
+  { n: 15, label: '11) Embargos' },
+  { n: 16, label: '12) Declaración de bienes' },
+];
+
+// Mismo orden que las hojas del formulario oficial
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'datos',    label: 'Datos Personales' },
-  { key: 'foja',     label: 'Foja de Servicios' },
-  { key: 'bonif',    label: 'Bonificaciones' },
-  { key: 'familia',  label: 'Grupo Familiar' },
-  { key: 'funcDest', label: 'Función y Destino' },
-  { key: 'licencias',label: 'Licencias' },
-  { key: 'concepto', label: 'Concepto / Menciones' },
-  { key: 'penas',    label: 'Penas Disciplinarias' },
-  { key: 'incomp',   label: 'Incompatibilidad' },
-  { key: 'embargos', label: 'Embargos' },
-  { key: 'bienes',   label: 'Decl. de Bienes' },
+  { key: 'datos',     label: '1) Datos Personales' },
+  { key: 'rectif',    label: 'Rectificaciones' },
+  { key: 'familia',   label: '2) Familia' },
+  { key: 'foja',      label: '3) Foja de Servicios' },
+  { key: 'bonif',     label: '3 bis) Bonificaciones' },
+  { key: 'funcDest',  label: '4) Función y Destino' },
+  { key: 'licencias', label: '5) Licencias' },
+  { key: 'lic06',     label: '6) Licencias 55/80' },
+  { key: 'concepto',  label: '7) Concepto / Menciones' },
+  { key: 'penas',     label: '8) Penas Disciplinarias' },
+  { key: 'domicilio', label: '9) Domicilio' },
+  { key: 'incomp',    label: '10) Incompatibilidad' },
+  { key: 'embargos',  label: '11) Embargos' },
+  { key: 'bienes',    label: '12) Decl. de Bienes' },
 ];
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -923,18 +1301,22 @@ export function LegajoPage() {
   const [data, setData]       = useState<any | null>(null);
   const [activeDni, setActiveDni] = useState<number>(0);
   const [tab, setTab]         = useState<TabKey>('datos');
-  const printRef = useRef<HTMLDivElement>(null);
+  const [hojaImprimir, setHojaImprimir] = useState<number>(0);  // 0 = legajo completo
+  const [importando, setImportando] = useState(false);
 
-  const cargar = useCallback(async (dniNum: number) => {
+  // refrescar = recarga tras guardar: no vacía la pantalla ni cambia de pestaña
+  const cargar = useCallback(async (dniNum: number, refrescar = false) => {
     setLoading(true);
-    setData(null);
+    if (!refrescar) setData(null);
     try {
       const res = await apiFetch<{ ok: boolean; data: any }>(`/legajo/${dniNum}`);
       if (!res.ok) throw new Error('No encontrado');
       setData(res.data);
       setActiveDni(dniNum);
-      setTab('datos');
-      toast.ok('Legajo cargado');
+      if (!refrescar) {
+        setTab('datos');
+        toast.ok('Legajo cargado');
+      }
     } catch (e: any) {
       toast.error('No encontrado', e?.message);
     } finally {
@@ -975,35 +1357,22 @@ export function LegajoPage() {
   }, [apellido, cargar, toast]);
 
   const refresh = useCallback(() => {
-    if (activeDni) cargar(activeDni);
+    if (activeDni) cargar(activeDni, true);
   }, [activeDni, cargar]);
 
-  const imprimir = () => {
-    if (!printRef.current) return;
-    const html = `<!DOCTYPE html><html><head><title>Legajo — ${activeDni}</title>
-      <meta charset="utf-8">
-      <style>
-        *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;padding:24px;color:#111;font-size:11px;background:#fff}
-        h1{font-size:15px;margin:0 0 4px 0;color:#111}
-        h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-           color:#555;border-bottom:1px solid #ccc;padding-bottom:3px;margin:16px 0 8px 0}
-        .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 16px;margin-bottom:12px}
-        .campo label{font-size:8px;text-transform:uppercase;color:#888;display:block}
-        .campo span{font-size:11px}
-        table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:10px}
-        th{background:#f0f0f0;padding:3px 6px;text-align:left;font-size:9px;font-weight:700;
-           text-transform:uppercase;color:#555}
-        td{padding:3px 6px;border-bottom:1px solid #eee}
-        @page{margin:15mm}
-        @media print{body{padding:0}}
-      </style>
-    </head><body>${printRef.current.innerHTML}</body></html>`;
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    setTimeout(() => { w.focus(); w.print(); }, 300);
+  // Abre el legajo completado sobre el PDF original del Ministerio (lo arma la API)
+  const imprimir = async () => {
+    if (!activeDni) return;
+    const w = window.open('', '_blank');  // se abre antes del await para que no lo bloquee el navegador
+    if (!w) { toast.error('El navegador bloqueó la ventana del PDF'); return; }
+    w.document.write('<p style="font-family:sans-serif">Generando el legajo…</p>');
+    try {
+      const blob = await apiFetchBlob(`/legajo/${activeDni}/pdf${hojaImprimir ? `?hojas=${hojaImprimir}` : ''}`);
+      w.location.href = URL.createObjectURL(blob);
+    } catch (e: any) {
+      w.close();
+      toast.error('No se pudo generar el PDF', e?.message);
+    }
   };
 
   const d = data;
@@ -1038,10 +1407,24 @@ export function LegajoPage() {
           style={{ background: '#7c3aed', color: '#fff', height: 38 }}>
           Buscar apellido
         </button>
+        <button className="btn" onClick={() => setImportando(true)} style={{ height: 38 }}
+          title="Importar respuestas del formulario de Google">
+          📥 Importar formulario
+        </button>
         {d && (
-          <button className="btn" onClick={imprimir} style={{ height: 38 }}>
-            Imprimir
-          </button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+            <div>
+              <label htmlFor="legajo-hoja" className="muted" style={{ display: 'block', fontSize: '0.75rem', marginBottom: 4 }}>IMPRIMIR</label>
+              <select id="legajo-hoja" className="input" value={hojaImprimir}
+                onChange={e => setHojaImprimir(Number(e.target.value))} style={{ height: 38 }}>
+                <option value={0}>Legajo completo (16 hojas)</option>
+                {HOJAS_LEGAJO.map(h => <option key={h.n} value={h.n}>Hoja {h.n} — {h.label}</option>)}
+              </select>
+            </div>
+            <button className="btn" onClick={imprimir} style={{ height: 38 }}>
+              🖨️ Imprimir
+            </button>
+          </div>
         )}
       </div>
 
@@ -1135,10 +1518,28 @@ export function LegajoPage() {
           </div>
 
           {/* Contenido del tab activo */}
-          <div ref={printRef} className="card" style={{ padding: 20, minHeight: 300 }}>
-            {tab === 'datos'    && <SeccionDatosPersonales d={d.datosPersonales} />}
-            {tab === 'foja'     && <SeccionFojaServicios agente={d.agente} servicios={d.servicios ?? []} />}
-            {tab === 'bonif'    && <SeccionBonificaciones rows={d.bonificaciones ?? []} />}
+          <div className="card" style={{ padding: 20, minHeight: 300 }}>
+            {tab === 'datos'    && (
+              <SeccionDatosPersonales key={activeDni} d={d.datosPersonales} dl={d.datosLegajo}
+                agente={d.agente} dni={activeDni} onRefresh={refresh} />
+            )}
+            {tab === 'rectif'   && (
+              <SeccionRectificaciones rows={d.rectificaciones ?? []} dni={activeDni} onRefresh={refresh} />
+            )}
+            {tab === 'foja'     && (
+              <SeccionFojaServicios rows={d.fojaServicios ?? []} tramos={d.tramos ?? []}
+                dni={activeDni} onRefresh={refresh} />
+            )}
+            {tab === 'bonif'    && (
+              <SeccionBonificaciones rows={d.bonificaciones ?? []} dni={activeDni} onRefresh={refresh} />
+            )}
+            {tab === 'lic06'    && (
+              <SeccionLicencias06 rows={d.licencias06 ?? []} dni={activeDni} onRefresh={refresh} />
+            )}
+            {tab === 'domicilio' && (
+              <SeccionDomicilios rows={d.domicilios ?? []} actual={d.datosPersonales}
+                dni={activeDni} onRefresh={refresh} />
+            )}
             {tab === 'familia'  && (
               <SeccionFamilia
                 rows={d.familia ?? []}
@@ -1170,6 +1571,9 @@ export function LegajoPage() {
             )}
           </div>
         </>
+      )}
+      {importando && (
+        <ImportarFormulario onClose={() => setImportando(false)} onImportado={refresh} />
       )}
     </Layout>
   );

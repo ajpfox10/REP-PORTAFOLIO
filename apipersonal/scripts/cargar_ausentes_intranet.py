@@ -1,4 +1,8 @@
 """
+SIN USO como programa desde 04/10/2026: lo reemplaza cargar_ausentes_intranet_v2.py (tablas).
+Sus funciones de Intranet (login, perfil de Chrome) las siguen usando descargar_novedades_ministerio.py
+(y probe_intranet_reportes.py): NO borrar.
+
 Carga ausentes puros desde D:\\G\\comparacion\\SIAPE\\SIAPE.xlsx en la Intranet.
 
 Fuente esperada:

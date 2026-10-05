@@ -7,6 +7,8 @@ import XLSXStyle from 'xlsx-js-style';
 import { saveAs } from 'file-saver';
 import { CruceHorariosTab } from './CruceHorariosTab';
 import { LicenciasHistorialTab } from './LicenciasHistorialTab';
+import { StressAlertasContent } from '../StressAlertasPage';
+import { useAuth } from '../../auth/AuthProvider';
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -107,7 +109,9 @@ export function ReporteAsistenciaServicioPage() {
   // ── Vista ──
   const [agenteAbierto, setAgenteAbierto] = useState<string | null>(null);
   const [vistaAgente, setVistaAgente]     = useState<'semanas' | 'dias'>('semanas');
-  const [tab, setTab]                     = useState<'reporte' | 'cruce' | 'licencias'>('reporte');
+  const [tab, setTab]                     = useState<'reporte' | 'cruce' | 'licencias' | 'stress'>('reporte');
+  const { hasPerm } = useAuth();
+  const esAdmin = hasPerm('crud:*:*');   // Stress post-vacacional era solo admin
 
   // Cargar servicios y archivos al montar
   useEffect(() => {
@@ -282,7 +286,16 @@ export function ReporteAsistenciaServicioPage() {
           onClick={() => setTab('licencias')}>
           📋 Licencias
         </button>
+        {esAdmin && (
+          <button type="button" className="btn"
+            style={tab === 'stress' ? { background: 'rgba(99,102,241,0.25)', color: '#818cf8', fontWeight: 700 } : {}}
+            onClick={() => setTab('stress')}>
+            🌴 Stress post-vacacional
+          </button>
+        )}
       </div>
+
+      {tab === 'stress' && esAdmin && <StressAlertasContent />}
 
       {tab === 'cruce' && (
         <CruceHorariosTab servicios={servicios} horariosFile={horariosFile} />

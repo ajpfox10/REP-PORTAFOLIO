@@ -14,6 +14,7 @@ type Pendiente = {
   anios_cumplidos: number | null;
   anios_residencia: number | null;
   servicio_nombre: string | null;
+  estado?: string;
 };
 
 function fmtFecha(f?: string | null) {
@@ -69,9 +70,11 @@ export function ResidenciasBajaBanner() {
             }}>
               {[r.apellido, r.nombre].filter(Boolean).join(', ')}
               {r.residencia_nombre ? ` · ${r.residencia_nombre}` : ''}
-              {r.anios_cumplidos != null && r.anios_residencia != null
-                ? ` (${r.anios_cumplidos}/${r.anios_residencia})`
-                : ''}
+              {r.estado === 'FIN_JEFATURA'
+                ? ' (fin de jefatura)'
+                : r.anios_cumplidos != null && r.anios_residencia != null
+                  ? ` (${r.anios_cumplidos}/${r.anios_residencia})`
+                  : ''}
             </span>
           ))}
           {restantes > 0 && (
@@ -81,9 +84,9 @@ export function ResidenciasBajaBanner() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Link className="btn" to="/app/duracion-residencias">Resolver bajas</Link>
+          <Link className="btn" to="/app/duracion-residencias">Resolver (baja o jefatura)</Link>
           <span style={{ opacity: .65, fontSize: '.76rem' }}>
-            Este aviso no se puede descartar: sigue hasta que el agente esté dado de baja.
+            Este aviso no se puede descartar: sigue hasta que el agente esté dado de baja o pase a jefatura.
           </span>
         </div>
       </div>

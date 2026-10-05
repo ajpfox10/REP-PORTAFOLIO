@@ -1,4 +1,7 @@
 // src/pages/ComparadorSiapePage/index.tsx
+// Versión 2.0: lee la última corrida del Comparador 2.0 (tablas comparacion_*) y el resultado
+// de la carga (novedades_carga_intranet). Los botones lanzan los robots 2.0 por run_robot.py
+// (quedan en la página Robots). La versión vieja (Excel + scripts sueltos) quedó SIN USO.
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 
 const DEPS_RES = ['HOSPITAL', 'UPA 4', 'UPA 18'] as const;
@@ -7,6 +10,8 @@ import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { exportToExcel } from '../../utils/export';
 import { useToast } from '../../ui/toast';
+import { useAuth } from '../../auth/AuthProvider';
+import { CargaSiapeContent } from '../CargaSiapePage';
 
 interface CompRow {
   legajo: string;
@@ -23,6 +28,8 @@ interface CompRow {
   justificado_siap?: string;
   estado: 'COINCIDENTE' | 'NO COINCIDENTE' | 'RANGO_DISTINTO' | 'SOLO_SIAP';
   motivo: string;
+  carga_estado?: string | null;   // estado en novedades_carga_intranet (solo filas SOLO_SIAP)
+  carga_detalle?: string | null;
 }
 
 function leyLabel(ley: string): string {
@@ -32,31 +39,41 @@ function leyLabel(ley: string): string {
 }
 
 interface ResultadoRow {
+  id: number;
   nombre: string;
   dni: string;
-  novedad: string;
+  novedad: string;        // novedad SIAPE (clave para cruzar con la comparación)
+  label: string;          // opción de la Intranet con la que se cargó / intentó
   desde: string;
   hasta: string;
   estado: string;
   detalle: string;
+  intentos: number;
+  corrida_id: number | null;
+  actualizado: string;
   ley?: string;
+}
+
+interface Corrida {
+  id: number;
+  creado_en: string;
+  archivo_ministerio: string;
+  archivo_siape: string;
+  ministerio_modificado: string | null;
+  siape_modificado: string | null;
 }
 
 interface ApiResult {
   ok: boolean;
-  resumen: {
-    total_ministerio: number;
-    total_siap_con_novedad: number;
-    coincidentes: number;
-    rango_distinto: number;
-    no_coincidentes: number;
-    solo_siap: number;
-  };
-  archivos: { ministerio: string; siap: string };
+  corrida: Corrida | null;
   resultado: CompRow[];
-  errores: CompRow[];
-  cached?: boolean;
   error?: string;
+}
+
+function fechaHora(s: string | null | undefined) {
+  if (!s) return '—';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? String(s) : d.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 const BADGE: Record<string, { label: string; color: string }> = {
@@ -72,6 +89,8 @@ const BADGE_RES: Record<string, { label: string; color: string }> = {
   'EXCEPCION':  { label: '⚠ Excepción', color: '#f59e0b' },
   'SIN_FECHA':  { label: '— Sin fecha', color: '#64748b' },
   'ERROR_NAV':  { label: '↯ Nav error', color: '#ef4444' },
+  'PENDIENTE':  { label: '● Pendiente', color: '#f59e0b' },
+  'DESCARTADA': { label: '— Descartada', color: '#64748b' },
 };
 
 const BG: Record<string, string> = {
@@ -112,7 +131,23 @@ const DEP_COLORS: Record<string, string> = {
   'UPA 18':   '#f59e0b',
 };
 
-const COLS = ['Estado','Dep.','Ley','Legajo','DNI','Nombre','Nov. Ministerio','Desde Min.','Hasta Min.','Nov. SIAP','Desde SIAP','Hasta SIAP','Motivo'];
+const COLS = ['Estado','Dep.','Ley','Legajo','DNI','Nombre','Nov. Ministerio','Desde Min.','Hasta Min.','Nov. SIAP','Desde SIAP','Hasta SIAP','Motivo','Carga'];
+
+// Estado de carga de una fila SOLO_SIAP (sin fila en la tabla de carga = el robot todavía no la tomó)
+function cargaDe(r: CompRow): 'OK' | 'ERROR' | 'SIN_INTENTAR' | 'DESCARTADA' | null {
+  if (r.estado !== 'SOLO_SIAP' || r.motivo === 'BECARIO_NO_APLICA') return null;
+  if (r.carga_estado === 'OK') return 'OK';
+  if (r.carga_estado === 'DESCARTADA') return 'DESCARTADA';
+  if (r.carga_estado && r.carga_estado !== 'PENDIENTE') return 'ERROR';
+  return 'SIN_INTENTAR';
+}
+
+const BADGE_CARGA: Record<string, { label: string; color: string }> = {
+  OK:           { label: '✓ Cargada',     color: '#22c55e' },
+  ERROR:        { label: '✗ Error',       color: '#ef4444' },
+  SIN_INTENTAR: { label: '● Sin intentar', color: '#f59e0b' },
+  DESCARTADA:   { label: '— Descartada',   color: '#64748b' },
+};
 
 function Tabla({ rows }: { rows: CompRow[] }) {
   const [page, setPage] = useState(0);
@@ -160,6 +195,10 @@ function Tabla({ rows }: { rows: CompRow[] }) {
                       <td style={{ padding: '3px 6px', whiteSpace: 'nowrap', fontSize: '0.66rem' }}>{r.fecha_desde_siap}</td>
                       <td style={{ padding: '3px 6px', whiteSpace: 'nowrap', fontSize: '0.66rem' }}>{r.fecha_hasta_siap}</td>
                       <td style={{ padding: '3px 6px', fontSize: '0.62rem', color: isNoAplica ? '#f59e0b' : '#64748b' }}>{r.motivo}</td>
+                      <td style={{ padding: '3px 6px', whiteSpace: 'nowrap' }} title={r.carga_detalle || ''}>
+                        {(() => { const c = cargaDe(r); const bc = c ? BADGE_CARGA[c] : null;
+                          return bc ? <span style={{ color: bc.color, fontWeight: 600, fontSize: '0.63rem' }}>{bc.label}</span> : null; })()}
+                      </td>
                     </tr>
                   );
                 })
@@ -180,7 +219,7 @@ function Tabla({ rows }: { rows: CompRow[] }) {
   );
 }
 
-const COLS_RES = ['Nombre','DNI','Ley','Novedad','Desde','Hasta','Estado','Detalle'];
+const COLS_RES = ['Nombre','DNI','Novedad','Desde','Hasta','Estado','Intentos','Detalle'];
 const PAGE_SIZE = 50;
 
 function TablaResultados({ rows }: { rows: ResultadoRow[] }) {
@@ -209,17 +248,16 @@ function TablaResultados({ rows }: { rows: ResultadoRow[] }) {
                     <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: bg }}>
                       <td style={{ padding: '4px 8px', fontWeight: 500 }}>{r.nombre}</td>
                       <td style={{ padding: '4px 8px', fontFamily: 'monospace', fontSize: '0.73rem', color: '#94a3b8' }}>{r.dni}</td>
-                      <td style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>
-                        <span style={{ color: leyLabel(r.ley ?? '') === 'BECARIO' ? '#f59e0b' : '#94a3b8', fontWeight: leyLabel(r.ley ?? '') === 'BECARIO' ? 700 : 400, fontSize: '0.68rem' }}>
-                          {leyLabel(r.ley ?? '') || '—'}
-                        </span>
+                      <td style={{ padding: '4px 8px', color: '#a78bfa', fontSize: '0.72rem' }}>
+                        {r.novedad}
+                        {r.label && r.label !== r.novedad && <div style={{ color: '#64748b', fontSize: '0.64rem' }}>→ {r.label}</div>}
                       </td>
-                      <td style={{ padding: '4px 8px', color: '#a78bfa', fontSize: '0.72rem' }}>{r.novedad}</td>
                       <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', fontSize: '0.71rem' }}>{r.desde}</td>
                       <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', fontSize: '0.71rem' }}>{r.hasta}</td>
                       <td style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>
                         <span style={{ color: b.color, fontWeight: 600, fontSize: '0.69rem' }}>{b.label}</span>
                       </td>
+                      <td style={{ padding: '4px 8px', textAlign: 'center', fontSize: '0.69rem', color: '#94a3b8' }}>{r.intentos}</td>
                       <td style={{ padding: '4px 8px', fontSize: '0.67rem', color: '#64748b' }}>{r.detalle}</td>
                     </tr>
                   );
@@ -249,12 +287,9 @@ const toRow = (r: CompRow) => ({
   'Desde SIAP': r.fecha_desde_siap, 'Hasta SIAP': r.fecha_hasta_siap,
   JUSTIFICADO: r.justificado_siap ?? '',
   Motivo: r.motivo,
+  Carga: r.carga_estado ?? '',
+  'Detalle carga': r.carga_detalle ?? '',
 });
-
-// Clave para identificar una novedad ya procesada con OK
-function resKey(dni: string, novedad: string, desde: string, hasta: string) {
-  return `${dni}|${novedad}|${desde}|${hasta}`;
-}
 
 function detalleGrupo(detalle: string) {
   const d = String(detalle ?? '').replace(/^×\s*Close\s*/i, '').trim();
@@ -309,8 +344,11 @@ export function ComparadorSiapePage() {
   const [loadingRes, setLoadingRes]     = useState(false);
   const [filtroRes, setFiltroRes]       = useState('no_ok');
   const [textoRes, setTextoRes]         = useState('');
-  const [exportandoPend, setExportandoPend] = useState(false);
-  const [tab, setTab] = useState<'comparacion' | 'resultados'>('comparacion');
+  const [comparando, setComparando]     = useState(false);
+  const [verAnteriores, setVerAnteriores] = useState(false);
+  const [tab, setTab] = useState<'comparacion' | 'resultados' | 'carga_siape'>('comparacion');
+  const { hasPerm } = useAuth();
+  const esAdmin = hasPerm('crud:*:*');   // Carga SiAPe era solo admin
   const [filtroDetalle, setFiltroDetalle] = useState('todos');
   const [filtroPisada, setFiltroPisada] = useState('todos');
   const [cargando, setCargando]           = useState(false);
@@ -322,23 +360,23 @@ export function ComparadorSiapePage() {
     const d = dep ?? depRes;
     setLoadingRes(true);
     try {
-      const r = await apiFetch<{ ok: boolean; filas: ResultadoRow[]; existe: boolean }>(
-        `/intranet/resultado?dep=${encodeURIComponent(d)}`
+      const r = await apiFetch<{ ok: boolean; filas: ResultadoRow[] }>(
+        `/comparacion-v2/resultado?dep=${encodeURIComponent(d)}${verAnteriores ? '&todas=1' : ''}`
       );
       if (r?.ok) setResultado(r.filas ?? []);
       else setResultado([]);
     } catch { setResultado([]); } finally {
       setLoadingRes(false);
     }
-  }, [depRes]);
+  }, [depRes, verAnteriores]);
 
   useEffect(() => {
-    if (!firstLoad.current) { firstLoad.current = true; cargarResultado('HOSPITAL'); }
+    if (!firstLoad.current) { firstLoad.current = true; cargarResultado('HOSPITAL'); cargar(); }
   }, []);
 
   useEffect(() => {
     if (firstLoad.current) cargarResultado(depRes);
-  }, [depRes]);
+  }, [depRes, verAnteriores]);
 
   async function lanzarScript(endpoint: string, body: object, setRunning: (v: boolean) => void) {
     setRunning(true);
@@ -355,25 +393,32 @@ export function ComparadorSiapePage() {
     }
   }
 
-  // Set de claves ya OK en el resultado
-  const okSet = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of resultado) {
-      if (r.estado === 'OK') s.add(resKey(r.dni, r.novedad, r.desde, r.hasta));
-    }
-    return s;
-  }, [resultado]);
-
-  async function cargar(refresh = false) {
+  async function cargar() {
     setLoading(true);
     try {
-      const r = await apiFetch<ApiResult>(`/comparacion-siape${refresh ? '?refresh=1' : ''}`);
+      const r = await apiFetch<ApiResult>('/comparacion-v2/ultima');
       if (!r?.ok) throw new Error(r?.error ?? 'Error');
-      setData(r);
+      setData(r.corrida ? r : null);
     } catch (e: any) {
       toast.error('Error', e?.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Corre el Comparador 2.0 (lee los archivos de D:\G\comparacion y guarda una corrida nueva)
+  async function comparar() {
+    setComparando(true);
+    try {
+      const r = await apiFetch<{ ok: boolean; error?: string }>('/comparacion-v2/comparar', { method: 'POST' });
+      if (!r?.ok) throw new Error(r?.error ?? 'Error');
+      toast.ok('Comparación lista');
+      await cargar();
+      await cargarResultado();
+    } catch (e: any) {
+      toast.error('No se pudo comparar', e?.message);
+    } finally {
+      setComparando(false);
     }
   }
 
@@ -402,15 +447,71 @@ export function ComparadorSiapePage() {
     [data, mes, texto, estado, dep, novedad]
   );
 
-  // SOLO_SIAP pendientes = los que no tienen OK en resultado y no son BECARIO_NO_APLICA
-  const pendientes = useMemo(() =>
-    completa.filter(r =>
-      r.estado === 'SOLO_SIAP' &&
-      r.motivo !== 'BECARIO_NO_APLICA' &&
-      !okSet.has(resKey(r.dni, r.novedad_siap, r.fecha_desde_siap, r.fecha_hasta_siap))
-    ),
-    [completa, okSet]
-  );
+  // Estado de carga de las SOLO_SIAP (las 3 dependencias, desde la base)
+  const cargaConteo = useMemo(() => {
+    const c = { OK: 0, ERROR: 0, SIN_INTENTAR: 0, DESCARTADA: 0 };
+    for (const r of completa) { const k = cargaDe(r); if (k) c[k]++; }
+    return c;
+  }, [completa]);
+
+  // Imprime en orden alfabético los 28 de SIAPE (AUSENTE SIN AVISO) y los de la Intranet
+  // (28-INASISTENCIA). Respeta los filtros de mes, dependencia y texto (no los de estado/novedad).
+  function imprimir28() {
+    if (!data) return;
+    const base = aplicarFiltros(data.resultado, mes, texto, 'todos', dep, 'todas');
+    const fmt = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : (iso || ''));
+    const esc = (v: string) => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] as string));
+    const ordenar = (rows: CompRow[], campo: keyof CompRow) =>
+      [...rows].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || String(a[campo]).localeCompare(String(b[campo])));
+
+    const siape = ordenar(base.filter(r => r.novedad_siap === 'AUSENTE SIN AVISO'), 'fecha_desde_siap');
+    const intranet = ordenar(base.filter(r => /^28/.test(r.novedad_ministerio || '')), 'fecha_desde_min');
+
+    const enIntranet = (r: CompRow) => {
+      if (r.estado === 'COINCIDENTE') return 'Sí';
+      if (r.estado === 'RANGO_DISTINTO') return 'Sí (otro rango)';
+      const c = cargaDe(r);
+      if (c === 'OK') return 'Sí (cargado por el robot)';
+      if (c === 'ERROR') return `No — ${r.carga_detalle || 'error de carga'}`;
+      if (c === 'DESCARTADA') return 'No — descartada (no se carga)';
+      return 'No';
+    };
+    const enSiape = (r: CompRow) =>
+      r.estado === 'COINCIDENTE' ? 'Sí' : r.estado === 'RANGO_DISTINTO' ? 'Sí (otro rango)' : 'No';
+
+    const tabla = (titulo: string, rows: CompRow[], desde: keyof CompRow, hasta: keyof CompRow, colCruce: string, cruce: (r: CompRow) => string) => {
+      let prev = '';
+      const filas = rows.map(r => {
+        const mismo = r.dni === prev; prev = r.dni;
+        return `<tr class="${mismo ? '' : 'nuevo'}"><td>${mismo ? '' : esc(r.nombre)}</td><td>${mismo ? '' : esc(r.dni)}</td>`
+          + `<td>${esc(r.dependencia)}</td><td>${fmt(String(r[desde]))}</td><td>${fmt(String(r[hasta]))}</td><td>${esc(cruce(r))}</td></tr>`;
+      }).join('');
+      const agentes = new Set(rows.map(r => r.dni)).size;
+      return `<h2>${titulo}</h2><div class="sub">${rows.length} registro(s) · ${agentes} agente(s)</div>`
+        + `<table><thead><tr><th>Agente</th><th>DNI</th><th>Dep.</th><th>Desde</th><th>Hasta</th><th>${colCruce}</th></tr></thead>`
+        + `<tbody>${filas || '<tr><td colspan="6">Sin registros</td></tr>'}</tbody></table>`;
+    };
+
+    const filtros = [dep !== 'todos' ? dep : 'Todas las dependencias', mes ? `Mes ${mes}` : 'Todo el período', texto.trim() ? `Búsqueda: ${texto.trim()}` : '']
+      .filter(Boolean).join(' · ');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Art. 28 — SIAPE e Intranet</title><style>
+      body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;margin:18px}
+      h1{font-size:16px;margin:0 0 2px} h2{font-size:13px;margin:18px 0 2px;page-break-after:avoid}
+      .sub{color:#444;margin-bottom:6px} table{width:100%;border-collapse:collapse}
+      th,td{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top} th{background:#eee}
+      tr.nuevo td{border-top:2px solid #444} .salto{page-break-before:always}
+      @media print{body{margin:8mm}}
+    </style></head><body>
+      <h1>Art. 28 (inasistencias) — SIAPE e Intranet</h1>
+      <div class="sub">Corrida ${data.corrida?.id ?? ''} · ${esc(fechaHora(data.corrida?.creado_en))} · ${esc(filtros)} · orden alfabético</div>
+      ${tabla('28 en SIAPE (AUSENTE SIN AVISO)', siape, 'fecha_desde_siap', 'fecha_hasta_siap', '¿Está en la Intranet?', enIntranet)}
+      <div class="salto"></div>
+      ${tabla('28 en la Intranet (28-INASISTENCIA)', intranet, 'fecha_desde_min', 'fecha_hasta_min', '¿Está en SIAPE?', enSiape)}
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast.error('El navegador bloqueó la ventana de impresión'); return; }
+    w.document.write(html); w.document.close(); w.focus(); w.print();
+  }
 
   const res = useMemo(() => {
     if (!data) return null;
@@ -426,7 +527,7 @@ export function ComparadorSiapePage() {
 
   const resultadoPorEstado = useMemo(() => {
     let r = resultado;
-    if (filtroRes === 'no_ok') r = r.filter(x => x.estado !== 'OK');
+    if (filtroRes === 'no_ok') r = r.filter(x => !['OK', 'PENDIENTE', 'DESCARTADA'].includes(x.estado));
     else if (filtroRes !== 'todos') r = r.filter(x => x.estado === filtroRes);
     return r;
   }, [resultado, filtroRes]);
@@ -493,12 +594,13 @@ export function ComparadorSiapePage() {
   }, [resultadoPorMotivo, filtroPisadaActivo, textoRes]);
 
   const resConteo = useMemo(() => ({
-    ok:    resultado.filter(r => r.estado === 'OK').length,
-    error: resultado.filter(r => r.estado !== 'OK').length,
+    ok:        resultado.filter(r => r.estado === 'OK').length,
+    error:     resultado.filter(r => !['OK', 'PENDIENTE', 'DESCARTADA'].includes(r.estado)).length,
+    pendiente: resultado.filter(r => r.estado === 'PENDIENTE').length,
   }), [resultado]);
 
   const erroresVisibles = useMemo(
-    () => resFiltrado.filter(r => r.estado !== 'OK'),
+    () => resFiltrado.filter(r => !['OK', 'PENDIENTE', 'DESCARTADA'].includes(r.estado)),
     [resFiltrado]
   );
 
@@ -511,7 +613,7 @@ export function ComparadorSiapePage() {
 
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        {([['comparacion', '📋 Comparación'], ['resultados', `📤 Resultados de carga${resultado.length > 0 ? ` (${resultado.length})` : ''}`]] as const).map(([key, label]) => (
+        {([['comparacion', '📋 Comparación'], ['resultados', `📤 Resultados de carga${resultado.length > 0 ? ` (${resultado.length})` : ''}`], ...(esAdmin ? [['carga_siape', '🏥 Carga SiAPe']] as const : [])] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: '7px 18px', fontSize: '0.8rem', fontWeight: tab === key ? 700 : 400,
@@ -527,25 +629,15 @@ export function ComparadorSiapePage() {
 
       {tab === 'comparacion' && !data && !loading && (
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-          <button className="btn" onClick={() => cargar(false)}
+          <div className="muted" style={{ fontSize: '0.8rem', marginBottom: 12 }}>Todavía no hay ninguna comparación guardada.</div>
+          <button className="btn" onClick={comparar} disabled={comparando}
             style={{ background: '#2563eb', color: '#fff', padding: '9px 24px' }}>
-            Cargar y comparar
+            {comparando ? '⏳ Comparando...' : '⚖ Comparar ahora'}
           </button>
-          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginTop: 12 }}>
-            {(['HOSPITAL', 'UPA 4', 'UPA 18'] as const).map(d => (
-              <button key={`aus-inicial-${d}`} className="btn"
-                onClick={() => lanzarScript('/intranet/cargar-ausentes', { dependencia: d }, setCargandoAusentes)}
-                disabled={cargandoAusentes}
-                title="Carga AUSENTE SIN AVISO desde D:\\G\\comparacion\\SIAPE\\SIAPE.xlsx"
-                style={{ background: '#dc2626', color: '#fff', fontSize: '0.75rem' }}>
-                {cargandoAusentes ? '...' : `Ausentes ${d}`}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
-      {tab === 'comparacion' && loading && <div className="card muted" style={{ padding: 24, textAlign: 'center' }}>⏳ Leyendo archivos...</div>}
+      {tab === 'comparacion' && loading && <div className="card muted" style={{ padding: 24, textAlign: 'center' }}>⏳ Leyendo la última comparación...</div>}
 
       {tab === 'comparacion' && data && !loading && (<>
         {/* Resumen */}
@@ -569,9 +661,9 @@ export function ComparadorSiapePage() {
 
         {/* Filtros */}
         <div className="card" style={{ marginBottom: 12, padding: '8px 12px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="muted" style={{ fontSize: '0.72rem', marginRight: 4 }}>
-            {data.archivos?.ministerio} · {data.archivos?.siap}
-            {data.cached && <span style={{ marginLeft: 4 }}>(caché)</span>}
+          <span className="muted" style={{ fontSize: '0.72rem', marginRight: 4 }}
+            title={`Ministerio: ${data.corrida?.archivo_ministerio} (${fechaHora(data.corrida?.ministerio_modificado)})\nSIAPE: ${data.corrida?.archivo_siape} (${fechaHora(data.corrida?.siape_modificado)})`}>
+            Corrida {data.corrida?.id} · {fechaHora(data.corrida?.creado_en)}
           </span>
 
           <select className="input" value={mes} onChange={e => setMes(e.target.value)}
@@ -607,9 +699,14 @@ export function ComparadorSiapePage() {
             value={texto} onChange={e => setTexto(e.target.value)}
             style={{ fontSize: '0.78rem', flex: '1 1 140px', minWidth: 120 }} />
 
-          <button className="btn" onClick={() => cargar(true)}
+          <button className="btn" onClick={() => cargar()}
             style={{ fontSize: '0.76rem', whiteSpace: 'nowrap', background: 'rgba(255,255,255,0.07)' }}>
             🔄 Recargar
+          </button>
+          <button className="btn" onClick={comparar} disabled={comparando}
+            title="Corre el Comparador 2.0 con los archivos actuales de D:\\G\\comparacion"
+            style={{ fontSize: '0.76rem', whiteSpace: 'nowrap', background: '#2563eb', color: '#fff' }}>
+            {comparando ? '⏳ Comparando...' : '⚖ Comparar de nuevo'}
           </button>
         </div>
 
@@ -617,9 +714,12 @@ export function ComparadorSiapePage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
           <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>
             Registros: <strong>{completa.length}</strong>
-            {pendientes.length > 0 && (
-              <span style={{ marginLeft: 10, color: '#a78bfa', fontSize: '0.78rem' }}>
-                · <strong>{pendientes.length}</strong> pendientes de carga
+            {(cargaConteo.OK + cargaConteo.ERROR + cargaConteo.SIN_INTENTAR) > 0 && (
+              <span style={{ marginLeft: 10, fontSize: '0.78rem' }}>
+                · Solo SIAP: <span style={{ color: '#22c55e' }}><strong>{cargaConteo.OK}</strong> cargadas</span>
+                {' · '}<span style={{ color: '#ef4444' }}><strong>{cargaConteo.ERROR}</strong> con error</span>
+                {' · '}<span style={{ color: '#f59e0b' }}><strong>{cargaConteo.SIN_INTENTAR}</strong> sin intentar</span>
+                {cargaConteo.DESCARTADA > 0 && <>{' · '}<span style={{ color: '#64748b' }}><strong>{cargaConteo.DESCARTADA}</strong> descartadas</span></>}
               </span>
             )}
           </span>
@@ -629,40 +729,25 @@ export function ComparadorSiapePage() {
               style={{ background: 'rgba(255,255,255,0.07)', fontSize: '0.75rem' }}>
               📥 Exportar todo ({completa.length})
             </button>
-            <button className="btn"
-              onClick={async () => {
-                if (!pendientes.length) return;
-                setExportandoPend(true);
-                try {
-                  const r = await apiFetch<{ ok: boolean; path?: string; error?: string }>(
-                    '/intranet/exportar-pendientes',
-                    { method: 'POST', body: JSON.stringify({ dependencia: dep, filas: pendientes.map(toRow) }) }
-                  );
-                  if (r?.ok) toast.ok(`Guardado en servidor (${pendientes.length} filas)`);
-                  else toast.error(r?.error ?? 'Error al guardar');
-                } catch (e: any) {
-                  toast.error(e?.message ?? 'Error');
-                } finally {
-                  setExportandoPend(false);
-                }
-              }}
-              disabled={!pendientes.length || exportandoPend}
-              style={{ background: '#7c3aed', color: '#fff', fontSize: '0.75rem' }}>
-              {exportandoPend ? '⏳ Guardando...' : `🚀 Exportar pendientes (${pendientes.length})`}
+            <button className="btn" onClick={imprimir28}
+              title="Imprime en orden alfabético los 28 de SIAPE (ausente sin aviso) y los 28 de la Intranet, con los filtros de mes / dependencia / búsqueda"
+              style={{ background: 'rgba(255,255,255,0.07)', fontSize: '0.75rem' }}>
+              🖨 Imprimir 28
             </button>
             {(['HOSPITAL', 'UPA 4', 'UPA 18'] as const).map(d => (
               <button key={d} className="btn"
-                onClick={() => lanzarScript('/intranet/cargar-novedades', { dependencia: d }, setCargando)}
+                onClick={() => lanzarScript('/comparacion-v2/lanzar', { tipo: 'novedades', dependencia: d }, setCargando)}
                 disabled={cargando}
+                title={`Carga en la Intranet las novedades pendientes de ${d} (robot 2.0)`}
                 style={{ background: '#16a34a', color: '#fff', fontSize: '0.75rem' }}>
                 {cargando ? '⏳...' : `▶ ${d}`}
               </button>
             ))}
             {(['HOSPITAL', 'UPA 4', 'UPA 18'] as const).map(d => (
               <button key={`aus-${d}`} className="btn"
-                onClick={() => lanzarScript('/intranet/cargar-ausentes', { dependencia: d }, setCargandoAusentes)}
+                onClick={() => lanzarScript('/comparacion-v2/lanzar', { tipo: 'ausentes', dependencia: d }, setCargandoAusentes)}
                 disabled={cargandoAusentes}
-                title="Carga AUSENTE SIN AVISO desde D:\\G\\comparacion\\SIAPE\\SIAPE.xlsx"
+                title={`Carga como 28 - INASISTENCIA los ausentes pendientes de ${d} (robot 2.0)`}
                 style={{ background: '#dc2626', color: '#fff', fontSize: '0.75rem' }}>
                 {cargandoAusentes ? '...' : `Ausentes ${d}`}
               </button>
@@ -676,6 +761,8 @@ export function ComparadorSiapePage() {
       </>)}
 
       {/* ── Tab: Resultados de carga Ministerio ── */}
+      {tab === 'carga_siape' && esAdmin && <CargaSiapeContent />}
+
       {tab === 'resultados' && <div style={{ marginTop: 0 }}>
 
         {/* Sub-tabs por dependencia */}
@@ -704,8 +791,14 @@ export function ComparadorSiapePage() {
                 <span style={{ color: '#22c55e' }}>✓ {resConteo.ok} OK</span>
                 {' · '}
                 <span style={{ color: '#ef4444' }}>✗ {resConteo.error} errores</span>
+                {resConteo.pendiente > 0 && <>{' · '}<span style={{ color: '#f59e0b' }}>● {resConteo.pendiente} pendientes</span></>}
               </span>
             )}
+            <label className="muted" style={{ fontSize: '0.72rem', marginLeft: 10, cursor: 'pointer' }}
+              title="Por defecto se ve solo la última comparación; esto suma las filas de comparaciones anteriores">
+              <input type="checkbox" checked={verAnteriores} onChange={e => setVerAnteriores(e.target.checked)} style={{ marginRight: 4 }} />
+              Ver también corridas anteriores
+            </label>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="btn" onClick={() => cargarResultado()} disabled={loadingRes}
@@ -715,8 +808,8 @@ export function ComparadorSiapePage() {
             {resFiltrado.length > 0 && (
               <button className="btn"
                 onClick={() => exportToExcel(`resultado_carga_${depRes.replace(' ', '')}`, resFiltrado.map(r => ({
-                  Nombre: r.nombre, DNI: r.dni, Novedad: r.novedad,
-                  Desde: r.desde, Hasta: r.hasta, Estado: r.estado, Detalle: r.detalle
+                  Nombre: r.nombre, DNI: r.dni, Novedad: r.novedad, 'Opción Intranet': r.label,
+                  Desde: r.desde, Hasta: r.hasta, Estado: r.estado, Intentos: r.intentos, Detalle: r.detalle
                 })))}
                 style={{ fontSize: '0.73rem', background: '#16a34a', color: '#fff' }}>
                 📥 Exportar ({resFiltrado.length})
@@ -724,14 +817,15 @@ export function ComparadorSiapePage() {
             )}
             {erroresVisibles.length > 0 && (
               <button className="btn"
-                onClick={() => {
-                  const errores = erroresVisibles
-                    .map(r => ({ Nombre: r.nombre, DNI: r.dni, Novedad: r.novedad, Desde: r.desde, Hasta: r.hasta }));
-                  lanzarScript('/intranet/segunda-pasada', { filas: errores, dependencia: depRes }, setSegundaPasada);
+                onClick={async () => {
+                  await lanzarScript('/comparacion-v2/reintentar',
+                    { ids: erroresVisibles.map(r => r.id), dependencia: depRes }, setSegundaPasada);
+                  cargarResultado();
                 }}
                 disabled={segundaPasada}
+                title="Vuelve a PENDIENTE las filas con error que se ven y lanza el robot 2.0 para reintentarlas"
                 style={{ background: '#d97706', color: '#fff', fontSize: '0.73rem' }}>
-                {segundaPasada ? '⏳...' : `🔁 Segunda pasada ${depRes} (${erroresVisibles.length})`}
+                {segundaPasada ? '⏳...' : `🔁 Reintentar errores ${depRes} (${erroresVisibles.length})`}
               </button>
             )}
           </div>
@@ -739,7 +833,7 @@ export function ComparadorSiapePage() {
 
         {resultado.length === 0 && !loadingRes && (
           <div className="card muted" style={{ padding: 16, textAlign: 'center', fontSize: '0.8rem' }}>
-            Sin datos — aún no se ejecutó la carga para {depRes} o no existe el archivo de resultados
+            Sin datos — todavía no se corrió la carga 2.0 para {depRes}
           </div>
         )}
 
@@ -755,6 +849,8 @@ export function ComparadorSiapePage() {
                 <option value="ERROR">Solo ERROR</option>
                 <option value="EXCEPCION">Solo Excepción</option>
                 <option value="ERROR_NAV">Solo Nav error</option>
+                <option value="PENDIENTE">Solo pendientes</option>
+                <option value="DESCARTADA">Solo descartadas</option>
               </select>
               <select className="input" value={filtroDetalleActivo} onChange={e => { setFiltroDetalle(e.target.value); setFiltroPisada('todos'); }}
                 style={{ fontSize: '0.78rem', flex: '1 1 200px', minWidth: 160 }}>

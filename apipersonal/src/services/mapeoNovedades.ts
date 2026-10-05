@@ -113,3 +113,107 @@ export async function restaurarMapeoTabla(sequelize: Sequelize): Promise<void> {
     );
   });
 }
+
+// ── Reglas por CIE (codigo_cie <> '') ────────────────────────────────────────
+// ENFERMEDAD en SIAPE se carga en el Ministerio según el CIE de la licencia:
+// ciertos CIE van como 1R/1RC, el resto cae en la regla general (01).
+// Las carga el usuario desde la pestaña "Por CIE" del editor de Asistencia.
+
+/** Solo las reglas generales: es lo que edita la pestaña Mapeo del editor. */
+export async function loadMapeoGeneral(sequelize: Sequelize): Promise<Record<string, string[]>> {
+  const rows = await sequelize.query<Fila>(
+    `SELECT novedad_siape, novedad_ministerio
+       FROM mapeo_novedades
+      WHERE activo = 1 AND codigo_cie = ''
+      ORDER BY novedad_ministerio, id`,
+    { type: QueryTypes.SELECT },
+  );
+  const out: Record<string, string[]> = {};
+  for (const r of rows) {
+    const arr = (out[r.novedad_ministerio] ||= []);
+    if (!arr.includes(r.novedad_siape)) arr.push(r.novedad_siape);
+  }
+  return out;
+}
+
+export type ReglaCie = {
+  id: number;
+  novedad_siape: string;
+  codigo_cie: string;
+  novedad_ministerio: string;
+  observacion: string | null;
+  updated_at: string;
+};
+
+export async function listReglasCie(sequelize: Sequelize): Promise<ReglaCie[]> {
+  return sequelize.query<ReglaCie>(
+    `SELECT id, novedad_siape, codigo_cie, novedad_ministerio, observacion, updated_at
+       FROM mapeo_novedades
+      WHERE activo = 1 AND codigo_cie <> ''
+      ORDER BY novedad_siape, novedad_ministerio, codigo_cie`,
+    { type: QueryTypes.SELECT },
+  );
+}
+
+/**
+ * Normaliza el CIE igual que el robot (scripts/mapeo_novedades.py): mayúsculas,
+ * sin espacios y sin ".0" final (S80.0 → S80). Si no, la regla no engancha.
+ */
+export function normCie(c: string): string {
+  let s = String(c || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (s.endsWith('.0')) s = s.slice(0, -2);
+  return s;
+}
+
+/**
+ * Alta de reglas por CIE: (novedad SIAPE + CIE) → se carga como novedad Ministerio.
+ * Si ese CIE ya tenía otra regla de carga para esa novedad SIAPE, se reemplaza
+ * (la vieja queda activo = 0). Devuelve cuántas se crearon / reemplazaron.
+ */
+export async function addReglasCie(
+  sequelize: Sequelize,
+  novedadSiape: string,
+  cies: string[],
+  novedadMinisterio: string,
+): Promise<{ creadas: number; reemplazadas: number; ignoradas: string[] }> {
+  const siape = String(novedadSiape || '').trim();
+  const min = String(novedadMinisterio || '').trim();
+  if (!siape || !min) throw new Error('Faltan novedad SIAPE o novedad Ministerio');
+  const lista = [...new Set((cies || []).map(normCie).filter(c => /[A-Z0-9]/.test(c)))];
+  if (!lista.length) throw new Error('Falta al menos un código CIE');
+
+  const ignoradas: string[] = lista.filter(c => c === '66666666');
+  let creadas = 0;
+  let reemplazadas = 0;
+
+  await sequelize.transaction(async (transaction: Transaction) => {
+    for (const cie of lista) {
+      if (ignoradas.includes(cie)) continue;
+      // apagar la regla de carga anterior de ese (siape, cie) si apunta a otra novedad
+      const [r]: any = await sequelize.query(
+        `UPDATE mapeo_novedades SET activo = 0
+          WHERE novedad_siape = ? AND codigo_cie = ? AND novedad_ministerio <> ? AND activo = 1`,
+        { replacements: [siape, cie, min], transaction },
+      );
+      reemplazadas += Number(r?.affectedRows ?? 0);
+
+      const [ins]: any = await sequelize.query(
+        `INSERT INTO mapeo_novedades (novedad_siape, codigo_cie, novedad_ministerio, usar_para_cargar, activo, observacion)
+         VALUES (?, ?, ?, 1, 1, 'editor asistencia: por CIE')
+         ON DUPLICATE KEY UPDATE activo = 1, usar_para_cargar = 1`,
+        { replacements: [siape, cie, min], transaction },
+      );
+      if (Number(ins?.affectedRows ?? 0) > 0) creadas++;
+    }
+  });
+  return { creadas, reemplazadas, ignoradas };
+}
+
+/** Baja de una regla por CIE (no se borra: activo = 0). */
+export async function bajaReglaCie(sequelize: Sequelize, id: number): Promise<boolean> {
+  const [r]: any = await sequelize.query(
+    `UPDATE mapeo_novedades SET activo = 0 WHERE id = ? AND codigo_cie <> ''`,
+    { replacements: [id] },
+  );
+  return Number(r?.affectedRows ?? 0) > 0;
+}

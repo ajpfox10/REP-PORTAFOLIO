@@ -30,6 +30,7 @@ const altaAgenteSchema = z.object({
   provincia_id:    z.string().max(50).optional(),
   nacionalidad:    z.string().max(50).optional(),
   mp:              z.string().max(30).optional(),
+  especialidad_id: z.number().int().positive().optional().nullable(),
   observaciones:   z.string().optional(),
   // Datos laborales (opcionales)
   ley_id:           z.number().int().positive().optional(),

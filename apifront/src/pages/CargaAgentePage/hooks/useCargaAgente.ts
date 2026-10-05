@@ -35,6 +35,14 @@ export type PersonalForm = {
   localidad_id: string;
   nacionalidad: string;
   mp: string;
+  especialidad_id: string;
+  // Especialidad con historial (agentes_especialidades): en edición, si especialidad_id
+  // cambia respecto de la vigente se cierra ésta en fecha_cierre y se abre la nueva
+  // desde fecha_desde (default: día siguiente al cierre).
+  especialidad_original: string;   // vigente al cargar el agente ('' = ninguna)
+  especialidad_desde: string;      // desde cuándo rige la vigente (solo lectura)
+  especialidad_fecha_cierre: string;
+  especialidad_fecha_desde: string;
   observaciones: string;
   // Agente (tabla: agentes)
   fecha_ingreso: string;
@@ -62,7 +70,9 @@ export const EMPTY_FORM: PersonalForm = {
   sexo_id: '', email: '', telefono: '', domicilio: '',
   numerodomicilio: '', piso: '', depto: '', cp: '', observaciones_direccion: '',
   provincia_id: '', municipio_id: '',
-  localidad_id: '', nacionalidad: '', mp: '', observaciones: '',
+  localidad_id: '', nacionalidad: '', mp: '', especialidad_id: '',
+  especialidad_original: '', especialidad_desde: '', especialidad_fecha_cierre: '', especialidad_fecha_desde: '',
+  observaciones: '',
   fecha_ingreso: '', fecha_egreso: '', fecha_baja: '', estado_empleo: 'ACTIVO', legajo: '',
   ley_id: '', planta_id: '', categoria_id: '', ocupacion_id: '',
   regimen_horario_id: '', jefatura_id: '', funcion_id: '',
@@ -75,6 +85,17 @@ export const ESTADO_EMPLEO_OPTS = ['ACTIVO', 'INACTIVO', 'BAJA', 'COMISION', 'TR
 
 export type Step = 1 | 2 | 3 | 4;
 
+export const hoyIso = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+export const addDaysIso = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
 export type CatalogSet = {
   sexo: CatalogItem[];
   planta: CatalogItem[];
@@ -85,6 +106,7 @@ export type CatalogSet = {
   ley: CatalogItem[];
   ocupacion: CatalogItem[];
   regimenHorario: CatalogItem[];
+  especialidad: CatalogItem[];
 };
 
 function extractNombre(row: any): string {
@@ -99,7 +121,14 @@ function extractNombre(row: any): string {
   return String(row.id ?? '');
 }
 
-export type SavedMode = 'create' | 'edit' | 'reentry' | 'cambio';
+function labelRegimen(r: any): string {
+  const hs = r?.nombre != null ? `${r.nombre} hs` : String(r?.id ?? '');
+  const ep = String(r?.estado_planta ?? '').trim().toLowerCase();
+  if (!ep || ep === 'sin distincion') return `${hs} (sin distinción)`;
+  return `${hs} — ${ep.charAt(0).toUpperCase()}${ep.slice(1)}`;
+}
+
+export type SavedMode ='create' | 'edit' | 'reentry' | 'cambio';
 
 // Estado que dispara el flujo de cambio de ocupacion (cierra el tramo vigente y
 // abre uno nuevo) en vez de una edicion en el lugar. Vive como opcion del
@@ -125,7 +154,7 @@ export function useCargaAgente() {
 
   const [cats, setCats] = useState<CatalogSet>({
     sexo: [], planta: [], funcion: [], categoria: [], dependencia: [],
-    localidad: [], ley: [], ocupacion: [], regimenHorario: [],
+    localidad: [], ley: [], ocupacion: [], regimenHorario: [], especialidad: [],
   });
 
   const loadCatalog = useCallback(async (table: string): Promise<CatalogItem[]> => {
@@ -141,6 +170,9 @@ export function useCargaAgente() {
         id: r.id ?? r.ID,   // categorias usa PK "ID" en mayúscula
         nombre: table === 'localidades'
           ? [r.localidad_nombre, r.municipio_nombre].filter(Boolean).join(' — ')
+          : table === 'regimenes_horarios'
+          // nombre son solo las horas (hay 36 repetido): se aclara planta/guardia
+          ? labelRegimen(r)
           : extractNombre(r),
         ...(table === 'localidades' ? {
           provincia_id:     r.provincia_id != null ? String(r.provincia_id) : '',
@@ -148,6 +180,21 @@ export function useCargaAgente() {
           municipio_id:     r.municipio_id != null ? String(r.municipio_id) : '',
           municipio_nombre: r.municipio_nombre || '',
         } : {}),
+      }));
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Especialidades (medicas, bioquimicas, etc.): vienen por /personal/especialidades
+  // (mismo permiso que el form). Se etiquetan con la profesion para distinguir, p.ej.,
+  // HEMATOLOGIA de medico y de bioquimico.
+  const loadEspecialidades = useCallback(async (): Promise<CatalogItem[]> => {
+    try {
+      const res = await apiFetch<any>('/personal/especialidades');
+      return (res?.data || []).map((r: any) => ({
+        id: r.id,
+        nombre: r.profesion ? `${r.especialidad} (${r.profesion})` : String(r.especialidad),
       }));
     } catch {
       return [];
@@ -165,10 +212,11 @@ export function useCargaAgente() {
       loadCatalog('ley'),
       loadCatalog('ocupaciones'),
       loadCatalog('regimenes_horarios'),
-    ]).then(([sexo, planta, funcion, categoria, dependencia, localidad, ley, ocupacion, regimenHorario]) => {
-      setCats({ sexo, planta, funcion, categoria, dependencia, localidad, ley, ocupacion, regimenHorario });
+      loadEspecialidades(),
+    ]).then(([sexo, planta, funcion, categoria, dependencia, localidad, ley, ocupacion, regimenHorario, especialidad]) => {
+      setCats({ sexo, planta, funcion, categoria, dependencia, localidad, ley, ocupacion, regimenHorario, especialidad });
     });
-  }, [loadCatalog]);
+  }, [loadCatalog, loadEspecialidades]);
 
   /**
    * Dado un DNI (6-8 dígitos), consulta el backend.
@@ -209,6 +257,11 @@ export function useCargaAgente() {
           localidad_id:       toStr(d.localidad_id),
           nacionalidad:       d.nacionalidad || '',
           mp:                 d.mp || '',
+          especialidad_id:    toStr(d.especialidad_id),
+          especialidad_original: toStr(d.especialidad_id),
+          especialidad_desde: toDate(d.especialidad_desde),
+          especialidad_fecha_cierre: hoyIso(),
+          especialidad_fecha_desde:  addDaysIso(hoyIso(), 1),
           observaciones:      d.observaciones || '',
           estado_empleo:      hasActive ? (d.estado_empleo || 'ACTIVO') : 'ACTIVO',
           legajo:             hasActive ? toStr(d.legajo) : '',
@@ -263,10 +316,26 @@ export function useCargaAgente() {
       if (form.fecha_egreso && form.estado_empleo === 'ACTIVO') {
         errs.estado_empleo = 'Con fecha de egreso debe seleccionar INACTIVO, BAJA, COMISION o TRAMITE';
       }
+      // Cambio de especialidad en la edición: pide cierre de la vigente y alta de la nueva.
+      if (editMode && form.estado_empleo !== ESTADO_CAMBIO_OCUPACION
+          && form.especialidad_id !== form.especialidad_original) {
+        if (form.especialidad_original && !form.especialidad_fecha_cierre) {
+          errs.especialidad_fecha_cierre = 'Indicá hasta cuándo rige la especialidad actual';
+        } else if (form.especialidad_original && form.especialidad_desde
+                   && form.especialidad_fecha_cierre < form.especialidad_desde) {
+          errs.especialidad_fecha_cierre = 'El cierre no puede ser anterior al inicio de la especialidad actual';
+        }
+        if (form.especialidad_id && !form.especialidad_fecha_desde) {
+          errs.especialidad_fecha_desde = 'Indicá desde cuándo rige la nueva especialidad';
+        } else if (form.especialidad_id && form.especialidad_original
+                   && form.especialidad_fecha_desde <= form.especialidad_fecha_cierre) {
+          errs.especialidad_fecha_desde = 'El alta tiene que ser posterior al cierre';
+        }
+      }
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
-  }, [form]);
+  }, [form, editMode]);
 
   const nextStep = useCallback(() => {
     if (!validateStep(step)) return;
@@ -317,6 +386,7 @@ export function useCargaAgente() {
           ...(form.categoria_id      ? { categoria_id:       Number(form.categoria_id) }         : {}),
           ...(form.funcion_id        ? { funcion_id:         Number(form.funcion_id) }           : {}),
           ...(form.ocupacion_id      ? { ocupacion_id:       Number(form.ocupacion_id) }         : {}),
+          ...(form.especialidad_id   ? { especialidad_id:    Number(form.especialidad_id) }      : {}),
           ...(form.regimen_horario_id? { regimen_horario_id: Number(form.regimen_horario_id) }   : {}),
           ...(form.reparticion_id    ? { reparticion_id:     Number(form.reparticion_id) }       : {}),
           ...(form.legajo            ? { legajo:             Number(form.legajo) }               : {}),
@@ -358,6 +428,14 @@ export function useCargaAgente() {
           ...(form.provincia_id      ? { provincia_id:       form.provincia_id }                  : {}),
           ...(form.nacionalidad      ? { nacionalidad:       form.nacionalidad }                  : {}),
           ...(form.mp                ? { mp:                 form.mp }                            : {}),
+          // cambio de especialidad: cierra la vigente y abre la nueva (historial)
+          ...(form.especialidad_id !== form.especialidad_original ? {
+            especialidad_cambio: {
+              especialidad_id: form.especialidad_id ? Number(form.especialidad_id) : null,
+              ...(form.especialidad_original ? { fecha_cierre: form.especialidad_fecha_cierre } : {}),
+              ...(form.especialidad_id ? { fecha_desde: form.especialidad_fecha_desde } : {}),
+            },
+          } : {}),
           ...(form.observaciones     ? { observaciones:      form.observaciones }                 : {}),
           // campos agente
           estado_empleo: form.estado_empleo || 'ACTIVO',
@@ -409,6 +487,7 @@ export function useCargaAgente() {
             ...(form.provincia_id ? { provincia_id: form.provincia_id } : {}),
             ...(form.nacionalidad ? { nacionalidad: form.nacionalidad } : {}),
             ...(form.mp ? { mp: form.mp } : {}),
+            ...(form.especialidad_id ? { especialidad_id: Number(form.especialidad_id) } : {}),
             ...(form.observaciones ? { observaciones: form.observaciones } : {}),
             ...(form.fecha_ingreso ? { fecha_ingreso: form.fecha_ingreso } : {}),
             ...(form.fecha_egreso ? { fecha_egreso: form.fecha_egreso } : {}),
@@ -469,6 +548,7 @@ export function useCargaAgente() {
           ...(form.provincia_id     ? { provincia_id:     form.provincia_id }          : {}),
           ...(form.nacionalidad     ? { nacionalidad:     form.nacionalidad }          : {}),
           ...(form.mp               ? { mp:               form.mp }                    : {}),
+          ...(form.especialidad_id  ? { especialidad_id:  Number(form.especialidad_id) } : {}),
           ...(form.observaciones    ? { observaciones:    form.observaciones }         : {}),
           estado_empleo: form.estado_empleo || 'ACTIVO',
           ...(form.fecha_ingreso      ? { fecha_ingreso:      form.fecha_ingreso }                : {}),

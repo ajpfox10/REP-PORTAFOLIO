@@ -89,7 +89,8 @@ function Kpi({ titulo, valor, detalle, color }: {
 }
 
 // ─── PÁGINA ──────────────────────────────────────────────────────────────────
-export function AusentismoPage() {
+/** Contenido de Ausentismo (sin Layout): se usa en su pagina y como pestaña de Presentes por turno. */
+export function AusentismoContent() {
   const toast = useToast();
 
   const hoy = new Date();
@@ -345,7 +346,7 @@ export function AusentismoPage() {
     : 0;
 
   return (
-    <Layout title="Nivel de ausentismo">
+    <>
       <div style={{ marginBottom: 14 }}>
         <h2 style={{ margin: 0 }}>📉 Nivel de ausentismo</h2>
         <p className="muted" style={{ margin: '4px 0 0' }}>
@@ -779,6 +780,14 @@ export function AusentismoPage() {
           )}
         </>
       )}
+    </>
+  );
+}
+
+export function AusentismoPage() {
+  return (
+    <Layout title="Nivel de ausentismo">
+      <AusentismoContent />
     </Layout>
   );
 }

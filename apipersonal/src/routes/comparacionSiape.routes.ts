@@ -477,6 +477,8 @@ const CACHE_TTL = 5 * 60 * 1000;
 export function buildComparacionSiapeRouter(sequelize: Sequelize) {
   const router = Router();
 
+  // SIN USO desde 04/10/2026: la pantalla lee la 2.0 (GET /comparacion-v2/ultima). Las funciones
+  // de lectura del Excel SIAPE de este archivo las sigue usando licenciasConsultorio.routes.ts.
   router.get('/', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
     try {
       if (!XLSX) return res.status(503).json({ ok: false, error: 'Módulo xlsx no disponible' });

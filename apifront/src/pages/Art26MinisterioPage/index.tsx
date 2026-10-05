@@ -1,6 +1,7 @@
 // src/pages/Art26MinisterioPage/index.tsx
-// Módulo "Art. 26 → Ministerio (FC)". Controla el Art.26 cargado por los jefes contra la
-// Intranet MS y prepara el Excel que consume el robot scripts/cargar_art26_intranet.py.
+// Módulo "Art. 26 → Ministerio (FC)" — versión 2.0. Controla el Art.26 cargado por los jefes
+// contra el resultado de la carga (tabla art26_carga_intranet) y lanza el robot 2.0
+// (scripts/cargar_art26_intranet_v2.py) por dependencia. El Excel para el robot quedó SIN USO.
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
@@ -19,8 +20,11 @@ interface Art26Row {
   observaciones: string;
   estado: string;          // estado del Art.26
   jefe_nombre: string;
-  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR';
+  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR' | 'NO_SE_CARGA';
   detalle_ms: string;
+  carga_id: number | null;
+  dependencia: string;
+  intentos: number;
 }
 
 interface ApiResult {
@@ -31,6 +35,7 @@ interface ApiResult {
     ya_en_ms: number;
     conflicto: number;
     error: number;
+    no_se_carga: number;
     por_estado_art26: Record<string, number>;
   };
   fuentes: { historial: string | null; log: string | null; export: string | null; dir: string };
@@ -43,7 +48,10 @@ const BADGE_MS: Record<string, { label: string; color: string; bg: string }> = {
   YA_EN_MS:  { label: '✓ Ya en MS', color: '#22c55e', bg: 'transparent' },
   CONFLICTO: { label: '⚠ Conflicto', color: '#a78bfa', bg: 'rgba(167,139,250,0.06)' },
   ERROR:     { label: '✗ Error carga', color: '#ef4444', bg: 'rgba(239,68,68,0.06)' },
+  NO_SE_CARGA: { label: '— No se carga', color: '#64748b', bg: 'transparent' },
 };
+
+const DEPENDENCIAS = ['HOSPITAL', 'UPA 4', 'UPA 18'] as const;
 
 function mesStr(s: string) { return s?.length >= 7 ? s.slice(0, 7) : ''; }
 
@@ -51,7 +59,7 @@ export function Art26MinisterioPage() {
   const toast = useToast();
   const [data, setData] = useState<ApiResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [generando, setGenerando] = useState(false);
+  const [lanzando, setLanzando] = useState<string | null>(null);
 
   const [fEstado, setFEstado] = useState('');   // estado_ms
   const [fMes, setFMes] = useState('');
@@ -72,16 +80,32 @@ export function Art26MinisterioPage() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const generarExcel = async () => {
-    setGenerando(true);
+  // Corre el robot 2.0 de una dependencia (queda registrado en la página Robots)
+  const lanzar = async (dependencia: string) => {
+    setLanzando(dependencia);
     try {
-      const res = await apiFetch<any>('/articulo-26-intranet/generar-excel', { method: 'POST' });
+      const res = await apiFetch<any>('/articulo-26-intranet/lanzar', { method: 'POST', body: JSON.stringify({ dependencia }) });
       if (!res.ok) throw new Error(res.error || 'Error');
-      toast.ok('Excel generado', `${res.filas} filas → ${res.path}`);
+      toast.ok('Robot lanzado', res.msg);
     } catch (e: any) {
-      toast.error('No se pudo generar el Excel', e?.message || 'Error');
+      toast.error('No se pudo lanzar el robot', e?.message || 'Error');
     } finally {
-      setGenerando(false);
+      setLanzando(null);
+    }
+  };
+
+  // Vuelve a PENDIENTE los que se ven con error y lanza los robots que correspondan
+  const reintentar = async (ids: number[]) => {
+    setLanzando('reintentar');
+    try {
+      const res = await apiFetch<any>('/articulo-26-intranet/reintentar', { method: 'POST', body: JSON.stringify({ ids }) });
+      if (!res.ok) throw new Error(res.error || 'Error');
+      toast.ok('Reintento lanzado', res.msg);
+      cargar();
+    } catch (e: any) {
+      toast.error('No se pudo reintentar', e?.message || 'Error');
+    } finally {
+      setLanzando(null);
     }
   };
 
@@ -102,11 +126,17 @@ export function Art26MinisterioPage() {
     return r;
   }, [data, fEstado, fMes, fTexto]);
 
+  const erroresVisibles = useMemo(
+    () => filtradas.filter(r => r.estado_ms === 'ERROR' && r.carga_id).map(r => r.carga_id as number),
+    [filtradas],
+  );
+
   const exportar = () => {
     exportToExcel('art26_ministerio', filtradas.map(r => ({
       DNI: r.dni, Agente: r.nombre_full, Fecha: r.fecha, Dias: r.dias,
       Desde: r.desde_ddmm, Hasta: r.hasta_ddmm, 'Estado Art.26': r.estado,
-      'Estado MS': r.estado_ms, Detalle: r.detalle_ms, Motivo: r.motivo, Jefe: r.jefe_nombre,
+      'Estado MS': r.estado_ms, Detalle: r.detalle_ms, Dependencia: r.dependencia, Intentos: r.intentos,
+      Motivo: r.motivo, Jefe: r.jefe_nombre,
     })));
   };
 
@@ -131,9 +161,19 @@ export function Art26MinisterioPage() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn" onClick={cargar} disabled={loading}>{loading ? '⏳' : '🔄'} Actualizar</button>
             <button className="btn" onClick={exportar} disabled={!filtradas.length}>⬇️ Exportar vista</button>
-            <button className="btn js-btn-save" onClick={generarExcel} disabled={generando}>
-              {generando ? '⏳ Generando…' : '🤖 Generar Excel para el robot'}
-            </button>
+            {DEPENDENCIAS.map(d => (
+              <button key={d} className="btn js-btn-save" onClick={() => lanzar(d)} disabled={!!lanzando}
+                title={`Carga en la Intranet los Art. 26 pendientes de ${d} (robot 2.0)`}>
+                {lanzando === d ? '⏳' : '🤖'} Cargar {d}
+              </button>
+            ))}
+            {erroresVisibles.length > 0 && (
+              <button className="btn" onClick={() => reintentar(erroresVisibles)} disabled={!!lanzando}
+                title="Vuelve a PENDIENTE los Art. 26 con error que se ven y lanza el robot"
+                style={{ background: '#d97706', color: '#fff' }}>
+                {lanzando === 'reintentar' ? '⏳' : '🔁'} Reintentar errores ({erroresVisibles.length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -144,6 +184,7 @@ export function Art26MinisterioPage() {
           {card('Ya en MS', rs?.ya_en_ms, '#22c55e')}
           {card('Conflicto', rs?.conflicto, '#a78bfa')}
           {card('Error carga', rs?.error, '#ef4444')}
+          {card('No se carga', rs?.no_se_carga, '#64748b')}
         </div>
 
         {/* Fuentes */}
@@ -151,7 +192,7 @@ export function Art26MinisterioPage() {
           <div style={{ fontSize: '0.74rem', color: '#64748b', marginBottom: 12 }}>
             Carpeta: <code>{data.fuentes.dir}</code>{' · '}
             Historial MS: {data.fuentes.historial ? <span style={{ color: '#22c55e' }}>✓ {data.fuentes.historial}</span> : <span style={{ color: '#64748b' }}>no cargado (todo queda PENDIENTE)</span>}{' · '}
-            Log robot: {data.fuentes.log ? <span style={{ color: '#22c55e' }}>✓ {data.fuentes.log}</span> : <span style={{ color: '#64748b' }}>sin log</span>}
+            Resultado robot: {data.fuentes.log ? <span style={{ color: '#22c55e' }}>✓ {data.fuentes.log}</span> : <span style={{ color: '#64748b' }}>todavía no corrió</span>}
           </div>
         )}
 
@@ -163,6 +204,7 @@ export function Art26MinisterioPage() {
             <option value="YA_EN_MS">Ya en MS</option>
             <option value="CONFLICTO">Conflicto</option>
             <option value="ERROR">Error carga</option>
+            <option value="NO_SE_CARGA">No se carga (anulado / rechazado)</option>
           </select>
           <select className="input" value={fMes} onChange={e => setFMes(e.target.value)} style={{ maxWidth: 160 }}>
             <option value="">Mes (todos)</option>
@@ -177,7 +219,7 @@ export function Art26MinisterioPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
             <thead>
               <tr style={{ background: '#0f172a', textAlign: 'left' }}>
-                {['Estado MS', 'Agente', 'DNI', 'Desde', 'Hasta', 'Días', 'Estado Art.26', 'Detalle', 'Jefe'].map(h => (
+                {['Estado MS', 'Agente', 'DNI', 'Desde', 'Hasta', 'Días', 'Estado Art.26', 'Dep.', 'Detalle', 'Jefe'].map(h => (
                   <th key={h} style={{ padding: '8px 10px', borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -196,13 +238,16 @@ export function Art26MinisterioPage() {
                     <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{r.hasta_ddmm}</td>
                     <td style={{ padding: '7px 10px', textAlign: 'center' }}>{r.dias}</td>
                     <td style={{ padding: '7px 10px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{r.estado}</td>
+                    <td style={{ padding: '7px 10px', color: '#94a3b8', whiteSpace: 'nowrap', fontSize: '0.76rem' }}>
+                      {r.dependencia || '—'}{r.intentos > 1 ? ` · ${r.intentos} int.` : ''}
+                    </td>
                     <td style={{ padding: '7px 10px', color: '#94a3b8', fontSize: '0.76rem' }}>{r.detalle_ms}</td>
                     <td style={{ padding: '7px 10px', color: '#64748b', fontSize: '0.76rem' }}>{r.jefe_nombre}</td>
                   </tr>
                 );
               })}
               {!filtradas.length && (
-                <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+                <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
                   {loading ? 'Cargando…' : 'Sin registros para los filtros aplicados.'}
                 </td></tr>
               )}
@@ -211,9 +256,11 @@ export function Art26MinisterioPage() {
         </div>
 
         <div style={{ marginTop: 14, fontSize: '0.76rem', color: '#64748b', lineHeight: 1.6 }}>
-          <b>Flujo:</b> 1) «Generar Excel para el robot» deja <code>art26_export.xlsx</code> en la carpeta ART26.
-          2) Se corre <code>python scripts/cargar_art26_intranet.py --pass CLAVE</code> (carga cada Art.26 como FC).
-          3) El robot deja <code>resultado_carga_art26.xlsx</code>; al «Actualizar» acá se ve OK/error por fila.
+          <b>Flujo (2.0):</b> «Cargar HOSPITAL / UPA 4 / UPA 18» corre el robot de esa dependencia: toma los Art. 26
+          de la base (sin anulados ni rechazados), los carga como FC y anota cada resultado en la tabla
+          <code> art26_carga_intranet</code> (los OK no se reintentan). Lo mismo corre solo en el Circuito 2.0.
+          Si la Intranet dice que el agente no pertenece a una dependencia, lo intenta la siguiente.
+          Cada corrida queda en la página Robots con el detalle por agente.
           El control «Ya en MS / Conflicto» usa además <code>historial_intranet.xlsx</code> si está presente.
         </div>
       </div>

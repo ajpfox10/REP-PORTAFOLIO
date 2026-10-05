@@ -8,6 +8,10 @@
  *   GET  /personal/:dni             Perfil completo (personal + agentes + servicios + foto)
  *   PATCH /personal/:dni            Actualización parcial de datos personales
  *   GET  /personal/:dni/documentos  Documentos del agente (paginados)
+ *   GET    /personal/:dni/especialidades          Historial de especialidades
+ *   POST   /personal/:dni/especialidades/cambio   Cierra la vigente y abre otra
+ *   PATCH  /personal/:dni/especialidades/:id      Corrige fechas/observaciones
+ *   DELETE /personal/:dni/especialidades/:id      Anula un periodo cargado por error
  *   GET  /personal/:dni/historial   Historial de cambios en audit_log
  */
 
@@ -21,6 +25,7 @@ import { invalidate, personalTags, agenteTags } from '../infra/invalidateOnWrite
 import { trackAction } from '../logging/track';
 import { logger } from '../logging/logger';
 import { seedReclamoHaberes } from './reclamosHaberes.routes';
+import { listarEspecialidades, cambiarEspecialidad, corregirPeriodo, anularPeriodo } from '../services/especialidadesAgente';
 
 // ── RBAC helper ───────────────────────────────────────────────────────────────
 function requireCrudFor(table: string, action: 'read' | 'create' | 'update' | 'delete') {
@@ -63,6 +68,14 @@ const patchPersonalSchema = z.object({
   provincia_id:           z.string().max(50).optional().nullable(),
   nacionalidad:           z.string().max(50).optional().nullable(),
   mp:                     z.string().max(30).optional().nullable(),
+  // Cambio de especialidad (historial en agentes_especialidades): cierra la vigente en
+  // fecha_cierre y abre la nueva desde fecha_desde. especialidad_id null = solo cerrar.
+  especialidad_cambio:    z.object({
+    especialidad_id: z.number().int().positive().nullable(),
+    fecha_cierre:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+    fecha_desde:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+    observaciones:   z.string().max(255).optional().nullable(),
+  }).strict().optional(),
   observaciones:          z.string().optional().nullable(),
   estado_empleo:          z.enum(['ACTIVO','INACTIVO','BAJA','COMISION','TRAMITE']).optional().nullable(),
   // ── tabla: agentes ───────────────────────────────────────────────────────
@@ -329,6 +342,32 @@ export function buildPersonalRouter(sequelize: Sequelize) {
     }
   );
 
+  // ── GET /personal/especialidades — Catálogo para los combos ──────────────
+  /**
+   * Especialidades cargables (medicas, bioquimicas, etc.) agrupadas por profesion.
+   * Va por /personal (mismo permiso que el formulario) y no por el CRUD generico de
+   * especialidaddesmedicas, que solo tiene Admin -> Catalogos.
+   * Debe declararse antes de /:dni.
+   */
+  router.get(
+    '/especialidades',
+    requireCrudFor('personal', 'read'),
+    async (_req: Request, res: Response) => {
+      try {
+        const rows = await sequelize.query(`
+          SELECT id, especialidad, profesion
+          FROM especialidaddesmedicas
+          WHERE deleted_at IS NULL AND especialidad IS NOT NULL AND TRIM(especialidad) <> ''
+          ORDER BY (profesion IS NULL), profesion, especialidad
+        `, { type: QueryTypes.SELECT });
+        return res.json({ ok: true, data: rows });
+      } catch (err: any) {
+        logger.error({ msg: '[personal] especialidades error', err: err?.message });
+        return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+      }
+    }
+  );
+
   // ── GET /personal/:dni — Perfil completo ──────────────────────────────────
   /**
    * Devuelve el perfil completo de un agente:
@@ -356,6 +395,8 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             p.email, p.telefono, p.domicilio, p.foto_path, p.observaciones,
             p.numerodomicilio, p.piso, p.depto, p.cp, p.observacionesdireccion,
             p.localidad_id, p.provincia_id, p.nacionalidad, p.mp,
+            ae.especialidad_id, esp.especialidad AS especialidad_nombre, esp.profesion AS especialidad_profesion,
+            DATE_FORMAT(ae.fecha_desde, '%Y-%m-%d') AS especialidad_desde,
             p.created_at AS alta_sistema,
 
             s.id   AS sexo_id,    s.nombre  AS sexo_nombre,
@@ -390,6 +431,8 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             LIMIT 1
           )
           LEFT JOIN sexos s                 ON s.id   = p.sexo_id
+          LEFT JOIN agentes_especialidades ae ON ae.dni = p.dni AND ae.abierta = 1
+          LEFT JOIN especialidaddesmedicas esp ON esp.id = ae.especialidad_id
           LEFT JOIN ley l                   ON l.id   = a.ley_id
           LEFT JOIN plantas pl              ON pl.id  = a.planta_id
           LEFT JOIN categorias cat          ON cat.ID = a.categoria_id
@@ -635,6 +678,15 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           }
         }
 
+        // ── especialidad → agentes_especialidades (cierra la vigente + abre la nueva) ──
+        if (data.especialidad_cambio) {
+          await cambiarEspecialidad(sequelize, {
+            dni,
+            ...data.especialidad_cambio,
+            actor: (req as any).auth?.principalId ?? null,
+          }, t);
+        }
+
         await t.commit();
 
         // Siembra del pendiente de reclamo de haberes (post-commit, best-effort:
@@ -685,7 +737,122 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             error: 'Conflicto de datos: ya existe un registro con esos valores',
           });
         }
+        // errores de validacion propios (p.ej. fechas de la especialidad)
+        if (err?.status >= 400 && err?.status < 500) {
+          return res.status(err.status).json({ ok: false, error: err.message });
+        }
         return res.status(500).json({ ok: false, error: err?.message || 'Error al actualizar' });
+      }
+    }
+  );
+
+  // ── Especialidades del agente (historial en agentes_especialidades) ───────
+  const sendEspErr = (res: Response, dni: number, err: any) => {
+    if (err?.status >= 400 && err?.status < 500) return res.status(err.status).json({ ok: false, error: err.message });
+    if (err?.parent?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ ok: false, error: 'El agente ya tiene una especialidad vigente: cerrala antes de abrir otra' });
+    }
+    logger.error({ msg: '[personal] especialidades error', dni, err: err?.message });
+    return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+  };
+  const dniParam = (req: Request) => {
+    const dni = parseInt(req.params.dni, 10);
+    return dni && !isNaN(dni) ? dni : null;
+  };
+  const isoOpt = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const afterWrite = async (req: Request, res: Response, dni: number, action: string, body: any) => {
+    await invalidate([...personalTags.all(String(dni)), ...agenteTags.all(String(dni))], `personal.${action}`).catch(() => {});
+    (res.locals as any).audit = { action, table_name: 'agentes_especialidades', record_pk: dni, request_json: body };
+    trackAction(action, { dni }, { id: (req as any).auth?.principalId ?? undefined });
+  };
+
+  router.get(
+    '/:dni/especialidades',
+    requireCrudFor('personal', 'read'),
+    async (req: Request, res: Response) => {
+      const dni = dniParam(req);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      try {
+        return res.json({ ok: true, data: await listarEspecialidades(sequelize, dni) });
+      } catch (err: any) { return sendEspErr(res, dni, err); }
+    }
+  );
+
+  router.post(
+    '/:dni/especialidades/cambio',
+    requireCrudFor('personal', 'update'),
+    async (req: Request, res: Response) => {
+      const dni = dniParam(req);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const parsed = z.object({
+        especialidad_id: z.number().int().positive().nullable(),
+        fecha_cierre:    isoOpt.optional().nullable(),
+        fecha_desde:     isoOpt.optional().nullable(),
+        observaciones:   z.string().max(255).optional().nullable(),
+      }).strict().safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: 'Datos inválidos', details: parsed.error.flatten() });
+
+      const t = await sequelize.transaction();
+      try {
+        const existe = await sequelize.query('SELECT dni FROM personal WHERE dni = :dni AND deleted_at IS NULL LIMIT 1',
+          { replacements: { dni }, type: QueryTypes.SELECT, transaction: t });
+        if (!existe.length) { await t.rollback(); return res.status(404).json({ ok: false, error: `Agente DNI ${dni} no encontrado` }); }
+        const result = await cambiarEspecialidad(sequelize, {
+          dni, ...parsed.data, actor: (req as any).auth?.principalId ?? null,
+        }, t);
+        await t.commit();
+        await afterWrite(req, res, dni, 'especialidad_cambio', parsed.data);
+        return res.json({ ok: true, data: result });
+      } catch (err: any) {
+        await t.rollback().catch(() => {});
+        return sendEspErr(res, dni, err);
+      }
+    }
+  );
+
+  router.patch(
+    '/:dni/especialidades/:id',
+    requireCrudFor('personal', 'update'),
+    async (req: Request, res: Response) => {
+      const dni = dniParam(req);
+      const id = parseInt(req.params.id, 10);
+      if (!dni || !id) return res.status(400).json({ ok: false, error: 'Parámetros inválidos' });
+      const parsed = z.object({
+        fecha_desde:   isoOpt.optional(),
+        fecha_hasta:   isoOpt.optional().nullable(),
+        observaciones: z.string().max(255).optional().nullable(),
+      }).strict().safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: 'Datos inválidos', details: parsed.error.flatten() });
+
+      const t = await sequelize.transaction();
+      try {
+        await corregirPeriodo(sequelize, dni, id, { ...parsed.data, actor: (req as any).auth?.principalId ?? null }, t);
+        await t.commit();
+        await afterWrite(req, res, dni, 'especialidad_correccion', { id, ...parsed.data });
+        return res.json({ ok: true });
+      } catch (err: any) {
+        await t.rollback().catch(() => {});
+        return sendEspErr(res, dni, err);
+      }
+    }
+  );
+
+  router.delete(
+    '/:dni/especialidades/:id',
+    requireCrudFor('personal', 'update'),
+    async (req: Request, res: Response) => {
+      const dni = dniParam(req);
+      const id = parseInt(req.params.id, 10);
+      if (!dni || !id) return res.status(400).json({ ok: false, error: 'Parámetros inválidos' });
+      const t = await sequelize.transaction();
+      try {
+        await anularPeriodo(sequelize, dni, id, (req as any).auth?.principalId ?? null, t);
+        await t.commit();
+        await afterWrite(req, res, dni, 'especialidad_anulacion', { id });
+        return res.json({ ok: true });
+      } catch (err: any) {
+        await t.rollback().catch(() => {});
+        return sendEspErr(res, dni, err);
       }
     }
   );

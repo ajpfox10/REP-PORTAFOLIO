@@ -12,6 +12,9 @@ interface Props {
   citacionesActivas?: number;
   onOpenExpedientes?: () => void;
   expedientesCount?: number;
+  /** Solo admin (la consulta exige crud:*:*); sin handler no se muestra la card. */
+  onOpenLicenciasMedicas?: () => void;
+  licenciasMedicas?: { noOtorgadas: number; debenReclamar: number } | null;
 }
 
 export function ModuleGrid({
@@ -24,7 +27,11 @@ export function ModuleGrid({
   citacionesActivas = 0,
   onOpenExpedientes,
   expedientesCount = 0,
+  onOpenLicenciasMedicas,
+  licenciasMedicas = null,
 }: Props) {
+  const debenReclamar = licenciasMedicas?.debenReclamar ?? 0;
+  const noOtorgadas = licenciasMedicas?.noOtorgadas ?? 0;
   return (
     <div className="card gp-card-14">
       <div className="row gp-row-between-baseline">
@@ -173,6 +180,36 @@ export function ModuleGrid({
             </button>
           </div>
         </div>
+
+        {/* LICENCIAS MÉDICAS NO OTORGADAS */}
+        {onOpenLicenciasMedicas && (
+          <div className="card gp-card-12" style={{ borderTop: debenReclamar > 0 ? '2px solid #ef4444' : undefined }}>
+            <div className="row gp-row-between-center">
+              <b>Licencias médicas</b>
+              {debenReclamar > 0
+                ? <span className="badge" style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)' }}>
+                    {debenReclamar} a reclamar
+                  </span>
+                : noOtorgadas > 0
+                ? <span className="badge" style={{ background: 'rgba(234,179,8,0.18)', color: '#fde68a', border: '1px solid rgba(234,179,8,0.3)' }}>
+                    {noOtorgadas} no otorgada{noOtorgadas > 1 ? 's' : ''}
+                  </span>
+                : <span className="badge">{licenciasMedicas ? 'Sin pendientes' : '—'}</span>
+              }
+            </div>
+            <p className="muted gp-mt-6">No otorgadas del año: reclamos, notas y detalle día por día.</p>
+            <div className="row gp-row-between-center">
+              <button
+                className="btn"
+                type="button"
+                onClick={onOpenLicenciasMedicas}
+                style={debenReclamar > 0 ? { borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' } : undefined}
+              >
+                🩺 Licencias médicas
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

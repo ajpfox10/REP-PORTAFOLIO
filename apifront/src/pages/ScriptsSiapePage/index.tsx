@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Layout }   from '../../components/Layout';
 import { apiFetch } from '../../api/http';
+import { lanzarRobot, estaCorriendo } from '../../components/RobotsFallidosBanner';
 
 interface EstadoTarea {
   existe: boolean;
@@ -120,6 +121,43 @@ function EstadoTag({ estado, filas }: { estado: 'ok' | 'error' | null; filas?: n
   return <span style={{ color: '#64748b', fontSize: '0.78rem' }}>sin datos aún</span>;
 }
 
+// ── Lanzar ahora (robot cuya última corrida falló) ──────────────────────────
+
+function BotonLanzar({ script, runId, lanzable }: { script: string; runId: number | null; lanzable: boolean }) {
+  const [, refrescar] = useState(0);
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const h = () => refrescar(n => n + 1);
+    window.addEventListener('robots:lanzado', h);
+    return () => window.removeEventListener('robots:lanzado', h);
+  }, []);
+
+  if (!lanzable) return <div style={{ ...S.muted, marginTop: 4 }}>se lanza desde su pantalla</div>;
+  const corriendo = estaCorriendo(script, runId);
+  if (corriendo) {
+    const hora = new Date(corriendo.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    return <div style={{ color: '#fcd34d', fontSize: '0.72rem', marginTop: 4, whiteSpace: 'nowrap' }}>⏳ Corriendo… ({hora})</div>;
+  }
+  const lanzar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEnviando(true);
+    setError('');
+    try { await lanzarRobot(script, runId); }
+    catch (err: any) { setError(err?.message || 'No se pudo lanzar'); }
+    finally { setEnviando(false); }
+  };
+  return (
+    <div style={{ marginTop: 4 }}>
+      <button style={{ ...S.btn, color: '#fca5a5', borderColor: '#ef4444', whiteSpace: 'nowrap' }} disabled={enviando} onClick={lanzar}>
+        {enviando ? 'Lanzando…' : '▶ Lanzar ahora'}
+      </button>
+      {error && <div style={{ color: '#fde047', fontSize: '0.72rem' }}>⚠️ {error}</div>}
+    </div>
+  );
+}
+
 // ── Detalle por agente (script_run_items) ───────────────────────────────────
 
 function Detalle({ runId, script, soloErroresInicial, conRobot }:
@@ -201,7 +239,7 @@ function Detalle({ runId, script, soloErroresInicial, conRobot }:
 
 // ── Historial de un robot (o de todos) ──────────────────────────────────────
 
-function Historial({ script }: { script?: string }) {
+function Historial({ script, robots }: { script?: string; robots: Robot[] }) {
   const [estado, setEstado] = useState('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
@@ -261,7 +299,16 @@ function Historial({ script }: { script?: string }) {
               <tr>
                 <td style={{ ...S.td, whiteSpace: 'nowrap' }}>{fmtFechaHora(c.actualizado_at)}</td>
                 {!script && <td style={S.td}>{c.descripcion || c.script}</td>}
-                <td style={S.td}><EstadoTag estado={c.estado} filas={c.filas} /></td>
+                <td style={S.td}>
+                  <EstadoTag estado={c.estado} filas={c.filas} />
+                  {c.estado === 'error' && (() => {
+                    // solo en la última corrida del robot: una falla vieja ya resuelta no se relanza
+                    const rob = robots.find(x => x.script === c.script);
+                    return rob && rob.run_id === c.id
+                      ? <BotonLanzar script={c.script} runId={c.id} lanzable={!!rob.comando} />
+                      : null;
+                  })()}
+                </td>
                 <td style={{ ...S.td, ...S.muted }}>{fmtDuracion(c.duracion_seg)}</td>
                 <td style={{ ...S.td, fontSize: '0.78rem', color: c.estado === 'error' ? '#fca5a5' : '#cbd5e1' }}>{c.motivo || '—'}</td>
                 <td style={S.td}>
@@ -485,7 +532,7 @@ export function ScriptsSiapePage() {
         {verTodo && (
           <div style={{ ...S.card, background: 'rgba(0,0,0,0.15)' }}>
             <div style={S.titulo}>Registro de todos los robots</div>
-            <Historial />
+            <Historial robots={datos} />
           </div>
         )}
 
@@ -520,6 +567,7 @@ export function ScriptsSiapePage() {
                         </td>
                         <td style={S.td}>
                           <EstadoTag estado={r.estado} filas={r.filas} />
+                          {r.estado === 'error' && <BotonLanzar script={r.script} runId={r.run_id} lanzable={!!r.comando} />}
                           {r.items_error > 0 && (
                             <div style={{ color: '#fca5a5', fontSize: '0.72rem', marginTop: 4 }}>❌ {r.items_error} error(es) de carga</div>
                           )}
@@ -550,7 +598,7 @@ export function ScriptsSiapePage() {
                                       onClick={() => setPestana('config')}>⚙️ Programación y archivo</button>
                             </div>
                             {pestana === 'historial'
-                              ? <Historial script={r.script} />
+                              ? <Historial script={r.script} robots={datos} />
                               : <Configuracion robot={r} onGuardado={cargar} />}
                           </td>
                         </tr>

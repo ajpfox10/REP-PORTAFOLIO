@@ -80,8 +80,9 @@ function apiGet(path) {
   })
 }
 
-// Credencial institucional de SSS-HPGD (se trae del backend tras el login).
-let sssCred = null
+// Credenciales institucionales por fuente (se traen del backend tras el login).
+// Clave = fuente.cred ('sss', 'ioma'); valor = {username, password} o null.
+const creds = {}
 
 // Servidor fijo (no editable ni visible): siempre apunta al backend de produccion.
 const SERVIDOR_POR_DEFECTO = 'http://192.168.0.21:8510'
@@ -104,11 +105,13 @@ document.getElementById('btnLogin').addEventListener('click', async () => {
     // Modulo de lote por Excel: solo para el usuario habilitado.
     if ((usuario || '').trim().toLowerCase() === USUARIO_LOTE) loteBar.classList.add('visible')
     else loteBar.classList.remove('visible')
-    // Traer la credencial de SSS-HPGD para el login automatico (si el backend la tiene).
-    try {
-      const c = await apiGet('/api/sss/credenciales')
-      sssCred = (c && c.username) ? c : null
-    } catch (e) { sssCred = null; console.log('sss cred no disponible: ' + e.message) }
+    // Traer las credenciales institucionales para el login automatico (si el backend las tiene).
+    for (const k of ['sss', 'ioma']) {
+      try {
+        const c = await apiGet(`/api/${k}/credenciales`)
+        creds[k] = (c && c.username) ? c : null
+      } catch (e) { creds[k] = null; console.log(k + ' cred no disponible: ' + e.message) }
+    }
   } catch (e) {
     if (/HTTP 401/.test(e.message)) msg.textContent = 'Usuario o contrasena incorrectos.'
     else if (/ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|ECONNRESET|getaddrinfo|socket hang up|URL de servidor/i.test(e.message)) msg.textContent = 'No se pudo conectar al servidor (192.168.0.21:8510). Verifica que este encendido y en red.'
@@ -142,6 +145,7 @@ const FUENTES = [
     // Acceso restringido para Hospitales (HPGD): la app hace el login automatico
     // con la credencial institucional; la sesion queda persistida en el webview.
     url: 'https://seguro.sssalud.gob.ar/login.php?b_publica=Acceso+Restringido+para+Hospitales&opc=bus650&user=HPGD',
+    cred: 'sss',
     login: {
       user: "input[name='_user_name_']",
       pass: "input[name='_pass_word_']",
@@ -197,12 +201,34 @@ const FUENTES = [
     // si aparece un desafio, lo resuelve el operador.
     codigo: 'anses_doc', nombre: 'ANSES - Obra Social',
     url: 'https://servicioswww.anses.gob.ar/ooss2/ConsultaDoc.aspx',
-    campos: (p) => [["input#ContentPlaceHolder1_txtDoc, input[name='ctl00$ContentPlaceHolder1$txtDoc']", p.cuilDigits || p.dni]],
+    // Respaldo generico (el mismo que ANSES - CODEM) por si ANSES cambia los ids del form.
+    campos: (p) => [["input#ContentPlaceHolder1_txtDoc, input[name='ctl00$ContentPlaceHolder1$txtDoc'], input[placeholder*='DOCUMENTO' i], input[placeholder*='CUIL' i], input[type='text']", p.cuilDigits || p.dni]],
     foco: null,
     enviarConsulta: true,
     enviar: "input#ContentPlaceHolder1_Button1, input[value='Continuar']",
     enviarTexto: /continuar/i,
     resultado: /obra social|la consulta no arroj|comprobante de empadronamiento|codem|no posee|no se encontr/i
+  },
+  {
+    // IOMA - Consulta Afiliados (ASP.NET MVC). Login institucional automatico
+    // (credencial del .env via /api/ioma/credenciales), sin captcha.
+    // La consulta pide sexo + DNI: el sexo sale del prefijo del CUIL (20=M, 27=F);
+    // si no se puede deducir, se prellena el DNI y el operador elige el sexo y aprieta Buscar.
+    codigo: 'ioma', nombre: 'IOMA - Padron de afiliados',
+    url: 'https://sistemas.ioma.gba.gov.ar/ConsultaAfiliado/Afiliado/Index',
+    cred: 'ioma',
+    login: {
+      user: 'input#userName',
+      pass: 'input#password',
+      submit: "input[type='submit'][value*='Iniciar' i], input[type='submit']"
+    },
+    campos: (p) => [['select#sexo', p.sexo], ['input#documento', p.dni]],
+    foco: null,
+    enviarConsulta: true,
+    puedeEnviar: (p) => !!(p.sexo && p.dni),
+    enviar: 'button#buscarAfiliado',
+    enviarTexto: /buscar/i,
+    resultado: /datos del padr|estado afiliatorio|no se encuentra en el padr/i
   }
 ]
 
@@ -223,6 +249,13 @@ function digits(s) { return (s || '').replace(/\D/g, '') }
 function toCuil(s) {
   const d = digits(s)
   return d.length === 11 ? `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}` : ''
+}
+
+// Sexo segun el prefijo del CUIL, con los codigos del select de IOMA (1=M, 2=F).
+// 23/24 (y personas juridicas) no lo determinan: devuelve '' y lo elige el operador.
+function sexoDeCuil(cuil) {
+  const pre = digits(cuil).slice(0, 2)
+  return pre === '20' ? '1' : pre === '27' ? '2' : ''
 }
 
 function buildPrefillJS(fuente, p) {
@@ -384,7 +417,7 @@ function confirmarEnPagina(mensaje) {
 btnIniciar.addEventListener('click', async () => {
   const dni = digits(document.getElementById('dni').value)
   const cuil = toCuil(document.getElementById('cuil').value) || toCuil(dni)
-  datos = { dni, cuil, cuilDigits: digits(cuil) }
+  datos = { dni, cuil, cuilDigits: digits(cuil), sexo: sexoDeCuil(cuil) }
   if (!datos.dni && !datos.cuil) { msgEl.textContent = 'Carga al menos DNI o CUIL.'; return }
   evaluarCuil()
   // Muestra el historial y, si ya hay una consulta previa, CARGA el ultimo resultado
@@ -421,10 +454,13 @@ function programarPrefill() {
       if (r === 'lleno' || r === 'sin-campos' || r === 'ya') {
         monitoreando = true // a partir de aca, cualquier resultado se detecta solo
         // Auto-enviar "Consultar" si la fuente no tiene captcha (ej: SSS-HPGD).
-        if (r === 'lleno' && cfg.fuente.enviarConsulta && !consultaEnviada) {
+        const puede = !cfg.fuente.puedeEnviar || cfg.fuente.puedeEnviar(cfg.datos)
+        if (r === 'lleno' && cfg.fuente.enviarConsulta && puede && !consultaEnviada) {
           const s = await webview.executeJavaScript(buildSubmitJS(cfg.fuente))
           console.log('submit ' + cfg.fuente.codigo + ' -> ' + s)
           if (s === 'consultado') { consultaEnviada = true; msgEl.textContent = `${cfg.fuente.nombre}: consultando...` }
+        } else if (r === 'lleno' && cfg.fuente.enviarConsulta && !puede) {
+          msgEl.textContent = `${cfg.fuente.nombre}: completa los datos que faltan (ej: sexo) y presiona Buscar.`
         }
       } else if (r === 'sin-campos-todavia' && prefillIntentos++ < 8) {
         prefillTimer = setTimeout(programarPrefill, 700)
@@ -513,9 +549,10 @@ webview.addEventListener('did-stop-loading', async () => {
 
   // Login automatico si la fuente lo requiere y tenemos credencial.
   if (f.login) {
-    if (sssCred) {
+    const cred = creds[f.cred]
+    if (cred) {
       try {
-        const r = await webview.executeJavaScript(buildLoginJS(f, sssCred))
+        const r = await webview.executeJavaScript(buildLoginJS(f, cred))
         console.log('login ' + f.codigo + ' -> ' + r)
         if (r === 'enviado' || r === 'enviado-form') {
           msgEl.textContent = `${f.nombre}: ingresando automaticamente...`
@@ -546,10 +583,10 @@ webview.addEventListener('did-stop-loading', async () => {
 })
 
 function clasificar(texto) {
-  if (/no hay datos|no se reportan datos|no registra|sin cobertura|no se encontr|no posee|no existen datos|sin pagos|no se reportan pagos|no arroj/i.test(texto)) {
+  if (/no se encuentra en el padr|estado afiliatorio: (baja|inactiv)|no hay datos|no se reportan datos|no registra|sin cobertura|no se encontr|no posee|no existen datos|sin pagos|no se reportan pagos|no arroj/i.test(texto)) {
     return { v: 'SIN cobertura', c: '#f87171' }
   }
-  if (/obra social|os origen|os destino|beneficiario|incluido en declaraci|aportes de obra social|puco|periodo|importe|comprobante de empadron/i.test(texto)) {
+  if (/estado afiliatorio: activo|obra social|os origen|os destino|beneficiario|incluido en declaraci|aportes de obra social|puco|periodo|importe|comprobante de empadron/i.test(texto)) {
     return { v: 'CON cobertura / aportes', c: '#4ade80' }
   }
   return { v: 'Sin determinar', c: '#fbbf24' }
@@ -686,7 +723,7 @@ async function terminarDni() {
     filaActual += 1
     const it = cola[filaActual]
     const cuil = it.cuil || toCuil(it.dni)
-    datos = { dni: it.dni, cuil, cuilDigits: digits(cuil) }
+    datos = { dni: it.dni, cuil, cuilDigits: digits(cuil), sexo: sexoDeCuil(cuil) }
     resultados.length = 0
     resultadosEl.innerHTML = ''
     idx = 0
@@ -821,7 +858,7 @@ btnIniciarLote.addEventListener('click', () => {
   filaActual = 0
   const it = cola[0]
   const cuil = it.cuil || toCuil(it.dni)
-  datos = { dni: it.dni, cuil, cuilDigits: digits(cuil) }
+  datos = { dni: it.dni, cuil, cuilDigits: digits(cuil), sexo: sexoDeCuil(cuil) }
   evaluarCuil()
   resultados.length = 0
   resultadosEl.innerHTML = ''

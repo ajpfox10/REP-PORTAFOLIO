@@ -1065,7 +1065,7 @@ function WhatsappTab() {
           </tr>
         </thead>
         <tbody>
-          {filas.map(r => <FilaTabla key={r.id} r={r} />)}
+          {filas.map(r => FilaTabla({ r }))}
           <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)' }}>
             <td colSpan={2} style={{ padding: '6px 10px', fontWeight: 700, color: '#94a3b8' }}>
               TOTAL {labelTotal}
@@ -1165,7 +1165,7 @@ function WhatsappTab() {
                   </span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <TablaFilas filas={grupo.filas} labelTotal={grupo.label.toUpperCase()} />
+                  {TablaFilas({ filas: grupo.filas, labelTotal: grupo.label.toUpperCase() })}
                 </div>
               </div>
             ))}
@@ -1222,7 +1222,7 @@ function WhatsappTab() {
               </strong>
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <TablaFilas filas={rowsHabil} labelTotal={MESES[Number(filtroMes)-1].toUpperCase()} />
+              {TablaFilas({ filas: rowsHabil, labelTotal: MESES[Number(filtroMes)-1].toUpperCase() })}
             </div>
           </>
         )}
