@@ -120,7 +120,7 @@ Notas JAB: el `name` de un campo enfocado viene ensuciado (` BAJA tab page FECHA
 `description`. `F._jab_buscar` se corta por tiempo en esta pantalla (grilla de cientos de celdas); el walker de
 `siape_observador_jab.recorrer` (solo visibles) la lee en ~5 s.
 
-## Primera baja real (06/10/2026, BORGEAUD VICTORIA BELEN, DNI 40642725)
+## Primera baja real (06/10/2026, AGENTE DE PRUEBA, DNI 12345678)
 
 - Preventiva: FECHA 31/08/2026 + MOTIVO `BAJA BECA` → Guardar → "Informacion Se han Guardado los cambios."
 - **Guardar saca del modo Supervisor**: los campos dejan de ser editables y la LOV responde "No puede

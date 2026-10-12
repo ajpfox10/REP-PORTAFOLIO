@@ -7,8 +7,8 @@
  * Uso:
  *   node 012__importar_archivos_docu.js              → dry-run (solo muestra lo que haría)
  *   node 012__importar_archivos_docu.js --execute    → inserta en la BD
- *   node 012__importar_archivos_docu.js --dni=28305607          → solo ese DNI (dry-run)
- *   node 012__importar_archivos_docu.js --dni=28305607 --execute
+ *   node 012__importar_archivos_docu.js --dni=12345678          → solo ese DNI (dry-run)
+ *   node 012__importar_archivos_docu.js --dni=12345678 --execute
  */
 
 const fs   = require('fs');
@@ -87,7 +87,7 @@ function archivosEnCarpetaDni(dniDir, dniStr) {
       const ext = path.extname(entry.name).toLowerCase();
       if (!ALLOWED_EXT.has(ext)) continue;
 
-      // ruta relativa a DOCS_DIR: "28305607\archivo.pdf" o "28305607\CARPETA\archivo.pdf"
+      // ruta relativa a DOCS_DIR: "12345678\archivo.pdf" o "12345678\CARPETA\archivo.pdf"
       const rutaRelativa = subcarpeta
         ? `${dniStr}\\${subcarpeta}\\${entry.name}`
         : `${dniStr}\\${entry.name}`;

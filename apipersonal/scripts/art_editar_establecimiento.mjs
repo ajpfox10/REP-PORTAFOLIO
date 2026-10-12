@@ -5,7 +5,7 @@
 // modificación del trabajador. El domicilio NO se toca (ART no deja editarlo por web).
 //
 // Uso:
-//   node scripts/art_editar_establecimiento.mjs --cuil 20-12580743-8            (dry-run, 1 agente)
+//   node scripts/art_editar_establecimiento.mjs --cuil 20-12345678-9            (dry-run, 1 agente)
 //   node scripts/art_editar_establecimiento.mjs --excel D:\G\comparacion\lista.xlsx  (dry-run, lote)
 //   ...agregar --apply para EJECUTAR de verdad (destructivo).
 //   node scripts/art_editar_establecimiento.mjs --pendientes --apply

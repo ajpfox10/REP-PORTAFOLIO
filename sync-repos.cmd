@@ -12,8 +12,8 @@ set "DRY="
 if /i "%MODE%"=="dry" set "DRY=/L"
 
 REM Carpetas y archivos que NO se copian
-set "XD=node_modules dist .git .cache logs tmp coverage .vs fichadas bin obj __pycache__ .playwright .chrome-debug chrome-dev-visible chrome-dev-visible-2 storage uploads capturas screenshots .venv venv"
-set "XF=.env*reformas.txt PENDIENTES.txt fichadas_log.txt *fichad*.txt attlog*.txt *.log *.err *.jpg *.jpeg Thumbs.db .DS_Store fichero_config.json *.bak *.bak_* *.pyc *.pem *.key *.pfx *.p12 id_rsa* *.pdf *.csv *.xlsx *.xls *.webp *.bmp"
+set "XD=node_modules dist .git .cache logs tmp coverage .vs fichadas bin obj __pycache__ .playwright .chrome-debug chrome-dev-visible chrome-dev-visible-2 storage uploads capturas screenshots .venv venv test-results playwright-report siape_map_baja siape_catalogo"
+set "XF=.env*reformas.txt PENDIENTES.txt fichadas_log.txt *fichad*.txt attlog*.txt *.log *.err *.jpg *.jpeg Thumbs.db .DS_Store fichero_config.json *.bak *.bak_* *.pyc *.pem *.key *.pfx *.p12 id_rsa* *.pdf *.csv *.xlsx *.xls *.webp *.bmp *.out *.exe *.msi dump_*.txt logs_*.txt"
 
 echo ================================================================
 echo   SYNC personaldev -^> D:\Repositorios   (modo: %MODE%)

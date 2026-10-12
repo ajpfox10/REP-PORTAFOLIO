@@ -85,10 +85,13 @@ try {
   # PDFs, planillas, imagenes y carpetas de datos: solo se permiten los assets reales del codigo
   $dataFile    = '(?i)\.(pdf|csv|xlsx?|png|jpe?g|webp|bmp)$|(^|/)(storage|uploads|capturas|screenshots|fichadas)/|fichad[^/]*\.txt$|(^|/)attlog[^/]*\.txt$'
   $dataAllowed = '(?i)^(apipersonal/src/templates/|apipersonal/assets/|TRABAJO PRACTICO FINAL/img/)'
+  # volcados de pantallas de SiAPe, logs de pruebas y listados reales: traen DNI/CUIL/nombres de agentes
+  $personalData = '(?i)^apipersonal/scripts/(dump_[^/]*\.txt|logs_[^/]*\.txt|siape_[^/]*\.(json|txt)|siape_map_baja/|siape_catalogo/|data/)'
   $staged = @(git -c core.quotepath=off diff --cached --name-only --diff-filter=ACMR)
   foreach ($f in $staged) {
     if ($f -match $forbiddenPath -and $f -notmatch '\.playwright/') { $findings.Add("ARCHIVO PROHIBIDO  $f"); continue }
     if ($f -match $dataFile -and $f -notmatch $dataAllowed) { $findings.Add("DATOS/DOCUMENTO/CAPTURA  $f") }
+    if ($f -match $personalData) { $findings.Add("DATOS PERSONALES (volcado/listado)  $f") }
   }
 
   # 2) Secretos conocidos en cualquier archivo del stage (incluye binarios)
@@ -99,7 +102,7 @@ try {
 
   # 3) Patrones genericos solo en las lineas agregadas
   $allowPath = '(?i)(^|/)(tests?|__tests__|e2e|fixtures?)/|\.(test|spec)\.[jt]sx?$|\.example$|\.sample$|/\.github/workflows/|(^|/)assets/[^/]+\.js$'
-  $placeholder = '(?i)change_?me|x{4,}|\*{3,}|your[-_]|tu[-_]|example|redacted|fake|dummy|placeholder|_pass_word_|_user_name_|<[^>]+>|\$\{|process\.env|os\.environ|%[A-Z_]+%'
+  $placeholder = '(?i)12345678|change_?me|x{4,}|\*{3,}|your[-_]|tu[-_]|example|redacted|fake|dummy|placeholder|_pass_word_|_user_name_|<[^>]+>|\$\{|process\.env|os\.environ|%[A-Z_]+%'
   $rules = @(
     @{ n = 'PASSWORD/SECRET LITERAL'; r = '(?i)(pass(word|wd)?|pwd|clave|contrase.a|secret|token|api_?key|private_?key)\w*[''"]?\s*[:=]\s*[''"]([^''"\s]{6,})[''"]' },
     @{ n = 'CONNECTION STRING';      r = '(?i)(Password|Pwd)\s*=\s*([^;''"\s<>]{4,})' },
@@ -107,6 +110,7 @@ try {
     @{ n = 'MYSQL -p INLINE';        r = '(?i)\bmysql\w*(\.exe)?["'']?\s.*\s-p([^\s"'']{4,})' },
     @{ n = 'CLAVE PRIVADA';          r = '-----BEGIN [A-Z ]*PRIVATE KEY-----' },
     @{ n = 'TOKEN DE SERVICIO';      r = '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|xox[abp]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|SG\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,})' }
+    @{ n = 'DNI/CUIL REAL';         r = '(?i)\b(20|23|24|27)-?[0-9]{8}-?[0-9]\b|(dni|cuil|nro_?doc|documento)\W{1,6}[1-4][0-9]{6,7}\b' }
   )
 
   $file = $null; $lineNo = 0

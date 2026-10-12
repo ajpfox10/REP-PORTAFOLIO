@@ -12,7 +12,7 @@ const GRID = 'https://www.provinciart.com.ar/modules/usuarios_registrados/client
 async function clickVC(p, l) { await l.waitFor({ state: 'visible', timeout: 20000 }); const b = await l.boundingBox(); await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(300); await p.mouse.down(); await p.waitForTimeout(100); await p.mouse.up(); }
 async function typeInto(p, l, v) { await l.click({ timeout: 15000 }); await l.press('Control+A'); await l.press('Backspace'); await l.type(String(v), { delay: 35 }); }
 
-const CUILS = process.argv.slice(2).length ? process.argv.slice(2) : ['20-12580743-8', '20-31917664-1']; // PENAYO (esperado: sí) / BORDA (esperado: no)
+const CUILS = process.argv.slice(2).length ? process.argv.slice(2) : ['20-12345678-9', '20-12345678-9']; // PENAYO (esperado: sí) / BORDA (esperado: no)
 const { chromium } = await import('playwright');
 const browser = await chromium.launch({ headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });

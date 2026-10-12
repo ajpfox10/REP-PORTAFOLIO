@@ -29,7 +29,7 @@ Uso:
   python cargar_examen_siape.py --solo-cola           # arma la cola y lista, sin tocar SIAPE
   python cargar_examen_siape.py --dry-run --limit 1   # prueba en vivo SIN guardar
   python cargar_examen_siape.py                       # carga todos los pendientes
-  python cargar_examen_siape.py --dni 30063584
+  python cargar_examen_siape.py --dni 12345678
 """
 import argparse
 import sys

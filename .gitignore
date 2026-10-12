@@ -94,3 +94,26 @@ chrome-dev-visible*/
 **/.venv/
 venv/
 **/venv/
+# volcados/capturas de pantallas de SiAPe y listados reales (datos personales de agentes)
+apipersonal/scripts/dump_*.txt
+apipersonal/scripts/logs_*.txt
+apipersonal/scripts/siape_*.json
+apipersonal/scripts/siape_*.txt
+apipersonal/scripts/siape_map_baja/
+apipersonal/scripts/siape_catalogo/
+apipersonal/scripts/data/
+apipersonal/scripts/siape_stress/bajar_frame*.html
+# basura: copias, salidas de pruebas, temporales, instaladores y builds viejos
+* - copia*
+*.out
+*.exe
+*.msi
+**/test-results/
+**/playwright-report/
+**/_tmp_*
+apipersonal/_*.mjs
+apipersonal/tmp_*
+apifront/public/assets/
+3bugs.txt
+PENDIENTES_EXTERNOS.txt
+synctest.txt

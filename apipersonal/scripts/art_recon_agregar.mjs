@@ -10,7 +10,7 @@ dotenv.config({ path: path.join(appRoot, '.env') });
 const opt = (n, d = '') => process.env[n]?.trim() || d;
 const must = (n) => { const v = process.env[n]?.trim(); if (!v) throw new Error(`Falta ${n}`); return v; };
 const OUT = path.join(appRoot, 'logs', 'art_capture');
-const TID = process.argv[2] || '4714602'; // PENAYO
+const TID = process.argv[2] || '4714602'; // trabajador de prueba
 async function clickVC(p, l) { await l.waitFor({ state: 'visible', timeout: 20000 }); const b = await l.boundingBox(); await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(300); await p.mouse.down(); await p.waitForTimeout(100); await p.mouse.up(); }
 async function typeInto(p, l, v) { await l.click({ timeout: 15000 }); await l.press('Control+A'); await l.press('Backspace'); await l.type(String(v), { delay: 35 }); }
 

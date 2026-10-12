@@ -6,7 +6,7 @@
 //
 // Uso:
 //   const results = await searchPersonal('GARCIA');     // por apellido/nombre
-//   const results = await searchPersonal('', 28305607); // por DNI
+//   const results = await searchPersonal('', 12345678); // por DNI
 
 import { apiFetch } from './http';
 

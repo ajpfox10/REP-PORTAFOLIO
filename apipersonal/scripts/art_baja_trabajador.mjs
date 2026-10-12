@@ -8,7 +8,7 @@
 // Uso:
 //   node scripts/art_baja_trabajador.mjs --pendientes            (dry-run: muestra qué haría)
 //   node scripts/art_baja_trabajador.mjs --pendientes --apply    (da de baja de verdad; lo corre la página Robots)
-//   node scripts/art_baja_trabajador.mjs --dni 25981890 [--apply]
+//   node scripts/art_baja_trabajador.mjs --dni 12345678 [--apply]
 // Opcionales: --limit N. Env: ART_LOGIN_URL, ART_PROVINCIA_USER, ART_PROVINCIA_PASSWORD, ART_HEADLESS.
 //
 // Reglas (decisión RRHH 09/10/2026):

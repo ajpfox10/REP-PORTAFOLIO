@@ -1,6 +1,6 @@
 // Recon READ-ONLY dirigida: busca un CUIL en la nómina, saca trabajadorId, abre modificación,
 // lee el iframe de establecimientos (lista + rl + eliminar) y abre el buscador de "agregar".
-// Uso: node scripts/art_recon_penayo.mjs [CUIL]   default 20-12580743-8 (PENAYO)
+// Uso: node scripts/art_recon_penayo.mjs [CUIL]   default 20-12345678-9
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import path from 'path';
@@ -11,7 +11,7 @@ dotenv.config({ path: path.join(appRoot, '.env') });
 const opt = (n, d = '') => process.env[n]?.trim() || d;
 const must = (n) => { const v = process.env[n]?.trim(); if (!v) throw new Error(`Falta ${n}`); return v; };
 const OUT = path.join(appRoot, 'logs', 'art_capture');
-const CUIL = process.argv[2] || '20-12580743-8';
+const CUIL = process.argv[2] || '20-12345678-9';
 async function clickVC(p, l) { await l.waitFor({ state: 'visible', timeout: 20000 }); const b = await l.boundingBox(); await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await p.waitForTimeout(300); await p.mouse.down(); await p.waitForTimeout(100); await p.mouse.up(); }
 async function typeInto(p, l, v) { await l.click({ timeout: 15000 }); await l.press('Control+A'); await l.press('Backspace'); await l.type(String(v), { delay: 35 }); }
 

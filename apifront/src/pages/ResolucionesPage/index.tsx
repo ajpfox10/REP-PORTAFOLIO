@@ -836,7 +836,7 @@ export function ResolucionesPage() {
               <label htmlFor="res-busq-dni" style={lbl}>Buscar por DNI</label>
               <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                 <input id="res-busq-dni" name="dniInput" className="input"
-                  style={{ fontSize: '0.85rem' }} placeholder="Ej: 28305607"
+                  style={{ fontSize: '0.85rem' }} placeholder="Ej: 12345678"
                   value={dniInput}
                   onChange={e => setDniInput(e.target.value.replace(/\D/g, ''))}
                   onKeyDown={e => e.key === 'Enter' && buscarPorDni()} />

@@ -47,6 +47,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [INFO] Trayendo cambios de GitHub antes de subir...
+git pull --no-rebase --no-edit
+if errorlevel 1 (
+  echo [ERROR] Fallo el pull ^(posible conflicto^). Resolvelo y volve a correr este script.
+  pause
+  exit /b 1
+)
+
 git push
 if errorlevel 1 (
   echo [ERROR] Fallo el push.

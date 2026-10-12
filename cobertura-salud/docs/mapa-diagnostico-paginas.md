@@ -99,7 +99,7 @@ del operador y luego extrae automaticamente el resultado visible.
 - Relevamiento en vivo: desde la pantalla principal abrir la tarjeta `Consulta de Cobertura de Salud (PUCO)`.
 - Busqueda PUCO: selector `Buscar por` = `NroDoc`, condicion `igual a`, llenar DNI y apretar `Buscar`.
 - Resultado a extraer: primera fila de la grilla con columnas `TipoDoc`, `NroDoc`, `Sexo`, `Cobertura Social`, `Denominacion`.
-- Ejemplo visto: `TipoDoc = DNI`, `NroDoc = 28305607`, `Sexo = M`, `Cobertura Social = O.S.P. BUENOS AIRES (IOMA)`, `Denominacion = PEVERI ALEJANDRO JAVIER`.
+- Ejemplo visto: `TipoDoc = DNI`, `NroDoc = 12345678`, `Sexo = M`, `Cobertura Social = O.S.P. BUENOS AIRES (IOMA)`, `Denominacion = PEVERI ALEJANDRO JAVIER`.
 - Login: `usuario`, `contraseña`, `ingresar`, `iniciar sesion`.
 - Resultado positivo: `PUCO`, `cobertura`, `paciente`, `DNI`.
 - Resultado negativo: `no registra cobertura`, `sin cobertura`.
