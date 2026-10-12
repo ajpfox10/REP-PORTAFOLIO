@@ -1,0 +1,18 @@
+EXTENSIÓN "Personal - Avisos por WhatsApp"
+=========================================
+
+Se instala UNA vez en cada PC (Chrome) que vaya a mandar los avisos automáticos.
+
+1. Descomprimir la carpeta en un lugar fijo (ej: C:\whatsapp-extension). No borrarla después.
+2. En Chrome ir a  chrome://extensions
+3. Activar "Modo de desarrollador" (arriba a la derecha).
+4. "Cargar descomprimida" → elegir la carpeta.
+5. Recargar la página de la app (Licencias médicas no otorgadas → pestaña WhatsApp).
+   Tiene que decir "Extensión instalada".
+
+Uso:
+- Tener WhatsApp Web abierto y vinculado en ese mismo Chrome (en cualquier pestaña).
+- Mientras envía, la extensión trae WhatsApp al frente y vuelve a la app después de cada mensaje:
+  no usar la PC durante la tanda.
+
+Si se actualiza la extensión: chrome://extensions → botón de recargar (flecha circular) y recargar la app.

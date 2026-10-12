@@ -36,6 +36,10 @@ echo === scanner1 ===
 robocopy "C:\apps\personaldev\scanner1" "D:\Repositorios\scanner1" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
 
 echo.
+echo === whatsapp-extension ===
+robocopy "C:\apps\personaldev\whatsapp-extension" "D:\Repositorios\whatsapp-extension" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
+
+echo.
 echo === ARCHIVOPASIVO ===
 robocopy "C:\apps\ARCHIVOPASIVO" "D:\Repositorios\ARCHIVOPASIVO" %DRY% /E /R:1 /W:1 /NP /NDL /XD %XD% /XF %XF%
 

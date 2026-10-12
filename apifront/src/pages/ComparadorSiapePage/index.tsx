@@ -51,6 +51,7 @@ interface ResultadoRow {
   intentos: number;
   corrida_id: number | null;
   actualizado: string;
+  cargado?: string | null; // cuando la cargo el robot (solo OK)
   ley?: string;
 }
 
@@ -226,7 +227,19 @@ function Tabla({ rows }: { rows: CompRow[] }) {
   );
 }
 
-const COLS_RES = ['Nombre','DNI','Novedad','Desde','Hasta','Estado','Intentos','Detalle'];
+const COLS_RES = ['Nombre','DNI','Novedad','Desde','Hasta','Estado','Intentos','Último intento','Detalle'];
+
+// Fecha/hora del último movimiento de la fila: la carga si quedó OK, si no el último intento / cambio
+const momentoRes = (r: ResultadoRow) => r.cargado || r.actualizado || '';
+const fechaRes = (r: ResultadoRow) => momentoRes(r).slice(0, 10);
+const ddmm = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
+const MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const mesLabel = (ym: string) => `${MESES[Number(ym.slice(5, 7))] ?? ym} ${ym.slice(0, 4)}`;
+const contar = (vals: string[]) => {
+  const m = new Map<string, number>();
+  for (const v of vals) if (v) m.set(v, (m.get(v) ?? 0) + 1);
+  return m;
+};
 const PAGE_SIZE = 50;
 
 function TablaResultados({ rows }: { rows: ResultadoRow[] }) {
@@ -265,6 +278,10 @@ function TablaResultados({ rows }: { rows: ResultadoRow[] }) {
                         <span style={{ color: b.color, fontWeight: 600, fontSize: '0.69rem' }}>{b.label}</span>
                       </td>
                       <td style={{ padding: '4px 8px', textAlign: 'center', fontSize: '0.69rem', color: '#94a3b8' }}>{r.intentos}</td>
+                      <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', fontSize: '0.69rem', color: '#94a3b8' }}
+                        title={r.cargado ? 'Cargada por el robot' : 'Último intento / cambio de estado'}>
+                        {momentoRes(r) ? `${ddmm(momentoRes(r))} ${momentoRes(r).slice(11, 16)}` : '—'}
+                      </td>
                       <td style={{ padding: '4px 8px', fontSize: '0.67rem', color: '#64748b' }}>{r.detalle}</td>
                     </tr>
                   );
@@ -358,6 +375,10 @@ export function ComparadorSiapePage() {
   const esAdmin = hasPerm('crud:*:*');   // Carga SiAPe era solo admin
   const [filtroDetalle, setFiltroDetalle] = useState('todos');
   const [filtroPisada, setFiltroPisada] = useState('todos');
+  // '' = automático: siempre el día del último movimiento (la última carga)
+  const [filtroFecha, setFiltroFecha]   = useState('');
+  const [filtroTipo, setFiltroTipo]     = useState('todos');
+  const [filtroMes, setFiltroMes]       = useState('todos');
   const [cargando, setCargando]           = useState(false);
   const [cargandoAusentes, setCargandoAusentes] = useState(false);
   const [segundaPasada, setSegundaPasada] = useState(false);
@@ -532,12 +553,35 @@ export function ComparadorSiapePage() {
     };
   }, [completa, data]);
 
+  // Filtros de fecha de carga / tipo de novedad / mes de la novedad (van antes que el de estado)
+  const fechasRes = useMemo(
+    () => [...contar(resultado.map(fechaRes)).entries()].sort((a, b) => b[0].localeCompare(a[0])),
+    [resultado]);
+  const fechaActiva = filtroFecha === ''
+    ? (fechasRes[0]?.[0] ?? 'todas')
+    : (filtroFecha === 'todas' || fechasRes.some(([f]) => f === filtroFecha) ? filtroFecha : (fechasRes[0]?.[0] ?? 'todas'));
+  const porFecha = useMemo(
+    () => (fechaActiva === 'todas' ? resultado : resultado.filter(r => fechaRes(r) === fechaActiva)),
+    [resultado, fechaActiva]);
+  const tiposRes = useMemo(
+    () => [...contar(porFecha.map(r => r.novedad)).entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')),
+    [porFecha]);
+  const mesesRes = useMemo(
+    () => [...contar(porFecha.map(r => (r.desde || '').slice(0, 7))).entries()].sort((a, b) => b[0].localeCompare(a[0])),
+    [porFecha]);
+  const resultadoBase = useMemo(() => {
+    let r = porFecha;
+    if (filtroTipo !== 'todos') r = r.filter(x => x.novedad === filtroTipo);
+    if (filtroMes !== 'todos') r = r.filter(x => (x.desde || '').slice(0, 7) === filtroMes);
+    return r;
+  }, [porFecha, filtroTipo, filtroMes]);
+
   const resultadoPorEstado = useMemo(() => {
-    let r = resultado;
+    let r = resultadoBase;
     if (filtroRes === 'no_ok') r = r.filter(x => !NO_ERROR.includes(x.estado));
     else if (filtroRes !== 'todos') r = r.filter(x => x.estado === filtroRes);
     return r;
-  }, [resultado, filtroRes]);
+  }, [resultadoBase, filtroRes]);
 
   const detallesDisponibles = useMemo(() => {
     const counts = new Map<string, number>();
@@ -601,12 +645,12 @@ export function ComparadorSiapePage() {
   }, [resultadoPorMotivo, filtroPisadaActivo, textoRes]);
 
   const resConteo = useMemo(() => ({
-    ok:        resultado.filter(r => r.estado === 'OK').length,
-    error:     resultado.filter(r => !NO_ERROR.includes(r.estado)).length,
-    pendiente: resultado.filter(r => r.estado === 'PENDIENTE').length,
-    cerrado:   resultado.filter(r => r.estado === 'PERIODO_CERRADO').length,
-    cambio:    resultado.filter(r => r.estado === 'CAMBIO_SIAPE').length,
-  }), [resultado]);
+    ok:        resultadoBase.filter(r => r.estado === 'OK').length,
+    error:     resultadoBase.filter(r => !NO_ERROR.includes(r.estado)).length,
+    pendiente: resultadoBase.filter(r => r.estado === 'PENDIENTE').length,
+    cerrado:   resultadoBase.filter(r => r.estado === 'PERIODO_CERRADO').length,
+    cambio:    resultadoBase.filter(r => r.estado === 'CAMBIO_SIAPE').length,
+  }), [resultadoBase]);
 
   const erroresVisibles = useMemo(
     () => resFiltrado.filter(r => !NO_ERROR.includes(r.estado)),
@@ -806,9 +850,9 @@ export function ComparadorSiapePage() {
               </span>
             )}
             <label className="muted" style={{ fontSize: '0.72rem', marginLeft: 10, cursor: 'pointer' }}
-              title="Por defecto se ve solo la última comparación; esto suma las filas de comparaciones anteriores">
+              title="Por defecto se ve lo que sigue abierto (pendientes, errores, alertas) y los OK de las últimas 24 h; esto muestra todo el historial, incluidos los OK viejos">
               <input type="checkbox" checked={verAnteriores} onChange={e => setVerAnteriores(e.target.checked)} style={{ marginRight: 4 }} />
-              Ver también corridas anteriores
+              Ver historial completo
             </label>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -820,7 +864,8 @@ export function ComparadorSiapePage() {
               <button className="btn"
                 onClick={() => exportToExcel(`resultado_carga_${depRes.replace(' ', '')}`, resFiltrado.map(r => ({
                   Nombre: r.nombre, DNI: r.dni, Novedad: r.novedad, 'Opción Intranet': r.label,
-                  Desde: r.desde, Hasta: r.hasta, Estado: r.estado, Intentos: r.intentos, Detalle: r.detalle
+                  Desde: r.desde, Hasta: r.hasta, Estado: r.estado, Intentos: r.intentos,
+                  'Último intento': momentoRes(r), Detalle: r.detalle
                 })))}
                 style={{ fontSize: '0.73rem', background: '#16a34a', color: '#fff' }}>
                 📥 Exportar ({resFiltrado.length})
@@ -850,6 +895,25 @@ export function ComparadorSiapePage() {
 
         {resultado.length > 0 && (
           <>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+              <select className="input" value={filtroFecha === '' ? '' : fechaActiva} onChange={e => setFiltroFecha(e.target.value)}
+                title="Día del último movimiento: carga OK, intento con error o cambio de estado"
+                style={{ fontSize: '0.78rem', width: 230 }}>
+                <option value="">📅 Última carga{fechasRes[0] ? ` (${ddmm(fechasRes[0][0])} · ${fechasRes[0][1]})` : ''}</option>
+                <option value="todas">📅 Todas las fechas ({resultado.length})</option>
+                {fechasRes.map(([f, n]) => <option key={f} value={f}>{ddmm(f)} ({n})</option>)}
+              </select>
+              <select className="input" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
+                style={{ fontSize: '0.78rem', flex: '1 1 200px', minWidth: 160 }}>
+                <option value="todos">Todos los tipos de novedad</option>
+                {tiposRes.map(([t, n]) => <option key={t} value={t}>{t} ({n})</option>)}
+              </select>
+              <select className="input" value={filtroMes} onChange={e => setFiltroMes(e.target.value)}
+                style={{ fontSize: '0.78rem', width: 190 }}>
+                <option value="todos">Todos los meses</option>
+                {mesesRes.map(([m, n]) => <option key={m} value={m}>{mesLabel(m)} ({n})</option>)}
+              </select>
+            </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
               <select className="input" value={filtroRes}
                 onChange={e => { setFiltroRes(e.target.value); setFiltroDetalle('todos'); setFiltroPisada('todos'); }}

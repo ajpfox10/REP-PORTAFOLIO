@@ -7,8 +7,9 @@
 //                                            + estado de carga de cada fila (novedades_carga_intranet).
 // POST /comparacion-v2/comparar            → corre el Comparador 2.0 (espera a que termine).
 // GET  /comparacion-v2/resultado?dep=[&todas=1] → resultado de la carga en la Intranet (novedades_carga_intranet),
-//                                            novedades + ausentes de esa dependencia; por defecto solo la
-//                                            última corrida (todas=1 suma las filas de corridas anteriores).
+//                                            novedades + ausentes de esa dependencia; por defecto lo abierto
+//                                            (todo lo que no es OK/DESCARTADA) + los OK que cargó el robot en las últimas 24 h;
+//                                            todas=1 = historial completo.
 // POST /comparacion-v2/lanzar              → { tipo: novedades|ausentes|art26, dependencia } corre ese robot.
 // POST /comparacion-v2/reintentar          → { dependencia, ids } vuelve a PENDIENTE esas filas con error
 //                                            y lanza los robots que correspondan (reemplaza "segunda pasada").
@@ -119,11 +120,14 @@ export function buildComparacionV2Router(sequelize: Sequelize) {
         SELECT id, nombre, dni, novedad_siap AS novedad, COALESCE(label_intranet, '') AS label,
                DATE_FORMAT(desde, '%Y-%m-%d') AS desde, DATE_FORMAT(hasta, '%Y-%m-%d') AS hasta,
                estado, COALESCE(detalle, '') AS detalle, intentos, corrida_id,
-               DATE_FORMAT(actualizado_en, '%Y-%m-%d %H:%i') AS actualizado
+               DATE_FORMAT(actualizado_en, '%Y-%m-%d %H:%i') AS actualizado,
+               DATE_FORMAT(cargado_en, '%Y-%m-%d %H:%i') AS cargado
           FROM novedades_carga_intranet
-         WHERE dependencia = ? ${todas ? '' : 'AND corrida_id = ?'}
+         WHERE dependencia = ?
+           ${todas ? '' : `AND (estado NOT IN ('OK', 'DESCARTADA')
+                OR (estado = 'OK' AND cargado_en >= NOW() - INTERVAL 24 HOUR))`}
          ORDER BY (estado = 'OK'), nombre, desde`,
-        { type: QueryTypes.SELECT, replacements: todas ? [dep] : [dep, ultima?.id ?? 0] });
+        { type: QueryTypes.SELECT, replacements: [dep] });
       return res.json({ ok: true, corrida_actual: ultima?.id ?? null, filas });
     } catch (err: any) {
       if (/doesn't exist/i.test(String(err?.message))) return res.json({ ok: true, corrida_actual: null, filas: [] });
