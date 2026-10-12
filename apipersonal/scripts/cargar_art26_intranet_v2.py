@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN
 import post_carga
 import cargar_art26_intranet as V   # funciones de Intranet de la version vieja
+from cargar_novedades_intranet_v2 import es_error_cierre
 
 TABLA = "art26_carga_intranet"
 SCRIPT_ID = None   # lo fija main(): intranet_carga_art26_v2_<dep>
@@ -51,7 +52,7 @@ def crear_tabla(cur):
           dependencia_sugerida VARCHAR(20) NOT NULL DEFAULT 'HOSPITAL',
           deps_descartadas VARCHAR(60) NOT NULL DEFAULT '' COMMENT 'dependencias donde la Intranet dijo "no pertenece" (CSV)',
           dependencia VARCHAR(20) NULL COMMENT 'dependencia del ultimo intento',
-          estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' COMMENT 'PENDIENTE / OK / ERROR / ERROR_NAV / EXCEPCION / BAJA',
+          estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' COMMENT 'PENDIENTE / OK / ERROR / ERROR_NAV / EXCEPCION / BAJA / PERIODO_CERRADO',
           label_intranet VARCHAR(200) NULL,
           detalle VARCHAR(500) NULL,
           intentos INT NOT NULL DEFAULT 0,
@@ -85,9 +86,14 @@ def sincronizar(cur):
         ON DUPLICATE KEY UPDATE
           nombre = VALUES(nombre), estado_art26 = VALUES(estado_art26),
           dependencia_sugerida = VALUES(dependencia_sugerida),
+          -- PERIODO_CERRADO vuelve a PENDIENTE solo si le cambiaron las fechas al Art. 26.
+          -- Va ANTES que desde/hasta: MySQL asigna en orden y aca necesita las fechas viejas.
+          estado = IF({TABLA}.estado = 'BAJA'
+                      OR ({TABLA}.estado = 'PERIODO_CERRADO'
+                          AND ({TABLA}.desde <> VALUES(desde) OR {TABLA}.hasta <> VALUES(hasta))),
+                      'PENDIENTE', {TABLA}.estado),
           desde = IF({TABLA}.estado = 'OK', {TABLA}.desde, VALUES(desde)),
-          hasta = IF({TABLA}.estado = 'OK', {TABLA}.hasta, VALUES(hasta)),
-          estado = IF({TABLA}.estado = 'BAJA', 'PENDIENTE', {TABLA}.estado)""")
+          hasta = IF({TABLA}.estado = 'OK', {TABLA}.hasta, VALUES(hasta))""")
     cur.execute(f"""
         UPDATE {TABLA} t
           LEFT JOIN articulo_26 a ON a.id = t.art26_id
@@ -104,7 +110,7 @@ def cargar_filas_db(dependencia, test_mode=False):
         cur.execute(f"""
             SELECT art26_id, dni, nombre, desde, hasta
               FROM {TABLA}
-             WHERE estado NOT IN ('OK', 'BAJA')
+             WHERE estado NOT IN ('OK', 'BAJA', 'PERIODO_CERRADO')   -- periodo cerrado: no se reintenta
                AND NOT FIND_IN_SET(%s, deps_descartadas)
                AND (dependencia_sugerida = %s OR FIND_IN_SET(dependencia_sugerida, deps_descartadas))
              ORDER BY nombre, desde""", (dependencia, dependencia))
@@ -228,7 +234,7 @@ def main():
                 print(f"  Cargando FC: {f['Desde']} -> {f['Hasta']}")
                 try:
                     exito, msg, real_label = V.cargar_novedad_fc(page, f["Desde"], f["Hasta"], args.label)
-                    estado = "OK" if exito else "ERROR"
+                    estado = "OK" if exito else ("PERIODO_CERRADO" if es_error_cierre(msg) else "ERROR")
                     print(f"  {'OK - opcion: ' + str(real_label) if exito else 'ERROR: ' + str(msg)}")
                 except Exception as e:
                     estado, msg, real_label = "EXCEPCION", str(e)[:200], "FC"

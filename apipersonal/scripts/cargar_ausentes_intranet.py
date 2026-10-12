@@ -415,7 +415,26 @@ def exito_visible(page):
     return None
 
 
+URLS_LOGOUT = [
+    "https://sistemas.ms.gba.gov.ar/partenovedades/web/app.php/logout",
+    "https://sistemas.ms.gba.gov.ar/intranet/logout",
+]
+
+
+def cerrar_sesion(page):
+    """Con la sesion vieja abierta ("Sesion ya activa") Parte de Novedades entra como PROFERS sin
+    dependencia ("Acceso Denegado") y no se puede cambiar de dependencia; con login nuevo anda.
+    Por eso el login arranca cerrando la sesion del perfil del robot (09/10/2026)."""
+    for url in URLS_LOGOUT:
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1500)
+        except Exception as e:
+            print(f"  AVISO logout {url}: {e}")
+
+
 def login(page, password, dependencia="HOSPITAL"):
+    cerrar_sesion(page)
     page.goto(URL_LOGIN, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector("#username", timeout=6000)

@@ -154,7 +154,8 @@ export function buildComparacionV2Router(sequelize: Sequelize) {
 
       const filas = await sequelize.query<any>(`
         SELECT id, novedad_siap, corrida_id FROM novedades_carga_intranet
-         WHERE id IN (:ids) AND dependencia = :dep AND estado <> 'OK'`,
+         WHERE id IN (:ids) AND dependencia = :dep
+           AND estado NOT IN ('OK', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE')`,
         { type: QueryTypes.SELECT, replacements: { ids, dep } });
       if (!filas.length) return res.json({ ok: true, msg: 'No hay filas con error para reintentar' });
       await sequelize.query(

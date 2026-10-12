@@ -1,5 +1,6 @@
 // src/pages/ResidentesRotacionPage/index.tsx
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useAuth } from '../../auth/AuthProvider';
 import { useToast } from '../../ui/toast';
@@ -124,6 +125,7 @@ function useAgenteSearch() {
 export function ResidentesRotacionPage() {
   const { canCrud, hasPerm, session } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const search = useAgenteSearch();
   const isAdmin = hasPerm('crud:*:*');
 
@@ -252,6 +254,14 @@ export function ResidentesRotacionPage() {
       setEditingId(null);
       await loadRows();
       await regenerarSiape();
+      // El robot corre solo todos los días a las 15:00; una rotación nueva cargada después
+      // de esa hora se manda a SIAPE en el momento (no espera al día siguiente).
+      if (!editingId && new Date().getHours() >= 15) {
+        try {
+          await apiFetch('/rotacion-siape/lanzar', { method: 'POST', body: JSON.stringify({}) });
+          toast.ok('SIAPE', 'Robot lanzado: carga la rotación en SIAPE ahora');
+        } catch { /* queda para la corrida de mañana 15:00 */ }
+      }
     } catch (e: any) { toast.error('Error al guardar', e?.message); }
     finally { setSaving(false); }
   };
@@ -375,7 +385,14 @@ export function ResidentesRotacionPage() {
                 {editingId && <span style={{ marginLeft: 8, color: '#f59e0b' }}>● Editando rotación existente</span>}
               </div>
             </div>
-            <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={() => { search.clear(); setEditingId(null); }}>✕ Limpiar</button>
+            <div className="row" style={{ gap: 6 }}>
+              <button className="btn" type="button" style={{ fontSize: '0.78rem' }}
+                title="Abre el módulo de escaneo con este agente y tipo Certificación de rotación ya elegidos"
+                onClick={() => navigate(`/app/escaneo-agente/${String(search.row.dni).replace(/\D/g, '')}?tipo=cert_rotacion`)}>
+                📷 Escanear rotación
+              </button>
+              <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={() => { search.clear(); setEditingId(null); }}>✕ Limpiar</button>
+            </div>
           </div>
         )}
       </div>

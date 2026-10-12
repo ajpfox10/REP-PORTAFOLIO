@@ -1,0 +1,1998 @@
+{
+ "firma": "internal frame:. | internal frame:Cargos y Carrera Administrativa                                                                                                                                     | page tab: BAJA",
+ "nodos": [
+  {
+   "depth": 0,
+   "role": "frame",
+   "name": "Sistema Unico Provincial de Administracion de Personal",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -32000,
+    "height": 784,
+    "width": 1382
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "redimensionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 1,
+   "role": "root pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31992,
+    "y": -31969,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 2,
+   "role": "layered pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31992,
+    "y": -31969,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 3,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31992,
+    "y": -31969,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 4,
+   "role": "frame",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -32000,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "activo"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 5,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -32000,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 5,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -32000,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 3,
+   "text": ""
+  },
+  {
+   "depth": 6,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -31944,
+    "height": 689,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 6,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -32000,
+    "height": 56,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 7,
+   "role": "scroll pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -31944,
+    "height": 689,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 3,
+   "text": ""
+  },
+  {
+   "depth": 7,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -32000,
+    "height": 24,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 7,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -31976,
+    "height": 32,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 17,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "viewport",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -31944,
+    "height": 689,
+    "width": 1351
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "scroll bar",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -30649,
+    "y": -31944,
+    "height": 689,
+    "width": 15
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "vertical"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -30653,
+    "y": -32000,
+    "height": 24,
+    "width": 19
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "menu bar",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -32000,
+    "height": 24,
+    "width": 1347
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "horizontal"
+   ],
+   "children": 20,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "text",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31489,
+    "y": -31969,
+    "height": 18,
+    "width": 873
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "MINISTERIO DE SALUD   -   PEVERI ALEJANDRO JAVIER   -   05/10/2026"
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Guardar",
+   "description": "Guardar",
+   "bounds": {
+    "x": -31996,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Imprimir",
+   "description": "Imprimir",
+   "bounds": {
+    "x": -31972,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Agregar",
+   "description": "Agregar",
+   "bounds": {
+    "x": -31941,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": " Save ",
+   "description": " Save ",
+   "bounds": {
+    "x": -31917,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Enter Query",
+   "description": "Enter Query",
+   "bounds": {
+    "x": -31887,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Re Query",
+   "description": "Re Query",
+   "bounds": {
+    "x": -31863,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "cancel",
+   "description": "cancel",
+   "bounds": {
+    "x": -31839,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Up",
+   "description": "Up",
+   "bounds": {
+    "x": -31808,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Down",
+   "description": "Down",
+   "bounds": {
+    "x": -31784,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": " Save ",
+   "description": " Save ",
+   "bounds": {
+    "x": -31760,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": " Save ",
+   "description": " Save ",
+   "bounds": {
+    "x": -31736,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Acerca de",
+   "description": "Acerca de",
+   "bounds": {
+    "x": -31705,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Calcular diferencia entre Fechas",
+   "description": "Calcular diferencia entre Fechas",
+   "bounds": {
+    "x": -31681,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Auditoria",
+   "description": "Auditoria",
+   "bounds": {
+    "x": -31657,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Enviar Solicitud al Administrador",
+   "description": "Enviar Solicitud al Administrador",
+   "bounds": {
+    "x": -31629,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 8,
+   "role": "push button",
+   "name": "Salir",
+   "description": "Salir",
+   "bounds": {
+    "x": -31600,
+    "y": -31972,
+    "height": 24,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "desktop pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -31944,
+    "height": 1225,
+    "width": 1351
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 10,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu item",
+   "name": "SIAPE ALT S",
+   "description": "",
+   "bounds": {
+    "x": -31985,
+    "y": -32000,
+    "height": 24,
+    "width": 48
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "MILegajo ALT M",
+   "description": "",
+   "bounds": {
+    "x": -31937,
+    "y": -32000,
+    "height": 24,
+    "width": 60
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 10,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Personas ALT P",
+   "description": "",
+   "bounds": {
+    "x": -31877,
+    "y": -32000,
+    "height": 24,
+    "width": 64
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 5,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Estructuras ALT E",
+   "description": "",
+   "bounds": {
+    "x": -31813,
+    "y": -32000,
+    "height": 24,
+    "width": 73
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 3,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Hospitales ALT H",
+   "description": "",
+   "bounds": {
+    "x": -31740,
+    "y": -32000,
+    "height": 24,
+    "width": 70
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Cargos ALT C",
+   "description": "",
+   "bounds": {
+    "x": -31670,
+    "y": -32000,
+    "height": 24,
+    "width": 51
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 15,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Autorizante ALT A",
+   "description": "",
+   "bounds": {
+    "x": -31619,
+    "y": -32000,
+    "height": 24,
+    "width": 70
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 17,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Novedades ALT N",
+   "description": "",
+   "bounds": {
+    "x": -31549,
+    "y": -32000,
+    "height": 24,
+    "width": 73
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 23,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Rec. Médicos ALT R",
+   "description": "",
+   "bounds": {
+    "x": -31476,
+    "y": -32000,
+    "height": 24,
+    "width": 84
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Autoseguro ALT A",
+   "description": "",
+   "bounds": {
+    "x": -31392,
+    "y": -32000,
+    "height": 24,
+    "width": 73
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Exportaciones ALT E",
+   "description": "",
+   "bounds": {
+    "x": -31319,
+    "y": -32000,
+    "height": 24,
+    "width": 88
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Jubilación Ejecutiva ALT J",
+   "description": "",
+   "bounds": {
+    "x": -31231,
+    "y": -32000,
+    "height": 24,
+    "width": 118
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Documentos Administrativos ALT D",
+   "description": "",
+   "bounds": {
+    "x": -31113,
+    "y": -32000,
+    "height": 24,
+    "width": 168
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Trámites ALT T",
+   "description": "",
+   "bounds": {
+    "x": -30945,
+    "y": -32000,
+    "height": 24,
+    "width": 59
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 3,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Régimen Disciplinario ALT R",
+   "description": "",
+   "bounds": {
+    "x": -30886,
+    "y": -32000,
+    "height": 24,
+    "width": 133
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 4,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Mantenimiento ALT M",
+   "description": "",
+   "bounds": {
+    "x": -30753,
+    "y": -32000,
+    "height": 24,
+    "width": 91
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Ayuda ALT A",
+   "description": "",
+   "bounds": {
+    "x": -30662,
+    "y": -32000,
+    "height": 24,
+    "width": 43
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Generalidades ALT G",
+   "description": "",
+   "bounds": {
+    "x": -30619,
+    "y": -32000,
+    "height": 24,
+    "width": 92
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu item",
+   "name": "Salir ALT S",
+   "description": "",
+   "bounds": {
+    "x": -30527,
+    "y": -32000,
+    "height": 24,
+    "width": 39
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 9,
+   "role": "menu",
+   "name": "Ventana ALT V",
+   "description": "",
+   "bounds": {
+    "x": -30488,
+    "y": -32000,
+    "height": 24,
+    "width": 55
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "seleccionable",
+    "enfocable"
+   ],
+   "children": 5,
+   "text": ""
+  },
+  {
+   "depth": 10,
+   "role": "internal frame",
+   "name": "Cargos y Carrera Administrativa                                                                                                                                    ",
+   "description": "",
+   "bounds": {
+    "x": -32000,
+    "y": -31944,
+    "height": 583,
+    "width": 1206
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "activo"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 10,
+   "role": "internal frame",
+   "name": ".",
+   "description": "",
+   "bounds": {
+    "x": -31999,
+    "y": -30744,
+    "height": 25,
+    "width": 7
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 11,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 556,
+    "width": 1200
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 3,
+   "text": ""
+  },
+  {
+   "depth": 12,
+   "role": "scroll pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 556,
+    "width": 1200
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 13,
+   "role": "viewport",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 556,
+    "width": 1200
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 14,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 560,
+    "width": 1200
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 15,
+   "role": "page tab list",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31992,
+    "y": -31847,
+    "height": 483,
+    "width": 1191
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 11,
+   "text": ""
+  },
+  {
+   "depth": 15,
+   "role": "scroll pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 560,
+    "width": 1200
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "CARGOS",
+   "description": "",
+   "bounds": {
+    "x": -31992,
+    "y": -31847,
+    "height": 22,
+    "width": 114
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "FUNCIONES",
+   "description": "",
+   "bounds": {
+    "x": -31881,
+    "y": -31847,
+    "height": 22,
+    "width": 114
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "FUNCION 10.471",
+   "description": "",
+   "bounds": {
+    "x": -31770,
+    "y": -31847,
+    "height": 22,
+    "width": 114
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "PRESUPUESTO",
+   "description": "",
+   "bounds": {
+    "x": -31659,
+    "y": -31847,
+    "height": 22,
+    "width": 114
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "ESCALAFON",
+   "description": "",
+   "bounds": {
+    "x": -31548,
+    "y": -31847,
+    "height": 22,
+    "width": 114
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "PREST. SERVICIO",
+   "description": "",
+   "bounds": {
+    "x": -31437,
+    "y": -31847,
+    "height": 22,
+    "width": 120
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "RESERVA / RETENC.",
+   "description": "",
+   "bounds": {
+    "x": -31320,
+    "y": -31847,
+    "height": 22,
+    "width": 136
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": " BAJA",
+   "description": "",
+   "bounds": {
+    "x": -31187,
+    "y": -31847,
+    "height": 22,
+    "width": 114
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable",
+    "seleccionado"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "OTROS DATOS",
+   "description": "",
+   "bounds": {
+    "x": -31076,
+    "y": -31847,
+    "height": 22,
+    "width": 114
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "page tab",
+   "name": "PLANTA TEMPORARIA",
+   "description": "",
+   "bounds": {
+    "x": -30965,
+    "y": -31847,
+    "height": 22,
+    "width": 142
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco",
+    "seleccionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 16,
+   "role": "viewport",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 560,
+    "width": 1200
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 17,
+   "role": "scroll pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31989,
+    "y": -31822,
+    "height": 455,
+    "width": 1185
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 17,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 560,
+    "width": 1200
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 9,
+   "text": ""
+  },
+  {
+   "depth": 18,
+   "role": "viewport",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31989,
+    "y": -31822,
+    "height": 455,
+    "width": 1185
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 18,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31997,
+    "y": -31920,
+    "height": 1,
+    "width": 1
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 18,
+   "role": "text",
+   "name": "APELLIDO y NOMBRE",
+   "description": "APELLIDO y NOMBRE",
+   "bounds": {
+    "x": -31858,
+    "y": -31903,
+    "height": 27,
+    "width": 280
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "editable",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "PEVERI ALEJANDRO JAVIER"
+  },
+  {
+   "depth": 18,
+   "role": "text",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31980,
+    "y": -31872,
+    "height": 16,
+    "width": 1111
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "línea única"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 18,
+   "role": "push button",
+   "name": "BUSCAR",
+   "description": "BUSCAR",
+   "bounds": {
+    "x": -30980,
+    "y": -31903,
+    "height": 30,
+    "width": 134
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 18,
+   "role": "text",
+   "name": "LEGAJO",
+   "description": "LEGAJO",
+   "bounds": {
+    "x": -31265,
+    "y": -31903,
+    "height": 27,
+    "width": 80
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "editable",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "357424"
+  },
+  {
+   "depth": 18,
+   "role": "text",
+   "name": "DOCUMENTO",
+   "description": "DOCUMENTO",
+   "bounds": {
+    "x": -31477,
+    "y": -31903,
+    "height": 27,
+    "width": 48
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "DNI"
+  },
+  {
+   "depth": 18,
+   "role": "text",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31426,
+    "y": -31903,
+    "height": 27,
+    "width": 100
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "28305607"
+  },
+  {
+   "depth": 18,
+   "role": "text",
+   "name": "CUIT - CUIL",
+   "description": "CUIT - CUIL",
+   "bounds": {
+    "x": -31109,
+    "y": -31903,
+    "height": 27,
+    "width": 113
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "20-28305607-5"
+  },
+  {
+   "depth": 18,
+   "role": "push button",
+   "name": "Ingresar como Supervisor",
+   "description": "Ingresar como Supervisor",
+   "bounds": {
+    "x": -30836,
+    "y": -31901,
+    "height": 25,
+    "width": 24
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 19,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31989,
+    "y": -31822,
+    "height": 483,
+    "width": 1191
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 11,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "text",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31553,
+    "y": -31742,
+    "height": 19,
+    "width": 400
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando",
+    "línea única"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "text",
+   "name": "FECHA DE BAJA",
+   "description": "FECHA DE BAJA",
+   "bounds": {
+    "x": -31722,
+    "y": -31742,
+    "height": 27,
+    "width": 93
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "editable",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "05/10/2026"
+  },
+  {
+   "depth": 20,
+   "role": "push button",
+   "name": "CALENDARIO",
+   "description": "CALENDARIO",
+   "bounds": {
+    "x": -31622,
+    "y": -31742,
+    "height": 27,
+    "width": 26
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "text",
+   "name": "ACTO DE BAJA",
+   "description": "ACTO DE BAJA",
+   "bounds": {
+    "x": -31722,
+    "y": -31702,
+    "height": 27,
+    "width": 426
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "editable",
+    "línea única"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "push button",
+   "name": "...",
+   "description": "...",
+   "bounds": {
+    "x": -31290,
+    "y": -31702,
+    "height": 27,
+    "width": 26
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "push button",
+   "name": "VER",
+   "description": "VER",
+   "bounds": {
+    "x": -31254,
+    "y": -31702,
+    "height": 27,
+    "width": 26
+   },
+   "states": [
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "text",
+   "name": " BAJA tab page MOTIVO DE BAJA",
+   "description": "MOTIVO DE BAJA",
+   "bounds": {
+    "x": -31722,
+    "y": -31662,
+    "height": 27,
+    "width": 426
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "editable",
+    "línea única"
+   ],
+   "children": 0,
+   "text": "BAJA BECA"
+  },
+  {
+   "depth": 20,
+   "role": "push button",
+   "name": "...",
+   "description": "...",
+   "bounds": {
+    "x": -31290,
+    "y": -31662,
+    "height": 27,
+    "width": 26
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": -31694,
+    "y": -31565,
+    "height": 20,
+    "width": 192
+   },
+   "states": [
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "text",
+   "name": "ORGANISMO",
+   "description": "ORGANISMO",
+   "bounds": {
+    "x": -31694,
+    "y": -31505,
+    "height": 27,
+    "width": 398
+   },
+   "states": [
+    "enfocable",
+    "visible",
+    "mostrando",
+    "línea única"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 20,
+   "role": "push button",
+   "name": "...",
+   "description": "...",
+   "bounds": {
+    "x": -31290,
+    "y": -31505,
+    "height": 27,
+    "width": 26
+   },
+   "states": [
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 21,
+   "role": "check box",
+   "name": "Traslado Con Cargo",
+   "description": "Traslado Con Cargo",
+   "bounds": {
+    "x": -31694,
+    "y": -31565,
+    "height": 20,
+    "width": 126
+   },
+   "states": [
+    "enfocable",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 0,
+   "text": ""
+  }
+ ]
+}

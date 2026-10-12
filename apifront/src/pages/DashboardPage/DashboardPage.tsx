@@ -212,6 +212,7 @@ export function DashboardPage() {
   const canSeeHorariosExtendidos = hasPerm('app:horarios-extendidos:access') || hasPerm('crud:*:*');
   const isNutricion =
     hasPerm('app:horarios-extendidos:access') && !hasPerm('crud:*:*');
+  const canSeeJubilablesEstadistica = hasPerm('app:jubilables-estadistica:access') || hasPerm('crud:*:*');
 
   const isSaludLaboral =
     canSeeSaludLaboral &&
@@ -283,6 +284,14 @@ export function DashboardPage() {
             />
             {(canSeeResidentes || canSeeResidentesRotacion) && (
               <ResidentesTile canOpenResidentes={canSeeResidentes} showRotacion={canSeeResidentesRotacion} />
+            )}
+            {canSeeJubilablesEstadistica && (
+            <Tile
+              to="/app/jubilables-estadistica"
+              title="📈 Jubilables (estadística)"
+              desc="Proyección de jubilables por servicio y ley, sin datos de agentes."
+              accent="#7c3aed"
+            />
             )}
             {hasPerm('app:samo:access') && (
             <Tile
@@ -509,6 +518,9 @@ export function DashboardPage() {
         <div className="grid">
           <Tile to="/app/estadisticas" title="📊 Estadísticas" desc="Agentes por sector, servicio, categoría, ingresos por año, cumpleaños del mes y más." accent="#ec4899" />
           <AsistenciaTile />
+          {canSeeJubilablesEstadistica && (
+            <Tile to="/app/jubilables-estadistica" title="📈 Jubilables (estadística)" desc="Proyección de jubilables por servicio y ley, sin datos de agentes." accent="#7c3aed" />
+          )}
           {(hasPerm('crud:fc_cert_reemplazos:read') || hasPerm('crud:*:*')) && (
             <Tile to="/app/fc-cert-reemplazos" title="📋 FC / Cert. / Reemplazos" desc="Seguimiento mensual de Francos Compensatorios, Certificación de Servicios y Reemplazos de Guardia." accent="#7c2d12" />
           )}

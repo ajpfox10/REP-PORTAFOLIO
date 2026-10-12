@@ -70,19 +70,30 @@ app.use(errorHandler)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const port = Number(process.env.PORT || 3001)
-const scanInProgressTimeoutMinutes = Math.max(1, Number(process.env.SCAN_IN_PROGRESS_TIMEOUT_MINUTES || 3))
+// Corte por FALTA DE PROGRESO: el agente refresca updated_at con cada hoja
+// (POST /v1/agent/progress), así una pila grande por ADF no se corta a mitad.
+const scanInProgressTimeoutMinutes = Math.max(1, Number(process.env.SCAN_IN_PROGRESS_TIMEOUT_MINUTES || 5))
+// Tope absoluto (el agente corta a los 15 min; esto es por si el agente murió).
+const scanInProgressMaxMinutes = Math.max(scanInProgressTimeoutMinutes, Number(process.env.SCAN_IN_PROGRESS_MAX_MINUTES || 16))
 
 async function failStaleScanJobs() {
   try {
     const [result] = await pool.query(
       `UPDATE scan_jobs
           SET status='failed',
-              error_message=?,
+              error_message=IF(updated_at < DATE_SUB(now(), INTERVAL ? MINUTE), ?, ?),
               completed_at=now(),
               updated_at=now()
         WHERE status='in_progress'
-          AND started_at < DATE_SUB(now(), INTERVAL ? MINUTE)`,
-      [`agent_timeout: escaneo sin respuesta por más de ${scanInProgressTimeoutMinutes} minutos`, scanInProgressTimeoutMinutes]
+          AND (updated_at < DATE_SUB(now(), INTERVAL ? MINUTE)
+               OR started_at < DATE_SUB(now(), INTERVAL ? MINUTE))`,
+      [
+        scanInProgressTimeoutMinutes,
+        `agent_timeout: escaneo sin respuesta por más de ${scanInProgressTimeoutMinutes} minutos`,
+        `agent_timeout: el escaneo superó ${scanInProgressMaxMinutes} minutos`,
+        scanInProgressTimeoutMinutes,
+        scanInProgressMaxMinutes,
+      ]
     )
     const changed = Number((result as any).affectedRows || 0)
     if (changed) console.warn(`[api] ${changed} scan job(s) in_progress expirados cerrados`)

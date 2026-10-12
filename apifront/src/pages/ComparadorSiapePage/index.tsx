@@ -91,7 +91,12 @@ const BADGE_RES: Record<string, { label: string; color: string }> = {
   'ERROR_NAV':  { label: '↯ Nav error', color: '#ef4444' },
   'PENDIENTE':  { label: '● Pendiente', color: '#f59e0b' },
   'DESCARTADA': { label: '— Descartada', color: '#64748b' },
+  'PERIODO_CERRADO': { label: '🔒 Período cerrado', color: '#94a3b8' },
+  'CAMBIO_SIAPE':    { label: '⚠ Cambió en SIAPE', color: '#e879f9' },
 };
+
+// Estados que no son error (no cuentan como error ni entran en "Reintentar")
+const NO_ERROR = ['OK', 'PENDIENTE', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE'];
 
 const BG: Record<string, string> = {
   'NO COINCIDENTE': 'rgba(239,68,68,0.05)',
@@ -134,10 +139,11 @@ const DEP_COLORS: Record<string, string> = {
 const COLS = ['Estado','Dep.','Ley','Legajo','DNI','Nombre','Nov. Ministerio','Desde Min.','Hasta Min.','Nov. SIAP','Desde SIAP','Hasta SIAP','Motivo','Carga'];
 
 // Estado de carga de una fila SOLO_SIAP (sin fila en la tabla de carga = el robot todavía no la tomó)
-function cargaDe(r: CompRow): 'OK' | 'ERROR' | 'SIN_INTENTAR' | 'DESCARTADA' | null {
+function cargaDe(r: CompRow): 'OK' | 'ERROR' | 'SIN_INTENTAR' | 'DESCARTADA' | 'PERIODO_CERRADO' | null {
   if (r.estado !== 'SOLO_SIAP' || r.motivo === 'BECARIO_NO_APLICA') return null;
   if (r.carga_estado === 'OK') return 'OK';
   if (r.carga_estado === 'DESCARTADA') return 'DESCARTADA';
+  if (r.carga_estado === 'PERIODO_CERRADO') return 'PERIODO_CERRADO';
   if (r.carga_estado && r.carga_estado !== 'PENDIENTE') return 'ERROR';
   return 'SIN_INTENTAR';
 }
@@ -147,6 +153,7 @@ const BADGE_CARGA: Record<string, { label: string; color: string }> = {
   ERROR:        { label: '✗ Error',       color: '#ef4444' },
   SIN_INTENTAR: { label: '● Sin intentar', color: '#f59e0b' },
   DESCARTADA:   { label: '— Descartada',   color: '#64748b' },
+  PERIODO_CERRADO: { label: '🔒 Período cerrado', color: '#94a3b8' },
 };
 
 function Tabla({ rows }: { rows: CompRow[] }) {
@@ -449,7 +456,7 @@ export function ComparadorSiapePage() {
 
   // Estado de carga de las SOLO_SIAP (las 3 dependencias, desde la base)
   const cargaConteo = useMemo(() => {
-    const c = { OK: 0, ERROR: 0, SIN_INTENTAR: 0, DESCARTADA: 0 };
+    const c = { OK: 0, ERROR: 0, SIN_INTENTAR: 0, DESCARTADA: 0, PERIODO_CERRADO: 0 };
     for (const r of completa) { const k = cargaDe(r); if (k) c[k]++; }
     return c;
   }, [completa]);
@@ -527,7 +534,7 @@ export function ComparadorSiapePage() {
 
   const resultadoPorEstado = useMemo(() => {
     let r = resultado;
-    if (filtroRes === 'no_ok') r = r.filter(x => !['OK', 'PENDIENTE', 'DESCARTADA'].includes(x.estado));
+    if (filtroRes === 'no_ok') r = r.filter(x => !NO_ERROR.includes(x.estado));
     else if (filtroRes !== 'todos') r = r.filter(x => x.estado === filtroRes);
     return r;
   }, [resultado, filtroRes]);
@@ -595,12 +602,14 @@ export function ComparadorSiapePage() {
 
   const resConteo = useMemo(() => ({
     ok:        resultado.filter(r => r.estado === 'OK').length,
-    error:     resultado.filter(r => !['OK', 'PENDIENTE', 'DESCARTADA'].includes(r.estado)).length,
+    error:     resultado.filter(r => !NO_ERROR.includes(r.estado)).length,
     pendiente: resultado.filter(r => r.estado === 'PENDIENTE').length,
+    cerrado:   resultado.filter(r => r.estado === 'PERIODO_CERRADO').length,
+    cambio:    resultado.filter(r => r.estado === 'CAMBIO_SIAPE').length,
   }), [resultado]);
 
   const erroresVisibles = useMemo(
-    () => resFiltrado.filter(r => !['OK', 'PENDIENTE', 'DESCARTADA'].includes(r.estado)),
+    () => resFiltrado.filter(r => !NO_ERROR.includes(r.estado)),
     [resFiltrado]
   );
 
@@ -792,6 +801,8 @@ export function ComparadorSiapePage() {
                 {' · '}
                 <span style={{ color: '#ef4444' }}>✗ {resConteo.error} errores</span>
                 {resConteo.pendiente > 0 && <>{' · '}<span style={{ color: '#f59e0b' }}>● {resConteo.pendiente} pendientes</span></>}
+                {resConteo.cambio > 0 && <>{' · '}<span style={{ color: '#e879f9' }} title="Ya no figuran en SIAPE: algo cambió (se borró o se corrigió). Revisar a mano">⚠ {resConteo.cambio} cambiaron en SIAPE</span></>}
+                {resConteo.cerrado > 0 && <>{' · '}<span style={{ color: '#94a3b8' }} title="El Ministerio ya cerró ese período: el robot no las vuelve a intentar">🔒 {resConteo.cerrado} período cerrado</span></>}
               </span>
             )}
             <label className="muted" style={{ fontSize: '0.72rem', marginLeft: 10, cursor: 'pointer' }}
@@ -851,6 +862,8 @@ export function ComparadorSiapePage() {
                 <option value="ERROR_NAV">Solo Nav error</option>
                 <option value="PENDIENTE">Solo pendientes</option>
                 <option value="DESCARTADA">Solo descartadas</option>
+                <option value="CAMBIO_SIAPE">⚠ Cambiaron en SIAPE</option>
+                <option value="PERIODO_CERRADO">🔒 Período cerrado</option>
               </select>
               <select className="input" value={filtroDetalleActivo} onChange={e => { setFiltroDetalle(e.target.value); setFiltroPisada('todos'); }}
                 style={{ fontSize: '0.78rem', flex: '1 1 200px', minWidth: 160 }}>

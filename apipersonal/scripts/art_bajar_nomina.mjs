@@ -10,6 +10,11 @@
 //   node scripts/art_bajar_nomina.mjs                 -> G. Catán KM.32 (488242)
 //   node scripts/art_bajar_nomina.mjs 488242 289012   -> establecimientos indicados
 //   node scripts/art_bajar_nomina.mjs --all           -> TODOS los establecimientos del select
+//      (OJO: 107 establecimientos y el 289003 "DIRECCION PROVINCIAL DE HOSPITALES (LEGAL)" tiene
+//       ~57.000 trabajadores de toda la provincia: no es nuestro padrón)
+//   --db            además guarda el padrón en la tabla art_nomina (reemplaza ese establecimiento)
+//   --encolar-bajas (con --db) encola en art_baja_queue a los del padrón que en la base ya no
+//                   tienen ningún tramo vigente; los da de baja el robot art_baja_trabajador.mjs
 // Env: ART_LOGIN_URL, ART_PROVINCIA_USER, ART_PROVINCIA_PASSWORD, ART_HEADLESS, ART_NOMINA_DIR
 
 import dotenv from 'dotenv';
@@ -45,7 +50,9 @@ async function parseGrid(page, html) {
       if (!tds.length) continue;
       const cuil = (tds.find((t) => cuilRe.test(t)) || '').match(cuilRe)?.[0] || '';
       if (!cuil) continue; // saltea header y filas sin CUIL
-      rows.push({ trabajador: tds[0] || '', email: tds[1] && !cuilRe.test(tds[1]) ? tds[1] : '', cuil });
+      const oc = Array.from(tr.querySelectorAll('[onclick]')).map((e) => e.getAttribute('onclick')).join(' ');
+      const trabajadorId = (oc.match(/(?:modificacion|baja)-trabajador\/(\d+)/) || [])[1] || null;
+      rows.push({ trabajador: tds[0] || '', email: tds[1] && !cuilRe.test(tds[1]) ? tds[1] : '', cuil, trabajadorId });
     }
     let maxPage = 1;
     for (const m of h.matchAll(/pagina=(\d+)/g)) maxPage = Math.max(maxPage, Number(m[1]));
@@ -82,8 +89,59 @@ async function bajarEstablecimiento(page, estabId, label) {
   return { total: p1.total, rows: [...map.values()].map((r) => ({ establecimiento: label, ...r })) };
 }
 
+// Guarda el padrón en art_nomina (1 fila por establecimiento+CUIL; reemplaza lo de cada
+// establecimiento bajado) y, con --encolar-bajas, encola las bajas que salen del cruce.
+async function guardarEnDb(porEstab, encolarBajas) {
+  const mysql = (await import('mysql2/promise')).default;
+  const db = await mysql.createConnection({
+    host: opt('DB_HOST', '127.0.0.1'), port: Number(opt('DB_PORT', '3306')), user: opt('DB_USER', 'root'),
+    password: process.env.DB_PASSWORD || '', database: opt('DB_NAME', 'personalv5'),
+  });
+  try {
+    const [pers] = await db.query("SELECT dni, REPLACE(REPLACE(cuil, '-', ''), ' ', '') AS c FROM personal WHERE cuil IS NOT NULL AND cuil <> ''");
+    const dniPorCuil = new Map(pers.map((p) => [String(p.c), Number(p.dni)]));
+    const ahora = new Date();
+    for (const [estabId, { label, rows }] of porEstab) {
+      if (!rows.length) { console.log(`  ${estabId}: sin filas, NO se reemplaza el padrón guardado`); continue; }
+      await db.beginTransaction();
+      await db.query('DELETE FROM art_nomina WHERE establecimiento_id = ?', [estabId]);
+      const vals = rows.map((r) => {
+        const c = r.cuil.replace(/\D/g, '');
+        return [estabId, c, dniPorCuil.get(c) ?? (Number(c.slice(2, 10)) || null), r.trabajador.slice(0, 150),
+          (r.email || '').slice(0, 150) || null, r.trabajadorId ? Number(r.trabajadorId) : null, label.slice(0, 150), ahora];
+      });
+      for (let i = 0; i < vals.length; i += 500) {
+        await db.query(`INSERT INTO art_nomina (establecimiento_id, cuil, dni, trabajador, email, trabajador_id, establecimiento_label, descargado_en)
+                        VALUES ? ON DUPLICATE KEY UPDATE trabajador = VALUES(trabajador)`, [vals.slice(i, i + 500)]);
+      }
+      await db.commit();
+      console.log(`  ${estabId}: ${vals.length} filas guardadas en art_nomina`);
+    }
+    if (encolarBajas) {
+      // En el padrón + con tramos en la base + NINGUNO vigente (todos BAJA) = egresó y sigue en ART.
+      // created_at 2 h atrás para que el robot de bajas los tome en la próxima corrida.
+      const [r] = await db.query(`
+        INSERT INTO art_baja_queue (dni, agente_id, origen, status, created_at)
+        SELECT n.dni, MAX(a.id), 'cruce', 'PENDING', NOW() - INTERVAL 2 HOUR
+          FROM art_nomina n
+          JOIN agentes a ON a.dni = n.dni AND a.deleted_at IS NULL
+         WHERE n.establecimiento_id IN (?)
+           AND NOT EXISTS (SELECT 1 FROM agentes b WHERE b.dni = n.dni AND b.deleted_at IS NULL AND b.estado_empleo <> 'BAJA')
+           AND NOT EXISTS (SELECT 1 FROM art_baja_queue q WHERE q.dni = n.dni AND q.status IN ('PENDING','PROCESSING','ERROR'))
+         GROUP BY n.dni
+        ON DUPLICATE KEY UPDATE origen = 'cruce', status = 'PENDING', attempts = 0, resultado = NULL,
+          last_error = NULL, locked_at = NULL, created_at = NOW() - INTERVAL 2 HOUR`, [[...porEstab.keys()]]);
+      console.log(`  bajas encoladas por el cruce: ${r.affectedRows}`);
+    }
+  } finally {
+    await db.end();
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
+  const conDb = args.includes('--db');
+  const encolarBajas = args.includes('--encolar-bajas');
   const all = args.includes('--all');
   const estabArgs = args.filter((a) => /^\d+$/.test(a));
   await fs.mkdir(OUT_DIR, { recursive: true });
@@ -122,13 +180,16 @@ async function main() {
 
     console.log(`Establecimientos a bajar: ${targets.length}`);
     const todo = [];
+    const porEstab = new Map();
     for (const id of targets) {
       const label = labelOf(id);
       console.log(`→ ${label} (${id})`);
       const { total, rows } = await bajarEstablecimiento(page, id, label);
       console.log(`  OK: ${rows.length} trabajadores${total != null ? ` (total informado: ${total})` : ''}`);
       todo.push(...rows);
+      porEstab.set(id, { label, rows });
     }
+    if (conDb) await guardarEnDb(porEstab, encolarBajas);
 
     const ws = XLSX.utils.json_to_sheet(todo.map((r) => ({
       Establecimiento: r.establecimiento, Trabajador: r.trabajador, CUIL: r.cuil, Email: r.email,

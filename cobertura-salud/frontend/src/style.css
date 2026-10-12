@@ -637,3 +637,6 @@ th {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* CUIL calculado por la app de escritorio (no lo cargo el operador). */
+.cuil-gen { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #fef3c7; color: #92400e; vertical-align: middle; }

@@ -123,7 +123,7 @@ interface Art26Row {
   observaciones: string;
   estado: string;        // estado del Art.26 (PENDIENTE/APROBADO/...)
   jefe_nombre: string;
-  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR' | 'NO_SE_CARGA';
+  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR' | 'NO_SE_CARGA' | 'PERIODO_CERRADO';
   detalle_ms: string;
   carga_id: number | null;     // fila de art26_carga_intranet (para reintentar)
   dependencia: string;         // donde se cargó / intentó
@@ -274,6 +274,9 @@ export function buildArticulo26IntranetRouter(sequelize: Sequelize) {
         if (cg) {
           r.carga_id = cg.id; r.dependencia = cg.dependencia; r.intentos = cg.intentos;
           if (cg.estado === 'OK') { r.estado_ms = 'YA_EN_MS'; r.detalle_ms = cg.detalle || 'Cargado por el robot'; continue; }
+          if (cg.estado === 'PERIODO_CERRADO') {
+            r.estado_ms = 'PERIODO_CERRADO'; r.detalle_ms = cg.detalle || 'El Ministerio ya cerró ese período'; continue;
+          }
           if (cg.estado !== 'PENDIENTE' && cg.estado !== 'BAJA') {
             r.estado_ms = 'ERROR'; r.detalle_ms = cg.detalle || 'El robot no pudo cargarla'; continue;
           }
@@ -304,6 +307,7 @@ export function buildArticulo26IntranetRouter(sequelize: Sequelize) {
         conflicto: rows.filter(r => r.estado_ms === 'CONFLICTO').length,
         error:     rows.filter(r => r.estado_ms === 'ERROR').length,
         no_se_carga: rows.filter(r => r.estado_ms === 'NO_SE_CARGA').length,
+        periodo_cerrado: rows.filter(r => r.estado_ms === 'PERIODO_CERRADO').length,
         por_estado_art26: rows.reduce((acc: Record<string, number>, r) => {
           acc[r.estado || '—'] = (acc[r.estado || '—'] || 0) + 1; return acc;
         }, {}),
@@ -349,7 +353,7 @@ export function buildArticulo26IntranetRouter(sequelize: Sequelize) {
       if (!ids.length) return res.status(400).json({ ok: false, error: 'Sin filas para reintentar' });
       await ensureTablaCarga(sequelize);
       const filas = await sequelize.query<any>(
-        `SELECT id, dependencia_sugerida FROM ${TABLA_CARGA} WHERE id IN (:ids) AND estado NOT IN ('OK', 'BAJA')`,
+        `SELECT id, dependencia_sugerida FROM ${TABLA_CARGA} WHERE id IN (:ids) AND estado NOT IN ('OK', 'BAJA', 'PERIODO_CERRADO')`,
         { type: QueryTypes.SELECT, replacements: { ids } });
       if (!filas.length) return res.json({ ok: true, msg: 'No hay filas con error para reintentar' });
       await sequelize.query(

@@ -10,6 +10,7 @@ import { searchPersonal } from '../../api/searchPersonal';
 import { useAuth } from '../../auth/AuthProvider';
 import { fetchScanMusicBlobUrl } from '../GestionUsuarioPage/GestionUsuarioPage';
 import '../EscaneoPage/styles/EscaneoPage.css';
+import { ScanPagesOrganizer, scanPageId, applyScanPageOrder } from '../EscaneoPage/ScanPagesOrganizer';
 
 // ─── Scanner API client ───────────────────────────────────────────────────────
 function getScannerBase() {
@@ -325,6 +326,7 @@ export function ResolucionesPage() {
 
   // ── Scanner — viewer ───────────────────────────────────────────────────────
   const [scanViewer, setScanViewer] = useState<ViewerState>(null);
+  const [organizerPageId, setOrganizerPageId] = useState<string | null>(null);
 
   // ── Bypass ─────────────────────────────────────────────────────────────────
   const [showBypass,     setShowBypass]     = useState(false);
@@ -1328,9 +1330,9 @@ export function ResolucionesPage() {
                                   <div key={page.storageKey}
                                     className="scan-preview-thumb scan-preview-thumb-live"
                                     role="button" tabIndex={0}
-                                    title="Doble click para ampliar"
-                                    onDoubleClick={() => abrirPaginaEscaneada(page, idx)}
-                                    onKeyDown={e => e.key === 'Enter' && abrirPaginaEscaneada(page, idx)}>
+                                    title="Doble click para ordenar, rotar o ampliar"
+                                    onDoubleClick={() => setOrganizerPageId(scanPageId(page))}
+                                    onKeyDown={e => e.key === 'Enter' && setOrganizerPageId(scanPageId(page))}>
                                     <div className="scan-preview-frame">
                                       {page.blobUrl ? (
                                         <img src={page.blobUrl} alt={`Pág. ${idx + 1}`} className="scan-preview-img" />
@@ -1622,6 +1624,17 @@ export function ResolucionesPage() {
           </>
         )}
       </div>
+
+      {/* ── Organizador de páginas escaneadas ── */}
+      {organizerPageId && scanSession.length > 0 && (
+        <ScanPagesOrganizer
+          pages={scanSession}
+          initialPageId={organizerPageId}
+          onRotate={(page, degrees) => rotarPaginaScan(page, degrees)}
+          onApply={ids => { setScanSession(prev => applyScanPageOrder(prev, ids)); setOrganizerPageId(null); }}
+          onClose={() => setOrganizerPageId(null)}
+        />
+      )}
 
       {/* ── Viewer de páginas escaneadas ── */}
       {scanViewer && (

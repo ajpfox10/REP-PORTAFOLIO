@@ -148,6 +148,21 @@ r.post("/heartbeat", asyncRoute(async (req, res) => {
   res.json({ ok: true, server_ts: Date.now() })
 }))
 
+// ── POST /v1/agent/progress — el agente avisa que llegó otra hoja ────────────
+// Refresca updated_at: el vigilante de server.ts corta por falta de progreso.
+r.post("/progress", asyncRoute(async (req, res) => {
+  const tenant_id = (req as any).tenant_id as number
+  const device_id = (req as any).device_id as number
+  const { job_id } = req.body || {}
+  if (!job_id) throw new ApiError(400, "missing_job_id")
+
+  await pool.query(
+    "UPDATE scan_jobs SET updated_at=now() WHERE tenant_id=? AND id=? AND device_id=? AND status='in_progress'",
+    [tenant_id, job_id, device_id]
+  )
+  res.json({ ok: true })
+}))
+
 // ── POST /v1/agent/fail ───────────────────────────────────────────────────────
 r.post("/fail", asyncRoute(async (req, res) => {
   const tenant_id = (req as any).tenant_id as number

@@ -8,6 +8,7 @@ import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf } from '../../utils/export';
+import { LicenciasMinisterioTab } from './LicenciasMinisterioTab';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(d?: string | null): string {
@@ -131,7 +132,7 @@ function enMesAño(fechaStr: string | null | undefined, mes: number, año: numbe
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio' | 'articulo26' | 'art48' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen';
+type TabId = 'licencias' | 'bajas' | 'altas' | 'servicio' | 'articulo26' | 'art48' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen' | 'ministerio';
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function SamoPage() {
@@ -512,6 +513,7 @@ export function SamoPage() {
 
   // ── Exports ────────────────────────────────────────────────────────────────
   const exportar = (tipo: 'excel' | 'pdf') => {
+    if (tab === 'ministerio') { toast.error('Usá los botones Excel/PDF de la pestaña Licencias Ministerio'); return; }
     let rows: any[] = [];
     let file = 'samo';
     if (tab === 'licencias')  { rows = filtrar(licRows);          file = 'samo_licencias'; }
@@ -602,6 +604,9 @@ export function SamoPage() {
         </Tab>
         <Tab active={tab === 'prexamen'} onClick={() => { setTab('prexamen'); setBusqueda(''); }}>
           📋 Pre-examen ({prexamenFiltradas.length})
+        </Tab>
+        <Tab active={tab === 'ministerio'} onClick={() => { setTab('ministerio'); setBusqueda(''); }}>
+          🏛️ Licencias Ministerio
         </Tab>
       </div>
 
@@ -781,6 +786,9 @@ export function SamoPage() {
                 <MiniTabla rows={filtrar(practicasRows)} cols={colsPracticas} />
               </>
             )}
+
+            {/* Tab: Licencias Ministerio (tiene su propia carga, búsqueda y export) */}
+            {tab === 'ministerio' && <LicenciasMinisterioTab />}
 
             {/* Tabs: Pap/Colpo, Examen, Pre-examen */}
             {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen') && (() => {

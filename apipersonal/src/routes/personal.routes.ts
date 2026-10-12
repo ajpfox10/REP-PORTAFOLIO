@@ -135,13 +135,18 @@ export function buildPersonalRouter(sequelize: Sequelize) {
         if (apellido) { whereParts.push('p.apellido LIKE :apellido'); repl.apellido = `%${apellido}%`; }
         if (nombre)   { whereParts.push('p.nombre LIKE :nombre');     repl.nombre = `%${nombre}%`; }
       } else if (qRaw) {
+        // Cada palabra debe estar en apellido o nombre (todas): así "fernandez maria"
+        // o "rivera fernandez" encuentran a FERNANDEZ RIVERA, MARIA XIMENA.
+        const palabras = qRaw.split(/\s+/).filter(Boolean).slice(0, 6);
+        const porPalabra = palabras.map((w, i) => {
+          repl[`qW${i}`] = `%${w}%`;
+          return `(p.apellido LIKE :qW${i} OR p.nombre LIKE :qW${i})`;
+        }).join(' AND ');
         if (qDigits) {
-          whereParts.push('(p.apellido LIKE :qLike OR p.nombre LIKE :qLike OR p.dni = :qDni)');
-          repl.qLike = `%${qRaw}%`;
+          whereParts.push(`((${porPalabra}) OR p.dni = :qDni)`);
           repl.qDni  = Number(qDigits);
         } else {
-          whereParts.push('(p.apellido LIKE :qLike OR p.nombre LIKE :qLike)');
-          repl.qLike = `%${qRaw}%`;
+          whereParts.push(`(${porPalabra})`);
         }
       }
 

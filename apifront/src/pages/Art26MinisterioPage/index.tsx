@@ -20,7 +20,7 @@ interface Art26Row {
   observaciones: string;
   estado: string;          // estado del Art.26
   jefe_nombre: string;
-  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR' | 'NO_SE_CARGA';
+  estado_ms: 'YA_EN_MS' | 'PENDIENTE' | 'CONFLICTO' | 'ERROR' | 'NO_SE_CARGA' | 'PERIODO_CERRADO';
   detalle_ms: string;
   carga_id: number | null;
   dependencia: string;
@@ -36,6 +36,7 @@ interface ApiResult {
     conflicto: number;
     error: number;
     no_se_carga: number;
+    periodo_cerrado?: number;
     por_estado_art26: Record<string, number>;
   };
   fuentes: { historial: string | null; log: string | null; export: string | null; dir: string };
@@ -49,6 +50,7 @@ const BADGE_MS: Record<string, { label: string; color: string; bg: string }> = {
   CONFLICTO: { label: '⚠ Conflicto', color: '#a78bfa', bg: 'rgba(167,139,250,0.06)' },
   ERROR:     { label: '✗ Error carga', color: '#ef4444', bg: 'rgba(239,68,68,0.06)' },
   NO_SE_CARGA: { label: '— No se carga', color: '#64748b', bg: 'transparent' },
+  PERIODO_CERRADO: { label: '🔒 Período cerrado', color: '#94a3b8', bg: 'transparent' },
 };
 
 const DEPENDENCIAS = ['HOSPITAL', 'UPA 4', 'UPA 18'] as const;
@@ -185,6 +187,7 @@ export function Art26MinisterioPage() {
           {card('Conflicto', rs?.conflicto, '#a78bfa')}
           {card('Error carga', rs?.error, '#ef4444')}
           {card('No se carga', rs?.no_se_carga, '#64748b')}
+          {card('Período cerrado', rs?.periodo_cerrado, '#94a3b8')}
         </div>
 
         {/* Fuentes */}
@@ -205,6 +208,7 @@ export function Art26MinisterioPage() {
             <option value="CONFLICTO">Conflicto</option>
             <option value="ERROR">Error carga</option>
             <option value="NO_SE_CARGA">No se carga (anulado / rechazado)</option>
+            <option value="PERIODO_CERRADO">Período cerrado en MS</option>
           </select>
           <select className="input" value={fMes} onChange={e => setFMes(e.target.value)} style={{ maxWidth: 160 }}>
             <option value="">Mes (todos)</option>

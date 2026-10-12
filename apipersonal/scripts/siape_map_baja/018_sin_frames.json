@@ -1,0 +1,205 @@
+{
+ "firma": "(sin frames)",
+ "nodos": [
+  {
+   "depth": 0,
+   "role": "frame",
+   "name": "Sistema Unico Provincial de Administracion de Personal",
+   "description": "",
+   "bounds": {
+    "x": -8,
+    "y": -8,
+    "height": 784,
+    "width": 1382
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "activo",
+    "redimensionable"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 1,
+   "role": "root pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 23,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 2,
+   "role": "layered pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 23,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 3,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 23,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "opaco"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 4,
+   "role": "frame",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 23,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "enfocable",
+    "visible",
+    "mostrando",
+    "activo"
+   ],
+   "children": 2,
+   "text": ""
+  },
+  {
+   "depth": 5,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 23,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 0,
+   "text": ""
+  },
+  {
+   "depth": 5,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 23,
+    "height": 745,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 3,
+   "text": ""
+  },
+  {
+   "depth": 6,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 47,
+    "height": 721,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 6,
+   "role": "panel",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 23,
+    "height": 24,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 1,
+   "text": ""
+  },
+  {
+   "depth": 7,
+   "role": "scroll pane",
+   "name": "",
+   "description": "",
+   "bounds": {
+    "x": 0,
+    "y": 47,
+    "height": 721,
+    "width": 1366
+   },
+   "states": [
+    "activado",
+    "visible",
+    "mostrando"
+   ],
+   "children": 3,
+   "text": ""
+  }
+ ]
+}

@@ -36,6 +36,8 @@ import { buildPersonalRouter } from '../routes/personal.routes';
 import { buildAgentesFotoRouter } from '../routes/agentesFoto.routes';
 import { buildCertificadosRouter } from '../routes/certificados.routes';
 import { buildLegajoRouter }      from '../routes/legajo.routes';
+import { buildGuarderiaDdjjRouter } from '../routes/guarderiaDdjj.routes';
+import { buildSamoMinisterioRouter } from '../routes/samoMinisterio.routes';
 import { buildEventosRouter } from '../routes/eventos.routes';
 import { buildApiKeysRouter } from '../routes/apiKeys.routes';
 import { buildWebhooksRouter } from '../routes/webhooks.routes';
@@ -178,6 +180,8 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/agentes`,   ...protect, buildAgentesFotoRouter());
   app.use(`${apiPrefix}/certificados`, ...protect, buildCertificadosRouter(sequelize));
   app.use(`${apiPrefix}/legajo`,       ...protect, buildLegajoRouter(sequelize));
+  app.use(`${apiPrefix}/guarderia-ddjj`, ...protect, buildGuarderiaDdjjRouter(sequelize));
+  app.use(`${apiPrefix}/samo-ministerio`, ...protect, buildSamoMinisterioRouter(sequelize));
   app.use(`${apiPrefix}/eventos`,   ...protect, buildEventosRouter(sequelize));
   app.use(`${apiPrefix}/api-keys`,  ...protect, buildApiKeysRouter(sequelize));
   app.use(`${apiPrefix}/usuarios`,  ...protect, buildUsuariosRouter(sequelize));

@@ -35,6 +35,7 @@ import pyautogui
 import cargar_francos_siape as F
 import cargar_stress_jab as SJ
 from cargar_stress_jab import _forzar_frente_seguro
+from escritorio_activo import asegurar_escritorio_activo
 
 pyautogui.FAILSAFE = F.SIAPE_PYAUTOGUI_FAILSAFE  # mismo criterio que cargar_stress_jab.py / corregir_stress_jab.py
 
@@ -48,7 +49,7 @@ SIAPE_MUERTO_SEG = 15        # sin PROCESO Java este tiempo seguido = se cerro s
 # OJO: tras INGRESAR SiAPe OCULTA su ventana ~40-50s (Java sigue vivo). Faltar la
 # ventana NO es estar muerto: matarlo ahi era lo que lo "cerraba" (04/10/2026).
 PROCESOS_JAVA = ("jp2launcher.exe", "javaw.exe", "java.exe")
-CONSULTA_INTENTOS = 2
+CONSULTA_INTENTOS = 3        # cada reintento relanza SiAPe de cero (cerrar Java + login)
 
 # periodo: como se completa el modal si aparece.
 #   "mes_a_fin" -> PERIODO dia 1 del MES ANTERIOR .. fin de anio (ver calcular_periodo)
@@ -132,7 +133,30 @@ CONSULTAS = {
         "destino_nombre": "plantel nominado.xlsx",
         "periodo": None,
     },
+    # Reemplaza la bajada por Discoverer. NO trae las filas en 0 dias: el archivo solo
+    # alimenta la tabla `tiempo_acumulado` (tiempo_acumulado_tabla.py infiere los 0),
+    # que es lo que leen la carga de stress y las paginas de licencias/residentes.
+    "Tiempo Acumulado": {
+        "nro": 13,
+        "script_id": "siape_tiempo_acumulado_tabla",
+        "descripcion": "Descarga Tiempo Acumulado (SIAPE, consulta 13) -> tabla tiempo_acumulado",
+        "destino_dir": COMPARACION,
+        "destino_nombre": "TIEMPO_ACUMULADO_GESTOR.xlsx",
+        "periodo": None,
+        "post": "tiempo_acumulado",
+    },
 }
+
+
+def post_descarga(cfg, destino):
+    """Paso extra despues de copiar el archivo. Devuelve (filas, detalle) para el registro."""
+    if cfg.get("post") == "tiempo_acumulado":
+        import tiempo_acumulado_tabla as TA
+        r = TA.importar_gestor(destino)
+        F.log(f"Tabla tiempo_acumulado: {r['filas']} filas de SIAPE (años {r['anios']}), "
+              f"{r['a_cero']} saldo(s) pasaron a 0")
+        return r["filas"], f"{r['filas']} filas, {r['a_cero']} a 0"
+    return None, None
 
 
 # =================== capturas de diagnostico ===================
@@ -311,10 +335,6 @@ def asegurar_sesion_con_reintentos(intentos=SESION_INTENTOS):
     raise RuntimeError(f"{intentos} intentos de sesion fallaron. Ultimo: {ultimo_error}")
 
 
-def siape_vivo():
-    return F._buscar_ventana_siape() is not None
-
-
 def _norm(t):
     """Compara nombres sin acentos/mayusculas/espacios dobles (JAB a veces
     devuelve los acentos raros)."""
@@ -461,9 +481,19 @@ def fila_consulta(nombre_consulta, nro=None, timeout=20):
     return None, None, None
 
 
-def fila_enfocada(y, nombre_consulta, timeout=6):
-    """True si la celda con foco es la de NOMBRE a la altura y (la fila elegida)."""
-    for el, _d, info in F._jab_walk(max_depth=24, max_segundos=timeout):
+def fila_enfocada(y, nombre_consulta, el_fila=None, timeout=15):
+    """True si la celda con foco es la de NOMBRE a la altura y (la fila elegida).
+    Primero se le pregunta a la propia celda (1 llamada JAB). Si no, se recorre solo
+    la banda de la fila: el 08/10, con SiAPe lento, el walk completo de 6s se cortaba
+    a los ~360 nodos sin llegar a la grilla y daba "no seleccionada" con la fila en azul."""
+    if el_fila is not None:
+        try:
+            if "enfocado" in (el_fila.get_element_information().get("states") or []):
+                return True
+        except Exception:
+            pass
+    for el, _d, info in F._jab_walk(max_depth=24, max_segundos=timeout,
+                                    banda_y=(y - 3, y + 3) if y is not None else None):
         if "enfocado" not in (info.get("states") or []) or info.get("role") != "text":
             continue
         b = info.get("bounds") or {}
@@ -479,7 +509,7 @@ def seleccionar_fila(el_fila, info_fila, nombre_consulta):
     try:
         el_fila._request_focus()
         time.sleep(0.8)
-        if fila_enfocada(y, nombre_consulta):
+        if fila_enfocada(y, nombre_consulta, el_fila):
             F.log("Fila seleccionada por JAB (foco verificado).")
             return True
         F.log("AVISO: el foco JAB no quedo en la fila; pruebo click.")
@@ -487,7 +517,7 @@ def seleccionar_fila(el_fila, info_fila, nombre_consulta):
         F.log(f"AVISO: requestFocus fallo ({e}); pruebo click.")
     F._jab_click_bounds(info_fila)
     time.sleep(0.8)
-    if fila_enfocada(y, nombre_consulta):
+    if fila_enfocada(y, nombre_consulta, el_fila):
         F.log("Fila seleccionada por click (foco verificado).")
         return True
     return False
@@ -665,8 +695,8 @@ def registrar_resultado(script_id, descripcion, estado, motivo=None, filas=None,
 
 
 def descargar_con_reintentos(nombre, args, ya_bajados):
-    """Etapas 5-7 con reintento: si falla, limpia pantalla y prueba de nuevo; si en el
-    medio SiAPe se murio, rearma la sesion entera antes del reintento."""
+    """Etapas 5-7 con reintento: si falla, cierra SiAPe y rearma la sesion entera
+    (relanzar + login + eRreH) antes de probar de nuevo, hasta CONSULTA_INTENTOS."""
     for n in range(1, CONSULTA_INTENTOS + 1):
         ultimo = n == CONSULTA_INTENTOS
         if descargar_una(nombre, args, ya_bajados, registrar_error=ultimo):
@@ -674,18 +704,17 @@ def descargar_con_reintentos(nombre, args, ya_bajados):
         capturar(f"consulta_fallo_{_norm(nombre).replace(' ', '_')}_{n}")
         if ultimo:
             return False
-        F.log(f"Reintento '{nombre}' ({n + 1}/{CONSULTA_INTENTOS})...")
-        if not siape_vivo():
-            F.log("SiAPe ya no esta abierto: rearmo la sesion.")
-            try:
-                _reset_intento()
-                asegurar_sesion_con_reintentos()
-            except Exception as e:
-                F.log(f"No pude rearmar la sesion: {e}")
-                cfg = CONSULTAS[nombre]
-                registrar_resultado(cfg["script_id"], cfg["descripcion"], "error",
-                                    motivo=f"SiAPe se cerro y no pude rearmar la sesion: {e}")
-                return False
+        F.log(f"Reintento '{nombre}' ({n + 1}/{CONSULTA_INTENTOS}): cierro SiAPe y lo relanzo de cero.")
+        try:
+            asegurar_escritorio_activo(F.log)
+            _reset_intento()
+            asegurar_sesion_con_reintentos()
+        except Exception as e:
+            F.log(f"No pude rearmar la sesion: {e}")
+            cfg = CONSULTAS[nombre]
+            registrar_resultado(cfg["script_id"], cfg["descripcion"], "error",
+                                motivo=f"Fallo la consulta y no pude relanzar SiAPe: {e}")
+            return False
     return False
 
 
@@ -748,7 +777,15 @@ def descargar_una(nombre, args, ya_bajados, registrar_error=True):
         else:
             F.log("Sin modal de fechas (consulta sin parametros).")
 
-        resultado = confirmar_dialogo_si()
+        resultado = confirmar_dialogo_si(timeout=20)
+        if resultado is True and esperado:
+            # Con fechas SiAPe SIEMPRE pregunta "¿Esta seguro de ejecutar la consulta...?".
+            # Si no pregunto, el ACEPTAR (mouse/teclado reales) no llego: no se pidio
+            # ninguna descarga, no tiene sentido esperarla (10-11/10/2026: escritorio
+            # desconectado, capturas en negro).
+            capturar("sin_confirmacion")
+            raise RuntimeError("Despues de ACEPTAR no aparecio la confirmacion de SiAPe: la fecha/ACEPTAR "
+                               "no llegaron (¿escritorio remoto desconectado?). No se pidio la descarga.")
         if resultado is None:
             raise RuntimeError("Aparecio un dialogo de confirmacion pero no encontre el boton Si.")
         if resultado is not True:
@@ -768,9 +805,11 @@ def descargar_una(nombre, args, ya_bajados, registrar_error=True):
         destino = cfg["destino_dir"] / cfg["destino_nombre"]
         shutil.copyfile(archivo, destino)
         F.log(f"Copiado a {destino}")
+        filas, _detalle = post_descarga(cfg, destino)
 
         duracion = int(time.time() - t0)
-        registrar_resultado(cfg["script_id"], cfg["descripcion"], "ok", archivo=destino, duracion_seg=duracion)
+        registrar_resultado(cfg["script_id"], cfg["descripcion"], "ok", archivo=destino, duracion_seg=duracion,
+                            filas=filas)
         F.log(f"OK ({duracion}s).")
         return True
 
@@ -792,16 +831,17 @@ def main():
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--consulta", choices=list(CONSULTAS.keys()))
-    g.add_argument("--all", action="store_true", help="Baja las 9 consultas en orden")
+    g.add_argument("--all", action="store_true", help="Baja todas las consultas en orden")
     ap.add_argument("--desde", help="DD/MM/AAAA para modal PERIODO (si no, se calcula)")
     ap.add_argument("--hasta", help="DD/MM/AAAA para modal PERIODO (si no, se calcula)")
     ap.add_argument("--fecha", help="DD/MM/AAAA para modal FECHA (si no, hoy)")
-    ap.add_argument("--timeout-descarga", type=int, default=300)
+    ap.add_argument("--timeout-descarga", type=int, default=600)
     args = ap.parse_args()
 
     nombres = list(CONSULTAS.keys()) if args.all else [args.consulta]
 
     limpiar_capturas_viejas()
+    asegurar_escritorio_activo(F.log)  # por si se corre directo (bat) y no por run_robot
     try:
         asegurar_sesion_con_reintentos()
     except Exception as e:

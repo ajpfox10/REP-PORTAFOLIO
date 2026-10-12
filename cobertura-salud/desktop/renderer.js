@@ -34,7 +34,8 @@ let token = null
 let usuario = ''
 let backendUrl = 'http://localhost:8510'
 
-function apiPost(path, body) {
+function apiPost(path, body) { return reintentar401(path, () => apiPostRaw(path, body)) }
+function apiPostRaw(path, body) {
   return new Promise((resolve, reject) => {
     let u
     try { u = new URL(backendUrl + path) } catch (e) { return reject(new Error('URL de servidor invalida')) }
@@ -58,7 +59,8 @@ function apiPost(path, body) {
   })
 }
 
-function apiGet(path) {
+function apiGet(path) { return reintentar401(path, () => apiGetRaw(path)) }
+function apiGetRaw(path) {
   return new Promise((resolve, reject) => {
     let u
     try { u = new URL(backendUrl + path) } catch (e) { return reject(new Error('URL de servidor invalida')) }
@@ -80,6 +82,15 @@ function apiGet(path) {
   })
 }
 
+// La sesion vence a las 8 h: ante un 401 se vuelve a entrar sola y se reintenta una vez.
+async function reintentar401(path, fn) {
+  try { return await fn() } catch (e) {
+    if (!/HTTP 401/.test(e.message) || path === '/api/auth/escritorio') throw e
+    await ingresarEscritorio()
+    return fn()
+  }
+}
+
 // Credenciales institucionales por fuente (se traen del backend tras el login).
 // Clave = fuente.cred ('sss', 'ioma'); valor = {username, password} o null.
 const creds = {}
@@ -87,19 +98,23 @@ const creds = {}
 // Servidor fijo (no editable ni visible): siempre apunta al backend de produccion.
 const SERVIDOR_POR_DEFECTO = 'http://192.168.0.21:8510'
 backendUrl = SERVIDOR_POR_DEFECTO
-document.getElementById('usr').value = localStorage.getItem('cob_usuario') || ''
 
-document.getElementById('btnLogin').addEventListener('click', async () => {
+// Sin pantalla de usuario/contrasena: al abrir, la app entra sola con el usuario
+// fijo "escritorio". Si no hay servidor, muestra un cartel para avisar al jefe.
+async function ingresarEscritorio() {
+  const r = await apiPost('/api/auth/escritorio', {})
+  token = r.token
+  usuario = r.user ? r.user.username : 'escritorio'
+}
+
+async function conectar() {
+  const card = document.querySelector('#login .login-card')
+  const titulo = document.getElementById('loginTitulo')
   const msg = document.getElementById('loginMsg')
-  msg.textContent = 'Ingresando...'
-  backendUrl = SERVIDOR_POR_DEFECTO
-  const username = document.getElementById('usr').value.trim()
-  const password = document.getElementById('pwd').value
+  const btn = document.getElementById('btnLogin')
+  card.classList.remove('error'); titulo.textContent = 'Conectando...'; msg.textContent = ''; btn.style.display = 'none'
   try {
-    const r = await apiPost('/api/auth/login', { username, password })
-    token = r.token
-    usuario = r.user ? r.user.username : username
-    localStorage.setItem('cob_usuario', username)
+    await ingresarEscritorio()
     document.getElementById('userLabel').textContent = 'Usuario: ' + usuario
     document.getElementById('login').style.display = 'none'
     // Modulo de lote por Excel: solo para el usuario habilitado.
@@ -113,12 +128,16 @@ document.getElementById('btnLogin').addEventListener('click', async () => {
       } catch (e) { creds[k] = null; console.log(k + ' cred no disponible: ' + e.message) }
     }
   } catch (e) {
-    if (/HTTP 401/.test(e.message)) msg.textContent = 'Usuario o contrasena incorrectos.'
-    else if (/ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|ECONNRESET|getaddrinfo|socket hang up|URL de servidor/i.test(e.message)) msg.textContent = 'No se pudo conectar al servidor (192.168.0.21:8510). Verifica que este encendido y en red.'
-    else if (/HTTP 5\d\d/.test(e.message)) msg.textContent = 'Error del servidor. Intenta de nuevo en un momento.'
-    else msg.textContent = 'No se pudo ingresar: ' + e.message
+    console.log('conexion ERROR: ' + e.message)
+    card.classList.add('error')
+    titulo.textContent = '⚠ Sin conexion'
+    msg.textContent = 'LA APLICACION NO SE PUEDE CONECTAR AL SERVIDOR. SAQUE CAPTURA DE ESTE MENSAJE Y ENVIESELA A SU JEFE.'
+    btn.style.display = ''
   }
-})
+}
+
+document.getElementById('btnLogin').addEventListener('click', conectar)
+conectar()
 
 async function guardarRecorrido() {
   if (!token) { msgEl.textContent = 'Recorrido completo (no hay sesion: no se guardo en el backend).'; return }
@@ -127,6 +146,9 @@ async function guardarRecorrido() {
       dni: datos.dni,
       cuil: datos.cuil,
       apellido: '',
+      sexo: datos.sexo || '',
+      fechaNacimiento: datos.fnac || '',
+      cuilGenerado: !!datos.cuilGenerado,
       resultados: resultados.map((x) => ({
         fuente: x.codigo, nombre: x.nombre, veredicto: x.veredicto, texto: (x.texto || '').slice(0, 4000)
       }))
@@ -251,12 +273,77 @@ function toCuil(s) {
   return d.length === 11 ? `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}` : ''
 }
 
+// DNI contenido en el CUIL (sin ceros a la izquierda): XX-DDDDDDDD-X.
+function dniDeCuil(cuil) {
+  const d = digits(cuil)
+  return d.length === 11 ? d.slice(2, 10).replace(/^0+/, '') : ''
+}
+
 // Sexo segun el prefijo del CUIL, con los codigos del select de IOMA (1=M, 2=F).
 // 23/24 (y personas juridicas) no lo determinan: devuelve '' y lo elige el operador.
 function sexoDeCuil(cuil) {
   const pre = digits(cuil).slice(0, 2)
   return pre === '20' ? '1' : pre === '27' ? '2' : ''
 }
+
+// CUIL calculado (algoritmo de ANSES/AFIP): prefijo 20=M / 27=F + DNI a 8 digitos
+// + verificador modulo 11. Si el resto da 10 el prefijo pasa a 23 (verif. 9 M / 4 F).
+// sexo: '1'=M, '2'=F (codigos del select). Es una SUGERENCIA: no es el CUIL oficial.
+function calcularCuil(dni, sexo) {
+  const d = digits(dni)
+  if (d.length < 7 || d.length > 8 || (sexo !== '1' && sexo !== '2')) return ''
+  const doc = d.padStart(8, '0')
+  let pre = sexo === '1' ? '20' : '27'
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+  const verif = (p) => {
+    const suma = (p + doc).split('').reduce((a, c, i) => a + Number(c) * pesos[i], 0)
+    const r = 11 - (suma % 11)
+    return r === 11 ? 0 : r
+  }
+  let v = verif(pre)
+  if (v === 10) { pre = '23'; v = sexo === '1' ? 9 : 4 }
+  return `${pre}-${doc}-${v}`
+}
+
+// Muestra el CUIL sugerido debajo del campo CUIL cuando hay DNI y el CUIL esta vacio.
+// Sin sexo elegido muestra las dos opciones (M/F). Clic = lo copia al campo CUIL.
+// cuilAuto guarda el CUIL que puso la app: si el operador lo cambia a mano deja de serlo.
+const cuilSugEl = document.getElementById('cuilSug')
+let cuilAuto = ''
+function actualizarCuilSugerido() {
+  cuilSugEl.innerHTML = ''
+  if (toCuil(document.getElementById('cuil').value)) return
+  const dni = digits(document.getElementById('dni').value)
+  const sexo = document.getElementById('sexo').value
+  const opciones = (sexo ? [sexo] : ['1', '2'])
+    .map((sx) => ({ sx, cuil: calcularCuil(dni, sx) })).filter((o) => o.cuil)
+  if (!opciones.length) return
+  cuilSugEl.append('Sugerido: ')
+  opciones.forEach((o, i) => {
+    if (i) cuilSugEl.append(' · ')
+    const a = document.createElement('span')
+    a.textContent = o.cuil + (sexo ? '' : (o.sx === '1' ? ' (M)' : ' (F)'))
+    a.style.textDecoration = 'underline'
+    a.addEventListener('click', () => {
+      document.getElementById('cuil').value = o.cuil
+      cuilAuto = o.cuil
+      if (!document.getElementById('sexo').value) document.getElementById('sexo').value = o.sx
+      actualizarCuilSugerido()
+    })
+    cuilSugEl.append(a)
+  })
+}
+;['dni', 'cuil', 'sexo'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', actualizarCuilSugerido)
+  document.getElementById(id).addEventListener('change', actualizarCuilSugerido)
+  document.getElementById(id).addEventListener('input', () => document.getElementById(id).classList.remove('falta'))
+})
+document.getElementById('fnac').addEventListener('input', () => document.getElementById('fnac').classList.remove('falta'))
+// Si cargan el CUIL a mano y no eligieron sexo, se preselecciona por el prefijo (20/27).
+document.getElementById('cuil').addEventListener('change', () => {
+  const sx = sexoDeCuil(document.getElementById('cuil').value)
+  if (sx && !document.getElementById('sexo').value) { document.getElementById('sexo').value = sx; actualizarCuilSugerido() }
+})
 
 function buildPrefillJS(fuente, p) {
   const pares = fuente.campos(p).filter(([, val]) => val)
@@ -385,7 +472,9 @@ function evaluarCuil() {
   // Muestra un aviso si no hay CUIL valido: las fuentes que dependen del CUIL
   // (ARCA, y con datos parciales SSS/ANSES/Serv.Domestico) no van a funcionar bien.
   if (!datos.cuil) {
-    avisoEl.textContent = '⚠ Sin CUIL: las paginas que usan CUIL (SSS, ARCA, ANSES, Servicio Domestico) pueden no funcionar correctamente. Carga el CUIL para resultados completos.'
+    const sug = calcularCuil(datos.dni, datos.sexo)
+    avisoEl.textContent = '⚠ Sin CUIL: las paginas que usan CUIL (SSS, ARCA, ANSES, Servicio Domestico) pueden no funcionar correctamente. Carga el CUIL para resultados completos.' +
+      (sug ? ` CUIL sugerido (calculado): ${sug} — clic en la sugerencia debajo del campo CUIL para usarlo.` : '')
     avisoEl.classList.add('visible')
   } else {
     avisoEl.textContent = ''
@@ -415,10 +504,31 @@ function confirmarEnPagina(mensaje) {
 }
 
 btnIniciar.addEventListener('click', async () => {
-  const dni = digits(document.getElementById('dni').value)
-  const cuil = toCuil(document.getElementById('cuil').value) || toCuil(dni)
-  datos = { dni, cuil, cuilDigits: digits(cuil), sexo: sexoDeCuil(cuil) }
-  if (!datos.dni && !datos.cuil) { msgEl.textContent = 'Carga al menos DNI o CUIL.'; return }
+  let dni = digits(document.getElementById('dni').value)
+  let cuil = toCuil(document.getElementById('cuil').value) || toCuil(dni)
+  // Si solo cargaron el CUIL (o pegaron el CUIL en el campo DNI), el DNI son
+  // los 8 digitos del medio: 2 adelante (tipo) y 1 atras (verificador).
+  if (cuil && (!dni || dni.length === 11)) dni = dniDeCuil(cuil)
+  document.getElementById('dni').value = dni
+  if (cuil) document.getElementById('cuil').value = cuil
+  // DNI, sexo y fecha de nacimiento son obligatorios.
+  const sexo = document.getElementById('sexo').value
+  const fnac = document.getElementById('fnac').value // yyyy-mm-dd
+  const hoy = new Date().toISOString().slice(0, 10)
+  const faltan = []
+  if (dni.length < 7 || dni.length > 8) faltan.push(['dni', 'DNI (7 u 8 digitos)'])
+  if (!sexo) faltan.push(['sexo', 'sexo'])
+  if (!fnac || fnac > hoy || fnac < '1900-01-01') faltan.push(['fnac', 'fecha de nacimiento valida'])
+  if (faltan.length) {
+    faltan.forEach(([id]) => document.getElementById(id).classList.add('falta'))
+    msgEl.textContent = 'Faltan datos obligatorios: ' + faltan.map((f) => f[1]).join(', ') + '.'
+    return
+  }
+  // Sin CUIL cargado: se usa el calculado con DNI + sexo y queda marcado como generado.
+  if (!cuil) { cuil = calcularCuil(dni, sexo); cuilAuto = cuil; document.getElementById('cuil').value = cuil }
+  const cuilGenerado = !!cuil && cuil === cuilAuto
+  datos = { dni, cuil, cuilDigits: digits(cuil), sexo, fnac, cuilGenerado }
+  actualizarCuilSugerido()
   evaluarCuil()
   // Muestra el historial y, si ya hay una consulta previa, CARGA el ultimo resultado
   // en el panel y DESPUES pregunta si repetir.
@@ -519,7 +629,9 @@ webview.addEventListener('did-stop-loading', async () => {
             clickReal(st.input.x, st.input.y)
             // limpiar el campo antes de tipear (evita DNIs repetidos)
             await webview.executeJavaScript(`(function(){var i=document.querySelector("input[placeholder='Ingrese el valor']")||document.querySelector('input.gwt-TextBox'); if(i){i.value=''; i.dispatchEvent(new Event('input',{bubbles:true}));} return true;})()`)
-            tipear(digits(datos.dni)) // solo digitos
+            // PUCO busca por NroDoc: siempre el DNI (nunca el CUIL de 11 digitos).
+            const dniPuco = digits(datos.dni)
+            tipear(dniPuco && dniPuco.length <= 8 ? dniPuco.replace(/^0+/, '') : dniDeCuil(datos.cuil))
             // Confirmar con Enter (los buscadores GWT suelen disparar la busqueda con Enter).
             webview.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
             webview.sendInputEvent({ type: 'char', keyCode: '\r' })
@@ -759,6 +871,11 @@ btnRecargar.addEventListener('click', () => {
   // Limpiar campos y textos.
   document.getElementById('dni').value = ''
   document.getElementById('cuil').value = ''
+  document.getElementById('sexo').value = ''
+  document.getElementById('fnac').value = ''
+  cuilAuto = ''
+  ;['dni', 'sexo', 'fnac'].forEach((id) => document.getElementById(id).classList.remove('falta'))
+  actualizarCuilSugerido()
   progresoEl.textContent = ''
   msgEl.textContent = 'Listo para una nueva consulta. Carga DNI/CUIL y presiona "Iniciar recorrido".'
   avisoEl.classList.remove('visible')
@@ -807,7 +924,7 @@ function extraerCola(col) {
   for (const r of filasExcel) {
     const crudo = String(r[col] == null ? '' : r[col]).trim()
     const d = digits(crudo)
-    if (d.length === 11) { cola.push({ dni: d.slice(2, 10), cuil: `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}` }) }
+    if (d.length === 11) { cola.push({ dni: dniDeCuil(d), cuil: `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}` }) }
     else if (d.length >= 7 && d.length <= 8) { cola.push({ dni: d, cuil: '' }) }
   }
   loteInfo.textContent = `${cola.length} DNIs validos en la columna "${encabezadoExcel[col] || ('columna ' + (col + 1))}".`

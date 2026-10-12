@@ -294,6 +294,7 @@ const schema = z.object({
 
   // Trámites documentales: entrada de PDFs descargados y base final por DNI/trámite.
   TRAMITES_PDF_INPUT_DIR: strish(""),
+  SAMO_CLAVE_HABILITACION: strish(""), // clave fija que el admin carga para habilitar un mes en SAMO → Licencias Ministerio
   TRAMITES_DOCU_BASE_DIR: strish(""),
   // Ruta de la carpeta DOCU relativa al share de red (lo que va despues de \\host\).
   // Sirve para armar la ruta UNC que el front copia al portapapeles para abrir en el Explorador.

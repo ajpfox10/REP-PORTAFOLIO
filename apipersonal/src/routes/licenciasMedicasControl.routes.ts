@@ -348,6 +348,48 @@ function reclamoDe(porDni: Map<string, ReclamoReg[]>, l: Licencia, usados?: Set<
 }
 const tieneReclamo = (r: ReclamoReg | null) => !!r && (r.reclamo || r.notas.length > 0);
 
+interface EnvioWsp {
+  dni: string; desde: string; hasta: string; novedad: string; destino: string | null; modo: string;
+  estado: string; detalle: string | null; created_at: string | null; enviado_por: string | null;
+}
+/** Envíos reales de WhatsApp (sin los de prueba), agrupados por DNI y en orden de id. */
+async function leerEnviosWhatsapp(sequelize: Sequelize): Promise<Map<string, EnvioWsp[]>> {
+  const rows = await sequelize.query<any>(
+    `SELECT e.dni, e.desde, e.hasta, e.novedad, e.destino, e.modo, e.estado, e.detalle, e.created_at, u.nombre AS enviado_por
+       FROM licencias_medicas_whatsapp_envios e
+       LEFT JOIN usuarios u ON u.id = e.enviado_por
+      WHERE e.prueba = 0
+      ORDER BY e.id`,
+    { type: QueryTypes.SELECT },
+  );
+  const porDni = new Map<string, EnvioWsp[]>();
+  for (const e of rows) {
+    const dni = normDni(e.dni);
+    if (!porDni.has(dni)) porDni.set(dni, []);
+    porDni.get(dni)!.push({
+      dni, desde: fechaStr(e.desde)!, hasta: fechaStr(e.hasta)!, novedad: String(e.novedad),
+      destino: e.destino ?? null, modo: e.modo, estado: e.estado, detalle: e.detalle ?? null,
+      created_at: isoDe(e.created_at), enviado_por: e.enviado_por ?? null,
+    });
+  }
+  return porDni;
+}
+/** Resumen de WhatsApp de una licencia (misma regla que el reclamo: clave exacta o misma novedad
+ *  con rango solapado): último intento y, si alguno salió, el último ENVIADO. */
+function whatsappDe(porDni: Map<string, EnvioWsp[]>, l: Licencia) {
+  const lista = porDni.get(l.dni) || [];
+  let mios = lista.filter(e => e.desde === l.desde && e.hasta === l.hasta && e.novedad === l.novedad);
+  if (!mios.length) mios = lista.filter(e => e.novedad === l.novedad && e.desde <= l.hasta && e.hasta >= l.desde);
+  if (!mios.length) return null;
+  const ultimo = mios[mios.length - 1];
+  const avisado = [...mios].reverse().find(e => e.estado === 'ENVIADO') || null;
+  const ref = avisado || ultimo;
+  return {
+    avisado: !!avisado, estado: ref.estado, fecha: ref.created_at, enviado_por: ref.enviado_por,
+    destino: ref.destino, modo: ref.modo, detalle: ref.detalle, intentos: mios.length,
+  };
+}
+
 // ── Avisos por WhatsApp ──────────────────────────────────────────────────────────────────────
 // licencias_medicas_whatsapp_envios: una fila por intento de envío (automático por la extensión
 // de Chrome o manual por link). Los de prueba (prueba=1) no cuentan como "avisado".
@@ -377,7 +419,7 @@ async function ensureWhatsappTable(sequelize: Sequelize) {
  *  personal.telefono ("4627-1479/1554242725", "NO POSEE/1130610665", "0341-153591500"…).
  *  Prefiere el que es seguro móvil (tenía 15, o es 11 que no empieza con 4); un 11-4xxx
  *  puede ser fijo → se usa solo si no hay otro y queda como dudoso. */
-export function celularDe(raw: any): { celular: string | null; dudoso: boolean } {
+export function celularDe(raw: any): { celular: string | null; dudoso: boolean; opciones: { celular: string; dudoso: boolean }[] } {
   const cands: { cel: string; movil: boolean }[] = [];
   for (const seg of String(raw ?? '').split(/[\/;,|]|\s+[yo]\s+|-\s+|\s+-/i)) {
     const d = seg.replace(/\D/g, '');
@@ -402,7 +444,9 @@ export function celularDe(raw: any): { celular: string | null; dudoso: boolean }
     cands.push({ cel: `549${nac}`, movil });
   }
   const elegido = cands.find(c => c.movil) || cands[0];
-  return elegido ? { celular: elegido.cel, dudoso: !elegido.movil } : { celular: null, dudoso: false };
+  // Todas las opciones (sin repetir) para elegir otro número desde la pestaña WhatsApp
+  const opciones = [...new Map(cands.map(c => [c.cel, { celular: c.cel, dudoso: !c.movil }])).values()];
+  return elegido ? { celular: elegido.cel, dudoso: !elegido.movil, opciones } : { celular: null, dudoso: false, opciones };
 }
 
 export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
@@ -438,6 +482,14 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
         reclamos = await leerReclamos(sequelize);
       } catch (e: any) {
         logger.warn({ msg: 'licencias-medicas-control: no se pudo leer reclamos', error: e?.message });
+      }
+      // Avisos por WhatsApp (reales, sin prueba)
+      let enviosWsp = new Map<string, EnvioWsp[]>();
+      try {
+        await tablaWhatsapp;
+        enviosWsp = await leerEnviosWhatsapp(sequelize);
+      } catch (e: any) {
+        logger.warn({ msg: 'licencias-medicas-control: no se pudo leer envíos de WhatsApp', error: e?.message });
       }
 
       // Licencias que se solapan con el período:
@@ -543,6 +595,7 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
           reclamo_por: rec?.reclamo_por ?? null,
           notas,
           sigue_sin_otorgar: !resuelta && reclamo && !!ultimoReclamo && ultimoReclamo < licenciasMtime,
+          whatsapp: whatsappDe(enviosWsp, l),
           detalle,
         };
       });
@@ -568,6 +621,7 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
           resueltas: salida.filter(x => x.resuelta).length,
           reclamar_con_fichada: den.filter(x => x.debe_reclamar && x.dias_ficho_tocaba > 0).length,
           denegadas_sin_horario: den.filter(x => x.sin_horario).length,
+          avisados_whatsapp: new Set(salida.filter(x => x.whatsapp?.avisado).map(x => x.dni)).size,
         },
         data: salida,
         generado: new Date().toISOString(),

@@ -29,7 +29,11 @@ const PASSWORD = process.env.AGENT_PASSWORD    || "xxxxxxx"
 const POLL_MS  = Number(process.env.POLL_INTERVAL_MS  || 4000)
 const BEAT_MS  = Number(process.env.HEARTBEAT_MS      || 30000)
 const SCAN_CONCURRENCY = Math.max(1, Number(process.env.SCAN_CONCURRENCY || 2))
-const SCAN_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.SCAN_JOB_TIMEOUT_MS || 180_000))
+// Corte por FALTA DE PROGRESO (sin hojas nuevas), no por duración total:
+// una pila grande por ADF puede tardar varios minutos y seguir escaneando bien.
+const SCAN_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.SCAN_JOB_TIMEOUT_MS || 300_000))
+// Tope absoluto del trabajo completo, aunque sigan llegando hojas.
+const SCAN_JOB_MAX_MS = Math.max(SCAN_JOB_TIMEOUT_MS, Number(process.env.SCAN_JOB_MAX_MS || 900_000))
 const AUTO_DISCOVERY_ENABLED = process.env.AUTO_DISCOVERY_ENABLED !== "false"
 const HOSTNAME = os.hostname()
 
@@ -182,10 +186,29 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
     }
   }
 
+  // 1b. ADF en tamaño distinto de A4: los Olivetti/Kyocera ignoran la región eSCL
+  //     en el alimentador y devuelven A4 (corta el oficio). La API privada Kyocera
+  //     recibe el tamaño de original explícito, así que va primero.
+  const isAdfSource = source === "adf" || source === "adf_duplex"
+  let kyoceraTried = false
+  if (isAdfSource && normalizePaperSize(paperSize) !== "A4") {
+    kyoceraTried = true
+    try {
+      const pages = await scanKyoceraPrivate(ip, { dpi, color, source, duplex, paper_size: paperSize })
+      console.log(`[kyocera] ✅ ${ip} → ${pages.length} pág. (ADF ${paperSize})`)
+      warnIfPagesShorter(ip, pages, paperSize, "kyocera")
+      return pages
+    } catch (e: any) {
+      errors.push(`Kyocera: ${e.message}`)
+      console.warn(`[kyocera] ${ip} falló: ${e.message} — probando eSCL…`)
+    }
+  }
+
   // 2. eSCL / AirScan (estándar moderno, HP/Canon/Ricoh/Brother)
   try {
     const pages = await scanESCL(ip, { dpi, color, source, duplex, paper_size: paperSize, escl_port })
     console.log(`[escl] ✅ ${ip} → ${pages.length} pág.`)
+    warnIfPagesShorter(ip, pages, paperSize, "escl")
     return pages
   } catch (e: any) {
     errors.push(`eSCL: ${e.message}`)
@@ -193,13 +216,15 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
   }
 
   // 2b. Kyocera private scan API (KMTWAIN / Boxless Scanning Module)
-  try {
-    const pages = await scanKyoceraPrivate(ip, { dpi, color, source, duplex, paper_size: paperSize })
-    console.log(`[kyocera] ✅ ${ip} → ${pages.length} pág.`)
-    return pages
-  } catch (e: any) {
-    errors.push(`Kyocera: ${e.message}`)
-    console.warn(`[kyocera] ${ip} falló: ${e.message} — probando WSD-Scan…`)
+  if (!kyoceraTried) {
+    try {
+      const pages = await scanKyoceraPrivate(ip, { dpi, color, source, duplex, paper_size: paperSize })
+      console.log(`[kyocera] ✅ ${ip} → ${pages.length} pág.`)
+      return pages
+    } catch (e: any) {
+      errors.push(`Kyocera: ${e.message}`)
+      console.warn(`[kyocera] ${ip} falló: ${e.message} — probando WSD-Scan…`)
+    }
   }
 
   // 3. WS-Scan / WSD-Scan via puerto 5357 (Kyocera, Olivetti, Canon)
@@ -228,6 +253,7 @@ async function scanDevice(ip: string, profile: any): Promise<Buffer[]> {
     const waitMs = [10_000, 20_000, 30_000]
     let retryErrors: string[] = []
     for (let attempt = 0; attempt < waitMs.length; attempt++) {
+      if (scanCancelled(ip)) break
       const waitSec = waitMs[attempt] / 1000
       console.warn(`[scan] ${ip} escáner bloqueado — esperando ${waitSec}s (intento ${attempt + 1}/${waitMs.length})…`)
       await sleep(waitMs[attempt])
@@ -443,16 +469,50 @@ function getWsdRegion(value?: string | null) {
   }
 }
 
-function getKyoceraOriginalSize(value?: string | null): string {
+// "LEGAL" probado en d-COPIA 5514MF (08/10/2026); "LEGAL_R" lo rechaza por tipo.
+// Los demás no están verificados. Sin equivalente → null (no degradar a A4 en silencio).
+function getKyoceraOriginalSize(value?: string | null): string | null {
   switch (normalizePaperSize(value)) {
+    case "A4":     return "A4_R"
     case "Letter": return "LETTER_R"
-    case "Legal":  return "LEGAL_R"
+    case "Legal":  return "LEGAL"
     case "A3":     return "A3_R"
     case "A5":     return "A5_R"
     case "B4":     return "B4_R"
     case "B5":     return "B5_R"
-    default:       return "A4_R"
+    default:       return null
   }
+}
+
+// Alto (px) del JPEG leyendo el marcador SOF; null si no se puede leer.
+function jpegPixelSize(buf: Buffer): { width: number; height: number } | null {
+  if (buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8) return null
+  let i = 2
+  while (i + 9 < buf.length) {
+    if (buf[i] !== 0xFF) { i++; continue }
+    const marker = buf[i + 1]
+    if (marker >= 0xC0 && marker <= 0xC3) {
+      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) }
+    }
+    if (marker === 0xD8 || marker === 0x01 || (marker >= 0xD0 && marker <= 0xD7)) { i += 2; continue }
+    i += 2 + buf.readUInt16BE(i + 2)
+  }
+  return null
+}
+
+// Aviso en el log si el equipo devolvió páginas más cortas que el papel pedido
+// (ej. pide Oficio y llega A4 → la hoja quedó recortada).
+function warnIfPagesShorter(ip: string, pages: Buffer[], paperSize: string, tag: string): void {
+  const paper = getPaperSizeMm(paperSize)
+  const expectedRatio = paper.heightMm / paper.widthMm
+  pages.forEach((page, idx) => {
+    const size = jpegPixelSize(page)
+    if (!size || !size.width) return
+    const ratio = Math.max(size.width, size.height) / Math.min(size.width, size.height)
+    if (ratio < expectedRatio * 0.95) {
+      console.warn(`[${tag}] ${ip} ⚠️ página ${idx + 1}: ${size.width}x${size.height} es más corta que ${paper.paper} — el equipo pudo haber recortado la hoja`)
+    }
+  })
 }
 
 // Extrae el contenido de un bloque XML <ns:Name>…</ns:Name> (namespace opcional)
@@ -614,6 +674,10 @@ async function scanESCL(ip: string, opts: {
 
   try {
     for (let attempt = 0; attempt < 100; attempt++) {
+      if (scanCancelled(ip)) {
+        console.warn(`[escl] ${ip} escaneo cancelado por timeout — cerrando el trabajo en el equipo`)
+        break
+      }
       try {
         const pageData = await httpGetBinary(`${fullJobUrl}/NextDocument`, 30_000)
         if (!pageData || pageData.length < 100) {
@@ -626,6 +690,7 @@ async function scanESCL(ip: string, opts: {
         pages.push(pageData)
         lastPageAt = Date.now()
         console.log(`[escl] página ${pages.length} → ${pageData.length} bytes`)
+        notifyScanPage(ip)
       } catch (e: any) {
         // 404 = no más páginas, es el fin normal
         const msg = e?.message || String(e)
@@ -642,8 +707,16 @@ async function scanESCL(ip: string, opts: {
         }
         // Si ya tenemos al menos una página y la impresora cerró la conexión,
         // es fin normal (flatbed/cristal cierra el socket en lugar de devolver 404)
-        if (pages.length > 0 && !isAdf && (msg.includes('socket hang up') || msg.includes('ECONNRESET') || msg.includes('EPIPE'))) {
+        const isHangUp = msg.includes('socket hang up') || msg.includes('ECONNRESET') || msg.includes('EPIPE')
+        if (pages.length > 0 && !isAdf && isHangUp) {
           console.log(`[escl] ${ip} conexión cerrada tras ${pages.length} pág. — fin normal`)
+          break
+        }
+        // ADF: los Olivetti/Kyocera cortan la conexión al vaciarse el alimentador en
+        // vez de responder 404. Antes se reintentaba hasta 30s después de la última
+        // hoja; con 20s sin hojas nuevas ya se da por vacío (deja margen entre hojas).
+        if (pages.length > 0 && isAdf && isHangUp && Date.now() - lastPageAt > 20_000) {
+          console.log(`[escl] ${ip} ADF: conexión cerrada y 20s sin hojas tras ${pages.length} pág. — fin normal`)
           break
         }
         // Sin páginas aún: no reintentar más de 15s (scanner probablemente no pudo escanear)
@@ -739,6 +812,8 @@ async function scanKyoceraPrivate(ip: string, opts: {
   dpi: number; color: boolean; source: string; duplex: boolean; paper_size?: string
 }): Promise<Buffer[]> {
   const base = `http://${ip}:9090/ws/km-wsdl/job/scan_operation`
+  const originalSize = getKyoceraOriginalSize(opts.paper_size)
+  if (!originalSize) throw new Error(`tamaño ${opts.paper_size} sin equivalente Kyocera`)
   const serviceInfo = await kyoceraSoap(base, "get_service_information", "<k:get_service_informationRequest/>", 8_000)
   if (xmlValue(serviceInfo.text, "result") !== "SUCCESS") {
     throw new Error("servicio privado no disponible")
@@ -756,7 +831,6 @@ async function scanKyoceraPrivate(ip: string, opts: {
     const dpi = nearestKyoceraDpi(opts.dpi || 300)
     const colorSelection = opts.color ? "FULL_COLOR" : "GRAYSCALE"
     const duplexMode = opts.duplex ? "DUPLEX" : "SIMPLEX"
-    const originalSize = getKyoceraOriginalSize(opts.paper_size)
     const scanSettings = `<k:scan_image_configuration>
   <k:color_selection>${colorSelection}</k:color_selection>
   <k:scan_resolution>RESOLUTION_${dpi}X${dpi}</k:scan_resolution>
@@ -778,20 +852,39 @@ async function scanKyoceraPrivate(ip: string, opts: {
       throw new Error(`start_scan ${startResult || "sin job_id"}`)
     }
 
+    // Pedir imágenes hasta ALL_GET_COMPLETE (una por cara; ADF/duplex trae varias).
+    // Sin páginas nuevas por 60s → se corta con lo que haya.
     const pages: Buffer[] = []
-    for (let attempt = 0; attempt < 30; attempt++) {
-      await sleep(attempt === 0 ? 3_000 : 2_000)
+    let lastPageAt = Date.now()
+    for (let attempt = 0; attempt < 500; attempt++) {
+      if (scanCancelled(ip)) {
+        console.warn(`[kyocera] ${ip} escaneo cancelado por timeout`)
+        break
+      }
+      await sleep(attempt === 0 ? 3_000 : pages.length ? 500 : 2_000)
       const retrieve = await kyoceraSoap(base, "retrieve_image",
         `<k:retrieve_imageRequest><k:operation_id>${operationId}</k:operation_id><k:job_id>${jobId}</k:job_id></k:retrieve_imageRequest>`,
         60_000)
       const page = extractKyoceraImage(retrieve)
       if (page && page.length > 100) {
         pages.push(page)
-        break
+        lastPageAt = Date.now()
+        console.log(`[kyocera] página ${pages.length} → ${page.length} bytes`)
+        notifyScanPage(ip)
+        continue
       }
       const result = xmlValue(retrieve.text, "result")
+      if (result === "ALL_GET_COMPLETE") break
       if (result && !["SUCCESS", "PROCESSING", "SCAN_CONTINUE", "WAITING"].includes(result)) {
+        if (pages.length) {
+          console.warn(`[kyocera] ${ip} retrieve_image ${result} tras ${pages.length} pág. — fin`)
+          break
+        }
         throw new Error(`retrieve_image ${result}`)
+      }
+      if (Date.now() - lastPageAt > 60_000) {
+        if (pages.length) break
+        throw new Error("retrieve_image sin imagen en 60s")
       }
     }
 
@@ -868,7 +961,11 @@ function xmlValue(xml: string, tag: string): string {
 
 function extractKyoceraImage(res: { text: string; buffer: Buffer }): Buffer | null {
   const jpeg = res.buffer.indexOf(Buffer.from([0xFF, 0xD8]))
-  if (jpeg >= 0) return res.buffer.slice(jpeg)
+  if (jpeg >= 0) {
+    // La respuesta es MIME multipart: cortar en el fin de imagen (FFD9) para no arrastrar el boundary
+    const end = res.buffer.lastIndexOf(Buffer.from([0xFF, 0xD9]))
+    return res.buffer.slice(jpeg, end > jpeg ? end + 2 : undefined)
+  }
   const pdf = res.buffer.indexOf(Buffer.from("%PDF"))
   if (pdf >= 0) return res.buffer.slice(pdf)
   const b64 = res.text.match(/<[^>]*:?image_data[^>]*>([A-Za-z0-9+/=\r\n\s]+)</i)?.[1]
@@ -1296,6 +1393,50 @@ function isTransientHttpError(err: any): boolean {
 
 function isScannerBusyMessage(value: string): boolean {
   return /SCANNER_BUSY|HTTP 409|409 Conflict|ServerErrorNotAcceptingJobs|not accepting|temporarily blocked/i.test(value)
+}
+
+// Control de un escaneo en curso, por IP: el motor avisa cada hoja (onPage) y
+// mira `cancelled` para cortar de verdad y cerrar el trabajo en el equipo.
+type ScanControl = { cancelled: boolean; onPage: () => void }
+const scanControls = new Map<string, ScanControl>()
+
+function scanCancelled(ip: string): boolean {
+  return !!scanControls.get(ip)?.cancelled
+}
+
+function notifyScanPage(ip: string): void {
+  try { scanControls.get(ip)?.onPage() } catch {}
+}
+
+// Como withTimeout, pero el plazo de inactividad se reinicia con cada hoja.
+function withProgressTimeout<T>(
+  promise: Promise<T>,
+  control: ScanControl,
+  idleMs: number,
+  maxMs: number,
+  idleMessage: string,
+  maxMessage: string,
+): Promise<T> {
+  let idleTimer: ReturnType<typeof setTimeout>
+  let maxTimer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_resolve, reject) => {
+    const fire = (message: string) => {
+      control.cancelled = true
+      reject(new Error(message))
+    }
+    const armIdle = () => {
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => fire(idleMessage), idleMs)
+    }
+    const prevOnPage = control.onPage
+    control.onPage = () => { armIdle(); prevOnPage() }
+    armIdle()
+    maxTimer = setTimeout(() => fire(maxMessage), maxMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => {
+    clearTimeout(idleTimer)
+    clearTimeout(maxTimer)
+  })
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -2039,6 +2180,12 @@ function friendlyErrorMessage(technical: string): string {
   if (/no devolvió páginas|no se recibió páginas|sin páginas/i.test(technical)) {
     return '⚠️ El escáner no devolvió ninguna página. Verifique que haya papel en el alimentador o en el cristal.'
   }
+  if (/SCAN_TIMEOUT: .*sin recibir hojas/i.test(technical)) {
+    return `⚠️ El escáner estuvo ${Math.round(SCAN_JOB_TIMEOUT_MS / 60_000)} minutos sin entregar hojas. Puede estar trabado o sin papel: revíselo y vuelva a intentar.`
+  }
+  if (/SCAN_TIMEOUT: .*en total/i.test(technical)) {
+    return `⚠️ El escaneo superó ${Math.round(SCAN_JOB_MAX_MS / 60_000)} minutos. Divida la pila en tandas más chicas.`
+  }
   if (/ECONNREFUSED/i.test(technical)) {
     return '⚠️ No se pudo conectar con el escáner. Verifique que esté encendido y conectado a la red.'
   }
@@ -2079,6 +2226,9 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
       // queden filas de device duplicadas. El job queda en cola y lo toma el próximo ciclo.
       if (scanningIps.has(ip)) return
       scanningIps.add(ip)
+      // Si se cortó por timeout, el escaneo sigue hablando con el equipo un rato
+      // (hasta cerrar el trabajo eSCL): la IP se libera recién cuando termina.
+      let pendingScan: Promise<unknown> | null = null
       try {
         const caps = await detectDeviceCapabilities(dev)
         if (caps.online === false) return
@@ -2093,13 +2243,32 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
 
         console.log(`[poll] 📋 job ${job_id} → device "${dev.name}" (${ip}) source=${src} duplex=${dup} paper=${paperSize}`)
 
+        // Cada hoja recibida avisa a la API (el vigilante de la API corta por
+        // falta de progreso, no por duración total).
+        let lastProgressAt = 0
+        const control: ScanControl = {
+          cancelled: false,
+          onPage: () => {
+            if (Date.now() - lastProgressAt < 5_000) return
+            lastProgressAt = Date.now()
+            client.post("/agent/progress", { job_id }).catch(() => {})
+          },
+        }
+        scanControls.set(ip, control)
+
         let pages: Buffer[]
         try {
-          pages = await withTimeout(
-            scanDevice(ip, { ...profile, source: src, duplex: dup, paper_size: paperSize, escl_port: dev.escl_port || null, driver: dev.driver }),
+          const scanPromise = scanDevice(ip, { ...profile, source: src, duplex: dup, paper_size: paperSize, escl_port: dev.escl_port || null, driver: dev.driver })
+          pendingScan = scanPromise
+          pages = await withProgressTimeout(
+            scanPromise,
+            control,
             SCAN_JOB_TIMEOUT_MS,
-            `SCAN_TIMEOUT: el escaneo superó ${Math.round(SCAN_JOB_TIMEOUT_MS / 1000)} segundos`
+            SCAN_JOB_MAX_MS,
+            `SCAN_TIMEOUT: ${Math.round(SCAN_JOB_TIMEOUT_MS / 60_000)} minutos sin recibir hojas del escáner`,
+            `SCAN_TIMEOUT: el escaneo superó ${Math.round(SCAN_JOB_MAX_MS / 60_000)} minutos en total`
           )
+          pendingScan = null
           pages = await processScannedPages(pages, profile || null)
         } catch (scanErr: any) {
           console.error(`[scan] ❌ job ${job_id} falló:`, scanErr.message)
@@ -2130,7 +2299,24 @@ async function pollAll(devices: DeviceRow[]): Promise<void> {
             e?.response?.status ? `HTTP ${e.response.status}` : "")
         }
       } finally {
-        scanningIps.delete(ip)
+        if (pendingScan) {
+          // Cortado por timeout: esperar a que el motor cierre el trabajo en el
+          // equipo (máx. 90s) antes de dejar que otro escaneo use esta IP.
+          const scan = pendingScan
+          const ownControl = scanControls.get(ip)
+          let released = false
+          const release = () => {
+            if (released) return
+            released = true
+            if (scanControls.get(ip) === ownControl) scanControls.delete(ip)
+            scanningIps.delete(ip)
+          }
+          const guard = setTimeout(release, 90_000)
+          scan.catch(() => {}).finally(() => { clearTimeout(guard); release() })
+        } else {
+          scanControls.delete(ip)
+          scanningIps.delete(ip)
+        }
       }
     })
   } finally {

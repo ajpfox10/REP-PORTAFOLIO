@@ -78,17 +78,29 @@ function esProfesional(ocupacion) {
 function calcularStress(leyId, ocupacion, ingresoOriginal) {
   if (!leyId) return null;
   const fi = ingresoOriginal ? new Date(ingresoOriginal) : null;
-  const anios = (fi && fi.getFullYear() >= 1900) ? (HOY - fi) / (365.25 * 24 * 3600 * 1000) : null;
+  // antiguedad al 31/12 del AÑO QUE SE CARGA (no a hoy): ej. ingreso 05/2021 -> 4,6 años a 31/12/2025 -> 6 dias
+  const CORTE = new Date(ANIO, 11, 31);
+  const anios = (fi && fi.getFullYear() >= 1900) ? (CORTE - fi) / (365.25 * 24 * 3600 * 1000) : null;
   if (LEY_10430.has(leyId)) return escalaAntiguedad(anios);         // 10430 -> antiguedad
   if (LEY_10471.has(leyId)) {                                        // 10471 -> proporcional 1/mes hasta 12
     if (anios == null) return null;
-    const meses = anios * 12;
+    const meses = ((HOY - fi) / (365.25 * 24 * 3600 * 1000)) * 12;  // 10471 sigue midiendo a HOY (no se toca)
     if (meses < 6) return null;                                      // <6 meses -> no se carga
     return Math.min(12, Math.floor(meses));
   }
   if (LEY_RESID.has(leyId)) return 12;                               // residentes -> 12 fijo
   if (LEY_BECAS.has(leyId)) return esProfesional(ocupacion) ? 12 : escalaAntiguedad(anios);
   return null;
+}
+// Regimen de la ANUAL en SIAPE -> ley_id con que se calcula. Si la base ya cae en el mismo
+// grupo se respeta (ej. 4 vs 5, o la beca puntual); si no, se usa uno representativo del grupo.
+function LEY_DE_REGIMEN(rg, leyBase) {
+  const r = rg.replace(/\./g, '');
+  if (r === '10430') return LEY_10430.has(leyBase) ? leyBase : 1;
+  if (r === '10471') return LEY_10471.has(leyBase) ? leyBase : 4;
+  if (r === 'RESIDENTES') return 11;
+  if (r === 'BECARIOS') return LEY_BECAS.has(leyBase) ? leyBase : 9;
+  return leyBase;
 }
 function variante(leyId) {
   if (VAR_10430.has(leyId)) return 'ANUAL COMPLEMENTARIA 10430';
@@ -103,17 +115,25 @@ async function build(dniFilter = null, force = false) {
   const wb = XLSX.readFile(xlsPath, { cellDates: true, raw: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
-  const dniDias = new Map();
+  // Por DNI: saldo de la ANUAL (solo filas ANUAL), regimenes de SIAPE de esas filas
+  // (10.430 / 10.471 / BECARIOS / RESIDENTES) y si ya tiene alguna ANUAL COMPLEMENTARIA del año.
+  const dniDias = new Map(), regSiape = new Map(), yaTieneComp = new Set();
   for (let i = 5; i < rows.length; i++) {
     const r = rows[i];
     if (!r || r[2] == null) continue;
     const dni = parseInt(String(r[2]).replace(/\D/g, ''));
     if (!dni) continue;
+    const tipo = String(r[4] ?? '').trim().toUpperCase();
+    if (tipo.startsWith('ANUAL COMPLEMENTARIA')) { yaTieneComp.add(dni); continue; }
+    if (!tipo.startsWith('ANUAL')) continue;
     const d = typeof r[5] === 'number' ? r[5] : parseFloat(String(r[5] ?? '0')) || 0;
     dniDias.set(dni, (dniDias.get(dni) ?? 0) + d);
+    const m = tipo.match(/\(([^)]+)\)/);
+    if (m) { if (!regSiape.has(dni)) regSiape.set(dni, new Set()); regSiape.get(dni).add(m[1].trim()); }
   }
-  const atZero = [...dniDias.entries()].filter(([, t]) => t === 0).map(([d]) => d);
-  console.log(`Tiempo Acumulado: ${dniDias.size} agentes, ${atZero.length} con 0 dias`);
+  // ya tiene la complementaria del año en SIAPE (aunque sea en 0) -> NO se vuelve a cargar (evita duplicado)
+  const atZero = [...dniDias.entries()].filter(([d, t]) => t === 0 && !yaTieneComp.has(d)).map(([d]) => d);
+  console.log(`Tiempo Acumulado: ${dniDias.size} agentes, ${atZero.length} con ANUAL en 0 sin complementaria cargada`);
   if (!atZero.length) return;
 
   const cn = await mysql.createConnection({
@@ -179,12 +199,23 @@ async function build(dniFilter = null, force = false) {
   let pend = 0, omit = 0, dup = 0;
   for (const e of elegibles) {
     const ag = agMap.get(e.dni);
-    const leyId = ag?.ley_id ?? null;
-    const ley = ag?.ley ?? '(sin ley)';
+    // El regimen lo manda SIAPE (la ANUAL del export): la base puede tener la ley vieja
+    // (ej. pasaron de 10430 a Carrera Hospitalaria) y SIAPE solo ofrece la licencia de su regimen.
+    const regs = [...(regSiape.get(e.dni) ?? [])];
+    let leyId = ag?.ley_id ?? null;
+    let ley = ag?.ley ?? '(sin ley)';
+    let mixto = false;
+    if (regs.length > 1) mixto = true;
+    else if (regs.length === 1) {
+      const rg = regs[0];
+      const sig = LEY_DE_REGIMEN(rg, leyId);
+      if (sig !== leyId) { ley = `${ley} -> SIAPE ${rg}`; leyId = sig; }
+    }
     const dias = calcularStress(leyId, ag?.ocupacion, ingMap.get(e.dni) ?? null);
     const lic = variante(leyId);
     let estado = 'pendiente', motivo = null;
     if (yaCargado.has(e.dni)) { estado = 'cargado'; motivo = 'ya en ledger'; dup++; }
+    else if (mixto) { estado = 'omitido'; motivo = `regimen mixto en SIAPE (${regs.join(' + ')}): revisar a mano`; omit++; }
     else if (!lic) { estado = 'omitido'; motivo = `ley sin regla de variante (ley_id=${leyId} ${ley})`; omit++; }
     else if (!dias) { estado = 'omitido'; motivo = 'sin dias de stress (antiguedad/ley)'; omit++; }
     else pend++;

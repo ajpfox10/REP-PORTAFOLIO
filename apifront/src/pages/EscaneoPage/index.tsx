@@ -8,6 +8,7 @@ import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { TIPOS_DOCUMENTO, GROUP_LABELS } from './documentTypes';
 import { SUBCARPETAS_PRESETS, presetSubdivisiones } from './subcarpetas';
+import { ScanPagesOrganizer, scanPageId, applyScanPageOrder } from './ScanPagesOrganizer';
 import './styles/EscaneoPage.css';
 
 function getScannerBase() {
@@ -280,6 +281,7 @@ export function EscaneoPage() {
   const [deviceSearch, setDeviceSearch] = useState('');
   const [devicePage, setDevicePage] = useState(1);
   const [viewer, setViewer] = useState<ViewerState>(null);
+  const [organizerPageId, setOrganizerPageId] = useState<string | null>(null);
   const viewerUrlRef = useRef<string | null>(null);
 
   // Lanzar scan (legacy — se mantiene para compatibilidad de estado)
@@ -850,9 +852,9 @@ export function EscaneoPage() {
             className="scan-preview-thumb scan-preview-thumb-live"
             role="button"
             tabIndex={0}
-            title="Doble click para ampliar"
-            onDoubleClick={() => abrirPaginaEscaneada(page, idx)}
-            onKeyDown={e => e.key === 'Enter' && abrirPaginaEscaneada(page, idx)}
+            title="Doble click para ordenar, rotar o ampliar"
+            onDoubleClick={() => setOrganizerPageId(scanPageId(page))}
+            onKeyDown={e => e.key === 'Enter' && setOrganizerPageId(scanPageId(page))}
           >
             <div className="scan-preview-frame">
               {page.blobUrl ? (
@@ -1951,6 +1953,16 @@ export function EscaneoPage() {
               </div>
             )}
           </div>
+        )}
+
+        {organizerPageId && session.length > 0 && (
+          <ScanPagesOrganizer
+            pages={session}
+            initialPageId={organizerPageId}
+            onRotate={(page, degrees) => rotarPagina(page, degrees)}
+            onApply={ids => { setSession(prev => applyScanPageOrder(prev, ids)); setOrganizerPageId(null); }}
+            onClose={() => setOrganizerPageId(null)}
+          />
         )}
 
         {viewer && (

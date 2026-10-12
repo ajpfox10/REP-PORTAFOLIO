@@ -47,7 +47,19 @@ export interface Licencia {
   reclamo_por: string | null;
   notas: Nota[];
   sigue_sin_otorgar: boolean;
+  whatsapp: AvisoWhatsapp | null;
   detalle: Dia[];
+}
+/** Aviso por WhatsApp de la licencia (solo envíos reales): si alguno salió, datos del último ENVIADO; si no, del último intento. */
+export interface AvisoWhatsapp {
+  avisado: boolean;
+  estado: string; // ENVIADO, NO_ENCONTRADO, SIN_WHATSAPP, ERROR
+  fecha: string | null;
+  enviado_por: string | null;
+  destino: string | null;
+  modo: string;
+  detalle: string | null;
+  intentos: number;
 }
 export interface Nota {
   id: number;
@@ -67,7 +79,7 @@ export interface Resp {
   resumen: {
     pendientes: number; denegadas: number; deben_reclamar: number; reclamaron: number;
     reclamar_con_fichada: number; denegadas_sin_horario: number; por_resolucion?: Record<string, number>;
-    sigue_sin_otorgar?: number; resueltas?: number;
+    sigue_sin_otorgar?: number; resueltas?: number; avisados_whatsapp?: number;
   };
   data: Licencia[];
   generado: string;
@@ -105,6 +117,30 @@ export const txtNota = (n: Nota) => `#${n.nro} ${n.numero}${n.fecha ? ` (${fmtFe
 export function txtFichada(f: Fichada | null) {
   if (!f) return 'No fichó';
   return f.marcas > 1 ? `${f.primera} – ${f.ultima}` : f.primera;
+}
+
+export const TXT_ESTADO_WSP: Record<string, string> = { ENVIADO: 'Avisado', NO_ENCONTRADO: 'No encontrado', SIN_WHATSAPP: 'Sin WhatsApp', ERROR: 'Error' };
+export function txtWhatsapp(w: AvisoWhatsapp | null) {
+  if (!w) return '';
+  return `${TXT_ESTADO_WSP[w.estado] ?? w.estado}${w.fecha ? ` ${new Date(w.fecha).toLocaleDateString('es-AR')}` : ''}`;
+}
+/** Etiqueta 📲 de la fila: verde si se avisó, amarilla/roja si se intentó y no salió. */
+export function BadgeWhatsapp({ w }: { w: AvisoWhatsapp | null }) {
+  if (!w) return null;
+  const titulo = [
+    w.avisado ? 'Avisado por WhatsApp' : `Intento de WhatsApp: ${TXT_ESTADO_WSP[w.estado] ?? w.estado}`,
+    w.fecha ? new Date(w.fecha).toLocaleString('es-AR') : '',
+    w.enviado_por ? `por ${w.enviado_por}` : '',
+    w.destino ? `a ${w.destino}` : '',
+    !w.avisado && w.detalle ? w.detalle : '',
+    w.intentos > 1 ? `${w.intentos} intentos` : '',
+  ].filter(Boolean).join(' · ');
+  const fondo = w.avisado ? 'rgba(34,197,94,0.25)' : w.estado === 'NO_ENCONTRADO' ? 'rgba(234,179,8,0.25)' : 'rgba(239,68,68,0.25)';
+  return (
+    <span className="badge" title={titulo} style={{ background: fondo, fontSize: '0.68rem', marginTop: 2, display: 'inline-block' }}>
+      📲 {txtWhatsapp(w)}
+    </span>
+  );
 }
 
 export const hoy = new Date().toISOString().slice(0, 10);
@@ -380,6 +416,7 @@ export function LicenciasMedicasTabla({
                     <div className="muted" style={{ fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={l.servicio || undefined}>
                       {l.servicio || '—'}
                     </div>
+                    <BadgeWhatsapp w={l.whatsapp} />
                   </td>
                   {conReclamo && (
                     <td style={{ padding: '6px 6px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>

@@ -348,8 +348,21 @@ def main():
 
         ok = ya = err = 0
         errores = []
+        ficha_sucia = False
         for x in filas[: args.max_dias] if args.max_dias else filas:
             dia = x["fecha"]
+            if ficha_sucia:
+                # Un dia rechazado deja la ficha a medio completar (el combo despues ya
+                # no toma el tipo: "quedo en 'None'"). Se reabre el agente limpio.
+                try:
+                    F.volver_a_ficheros()
+                    F.seleccionar_agente_ausencias(filas[0]["cuil"], nombre)
+                    ficha_sucia = False
+                except Exception as e:
+                    marcar(cn, x["id"], "ERROR", f"{dia:%d/%m/%Y}: no pude reabrir el agente: {e}")
+                    errores.append(f"{dia:%d/%m/%Y}: no pude reabrir el agente: {e}")
+                    err += 1
+                    break
             F.log(f"   cargando {dia:%d/%m/%Y}...")
             try:
                 cargo, motivo = F.cargar_dia_ausencia_agente(dia)
@@ -366,11 +379,13 @@ def main():
             elif "ya existia" in (motivo or "").lower():
                 marcar(cn, x["id"], "YA_EXISTIA", motivo)
                 ya += 1
+                ficha_sucia = True
                 F.log(f"   YA   {motivo}")
             else:
                 marcar(cn, x["id"], "ERROR", motivo)
                 errores.append(motivo)
                 err += 1
+                ficha_sucia = True
                 F.log(f"   SKIP {motivo}")
         hubo_error = hubo_error or err > 0
         MN.registrar_item(SCRIPT_ID, dni, nombre, "FC ROTACION", f"{filas[0]['fecha']:%d/%m/%Y}",

@@ -11,13 +11,14 @@
 // Pestaña "WhatsApp" = las mismas de "Deben reclamar" (sin observadas), para avisarles por WhatsApp (./WhatsappTab).
 // Datos: GET /licencias-medicas-control?desde&hasta
 // La tabla y el modal de nota viven en ./shared (los reusa el modal de Gestión).
+// Tarjeta "📲 Avisados por WhatsApp" = agentes del período con algún envío real OK; click → lista de a quién.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { exportToExcel } from '../../utils/export';
 import {
   ANIOS, ANIO_ACTUAL, DIA_CORTO, LicenciasMedicasTabla, MESES, Resp, Tab,
-  enTab, fmtFecha, hoy, noJustificada, normTxt, rangoDe, txtFichada, txtNota, txtTocaba, useReclamoAcciones,
+  BadgeWhatsapp, enTab, fmtFecha, hoy, noJustificada, normTxt, rangoDe, txtFichada, txtNota, txtTocaba, txtWhatsapp, useReclamoAcciones,
 } from './shared';
 import { WhatsappTab } from './WhatsappTab';
 
@@ -35,6 +36,7 @@ export function LicenciasMedicasControlPage() {
   const [servicio, setServicio] = useState('TODOS');
   const [resolucion, setResolucion] = useState('TODAS');
   const [verNoReclamar, setVerNoReclamar] = useState(false);
+  const [verAvisados, setVerAvisados] = useState(false);
 
   const cargar = useCallback(async (refresh = false, silencioso = false) => {
     if (!silencioso) setLoading(true);
@@ -91,6 +93,8 @@ export function LicenciasMedicasControlPage() {
       'Reclamos': l.notas.length || '',
       'Notas de reclamo': l.notas.map(txtNota).join(' / '),
       'Sigue sin otorgar': l.sigue_sin_otorgar ? 'SI' : '',
+      WhatsApp: txtWhatsapp(l.whatsapp),
+      'WhatsApp enviado por': l.whatsapp?.enviado_por ?? '',
       Fecha: fmtFecha(d.fecha),
       Día: DIA_CORTO[d.dia_semana] ?? d.dia_semana,
       'Le tocaba venir': txtTocaba(d),
@@ -104,6 +108,23 @@ export function LicenciasMedicasControlPage() {
   // Contadores de "Deben reclamar" / "Observadas" calculados acá (el resumen del back mezcla las observadas)
   const nReclamar = useMemo(() => (data?.data ?? []).filter(l => enTab(l, 'reclamar', false)).length, [data]);
   const nObservadas = useMemo(() => (data?.data ?? []).filter(l => enTab(l, 'observadas', false)).length, [data]);
+  // Licencias del período con algún envío de WhatsApp (avisadas primero, después las que no salieron)
+  const conWhatsapp = useMemo(() => (data?.data ?? []).filter(l => l.whatsapp)
+    .sort((a, b) => Number(b.whatsapp!.avisado) - Number(a.whatsapp!.avisado)
+      || a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }) || a.desde.localeCompare(b.desde)), [data]);
+  const dnisAvisados = useMemo(() => new Set(conWhatsapp.filter(l => l.whatsapp!.avisado).map(l => l.dni)), [conWhatsapp]);
+  const nAvisados = dnisAvisados.size;
+  const nIntentados = useMemo(() => new Set(conWhatsapp.filter(l => !dnisAvisados.has(l.dni)).map(l => l.dni)).size, [conWhatsapp, dnisAvisados]);
+  const exportarAvisados = () => exportToExcel(`whatsapp_avisados_${mes ? `${anio}-${mes}` : anio}`, conWhatsapp.map(l => {
+    const w = l.whatsapp!;
+    return {
+      'Apellido y nombre': l.nombre, DNI: l.dni, Servicio: l.servicio, Novedad: l.novedad, Resolución: l.resolucion,
+      'Licencia desde': fmtFecha(l.desde), 'Licencia hasta': fmtFecha(l.hasta),
+      Estado: txtWhatsapp(w).replace(/ \d.*$/, ''),
+      'Fecha envío': w.fecha ? new Date(w.fecha).toLocaleString('es-AR') : '',
+      'Enviado por': w.enviado_por ?? '', Destino: w.destino ?? '', Intentos: w.intentos,
+    };
+  }));
 
   return (
     <Layout title="Licencias médicas no otorgadas">
@@ -154,6 +175,15 @@ export function LicenciasMedicasControlPage() {
                 <div className="muted" style={{ fontSize: '0.72rem' }}>{t.k}</div>
               </div>
             ))}
+            <div
+              className="card" role="button" tabIndex={0}
+              onClick={() => setVerAvisados(true)} onKeyDown={e => { if (e.key === 'Enter') setVerAvisados(true); }}
+              title="Ver a quién se le mandó WhatsApp"
+              style={{ padding: '8px 14px', minWidth: 120, textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(34,197,94,0.45)' }}
+            >
+              <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{nAvisados}</div>
+              <div className="muted" style={{ fontSize: '0.72rem' }}>📲 Avisados por WhatsApp{nIntentados ? ` · ${nIntentados} sin éxito` : ''}</div>
+            </div>
           </div>
         )}
 
@@ -252,6 +282,66 @@ export function LicenciasMedicasControlPage() {
           resetKey={`${tab}|${q}|${servicio}|${resolucion}|${verNoReclamar}|${anio}|${mes}`}
         />
       </div>
+      )}
+
+      {verAvisados && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={e => { if (e.target === e.currentTarget) setVerAvisados(false); }}
+        >
+          <div className="card" style={{ width: '100%', maxWidth: 900, maxHeight: '85vh', overflow: 'auto', padding: 20, background: '#0f1422', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div>
+                <div className="h2" style={{ margin: 0, fontSize: '1.05rem' }}>📲 Avisados por WhatsApp · {nAvisados} agente{nAvisados === 1 ? '' : 's'}</div>
+                <div className="muted" style={{ fontSize: '0.78rem', marginTop: 2 }}>
+                  {mes ? `${MESES[Number(mes) - 1]} ${anio}` : `Año ${anio}`} · solo envíos reales (los de prueba no cuentan)
+                  {nIntentados ? ` · ${nIntentados} agente${nIntentados === 1 ? '' : 's'} con intento sin éxito` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn" disabled={!conWhatsapp.length} onClick={exportarAvisados}>⬇️ Excel</button>
+                <button type="button" className="btn" onClick={() => setVerAvisados(false)}>Cerrar</button>
+              </div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', marginTop: 12 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+                  <th style={{ padding: 6 }}>Agente / servicio</th>
+                  <th style={{ padding: 6 }}>Licencia</th>
+                  <th style={{ padding: 6 }}>WhatsApp</th>
+                  <th style={{ padding: 6 }}>Enviado por</th>
+                  <th style={{ padding: 6 }}>Destino</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!conWhatsapp.length && (
+                  <tr><td colSpan={5} className="muted" style={{ padding: 16, textAlign: 'center' }}>No se mandó ningún WhatsApp en este período.</td></tr>
+                )}
+                {conWhatsapp.map(l => {
+                  const w = l.whatsapp!;
+                  return (
+                    <tr key={`${l.dni}|${l.desde}|${l.hasta}|${l.novedad}|${l.resolucion}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <td style={{ padding: 6 }}>
+                        <div style={{ fontWeight: 600 }}>{l.nombre}</div>
+                        <div className="muted" style={{ fontSize: '0.72rem' }}>DNI {l.dni} · {l.servicio || '—'}</div>
+                      </td>
+                      <td style={{ padding: 6, whiteSpace: 'nowrap' }}>
+                        {l.novedad}
+                        <div className="muted" style={{ fontSize: '0.72rem' }}>{fmtFecha(l.desde)}{l.hasta !== l.desde ? ` → ${fmtFecha(l.hasta)}` : ''} · {l.resolucion}</div>
+                      </td>
+                      <td style={{ padding: 6, whiteSpace: 'nowrap' }}>
+                        <BadgeWhatsapp w={w} />
+                        {w.intentos > 1 && <div className="muted" style={{ fontSize: '0.7rem' }}>{w.intentos} intentos</div>}
+                      </td>
+                      <td style={{ padding: 6 }} className={w.enviado_por ? '' : 'muted'}>{w.enviado_por || '—'}</td>
+                      <td style={{ padding: 6 }} className={w.destino ? '' : 'muted'}>{w.destino || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {modalNota}

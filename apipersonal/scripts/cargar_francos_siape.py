@@ -491,7 +491,8 @@ def _banda_ok(info, banda_y):
     return not (y > banda_y[1] or (y + h) < banda_y[0])
 
 
-def _jab_walk(max_depth=30, max_nodes=4000, root=None, timeout=10, max_segundos=None, banda_y=None):
+def _jab_walk(max_depth=30, max_nodes=4000, root=None, timeout=10, max_segundos=None, banda_y=None,
+              podar=None):
     """
     Recorre el arbol JAB. `max_segundos` corta el recorrido aunque falten nodos:
     sin ese corte un walk podia irse minutos y hacer inutiles los timeouts de
@@ -524,7 +525,7 @@ def _jab_walk(max_depth=30, max_nodes=4000, root=None, timeout=10, max_segundos=
         # La grilla de Ficheros son cientos de celdas: si el nodo esta fuera de la
         # banda que interesa, no se baja. Es lo que hacia lento (y por lo tanto
         # inutil) cada recorrido en esa pantalla.
-        if depth < max_depth and _banda_ok(info, banda_y):
+        if depth < max_depth and _banda_ok(info, banda_y) and not (podar and podar(info)):
             for child in _jab_iter_children(el):
                 queue.append((child, depth + 1))
 
@@ -532,10 +533,14 @@ def _jab_walk(max_depth=30, max_nodes=4000, root=None, timeout=10, max_segundos=
 def _jab_visible_bounds(info):
     bounds = info.get("bounds") or {}
     states = info.get("states") or []
+    # OJO: x puede valer 0 (la ficha del agente esta en x=0). El `(x or -1)` de
+    # antes convertia ese 0 en -1 y la daba por invisible: rotaciones nunca la
+    # encontraba ("No pude dejar la pantalla del agente en AUSENCIAS...").
+    x = bounds.get("x")
     return (
         "visible" in states
         and "mostrando" in states
-        and (bounds.get("x", -1) or -1) >= 0
+        and x is not None and x >= 0
         and (bounds.get("width", 0) or 0) > 0
         and (bounds.get("height", 0) or 0) > 0
     )
@@ -543,11 +548,12 @@ def _jab_visible_bounds(info):
 
 def _bounds_ok(info):
     b = info.get("bounds") or {}
-    return (b.get("x", -1) or -1) >= 0 and (b.get("width", 0) or 0) > 0 and (b.get("height", 0) or 0) > 0
+    x = b.get("x")       # x=0 es valido (ver _jab_visible_bounds)
+    return x is not None and x >= 0 and (b.get("width", 0) or 0) > 0 and (b.get("height", 0) or 0) > 0
 
 
 def _jab_buscar(nombre=None, role=None, desc=None, empieza=None, timeout=None,
-                banda_y=None, x_min=None, x_max=None, y_min=None, y_max=None):
+                banda_y=None, x_min=None, x_max=None, y_min=None, y_max=None, root=None):
     """
     Busca un elemento desde la raiz, reintentando hasta `timeout` REAL.
 
@@ -560,7 +566,7 @@ def _jab_buscar(nombre=None, role=None, desc=None, empieza=None, timeout=None,
         if restante <= 0:
             return None, None
         for _el, _depth, info in _jab_walk(max_depth=25, max_segundos=min(restante, 20),
-                                           banda_y=banda_y):
+                                           banda_y=banda_y, root=root):
             if role is not None and info.get("role") != role:
                 continue
             b = info.get("bounds") or {}
@@ -583,6 +589,47 @@ def _jab_buscar(nombre=None, role=None, desc=None, empieza=None, timeout=None,
                 continue
             return _el, info
         time.sleep(0.6)
+
+
+_FRAME_AUSENCIAS = {"el": None}
+
+
+def _frame_ausencias(max_segundos=30):
+    """
+    El internal frame "Novedades de Ausentismo" (la ficha del agente), cacheado.
+
+    Ficheros queda abierto ATRAS de la ficha y sigue en el arbol JAB con su
+    grilla de cientos de celdas: buscar desde la raiz pasaba primero por ahi y se
+    cortaba por tiempo sin llegar al combo. Aca no se baja a NINGUN internal
+    frame: se llega derecho al de la ficha y despues se busca solo adentro.
+    """
+    el = _FRAME_AUSENCIAS["el"]
+    if el is not None:
+        try:
+            info = el.get_element_information()
+            if info.get("name") == FRAME_AUSENCIAS and _jab_visible_bounds(info):
+                return el
+        except Exception:
+            pass
+        _FRAME_AUSENCIAS["el"] = None
+    for el, _d, info in _jab_walk(max_depth=14, max_segundos=max_segundos,
+                                  podar=lambda i: i.get("role") == "internal frame"):
+        if (info.get("role") == "internal frame" and info.get("name") == FRAME_AUSENCIAS
+                and _jab_visible_bounds(info)):
+            _FRAME_AUSENCIAS["el"] = el
+            return el
+    return None
+
+
+def _jab_buscar_ausencias(*, timeout=20, **kw):
+    """Busca un control de la ficha del agente adentro de su frame; si no, el recorrido de siempre."""
+    frame = _frame_ausencias()
+    if frame is not None:
+        el, info = _jab_buscar(timeout=min(timeout, 15), root=frame, **kw)
+        if info:
+            return el, info
+    log("AVISO: no encontre el control dentro de la ficha; recorro todo el arbol.")
+    return _jab_buscar(timeout=timeout, **kw)
 
 
 # ESTADO DE LA SESION
@@ -1374,9 +1421,58 @@ def _en_ficheros(timeout=6):
     return info is not None
 
 
+def volver_a_ficheros():
+    """Si la ficha del agente esta abierta, la cierra con 'Volver a Ficheros'.
+
+    Sin esto, al pasar al agente siguiente la ficha seguia ENCIMA de Ficheros:
+    _en_ficheros() daba True igual (FILTRAR sigue en el arbol), se tipeaba en la
+    ficha y la fila leida era la del agente anterior ("La fila de Ficheros dice
+    'FARFAN...' y yo buscaba 'CICARDI...'"). A "¿guardar cambios?" se contesta NO:
+    cada dia bueno ya se guardo con confirmacion; lo pendiente es el resto de un
+    dia rechazado. Devuelve True si cerro la ficha."""
+    fe = _frame_ausencias(max_segundos=15)
+    if fe is None:
+        return False
+    _b, info = _jab_buscar(nombre="Volver a Ficheros Alt V", role="push button", timeout=10, root=fe)
+    if not info:
+        _b, info = _jab_buscar(desc="Volver a Ficheros Alt V", role="push button", timeout=5, root=fe)
+    if not info:
+        log("AVISO: no encuentro 'Volver a Ficheros' en la ficha del agente.")
+        return False
+    _jab_click_bounds(info)
+    time.sleep(PAUSA_MEDIA)
+    for _ in range(4):
+        texto, _bs = leer_dialogo_jab(max_segundos=5)
+        if not texto:
+            break
+        t = " ".join(texto.split()).lower()
+        log(f"   aviso al volver a Ficheros: {t[:120]}")
+        if "guardar" in t or "cambios" in t:
+            cerrar_dialogo_jab(preferidos=("No", "NO", "No ALT N"))
+        else:
+            cerrar_modales()
+        time.sleep(PAUSA_CORTA)
+    # Forms deja la ficha y Ficheros los dos 'visibles' (uno encima del otro): lo
+    # que dice donde estoy es cual de los dos esta ACTIVO.
+    limite = time.time() + 15
+    activo = False
+    while time.time() < limite and not activo:
+        for _el, _d, info in _jab_walk(max_depth=14, max_segundos=8,
+                                      podar=lambda i: i.get("role") == "internal frame"):
+            if (info.get("role") == "internal frame" and (info.get("name") or "").strip() == "Ficheros"
+                    and "activo" in (info.get("states") or [])):
+                activo = True
+                break
+        if not activo:
+            time.sleep(1)
+    log("   volvi a Ficheros" if activo else "AVISO: Ficheros no quedo activo")
+    return activo
+
+
 def _buscar_agente_en_ficheros_jab(nombre, cuil=None):
     """Busca por apellido/nombre en Ficheros y abre `NOVEDADES` del primer resultado."""
     cerrar_modales()
+    volver_a_ficheros()          # la ficha del agente anterior tapa Ficheros
 
     # OJO: si quedo abierta la pantalla de un agente, su campo "APELLIDO y NOMBRE"
     # se parece al buscador de Ficheros. Sin este chequeo el script escribia ahi
@@ -1454,6 +1550,7 @@ def _buscar_agente_en_ficheros_jab(nombre, cuil=None):
 
 
 TAB_AUSENCIAS = "AUSENCIAS Y PRESENTES"
+FRAME_AUSENCIAS = "Novedades de Ausentismo"
 
 
 def seleccionar_agente_ausencias(cuil, nombre):
@@ -1531,8 +1628,8 @@ def _opciones_tipo(combo, combo_info):
 
 def tipo_seleccionado_root():
     """Igual que tipo_seleccionado pero buscando el combo desde la raiz."""
-    combo, combo_info = _jab_buscar(role="combo box", desc="TIPO DE AUSENCIA",
-                                    timeout=20, banda_y=(180, 240))
+    combo, combo_info = _jab_buscar_ausencias(role="combo box", desc="TIPO DE AUSENCIA",
+                                           timeout=20, banda_y=(180, 240))
     if not combo:
         return None
     for nombre, elegido in _opciones_tipo(combo, combo_info):
@@ -1565,8 +1662,63 @@ def _elegir_tipo_ausencia_jab(combo, combo_info, tipo):
         raise RuntimeError(f"'{tipo}' no esta en el combo TIPO DE AUSENCIA ({len(nombres)} opciones).")
     destino = nombres.index(tipo)
 
-    _jab_click_bounds(combo_info)      # foco en el combo
-    time.sleep(PAUSA_CORTA)
+    def _quedo():
+        return next((n for n, sel in _opciones_tipo(combo, combo_info) if sel), None)
+
+    # A) seleccion por JAB (sin teclado ni mouse). Las flechas NO sirven despues del
+    #    `+` verde: con el registro nuevo vacio, "abajo" es "registro siguiente" en
+    #    Forms y salta "No puede dejar Datos en blanco" (visto 08/10, 2do dia).
+    try:
+        combo.select(tipo, simulate=False, wait_for_selection=False)
+        time.sleep(PAUSA_MEDIA)
+        if _quedo() == tipo:
+            log("   tipo elegido por seleccion JAB")
+            return True
+        log(f"   seleccion JAB no quedo (quedo '{_quedo()}')")
+    except Exception as e:
+        log(f"   seleccion JAB fallo: {e}")
+    # B) desplegar la lista (accion JAB), elegir el item y Enter
+    try:
+        combo._request_focus()
+        combo._do_accessible_action(action="togglepopup")
+        time.sleep(PAUSA_MEDIA)
+        lista = combo.find_element_by_role("list")
+        item = lista.find_element_by_name(tipo)
+        lista._add_accessible_selection_from_context(item.index_in_parent, lista.accessible_context)
+        time.sleep(PAUSA_CORTA)
+        pyautogui.press("enter")
+        time.sleep(PAUSA_MEDIA)
+        if _quedo() == tipo:
+            log("   tipo elegido desplegando la lista")
+            return True
+        log(f"   lista desplegada no quedo (quedo '{_quedo()}')")
+        cerrar_modales()
+    except Exception as e:
+        log(f"   desplegar la lista fallo: {e}")
+    # C) flechas (lo de antes): solo anda con la ficha recien abierta
+
+    # Foco en el combo SIN mouse: el click sobre el combo (sobre todo con la ficha
+    # reabierta) lo dejaba sin opcion ("quedo en 'None'"). Visto 08/10: cuando el
+    # combo ya tenia foco, las flechas andaban siempre.
+    def _con_foco():
+        try:
+            return "enfocado" in (combo.get_element_information().get("states") or [])
+        except Exception:
+            return False
+    if _con_foco():
+        log("   combo ya con foco")
+    else:
+        try:
+            combo._request_focus()
+            time.sleep(PAUSA_MEDIA)
+        except Exception as e:
+            log(f"   request_focus del combo fallo ({e})")
+        if _con_foco():
+            log("   foco al combo por JAB")
+        else:
+            log("   AVISO: el combo no tomo foco por JAB; pruebo click")
+            _jab_click_bounds(combo_info)
+            time.sleep(PAUSA_CORTA)
 
     for _intento in range(8):
         opciones = _opciones_tipo(combo, combo_info)
@@ -1583,9 +1735,42 @@ def _elegir_tipo_ausencia_jab(combo, combo_info, tipo):
     return False
 
 
+# Catalogo de campos (siape_catalogo/ + siape_campos.py): ubica los campos de la ficha
+# por `description` JAB + posicion RELATIVA al frame, sin bandas ni coordenadas de
+# pantalla. Si no esta o no encuentra algo, se cae a la busqueda de siempre.
+PANT_AUSENCIAS = "Novedades de Ausentismo :: pestana AUSENCIAS Y PRESENTES"
+_CAMPOS_CAT = {}
+
+
+def _campos_ausencias_catalogo():
+    """{etiqueta: (el, info)} de TIPO DE AUSENCIA, FECHA y JUSTIFICADO. en un solo recorrido."""
+    _CAMPOS_CAT.clear()
+    try:
+        import siape_campos as SC
+        fel = _frame_ausencias()
+        if fel is None:
+            return _CAMPOS_CAT
+        r = SC.varios(PANT_AUSENCIAS, [("TIPO DE AUSENCIA", "combo box", 1), ("FECHA", "text", 1),
+                                       ("JUSTIFICADO.", "check box", 1)],
+                      frame=(fel, fel.get_element_information()))
+        _CAMPOS_CAT.update({k: v for k, v in r.items() if v[1]})
+        faltan = [k for k, v in r.items() if not v[1]]
+        log(f"   catalogo: {len(_CAMPOS_CAT)}/3 campos" + (f" (faltan {', '.join(faltan)})" if faltan else ""))
+    except Exception as e:
+        log(f"AVISO: catalogo de campos no disponible ({e}); uso la busqueda vieja.")
+    return _CAMPOS_CAT
+
+
 def _tildar_justificado(frame=None):
-    campo, info = _jab_buscar(nombre="JUSTIFICADO.", role="check box", timeout=15,
-                              banda_y=(250, 290))
+    campo, info = _CAMPOS_CAT.get("JUSTIFICADO.", (None, None))
+    if campo is not None:
+        try:
+            info = campo.get_element_information()   # estado ACTUAL, no el del recorrido
+        except Exception:
+            campo, info = None, None
+    if not campo:
+        campo, info = _jab_buscar_ausencias(nombre="JUSTIFICADO.", role="check box",
+                                         timeout=15, banda_y=(250, 290))
     if not campo:
         campo, info = _jab_buscar(desc="JUSTIFICADO.", role="check box", timeout=10,
                                   banda_y=(250, 290))
@@ -1634,6 +1819,26 @@ def _resolver_avisos(dia):
     return False, f"{dia:%d/%m/%Y}: no pude cerrar los avisos de SiAPe"
 
 
+def _foco_ficha(max_segundos=12):
+    """Control con foco dentro de la ficha (DIAG para el 2do dia en la misma ficha)."""
+    fe = _frame_ausencias(max_segundos=10)
+    if fe is None:
+        return None
+    for _el, _d, info in _jab_walk(root=fe, max_depth=30, max_segundos=max_segundos, max_nodes=6000):
+        if "enfocado" in (info.get("states") or []) and info.get("role") not in ("internal frame", "panel"):
+            return info
+    return None
+
+
+def _log_foco(cuando):
+    i = _foco_ficha()
+    if i:
+        log(f"   [foco {cuando}] {i.get('role')} | desc='{(i.get('description') or '').strip()}' "
+            f"| name='{(i.get('name') or '').strip()[:40]}' | {i.get('bounds')}")
+    else:
+        log(f"   [foco {cuando}] (ninguno dentro de la ficha)")
+
+
 def _registro_nuevo():
     """
     El `+` verde va DESPUES de guardar (asi se opera a mano): deja el formulario
@@ -1658,8 +1863,11 @@ def asegurar_pestana_ausencias(intentos=3):
     """
     for _intento in range(intentos):
         cerrar_modales()
-        combo, combo_info = _jab_buscar(role="combo box", desc="TIPO DE AUSENCIA",
-                                        timeout=30, banda_y=(180, 240))
+        combo, combo_info = _campos_ausencias_catalogo().get("TIPO DE AUSENCIA", (None, None))
+        if combo:
+            return combo, combo_info
+        combo, combo_info = _jab_buscar_ausencias(role="combo box", desc="TIPO DE AUSENCIA",
+                                               timeout=30, banda_y=(180, 240))
         if combo:
             return combo, combo_info
         if not _jab_select_tab(TAB_AUSENCIAS):
@@ -1677,17 +1885,21 @@ def cargar_dia_ausencia_agente(dia, dialogos=None):
       PARTIDO se deja vacio                | JUSTIFICADO. (check, x~408 y~267)
     """
     combo, combo_info = asegurar_pestana_ausencias()
+    _log_foco("antes del combo")
 
     if not _elegir_tipo_ausencia_jab(combo, combo_info, TIPO_AUSENCIA):
         quedo = next((n for n, sel in _opciones_tipo(combo, combo_info) if sel), None)
-        _registro_nuevo()
-        cerrar_modales()
+        # NO `+` ni cerrar_modales(): a "¿Desea guardar los cambios?" contestan Si y
+        # podian guardar el registro con otro tipo. Se sale a Ficheros contestando No.
+        volver_a_ficheros()
         return False, (f"{dia:%d/%m/%Y}: no pude dejar el combo en '{TIPO_AUSENCIA}' "
                        f"(quedo en '{quedo}'); no guardo")
     log(f"   TIPO DE AUSENCIA = {TIPO_AUSENCIA}")
 
-    _fecha, fecha_info = _jab_buscar(nombre="FECHA", role="text", timeout=20,
-                                     banda_y=(195, 235), x_min=360, x_max=520)
+    _fecha, fecha_info = _CAMPOS_CAT.get("FECHA", (None, None))
+    if not fecha_info:
+        _fecha, fecha_info = _jab_buscar_ausencias(nombre="FECHA", role="text", timeout=20,
+                                                banda_y=(195, 235), x_min=360, x_max=520)
     if not fecha_info:
         raise RuntimeError("No encuentro el campo FECHA de la ausencia.")
     _jab_set_text_by_bounds(fecha_info, dia.strftime("%d/%m/%Y"))

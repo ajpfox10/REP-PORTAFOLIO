@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
+import { DdjjModal } from './DdjjModal';
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -388,6 +389,7 @@ export function GuarderiaPage() {
   const [editingRow, setEditingRow] = useState<GuarderiaRow | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [showAllEmbPend, setShowAllEmbPend] = useState(false);
+  const [ddjjFor, setDdjjFor] = useState<{ dni: string; nombre: string } | null>(null);
 
   // form cargar
   const [fechaNacimiento, setFechaNacimiento] = useState('');
@@ -810,7 +812,14 @@ export function GuarderiaPage() {
                     </div>
                   )}
                 </div>
-                <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={search.clear}>✕ Limpiar</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn" type="button"
+                    style={{ fontSize: '0.78rem', background: 'rgba(20,184,166,0.2)', color: '#5eead4' }}
+                    onClick={() => setDdjjFor({ dni: String(search.row.dni).replace(/\D/g, ''), nombre: `${search.row.apellido}, ${search.row.nombre}` })}>
+                    📄 DDJJ Guardería
+                  </button>
+                  <button className="btn" type="button" style={{ fontSize: '0.78rem' }} onClick={search.clear}>✕ Limpiar</button>
+                </div>
               </div>
             )}
           </div>
@@ -972,6 +981,11 @@ export function GuarderiaPage() {
                             onClick={() => openEdit(r)}>
                             ✏️ Editar
                           </button>
+                          <button className="btn" type="button"
+                            style={{ fontSize: '0.7rem', padding: '2px 7px', background: 'rgba(20,184,166,0.18)', color: '#5eead4' }}
+                            onClick={() => setDdjjFor({ dni: String(r.dni).replace(/\D/g, ''), nombre: r.apellido ? `${r.apellido}, ${r.nombre}` : `DNI ${r.dni}` })}>
+                            📄 DDJJ
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1019,6 +1033,8 @@ export function GuarderiaPage() {
           </div>
         </div>
       )}
+
+      {ddjjFor && <DdjjModal dni={ddjjFor.dni} nombre={ddjjFor.nombre} onClose={() => setDdjjFor(null)} />}
 
     </Layout>
   );

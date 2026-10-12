@@ -7,13 +7,16 @@
 //     se aprieta Enter allá y "✓ Enviado" acá.
 // Cada intento queda en licencias_medicas_whatsapp_envios (los de modo prueba no cuentan como avisado).
 // Teléfonos: personal.telefono normalizado en el back (GET /whatsapp/contactos).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { COLOR_RES, Licencia, fmtFecha, keyDe } from './shared';
 import { ContactosWhatsapp } from './ContactosWhatsapp';
 
-interface Contacto { dni: string; apellido: string; nombre: string; telefono: string; celular: string | null; dudoso: boolean }
+interface Contacto {
+  dni: string; apellido: string; nombre: string; telefono: string; celular: string | null; dudoso: boolean;
+  opciones?: { celular: string; dudoso: boolean }[]; // todos los números que se leen en personal.telefono
+}
 interface Envio {
   id: number; dni: string; desde: string; hasta: string; novedad: string; destino: string | null;
   modo: string; estado: string; detalle: string | null; created_at: string | null; enviado_por: string | null;
@@ -81,6 +84,10 @@ const COLOR_ESTADO: Record<string, string> = {
   ENVIADO: 'rgba(34,197,94,0.22)', NO_ENCONTRADO: 'rgba(234,179,8,0.25)', SIN_WHATSAPP: 'rgba(239,68,68,0.25)', ERROR: 'rgba(239,68,68,0.25)',
 };
 const TXT_ESTADO: Record<string, string> = { ENVIADO: 'Avisado', NO_ENCONTRADO: 'No encontrado', SIN_WHATSAPP: 'Sin WhatsApp', ERROR: 'Error' };
+// Estilos de la tabla: celdas centradas en vertical, renglones de una línea que se cortan con …
+const TD: CSSProperties = { padding: '7px 6px', verticalAlign: 'middle' };
+const LINEA: CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
+const BTN: CSSProperties = { padding: '2px 6px', fontSize: '0.72rem', width: '100%' };
 
 export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   const toast = useToast();
@@ -134,6 +141,24 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   }, [envios]);
   const avisoDe = (l: Licencia) => avisos.get(`${l.dni}|${l.desde}|${l.hasta}|${l.novedad}`);
 
+  // Número elegido a mano por agente (otra opción de la base u "otro…" escrito). Solo para enviar: no toca la ficha.
+  const [numeroElegido, setNumeroElegido] = useState<Map<string, string>>(new Map());
+  const telefonoDe = (dni: string) => numeroElegido.get(dni) ?? contactos.get(dni)?.celular ?? null;
+  const elegirNumero = (dni: string, valor: string) => {
+    let cel = valor;
+    if (valor === '__otro') {
+      const escrito = window.prompt('Número de WhatsApp (con código de área, ej. 11 5555-1234):', '');
+      if (!escrito) return;
+      cel = celularPrueba(escrito);
+      if (!/^549\d{10}$/.test(cel)) { toast.error('Número inválido', escrito); return; }
+    }
+    setNumeroElegido(prev => {
+      const n = new Map(prev);
+      if (cel === contactos.get(dni)?.celular) n.delete(dni); else n.set(dni, cel);
+      return n;
+    });
+  };
+
   const filas = useMemo(
     () => licencias.filter(l => !ocultarAvisados || !avisoDe(l)?.avisado),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,6 +170,19 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   const todos = filas.length > 0 && filas.every(l => tildados.has(keyDe(l)));
   const tildar = (k: string, v: boolean) => setTildados(prev => { const n = new Set(prev); v ? n.add(k) : n.delete(k); return n; });
   const tildarTodos = (v: boolean) => setTildados(v ? new Set(filas.map(keyDe)) : new Set());
+
+  // Los de número dudoso sin aviso que haya salido arrancan tildados (una sola vez por licencia, para no pisar al usuario)
+  const yaPretildados = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const nuevos = licencias.filter(l => {
+      const k = keyDe(l);
+      return contactos.get(l.dni)?.dudoso && !avisoDe(l)?.avisado && !yaPretildados.current.has(k);
+    }).map(keyDe);
+    if (!nuevos.length) return;
+    nuevos.forEach(k => yaPretildados.current.add(k));
+    setTildados(prev => new Set([...prev, ...nuevos]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [licencias, contactos, avisos]);
 
   const mensajeDe = useCallback((l: Licencia) => {
     const c = contactos.get(l.dni);
@@ -172,6 +210,9 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
     const c = contactos.get(l.dni);
     const ape = palabras(c?.apellido || l.nombre.split(',')[0] || '');
     const nom = palabras(c?.nombre || l.nombre.split(',')[1] || '');
+    // Número elegido a mano → va directo por teléfono (sin buscar por nombre)
+    const elegido = numeroElegido.get(l.dni);
+    if (elegido) return { modo: 'TELEFONO' as Modo, buscar: '', palabras: [] as string[], telefono: elegido };
     // Busca por el primer apellido; exige primer apellido + primer nombre en el contacto
     return { modo, buscar: ape[0] || '', palabras: [ape[0], nom[0]].filter(Boolean) as string[], telefono: c?.celular ?? null };
   };
@@ -201,6 +242,40 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
     return true;
   };
 
+  /** Manda (por la extensión) el mensaje de una licencia, lo registra y lo suma al log. */
+  const enviarUno = async (l: Licencia): Promise<ResultadoExt> => {
+    const obj = objetivoDe(l);
+    const texto = mensajeDe(l);
+    let r: ResultadoExt;
+    if (obj.modo === 'TELEFONO' && !obj.telefono) r = { ok: false, estado: 'NO_ENCONTRADO', modo: 'TELEFONO', detalle: 'Sin celular en la base' };
+    else r = await aExtension('ENVIAR', { ...obj, texto }, 180000);
+    await registrar(l, { modo: r.modo || (obj.modo === 'TELEFONO' ? 'TELEFONO' : 'NOMBRE'), estado: r.estado || 'ERROR', destino: r.destino, detalle: r.detalle }, texto);
+    setLog(prev => [...prev, { nombre: l.nombre, r }]);
+    if (r.ok) tildar(keyDe(l), false);
+    return r;
+  };
+
+  // ↻ Reenviar una sola licencia (sin tildar ni tanda)
+  const reenviar = async (l: Licencia) => {
+    if (!ext) { toast.error('Sin extensión', 'Para reenviar automático hace falta la extensión; usá "Abrir"'); return; }
+    if (!validarPrueba()) return;
+    const tel = objetivoDe(l).telefono;
+    if (!prueba && !window.confirm(`Reenviar el WhatsApp REAL a ${l.nombre}${tel ? ` (+${tel})` : ''}?`)) return;
+    detener.current = false;
+    setEnviando(true);
+    setLog([]);
+    setProgreso({ i: 1, n: 1, espera: 0, actual: l.nombre });
+    try {
+      const r = await enviarUno(l);
+      if (r.ok) toast.ok(prueba ? 'Reenviado (prueba)' : 'Reenviado', l.nombre);
+      else toast.error(TXT_ESTADO[r.estado || 'ERROR'] ?? 'No salió', r.detalle || l.nombre);
+    } finally {
+      setEnviando(false);
+      setProgreso(null);
+      void cargarContactos();
+    }
+  };
+
   const enviarTanda = async () => {
     const lista = filas.filter(l => tildados.has(keyDe(l)));
     if (!lista.length || !validarPrueba()) return;
@@ -213,14 +288,7 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
         if (detener.current) break;
         const l = lista[i];
         setProgreso({ i: i + 1, n: lista.length, espera: 0, actual: l.nombre });
-        const obj = objetivoDe(l);
-        const texto = mensajeDe(l);
-        let r: ResultadoExt;
-        if (obj.modo === 'TELEFONO' && !obj.telefono) r = { ok: false, estado: 'NO_ENCONTRADO', modo: 'TELEFONO', detalle: 'Sin celular en la base' };
-        else r = await aExtension('ENVIAR', { ...obj, texto }, 180000);
-        await registrar(l, { modo: r.modo || (obj.modo === 'TELEFONO' ? 'TELEFONO' : 'NOMBRE'), estado: r.estado || 'ERROR', destino: r.destino, detalle: r.detalle }, texto);
-        setLog(prev => [...prev, { nombre: l.nombre, r }]);
-        if (r.ok) tildar(keyDe(l), false);
+        const r = await enviarUno(l);
         // Si WhatsApp no está usable no tiene sentido seguir
         if (r.estado === 'ERROR' && /QR|no está listo|no terminó de cargar|no respondió|Recargá/i.test(r.detalle || '')) {
           toast.error('Tanda detenida', r.detalle || '');
@@ -262,7 +330,7 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   };
 
   const nTild = filas.filter(l => tildados.has(keyDe(l))).length;
-  const sinCel = filas.filter(l => !contactos.get(l.dni)?.celular).length;
+  const sinCel = filas.filter(l => !telefonoDe(l.dni)).length;
   const filaVista = filas.find(l => keyDe(l) === vista) || filas.find(l => tildados.has(keyDe(l))) || filas[0];
 
   return (
@@ -365,67 +433,108 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
         </div>
       )}
 
-      {/* Tabla */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+      {/* Tabla: anchos fijos y cada celda en 2 renglones como máximo (lo largo se corta con … y va entero en el title) */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: 34 }} />
+          <col style={{ width: '25%' }} />
+          <col style={{ width: '25%' }} />
+          <col style={{ width: '20%' }} />
+          <col style={{ width: '18%' }} />
+          <col style={{ width: 92 }} />
+        </colgroup>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.12)', whiteSpace: 'nowrap' }}>
-            <th style={{ padding: '8px 6px', width: 30 }}>
+            <th style={{ ...TD, paddingTop: 8, paddingBottom: 8 }}>
               <input type="checkbox" checked={todos} onChange={e => tildarTodos(e.target.checked)} disabled={enviando} title="Tildar todos" style={{ width: 16, height: 16 }} />
             </th>
-            <th style={{ padding: '8px 6px' }}>Agente / servicio</th>
-            <th style={{ padding: '8px 6px' }}>Licencia</th>
-            <th style={{ padding: '8px 6px' }}>Celular</th>
-            <th style={{ padding: '8px 6px' }}>Último aviso</th>
-            <th style={{ padding: '8px 6px' }}>Manual</th>
+            <th style={TD}>Agente / servicio</th>
+            <th style={TD}>Licencia</th>
+            <th style={TD}>Celular</th>
+            <th style={TD}>Último aviso</th>
+            <th style={TD}>Manual</th>
           </tr>
         </thead>
         <tbody>
           {filas.length === 0 && (
             <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center' }} className="muted">Sin licencias para avisar.</td></tr>
           )}
-          {filas.map(l => {
+          {filas.map((l, i) => {
             const k = keyDe(l);
             const c = contactos.get(l.dni);
             const av = avisoDe(l);
+            const rango = `${fmtFecha(l.desde)}${l.hasta !== l.desde ? ` → ${fmtFecha(l.hasta)}` : ''}`;
+            const fechaAviso = av?.ultimo.created_at ? new Date(av.ultimo.created_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+            const extraAviso = [av?.ultimo.destino, av && av.ultimo.estado !== 'ENVIADO' ? av.ultimo.detalle : null].filter(Boolean).join(' · ');
             return (
               <tr key={k} onClick={() => setVista(k)}
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', background: vista === k ? 'rgba(124,58,237,0.1)' : undefined }}>
-                <td style={{ padding: '6px 6px' }} onClick={e => e.stopPropagation()}>
+                style={{
+                  borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer',
+                  background: vista === k ? 'rgba(124,58,237,0.12)' : i % 2 ? 'rgba(255,255,255,0.025)' : undefined,
+                }}>
+                <td style={TD} onClick={e => e.stopPropagation()}>
                   <input type="checkbox" checked={tildados.has(k)} onChange={e => tildar(k, e.target.checked)} disabled={enviando} style={{ width: 16, height: 16 }} />
                 </td>
-                <td style={{ padding: '6px 6px', maxWidth: 230 }}>
-                  <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nombre}</div>
-                  <div className="muted" style={{ fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={l.servicio || undefined}>
+                <td style={TD}>
+                  <div style={{ ...LINEA, fontWeight: 600 }} title={l.nombre}>{l.nombre}</div>
+                  <div className="muted" style={{ ...LINEA, fontSize: '0.72rem' }} title={l.servicio || undefined}>
                     DNI {l.dni} · {l.servicio || '—'}
                   </div>
                 </td>
-                <td style={{ padding: '6px 6px', whiteSpace: 'nowrap' }}>
-                  {l.novedad} <span className="badge" style={{ background: COLOR_RES[l.resolucion] ?? 'rgba(168,85,247,0.25)' }}>{l.resolucion}</span>
-                  <div className="muted" style={{ fontSize: '0.72rem' }}>{fmtFecha(l.desde)}{l.hasta !== l.desde ? ` → ${fmtFecha(l.hasta)}` : ''}</div>
+                <td style={TD}>
+                  <div style={LINEA} title={l.novedad}>{l.novedad}</div>
+                  <div style={{ ...LINEA, fontSize: '0.72rem' }}>
+                    <span className="badge" style={{ background: COLOR_RES[l.resolucion] ?? 'rgba(168,85,247,0.25)', fontSize: '0.68rem', padding: '1px 6px', marginRight: 6 }}>{l.resolucion}</span>
+                    <span className="muted">{rango}</span>
+                  </div>
                 </td>
-                <td style={{ padding: '6px 6px', whiteSpace: 'nowrap' }} title={c?.telefono ? `En la base: ${c.telefono}` : undefined}>
-                  {c?.celular
-                    ? <>+{c.celular}{c.dudoso && <span className="badge" style={{ background: 'rgba(234,179,8,0.25)', marginLeft: 4 }} title="Puede ser un fijo">dudoso</span>}</>
-                    : <span className="muted">Sin celular</span>}
-                  {c?.telefono && <div className="muted" style={{ fontSize: '0.7rem', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.telefono}</div>}
+                <td style={TD} title={c?.telefono ? `En la base: ${c.telefono}` : undefined} onClick={e => e.stopPropagation()}>
+                  {(() => {
+                    const tel = telefonoDe(l.dni);
+                    const elegido = numeroElegido.has(l.dni);
+                    const opciones = [...(c?.opciones ?? [])];
+                    if (tel && !opciones.some(o => o.celular === tel)) opciones.push({ celular: tel, dudoso: false }); // escrito a mano
+                    const dudoso = !elegido && !!c?.dudoso;
+                    return (
+                      <div style={{ ...LINEA, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <select
+                          className="input" value={tel ?? ''} disabled={enviando}
+                          onChange={e => elegirNumero(l.dni, e.target.value)}
+                          title={elegido ? 'Número elegido a mano (solo para este envío; no cambia la ficha)' : 'Elegí otro número o escribí uno'}
+                          style={{ padding: '1px 4px', fontSize: '0.75rem', minWidth: 0, flex: '1 1 auto', borderColor: elegido ? 'rgba(34,197,94,0.6)' : dudoso ? 'rgba(234,179,8,0.6)' : undefined }}
+                        >
+                          {!tel && <option value="">Sin celular</option>}
+                          {opciones.map(o => <option key={o.celular} value={o.celular}>+{o.celular}{o.dudoso ? ' (dudoso)' : ''}</option>)}
+                          <option value="__otro">✏️ Otro número…</option>
+                        </select>
+                        {dudoso && <span className="badge" style={{ background: 'rgba(234,179,8,0.25)', fontSize: '0.68rem', padding: '1px 6px' }} title="Puede ser un fijo: elegí otro o escribí uno">dudoso</span>}
+                      </div>
+                    );
+                  })()}
+                  {c?.telefono && <div className="muted" style={{ ...LINEA, fontSize: '0.7rem' }}>{c.telefono}</div>}
                 </td>
-                <td style={{ padding: '6px 6px', maxWidth: 220 }}>
+                <td style={TD}>
                   {av ? (
                     <>
-                      <span className="badge" style={{ background: COLOR_ESTADO[av.ultimo.estado] }}>{TXT_ESTADO[av.ultimo.estado] ?? av.ultimo.estado}</span>
-                      <div className="muted" style={{ fontSize: '0.7rem' }} title={av.ultimo.detalle || undefined}>
-                        {av.ultimo.created_at ? new Date(av.ultimo.created_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
-                        {av.ultimo.destino ? ` · ${av.ultimo.destino}` : ''}
-                        {av.ultimo.estado !== 'ENVIADO' && av.ultimo.detalle ? ` · ${av.ultimo.detalle}` : ''}
+                      <div style={LINEA}>
+                        <span className="badge" style={{ background: COLOR_ESTADO[av.ultimo.estado], fontSize: '0.68rem', padding: '1px 6px' }}>{TXT_ESTADO[av.ultimo.estado] ?? av.ultimo.estado}</span>
+                        <span className="muted" style={{ fontSize: '0.7rem', marginLeft: 6 }}>{fechaAviso}</span>
                       </div>
+                      {extraAviso && <div className="muted" style={{ ...LINEA, fontSize: '0.7rem' }} title={extraAviso}>{extraAviso}</div>}
                     </>
                   ) : <span className="muted">—</span>}
                 </td>
-                <td style={{ padding: '6px 6px', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                  <button type="button" className="btn" style={{ padding: '2px 8px', fontSize: '0.75rem' }} onClick={() => abrirManual(l)} disabled={enviando}
-                    title="Abre WhatsApp Web con el chat y el mensaje ya escrito">Abrir</button>{' '}
-                  <button type="button" className="btn" style={{ padding: '2px 8px', fontSize: '0.75rem' }} onClick={() => marcarManual(l)} disabled={enviando}
-                    title="Registrar que se envió a mano">✓ Enviado</button>
+                <td style={TD} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {av && (
+                      <button type="button" className="btn" style={{ ...BTN, background: 'rgba(34,197,94,0.2)' }} onClick={() => reenviar(l)} disabled={enviando || !ext}
+                        title={ext ? `Volver a mandar solo a este agente${prueba ? ' (modo prueba)' : ''}` : 'Necesita la extensión; usá "Abrir"'}>↻ Reenviar</button>
+                    )}
+                    <button type="button" className="btn" style={BTN} onClick={() => abrirManual(l)} disabled={enviando}
+                      title="Abre WhatsApp Web con el chat y el mensaje ya escrito">Abrir</button>
+                    <button type="button" className="btn" style={BTN} onClick={() => marcarManual(l)} disabled={enviando}
+                      title="Registrar que se envió a mano">✓ Enviado</button>
+                  </div>
                 </td>
               </tr>
             );

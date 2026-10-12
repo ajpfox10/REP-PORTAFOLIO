@@ -129,6 +129,20 @@ def crear_tabla_carga(cur):
 # complementaria comun da "Opcion no disponible en este plantel"). Quedan DESCARTADA en la tabla.
 NOVEDADES_DESCARTADAS = ("ANUAL COMPLEMENTARIA",)
 
+# Estados de la tabla que los robots NO vuelven a intentar: PERIODO_CERRADO = el Ministerio ya cerro
+# el periodo ("fecha de ultimo cierre", no se puede cargar nunca); CAMBIO_SIAPE = alerta del comparador
+# (ya no figura en SIAPE; si vuelve a salir pendiente, el INSERT ... ON DUPLICATE la repone a PENDIENTE).
+ESTADOS_NO_CARGAR = "('OK', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE')"
+
+
+def estado_resultado(r):
+    """Estado a guardar en la tabla: el del robot, salvo el rechazo por periodo cerrado."""
+    estado = str(r.get("Estado", ""))
+    detalle = str(r.get("Detalle") or "")
+    if estado.upper() != "OK" and es_error_cierre(detalle) and not detalle.startswith("CONFLICTO"):
+        return "PERIODO_CERRADO"
+    return estado[:20]
+
 
 def cargar_filas_db(dependencia, test_mode=False):
     """Pendientes de la ULTIMA corrida del Comparador 2.0 para esta dependencia.
@@ -150,7 +164,8 @@ def cargar_filas_db(dependencia, test_mode=False):
                AND novedad_siap <> 'AUSENTE SIN AVISO'   -- los carga cargar_ausentes_intranet_v2.py
             ON DUPLICATE KEY UPDATE
               corrida_id = VALUES(corrida_id), dependencia = VALUES(dependencia), nombre = VALUES(nombre),
-              justificado = VALUES(justificado), motivo_comparacion = VALUES(motivo_comparacion)""",
+              justificado = VALUES(justificado), motivo_comparacion = VALUES(motivo_comparacion),
+              estado = IF({TABLA_CARGA}.estado = 'CAMBIO_SIAPE', 'PENDIENTE', {TABLA_CARGA}.estado)""",
             (corrida, dependencia))
         cur.execute(f"""
             UPDATE {TABLA_CARGA}
@@ -162,7 +177,7 @@ def cargar_filas_db(dependencia, test_mode=False):
         cur.execute(f"""
             SELECT dependencia, dni, nombre, novedad_siap, desde, hasta, justificado, motivo_comparacion
               FROM {TABLA_CARGA}
-             WHERE corrida_id = %s AND dependencia = %s AND estado NOT IN ('OK', 'DESCARTADA')
+             WHERE corrida_id = %s AND dependencia = %s AND estado NOT IN {ESTADOS_NO_CARGAR}
              ORDER BY nombre, desde""", (corrida, dependencia))
         filas = [{
             "Estado": "SOLO_SIAP", "Dependencia": r["dependencia"], "DNI": int(r["dni"]),
@@ -300,7 +315,7 @@ def guardar_log(registros):
                        SET estado = %s, label_intranet = %s, detalle = %s, intentos = intentos + 1,
                            cargado_en = IF(%s, NOW(), cargado_en)
                      WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
-                    (str(r.get("Estado", ""))[:20], str(r.get("Novedad") or "")[:200],
+                    (estado_resultado(r), str(r.get("Novedad") or "")[:200],
                      str(r.get("Detalle") or "")[:500] or None, ok,
                      str(int(r["DNI"])), siap, _fecha_iso(r["Desde"]), _fecha_iso(r["Hasta"])))
             cn.commit()
@@ -544,7 +559,26 @@ MAPA_DEP_CODIGO = {
     "UPA 18":   "1826",
 }
 
+URLS_LOGOUT = [
+    "https://sistemas.ms.gba.gov.ar/partenovedades/web/app.php/logout",
+    "https://sistemas.ms.gba.gov.ar/intranet/logout",
+]
+
+
+def cerrar_sesion(page):
+    """Con la sesion vieja abierta ("Sesion ya activa") Parte de Novedades entra como PROFERS sin
+    dependencia ("Acceso Denegado") y no se puede cambiar de dependencia; con login nuevo anda.
+    Por eso el login arranca cerrando la sesion del perfil del robot (09/10/2026)."""
+    for url in URLS_LOGOUT:
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1500)
+        except Exception as e:
+            print(f"  AVISO logout {url}: {e}")
+
+
 def login(page, password, dependencia="HOSPITAL"):
+    cerrar_sesion(page)
     page.goto(URL_LOGIN, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector("#username", timeout=6000)

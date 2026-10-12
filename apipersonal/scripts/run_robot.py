@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN  # conn() + registrar_run() + .env
+from escritorio_activo import asegurar_escritorio_activo
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 LOGS_DIR = SCRIPTS_DIR / "logs"
@@ -126,6 +127,9 @@ def main():
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
     with open(log_path, "a", encoding="utf-8", errors="replace") as log:
         log.write(f"\n==== {datetime.now():%Y-%m-%d %H:%M:%S} {cfg['comando']} ====\n")
+        if usa_siape:
+            # SiAPe se maneja con mouse/teclado reales: con el RDP desconectado no anda
+            asegurar_escritorio_activo(lambda m: (print(m), log.write(m + "\n"), log.flush()))
         try:
             p = subprocess.Popen(cfg["comando"], cwd=SCRIPTS_DIR, shell=True, env=env,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

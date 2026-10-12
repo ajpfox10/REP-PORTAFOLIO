@@ -142,9 +142,9 @@ function descargarControl() {
     const s = String(v ?? '').replace(/\r?\n/g, ' ').trim()
     return /[";]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
-  const enc = ['N° consulta', 'Fecha', 'Usuario', 'DNI', 'CUIL', 'Apellido', 'Resultado', 'Detalle por fuente']
+  const enc = ['N° consulta', 'Fecha', 'Usuario', 'DNI', 'CUIL', 'Sexo', 'Fecha nac.', 'Apellido', 'Resultado', 'Detalle por fuente']
   const lineas = filas.map((r) => [
-    r.consultaId, fecha(r.fecha), r.usuario, r.dni || '', r.cuil || '', r.apellido || '',
+    r.consultaId, fecha(r.fecha), r.usuario, r.dni || '', cuilTexto(r), r.sexo || '', r.fechaNacimiento ? fechaNac(r.fechaNacimiento) : '', r.apellido || '',
     coberturaLabels[r.cobertura], r.fuentes.map((f) => `${f.fuente}: ${f.resultado || estadoLabel(f.estado)}`).join(' | ')
   ].map(esc).join(';'))
   const blob = new Blob(['\ufeff' + [enc.join(';'), ...lineas].join('\r\n')], { type: 'text/csv;charset=utf-8;' })
@@ -337,7 +337,9 @@ const columnasReporte = [
   { key: 'usuario', label: 'Usuario', valor: (r) => r.usuario },
   { key: 'entrada', label: 'Tipo', valor: (r) => r.entrada || '' },
   { key: 'dni', label: 'DNI', valor: (r) => r.dni || '' },
-  { key: 'cuil', label: 'CUIL', valor: (r) => r.cuil || '' },
+  { key: 'cuil', label: 'CUIL', valor: (r) => cuilTexto(r) },
+  { key: 'sexo', label: 'Sexo', valor: (r) => r.sexo || '' },
+  { key: 'fechaNacimiento', label: 'Fecha nac.', valor: (r) => r.fechaNacimiento ? fechaNac(r.fechaNacimiento) : '' },
   { key: 'apellido', label: 'Apellido', valor: (r) => r.apellido || '' },
   { key: 'fuente', label: 'Fuente', valor: (r) => r.fuente },
   { key: 'resultado', label: 'Resultado', valor: (r) => r.resultado || '' },
@@ -435,6 +437,11 @@ function estadoLabel(estado) {
     completa: 'Completa'
   }[estado] || estado
 }
+
+// Sexo / fecha de nacimiento que manda la app de escritorio, y CUIL calculado por la app.
+function sexoLabel(s) { return s === 'M' ? 'Masc.' : s === 'F' ? 'Fem.' : '-' }
+function fechaNac(v) { return v ? v.split('-').reverse().join('/') : '-' }
+function cuilTexto(r) { return r.cuil ? r.cuil + (r.cuilGenerado ? ' (generado)' : '') : '' }
 
 function fecha(value) {
   if (!value) return '-'
@@ -654,6 +661,8 @@ onMounted(async () => {
             <th>Entrada</th>
             <th>DNI</th>
             <th>CUIL</th>
+            <th>Sexo</th>
+            <th>Fecha nac.</th>
             <th>Estado</th>
             <th>Decision</th>
             <th>Usuario</th>
@@ -665,7 +674,9 @@ onMounted(async () => {
             <td>{{ fecha(item.createdAt) }}</td>
             <td>{{ item.entrada }}</td>
             <td>{{ item.dni || '-' }}</td>
-            <td>{{ item.cuil || '-' }}</td>
+            <td>{{ item.cuil || '-' }} <span v-if="item.cuilGenerado" class="cuil-gen" title="CUIL calculado por la app (DNI + sexo)">generado</span></td>
+            <td>{{ sexoLabel(item.sexo) }}</td>
+            <td>{{ fechaNac(item.fechaNacimiento) }}</td>
             <td><span :class="['status', item.estado]">{{ estadoLabel(item.estado) }}</span></td>
             <td>{{ item.decisionFinal || '-' }}</td>
             <td>{{ item.creadoPorNombre }}</td>
@@ -743,14 +754,16 @@ onMounted(async () => {
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Hora</th><th v-if="controlAgrupar !== 'usuario'">Usuario</th><th>DNI</th><th>CUIL</th><th>Apellido</th><th>Resultado</th><th>Detalle por fuente</th></tr>
+              <tr><th>Hora</th><th v-if="controlAgrupar !== 'usuario'">Usuario</th><th>DNI</th><th>CUIL</th><th>Sexo</th><th>Fecha nac.</th><th>Apellido</th><th>Resultado</th><th>Detalle por fuente</th></tr>
             </thead>
             <tbody>
               <tr v-for="r in g.filas" :key="r.consultaId">
                 <td>{{ fecha(r.fecha) }}</td>
                 <td v-if="controlAgrupar !== 'usuario'">{{ r.usuario }}</td>
                 <td>{{ r.dni || '-' }}</td>
-                <td>{{ r.cuil || '-' }}</td>
+                <td>{{ r.cuil || '-' }} <span v-if="r.cuilGenerado" class="cuil-gen" title="CUIL calculado por la app (DNI + sexo)">generado</span></td>
+                <td>{{ sexoLabel(r.sexo) }}</td>
+                <td>{{ fechaNac(r.fechaNacimiento) }}</td>
                 <td>{{ r.apellido || '-' }}</td>
                 <td><span :class="['status', coberturaClase[r.cobertura]]">{{ coberturaLabels[r.cobertura] }}</span></td>
                 <td>

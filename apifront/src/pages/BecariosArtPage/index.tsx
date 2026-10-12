@@ -8,6 +8,8 @@ import { Layout }   from '../../components/Layout';
 import { apiFetch, apiFetchBlob } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { EstablecimientoArtTab } from './EstablecimientoArtTab';
+import { BajasArtTab } from './BajasArtTab';
+import { CruceArtTab } from './CruceArtTab';
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
 
@@ -253,7 +255,7 @@ export function BecariosArtPage() {
   const [loadingReg, setLoadingReg]     = useState(false);
   const [searchReg, setSearchReg]       = useState('');
   const [tabReg, setTabReg]             = useState<'todos' | 'automaticos'>('todos');
-  const [vista, setVista]               = useState<'altas' | 'establecimiento'>('altas');
+  const [vista, setVista]               = useState<'altas' | 'establecimiento' | 'bajas' | 'cruce'>('altas');
 
   // detalle de dirección expandido (id del registro)
   const [expandDir, setExpandDir]       = useState<number | null>(null);
@@ -494,9 +496,17 @@ export function BecariosArtPage() {
           <button style={{ ...S.tab, ...(vista === 'establecimiento' ? S.tabActive : {}) }} onClick={() => setVista('establecimiento')}>
             Establecimiento en ART (Catán)
           </button>
+          <button style={{ ...S.tab, ...(vista === 'bajas' ? S.tabActive : {}) }} onClick={() => setVista('bajas')}>
+            Bajas en ART
+          </button>
+          <button style={{ ...S.tab, ...(vista === 'cruce' ? S.tabActive : {}) }} onClick={() => setVista('cruce')}>
+            Cruce ART ↔ base
+          </button>
         </div>
 
         {vista === 'establecimiento' && <EstablecimientoArtTab />}
+        {vista === 'bajas' && <BajasArtTab />}
+        {vista === 'cruce' && <CruceArtTab />}
 
         {vista === 'altas' && (<>
 

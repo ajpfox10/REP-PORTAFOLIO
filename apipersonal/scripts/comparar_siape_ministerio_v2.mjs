@@ -489,6 +489,38 @@ async function main() {
     }
     await cn.commit();
 
+    // Filas de la tabla de carga que quedaron sin OK (pendientes de corridas anteriores, errores) y que
+    // en esta corrida ya dan COINCIDENTE: la novedad ya figura en el Ministerio (la cargo el robot y la
+    // corrida vieja nunca se actualizo, o se cargo a mano) -> pasan a OK para que no queden colgadas.
+    let yaEnMinisterio = 0, cambioSiape = 0;
+    try {
+      const [upd] = await cn.query(
+        `UPDATE novedades_carga_intranet t
+           JOIN comparacion_novedades c
+             ON c.corrida_id = ? AND c.estado = 'COINCIDENTE' AND c.dni = t.dni
+            AND c.novedad_siap = t.novedad_siap AND c.desde_siap = t.desde
+            AND COALESCE(c.hasta_siap, c.desde_siap) = t.hasta
+            SET t.estado = 'OK', t.detalle = CONCAT('Ya figura en el Ministerio (comparación ', ?, ')')
+          WHERE t.estado NOT IN ('OK', 'DESCARTADA')`, [corrida, corrida]);
+      yaEnMinisterio = upd.affectedRows;
+      // Y las que ya no aparecen en la comparacion (ni coincidente ni pendiente): algo cambio en SIAPE
+      // (se borro, se corrigieron fechas o la novedad) -> alerta CAMBIO_SIAPE para revisarla a mano.
+      // Si vuelve a salir como SOLO_SIAP, los robots la reponen a PENDIENTE al registrar los pendientes.
+      if (siapExcel.length) {
+        const [alerta] = await cn.query(
+          `UPDATE novedades_carga_intranet t
+             LEFT JOIN comparacion_novedades c
+               ON c.corrida_id = ? AND c.dni = t.dni AND c.novedad_siap = t.novedad_siap
+              AND c.desde_siap = t.desde AND COALESCE(c.hasta_siap, c.desde_siap) = t.hasta
+              SET t.estado = 'CAMBIO_SIAPE',
+                  t.detalle = CONCAT('Cambió en SIAPE: ya no figura (comparación ', ?, ')')
+            WHERE t.estado NOT IN ('OK', 'DESCARTADA', 'CAMBIO_SIAPE') AND c.id IS NULL`, [corrida, corrida]);
+        cambioSiape = alerta.affectedRows;
+      }
+    } catch (e) {
+      if (!/doesn't exist/i.test(String(e?.message))) throw e;   // la tabla la crea el robot de carga
+    }
+
     const porDep = {};
     for (const r of resultado) {
       if (r.estado !== 'SOLO_SIAP' || r.motivo === 'BECARIO_NO_APLICA') continue;
@@ -496,6 +528,8 @@ async function main() {
     }
     console.log(`Corrida ${corrida}: ${resultado.length} filas · coincidentes ${resumen.coincidentes} · rango distinto ${resumen.rango_distinto} · no coincidentes ${resumen.no_coincidentes} · solo SIAP ${resumen.solo_siap}`);
     console.log(`Solo SIAP a cargar por dependencia: ${Object.entries(porDep).map(([d, n]) => `${d} ${n}`).join(' · ') || 'ninguna'}`);
+    if (yaEnMinisterio) console.log(`Tabla de carga: ${yaEnMinisterio} fila(s) sin OK ya figuran en el Ministerio -> OK`);
+    if (cambioSiape) console.log(`Tabla de carga: ${cambioSiape} fila(s) ya no figuran en SIAPE -> alerta CAMBIO_SIAPE`);
     console.log(JSON.stringify({ ok: true, corrida, filas: resultado.length, ...resumen }));
   } catch (e) {
     try { await cn.rollback(); } catch { /* sin transaccion abierta */ }

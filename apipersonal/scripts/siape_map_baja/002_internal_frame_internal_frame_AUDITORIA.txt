@@ -1,0 +1,105 @@
+# 18:17:36  internal frame:. | internal frame:AUDITORIA
+
+frame | Sistema Unico Provincial de Administracion de Personal |  | (-8,-8,1382,784) | activado,enfocable,visible,mostrando,activo,redimensionable
+  root pane |  |  | (0,23,1366,745) | activado,enfocable,visible,mostrando,opaco
+    layered pane |  |  | (0,23,1366,745) | activado,enfocable,visible,mostrando
+      panel |  |  | (0,23,1366,745) | activado,enfocable,visible,mostrando,opaco
+        frame |  |  | (0,23,1366,745) | activado,enfocable,visible,mostrando,activo
+          panel |  |  | (0,23,1366,745) | activado,visible,mostrando
+          panel |  |  | (0,23,1366,745) | activado,visible,mostrando
+            panel |  |  | (0,47,1366,721) | activado,visible,mostrando
+            panel |  |  | (0,23,1366,24) | activado,visible,mostrando
+              scroll pane |  |  | (0,47,1366,721) | activado,visible,mostrando
+              panel |  |  | (0,23,1366,24) | activado,visible,mostrando
+                viewport |  |  | (0,47,1351,721) | activado,visible,mostrando
+                scroll bar |  |  | (1351,47,15,721) | activado,visible,mostrando,vertical
+                panel |  |  | (1347,23,19,24) | activado,visible,mostrando
+                menu bar |  |  | (0,23,1347,24) | activado,visible,mostrando,opaco,horizontal
+                  desktop pane |  |  | (0,47,1351,1225) | activado,enfocable,visible,mostrando
+                  menu | Ventana ALT V |  | (0,23,55,24) | activado,visible,mostrando,seleccionable,enfocable
+                    internal frame | AUDITORIA |  | (103,119,1167,577) | activado,enfocable,visible,mostrando,activo
+                    internal frame | . |  | (1,1247,7,25) | activado,visible,mostrando
+                      panel |  |  | (106,143,1161,550) | activado,visible,mostrando
+                        scroll pane |  |  | (106,143,1161,550) | activado,enfocable,visible,mostrando
+                          viewport |  |  | (106,143,1161,550) | activado,visible,mostrando,opaco
+                            panel |  |  | (106,143,1207,567) | activado,visible,mostrando,opaco
+                              scroll pane |  |  | (106,143,1207,567) | activado,enfocable,visible,mostrando
+                                viewport |  |  | (106,143,1207,567) | activado,visible,mostrando,opaco
+                                  panel |  |  | (106,143,1207,567) | activado,visible,mostrando,opaco
+                                    scroll bar |  |  | (1235,170,19,422) | activado,visible,mostrando,vertical
+                                    push button | CERRAR | CERRAR | (1162,658,93,26) | activado,enfocable,visible,mostrando,enfocado
+                                    text |  |  | (119,170,20,21) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,191,20,21) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,212,20,22) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,234,20,21) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,255,20,21) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,276,20,22) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,298,20,21) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,319,20,21) | activado,enfocable,visible,mostrando,editable,línea única
+                                    text |  |  | (119,340,20,22) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,362,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,383,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,404,20,22) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,426,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,447,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,468,20,22) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,490,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,511,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,532,20,22) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,554,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text |  |  | (119,575,20,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,170,67,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,191,67,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,212,67,22) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,234,67,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,255,67,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,276,67,22) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,298,67,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,319,67,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='UPDATE'
+                                    text | Operación | Operación | (139,340,67,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,362,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,383,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,404,67,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,426,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,447,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,468,67,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,490,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,511,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,532,67,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,554,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Operación | Operación | (139,575,67,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,170,160,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,191,160,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,212,160,22) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,234,160,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,255,160,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,276,160,22) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,298,160,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,319,160,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='PEVERI ALEJANDRO JAVIER'
+                                    text | Usuario | Usuario | (206,340,160,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,362,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,383,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,404,160,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,426,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,447,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,468,160,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,490,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,511,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,532,160,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,554,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Usuario | Usuario | (206,575,160,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Fecha | Fecha | (366,170,120,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='09-JUL-2021 12:56:31'
+                                    text | Fecha | Fecha | (366,191,120,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='09-JUL-2021 12:56:31'
+                                    text | Fecha | Fecha | (366,212,120,22) | activado,enfocable,visible,mostrando,editable,línea única | txt='20-FEB-2020 21:34:19'
+                                    text | Fecha | Fecha | (366,234,120,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='20-FEB-2020 21:34:19'
+                                    text | Fecha | Fecha | (366,255,120,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='22-JUL-2019 21:07:14'
+                                    text | Fecha | Fecha | (366,276,120,22) | activado,enfocable,visible,mostrando,editable,línea única | txt='22-JUL-2019 21:07:14'
+                                    text | Fecha | Fecha | (366,298,120,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='31-MAY-2019 11:07:34'
+                                    text | Fecha | Fecha | (366,319,120,21) | activado,enfocable,visible,mostrando,editable,línea única | txt='31-MAY-2019 11:07:34'
+                                    text | Fecha | Fecha | (366,340,120,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Fecha | Fecha | (366,362,120,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Fecha | Fecha | (366,383,120,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Fecha | Fecha | (366,404,120,22) | activado,enfocable,visible,mostrando,línea única
+                                    text | Fecha | Fecha | (366,426,120,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Fecha | Fecha | (366,447,120,21) | activado,enfocable,visible,mostrando,línea única
+                                    text | Fecha | Fecha | (366,468,120,22) | activado,enfocable,visible,mostrando,línea única

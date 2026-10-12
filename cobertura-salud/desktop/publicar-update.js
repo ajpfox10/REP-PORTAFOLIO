@@ -28,3 +28,13 @@ for (const f of fs.readdirSync(dist)) {
 }
 console.log(copiados + ' archivo(s) publicados en ' + destino)
 console.log('Las PC operadoras se actualizaran al abrir la app (o dentro de 4 h).')
+
+// Copia con nombre fijo de la ULTIMA version, para instalar a mano en una PC nueva:
+//   http://192.168.0.21:8510/updates/Cobertura-Salud-Setup.exe  (y en ../instalador/)
+const version = require('./package.json').version
+const ultimo = path.join(dist, `Cobertura Salud Setup ${version}.exe`)
+if (fs.existsSync(ultimo)) {
+  fs.copyFileSync(ultimo, path.join(destino, 'Cobertura-Salud-Setup.exe'))
+  fs.copyFileSync(ultimo, path.join(__dirname, '..', 'instalador', 'Cobertura-Salud-Setup.exe'))
+  console.log(`instalador fijo: Cobertura-Salud-Setup.exe = ${version}`)
+}

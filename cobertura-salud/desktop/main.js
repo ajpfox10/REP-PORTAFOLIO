@@ -1,8 +1,8 @@
-const { app, BrowserWindow, dialog } = require('electron')
+const { app, BrowserWindow } = require('electron')
 
 // --- Auto-actualizacion centralizada (electron-updater) ---
 // Chequea el servidor (config "publish" en package.json) al abrir y cada 4 h.
-// Descarga en segundo plano e instala al cerrar la app. Solo en la app instalada.
+// Descarga en segundo plano e instala sola, sin preguntar. Solo en la app instalada.
 function iniciarAutoUpdate(win) {
   if (!app.isPackaged) return // en desarrollo no corre
   let autoUpdater
@@ -19,15 +19,9 @@ function iniciarAutoUpdate(win) {
   autoUpdater.on('error', (err) => log('error: ' + (err == null ? 'desconocido' : err.message)))
   autoUpdater.on('update-downloaded', (info) => {
     log('version ' + info.version + ' descargada')
-    const r = dialog.showMessageBoxSync(win, {
-      type: 'info',
-      buttons: ['Actualizar ahora', 'Al cerrar'],
-      defaultId: 0,
-      title: 'Actualizacion disponible',
-      message: 'Hay una version nueva (' + info.version + ') lista para instalar.',
-      detail: 'Podes actualizar ahora (se reinicia la app) o cuando cierres.'
-    })
-    if (r === 0) autoUpdater.quitAndInstall()
+    // Instalacion automatica: sin preguntar, silenciosa (sin asistente ni permisos
+    // de admin, es por usuario) y vuelve a abrir la app sola.
+    setTimeout(() => autoUpdater.quitAndInstall(true, true), 3000)
   })
 
   const chequear = () => autoUpdater.checkForUpdates().catch((e) => log('check fallo: ' + e.message))
@@ -66,7 +60,33 @@ function createWindow() {
   return win
 }
 
+// Si en la PC quedo una copia vieja instalada "para todos los usuarios"
+// (C:\Program Files\Cobertura Salud), se desinstala sola y en silencio: esa copia
+// preguntaba antes de actualizar y su acceso directo seguia abriendo la version vieja.
+// Sin permisos de admin el desinstalador no arranca (no muestra UAC) y no pasa nada.
+function quitarInstalacionVieja() {
+  if (!app.isPackaged) return
+  const path = require('path')
+  const fs = require('fs')
+  const dir = path.join(process.env.ProgramW6432 || process.env.ProgramFiles || 'C:\\Program Files', 'Cobertura Salud')
+  const unins = path.join(dir, 'Uninstall Cobertura Salud.exe')
+  if (path.dirname(process.execPath).toLowerCase() === dir.toLowerCase()) return // somos esa copia
+  if (!fs.existsSync(unins)) return
+  try {
+    require('child_process').spawn(unins, ['/allusers', '/S'], { detached: true, stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref()
+  } catch (e) {}
+}
+
+// Una sola ventana: si la app ya esta abierta (o el instalador la abre dos veces
+// tras actualizar), la segunda se cierra y se trae al frente la primera.
+if (!app.requestSingleInstanceLock()) app.quit()
+app.on('second-instance', () => {
+  const w = BrowserWindow.getAllWindows()[0]
+  if (w) { if (w.isMinimized()) w.restore(); w.focus() }
+})
+
 app.whenReady().then(() => {
+  quitarInstalacionVieja()
   const win = createWindow()
   iniciarAutoUpdate(win)
   app.on('activate', () => {

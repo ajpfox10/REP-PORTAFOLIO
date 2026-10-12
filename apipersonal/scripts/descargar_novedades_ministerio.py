@@ -164,6 +164,16 @@ def main():
             shutil.copyfile(tmp_xls, destino)                  # recien ahora se pisa
         dur = int(time.time() - t0)
         motivo = f"{res['filas']} novedades, vigencia {desde} a {hasta}"
+        # Tambien refresca esa franja en ministerio_novedades_anual (la del robot anual). Si falla
+        # queda como aviso: el .xls ya esta y el comparador no se frena por esto.
+        if not args.destino:
+            try:
+                import descargar_anual_ministerio as A
+                n, borradas = A.volcar(dependencia, desde, hasta, destino)
+                motivo += f" | tabla anual: {n} (reemplazan {borradas})"
+            except Exception as e:
+                print(f"AVISO: no pude actualizar ministerio_novedades_anual: {e}")
+                motivo += f" | AVISO tabla anual: {str(e)[:150]}"
         print(f"OK: {motivo} -> {destino}")
         MN.registrar_run(script_id, descripcion, "ok", motivo=motivo, filas=res["filas"],
                          archivo=str(destino), duracion_seg=dur)

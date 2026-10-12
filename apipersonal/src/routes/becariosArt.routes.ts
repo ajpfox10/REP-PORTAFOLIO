@@ -10,6 +10,9 @@
 //   DELETE /becarios-art/:dni        Baja lógica (soft delete)
 //   GET    /becarios-art/establecimiento              Control "todos en Catán" (art_control_establecimiento)
 //   POST   /becarios-art/establecimiento/:dni/reintentar  Marca REINTENTAR para el robot
+//   GET    /becarios-art/bajas                       Cola de bajas en ART (art_baja_queue)
+//   POST   /becarios-art/bajas/:dni/reintentar       Vuelve a PENDING para el robot de bajas
+//   GET    /becarios-art/cruce                       Padrón ART (art_nomina) vs base
 
 import { Router, Request, Response } from 'express';
 import { Sequelize, QueryTypes }      from 'sequelize';
@@ -339,6 +342,122 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
       return res.json({ ok: true });
     } catch (err: any) {
       logger.error({ msg: '[becariosArt] establecimiento reintentar error', dni, err: err?.message });
+      return res.json({ ok: false, error: (err?.message || 'No se pudo marcar').slice(0, 400) });
+    }
+  });
+
+  // ── GET /bajas — cola de bajas en ART (art_baja_queue) ──────────────────────
+  // La llena el trigger trg_art_baja_queue_agentes_au (tramo que pasa a BAJA) y la procesa el
+  // robot scripts/art_baja_trabajador.mjs (página Robots). DEBE ir antes de /:dni.
+  router.get('/bajas', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      const rows = await sequelize.query<Record<string, any>>(`
+        SELECT q.id, q.dni, q.status, q.resultado, q.fecha_baja_art, q.trabajador_id, q.attempts,
+               q.last_error, q.created_at, q.finished_at, p.apellido, p.nombre, p.cuil,
+               (SELECT MAX(a.fecha_egreso) FROM agentes a
+                 WHERE a.dni = q.dni AND a.estado_empleo = 'BAJA' AND a.deleted_at IS NULL) AS fecha_egreso
+          FROM art_baja_queue q
+          LEFT JOIN personal p ON p.dni = q.dni
+         ORDER BY FIELD(q.status, 'ERROR', 'PROCESSING', 'PENDING', 'SKIPPED', 'DONE'), q.created_at DESC
+      `, { type: QueryTypes.SELECT });
+      const resumen: Record<string, number> = {};
+      for (const r of rows) {
+        const k = r.status === 'DONE' || r.status === 'SKIPPED' ? r.resultado || r.status : r.status;
+        resumen[k] = (resumen[k] ?? 0) + 1;
+      }
+      return res.json({ ok: true, data: rows, resumen, total: rows.length });
+    } catch (err: any) {
+      if (err?.parent?.code === 'ER_NO_SUCH_TABLE' || /ER_NO_SUCH_TABLE|doesn't exist/i.test(err?.message || '')) {
+        return res.json({ ok: true, data: [], resumen: {}, total: 0 });
+      }
+      logger.error({ msg: '[becariosArt] bajas error', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'Error al obtener las bajas en ART' });
+    }
+  });
+
+  // ── GET /cruce — padrón de ART (art_nomina, Catán) contra la base ─────────────
+  // art_nomina la llena el robot "Cruce padrón ART ↔ base" (art_bajar_nomina.mjs --db --encolar-bajas).
+  // Vigente = cualquier tramo de agentes que no sea BAJA (cambio de ocupación cierra en BAJA y abre otro).
+  router.get('/cruce', requirePermission('api:access'), async (_req: Request, res: Response) => {
+    try {
+      const sel = <T extends object>(sql: string) => sequelize.query<T>(sql, { type: QueryTypes.SELECT });
+      const VIGENTE = `EXISTS (SELECT 1 FROM agentes v WHERE v.dni = n.dni AND v.deleted_at IS NULL AND v.estado_empleo <> 'BAJA')`;
+      const [meta] = await sel<{ descargado_en: string | null; total: number }>(
+        `SELECT MAX(descargado_en) AS descargado_en, COUNT(*) AS total FROM art_nomina`);
+      const aDarDeBaja = await sel<Record<string, any>>(`
+        SELECT n.dni, n.cuil, n.trabajador, n.establecimiento_id,
+               (SELECT MAX(a.fecha_egreso) FROM agentes a WHERE a.dni = n.dni AND a.deleted_at IS NULL) AS fecha_egreso,
+               q.status AS baja_status, q.resultado AS baja_resultado, q.last_error AS baja_error
+          FROM art_nomina n
+          LEFT JOIN art_baja_queue q ON q.dni = n.dni
+         WHERE EXISTS (SELECT 1 FROM agentes a WHERE a.dni = n.dni AND a.deleted_at IS NULL)
+           AND NOT ${VIGENTE}
+         ORDER BY n.trabajador`);
+      const enArtNoEnBase = await sel<Record<string, any>>(`
+        SELECT n.dni, n.cuil, n.trabajador, n.email, n.establecimiento_id,
+               (p.dni IS NOT NULL) AS en_personal
+          FROM art_nomina n
+          LEFT JOIN personal p ON p.dni = n.dni
+         WHERE NOT EXISTS (SELECT 1 FROM agentes a WHERE a.dni = n.dni AND a.deleted_at IS NULL)
+         ORDER BY n.trabajador`);
+      // ACTIVOS (sin reemplazantes, que no van a ART) + aparte los otros vigentes (comisión, trámite...)
+      const enBaseNoEnArt = await sel<Record<string, any>>(`
+        SELECT a.dni, ANY_VALUE(p.cuil) AS cuil, ANY_VALUE(p.apellido) AS apellido, ANY_VALUE(p.nombre) AS nombre,
+               GROUP_CONCAT(DISTINCT a.estado_empleo ORDER BY a.estado_empleo SEPARATOR ', ') AS estado_empleo,
+               GROUP_CONCAT(DISTINCT l.nombre SEPARATOR ', ') AS ley, MAX(a.fecha_ingreso) AS fecha_ingreso,
+               ANY_VALUE(q.status) AS alta_status, ANY_VALUE(q.last_error) AS alta_error,
+               MAX(a.estado_empleo = 'ACTIVO') AS activo
+          FROM agentes a
+          JOIN personal p ON p.dni = a.dni
+          LEFT JOIN ley l ON l.id = a.ley_id
+          LEFT JOIN art_alta_queue q ON q.id = (SELECT MAX(q2.id) FROM art_alta_queue q2 WHERE q2.dni = a.dni)
+         WHERE a.deleted_at IS NULL AND a.estado_empleo NOT IN ('BAJA', 'CAMBIO DE DNI')
+           AND (l.nombre IS NULL OR UPPER(l.nombre) NOT LIKE '%REEMPLAZ%')
+           AND NOT EXISTS (SELECT 1 FROM art_nomina n WHERE n.dni = a.dni)
+         GROUP BY a.dni
+         ORDER BY activo DESC, apellido, nombre`);
+      return res.json({
+        ok: true,
+        descargado_en: meta?.descargado_en ?? null,
+        total_nomina: Number(meta?.total ?? 0),
+        a_dar_de_baja: aDarDeBaja,
+        en_art_no_en_base: enArtNoEnBase,
+        en_base_no_en_art: enBaseNoEnArt,
+      });
+    } catch (err: any) {
+      if (err?.parent?.code === 'ER_NO_SUCH_TABLE' || /ER_NO_SUCH_TABLE|doesn't exist/i.test(err?.message || '')) {
+        return res.json({ ok: true, descargado_en: null, total_nomina: 0, a_dar_de_baja: [], en_art_no_en_base: [], en_base_no_en_art: [] });
+      }
+      logger.error({ msg: '[becariosArt] cruce error', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'Error al armar el cruce ART ↔ base' });
+    }
+  });
+
+  // ── POST /bajas/:dni/reintentar — vuelve a PENDING para la próxima pasada del robot ──
+  router.post('/bajas/:dni/reintentar', requirePermission('api:access'), async (req: Request, res: Response) => {
+    const dni = parseInt(req.params.dni, 10);
+    if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+    try {
+      // Si no estaba en la cola (ej. sale del cruce con el padrón) lo encola; created_at 2 h atrás
+      // para que el robot no espere el margen de 1 h pensado para los cambios de tramo.
+      const [, meta] = await sequelize.query(
+        `INSERT INTO art_baja_queue (dni, agente_id, origen, status, created_at)
+         SELECT :dni, MAX(a.id), 'manual', 'PENDING', NOW() - INTERVAL 2 HOUR
+           FROM agentes a WHERE a.dni = :dni AND a.deleted_at IS NULL
+         HAVING COUNT(*) > 0
+         ON DUPLICATE KEY UPDATE
+           status     = IF(status = 'PROCESSING', status, 'PENDING'),
+           attempts   = IF(status = 'PROCESSING', attempts, 0),
+           resultado  = IF(status = 'PROCESSING', resultado, NULL),
+           last_error = IF(status = 'PROCESSING', last_error, NULL),
+           locked_at  = IF(status = 'PROCESSING', locked_at, NULL)`,
+        { replacements: { dni } }
+      ) as [unknown, any];
+      if (!(meta?.affectedRows ?? meta)) return res.json({ ok: false, error: 'Ese DNI no está en la base de agentes (o ya se está procesando)' });
+      trackAction('art_baja_reintento', { dni });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      logger.error({ msg: '[becariosArt] bajas reintentar error', dni, err: err?.message });
       return res.json({ ok: false, error: (err?.message || 'No se pudo marcar').slice(0, 400) });
     }
   });

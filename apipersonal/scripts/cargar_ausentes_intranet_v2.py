@@ -34,7 +34,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN
 import post_carga
-from cargar_novedades_intranet_v2 import TABLA_CARGA, crear_tabla_carga
+from cargar_novedades_intranet_v2 import TABLA_CARGA, crear_tabla_carga, ESTADOS_NO_CARGAR, estado_resultado
 SCRIPT_ID = None   # lo fija main(): intranet_carga_ausentes_v2_<dep>
 NOVEDAD_SIAP = "AUSENTE SIN AVISO"
 
@@ -127,13 +127,14 @@ def cargar_filas_db(dependencia, test_mode=False):
                AND justificado_siap = 'NO' AND dependencia = %s AND dni <> '' AND desde_siap IS NOT NULL
             ON DUPLICATE KEY UPDATE
               corrida_id = VALUES(corrida_id), dependencia = VALUES(dependencia), nombre = VALUES(nombre),
-              justificado = VALUES(justificado), motivo_comparacion = VALUES(motivo_comparacion)""",
+              justificado = VALUES(justificado), motivo_comparacion = VALUES(motivo_comparacion),
+              estado = IF({TABLA_CARGA}.estado = 'CAMBIO_SIAPE', 'PENDIENTE', {TABLA_CARGA}.estado)""",
             (corrida, NOVEDAD_SIAP, dependencia))
         cn.commit()
         cur.execute(f"""
             SELECT dni, nombre, novedad_siap, justificado, desde, hasta, dependencia
               FROM {TABLA_CARGA}
-             WHERE corrida_id = %s AND dependencia = %s AND novedad_siap = %s AND estado <> 'OK'
+             WHERE corrida_id = %s AND dependencia = %s AND novedad_siap = %s AND estado NOT IN {ESTADOS_NO_CARGAR}
              ORDER BY nombre, desde""", (corrida, dependencia, NOVEDAD_SIAP))
         filas = [{
             "Nombre": r["nombre"] or r["dni"], "DNI": int(r["dni"]),
@@ -178,7 +179,7 @@ def guardar_log(registros, _log_path=None):
                        SET estado = %s, label_intranet = %s, detalle = %s, intentos = intentos + 1,
                            cargado_en = IF(%s, NOW(), cargado_en)
                      WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
-                    (str(r.get("Estado", ""))[:20], str(r.get("Novedad") or "")[:200],
+                    (estado_resultado(r), str(r.get("Novedad") or "")[:200],
                      str(r.get("Detalle") or "")[:500] or None, ok,
                      str(int(r["DNI"])), NOVEDAD_SIAP, desde, hasta))
             cn.commit()
@@ -404,7 +405,26 @@ def exito_visible(page):
     return None
 
 
+URLS_LOGOUT = [
+    "https://sistemas.ms.gba.gov.ar/partenovedades/web/app.php/logout",
+    "https://sistemas.ms.gba.gov.ar/intranet/logout",
+]
+
+
+def cerrar_sesion(page):
+    """Con la sesion vieja abierta ("Sesion ya activa") Parte de Novedades entra como PROFERS sin
+    dependencia ("Acceso Denegado") y no se puede cambiar de dependencia; con login nuevo anda.
+    Por eso el login arranca cerrando la sesion del perfil del robot (09/10/2026)."""
+    for url in URLS_LOGOUT:
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1500)
+        except Exception as e:
+            print(f"  AVISO logout {url}: {e}")
+
+
 def login(page, password, dependencia="HOSPITAL"):
+    cerrar_sesion(page)
     page.goto(URL_LOGIN, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector("#username", timeout=6000)

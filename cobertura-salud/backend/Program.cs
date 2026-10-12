@@ -95,6 +95,25 @@ app.MapPost("/api/auth/login", async Task<Results<Ok<LoginResponse>, Unauthorize
     return TypedResults.Ok(new LoginResponse(SignToken(user, s), UserDto.From(user)));
 });
 
+// Ingreso de la app de escritorio sin pantalla de login: todas las PC usan el
+// usuario fijo "escritorio" (se crea solo). Si control lo da de baja, no entra nadie.
+app.MapPost("/api/auth/escritorio", async Task<Results<Ok<LoginResponse>, UnauthorizedHttpResult>> (Db db, AppSettings s) =>
+{
+    await using var conn = await db.OpenAsync();
+    await using (var cmd = new MySqlCommand("""
+        INSERT IGNORE INTO usuarios (username, password_hash, role, activo)
+        VALUES ('escritorio', @hash, 'user', 1)
+        """, conn))
+    {
+        cmd.Parameters.AddWithValue("@hash", BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N"), 12));
+        await cmd.ExecuteNonQueryAsync();
+    }
+    var user = await db.GetUserByUsernameAsync(conn, "escritorio");
+    if (user is null || user.Activo == 0)
+        return TypedResults.Unauthorized();
+    return TypedResults.Ok(new LoginResponse(SignToken(user, s), UserDto.From(user)));
+});
+
 app.MapGet("/api/auth/me", [Authorize] (ClaimsPrincipal principal) =>
     Results.Ok(new { user = CurrentUser.From(principal).ToDto() }));
 
@@ -263,7 +282,7 @@ app.MapGet("/api/consultas", [Authorize] async (ClaimsPrincipal principal, Db db
     var where = user.Role == "admin" ? "" : "WHERE c.creado_por = @userId";
     await using var cmd = new MySqlCommand($"""
         SELECT c.id, c.entrada, c.dni, c.cuil, c.apellido, c.estado, c.decision_final,
-               c.created_at, c.finished_at, u.username creado_por_nombre
+               c.created_at, c.finished_at, u.username creado_por_nombre, {PersonaCols.Select}
         FROM consultas c
         JOIN usuarios u ON u.id = c.creado_por
         {where}
@@ -284,7 +303,8 @@ app.MapGet("/api/consultas", [Authorize] async (ClaimsPrincipal principal, Db db
             reader.IsDBNull(reader.GetOrdinal("decision_final")) ? null : reader.GetString("decision_final"),
             reader.GetDateTime("created_at"),
             reader.IsDBNull(reader.GetOrdinal("finished_at")) ? null : reader.GetDateTime("finished_at"),
-            reader.GetString("creado_por_nombre")));
+            reader.GetString("creado_por_nombre"),
+            PersonaCols.Sexo(reader), PersonaCols.FechaNac(reader), PersonaCols.CuilGenerado(reader)));
     }
     return Results.Ok(new { data = rows });
 });
@@ -478,6 +498,22 @@ app.MapPost("/api/desktop/recorrido", [Authorize] async Task<Results<Ok<DesktopR
 
     await using var conn = await db.OpenAsync();
     var consultaId = await db.CreateConsultaAsync(conn, user.Id, patient);
+    await using (var extra = new MySqlCommand("""
+        UPDATE consultas SET sexo = @sexo, fecha_nacimiento = @fnac, cuil_generado = @gen WHERE id = @id
+        """, conn))
+    {
+        var sexo = (request.Sexo ?? "").Trim().ToUpperInvariant() switch
+        {
+            "1" or "M" => "M",
+            "2" or "F" => "F",
+            _ => null
+        };
+        extra.Parameters.AddWithValue("@sexo", (object?)sexo ?? DBNull.Value);
+        extra.Parameters.AddWithValue("@fnac", DateOnly.TryParse(request.FechaNacimiento, out var fn) ? fn.ToString("yyyy-MM-dd") : DBNull.Value);
+        extra.Parameters.AddWithValue("@gen", request.CuilGenerado == true && patient.Cuil is not null ? 1 : 0);
+        extra.Parameters.AddWithValue("@id", consultaId);
+        await extra.ExecuteNonQueryAsync();
+    }
 
     var orden = 1;
     foreach (var r in resultados)
@@ -513,6 +549,7 @@ app.MapGet("/api/control", [Authorize(Policy = "ControlOnly")] async (string? de
     await using var conn = await db.OpenAsync();
     await using var cmd = new MySqlCommand($"""
         SELECT c.id, c.created_at, u.username, u.activo, c.dni, c.cuil, c.apellido,
+               {PersonaCols.Select},
                p.nombre AS fuente, p.resultado, p.estado
         FROM consultas c
         JOIN usuarios u ON u.id = c.creado_por
@@ -544,7 +581,8 @@ app.MapGet("/api/control", [Authorize(Policy = "ControlOnly")] async (string? de
                     reader.IsDBNull(reader.GetOrdinal("cuil")) ? null : reader.GetString("cuil"),
                     reader.IsDBNull(reader.GetOrdinal("apellido")) ? null : reader.GetString("apellido"),
                     "sin_determinar",
-                    new List<ControlFuente>());
+                    new List<ControlFuente>(),
+                    PersonaCols.Sexo(reader), PersonaCols.FechaNac(reader), PersonaCols.CuilGenerado(reader));
                 mapa[cid] = row;
                 orden.Add(cid);
             }
@@ -582,6 +620,7 @@ app.MapGet("/api/reporte", [Authorize(Policy = "ControlOrAdmin")] async (string?
 
     await using var cmd = new MySqlCommand($"""
         SELECT c.id, c.created_at, u.username, c.entrada, c.dni, c.cuil, c.apellido,
+               {PersonaCols.Select},
                p.nombre AS fuente, p.resultado, p.estado, p.resumen
         FROM consulta_pasos p
         JOIN consultas c ON c.id = p.consulta_id
@@ -611,7 +650,8 @@ app.MapGet("/api/reporte", [Authorize(Policy = "ControlOrAdmin")] async (string?
             reader.GetString("fuente"),
             reader.IsDBNull(reader.GetOrdinal("resultado")) ? null : reader.GetString("resultado"),
             reader.GetString("estado"),
-            reader.IsDBNull(reader.GetOrdinal("resumen")) ? null : reader.GetString("resumen")));
+            reader.IsDBNull(reader.GetOrdinal("resumen")) ? null : reader.GetString("resumen"),
+            PersonaCols.Sexo(reader), PersonaCols.FechaNac(reader), PersonaCols.CuilGenerado(reader)));
     }
     return Results.Ok(new { data = rows });
 });
@@ -834,6 +874,25 @@ sealed class Db(AppSettings settings)
             if (Convert.ToInt32(await hasBaja.ExecuteScalarAsync()) == 0)
             {
                 await using var add = new MySqlCommand("ALTER TABLE usuarios ADD COLUMN baja_at TIMESTAMP NULL", conn);
+                await add.ExecuteNonQueryAsync();
+            }
+        }
+
+        // Datos de la persona que manda el escritorio: sexo (M/F), fecha de nacimiento
+        // y si el CUIL lo calculo la app (DNI + sexo) en vez de cargarlo el operador.
+        foreach (var (col, def) in new[] {
+            ("sexo", "CHAR(1) NULL"),
+            ("fecha_nacimiento", "DATE NULL"),
+            ("cuil_generado", "TINYINT(1) NOT NULL DEFAULT 0") })
+        {
+            await using var has = new MySqlCommand("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultas' AND COLUMN_NAME = @col
+                """, conn);
+            has.Parameters.AddWithValue("@col", col);
+            if (Convert.ToInt32(await has.ExecuteScalarAsync()) == 0)
+            {
+                await using var add = new MySqlCommand($"ALTER TABLE consultas ADD COLUMN {col} {def}", conn);
                 await add.ExecuteNonQueryAsync();
             }
         }
@@ -1898,9 +1957,20 @@ sealed record UserDto(int Id, string Username, string Role, bool Activo, DateTim
 {
     public static UserDto From(UserRecord user) => new(user.Id, user.Username, user.Role, user.Activo == 1, user.CreatedAt);
 }
+// Sexo / fecha de nacimiento / CUIL generado de una consulta (columnas c.sexo,
+// c.fecha_nacimiento, c.cuil_generado).
+static class PersonaCols
+{
+    public const string Select = "c.sexo, c.fecha_nacimiento, c.cuil_generado";
+    public static string? Sexo(MySqlDataReader r) => r.IsDBNull(r.GetOrdinal("sexo")) ? null : r.GetString("sexo");
+    public static string? FechaNac(MySqlDataReader r) =>
+        r.IsDBNull(r.GetOrdinal("fecha_nacimiento")) ? null : r.GetDateTime("fecha_nacimiento").ToString("yyyy-MM-dd");
+    public static bool CuilGenerado(MySqlDataReader r) => r.GetInt32("cuil_generado") == 1;
+}
 sealed record ControlFuente(string Fuente, string? Resultado, string Estado);
 sealed record ControlRow(long ConsultaId, DateTime Fecha, string Usuario, bool UsuarioActivo,
-    string? Dni, string? Cuil, string? Apellido, string Cobertura, List<ControlFuente> Fuentes);
+    string? Dni, string? Cuil, string? Apellido, string Cobertura, List<ControlFuente> Fuentes,
+    string? Sexo = null, string? FechaNacimiento = null, bool CuilGenerado = false);
 
 sealed record LoginRequest(string? Username, string? Password);
 sealed record LoginResponse(string Token, UserDto User);
@@ -1910,7 +1980,8 @@ sealed record ConsultaCreateRequest(string? Entrada, string? Apellido, string? F
 sealed record ConsultaDecisionRequest(string? DecisionFinal, string? CoberturaRecomendada, string? Observaciones);
 sealed record ConsultaLocalRequest(string? Fuente, string? Dni, string? Cuil, string? Apellido);
 sealed record DesktopResultado(string? Fuente, string? Nombre, string? Veredicto, string? Texto, string? Url);
-sealed record DesktopRecorridoRequest(string? Dni, string? Cuil, string? Apellido, List<DesktopResultado>? Resultados);
+sealed record DesktopRecorridoRequest(string? Dni, string? Cuil, string? Apellido, List<DesktopResultado>? Resultados,
+    string? Sexo = null, string? FechaNacimiento = null, bool? CuilGenerado = null);
 sealed record DesktopRecorridoResponse(long ConsultaId, string Usuario, int Fuentes);
 sealed record ReporteRow(
     long ConsultaId,
@@ -1923,7 +1994,10 @@ sealed record ReporteRow(
     string Fuente,
     string? Resultado,
     string Estado,
-    string? Resumen);
+    string? Resumen,
+    string? Sexo = null,
+    string? FechaNacimiento = null,
+    bool CuilGenerado = false);
 sealed record ConsultaLocalResponse(
     long ConsultaId,
     string Codigo,
@@ -1946,7 +2020,10 @@ sealed record ConsultaListItem(
     string? DecisionFinal,
     DateTime CreatedAt,
     DateTime? FinishedAt,
-    string CreadoPorNombre);
+    string CreadoPorNombre,
+    string? Sexo = null,
+    string? FechaNacimiento = null,
+    bool CuilGenerado = false);
 sealed record ConsultaDetail(
     long Id,
     string Entrada,

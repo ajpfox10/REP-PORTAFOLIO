@@ -10,6 +10,7 @@ import { getApiBaseUrl } from '../../api/env';
 import { loadSession, saveSession } from '../../auth/session';
 import { TIPOS_DOCUMENTO, GROUP_LABELS } from '../EscaneoPage/documentTypes';
 import { SUBCARPETAS_PRESETS, presetSubdivisiones } from '../EscaneoPage/subcarpetas';
+import { ScanPagesOrganizer, scanPageId, applyScanPageOrder } from '../EscaneoPage/ScanPagesOrganizer';
 import '../EscaneoPage/styles/EscaneoPage.css';
 
 function getScannerBase() {
@@ -363,6 +364,7 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
   const [deviceSearch, setDeviceSearch] = useState('');
   const [devicePage, setDevicePage] = useState(1);
   const [viewer, setViewer]         = useState<ViewerState>(null);
+  const [organizerPageId, setOrganizerPageId] = useState<string | null>(null);
   const viewerUrlRef = useRef<string | null>(null);
 
   // Limpiar blob URLs al desmontar
@@ -767,9 +769,9 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
             key={page.storageKey}
             className="scan-preview-thumb scan-preview-thumb-live"
             role="button" tabIndex={0}
-            title="Doble click para ampliar"
-            onDoubleClick={() => abrirPaginaEscaneada(page, idx)}
-            onKeyDown={e => e.key === 'Enter' && abrirPaginaEscaneada(page, idx)}
+            title="Doble click para ordenar, rotar o ampliar"
+            onDoubleClick={() => setOrganizerPageId(scanPageId(page))}
+            onKeyDown={e => e.key === 'Enter' && setOrganizerPageId(scanPageId(page))}
           >
             <div className="scan-preview-frame">
               {page.blobUrl ? (
@@ -1568,6 +1570,16 @@ export function EscaneoAgentePage({ dni, embedded = false, onExit }: EscaneoAgen
         )}
 
         {/* ── Visor de documentos/páginas ── */}
+        {organizerPageId && session.length > 0 && (
+          <ScanPagesOrganizer
+            pages={session}
+            initialPageId={organizerPageId}
+            onRotate={(page, degrees) => rotarPagina(page, degrees)}
+            onApply={ids => { setSession(prev => applyScanPageOrder(prev, ids)); setOrganizerPageId(null); }}
+            onClose={() => setOrganizerPageId(null)}
+          />
+        )}
+
         {viewer && (
           <div className="scan-viewer-backdrop" role="dialog" aria-modal="true" onClick={cerrarViewer}>
             <div className="scan-viewer-modal" onClick={e => e.stopPropagation()}>

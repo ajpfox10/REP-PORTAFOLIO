@@ -12,6 +12,7 @@ export default defineConfig({
   },
   build: {
     outDir: '../backend/wwwroot',
-    emptyOutDir: true,
+    // false: wwwroot/updates (auto-update del escritorio) vive aca y no se puede borrar.
+    emptyOutDir: false,
   },
 })

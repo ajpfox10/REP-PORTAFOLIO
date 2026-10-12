@@ -2817,6 +2817,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/art_baja_queue:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List art_baja_queue
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_art_baja_queue"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create art_baja_queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_baja_queue_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/art_baja_queue/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get art_baja_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update art_baja_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_baja_queue"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch art_baja_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_baja_queue_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete art_baja_queue by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/art_control_establecimiento:
     get:
       tags:
@@ -2938,6 +3070,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete art_control_establecimiento by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/art_nomina:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List art_nomina
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_art_nomina"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create art_nomina
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_nomina_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/art_nomina/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get art_nomina by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update art_nomina by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_nomina"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch art_nomina by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_art_nomina_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete art_nomina by id
       parameters:
         - name: id
           in: path
@@ -3334,6 +3598,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete auth_login_guard by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/baja_carga_siape:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List baja_carga_siape
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_baja_carga_siape"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create baja_carga_siape
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_baja_carga_siape_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/baja_carga_siape/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get baja_carga_siape by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update baja_carga_siape by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_baja_carga_siape"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch baja_carga_siape by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_baja_carga_siape_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete baja_carga_siape by id
       parameters:
         - name: id
           in: path
@@ -9366,6 +9762,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/guarderia_ddjj:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List guarderia_ddjj
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_guarderia_ddjj"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create guarderia_ddjj
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_ddjj_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/guarderia_ddjj/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get guarderia_ddjj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update guarderia_ddjj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_ddjj"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch guarderia_ddjj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_ddjj_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete guarderia_ddjj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/guarderia_ddjj_menores:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List guarderia_ddjj_menores
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_guarderia_ddjj_menores"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create guarderia_ddjj_menores
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_ddjj_menores_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/guarderia_ddjj_menores/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get guarderia_ddjj_menores by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update guarderia_ddjj_menores by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_ddjj_menores"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch guarderia_ddjj_menores by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_guarderia_ddjj_menores_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete guarderia_ddjj_menores by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/historial:
     get:
       tags:
@@ -13579,6 +14239,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete migrations by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/ministerio_novedades_anual:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List ministerio_novedades_anual
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_ministerio_novedades_anual"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create ministerio_novedades_anual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ministerio_novedades_anual_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/ministerio_novedades_anual/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get ministerio_novedades_anual by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update ministerio_novedades_anual by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ministerio_novedades_anual"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch ministerio_novedades_anual by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ministerio_novedades_anual_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete ministerio_novedades_anual by id
       parameters:
         - name: id
           in: path
@@ -18474,6 +19266,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/samo_meses_habilitados:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List samo_meses_habilitados
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_samo_meses_habilitados"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create samo_meses_habilitados
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_samo_meses_habilitados_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/samo_meses_habilitados/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get samo_meses_habilitados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update samo_meses_habilitados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_samo_meses_habilitados"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch samo_meses_habilitados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_samo_meses_habilitados_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete samo_meses_habilitados by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/scan_jobs:
     get:
       tags:
@@ -20839,6 +21763,138 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete tenants by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/tiempo_acumulado:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List tiempo_acumulado
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_tiempo_acumulado"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create tiempo_acumulado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tiempo_acumulado_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/tiempo_acumulado/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get tiempo_acumulado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update tiempo_acumulado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tiempo_acumulado"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch tiempo_acumulado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_tiempo_acumulado_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete tiempo_acumulado by id
       parameters:
         - name: id
           in: path
@@ -23354,6 +24410,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        motivo_baja:
+          type: string
+          nullable: true
         fecha_de_nombramiento:
           type: string
           format: date-time
@@ -23432,6 +24491,9 @@ components:
         fecha_egreso:
           type: string
           format: date-time
+          nullable: true
+        motivo_baja:
+          type: string
           nullable: true
         fecha_de_nombramiento:
           type: string
@@ -23512,6 +24574,9 @@ components:
         fecha_egreso:
           type: string
           format: date-time
+          nullable: true
+        motivo_baja:
+          type: string
           nullable: true
         fecha_de_nombramiento:
           type: string
@@ -25038,6 +26103,141 @@ components:
         updated_at:
           type: string
           format: date-time
+    Table_art_baja_queue:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        agente_id:
+          type: number
+          nullable: true
+        origen:
+          type: string
+        status:
+          type: string
+        resultado:
+          type: string
+          nullable: true
+        fecha_baja_art:
+          type: string
+          format: date-time
+          nullable: true
+        trabajador_id:
+          type: number
+          nullable: true
+        attempts:
+          type: number
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dni
+    Table_art_baja_queue_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        agente_id:
+          type: number
+          nullable: true
+        origen:
+          type: string
+        status:
+          type: string
+        resultado:
+          type: string
+          nullable: true
+        fecha_baja_art:
+          type: string
+          format: date-time
+          nullable: true
+        trabajador_id:
+          type: number
+          nullable: true
+        attempts:
+          type: number
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+    Table_art_baja_queue_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        agente_id:
+          type: number
+          nullable: true
+        origen:
+          type: string
+        status:
+          type: string
+        resultado:
+          type: string
+          nullable: true
+        fecha_baja_art:
+          type: string
+          format: date-time
+          nullable: true
+        trabajador_id:
+          type: number
+          nullable: true
+        attempts:
+          type: number
+        locked_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Table_art_control_establecimiento:
       type: object
       additionalProperties: false
@@ -25154,6 +26354,92 @@ components:
           type: string
           format: date-time
         updated_at:
+          type: string
+          format: date-time
+    Table_art_nomina:
+      type: object
+      additionalProperties: false
+      properties:
+        establecimiento_id:
+          type: string
+        cuil:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        trabajador:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        trabajador_id:
+          type: number
+          nullable: true
+        establecimiento_label:
+          type: string
+          nullable: true
+        descargado_en:
+          type: string
+          format: date-time
+      required:
+        - establecimiento_id
+        - cuil
+        - descargado_en
+    Table_art_nomina_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        establecimiento_id:
+          type: string
+        cuil:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        trabajador:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        trabajador_id:
+          type: number
+          nullable: true
+        establecimiento_label:
+          type: string
+          nullable: true
+        descargado_en:
+          type: string
+          format: date-time
+      required:
+        - establecimiento_id
+        - cuil
+        - descargado_en
+    Table_art_nomina_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        establecimiento_id:
+          type: string
+        cuil:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        trabajador:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        trabajador_id:
+          type: number
+          nullable: true
+        establecimiento_label:
+          type: string
+          nullable: true
+        descargado_en:
           type: string
           format: date-time
     Table_articulo_26:
@@ -25550,6 +26836,140 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_baja_carga_siape:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_id:
+          type: number
+        dni:
+          type: number
+        fecha_baja:
+          type: string
+          format: date-time
+        origen:
+          type: string
+        motivo_preventivo:
+          type: string
+        motivo_definitivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        preventiva_en:
+          type: string
+          format: date-time
+          nullable: true
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
+      required:
+        - id
+        - agente_id
+        - dni
+        - fecha_baja
+        - origen
+        - motivo_preventivo
+    Table_baja_carga_siape_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agente_id:
+          type: number
+        dni:
+          type: number
+        fecha_baja:
+          type: string
+          format: date-time
+        origen:
+          type: string
+        motivo_preventivo:
+          type: string
+        motivo_definitivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        preventiva_en:
+          type: string
+          format: date-time
+          nullable: true
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
+      required:
+        - agente_id
+        - dni
+        - fecha_baja
+        - origen
+        - motivo_preventivo
+    Table_baja_carga_siape_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_id:
+          type: number
+        dni:
+          type: number
+        fecha_baja:
+          type: string
+          format: date-time
+        origen:
+          type: string
+        motivo_preventivo:
+          type: string
+        motivo_definitivo:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        preventiva_en:
+          type: string
+          format: date-time
+          nullable: true
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
     Table_becarios_art:
       type: object
       additionalProperties: false
@@ -30925,6 +32345,443 @@ components:
         deleted_by:
           type: number
           nullable: true
+    Table_guarderia_ddjj:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        reparticion:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        documento:
+          type: string
+          nullable: true
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        estado_civil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        horario:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        fecha_reintegro:
+          type: string
+          format: date-time
+          nullable: true
+        ninos_a_cargo:
+          type: string
+          nullable: true
+        condicion_tutela:
+          type: string
+          nullable: true
+        motivo_no_ingresa:
+          type: string
+          nullable: true
+        otro_apellido_nombre:
+          type: string
+          nullable: true
+        otro_domicilio:
+          type: string
+          nullable: true
+        otro_documento:
+          type: string
+          nullable: true
+        otro_fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        otro_estado_civil:
+          type: string
+          nullable: true
+        otro_nacionalidad:
+          type: string
+          nullable: true
+        otro_lugar_trabajo:
+          type: string
+          nullable: true
+        firma_aclaracion:
+          type: string
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        certifica_pertenece:
+          type: string
+          nullable: true
+        certifica_aclaracion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+    Table_guarderia_ddjj_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        reparticion:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        documento:
+          type: string
+          nullable: true
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        estado_civil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        horario:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        fecha_reintegro:
+          type: string
+          format: date-time
+          nullable: true
+        ninos_a_cargo:
+          type: string
+          nullable: true
+        condicion_tutela:
+          type: string
+          nullable: true
+        motivo_no_ingresa:
+          type: string
+          nullable: true
+        otro_apellido_nombre:
+          type: string
+          nullable: true
+        otro_domicilio:
+          type: string
+          nullable: true
+        otro_documento:
+          type: string
+          nullable: true
+        otro_fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        otro_estado_civil:
+          type: string
+          nullable: true
+        otro_nacionalidad:
+          type: string
+          nullable: true
+        otro_lugar_trabajo:
+          type: string
+          nullable: true
+        firma_aclaracion:
+          type: string
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        certifica_pertenece:
+          type: string
+          nullable: true
+        certifica_aclaracion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+    Table_guarderia_ddjj_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        reparticion:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        documento:
+          type: string
+          nullable: true
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        estado_civil:
+          type: string
+          nullable: true
+        nacionalidad:
+          type: string
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        horario:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+        fecha_reintegro:
+          type: string
+          format: date-time
+          nullable: true
+        ninos_a_cargo:
+          type: string
+          nullable: true
+        condicion_tutela:
+          type: string
+          nullable: true
+        motivo_no_ingresa:
+          type: string
+          nullable: true
+        otro_apellido_nombre:
+          type: string
+          nullable: true
+        otro_domicilio:
+          type: string
+          nullable: true
+        otro_documento:
+          type: string
+          nullable: true
+        otro_fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        otro_estado_civil:
+          type: string
+          nullable: true
+        otro_nacionalidad:
+          type: string
+          nullable: true
+        otro_lugar_trabajo:
+          type: string
+          nullable: true
+        firma_aclaracion:
+          type: string
+          nullable: true
+        lugar:
+          type: string
+          nullable: true
+        fecha:
+          type: string
+          format: date-time
+          nullable: true
+        certifica_pertenece:
+          type: string
+          nullable: true
+        certifica_aclaracion:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_guarderia_ddjj_menores:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ddjj_id:
+          type: number
+        dni:
+          type: number
+        orden:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        documento:
+          type: string
+          nullable: true
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        patologia:
+          type: number
+          nullable: true
+        atencion_temporaria:
+          type: string
+          nullable: true
+        atencion_permanente:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - ddjj_id
+        - dni
+    Table_guarderia_ddjj_menores_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        ddjj_id:
+          type: number
+        dni:
+          type: number
+        orden:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        documento:
+          type: string
+          nullable: true
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        patologia:
+          type: number
+          nullable: true
+        atencion_temporaria:
+          type: string
+          nullable: true
+        atencion_permanente:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - ddjj_id
+        - dni
+    Table_guarderia_ddjj_menores_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ddjj_id:
+          type: number
+        dni:
+          type: number
+        orden:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        documento:
+          type: string
+          nullable: true
+        fecha_nacimiento:
+          type: string
+          format: date-time
+          nullable: true
+        patologia:
+          type: number
+          nullable: true
+        atencion_temporaria:
+          type: string
+          nullable: true
+        atencion_permanente:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
     Table_historial:
       type: object
       additionalProperties: false
@@ -35545,6 +37402,147 @@ components:
         applied_at:
           type: string
           format: date-time
+    Table_ministerio_novedades_anual:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dependencia:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+          nullable: true
+        codigo:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        tramite:
+          type: string
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        run_uid:
+          type: string
+          nullable: true
+        descargado_en:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dependencia
+    Table_ministerio_novedades_anual_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dependencia:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+          nullable: true
+        codigo:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        tramite:
+          type: string
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        run_uid:
+          type: string
+          nullable: true
+        descargado_en:
+          type: string
+          format: date-time
+      required:
+        - dependencia
+    Table_ministerio_novedades_anual_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dependencia:
+          type: string
+        dni:
+          type: number
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        cargo:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+          nullable: true
+        codigo:
+          type: string
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        tramite:
+          type: string
+          nullable: true
+        expediente:
+          type: string
+          nullable: true
+        run_uid:
+          type: string
+          nullable: true
+        descargado_en:
+          type: string
+          format: date-time
     Table_ministerios:
       type: object
       additionalProperties: false
@@ -39883,6 +41881,59 @@ components:
         generado_en:
           type: string
           format: date-time
+    Table_samo_meses_habilitados:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        anio:
+          type: number
+        mes:
+          type: number
+        habilitado_por:
+          type: number
+          nullable: true
+        habilitado_en:
+          type: string
+          format: date-time
+      required:
+        - id
+        - anio
+        - mes
+    Table_samo_meses_habilitados_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        anio:
+          type: number
+        mes:
+          type: number
+        habilitado_por:
+          type: number
+          nullable: true
+        habilitado_en:
+          type: string
+          format: date-time
+      required:
+        - anio
+        - mes
+    Table_samo_meses_habilitados_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        anio:
+          type: number
+        mes:
+          type: number
+        habilitado_por:
+          type: number
+          nullable: true
+        habilitado_en:
+          type: string
+          format: date-time
     Table_scan_jobs:
       type: object
       additionalProperties: false
@@ -41748,6 +43799,151 @@ components:
           type: string
           format: date-time
           nullable: true
+    Table_tiempo_acumulado:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        anio:
+          type: number
+        licencia:
+          type: string
+        regimen:
+          type: string
+        planta:
+          type: string
+        seq:
+          type: number
+        dias:
+          type: number
+        pasa:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        tipo_doc:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        estructura:
+          type: string
+          nullable: true
+        origen:
+          type: string
+        en_ultima_bajada:
+          type: number
+        visto_en:
+          type: string
+          format: date-time
+          nullable: true
+        actualizado_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dni
+        - anio
+        - licencia
+    Table_tiempo_acumulado_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        anio:
+          type: number
+        licencia:
+          type: string
+        regimen:
+          type: string
+        planta:
+          type: string
+        seq:
+          type: number
+        dias:
+          type: number
+        pasa:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        tipo_doc:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        estructura:
+          type: string
+          nullable: true
+        origen:
+          type: string
+        en_ultima_bajada:
+          type: number
+        visto_en:
+          type: string
+          format: date-time
+          nullable: true
+        actualizado_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - anio
+        - licencia
+    Table_tiempo_acumulado_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        anio:
+          type: number
+        licencia:
+          type: string
+        regimen:
+          type: string
+        planta:
+          type: string
+        seq:
+          type: number
+        dias:
+          type: number
+        pasa:
+          type: string
+          nullable: true
+        apellido_nombre:
+          type: string
+          nullable: true
+        tipo_doc:
+          type: string
+          nullable: true
+        legajo:
+          type: string
+          nullable: true
+        estructura:
+          type: string
+          nullable: true
+        origen:
+          type: string
+        en_ultima_bajada:
+          type: number
+        visto_en:
+          type: string
+          format: date-time
+          nullable: true
+        actualizado_at:
+          type: string
+          format: date-time
     Table_tipodecuidado:
       type: object
       additionalProperties: false
