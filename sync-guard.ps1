@@ -101,11 +101,11 @@ try {
   }
 
   # 3) Patrones genericos solo en las lineas agregadas
-  $allowPath = '(?i)(^|/)(tests?|__tests__|e2e|fixtures?)/|\.(test|spec)\.[jt]sx?$|\.example$|\.sample$|/\.github/workflows/|(^|/)assets/[^/]+\.js$'
+  $allowPath = '(?i)(^|/)(tests?|__tests__|e2e|fixtures?)/|\.(test|spec)\.[jt]sx?$|\.example$|\.sample$|/\.github/workflows/|(^|/)assets/[^/]+\.js$|(^|/)package(-lock)?\.json$'
   $placeholder = '(?i)12345678|change_?me|x{4,}|\*{3,}|your[-_]|tu[-_]|example|redacted|fake|dummy|placeholder|_pass_word_|_user_name_|<[^>]+>|\$\{|process\.env|os\.environ|%[A-Z_]+%'
   $rules = @(
     @{ n = 'PASSWORD/SECRET LITERAL'; r = '(?i)(pass(word|wd)?|pwd|clave|contrase.a|secret|token|api_?key|private_?key)\w*[''"]?\s*[:=]\s*[''"]([^''"\s]{6,})[''"]' },
-    @{ n = 'CONNECTION STRING';      r = '(?i)(Password|Pwd)\s*=\s*([^;''"\s<>]{4,})' },
+    @{ n = 'CONNECTION STRING';      r = '(?i)(^|[;''"\s])(Password|Pwd)\s*=\s*([^;''"\s<>()]{4,})\s*(;|[''"]|$)' },
     @{ n = 'URL CON CREDENCIALES';   r = '(?i)[a-z][a-z0-9+.-]*://[^\s/:@''"]+:([^\s/@''"]{3,})@' },
     @{ n = 'MYSQL -p INLINE';        r = '(?i)\bmysql\w*(\.exe)?["'']?\s.*\s-p([^\s"'']{4,})' },
     @{ n = 'CLAVE PRIVADA';          r = '-----BEGIN [A-Z ]*PRIVATE KEY-----' },

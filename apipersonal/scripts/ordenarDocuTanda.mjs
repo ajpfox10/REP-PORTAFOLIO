@@ -7,8 +7,8 @@
 // No pisa: si el destino ya tiene ese nombre, renombra con sufijo.
 //
 // Uso:
-//   node scripts/ordenarDocuTanda.mjs --dni=12345678            (dry-run 1 agente)
-//   node scripts/ordenarDocuTanda.mjs --dni=12345678 --apply    (mueve)
+//   node scripts/ordenarDocuTanda.mjs --dni=xxxxxxx            (dry-run 1 agente)
+//   node scripts/ordenarDocuTanda.mjs --dni=xxxxxxx --apply    (mueve)
 //   node scripts/ordenarDocuTanda.mjs --tanda=prueba            (dry-run tanda)
 //   node scripts/ordenarDocuTanda.mjs --tanda=prueba --apply    (mueve tanda)
 import fs from 'fs';

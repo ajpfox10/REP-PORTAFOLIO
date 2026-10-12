@@ -471,7 +471,7 @@ export function FicheroBiometriaLabPage() {
               </select>
             </Field>
             <Field label="DNI / PIN">
-              <input style={S.input} value={dni} onChange={(e) => setDni(e.target.value)} placeholder="Ej: 12345678" />
+              <input style={S.input} value={dni} onChange={(e) => setDni(e.target.value)} placeholder="Ej: xxxxxxx" />
             </Field>
             <div style={S.sectionTitle}>Datos a operar</div>
             <div style={S.checkGrid}>

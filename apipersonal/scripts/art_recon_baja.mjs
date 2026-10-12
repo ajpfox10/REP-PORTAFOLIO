@@ -1,11 +1,11 @@
 // art_recon_baja.mjs — READ-ONLY: busca un CUIL en la nómina y vuelca el HTML del botón ELIMINAR
-// (no lo clickea). Uso: node scripts/art_recon_baja.mjs --cuil 20-12345678-9 [--abrir]
+// (no lo clickea). Uso: node scripts/art_recon_baja.mjs --cuil 20-xxxxxxx-4 [--abrir]
 // --abrir: si ELIMINAR es un link GET a un form, lo abre y vuelca el form SIN enviarlo.
 import dotenv from 'dotenv'; import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url)); const appRoot = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(appRoot, '.env') });
 const args = process.argv.slice(2); const val = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
-const CUIL = val('--cuil') || '20-12345678-9'; const ABRIR = args.includes('--abrir');
+const CUIL = val('--cuil') || '20-xxxxxxx-4'; const ABRIR = args.includes('--abrir');
 const OUT = path.join(appRoot, 'logs', 'art_capture'); fs.mkdirSync(OUT, { recursive: true });
 async function clickVC(page, loc) { await loc.waitFor({ state: 'visible', timeout: 20000 }); const b = await loc.boundingBox(); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.waitForTimeout(300); await page.mouse.down(); await page.waitForTimeout(100); await page.mouse.up(); }
 async function typeInto(loc, v) { await loc.click({ timeout: 15000 }); await loc.press('Control+A'); await loc.press('Backspace'); await loc.type(String(v), { delay: 35 }); }

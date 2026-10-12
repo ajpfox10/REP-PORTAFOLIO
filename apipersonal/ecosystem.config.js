@@ -4,6 +4,7 @@ module.exports = {
     name:         'apipersonal-prod',
     script:       'dist/server.js',
     cwd:          'C:\\apps\\personalprod\\apipersonal-prod',
+    exec_mode:    'fork',   // cluster en Windows deja workers huérfanos al reiniciar
     instances:    1,
     autorestart:  true,
     watch:        false,

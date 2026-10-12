@@ -13,8 +13,12 @@ Regla de negocio (definida con el usuario):
   - PARTIDO queda vacio. JUSTIFICADO siempre tildado.
   - Si SiAPe avisa "Ya existe una ausencia eventual para el dia X" -> ese dia NO se carga
     y se registra en la columna errores_carga.
-  - Al terminar todos los dias de un registro -> procesado=1 (aunque no se haya cargado
-    ninguno porque ya existian).
+  - Cada dia se anota apenas termina en siape_carga_dias (dni+fecha unico):
+    CARGADO / YA_EXISTIA no se vuelven a intentar; ERROR se reintenta hasta
+    SIAPE_MAX_INTENTOS. Si la corrida se corta, retoma donde quedo.
+  - procesado=1 recien cuando todos los dias del registro quedaron CARGADO o
+    YA_EXISTIA. Con errores el registro sigue pendiente (no se abre el agente
+    si no le queda ningun dia para intentar).
 
 REQUISITOS:
     pip install pyautogui pygetwindow
@@ -111,6 +115,12 @@ SIAPE_COMP_TIPO = os.environ.get("SIAPE_COMP_TIPO", "HORA COMPENSADA").strip()
 SIAPE_COMP_CANT_HORAS = os.environ.get("SIAPE_COMP_CANT_HORAS", "8").strip()
 SIAPE_COMP_HORA_DESDE = os.environ.get("SIAPE_COMP_HORA_DESDE", "08:00").strip()
 SIAPE_COMP_HORA_HASTA = os.environ.get("SIAPE_COMP_HORA_HASTA", "16:00").strip()
+# Buscar el agente por DNI desde la ficha. APAGADO: probado 12/10 en Novedades de
+# Ausentismo, los '...' de LEGAJO y de APELLIDO NO abren el 'Buscador de Personas'
+# (el de LEGAJO busca por el legajo de la ficha -> "No se han encontrado personas").
+SIAPE_BUSCAR_POR_DNI = os.environ.get("SIAPE_BUSCAR_POR_DNI", "false").strip().lower() in ("1", "true", "si", "yes")
+# Un dia en ERROR se reintenta en las corridas siguientes hasta este tope.
+SIAPE_MAX_INTENTOS = int(os.environ.get("SIAPE_MAX_INTENTOS", "3") or "3")
 SIAPE_JAB_SCALE = float(os.environ.get("SIAPE_JAB_SCALE", "1.5") or "1.5")
 SIAPE_PYAUTOGUI_FAILSAFE = os.environ.get("SIAPE_PYAUTOGUI_FAILSAFE", "false").strip().lower() in (
     "1",
@@ -656,8 +666,37 @@ def estado_siape(max_segundos=20):
     return ESTADO_DESCONOCIDO
 
 
+def _siape_al_frente():
+    """True si la ventana activa es SiAPe. Si no, un tipeo/tecla cae en la ventana que
+    este usando la persona (12/10: con alguien usando la PC el login tipeaba afuera)."""
+    try:
+        import win32gui
+        import win32process
+        fg = win32gui.GetForegroundWindow()
+        titulo = win32gui.GetWindowText(fg) or ""
+        if VENTANA_SIAPE.lower() in titulo.lower():
+            return True
+        # el login / los modales de Java pueden tener otro titulo: vale si es del mismo proceso
+        pid = win32process.GetWindowThreadProcessId(fg)[1]
+        return pid in _pids_siape()
+    except Exception:
+        return False
+
+
+def _exigir_siape_al_frente(que):
+    for _ in range(3):
+        if _siape_al_frente():
+            return
+        w = _buscar_ventana_siape()
+        if w:
+            _activar_ventana(w)
+        time.sleep(1)
+    raise RuntimeError(f"SiAPe no esta al frente (alguien usando la PC?): no {que}")
+
+
 def _escribir_en_campo(info, texto):
     """Click en el campo por bounds y tipeo. Oracle Forms no acepta setTextContents."""
+    _exigir_siape_al_frente("tipeo")
     _jab_click_bounds(info)
     pyautogui.hotkey("ctrl", "a")
     pyautogui.press("delete")
@@ -954,6 +993,7 @@ def _jab_click_bounds_verificado(info, nombre_esperado, role="text", timeout=6):
 
 
 def _jab_set_text_by_bounds(info, value):
+    _exigir_siape_al_frente("tipeo")
     _jab_click_bounds(info)
     pyautogui.hotkey("ctrl", "a")
     pyautogui.press("delete")
@@ -1233,6 +1273,193 @@ def marcar_procesado(cn, rec_id, errores):
     cn.commit()
 
 
+SQL_TABLA_DIAS = """
+CREATE TABLE IF NOT EXISTS `siape_carga_dias` (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  reconocimiento_id INT NOT NULL,
+  dni VARCHAR(20) NOT NULL,
+  fecha DATE NOT NULL,
+  estado ENUM('CARGADO','YA_EXISTIA','ERROR') NOT NULL,
+  categoria VARCHAR(40) NULL,
+  detalle VARCHAR(500) NULL,
+  intentos INT NOT NULL DEFAULT 0,
+  creado_en DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY ux_siape_carga_dias_dni_fecha (dni, fecha),
+  KEY ix_siape_carga_dias_rec (reconocimiento_id),
+  KEY ix_siape_carga_dias_estado (estado, categoria),
+  CONSTRAINT fk_siape_carga_dias_rec FOREIGN KEY (reconocimiento_id)
+    REFERENCES reconocimientos_medicos(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+"""
+
+ESTADOS_LISTOS = ("CARGADO", "YA_EXISTIA")
+
+
+# Lo que el robot BORRA de SiAPe para poner el franco (se anota ANTES de borrar).
+SQL_TABLA_REEMPLAZOS = """
+CREATE TABLE IF NOT EXISTS `siape_carga_reemplazos` (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  reconocimiento_id INT NOT NULL,
+  dni VARCHAR(20) NOT NULL,
+  fecha DATE NOT NULL,
+  tipo_anterior VARCHAR(150) NOT NULL,
+  estado ENUM('PENDIENTE','CAMBIADO','BORRADO','FALLO') NOT NULL DEFAULT 'PENDIENTE',
+  detalle VARCHAR(500) NULL,
+  creado_en DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY ix_siape_carga_reemplazos_dni_fecha (dni, fecha),
+  KEY ix_siape_carga_reemplazos_rec (reconocimiento_id),
+  CONSTRAINT fk_siape_carga_reemplazos_rec FOREIGN KEY (reconocimiento_id)
+    REFERENCES reconocimientos_medicos(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+"""
+
+# Si el dia ya tiene otra novedad en AUSENCIAS Y PRESENTES (p.ej. AUSENTE SIN AVISO del
+# jefe) se borra y se pone el franco (regla del usuario 12/10: todo se reemplaza).
+SIAPE_REEMPLAZAR = os.environ.get("SIAPE_REEMPLAZAR", "true").strip().lower() not in ("0", "false", "no")
+
+
+def asegurar_tabla_dias(cn):
+    with cn.cursor() as cur:
+        cur.execute(SQL_TABLA_DIAS)
+        cur.execute(SQL_TABLA_REEMPLAZOS)
+    cn.commit()
+
+
+def anotar_reemplazo(cn, rec_id, dni, dia, tipo_anterior):
+    with cn.cursor() as cur:
+        cur.execute("""INSERT INTO siape_carga_reemplazos (reconocimiento_id, dni, fecha, tipo_anterior)
+                       VALUES (%s, %s, %s, %s)""", (rec_id, str(dni), dia, tipo_anterior[:150]))
+        rid = cur.lastrowid
+    cn.commit()
+    return rid
+
+
+def cerrar_reemplazo(cn, rid, estado, detalle=None):
+    with cn.cursor() as cur:
+        cur.execute("UPDATE siape_carga_reemplazos SET estado=%s, detalle=%s WHERE id=%s",
+                    (estado, (detalle or "")[:500] or None, rid))
+    cn.commit()
+
+
+def estados_dias(cn, dni):
+    """{fecha: (estado, intentos)} de lo ya anotado para el agente (cualquier registro)."""
+    with cn.cursor() as cur:
+        cur.execute("SELECT fecha, estado, intentos FROM siape_carga_dias WHERE dni = %s", (str(dni),))
+        return {f["fecha"]: (f["estado"], f["intentos"]) for f in cur.fetchall()}
+
+
+def dia_a_intentar(estados, dia):
+    estado, intentos = estados.get(dia, (None, 0))
+    if estado in ESTADOS_LISTOS:
+        return False
+    return not (estado == "ERROR" and intentos >= SIAPE_MAX_INTENTOS)
+
+
+def categorizar(motivo):
+    """(estado, categoria) a partir del motivo que devuelve la carga del dia."""
+    t = (motivo or "").lower()
+    if "aviso de otro dia" in t:
+        return "ERROR", "AVISO_VIEJO"
+    if "bloqueado" in t or "reservar el registro" in t:
+        return "ERROR", "BLOQUEADO"
+    if "no pude cambiar" in t or "no borro" in t or "consulta no dejo" in t or "grilla no muestra" in t:
+        return "ERROR", "REEMPLAZO"
+    if "ya existia" in t or "ya existe" in t:
+        return "YA_EXISTIA", "YA_EXISTE"
+    if "ingresar la fecha" in t:
+        return "ERROR", "FALTA_FECHA"
+    if "ingresar un tipo" in t:
+        return "ERROR", "TIPO_VACIO"          # el combo parecia elegido pero Forms no lo tomo
+    if "datos en blanco" in t:
+        return "ERROR", "DATOS_EN_BLANCO"
+    if "combo" in t:
+        return "ERROR", "COMBO_TIPO"
+    if "no confirmo" in t:
+        return "ERROR", "SIN_CONFIRMAR"
+    if "superpone" in t or "carpeta" in t or "licencia" in t:
+        return "ERROR", "SUPERPOSICION"
+    if "ficheros" in t or "agente" in t or "ventana" in t:
+        return "ERROR", "NO_ABRIO_AGENTE"
+    return "ERROR", "OTRO"
+
+
+# Fallas del robot (no abrio el agente, no quedo al frente, el combo no tomo...): se
+# anotan pero NO gastan intento. Solo un rechazo real de SiAPe cuenta para el tope.
+# AGENTE_NO_ENCONTRADO = SiAPe no lo tiene (ni por DNI ni por nombre): queda agotado de una.
+ERRORES_ROBOT = {"NO_ABRIO_AGENTE", "SIN_CONFIRMAR", "COMBO_TIPO", "TIPO_VACIO",
+                 "DATOS_EN_BLANCO", "FALTA_FECHA", "AVISO_VIEJO", "BLOQUEADO", "REEMPLAZO"}
+
+
+def registrar_dia(cn, rec_id, dni, dia, estado, categoria=None, detalle=None, cuenta=None):
+    """Upsert por dni+fecha. Suma intento solo un ERROR que sea rechazo de SiAPe
+    (cuenta=None decide por categoria; False fuerza a no contar; "agotar" lo deja
+    en el tope para que no se reintente solo)."""
+    if cuenta is None:
+        cuenta = estado == "ERROR" and categoria not in ERRORES_ROBOT
+    if cuenta == "agotar":
+        nuevo, upd = SIAPE_MAX_INTENTOS, "GREATEST(intentos, %s)"
+        val = SIAPE_MAX_INTENTOS
+    else:
+        nuevo = val = 1 if cuenta else 0
+        upd = "intentos + %s"
+    with cn.cursor() as cur:
+        cur.execute(
+            f"""INSERT INTO siape_carga_dias
+                   (reconocimiento_id, dni, fecha, estado, categoria, detalle, intentos)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE
+                   reconocimiento_id = VALUES(reconocimiento_id),
+                   estado = VALUES(estado),
+                   categoria = VALUES(categoria),
+                   detalle = VALUES(detalle),
+                   intentos = {upd}""",
+            (rec_id, str(dni), dia, estado, categoria, (detalle or "")[:500] or None, nuevo, val),
+        )
+    cn.commit()
+
+
+def cerrar_registro_si_completo(cn, r, cargados_ahora=0):
+    """
+    procesado=1 solo si TODOS los dias del rango quedaron CARGADO/YA_EXISTIA.
+    Si no, deja el resumen de errores en errores_carga y el registro sigue pendiente.
+    """
+    estados = estados_dias(cn, r["dni"])
+    dias = dias_corridos(r["fecha_desde"], r["fecha_hasta"])
+    errores = [d for d in dias if estados.get(d, (None, 0))[0] not in ESTADOS_LISTOS]
+    if not errores:
+        marcar_procesado(cn, r["id"], [])
+        log("   -> todos los dias listos. procesado=1")
+        MN.registrar_item("siape_carga_francos", r["dni"], r.get("nombre"), r.get("tipo") or "FRANCO",
+                          f"{r['fecha_desde']:%d/%m/%Y}", f"{r['fecha_hasta']:%d/%m/%Y}", "ok",
+                          f"{len(dias)} día(s) listos ({cargados_ahora} cargado(s) en esta corrida)")
+        return True
+
+    with cn.cursor() as cur:
+        cur.execute(
+            """SELECT fecha, estado, categoria, intentos FROM siape_carga_dias
+                WHERE dni = %s AND fecha BETWEEN %s AND %s AND estado = 'ERROR'""",
+            (str(r["dni"]), r["fecha_desde"], r["fecha_hasta"]),
+        )
+        filas = cur.fetchall()
+        resumen = "; ".join(f"{f['fecha']:%d/%m/%Y} {f['categoria']} ({f['intentos']}x)" for f in filas)
+        sin_intentar = len(errores) - len(filas)
+        if sin_intentar:
+            resumen = (resumen + "; " if resumen else "") + f"{sin_intentar} día(s) sin intentar"
+        cur.execute("UPDATE reconocimientos_medicos SET errores_carga = %s WHERE id = %s",
+                    (resumen[:60000] or None, r["id"]))
+    cn.commit()
+    agotados = [f for f in filas if f["intentos"] >= SIAPE_MAX_INTENTOS]
+    log(f"   -> faltan {len(errores)} dia(s); sigue pendiente"
+        + (f" ({len(agotados)} con errores agotados, revisar a mano)" if agotados else ""))
+    if agotados and len(agotados) == len(errores):
+        MN.registrar_item("siape_carga_francos", r["dni"], r.get("nombre"), r.get("tipo") or "FRANCO",
+                          f"{r['fecha_desde']:%d/%m/%Y}", f"{r['fecha_hasta']:%d/%m/%Y}", "error",
+                          f"errores agotados: {resumen}")
+    return False
+
+
 def dias_corridos(desde, hasta):
     """Expande el rango a dias individuales (corridos, incluye fin de semana)."""
     d, out = desde, []
@@ -1361,7 +1588,10 @@ def cerrar_modales(max_vueltas=4):
             break
         log(f"Cierro aviso de SiAPe: {texto[:140]}")
         cerrados.append(texto)
-        if not cerrar_dialogo_jab():
+        # "No se ha podido reservar el registro... ¿seguir intentandolo?": con Si se
+        # quedaba reintentando para siempre (12/10, 54 intentos). Se contesta No.
+        pref = ("No", "NO", "No ALT N") if "reservar el registro" in texto.lower() else None
+        if not (cerrar_dialogo_jab(preferidos=pref) if pref else cerrar_dialogo_jab()):
             break
         time.sleep(PAUSA_MEDIA)
     return cerrados
@@ -1469,8 +1699,12 @@ def volver_a_ficheros():
     return activo
 
 
-def _buscar_agente_en_ficheros_jab(nombre, cuil=None):
-    """Busca por apellido/nombre en Ficheros y abre `NOVEDADES` del primer resultado."""
+def _buscar_agente_en_ficheros_jab(nombre, cuil=None, exigir="apellido"):
+    """Busca por apellido/nombre en Ficheros y abre `NOVEDADES` del primer resultado.
+
+    exigir: "apellido" (la fila tiene que contener el apellido), "completo" (la fila
+    tiene que ser el nombre completo: con solo el apellido se abrio otra GARCIA) o
+    "ninguno" (solo para entrar a una ficha y despues buscar por DNI)."""
     cerrar_modales()
     volver_a_ficheros()          # la ficha del agente anterior tapa Ficheros
 
@@ -1491,6 +1725,8 @@ def _buscar_agente_en_ficheros_jab(nombre, cuil=None):
     intentos = [busqueda]
     if busqueda:
         intentos.append(busqueda.split()[0])
+    if exigir == "ninguno":
+        intentos.append("A")         # cualquier ficha sirve para llegar al Buscador por DNI
 
     ultimo_error = ""
     for texto_busqueda in [i for i in intentos if i]:
@@ -1519,7 +1755,11 @@ def _buscar_agente_en_ficheros_jab(nombre, cuil=None):
         # La fila tiene que ser el agente buscado: abrir a otra persona y
         # cargarle una ausencia seria mucho peor que no cargar nada.
         apellido = busqueda.split()[0].upper() if busqueda else ""
-        if apellido and apellido not in texto_fila.upper():
+        if exigir == "completo" and _norm_nombre(texto_fila) != _norm_nombre(busqueda):
+            raise RuntimeError(
+                f"La fila de Ficheros dice '{texto_fila}' y yo buscaba '{busqueda}' (nombre completo). Freno."
+            )
+        if exigir == "apellido" and apellido and apellido not in texto_fila.upper():
             raise RuntimeError(
                 f"La fila de Ficheros dice '{texto_fila}' y yo buscaba '{busqueda}'. Freno."
             )
@@ -1551,6 +1791,211 @@ def _buscar_agente_en_ficheros_jab(nombre, cuil=None):
 
 TAB_AUSENCIAS = "AUSENCIAS Y PRESENTES"
 FRAME_AUSENCIAS = "Novedades de Ausentismo"
+
+
+class AgenteNoEncontrado(RuntimeError):
+    """SiAPe no tiene al agente (ni por DNI ni por nombre completo): no es falla del robot."""
+
+
+def _norm_nombre(s):
+    return " ".join(str(s or "").upper().replace(",", " ").split())
+
+
+def _ficha_header(desc):
+    """(el, info) del campo de la cabecera de la ficha (APELLIDO y NOMBRE / LEGAJO)."""
+    fe = _frame_ausencias(max_segundos=15)
+    if fe is None:
+        return None, None, None
+    for el, _d, info in _jab_walk(root=fe, max_depth=30, max_segundos=15, max_nodes=6000):
+        if (info.get("role") == "text" and (info.get("description") or "").strip() == desc
+                and _bounds_ok(info)):
+            return fe, el, info
+    return fe, None, None
+
+
+def _nombre_ficha():
+    _fe, el, _info = _ficha_header("APELLIDO y NOMBRE")
+    return _jab_read_text(el).strip() if el else ""
+
+
+def _abrir_buscador_desde_ficha():
+    """
+    Con la ficha de un agente abierta, el `...` al lado de LEGAJO abre el 'Buscador de
+    Personas' (el mismo que usa el robot de bajas). Devuelve (frame_el, frame_info) o
+    (None, None) si no hay ficha o no se abrio.
+    """
+    fe, _el, legajo = _ficha_header("LEGAJO")
+    if fe is None or not legajo:
+        return None, None
+    ly, lx = legajo["bounds"]["y"], legajo["bounds"]["x"]
+    puntos = [info for _e, _d, info in _jab_walk(root=fe, max_depth=30, max_segundos=15, max_nodes=6000)
+              if info.get("role") == "push button" and (info.get("name") or "").strip() == "..."
+              and _bounds_ok(info) and abs(info["bounds"]["y"] - ly) <= 8 and info["bounds"]["x"] > lx]
+    if not puntos:
+        log("AVISO: no encuentro el '...' de LEGAJO en la ficha.")
+        return None, None
+    _jab_click_bounds(min(puntos, key=lambda i: i["bounds"]["x"]))
+    time.sleep(PAUSA_LARGA)
+    for _ in range(3):
+        texto, _bs = leer_dialogo_jab(max_segundos=5)
+        if not texto:
+            break
+        t = " ".join(texto.split()).lower()
+        log(f"   aviso al abrir el Buscador: {t[:120]}")
+        if "guardar" in t or "cambios" in t:
+            cerrar_dialogo_jab(preferidos=("No", "NO", "No ALT N"))
+        else:
+            # "No puede dejar Datos en blanco" & cia: la ficha quedo sucia, no sigo
+            cerrar_modales()
+            return None, None
+        time.sleep(PAUSA_CORTA)
+    return _jab_buscar(empieza="Buscador de Personas", role="internal frame", timeout=20)
+
+
+def _buscador_personas_por_dni(frame_el, dni):
+    """
+    Buscador de Personas abierto -> Documento -> DNI -> BUSCAR -> fila 1 (verifica el
+    DNI) -> ACEPTAR. Misma mecanica que cargar_bajas_siape.buscar_agente (probada en
+    vivo 05-06/10). Devuelve el APELLIDO Y NOMBRE de la fila elegida.
+    """
+    dni = str(dni)
+    controles = [info for _el, _d, info in _jab_walk(max_depth=20, root=frame_el, max_segundos=20)
+                 if _bounds_ok(info)]
+    radio_doc = next((c for c in controles if c.get("role") == "radio button"
+                      and "documento" in (c.get("name") or c.get("description") or "").lower()), None)
+    if not radio_doc:
+        raise RuntimeError("No encuentro la opcion 'Documento' del Buscador de Personas.")
+    _jab_click_bounds(radio_doc)
+    time.sleep(PAUSA_CORTA)
+
+    ry = radio_doc["bounds"]["y"]
+    fila_doc = [c for c in controles if c.get("role") == "text"
+                and abs(c["bounds"]["y"] - ry) <= 15 and c["bounds"]["x"] > radio_doc["bounds"]["x"]]
+    if not fila_doc:
+        raise RuntimeError("No encuentro el campo del numero de documento en el Buscador.")
+    _jab_set_text_by_bounds(max(fila_doc, key=lambda c: c["bounds"]["x"]), dni)
+
+    btn = next((c for c in controles if c.get("role") == "push button"
+                and (c.get("name") or "").strip().upper() == "BUSCAR"), None)
+    if not btn:
+        raise RuntimeError("No encuentro el BUSCAR del Buscador de Personas.")
+    _jab_click_bounds(btn)
+    time.sleep(PAUSA_LARGA)
+    texto, _ = leer_dialogo_jab(max_segundos=6)
+    if texto:
+        cerrar_modales()
+        limpio = " ".join(texto.split())
+        if any(s in limpio.lower() for s in ("no se encontr", "no existe", "no hay", "sin datos", "no devolvi")):
+            raise AgenteNoEncontrado(f"DNI {dni}: SiAPe dice '{limpio[:150]}'")
+        raise RuntimeError(f"SiAPe aviso en el Buscador: {limpio[:200]}")
+
+    celdas = []
+    for intento in range(3):
+        fe, _fi = _jab_buscar(empieza="Buscador de Personas", role="internal frame", timeout=15)
+        for el, _d, info in _jab_walk(max_depth=20, root=fe or frame_el, max_segundos=45):
+            if info.get("role") == "text" and _bounds_ok(info) and info["bounds"]["y"] > ry + 40:
+                celdas.append((info["bounds"]["y"], info["bounds"]["x"], el, info))
+        if celdas:
+            break
+        log(f"   Buscador: grilla sin leer (intento {intento + 1}/3), reintento...")
+        time.sleep(PAUSA_LARGA)
+    if not celdas:
+        raise AgenteNoEncontrado(f"el Buscador no devolvio resultados para el DNI {dni}")
+    y0 = min(c[0] for c in celdas)
+    primera = sorted([c for c in celdas if abs(c[0] - y0) <= 3], key=lambda c: c[1])
+    textos = [_jab_read_text(c[2]).strip() for c in primera]
+    log(f"   Buscador fila 1: {' | '.join(textos)}")
+    if not any(dni in t.replace(".", "").replace("-", "") for t in textos):
+        raise RuntimeError(f"La primera fila del Buscador no es el DNI {dni}: {textos}. Freno.")
+    _jab_click_bounds(primera[0][3])
+    aceptar = next((c for c in controles if c.get("role") == "push button"
+                    and (c.get("name") or "").strip().upper() == "ACEPTAR"), None)
+    if not aceptar:
+        raise RuntimeError("No encuentro ACEPTAR en el Buscador de Personas.")
+    _jab_click_bounds(aceptar)
+    time.sleep(PAUSA_LARGA)
+    for _ in range(3):
+        texto, _ = leer_dialogo_jab(max_segundos=5)
+        if not texto:
+            break
+        t = " ".join(texto.split()).lower()
+        if "guardar" in t or "cambios" in t:
+            cerrar_dialogo_jab(preferidos=("No", "NO", "No ALT N"))
+            continue
+        cerrar_modales()
+        raise RuntimeError(f"SiAPe aviso al aceptar: {' '.join(texto.split())[:200]}")
+    return textos[0] if textos else ""
+
+
+def seleccionar_agente_por_dni(r):
+    """
+    Abre la ficha del agente buscandolo por DNI (Buscador de Personas). Ficheros se usa
+    solo para entrar a una ficha cualquiera cuando todavia no hay ninguna abierta.
+    Por DNI NO se controla el nombre contra la base (regla del usuario): solo que la
+    ficha haya pasado a la persona de la fila elegida por DNI.
+    """
+    frame_el, _fi = _abrir_buscador_desde_ficha()
+    if frame_el is None:
+        log("   sin ficha abierta: entro por Ficheros para llegar al Buscador por DNI")
+        _buscar_agente_en_ficheros_jab(r["nombre"], cuil=r["cuil"], exigir="ninguno")
+        frame_el, _fi = _abrir_buscador_desde_ficha()
+        if frame_el is None:
+            raise RuntimeError("No pude abrir el Buscador de Personas desde la ficha.")
+    nombre_fila = _buscador_personas_por_dni(frame_el, r["dni"])
+    nombre = _nombre_ficha()
+    if _norm_nombre(nombre) != _norm_nombre(nombre_fila):
+        raise RuntimeError(f"Elegi '{nombre_fila}' (DNI {r['dni']}) pero la ficha muestra '{nombre}'. Freno.")
+    log(f"   agente SIAPE (por DNI {r['dni']}): {nombre}")
+    if not _jab_select_tab(TAB_AUSENCIAS):
+        _click_abs("tab_ausencias")
+    time.sleep(PAUSA_MEDIA)
+    cerrar_modales()
+
+
+def abrir_agente(r):
+    """Por DNI; si eso falla, por nombre en Ficheros exigiendo el nombre COMPLETO.
+    Si SiAPe no lo tiene ni por DNI ni por nombre -> AgenteNoEncontrado."""
+    if SIAPE_BUSCAR_POR_DNI:
+        try:
+            seleccionar_agente_por_dni(r)
+            return "DNI"
+        except Exception as e:
+            log(f"   por DNI no pude ({e}); pruebo por nombre completo en Ficheros")
+    try:
+        _buscar_agente_en_ficheros_jab(r["nombre"], cuil=r["cuil"], exigir="completo")
+    except RuntimeError as e:
+        # Ficheros no lo trae, o trae a otra persona: se marca y se sigue con el proximo.
+        if "sin resultado" in str(e) or "nombre completo" in str(e):
+            raise AgenteNoEncontrado(str(e))
+        raise
+    if not _jab_select_tab(TAB_AUSENCIAS):
+        _click_abs("tab_ausencias")
+    time.sleep(PAUSA_MEDIA)
+    cerrar_modales()
+    return "NOMBRE"
+
+
+def reiniciar_siape(motivo):
+    """Cierra SiAPe y vuelve a entrar: unica salida segura de una ficha trabada."""
+    log(f"   REINICIO SiAPe: {motivo}")
+    try:
+        cerrar_siape()
+    except Exception as e:
+        log(f"AVISO: no pude cerrar SiAPe: {e}")
+    _jab_reset_driver()
+    _ESCALA_JAB.update(clave=None, valor=None)
+    _asegurar_escritorio()
+    asegurar_sesion()
+    cerrar_modales()
+
+
+def _asegurar_escritorio():
+    """Con el RDP desconectado SiAPe no queda al frente y no se leen los avisos."""
+    try:
+        from escritorio_activo import asegurar_escritorio_activo
+        asegurar_escritorio_activo(log)
+    except Exception as e:
+        log(f"AVISO: no pude asegurar el escritorio activo: {e}")
 
 
 def seleccionar_agente_ausencias(cuil, nombre):
@@ -1787,6 +2232,22 @@ def _tildar_justificado(frame=None):
 AVISO_EXITO = "se han guardado los cambios"
 
 
+_MESES_SIAPE = {"ENE": 1, "JAN": 1, "FEB": 2, "MAR": 3, "ABR": 4, "APR": 4, "MAY": 5, "JUN": 6,
+                "JUL": 7, "AGO": 8, "AUG": 8, "SEP": 9, "SET": 9, "OCT": 10, "NOV": 11, "DIC": 12, "DEC": 12}
+
+
+def _fecha_de_aviso(texto):
+    """'... para el dia 29-MAR-2026.' -> date(2026, 3, 29) (None si no trae fecha)."""
+    import re
+    m = re.search(r"(\d{1,2})-([A-Za-z]{3})-(\d{4})", texto or "")
+    if not m or m.group(2).upper() not in _MESES_SIAPE:
+        return None
+    try:
+        return date(int(m.group(3)), _MESES_SIAPE[m.group(2).upper()], int(m.group(1)))
+    except ValueError:
+        return None
+
+
 def _resolver_avisos(dia):
     """
     Encadena los avisos que tira SiAPe despues de guardar.
@@ -1812,7 +2273,18 @@ def _resolver_avisos(dia):
             time.sleep(PAUSA_MEDIA)
             continue
         motivo = limpio[:180]
+        if "reservar el registro" in t:
+            cerrar_dialogo_jab(preferidos=("No", "NO", "No ALT N"))
+            cerrar_modales()
+            return False, f"{dia:%d/%m/%Y}: registro bloqueado por otra sesion de SiAPe"
         if "ya existe" in t:
+            fecha_aviso = _fecha_de_aviso(limpio)
+            if fecha_aviso and fecha_aviso != dia:
+                # Aviso trabado de un dia anterior: NO dice nada de este dia. Darlo por
+                # "ya existia" marcaba dias sin cargar (12/10: 30/03..05/04 con el del 29-MAR).
+                cerrar_modales()
+                return False, (f"{dia:%d/%m/%Y}: aviso de otro dia ({fecha_aviso:%d/%m/%Y}); "
+                               "SiAPe quedo trabado, no se sabe si este dia existe")
             motivo = "ya existia una ausencia ese dia"
         cerrar_modales()
         return False, f"{dia:%d/%m/%Y}: {motivo}"
@@ -1934,6 +2406,195 @@ def cargar_dia_ausencia_agente(dia, dialogos=None):
     if motivo == "GUARDADO":
         return True, ""
     return False, f"{dia:%d/%m/%Y}: SiAPe no confirmo el guardado; no lo doy por cargado"
+
+
+def _boton_barra(desc):
+    """Boton de la barra de herramientas de Forms (arriba de todo) por description."""
+    _el, info = _jab_buscar(desc=desc, role="push button", timeout=15, y_max=90)
+    return info
+
+
+def leer_grilla_ausencias():
+    """[(fecha_txt, tipo_txt, info_celda_fecha)] de la grilla FECHA | TIPO DE AUSENCIA de la ficha.
+    (El campo FECHA de arriba tambien tiene description FECHA: se deja afuera por x.)"""
+    fe = _frame_ausencias(max_segundos=15)
+    if fe is None:
+        return []
+    x0 = (fe.get_element_information().get("bounds") or {}).get("x", 0)
+    fechas, tipos = [], []
+    for el, _d, info in _jab_walk(root=fe, max_depth=30, max_segundos=25, max_nodes=8000):
+        if info.get("role") != "text" or not _bounds_ok(info):
+            continue
+        d = (info.get("description") or "").strip()
+        if d == "FECHA" and info["bounds"]["x"] - x0 < 200:
+            fechas.append((info["bounds"]["y"], _jab_read_text(el).strip(), info))
+        elif d == "TIPO DE AUSENCIA":
+            tipos.append((info["bounds"]["y"], _jab_read_text(el).strip()))
+    filas = []
+    for y, f, info in sorted(fechas, key=lambda t: t[0]):
+        tipo = next((t for ty, t in tipos if abs(ty - y) <= 4), "")
+        if f:
+            filas.append((f, tipo, info))
+    return filas
+
+
+def _contestar_avisos(si=("Si", "Sí"), no=("No", "NO", "No ALT N"), vueltas=4):
+    """Contesta los avisos encadenados: '¿guardar cambios?' -> No, confirmaciones -> Si.
+    Devuelve los textos vistos."""
+    vistos = []
+    for _ in range(vueltas):
+        texto, _bs = leer_dialogo_jab(max_segundos=5)
+        if not texto:
+            break
+        limpio = " ".join(texto.split())
+        vistos.append(limpio)
+        t = limpio.lower()
+        if "reservar el registro" in t:
+            cerrar_dialogo_jab(preferidos=no)     # bloqueado por otra sesion: no insistir
+        elif "guardar" in t and "cambios" in t:
+            cerrar_dialogo_jab(preferidos=no)
+        else:
+            cerrar_dialogo_jab(preferidos=si + ("Aceptar", "OK", "Continuar"))
+        time.sleep(PAUSA_MEDIA)
+    return vistos
+
+
+def _fecha_txt(s):
+    try:
+        d, m, a = (int(x) for x in s.split("/"))
+        return date(a, m, d)
+    except Exception:
+        return None
+
+
+def ir_a_fecha_grilla(dia, max_vueltas=15):
+    """
+    Lleva la grilla FECHA | TIPO DE AUSENCIA hasta `dia` como se hace a mano: clic en
+    la grilla y flechas arriba/abajo (la grilla viene ordenada de la fecha mas nueva a
+    la mas vieja y muestra 6 filas). Devuelve las filas de ese dia (lista vacia si la
+    grilla salta de largo ese dia) o None si no pude llegar.
+    (12/10: la consulta Enter Query/Re Query NO filtraba la grilla.)
+    """
+    # "¿Desea guardar los cambios?" -> NO: descarta el registro a medio cargar que deja
+    # un "ya existe" (con Si volvia a intentar guardarlo y la grilla no se movia, 12/10).
+    _contestar_avisos()
+    asegurar_pestana_ausencias()
+    filas = leer_grilla_ausencias()
+    if not filas:
+        return None
+    _jab_click_bounds(filas[0][2])               # foco en la grilla
+    time.sleep(PAUSA_MEDIA)
+    _contestar_avisos()
+    ultima_vista = None
+    for _vuelta in range(max_vueltas):
+        filas = leer_grilla_ausencias()
+        fechas = [_fecha_txt(f) for f, _t, _i in filas]
+        fechas_ok = [f for f in fechas if f]
+        if not fechas_ok:
+            return None
+        del_dia = [x for x, f in zip(filas, fechas) if f == dia]
+        if del_dia:
+            log(f"   grilla en {dia:%d/%m/%Y}: {[(f, t) for f, t, _i in del_dia]}")
+            return del_dia
+        nueva, vieja = max(fechas_ok), min(fechas_ok)
+        log(f"   grilla muestra {vieja:%d/%m/%Y}..{nueva:%d/%m/%Y} ({len(fechas_ok)} filas), busco {dia:%d/%m/%Y}")
+        if vieja < dia < nueva:
+            return []                             # la grilla pasa de largo: ese dia no hay nada
+        vista = tuple(fechas_ok)
+        if vista == ultima_vista:
+            log(f"   la grilla no se movio ({vieja:%d/%m/%Y}..{nueva:%d/%m/%Y})")
+            return None
+        ultima_vista = vista
+        if dia < vieja:
+            n, tecla = min(max((vieja - dia).days, 1), 60), "down"
+        else:
+            n, tecla = min(max((dia - nueva).days, 1), 60), "up"
+        # el foco tiene que quedar en la fila de la punta para que la grilla corra
+        _jab_click_bounds(filas[-1][2] if tecla == "down" else filas[0][2])
+        time.sleep(PAUSA_CORTA)
+        _exigir_siape_al_frente("aprieto flechas")
+        for _ in range(n):
+            pyautogui.press(tecla)
+            time.sleep(0.08)
+        time.sleep(PAUSA_MEDIA)
+        _contestar_avisos()
+    return None
+
+
+def _fecha_ficha_arriba():
+    """FECHA del registro actual (los campos de arriba de la ficha)."""
+    _campos_ausencias_catalogo()
+    el, info = _CAMPOS_CAT.get("FECHA", (None, None))
+    if not el:
+        el, info = _jab_buscar_ausencias(nombre="FECHA", role="text", timeout=20,
+                                         banda_y=(195, 235), x_min=360, x_max=520)
+    return _jab_read_text(el).strip() if el else ""
+
+
+def reemplazar_dia(cn, r, dia, hasta=None, reabrir=None):
+    """
+    El dia ya tiene una novedad que no es el franco: la anota en siape_carga_reemplazos,
+    la borra (X roja + Guardar) y despues carga el franco como siempre.
+    Devuelve (ok, motivo, tipo_anterior).
+    """
+    filas = ir_a_fecha_grilla(dia)
+    if filas is None and reabrir is not None:
+        # la ficha quedo trabada con el registro rechazado: vuelvo a abrirla limpia
+        log("   la grilla no avanza: vuelvo a Ficheros y reabro el agente")
+        reabrir()
+        filas = ir_a_fecha_grilla(dia)
+    if filas is None:
+        return False, f"{dia:%d/%m/%Y}: no pude llegar a ese dia en la grilla; no borro nada", None
+    if not filas:
+        return False, f"{dia:%d/%m/%Y}: SiAPe dijo 'ya existe' pero la grilla no muestra nada ese dia", None
+    if len(filas) > 1:
+        return False, f"{dia:%d/%m/%Y}: hay {len(filas)} novedades ese dia {[t for _f, t, _i in filas]}; no borro", None
+    _f, tipo, celda = filas[0]
+    if tipo.upper().startswith("FRANCO COMPENSATORIO"):
+        return True, "YA_ERA_FRANCO", tipo
+    if hasta == "leer":
+        _jab_click_bounds(celda)
+        time.sleep(PAUSA_MEDIA)
+        log(f"   --hasta leer: el {dia:%d/%m/%Y} tiene '{tipo}'; arriba quedo FECHA="
+            f"'{_fecha_ficha_arriba()}'; corto sin cambiar nada")
+        return False, "prueba: solo lectura", tipo
+
+    # No se borra nada (indicacion del usuario 12/10): se CAMBIA el tipo del registro
+    # existente a franco. Igual se anota antes lo que habia.
+    rid = anotar_reemplazo(cn, r["id"], r["dni"], dia, tipo)
+    log(f"   anotado cambio #{rid}: {dia:%d/%m/%Y} tenia '{tipo}' -> lo paso a franco")
+    try:
+        _jab_click_bounds(celda)                 # me paro en el registro de ese dia
+        time.sleep(PAUSA_MEDIA)
+        cerrar_modales()
+        # Control: el registro de arriba TIENE que ser el de ese dia; si no, no toco nada.
+        fecha_ficha = _fecha_ficha_arriba()
+        if fecha_ficha != dia.strftime("%d/%m/%Y"):
+            raise RuntimeError(f"arriba quedo FECHA '{fecha_ficha}', no el {dia:%d/%m/%Y}; no cambio nada")
+        combo, combo_info = asegurar_pestana_ausencias()
+        if not _elegir_tipo_ausencia_jab(combo, combo_info, TIPO_AUSENCIA):
+            raise RuntimeError(f"no pude dejar el combo en '{TIPO_AUSENCIA}'")
+        if _fecha_ficha_arriba() != dia.strftime("%d/%m/%Y"):
+            raise RuntimeError("al elegir el tipo cambio el registro de arriba; no guardo")
+        # JUSTIFICADO no se toca (asi se hace a mano)
+        g = _boton_barra("Guardar")
+        if not g:
+            raise RuntimeError("No encuentro Guardar")
+        _jab_click_bounds(g)
+        time.sleep(PAUSA_LARGA)
+        ok, motivo = _resolver_avisos(dia)
+        if not ok:
+            raise RuntimeError(motivo)
+        if motivo != "GUARDADO":
+            filas2 = ir_a_fecha_grilla(dia) or []
+            if not any(t.upper().startswith("FRANCO COMPENSATORIO") for _f, t, _i in filas2):
+                raise RuntimeError(f"SiAPe no confirmo y la grilla muestra {[(f, t) for f, t, _i in filas2]}")
+        cerrar_reemplazo(cn, rid, "CAMBIADO")
+    except Exception as e:
+        cerrar_reemplazo(cn, rid, "FALLO", str(e))
+        cerrar_modales()
+        return False, f"{dia:%d/%m/%Y}: no pude cambiar '{tipo}' a franco: {e}", tipo
+    return True, f"cambio '{tipo}' a franco", tipo
 
 
 def _set_compensatorios_field(frame, name, value, *, x_min=None, x_max=None, y_min=None, y_max=None):
@@ -2122,6 +2783,10 @@ def main():
     ap.add_argument("--log", help="archivo de log (ademas de la consola)")
     ap.add_argument("--solo-abrir", action="store_true",
                     help="deja el agente abierto en SiAPe y corta sin guardar nada")
+    ap.add_argument("--prueba-reemplazo", metavar="DD/MM/YYYY",
+                    help="con --id: va a ese dia de la grilla y reemplaza lo que haya por el franco")
+    ap.add_argument("--hasta", choices=["leer", "todo"], default="todo",
+                    help="con --prueba-reemplazo: 'leer' solo muestra lo que hay, sin borrar")
     args = ap.parse_args()
 
     if args.log:
@@ -2131,17 +2796,35 @@ def main():
             print(f"AVISO: no pude abrir el log {args.log}: {e}")
 
     cn = conn()
+    asegurar_tabla_dias(cn)
     pendientes = traer_pendientes(cn, solo_id=args.id, limit=args.limit)
 
-    total_dias = sum(
-        len(dias_corridos(r["fecha_desde"], r["fecha_hasta"])) for r in pendientes
-    )
-    log(f"{len(pendientes)} registro(s) pendiente(s) - {total_dias} dia(s) a cargar")
+    desde_arg = None
+    if args.from_date:
+        desde_arg = date.fromisoformat(
+            "-".join(reversed(args.from_date.replace("-", "/").split("/")))
+        )
+
+    def dias_del_registro(r):
+        """Dias del rango que todavia hay que intentar (lo CARGADO/YA_EXISTIA y los
+        errores agotados quedan afuera)."""
+        estados = estados_dias(cn, r["dni"])
+        dias = [d for d in dias_corridos(r["fecha_desde"], r["fecha_hasta"]) if dia_a_intentar(estados, d)]
+        if desde_arg:
+            dias = [d for d in dias if d >= desde_arg]
+        if args.max_days:
+            dias = dias[:args.max_days]
+        return dias
+
+    total_dias = sum(len(dias_del_registro(r)) for r in pendientes)
+    log(f"{len(pendientes)} registro(s) pendiente(s) - {total_dias} dia(s) a intentar "
+        f"(tope {SIAPE_MAX_INTENTOS} intentos por dia)")
 
     for r in pendientes:
         dias = dias_corridos(r["fecha_desde"], r["fecha_hasta"])
+        faltan = len(dias_del_registro(r))
         log(f"  #{r['id']:<4} {r['nombre']:<38} CUIL {r['cuil']}  "
-            f"{r['fecha_desde']:%d/%m/%Y} a {r['fecha_hasta']:%d/%m/%Y}  ({len(dias)}d)")
+            f"{r['fecha_desde']:%d/%m/%Y} a {r['fecha_hasta']:%d/%m/%Y}  ({len(dias)}d, faltan {faltan})")
 
     if args.dry_run:
         log("--dry-run: no se toco el SiAPe.")
@@ -2159,6 +2842,7 @@ def main():
     }
 
     # Login + eRreH en un solo paso, guiado por el estado real de la pantalla.
+    _asegurar_escritorio()
     asegurar_sesion()
     cerrar_modales()                    # avisos que hayan quedado de una corrida anterior
     origen = ventana_siape()            # trae la ventana al frente
@@ -2175,53 +2859,149 @@ def main():
     else:
         log("Flujo SIAPE: legacy Ausencias Eventuales")
 
+    ficha_sucia = {"v": False}
     for r in pendientes:
         log(f"-- #{r['id']} {r['nombre']} ---------------------")
-        if usar_agente_ausencias:
-            seleccionar_agente_ausencias(r["cuil"], r["nombre"])
-        elif usar_compensatorios:
-            seleccionar_agente_compensatorios(r["cuil"], r["nombre"])
-        else:
-            seleccionar_agente(r["cuil"], origen)
+        dias_a_cargar = dias_del_registro(r)
+        if not dias_a_cargar and not args.solo_abrir:
+            log("   nada para intentar (todo cargado/ya existia o errores agotados); no abro el agente.")
+            cerrar_registro_si_completo(cn, r)
+            continue
+
+        def _abrir():
+            if usar_agente_ausencias:
+                return abrir_agente(r)
+            if usar_compensatorios:
+                seleccionar_agente_compensatorios(r["cuil"], r["nombre"])
+            else:
+                seleccionar_agente(r["cuil"], origen)
+            return "NOMBRE"
+
+        if ficha_sucia["v"]:
+            # Un dia a medio cargar deja la ficha trabada ("No puede dejar Datos en
+            # blanco") y arrastraba a TODOS los agentes siguientes. Se arranca de cero.
+            reiniciar_siape("la ficha anterior quedo con un registro a medio cargar")
+            ficha_sucia["v"] = False
+        def _marcar_no_encontrado(e):
+            # SiAPe no lo tiene: se marca como definitivo (no se reintenta solo) y sigo.
+            log(f"   NO ESTA EN SiAPe: {e} -> lo marco y sigo con el siguiente")
+            for dia in dias_a_cargar:
+                registrar_dia(cn, r["id"], r["dni"], dia, "ERROR", "AGENTE_NO_ENCONTRADO", str(e),
+                              cuenta="agotar")
+            if SIAPE_BUSCAR_POR_DNI:
+                ficha_sucia["v"] = True      # puede haber quedado el Buscador abierto
+
+        try:
+            _abrir()
+        except AgenteNoEncontrado as e:
+            _marcar_no_encontrado(e)
+            continue
+        except Exception as e:
+            log(f"   ERROR abriendo el agente: {e}")
+            try:
+                reiniciar_siape("no pude abrir el agente")
+                _abrir()
+            except AgenteNoEncontrado as e2:
+                _marcar_no_encontrado(e2)
+                continue
+            except Exception as e2:
+                # Falla del robot, no de SiAPe: se anota pero NO gasta intento.
+                log(f"   ERROR abriendo el agente (tras reiniciar): {e2}")
+                for dia in dias_a_cargar:
+                    registrar_dia(cn, r["id"], r["dni"], dia, "ERROR", "NO_ABRIO_AGENTE", str(e2),
+                                  cuenta=False)
+                ficha_sucia["v"] = True
+                continue
 
         if args.solo_abrir:
             log("--solo-abrir: llegue a la pantalla del agente y corto sin guardar nada.")
             break
 
-        errores, cargados = [], 0
-        dias_a_cargar = dias_corridos(r["fecha_desde"], r["fecha_hasta"])
-        if args.from_date:
-            desde_arg = date.fromisoformat(
-                "-".join(reversed(args.from_date.replace("-", "/").split("/")))
-            )
-            dias_a_cargar = [d for d in dias_a_cargar if d >= desde_arg]
-        if args.max_days:
-            dias_a_cargar = dias_a_cargar[:args.max_days]
+        if args.prueba_reemplazo:
+            d_, m_, a_ = (int(x) for x in args.prueba_reemplazo.split("/"))
+            dia = date(a_, m_, d_)
+            log(f"   PRUEBA reemplazo {dia:%d/%m/%Y} (--hasta {args.hasta})")
+            ok, motivo, tipo = reemplazar_dia(cn, r, dia, hasta=args.hasta)
+            log(f"   resultado: ok={ok} motivo={motivo} tipo_anterior={tipo}")
+            if args.hasta == "todo":
+                if ok:
+                    registrar_dia(cn, r["id"], r["dni"], dia,
+                                  "YA_EXISTIA" if motivo == "YA_ERA_FRANCO" else "CARGADO",
+                                  None if motivo == "YA_ERA_FRANCO" else "REEMPLAZO_OK", motivo)
+                else:
+                    est, cat = categorizar(motivo)
+                    registrar_dia(cn, r["id"], r["dni"], dia, est, cat, motivo)
+            break
+
+        cargados = salteados = 0
+        seguidos_robot = 0              # errores del robot seguidos en este agente
+        reinicios = 0
         for dia in dias_a_cargar:
             log(f"   cargando {dia:%d/%m/%Y}...")
-            if usar_agente_ausencias:
-                ok, motivo = cargar_dia_ausencia_agente(dia, dialogos)
-            elif usar_compensatorios:
-                ok, motivo = cargar_dia_compensatorio_jab(dia, dialogos)
-            else:
-                ok, motivo = cargar_dia(dia, origen, dialogos)
+            try:
+                if usar_agente_ausencias:
+                    ok, motivo = cargar_dia_ausencia_agente(dia, dialogos)
+                elif usar_compensatorios:
+                    ok, motivo = cargar_dia_compensatorio_jab(dia, dialogos)
+                else:
+                    ok, motivo = cargar_dia(dia, origen, dialogos)
+                excepcion = False
+            except Exception as e:
+                ok, motivo, excepcion = False, f"{dia:%d/%m/%Y}: {e}", True
             if ok:
                 cargados += 1
+                seguidos_robot = 0
+                ficha_sucia["v"] = False
+                registrar_dia(cn, r["id"], r["dni"], dia, "CARGADO")
                 log(f"   OK   {dia:%d/%m/%Y}")
-            else:
-                errores.append(motivo)
-                log(f"   SKIP {motivo}")
+                continue
 
-        if args.max_days or args.solo_abrir:
-            log(f"   -> prueba parcial: {cargados} cargado(s), {len(errores)} salteado(s). "
-                "No marco procesado.")
-        else:
-            marcar_procesado(cn, r["id"], errores)
-            log(f"   -> {cargados} cargado(s), {len(errores)} salteado(s). procesado=1")
-            MN.registrar_item("siape_carga_francos", r["dni"], r.get("nombre"), r.get("tipo") or "FRANCO",
-                              f"{r['fecha_desde']:%d/%m/%Y}", f"{r['fecha_hasta']:%d/%m/%Y}",
-                              "ok" if not errores else ("error" if not cargados else "aviso"),
-                              f"{cargados} día(s) cargado(s)" + (f"; no cargados: {'; '.join(errores)}" if errores else ""))
+            estado, categoria = categorizar(motivo)
+            if (not excepcion and estado == "YA_EXISTIA" and SIAPE_REEMPLAZAR and usar_agente_ausencias):
+                # Ya hay algo ese dia (p.ej. AUSENTE SIN AVISO del jefe): se borra y va el franco.
+                try:
+                    ok_r, motivo_r, tipo_ant = reemplazar_dia(
+                        cn, r, dia, reabrir=lambda: (volver_a_ficheros(), abrir_agente(r)))
+                except Exception as e:
+                    ok_r, motivo_r, tipo_ant = False, f"{dia:%d/%m/%Y}: no pude cambiar a franco: {e}", None
+                if ok_r and motivo_r == "YA_ERA_FRANCO":
+                    pass                                  # de verdad ya estaba: YA_EXISTIA
+                elif ok_r:
+                    cargados += 1
+                    seguidos_robot = 0
+                    ficha_sucia["v"] = False
+                    registrar_dia(cn, r["id"], r["dni"], dia, "CARGADO", "REEMPLAZO_OK", motivo_r)
+                    log(f"   OK   {dia:%d/%m/%Y} ({motivo_r})")
+                    continue
+                else:
+                    motivo = motivo_r
+                    estado, categoria = categorizar(motivo)
+            salteados += 1
+            if excepcion and estado != "ERROR":
+                estado, categoria = "ERROR", "OTRO"
+            registrar_dia(cn, r["id"], r["dni"], dia, estado, categoria, motivo,
+                          cuenta=False if excepcion else None)
+            log(f"   {'ERROR' if excepcion else 'SKIP'} [{categoria}] {motivo}")
+            es_robot = excepcion or categoria in ERRORES_ROBOT
+            seguidos_robot = seguidos_robot + 1 if es_robot else 0
+            ficha_sucia["v"] = es_robot
+            if excepcion or categoria == "AVISO_VIEJO" or seguidos_robot >= 2:
+                if reinicios >= 1:
+                    log("   ya reinicie una vez en este agente; sigo con el registro siguiente")
+                    break
+                reinicios += 1
+                seguidos_robot = 0
+                try:
+                    reiniciar_siape(f"{'error' if excepcion else '2 fallas seguidas'} en {r['nombre']}")
+                    ficha_sucia["v"] = False
+                    _abrir()
+                except Exception as e:
+                    log(f"   no pude reabrir el agente: {e}")
+                    ficha_sucia["v"] = True
+                    break
+
+        log(f"   -> {cargados} cargado(s), {salteados} salteado(s).")
+        cerrar_registro_si_completo(cn, r, cargados)
 
     cn.close()
     log("Listo.")

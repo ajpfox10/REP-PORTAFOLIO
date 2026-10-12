@@ -18,7 +18,7 @@ dias_correcto). Para cada agente:
 
 Uso:
   python corregir_stress_jab.py --dry-run          # lista lo que haria
-  python corregir_stress_jab.py --dni 12345678     # uno solo (recomendado 1ra vez)
+  python corregir_stress_jab.py --dni xxxxxxx     # uno solo (recomendado 1ra vez)
   python corregir_stress_jab.py                    # toda la cola pendiente
 """
 import argparse

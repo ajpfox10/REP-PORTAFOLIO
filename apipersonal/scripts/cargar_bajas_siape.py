@@ -20,8 +20,8 @@ Tabla (se crea sola): baja_carga_siape, una fila por tramo dado de baja.
 
 Uso:
   python cargar_bajas_siape.py --dry-run                      # arma y muestra la cola
-  python cargar_bajas_siape.py --dni 12345678 --hasta buscar  # prueba hasta un paso
-  python cargar_bajas_siape.py --dni 12345678                 # carga ese agente
+  python cargar_bajas_siape.py --dni xxxxxxx --hasta buscar  # prueba hasta un paso
+  python cargar_bajas_siape.py --dni xxxxxxx                 # carga ese agente
 Pasos de --hasta: menu, buscar, cargo, supervisor, pestana, preventiva-sin-guardar, preventiva, todo
 """
 

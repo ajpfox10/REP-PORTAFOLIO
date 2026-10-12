@@ -1,0 +1,119 @@
+.env
+.env.*
+**/.env
+**/.env.*
+
+node_modules/
+**/node_modules/
+
+logs/
+*.log
+**/*.log
+*.err
+**/*.err
+
+dist/
+**/dist/
+
+tmp/
+**/tmp/
+
+.vs/
+**/.vs/
+
+.cache/
+**/.cache/
+coverage/
+**/coverage/
+
+
+# notas internas de auditoría con credenciales/secretos en texto
+reformas.txt
+**/reformas.txt
+PENDIENTES.txt
+**/PENDIENTES.txt
+
+# logs/capturas sueltas que no deben subir
+fichadas_log.txt
+**/fichadas_log.txt
+# cualquier log de fichadas con otro nombre (fichadas_2026.txt, attlog.txt, etc.)
+*fichad*.txt
+**/*fichad*.txt
+attlog*.txt
+**/attlog*.txt
+*.png
+**/*.png
+*.jpg
+**/*.jpg
+*.jpeg
+**/*.jpeg
+# ...pero conservar imágenes que son assets reales del código (plantilla Word)
+!apipersonal/src/templates/**/*.png
+!apipersonal/src/templates/**/*.jpg
+!apipersonal/src/templates/**/*.jpeg
+
+# --- credenciales / artefactos que nunca deben subir (ver sync-guard.ps1) ---
+fichero_config.json
+**/fichero_config.json
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+# salida de compilacion .NET y cache de Python
+**/bin/Debug/
+**/bin/Release/
+**/obj/
+__pycache__/
+**/__pycache__/
+*.pyc
+# backups sueltos (suelen tener la version sin redactar)
+*.bak
+*.bak_*
+# perfiles de Chrome de pruebas (cookies, logins, historial)
+.chrome-debug/
+**/.chrome-debug/
+chrome-dev-visible*/
+**/chrome-dev-visible*/
+# documentos, planillas y archivos subidos/escaneados (datos personales)
+*.pdf
+**/*.pdf
+!apipersonal/assets/legajo/*.pdf
+*.csv
+**/*.csv
+*.xlsx
+*.xls
+*.webp
+*.bmp
+**/storage/
+**/uploads/
+**/capturas/
+**/screenshots/
+# entornos virtuales de Python
+.venv/
+**/.venv/
+venv/
+**/venv/
+# volcados/capturas de pantallas de SiAPe y listados reales (datos personales de agentes)
+apipersonal/scripts/dump_*.txt
+apipersonal/scripts/logs_*.txt
+apipersonal/scripts/siape_*.json
+apipersonal/scripts/siape_*.txt
+apipersonal/scripts/siape_map_baja/
+apipersonal/scripts/siape_catalogo/
+apipersonal/scripts/data/
+apipersonal/scripts/siape_stress/bajar_frame*.html
+# basura: copias, salidas de pruebas, temporales, instaladores y builds viejos
+* - copia*
+*.out
+*.exe
+*.msi
+**/test-results/
+**/playwright-report/
+**/_tmp_*
+apipersonal/_*.mjs
+apipersonal/tmp_*
+apifront/public/assets/
+3bugs.txt
+PENDIENTES_EXTERNOS.txt
+synctest.txt

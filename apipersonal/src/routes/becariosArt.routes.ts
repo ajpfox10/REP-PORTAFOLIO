@@ -10,6 +10,7 @@
 //   DELETE /becarios-art/:dni        Baja lógica (soft delete)
 //   GET    /becarios-art/establecimiento              Control "todos en Catán" (art_control_establecimiento)
 //   POST   /becarios-art/establecimiento/:dni/reintentar  Marca REINTENTAR para el robot
+//   POST   /becarios-art/lanzar                      { script } corre un robot de ProvinciART ya
 //   GET    /becarios-art/bajas                       Cola de bajas en ART (art_baja_queue)
 //   POST   /becarios-art/bajas/:dni/reintentar       Vuelve a PENDING para el robot de bajas
 //   GET    /becarios-art/cruce                       Padrón ART (art_nomina) vs base
@@ -23,6 +24,7 @@ import { requirePermission }          from '../middlewares/rbacCrud';
 import { logger }                     from '../logging/logger';
 import { trackAction }                from '../logging/track';
 import { getDireccion, DireccionIntranet } from '../files/direccionesIntranet';
+import { ejecutarAhora }               from '../services/robotsTareasWindows';
 
 const createSchema = z.object({
   dni:    z.number().int().positive(),
@@ -301,28 +303,53 @@ export function buildBecariosArtRouter(sequelize: Sequelize) {
   // DEBE ir antes de /:dni. Si la tabla no existe todavía (robot nunca corrido), vacío.
   router.get('/establecimiento', requirePermission('api:access'), async (_req: Request, res: Response) => {
     try {
-      const resumenRows = await sequelize.query<{ estado: string; cant: number }>(
-        `SELECT estado, COUNT(*) AS cant FROM art_control_establecimiento GROUP BY estado`,
-        { type: QueryTypes.SELECT }
-      );
-      const resumen: Record<string, number> = {};
-      for (const r of resumenRows) resumen[r.estado] = Number(r.cant);
+      // Universo = todos los ACTIVOS de la base (+ los que el robot procesó aunque ya no estén activos),
+      // cruzados con el padrón de Catán (art_nomina) y con el resultado del robot (puede no haber fila:
+      // los que ya estaban en Catán antes de la corrida grande nunca pasaron por el robot).
       const rows = await sequelize.query<Record<string, any>>(`
-        SELECT c.dni, c.cuil, c.trabajador_id, c.establecimiento_destino, c.establecimientos_antes,
-               c.accion, c.estado, c.detalle, c.intentos, c.ultimo_intento,
-               p.apellido, p.nombre
-          FROM art_control_establecimiento c
-          LEFT JOIN personal p ON p.dni = c.dni
-         ORDER BY FIELD(c.estado, 'ERROR', 'PARCIAL', 'REINTENTAR', 'NO_EN_ART', 'OK', 'YA_OK'),
-                  p.apellido, p.nombre
+        SELECT u.dni, COALESCE(c.cuil, p.cuil) AS cuil, c.trabajador_id, c.establecimiento_destino,
+               c.establecimientos_antes, c.accion, c.estado, c.detalle, COALESCE(c.intentos, 0) AS intentos,
+               c.ultimo_intento, p.apellido, p.nombre,
+               (n.dni IS NOT NULL) AS en_padron,
+               EXISTS (SELECT 1 FROM agentes v WHERE v.dni = u.dni AND v.deleted_at IS NULL AND v.estado_empleo = 'ACTIVO') AS activo,
+               (SELECT MIN(rep.reparticion_nombre)
+                  FROM agentes_servicios s
+                  JOIN servicios srv    ON srv.id = s.servicio_id
+                  JOIN reparticiones rep ON rep.id = srv.reparticion_id
+                 WHERE s.dni = u.dni AND s.deleted_at IS NULL AND s.fecha_hasta IS NULL) AS dependencia
+          FROM (SELECT DISTINCT dni FROM agentes WHERE deleted_at IS NULL AND estado_empleo = 'ACTIVO'
+                UNION
+                SELECT dni FROM art_control_establecimiento) u
+          LEFT JOIN art_control_establecimiento c ON c.dni = u.dni
+          LEFT JOIN art_nomina n ON n.dni = u.dni
+          LEFT JOIN personal p ON p.dni = u.dni
+         ORDER BY p.apellido, p.nombre
       `, { type: QueryTypes.SELECT });
-      return res.json({ ok: true, data: rows, resumen, total: rows.length });
+      const [meta] = await sequelize.query<{ descargado_en: string | null; total: number }>(
+        `SELECT MAX(descargado_en) AS descargado_en, COUNT(*) AS total FROM art_nomina`, { type: QueryTypes.SELECT });
+      return res.json({ ok: true, data: rows, padron: meta ?? null, total: rows.length });
     } catch (err: any) {
       if (err?.parent?.code === 'ER_NO_SUCH_TABLE' || /ER_NO_SUCH_TABLE|doesn't exist/i.test(err?.message || '')) {
         return res.json({ ok: true, data: [], resumen: {}, total: 0 });
       }
       logger.error({ msg: '[becariosArt] establecimiento error', err: err?.message });
       return res.status(500).json({ ok: false, error: 'Error al obtener el control de establecimiento' });
+    }
+  });
+
+  // ── POST /lanzar — corre ya un robot de ProvinciART (mismo mecanismo que "Lanzar ahora" de Robots) ──
+  // Solo los de esta lista; queda registrado en la página Robots.
+  const ROBOTS_ART = ['art_cruce_nomina', 'art_reintentar_establecimiento', 'art_carga_alta'];
+  router.post('/lanzar', requirePermission('api:access'), async (req: Request, res: Response) => {
+    const script = String(req.body?.script ?? '');
+    if (!ROBOTS_ART.includes(script)) return res.status(400).json({ ok: false, error: 'Robot no permitido' });
+    try {
+      const como = await ejecutarAhora(script);
+      trackAction('art_lanzar_robot', { script, como });
+      return res.json({ ok: true, como });
+    } catch (err: any) {
+      logger.error({ msg: '[becariosArt] lanzar error', script, err: err?.message });
+      return res.status(500).json({ ok: false, error: String(err?.message ?? err) });
     }
   });
 

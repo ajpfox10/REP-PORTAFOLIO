@@ -419,7 +419,7 @@ def main():
     ap.add_argument("--abrir", default="ninguna", choices=["ninguna", "menu", "ta", "ausentismo", "pestanas_agente",
                                                          "exportaciones", "exportar_modales", "cargos", "selectores", "ta_pickers", "auditoria"])
     ap.add_argument("--agente", default="CICARDI LAUREANO NICOLAS")
-    ap.add_argument("--dni", default="12345678")
+    ap.add_argument("--dni", default="xxxxxxx")
     ap.add_argument("--modal", choices=["PERIODO", "FECHA"], help="exportar_modales: solo este dialogo")
     a = ap.parse_args()
     if a.abrir == "exportaciones":

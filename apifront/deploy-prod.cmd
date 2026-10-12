@@ -68,8 +68,13 @@ REM 4. Inyectar runtime-config de produccion en dist/
 REM 5. Instalar dependencias y reiniciar PM2
 echo [5/5] Reiniciando servicio...
 cd /d "%DST%"
+REM Parar antes de borrar: vite tiene tomado rollup.win32-x64-msvc.node y el npm install falla con EBUSY
+call pm2 stop apifront-prod >nul 2>&1
 if exist node_modules rmdir /s /q node_modules
+if exist node_modules ( echo ERROR: no se pudo borrar node_modules ^(archivo tomado^). Ver %LOG% & echo [%date% %time%] ERROR rmdir node_modules >> %LOG% & pause & exit /b 1 )
 call %NPM% install >> %LOG% 2>&1
+if errorlevel 1 ( echo ERROR: npm install en prod fallo. Ver %LOG% & echo [%date% %time%] ERROR npm install prod >> %LOG% & pause & exit /b 1 )
+if not exist "node_modules\vite\bin\vite.js" ( echo ERROR: falta vite en node_modules de prod. Ver %LOG% & pause & exit /b 1 )
 
 call pm2 describe apifront-prod >nul 2>&1
 if errorlevel 1 (

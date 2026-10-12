@@ -351,6 +351,55 @@ export function buildIntranetRouter(sequelize?: Sequelize): Router {
     }
   });
 
+  // GET /intranet/carga-francos/dias?estado=&categoria=&q= — estado por día de la carga de francos
+  // (tabla siape_carga_dias, la crea el robot). Devuelve filas + conteos por estado/categoría.
+  router.get('/carga-francos/dias', async (req: Request, res: Response) => {
+    if (!sequelize) { res.status(500).json({ error: 'DB no disponible' }); return; }
+    const estado = String(req.query.estado ?? '').trim().toUpperCase();
+    const categoria = String(req.query.categoria ?? '').trim().toUpperCase();
+    const q = String(req.query.q ?? '').trim();
+    const where: string[] = [];
+    const repl: Record<string, any> = {};
+    if (estado) { where.push('d.estado = :estado'); repl.estado = estado; }
+    if (categoria) { where.push('d.categoria = :categoria'); repl.categoria = categoria; }
+    if (q) { where.push("(d.dni LIKE :q OR CONCAT(p.apellido, ' ', p.nombre) LIKE :q)"); repl.q = `%${q}%`; }
+    try {
+      const filas = await sequelize.query<any>(`
+        SELECT d.id, d.reconocimiento_id, d.dni, CONCAT(p.apellido, ' ', p.nombre) AS nombre,
+               DATE_FORMAT(d.fecha, '%Y-%m-%d') AS fecha, d.estado, d.categoria, d.detalle, d.intentos,
+               DATE_FORMAT(d.actualizado_en, '%Y-%m-%d %H:%i') AS actualizado_en
+          FROM siape_carga_dias d
+          LEFT JOIN personal p ON p.dni = d.dni
+         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+         ORDER BY d.actualizado_en DESC, d.id DESC
+         LIMIT 2000`, { replacements: repl, type: QueryTypes.SELECT });
+      const conteos = await sequelize.query<any>(`
+        SELECT estado, COALESCE(categoria, '') AS categoria, COUNT(*) AS n,
+               SUM(estado = 'ERROR' AND intentos >= :max) AS agotados
+          FROM siape_carga_dias GROUP BY estado, categoria`,
+        { replacements: { max: Number(process.env.SIAPE_MAX_INTENTOS || 3) }, type: QueryTypes.SELECT });
+      res.json({ ok: true, filas, conteos, maxIntentos: Number(process.env.SIAPE_MAX_INTENTOS || 3) });
+    } catch (e: any) {
+      if (e?.original?.code === 'ER_NO_SUCH_TABLE') { res.json({ ok: true, filas: [], conteos: [], maxIntentos: 3 }); return; }
+      res.status(500).json({ ok: false, error: e?.message });
+    }
+  });
+
+  // POST /intranet/carga-francos/reintentar { ids: number[] } — vuelve a 0 los intentos de días en ERROR
+  router.post('/carga-francos/reintentar', async (req: Request, res: Response) => {
+    if (!sequelize) { res.status(500).json({ error: 'DB no disponible' }); return; }
+    const ids: number[] = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isFinite);
+    if (!ids.length) { res.status(400).json({ error: 'No hay días elegidos' }); return; }
+    try {
+      await sequelize.query(
+        "UPDATE siape_carga_dias SET intentos = 0 WHERE estado = 'ERROR' AND id IN (:ids)",
+        { replacements: { ids } });
+      res.json({ ok: true, msg: `${ids.length} día(s) vuelven a la cola del robot` });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e?.message });
+    }
+  });
+
   // POST /intranet/cargar-ausentes: lee directo D:\G\comparacion\SIAPE\SIAPE.xlsx y abre CMD visible
   // SIN USO desde 04/10/2026 (Comparador 2.0 → POST /comparacion-v2/lanzar)
   router.post('/cargar-ausentes', (req: Request, res: Response) => {

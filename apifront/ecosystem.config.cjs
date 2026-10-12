@@ -5,6 +5,7 @@ module.exports = {
     script:       'node_modules/vite/bin/vite.js',
     args:         'preview --host 0.0.0.0 --port 5173',
     cwd:          'C:\\apps\\personalprod\\apifront-prod',
+    exec_mode:    'fork',   // cluster en Windows deja workers huérfanos al reiniciar
     instances:    1,
     autorestart:  true,
     watch:        false,
