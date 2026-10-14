@@ -1110,7 +1110,15 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const [codigosMinisterio] = await sequelize
         .query(`SELECT codigo, novedad, vigente FROM ministerio_codigos ORDER BY novedad`)
         .catch(() => [[]] as any);
-      return res.json({ ok: true, mapeo, reglasCie, codigosMinisterio });
+      // novedades que ofrece SiAPe (mig 076, robot siape_control_novedades), sin las que no
+      // van al Ministerio: se suman a "SIAP sin mapear" aunque no estén en el Excel
+      const [novedadesSiape] = await sequelize
+        .query(
+          `SELECT origen, novedad FROM siape_novedades_catalogo
+            WHERE vigente = 1 AND no_va_al_ministerio = 0 ORDER BY novedad`,
+        )
+        .catch(() => [[]] as any);
+      return res.json({ ok: true, mapeo, reglasCie, codigosMinisterio, novedadesSiape });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }

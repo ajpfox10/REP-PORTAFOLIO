@@ -1079,6 +1079,18 @@ export function AsistenciaPage() {
       .map((c) => ({ name: c.novedad, count: 0 }));
     return [...novedadesMin, ...extra];
   }, [novedadesMin, codigosMinisterio]);
+  // Ídem del lado SIAP: lo que ofrece SiAPe (tabla siape_novedades_catalogo)
+  const [novedadesSiape, setNovedadesSiape] = useState<{ origen: string; novedad: string }[]>([]);
+  const novedadesSiapEditor = React.useMemo(() => {
+    const vistas = new Set(novedadesSiap.map((n) => norm(n.name)));
+    const extra: NovedadItem[] = [];
+    for (const c of novedadesSiape) {
+      if (vistas.has(norm(c.novedad))) continue;
+      vistas.add(norm(c.novedad));
+      extra.push({ name: c.novedad, count: 0 });
+    }
+    return [...novedadesSiap, ...extra];
+  }, [novedadesSiap, novedadesSiape]);
   const [loadingNovedades, setLoadingNovedades] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -1302,6 +1314,7 @@ export function AsistenciaPage() {
           setMapeo(r.mapeo ?? r.data ?? {});
           setReglasCie(r.reglasCie ?? []);
           setCodigosMinisterio(r.codigosMinisterio ?? []);
+          setNovedadesSiape(r.novedadesSiape ?? []);
           setMapeoFromDisk(r.fromDisk ?? false);
         }
       })
@@ -1912,7 +1925,7 @@ export function AsistenciaPage() {
               onReset={resetMapeo}
               saving={savingMapeo}
               novedadesMin={novedadesMinEditor}
-              novedadesSiap={novedadesSiap}
+              novedadesSiap={novedadesSiapEditor}
               codigosMinisterio={codigosMinisterio}
               reglasCie={reglasCie}
               onReglasCie={setReglasCie}

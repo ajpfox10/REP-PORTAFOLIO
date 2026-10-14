@@ -1,0 +1,156 @@
+-- 076__siape_novedades_catalogo.sql
+-- Catalogo de las novedades que ofrece SiAPe en Novedades de Ausentismo (ficha del
+-- agente), por pestaña de origen. Lo mantiene el robot siape_control_novedades
+-- (alta de nuevas, vigente = 0 las que desaparecen) y el editor de mapeo las ofrece
+-- en "SIAP sin mapear" aunque nunca hayan venido en el Excel.
+--
+-- origen: LICENCIAS (selector Licencia-Permiso), AUSENCIAS Y PRESENTES (TIPO DE
+--   AUSENCIA), COMISIONES, POR HORA, x EXPEDIENTE, LACTANCIA.
+-- no_va_al_ministerio = 1: no se informa en la Intranet (no cuenta como sin mapear).
+-- Carga inicial: lectura en vivo del 13/10/2026 (83 novedades).
+
+CREATE TABLE IF NOT EXISTS siape_novedades_catalogo (
+  origen VARCHAR(40) NOT NULL,
+  novedad VARCHAR(150) NOT NULL,
+  vigente TINYINT(1) NOT NULL DEFAULT 1,
+  no_va_al_ministerio TINYINT(1) NOT NULL DEFAULT 0,
+  visto_primero DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  visto_ultimo DATETIME NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (origen, novedad)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO siape_novedades_catalogo (origen, novedad) VALUES
+  ('AUSENCIAS Y PRESENTES', 'ASISTENCIA A CURSO DIA COMPLETO'),
+  ('AUSENCIAS Y PRESENTES', 'ASUETO'),
+  ('AUSENCIAS Y PRESENTES', 'AUSENTE CON AVISO'),
+  ('AUSENCIAS Y PRESENTES', 'AUSENTE SIN AVISO'),
+  ('AUSENCIAS Y PRESENTES', 'DESINFECCION'),
+  ('AUSENCIAS Y PRESENTES', 'DIA COMPENSADO'),
+  ('AUSENCIAS Y PRESENTES', 'ERROR EN SISTEMA CONTROL DE ACCESO (PS)'),
+  ('AUSENCIAS Y PRESENTES', 'EXAMEN APTITUD FISICA'),
+  ('AUSENCIAS Y PRESENTES', 'FESTIVIDAD ARMENIA'),
+  ('AUSENCIAS Y PRESENTES', 'FESTIVIDAD JUDIA'),
+  ('AUSENCIAS Y PRESENTES', 'FRANCO (OPNYA)'),
+  ('AUSENCIAS Y PRESENTES', 'FRANCO COMPENSATORIO'),
+  ('AUSENCIAS Y PRESENTES', 'FRANCO COMPENSATORIO (AERONAUTICOS)'),
+  ('AUSENCIAS Y PRESENTES', 'FRANCO COMPENSATORIO (COMUNICACIONES)'),
+  ('AUSENCIAS Y PRESENTES', 'JUNTA MEDICA'),
+  ('AUSENCIAS Y PRESENTES', 'LLEGO TARDE'),
+  ('AUSENCIAS Y PRESENTES', 'PARO'),
+  ('AUSENCIAS Y PRESENTES', 'PARO TRANSPORTE'),
+  ('AUSENCIAS Y PRESENTES', 'PERMISO DE SALIDA AUTORIZADO X SALA'),
+  ('AUSENCIAS Y PRESENTES', 'PRE-JUBILATORIO'),
+  ('AUSENCIAS Y PRESENTES', 'PRESENTE'),
+  ('AUSENCIAS Y PRESENTES', 'PRESENTE CON MEDIDA GREMIAL DE ACCIÓN DIRECTA'),
+  ('AUSENCIAS Y PRESENTES', 'TELETRABAJO'),
+  ('COMISIONES', 'COMISION'),
+  ('COMISIONES', 'COMISION ENTRADA'),
+  ('COMISIONES', 'COMISION SALIDA'),
+  ('LACTANCIA', 'ALIMENTACION Y CUIDADO DE HIJO'),
+  ('LICENCIAS', 'ADOPCION'),
+  ('LICENCIAS', 'ADOPCION DE INTEGRACION'),
+  ('LICENCIAS', 'ANUAL'),
+  ('LICENCIAS', 'ANUAL COMPLEMENTARIA 10430'),
+  ('LICENCIAS', 'AÑO NUEVO DE LOS PUEBLOS ORIGINARIOS'),
+  ('LICENCIAS', 'CAUSAS PARTICULARES'),
+  ('LICENCIAS', 'CITACION ORG.OFICIALES'),
+  ('LICENCIAS', 'CUIDADO RECIEN NACIDO/A'),
+  ('LICENCIAS', 'CUIDADO RECIEN NACIDO/A CON DISCAPACIDAD'),
+  ('LICENCIAS', 'DONACION DE ORGANOS O PIEL'),
+  ('LICENCIAS', 'DONACION DE SANGRE'),
+  ('LICENCIAS', 'DONACION DE SANGRE MAS DE 150 KMS'),
+  ('LICENCIAS', 'DUELO DIRECTO'),
+  ('LICENCIAS', 'DUELO DIRECTO a mas de 200 Km'),
+  ('LICENCIAS', 'DUELO INDIRECTO'),
+  ('LICENCIAS', 'DUELO INDIRECTO a mas de 200 Km'),
+  ('LICENCIAS', 'EX.MED.PREV.CANCER MAMARIO/PROSTATA/COLON'),
+  ('LICENCIAS', 'EXAMEN'),
+  ('LICENCIAS', 'FALLECIMIENTO CORRESPONSABLE PARENTAL'),
+  ('LICENCIAS', 'FERIA ANUAL'),
+  ('LICENCIAS', 'FERIA CHICA'),
+  ('LICENCIAS', 'GREMIAL'),
+  ('LICENCIAS', 'INASISTENCIA RESOLUCION N° 391/21'),
+  ('LICENCIAS', 'INTEGRACION DE MESA EXAMINADORA'),
+  ('LICENCIAS', 'MATRIMONIO'),
+  ('LICENCIAS', 'NACIMIENTO CORRESPONSABLE PARENTAL MULTIPLE'),
+  ('LICENCIAS', 'NACIMIENTO CORRESPONSABLE PARENTAL NO GESTANTE'),
+  ('LICENCIAS', 'NACIMIENTO SIN VIDA O FALLECIMIENTO'),
+  ('LICENCIAS', 'PAPANICOLAU Y/O RADIOGRAFIA O ECOGRAFIA MAMARIA'),
+  ('LICENCIAS', 'PARA MUJERES VICTIMAS DE VIOLENCIA'),
+  ('LICENCIAS', 'PARA MUJERES VICTIMAS DE VIOLENCIA. PRORROGA'),
+  ('LICENCIAS', 'PERMISO GREMIAL DIAS'),
+  ('LICENCIAS', 'POR ABRIGO DE NIÑO/A'),
+  ('LICENCIAS', 'PRACT. OBLIG. DE GRADO O POST GRADO UNIV.-TERC.'),
+  ('LICENCIAS', 'PRE-EXAMEN'),
+  ('LICENCIAS', 'SIN HABERES - LICENCIA POR EXCEDENCIA'),
+  ('LICENCIAS', 'TRAMITES DE ADOPCION'),
+  ('LICENCIAS', 'TRATAMIENTO TERAPEUTICO - PATOLOGIAS CRONICAS'),
+  ('LICENCIAS', 'ULTIMA MATERIA'),
+  ('POR HORA', 'ASISTENCIA A CURSO POR HORA'),
+  ('POR HORA', 'BOLETA DE SALIDA'),
+  ('POR HORA', 'BOLETA DE SALIDA - OFICIAL'),
+  ('POR HORA', 'FRANQUICIA POR ADAPTACION ESCOLAR'),
+  ('POR HORA', 'HORA COMPENSADA'),
+  ('POR HORA', 'PARA MUJERES VICTIMAS DE VIOLENCIA POR HORA'),
+  ('POR HORA', 'PERMISO GREMIAL HORAS'),
+  ('x EXPEDIENTE', 'ACTIVIDAD POLITICA'),
+  ('x EXPEDIENTE', 'ACTIVIDADES DEPORTIVAS Y ARTISTICAS'),
+  ('x EXPEDIENTE', 'ASISTENCIA A CONGRESOS'),
+  ('x EXPEDIENTE', 'DECENAL'),
+  ('x EXPEDIENTE', 'ESPECIAL CON HABERES'),
+  ('x EXPEDIENTE', 'ESPECIAL SIN HABERES'),
+  ('x EXPEDIENTE', 'LEY 13.688 ART.149'),
+  ('x EXPEDIENTE', 'LEY 14.070'),
+  ('x EXPEDIENTE', 'LICENCIA GREMIAL'),
+  ('x EXPEDIENTE', 'LICENCIA GREMIAL SIN GOCE DE HABERES');
+
+UPDATE siape_novedades_catalogo SET no_va_al_ministerio = 1
+ WHERE novedad IN ('PRESENTE', 'TELETRABAJO', 'ASISTENCIA A CURSO DIA COMPLETO', 'ASISTENCIA A CURSO POR HORA', 'ERROR EN SISTEMA CONTROL DE ACCESO (PS)', 'DESINFECCION');
+
+-- Tenian equivalencia pero ninguna regla de CARGA: el robot no las cargaba.
+UPDATE mapeo_novedades m
+   SET m.usar_para_cargar = 1
+ WHERE m.activo = 1 AND m.codigo_cie = ''
+   AND ((m.novedad_siape = 'PARA MUJERES VICTIMAS DE VIOLENCIA' AND m.novedad_ministerio = 'VV-MUJER VICTIMA DE VIOLENCIA DE GENERO')
+     OR (m.novedad_siape = 'NACIMIENTO CORRESPONSABLE PARENTAL MULTIPLE' AND m.novedad_ministerio = '312-PATERNIDAD/CORRESPONSAL PARENTAL NACIMIENTO MULTIPLE'))
+   AND NOT EXISTS (SELECT 1 FROM (SELECT novedad_siape FROM mapeo_novedades
+                                   WHERE activo = 1 AND codigo_cie = '' AND usar_para_cargar = 1) x
+                    WHERE x.novedad_siape = m.novedad_siape);
+
+-- Novedades del catalogo SiAPe sin mapeo, con equivalente claro en el combo de la Intranet.
+-- Quedan sin mapear (aviso del robot) las que espera decidir el usuario.
+INSERT IGNORE INTO mapeo_novedades (novedad_siape, codigo_cie, novedad_ministerio, usar_para_cargar, observacion)
+SELECT n.siape, '', n.min,
+       IF(EXISTS (SELECT 1 FROM mapeo_novedades x
+                   WHERE x.novedad_siape = n.siape AND x.codigo_cie = ''
+                     AND x.usar_para_cargar = 1 AND x.activo = 1), 0, 1),
+       'inicial: 076 catalogo SiAPe'
+FROM (
+            SELECT 'COMISION ENTRADA' siape, '30-COMISION DE SERVICIOS' min
+  UNION ALL SELECT 'COMISION SALIDA', '30-COMISION DE SERVICIOS'
+  UNION ALL SELECT 'ALIMENTACION Y CUIDADO DE HIJO', '35-POR ALIMENTACIÓN Y CUIDADO DEL HIJO'
+  UNION ALL SELECT 'ADOPCION DE INTEGRACION', '421-POR ADOPCION'
+  UNION ALL SELECT 'TRAMITES DE ADOPCION', '421-POR ADOPCION'
+  UNION ALL SELECT 'CUIDADO RECIEN NACIDO/A CON DISCAPACIDAD', 'RN1-RECIEN NACIDO'
+  UNION ALL SELECT 'DONACION DE ORGANOS O PIEL', '41-POR DONACIÓN DE ÓRGANOS O PIEL'
+  UNION ALL SELECT 'DONACION DE SANGRE MAS DE 150 KMS', '33-POR DONACIÓN DE SANGRE'
+  UNION ALL SELECT 'POR ABRIGO DE NIÑO/A', 'AN1-ABRIGO NIÑO/A'
+  UNION ALL SELECT 'FRANQUICIA POR ADAPTACION ESCOLAR', 'AE1-ADAPTACION ESCOLAR'
+  UNION ALL SELECT 'PARA MUJERES VICTIMAS DE VIOLENCIA POR HORA', 'V43-VIOLENCIA DE GENERO PERMISO HS.SALIDA'
+  UNION ALL SELECT 'PERMISO GREMIAL HORAS', '46-PERMISO GREMIAL (5 Hs Sem.)'
+  UNION ALL SELECT 'ACTIVIDADES DEPORTIVAS Y ARTISTICAS', '38-ACT.DEPORT.ART.C/SUELDO'
+  UNION ALL SELECT 'ESPECIAL CON HABERES', '20-ESPECIAL C/SUELDO'
+) n;
+
+-- Robot en la pagina Robots (se programa desde ahi; necesita escritorio RDP conectado)
+INSERT INTO robots_config
+  (script, descripcion, grupo, orden, comando, reporta_solo, prog_activa, prog_dias,
+   destino_nombre, destino_editable, notas, activo)
+VALUES
+  ('siape_control_novedades', 'Control de novedades de SiAPe vs mapeo', 'Asistencia 2.0', 41,
+   'python siape_control_novedades.py', 1, 0, 'LU',
+   'tabla siape_novedades_catalogo', 0,
+   'Solo LEE: en Novedades de Ausentismo abre el selector Licencia-Permiso (lo cierra con Cancelar) y los combos de Ausencias, Comisiones, Por hora, x Expediente y Lactancia. Alta de novedades nuevas, baja de las que desaparecen, aviso de las sin mapeo. Error = cambió algo en SiAPe.',
+   1)
+ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion), comando = VALUES(comando), notas = VALUES(notas);
