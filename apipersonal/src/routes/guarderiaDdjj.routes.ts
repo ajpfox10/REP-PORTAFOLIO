@@ -5,12 +5,14 @@
 //   GET  /guarderia-ddjj/:dni      → DDJJ guardada, o precarga desde personal/agentes/legajo
 //   PUT  /guarderia-ddjj/:dni      → alta o edición (reemplaza los menores)
 //   GET  /guarderia-ddjj/:dni/pdf  → PDF de lo guardado
+//   POST /guarderia-ddjj/importar-formulario/{preview,confirmar} → respuestas del Google Form
 
 import { Router, Request, Response } from 'express';
 import { Sequelize, QueryTypes, Transaction } from 'sequelize';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 import { generarGuarderiaDdjjPdf } from '../services/guarderiaDdjjPdf';
+import { registrarImportFormularioDdjj } from './guarderiaDdjjImportForm';
 
 // ─── Tablas (mig 069) ─────────────────────────────────────────────────────────
 // Se crean solas al levantar la API; espejo en scripts/migrations/069__guarderia_ddjj.sql
@@ -238,38 +240,45 @@ export function buildGuarderiaDdjjRouter(sequelize: Sequelize): Router {
     }
   });
 
+  // Alta o edición de la DDJJ completa (reemplaza los menores). La usan el PUT y el importador.
+  async function grabar(dni: number, body: Record<string, any>, uid: number | null): Promise<void> {
+    await ready;
+    const menores: any[] = Array.isArray(body.menores) ? body.menores : [];
+    const vals = CAMPOS.map(c => limpiar(c, body[c]));
+    await sequelize.transaction(async (t: Transaction) => {
+      await sequelize.query(
+        `INSERT INTO guarderia_ddjj (dni, ${CAMPOS.join(', ')}, created_by, updated_by)
+         VALUES (?, ${CAMPOS.map(() => '?').join(', ')}, ?, ?)
+         ON DUPLICATE KEY UPDATE ${CAMPOS.map(c => `${c} = VALUES(${c})`).join(', ')}, updated_by = VALUES(updated_by)`,
+        { replacements: [dni, ...vals, uid, uid], transaction: t });
+      const [row] = await sequelize.query<any>(
+        `SELECT id FROM guarderia_ddjj WHERE dni = ?`,
+        { replacements: [dni], type: QueryTypes.SELECT, transaction: t });
+      await sequelize.query(`DELETE FROM guarderia_ddjj_menores WHERE ddjj_id = ?`,
+        { replacements: [row.id], transaction: t });
+      let orden = 0;
+      for (const m of menores) {
+        const mv = CAMPOS_MENOR.map(c => limpiar(c, m?.[c]));
+        if (mv.every(v => v === null)) continue;
+        orden++;
+        await sequelize.query(
+          `INSERT INTO guarderia_ddjj_menores (ddjj_id, dni, orden, ${CAMPOS_MENOR.join(', ')})
+           VALUES (?, ?, ?, ${CAMPOS_MENOR.map(() => '?').join(', ')})`,
+          { replacements: [row.id, dni, orden, ...mv], transaction: t });
+      }
+    });
+  }
+
+  // Importador del formulario de Google (POST /importar-formulario/preview|confirmar)
+  registrarImportFormularioDdjj(router, sequelize, write, { guardada, precarga, reintegroMinisterio, grabar });
+
   // PUT /guarderia-ddjj/:dni  body: { ...campos, menores: [...] }
   router.put('/:dni', write, async (req: Request, res: Response) => {
     const dni = Number(req.params.dni);
     if (!dni) return res.status(400).json({ ok: false, error: 'dni requerido' });
-    const body = (req.body ?? {}) as Record<string, any>;
-    const menores: any[] = Array.isArray(body.menores) ? body.menores : [];
     const uid = (req as any).user?.id ?? null;
     try {
-      await ready;
-      const vals = CAMPOS.map(c => limpiar(c, body[c]));
-      await sequelize.transaction(async (t: Transaction) => {
-        await sequelize.query(
-          `INSERT INTO guarderia_ddjj (dni, ${CAMPOS.join(', ')}, created_by, updated_by)
-           VALUES (?, ${CAMPOS.map(() => '?').join(', ')}, ?, ?)
-           ON DUPLICATE KEY UPDATE ${CAMPOS.map(c => `${c} = VALUES(${c})`).join(', ')}, updated_by = VALUES(updated_by)`,
-          { replacements: [dni, ...vals, uid, uid], transaction: t });
-        const [row] = await sequelize.query<any>(
-          `SELECT id FROM guarderia_ddjj WHERE dni = ?`,
-          { replacements: [dni], type: QueryTypes.SELECT, transaction: t });
-        await sequelize.query(`DELETE FROM guarderia_ddjj_menores WHERE ddjj_id = ?`,
-          { replacements: [row.id], transaction: t });
-        let orden = 0;
-        for (const m of menores) {
-          const mv = CAMPOS_MENOR.map(c => limpiar(c, m?.[c]));
-          if (mv.every(v => v === null)) continue;
-          orden++;
-          await sequelize.query(
-            `INSERT INTO guarderia_ddjj_menores (ddjj_id, dni, orden, ${CAMPOS_MENOR.join(', ')})
-             VALUES (?, ?, ?, ${CAMPOS_MENOR.map(() => '?').join(', ')})`,
-            { replacements: [row.id, dni, orden, ...mv], transaction: t });
-        }
-      });
+      await grabar(dni, (req.body ?? {}) as Record<string, any>, uid);
       return res.json({ ok: true, data: await guardada(dni) });
     } catch (err: any) {
       logger.error({ msg: 'guarderia-ddjj: error guardando', dni, error: err?.message });

@@ -74,6 +74,14 @@ const servicioExternoSchema = z.object({
   caja:         z.enum(['IPS', 'EXTERNA']).optional().default('IPS'),
 });
 
+// Tramo que un acto administrativo reconoce como insalubre (16%) dentro del
+// período nombrado anterior a Jun/2015. Lo que no cubre ningún acto sigue común.
+const reconocimientoInsalubreSchema = z.object({
+  fecha_desde: dateStr,
+  fecha_hasta: dateStr,
+  acto:        z.string().max(200).optional().default(''),
+});
+
 const calculoSchema = z.object({
   dni:                     z.number().int().positive(),
   situacion_revista:       z.enum(['NORMAL', 'BECADO', 'RESIDENTE', 'CONCURRENTE', 'ARTICULO_48']),
@@ -81,6 +89,7 @@ const calculoSchema = z.object({
   ips_aporto:              z.boolean().optional(),
   es_insalubre_ips:        z.boolean(),
   diferencial_2pct_pagado: z.boolean(),
+  reconocimientos_insalubre: z.array(reconocimientoInsalubreSchema).max(20).optional().default([]),
   // Fecha a la que se para el cálculo. Vacío = hoy.
   fecha_calculo:           dateStr.optional().nullable(),
   servicios_anses:         z.array(servicioANSESSchema).max(20).default([]),
@@ -199,6 +208,47 @@ function unirMismaCaja<T extends { desde: Date; hasta: Date; es_insalubre: boole
   return out;
 }
 
+type ReconocimientoInsalubre = { fecha_desde: string; fecha_hasta: string; acto?: string };
+
+// Reconocimientos cargados (fechas inclusivas) → tramos medio abiertos.
+function rangosReconocidos(
+  recos: ReconocimientoInsalubre[] | null | undefined,
+): Array<{ desde: Date; hasta: Date; acto: string }> {
+  return (recos ?? [])
+    .map(r => {
+      const desde = parseDate(r.fecha_desde);
+      const hasta = parseDate(r.fecha_hasta);
+      return desde && hasta && desde <= hasta
+        ? { desde, hasta: finExclusivo(hasta), acto: (r.acto ?? '').trim() }
+        : null;
+    })
+    .filter(Boolean) as Array<{ desde: Date; hasta: Date; acto: string }>;
+}
+
+// Parte un tramo según los reconocimientos de insalubridad: los pedazos que
+// cubre algún acto salen con ese acto (insalubre); el resto con acto null
+// (común). Los pedazos son disjuntos y cubren exactamente el tramo.
+function partirPorReconocimientos(
+  rango: { desde: Date; hasta: Date },
+  recos: Array<{ desde: Date; hasta: Date; acto: string }>,
+): Array<{ desde: Date; hasta: Date; acto: string | null }> {
+  const items = [
+    { desde: rango.desde, hasta: rango.hasta, base: true, acto: '' },
+    ...recos
+      .map(r => {
+        const i = intersectRange(rango, r);
+        return i ? { ...i, base: false, acto: r.acto } : null;
+      })
+      .filter(Boolean) as Array<{ desde: Date; hasta: Date; base: boolean; acto: string }>,
+  ];
+  return segmentar(items)
+    .filter(s => s.cubren.some(c => c.base))
+    .map(s => {
+      const reco = s.cubren.find(c => !c.base);
+      return { desde: s.desde, hasta: s.hasta, acto: reco ? reco.acto : null };
+    });
+}
+
 function toDias(p: { anios: number; meses: number; dias: number }) {
   return p.anios * 365 + p.meses * 30 + p.dias;
 }
@@ -315,6 +365,7 @@ interface CalculoInput {
   ips_aporto:              boolean;
   es_insalubre_ips:        boolean;
   diferencial_2pct_pagado: boolean;
+  reconocimientos_insalubre?: ReconocimientoInsalubre[];
   fecha_calculo?:          string | null;
   servicios_anses:         Array<{ fecha_desde: string; fecha_hasta: string; es_insalubre: boolean }>;
   servicios_externos:      Array<{ organismo: string; fecha_desde: string; fecha_hasta: string; es_insalubre: boolean; caja?: 'IPS' | 'EXTERNA' }>;
@@ -407,7 +458,21 @@ function calcular(input: CalculoInput) {
   };
   const ipsFuentes: IpsFuente[] = [];
   if (ipsBecaRange)        ipsFuentes.push({ ...ipsBecaRange,        es_insalubre: true,                 tipo: 'beca',    label: 'Beca' });
-  if (ipsNombAntes15Range) ipsFuentes.push({ ...ipsNombAntes15Range, es_insalubre: esInsalubreEfectivo,  tipo: 'antes15', label: 'Nombrado antes 2015' });
+  // Antes de Jun/2015 el tramo se parte por los actos que reconocen
+  // insalubridad: lo reconocido va insalubre (16%) y el resto sigue el flag
+  // general (común salvo ocupación insalubre o 2% pagado).
+  const recosInsalubre = rangosReconocidos(input.reconocimientos_insalubre);
+  const antes15Pedazos = ipsNombAntes15Range
+    ? partirPorReconocimientos(ipsNombAntes15Range, recosInsalubre)
+    : [];
+  for (const p of antes15Pedazos) {
+    ipsFuentes.push({
+      desde: p.desde, hasta: p.hasta,
+      es_insalubre: p.acto !== null || esInsalubreEfectivo,
+      tipo: 'antes15',
+      label: p.acto !== null ? `Reconocido insalubre${p.acto ? ` (${p.acto})` : ''}` : 'Nombrado antes 2015',
+    });
+  }
   if (ipsNombDesde15Range) ipsFuentes.push({ ...ipsNombDesde15Range, es_insalubre: true,                 tipo: 'desde15', label: 'Nombrado desde 2015' });
   for (const ex of ipsExtrasRaw) {
     ipsFuentes.push({ desde: ex.desde, hasta: ex.hasta, es_insalubre: ex.es_insalubre, tipo: 'extra', label: ex.label });
@@ -704,15 +769,31 @@ function calcular(input: CalculoInput) {
   // ── Cargo deudor 2% ──────────────────────────────────────────────────────────
   let cargDeudor2pct    = false;
   let cargDeudorPeriodo = { anios: 0, meses: 0, dias: 0 };
-  if (!input.es_insalubre_ips && !input.diferencial_2pct_pagado && ipsNombAntes15Range) {
+  // El 2% sólo alcanza lo que quedó común: lo reconocido por acto ya es 16%.
+  const antes15Comunes      = antes15Pedazos.filter(p => p.acto === null);
+  const antes15Reconocidos  = antes15Pedazos.filter(p => p.acto !== null);
+  if (!input.es_insalubre_ips && !input.diferencial_2pct_pagado && antes15Comunes.length) {
     cargDeudor2pct    = true;
-    cargDeudorPeriodo = diffFechas(ipsNombAntes15Range.desde, ipsNombAntes15Range.hasta);
+    cargDeudorPeriodo = sumPeriodos(antes15Comunes.map(p => diffFechas(p.desde, p.hasta)));
   }
 
   // ── Períodos IPS para display ─────────────────────────────────────────────────
   const servBeca       = ipsBecaRange        ? diffFechas(ipsBecaRange.desde,        ipsBecaRange.hasta)        : { anios:0,meses:0,dias:0 };
   const servNomb       = ipsNombRange        ? diffFechas(ipsNombRange.desde,        ipsNombRange.hasta)        : { anios:0,meses:0,dias:0 };
   const servNombAntes15 = ipsNombAntes15Range ? diffFechas(ipsNombAntes15Range.desde, ipsNombAntes15Range.hasta) : { anios:0,meses:0,dias:0 };
+  const servAntes15Comun      = sumPeriodos(antes15Comunes.map(p => diffFechas(p.desde, p.hasta)));
+  const servAntes15Reconocido = sumPeriodos(antes15Reconocidos.map(p => diffFechas(p.desde, p.hasta)));
+  // Cada acto con lo que efectivamente aplicó dentro de "antes de Jun/2015"
+  // (cero = cargado fuera de ese período, el operador lo tiene que revisar).
+  const reconocimientosAplicados = recosInsalubre.map(r => {
+    const i = ipsNombAntes15Range ? intersectRange(ipsNombAntes15Range, r) : null;
+    return {
+      desde:   fmtISO(r.desde),
+      hasta:   fmtISO(addDias(r.hasta, -1)),
+      acto:    r.acto,
+      periodo: i ? diffFechas(i.desde, i.hasta) : { anios: 0, meses: 0, dias: 0 },
+    };
+  });
   const servNombDesde15 = ipsNombDesde15Range ? diffFechas(ipsNombDesde15Range.desde, ipsNombDesde15Range.hasta) : { anios:0,meses:0,dias:0 };
   const servIPSTotal    = sumPeriodos([servBeca, servNomb, fromDias(ipsExtraBrutoDias)]);
   const servIPSAjustado = fromDias(ipsSurvTotal);
@@ -814,6 +895,9 @@ function calcular(input: CalculoInput) {
     servicio_beca:                servBeca,
     servicio_nombrado:            servNomb,
     servicio_nombrado_antes_2015: servNombAntes15,
+    servicio_antes_2015_comun:     servAntes15Comun,
+    servicio_antes_2015_reconocido: servAntes15Reconocido,
+    reconocimientos_insalubre:    reconocimientosAplicados,
     servicio_nombrado_desde_2015: servNombDesde15,
     servicio_ips:                 servIPSTotal,
     servicio_ips_ajustado:        servIPSAjustado,
@@ -1403,7 +1487,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         const rows = await sequelize.query(
           `SELECT id, apellido, nombre, fecha_nacimiento, fecha_ingreso_ips,
                   ley_nombre, situacion_revista, beca_aporto, ips_aporto,
-                  es_insalubre_ips, diferencial_2pct_pagado, fecha_calculo,
+                  es_insalubre_ips, diferencial_2pct_pagado, reconocimientos_insalubre, fecha_calculo,
                   servicios_anses, servicios_externos, resoluciones_manuales,
                   resultado, observaciones,
                   creado_por_nombre, modificado_por_nombre, created_at, updated_at
@@ -1443,6 +1527,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           ips_aporto:              defaultIpsAporto(body.situacion_revista, body.ips_aporto),
           es_insalubre_ips:        body.es_insalubre_ips,
           diferencial_2pct_pagado: body.diferencial_2pct_pagado,
+          reconocimientos_insalubre: body.reconocimientos_insalubre ?? [],
           fecha_calculo:           body.fecha_calculo ?? null,
           servicios_anses:         body.servicios_anses,
           servicios_externos:      body.servicios_externos,
@@ -1535,6 +1620,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           ips_aporto:              defaultIpsAporto(body.situacion_revista, body.ips_aporto),
           es_insalubre_ips:        body.es_insalubre_ips,
           diferencial_2pct_pagado: body.diferencial_2pct_pagado,
+          reconocimientos_insalubre: body.reconocimientos_insalubre ?? [],
           fecha_calculo:           body.fecha_calculo ?? null,
           servicios_anses:         body.servicios_anses,
           servicios_externos:      body.servicios_externos,
@@ -1545,7 +1631,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           `INSERT INTO jubilacion_calculos
              (dni, apellido, nombre, fecha_nacimiento, fecha_ingreso_ips, ley_nombre,
               situacion_revista, beca_aporto, ips_aporto,
-              es_insalubre_ips, diferencial_2pct_pagado, fecha_calculo,
+              es_insalubre_ips, diferencial_2pct_pagado, reconocimientos_insalubre, fecha_calculo,
               anses_anios, anses_meses, anses_dias, anses_insalubre,
               servicios_anses, servicios_externos, resoluciones_manuales,
               resultado, observaciones,
@@ -1553,7 +1639,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
            VALUES
              (:dni, :apellido, :nombre, :fecha_nacimiento, :fecha_ingreso_ips, :ley_nombre,
               :situacion_revista, :beca_aporto, :ips_aporto,
-              :es_insalubre_ips, :diferencial_2pct_pagado, :fecha_calculo,
+              :es_insalubre_ips, :diferencial_2pct_pagado, :reconocimientos_insalubre, :fecha_calculo,
               0, 0, 0, 0,
               :servicios_anses, :servicios_externos, :resoluciones_manuales,
               :resultado, :observaciones,
@@ -1571,6 +1657,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
               ips_aporto:         defaultIpsAporto(body.situacion_revista, body.ips_aporto) ? 1 : 0,
               es_insalubre_ips:   body.es_insalubre_ips ? 1 : 0,
               diferencial_2pct_pagado: body.diferencial_2pct_pagado ? 1 : 0,
+              reconocimientos_insalubre: JSON.stringify(body.reconocimientos_insalubre ?? []),
               fecha_calculo:      body.fecha_calculo ?? null,
               servicios_anses:    JSON.stringify(body.servicios_anses),
               servicios_externos: JSON.stringify(body.servicios_externos),
@@ -1622,6 +1709,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           ips_aporto:              defaultIpsAporto(body.situacion_revista, body.ips_aporto),
           es_insalubre_ips:        body.es_insalubre_ips,
           diferencial_2pct_pagado: body.diferencial_2pct_pagado,
+          reconocimientos_insalubre: body.reconocimientos_insalubre ?? [],
           fecha_calculo:           body.fecha_calculo ?? null,
           servicios_anses:         body.servicios_anses,
           servicios_externos:      body.servicios_externos,
@@ -1635,6 +1723,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
                ips_aporto             = :ips_aporto,
                es_insalubre_ips       = :es_insalubre_ips,
                diferencial_2pct_pagado = :diferencial_2pct_pagado,
+               reconocimientos_insalubre = :reconocimientos_insalubre,
                fecha_calculo          = :fecha_calculo,
                servicios_anses        = :servicios_anses,
                servicios_externos     = :servicios_externos,
@@ -1652,6 +1741,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
               ips_aporto:            defaultIpsAporto(body.situacion_revista, body.ips_aporto) ? 1 : 0,
               es_insalubre_ips:      body.es_insalubre_ips ? 1 : 0,
               diferencial_2pct_pagado: body.diferencial_2pct_pagado ? 1 : 0,
+              reconocimientos_insalubre: JSON.stringify(body.reconocimientos_insalubre ?? []),
               fecha_calculo:         body.fecha_calculo ?? null,
               servicios_anses:       JSON.stringify(body.servicios_anses),
               servicios_externos:    JSON.stringify(body.servicios_externos),
@@ -1934,7 +2024,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         { type: QueryTypes.SELECT }) as Promise<any[]>,
       sequelize.query(
         `SELECT c.dni, c.situacion_revista, c.beca_aporto, c.ips_aporto,
-                c.es_insalubre_ips, c.diferencial_2pct_pagado,
+                c.es_insalubre_ips, c.diferencial_2pct_pagado, c.reconocimientos_insalubre,
                 c.servicios_anses, c.servicios_externos, c.resoluciones_manuales,
                 DATE_FORMAT(c.created_at, '%Y-%m-%d %H:%i:%s') AS actualizado
          FROM jubilacion_calculos c
@@ -1999,6 +2089,8 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       // desde Jun/2015 insalubre.
       const agenteId = Number(ag.agente_id);
       const anteriores = (tramosPorDni.get(dni) ?? []).filter((t) => Number(t.id) !== agenteId);
+      const recosGuardados = calc ? parseJSON<ReconocimientoInsalubre[]>(calc.reconocimientos_insalubre, []) : [];
+      const recosCalc      = rangosReconocidos(recosGuardados);
       const tramosAnteriores = (conPago: boolean) => {
         const becaPagada = conPago || (calc ? !!calc.beca_aporto : false);
         const dosPct     = conPago || (calc ? !!calc.diferencial_2pct_pagado : false);
@@ -2029,7 +2121,14 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           }
           if (desdeNomb > hasta) continue;
           const finAntes15 = new Date(FECHA_CORTE.getFullYear(), FECHA_CORTE.getMonth(), FECHA_CORTE.getDate() - 1);
-          if (desdeNomb < FECHA_CORTE) push(desdeNomb, hasta < FECHA_CORTE ? hasta : finAntes15, insalOcup || dosPct);
+          // Lo anterior a Jun/2015 se parte por los actos de reconocimiento
+          // del cálculo guardado: lo reconocido va insalubre aunque sea común.
+          if (desdeNomb < FECHA_CORTE) {
+            const finTramo = hasta < FECHA_CORTE ? hasta : finAntes15;
+            for (const p of partirPorReconocimientos({ desde: desdeNomb, hasta: finExclusivo(finTramo) }, recosCalc)) {
+              push(p.desde, addDias(p.hasta, -1), insalOcup || dosPct || p.acto !== null);
+            }
+          }
           if (hasta >= FECHA_CORTE) push(desdeNomb > FECHA_CORTE ? desdeNomb : FECHA_CORTE, hasta, true);
         }
         return out;
@@ -2053,6 +2152,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         ips_aporto:              conPago ? true : defaultIpsAporto(situacion, calc ? !!calc.ips_aporto : undefined),
         es_insalubre_ips:        calc ? !!calc.es_insalubre_ips : !!Number(ag.ocupacion_es_insalubre),
         diferencial_2pct_pagado: conPago ? true : (calc ? !!calc.diferencial_2pct_pagado : false),
+        reconocimientos_insalubre: recosGuardados,
         fecha_calculo:           fechaISO(fecha),
         servicios_anses:         serviciosAnses,
         servicios_externos:      [

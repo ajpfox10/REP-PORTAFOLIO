@@ -21,6 +21,7 @@ interface Envio {
   id: number; dni: string; desde: string; hasta: string; novedad: string; destino: string | null;
   modo: string; estado: string; detalle: string | null; created_at: string | null; enviado_por: string | null;
 }
+interface Omitido { dni: string; desde: string; hasta: string; novedad: string; motivo: string | null; created_at: string | null; omitido_por: string | null }
 type Modo = 'NOMBRE_TELEFONO' | 'NOMBRE' | 'TELEFONO';
 interface ResultadoExt { ok: boolean; estado: string; modo?: 'NOMBRE' | 'TELEFONO'; destino?: string; detalle?: string | null; version?: string; contactos?: any[] }
 
@@ -88,6 +89,7 @@ const TXT_ESTADO: Record<string, string> = { ENVIADO: 'Avisado', NO_ENCONTRADO: 
 const TD: CSSProperties = { padding: '7px 6px', verticalAlign: 'middle' };
 const LINEA: CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 const BTN: CSSProperties = { padding: '2px 6px', fontSize: '0.72rem', width: '100%' };
+const BTN_ICONO: CSSProperties = { padding: '1px 5px', fontSize: '0.72rem', flex: '0 0 auto', lineHeight: 1.2 };
 
 export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   const toast = useToast();
@@ -116,13 +118,18 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   // Contactos + envíos de los DNI en pantalla
   const [contactos, setContactos] = useState<Map<string, Contacto>>(new Map());
   const [envios, setEnvios] = useState<Envio[]>([]);
+  // Licencias omitidas (no se avisan): clave dni|desde|hasta|novedad
+  const [omitidos, setOmitidos] = useState<Map<string, Omitido>>(new Map());
+  const omitidoDe = (l: Licencia) => omitidos.get(`${l.dni}|${l.desde}|${l.hasta}|${l.novedad}`);
+  const [ocultarOmitidos, setOcultarOmitidos] = useState(true);
   const dnis = useMemo(() => [...new Set(licencias.map(l => l.dni))].sort().join(','), [licencias]);
   const cargarContactos = useCallback(async () => {
-    if (!dnis) { setContactos(new Map()); setEnvios([]); return; }
+    if (!dnis) { setContactos(new Map()); setEnvios([]); setOmitidos(new Map()); return; }
     try {
-      const r = await apiFetch<{ ok: boolean; contactos: Contacto[]; envios: Envio[] }>(`/licencias-medicas-control/whatsapp/contactos?dni=${dnis}`);
+      const r = await apiFetch<{ ok: boolean; contactos: Contacto[]; envios: Envio[]; omitidos?: Omitido[] }>(`/licencias-medicas-control/whatsapp/contactos?dni=${dnis}`);
       setContactos(new Map(r.contactos.map(c => [c.dni, c])));
       setEnvios(r.envios);
+      setOmitidos(new Map((r.omitidos ?? []).map(o => [`${o.dni}|${o.desde}|${o.hasta}|${o.novedad}`, o])));
     } catch (e: any) {
       toast.error('No se pudieron leer los teléfonos', e?.message || '');
     }
@@ -159,24 +166,86 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
     });
   };
 
+  // Copiar el número elegido y corregir el teléfono de la ficha (personal.telefono) en la misma fila
+  const copiarNumero = async (tel: string) => {
+    try { await navigator.clipboard.writeText(`+${tel}`); toast.ok('Número copiado', `+${tel}`); }
+    catch { window.prompt('Copiá el número (Ctrl+C):', `+${tel}`); }
+  };
+  const [editando, setEditando] = useState<{ dni: string; valor: string } | null>(null);
+  const [guardandoTel, setGuardandoTel] = useState(false);
+  const guardarTelefono = async () => {
+    if (!editando || guardandoTel) return;
+    const { dni, valor } = editando;
+    // Lo escrito reemplaza el teléfono de la ficha (los números viejos no se guardan); vacío = no cambia nada
+    if (!valor.trim() || valor.trim() === (contactos.get(dni)?.telefono ?? '').trim()) { setEditando(null); return; }
+    setGuardandoTel(true);
+    try {
+      const r = await apiFetch<{ ok: boolean; contacto: Omit<Contacto, 'apellido' | 'nombre'> }>('/licencias-medicas-control/whatsapp/telefono', {
+        method: 'PUT', body: JSON.stringify({ dni, telefono: valor.trim() }),
+      });
+      setContactos(prev => {
+        const n = new Map(prev);
+        const viejo = prev.get(dni);
+        n.set(dni, { apellido: viejo?.apellido ?? '', nombre: viejo?.nombre ?? '', ...r.contacto });
+        return n;
+      });
+      setNumeroElegido(prev => { const n = new Map(prev); n.delete(dni); return n; });
+      setEditando(null);
+      toast.ok('Teléfono guardado en la ficha', r.contacto.celular ? `WhatsApp: +${r.contacto.celular}` : 'No se reconoce ningún celular en el texto');
+    } catch (e: any) {
+      toast.error('No se pudo guardar el teléfono', e?.message || '');
+    } finally {
+      setGuardandoTel(false);
+    }
+  };
+
   const filas = useMemo(
-    () => licencias.filter(l => !ocultarAvisados || !avisoDe(l)?.avisado),
+    () => licencias.filter(l => (!ocultarAvisados || !avisoDe(l)?.avisado) && (!ocultarOmitidos || !omitidoDe(l))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [licencias, ocultarAvisados, avisos],
+    [licencias, ocultarAvisados, avisos, ocultarOmitidos, omitidos],
   );
+  const nOmitidos = licencias.filter(l => omitidoDe(l)).length;
+
+  // Omitir una fila (no se le avisa) / deshacerlo. Se guarda en licencias_medicas_whatsapp_omitidos.
+  const omitir = async (l: Licencia) => {
+    const motivo = window.prompt(`Omitir el aviso a ${l.nombre}.\nMotivo (opcional):`, '');
+    if (motivo === null) return;
+    try {
+      await apiFetch('/licencias-medicas-control/whatsapp/omitido', {
+        method: 'POST', body: JSON.stringify({ dni: l.dni, desde: l.desde, hasta: l.hasta, novedad: l.novedad, motivo }),
+      });
+      setTildados(prev => { const n = new Set(prev); n.delete(keyDe(l)); return n; });
+      toast.ok('Omitido', l.nombre);
+      await cargarContactos();
+    } catch (e: any) {
+      toast.error('No se pudo omitir', e?.message || '');
+    }
+  };
+  const quitarOmitido = async (l: Licencia) => {
+    try {
+      await apiFetch('/licencias-medicas-control/whatsapp/omitido', {
+        method: 'DELETE', body: JSON.stringify({ dni: l.dni, desde: l.desde, hasta: l.hasta, novedad: l.novedad }),
+      });
+      toast.ok('Ya no está omitido', l.nombre);
+      await cargarContactos();
+    } catch (e: any) {
+      toast.error('No se pudo quitar el omitido', e?.message || '');
+    }
+  };
 
   const [tildados, setTildados] = useState<Set<string>>(new Set());
   const [vista, setVista] = useState<string | null>(null);
-  const todos = filas.length > 0 && filas.every(l => tildados.has(keyDe(l)));
+  const tildables = filas.filter(l => !omitidoDe(l));
+  const todos = tildables.length > 0 && tildables.every(l => tildados.has(keyDe(l)));
   const tildar = (k: string, v: boolean) => setTildados(prev => { const n = new Set(prev); v ? n.add(k) : n.delete(k); return n; });
-  const tildarTodos = (v: boolean) => setTildados(v ? new Set(filas.map(keyDe)) : new Set());
+  const tildarTodos = (v: boolean) => setTildados(v ? new Set(tildables.map(keyDe)) : new Set());
 
   // Los de número dudoso sin aviso que haya salido arrancan tildados (una sola vez por licencia, para no pisar al usuario)
   const yaPretildados = useRef<Set<string>>(new Set());
   useEffect(() => {
     const nuevos = licencias.filter(l => {
       const k = keyDe(l);
-      return contactos.get(l.dni)?.dudoso && !avisoDe(l)?.avisado && !yaPretildados.current.has(k);
+      return contactos.get(l.dni)?.dudoso && !avisoDe(l)?.avisado && !omitidoDe(l) && !yaPretildados.current.has(k);
     }).map(keyDe);
     if (!nuevos.length) return;
     nuevos.forEach(k => yaPretildados.current.add(k));
@@ -277,7 +346,7 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   };
 
   const enviarTanda = async () => {
-    const lista = filas.filter(l => tildados.has(keyDe(l)));
+    const lista = filas.filter(l => tildados.has(keyDe(l)) && !omitidoDe(l));
     if (!lista.length || !validarPrueba()) return;
     if (!prueba && !window.confirm(`Se van a mandar ${lista.length} mensajes REALES por WhatsApp. ¿Seguimos?`)) return;
     detener.current = false;
@@ -329,7 +398,7 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
     void cargarContactos();
   };
 
-  const nTild = filas.filter(l => tildados.has(keyDe(l))).length;
+  const nTild = filas.filter(l => tildados.has(keyDe(l)) && !omitidoDe(l)).length;
   const sinCel = filas.filter(l => !telefonoDe(l.dni)).length;
   const filaVista = filas.find(l => keyDe(l) === vista) || filas.find(l => tildados.has(keyDe(l))) || filas[0];
 
@@ -418,7 +487,11 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
           <input type="checkbox" checked={ocultarAvisados} onChange={e => setOcultarAvisados(e.target.checked)} />
           Ocultar los ya avisados
         </label>
-        <span className="muted" style={{ fontSize: '0.8rem' }}>{filas.length} licencias · {sinCel} sin celular</span>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.82rem' }}>
+          <input type="checkbox" checked={ocultarOmitidos} onChange={e => setOcultarOmitidos(e.target.checked)} />
+          Ocultar omitidos
+        </label>
+        <span className="muted" style={{ fontSize: '0.8rem' }}>{filas.length} licencias · {sinCel} sin celular{nOmitidos ? ` · ${nOmitidos} omitida${nOmitidos === 1 ? '' : 's'}` : ''}</span>
       </div>
 
       {log.length > 0 && (
@@ -434,14 +507,15 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
       )}
 
       {/* Tabla: anchos fijos y cada celda en 2 renglones como máximo (lo largo se corta con … y va entero en el title) */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', tableLayout: 'fixed' }}>
+      <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse', fontSize: '0.8rem', tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: 34 }} />
-          <col style={{ width: '25%' }} />
-          <col style={{ width: '25%' }} />
-          <col style={{ width: '20%' }} />
-          <col style={{ width: '18%' }} />
-          <col style={{ width: 92 }} />
+          <col style={{ width: '23%' }} />
+          <col style={{ width: '22%' }} />
+          <col style={{ width: '28%' }} />
+          <col style={{ width: '15%' }} />
+          <col style={{ width: 100 }} />
         </colgroup>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.12)', whiteSpace: 'nowrap' }}>
@@ -463,6 +537,7 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
             const k = keyDe(l);
             const c = contactos.get(l.dni);
             const av = avisoDe(l);
+            const om = omitidoDe(l);
             const rango = `${fmtFecha(l.desde)}${l.hasta !== l.desde ? ` → ${fmtFecha(l.hasta)}` : ''}`;
             const fechaAviso = av?.ultimo.created_at ? new Date(av.ultimo.created_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
             const extraAviso = [av?.ultimo.destino, av && av.ultimo.estado !== 'ENVIADO' ? av.ultimo.detalle : null].filter(Boolean).join(' · ');
@@ -471,12 +546,20 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
                 style={{
                   borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer',
                   background: vista === k ? 'rgba(124,58,237,0.12)' : i % 2 ? 'rgba(255,255,255,0.025)' : undefined,
+                  opacity: om ? 0.55 : undefined,
                 }}>
                 <td style={TD} onClick={e => e.stopPropagation()}>
-                  <input type="checkbox" checked={tildados.has(k)} onChange={e => tildar(k, e.target.checked)} disabled={enviando} style={{ width: 16, height: 16 }} />
+                  <input type="checkbox" checked={!om && tildados.has(k)} onChange={e => tildar(k, e.target.checked)} disabled={enviando || !!om}
+                    title={om ? 'Omitido: no se le avisa' : undefined} style={{ width: 16, height: 16 }} />
                 </td>
                 <td style={TD}>
-                  <div style={{ ...LINEA, fontWeight: 600 }} title={l.nombre}>{l.nombre}</div>
+                  <div style={{ ...LINEA, fontWeight: 600 }} title={l.nombre}>
+                    {om && (
+                      <span className="badge" style={{ background: 'rgba(148,163,184,0.3)', fontSize: '0.66rem', padding: '1px 6px', marginRight: 6 }}
+                        title={[om.motivo ? `Motivo: ${om.motivo}` : 'Sin motivo', om.omitido_por ? `por ${om.omitido_por}` : '', om.created_at ? new Date(om.created_at).toLocaleString('es-AR') : ''].filter(Boolean).join(' · ')}>OMITIDO</span>
+                    )}
+                    {l.nombre}
+                  </div>
                   <div className="muted" style={{ ...LINEA, fontSize: '0.72rem' }} title={l.servicio || undefined}>
                     DNI {l.dni} · {l.servicio || '—'}
                   </div>
@@ -508,10 +591,27 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
                           <option value="__otro">✏️ Otro número…</option>
                         </select>
                         {dudoso && <span className="badge" style={{ background: 'rgba(234,179,8,0.25)', fontSize: '0.68rem', padding: '1px 6px' }} title="Puede ser un fijo: elegí otro o escribí uno">dudoso</span>}
+                        <button type="button" className="btn" style={BTN_ICONO} disabled={!tel} onClick={() => tel && copiarNumero(tel)} title={tel ? `Copiar +${tel}` : 'Sin celular'}>📋</button>
+                        <button type="button" className="btn" style={BTN_ICONO} disabled={enviando || guardandoTel}
+                          onClick={() => setEditando(editando?.dni === l.dni ? null : { dni: l.dni, valor: '' })}
+                          title="Corregir el teléfono de la ficha">✏️</button>
                       </div>
                     );
                   })()}
-                  {c?.telefono && <div className="muted" style={{ ...LINEA, fontSize: '0.7rem' }}>{c.telefono}</div>}
+                  {editando?.dni === l.dni ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                      <input
+                        className="input" autoFocus maxLength={30} value={editando.valor} disabled={guardandoTel}
+                        placeholder={c?.telefono ? `Nuevo (reemplaza ${c.telefono})` : 'Ej. 1531791175'}
+                        onChange={e => setEditando({ dni: l.dni, valor: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') void guardarTelefono(); if (e.key === 'Escape') setEditando(null); }}
+                        title="Nuevo teléfono: reemplaza el de la ficha (máx. 30). Enter guarda · Esc cancela"
+                        style={{ padding: '1px 4px', fontSize: '0.72rem', minWidth: 0, flex: '1 1 auto' }}
+                      />
+                      <button type="button" className="btn" style={BTN_ICONO} disabled={guardandoTel} onClick={() => void guardarTelefono()} title="Guardar en la ficha">💾</button>
+                      <button type="button" className="btn" style={BTN_ICONO} disabled={guardandoTel} onClick={() => setEditando(null)} title="Cancelar">✕</button>
+                    </div>
+                  ) : c?.telefono && <div className="muted" style={{ ...LINEA, fontSize: '0.7rem' }} title={c.telefono}>{c.telefono}</div>}
                 </td>
                 <td style={TD}>
                   {av ? (
@@ -526,6 +626,10 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
                 </td>
                 <td style={TD} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {om ? (
+                      <button type="button" className="btn" style={BTN} onClick={() => quitarOmitido(l)} disabled={enviando}
+                        title={om.motivo ? `Motivo: ${om.motivo}` : 'Volver a incluirla para avisar'}>↩ Quitar omitido</button>
+                    ) : <>
                     {av && (
                       <button type="button" className="btn" style={{ ...BTN, background: 'rgba(34,197,94,0.2)' }} onClick={() => reenviar(l)} disabled={enviando || !ext}
                         title={ext ? `Volver a mandar solo a este agente${prueba ? ' (modo prueba)' : ''}` : 'Necesita la extensión; usá "Abrir"'}>↻ Reenviar</button>
@@ -534,6 +638,9 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
                       title="Abre WhatsApp Web con el chat y el mensaje ya escrito">Abrir</button>
                     <button type="button" className="btn" style={BTN} onClick={() => marcarManual(l)} disabled={enviando}
                       title="Registrar que se envió a mano">✓ Enviado</button>
+                    <button type="button" className="btn" style={{ ...BTN, background: 'rgba(148,163,184,0.15)' }} onClick={() => omitir(l)} disabled={enviando}
+                      title="No avisarle esta licencia (se oculta; se puede deshacer)">⊘ Omitir</button>
+                    </>}
                   </div>
                 </td>
               </tr>
@@ -541,6 +648,7 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

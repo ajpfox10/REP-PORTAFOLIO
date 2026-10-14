@@ -26,6 +26,7 @@ import { Art26MinisterioPage } from '../pages/Art26MinisterioPage';
 import { LicenciasConsultorioPage } from '../pages/LicenciasConsultorioPage';
 import { HorariosExtendidosPage } from '../pages/HorariosExtendidosPage';
 import { JubilablesEstadisticaPage } from '../pages/JubilablesEstadisticaPage';
+import { ComisionesPage } from '../pages/ComisionesPage';
 import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
@@ -421,6 +422,16 @@ export function App() {
                 <Private>
                   <Guard anyOf={['app:jubilables-estadistica:access', 'crud:*:*']}>
                     <JubilablesEstadisticaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/comisiones"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:*:*', 'personal:write', 'crud:personal:update']}>
+                    <ComisionesPage />
                   </Guard>
                 </Private>
               }

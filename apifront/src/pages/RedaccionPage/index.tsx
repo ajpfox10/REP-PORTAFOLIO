@@ -58,8 +58,8 @@ function formatDateDMY(value: any): string {
 }
 
 const DOCS = [
-  { id: 1,  label: 'Certificado de Trabajo',   implementado: false,
-    frase: 'Se certifica que el/la agente presta servicios en esta reparticion con el cargo y antiguedad que se detalla a continuacion.' },
+  { id: 1,  label: 'Certificado de Trabajo',   implementado: true,
+    frase: 'Se certifica que el/la agente presta servicios con el historial de cargo, ley y servicio, y la fecha de fin de residencia si corresponde.' },
   { id: 2,  label: 'IOMA',                      implementado: true,
     frase: 'Se certifica para presentar ante IOMA que el/la agente se encuentra en actividad en la fecha indicada.' },
   { id: 3,  label: 'Constancia de Empleo',      implementado: false,
@@ -104,6 +104,7 @@ function DocModal({ agente, doc, onClose }: {
   const toast = useToast();
   const [descargando, setDescargando] = useState(false);
   const [iomaDatos, setIomaDatos] = useState<any>(null);
+  const [certLaboralDatos, setCertLaboralDatos] = useState<any>(null);
   const [loadingDatos, setLoadingDatos] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -151,6 +152,26 @@ function DocModal({ agente, doc, onClose }: {
   });
 
   const nombre = `${agente.apellido ?? ''} ${agente.nombre ?? ''}`.trim();
+
+  // Certificado de Trabajo — fetch datos + preview
+  useEffect(() => {
+    if (doc.id !== 1) return;
+    setLoadingDatos(true);
+    apiFetch<any>(`/certificados/certificado-laboral/datos?dni=${agente.dni}`)
+      .then(r => setCertLaboralDatos(r?.data ?? null))
+      .catch(() => setCertLaboralDatos(null))
+      .finally(() => setLoadingDatos(false));
+  }, [doc.id, agente.dni]);
+
+  useEffect(() => {
+    if (doc.id !== 1 || !certLaboralDatos) return;
+    setLoadingPreview(true);
+    apiFetchBlob(`/certificados/certificado-laboral/preview?dni=${agente.dni}`)
+      .then(blob => blob.text())
+      .then(html => setPreviewHtml(html))
+      .catch(() => setPreviewHtml(''))
+      .finally(() => setLoadingPreview(false));
+  }, [doc.id, certLaboralDatos, agente.dni]);
 
   useEffect(() => {
     if (doc.id !== 2) return;
@@ -389,6 +410,22 @@ function DocModal({ agente, doc, onClose }: {
       .finally(() => setLoadingPreview(false));
   }, [doc.id, cvDatos, cvFields, agente.dni]);
 
+  const descargarDocxCertLaboral = async () => {
+    setDescargando(true);
+    try {
+      const { blob, filename } = await apiFetchBlobWithMeta('/certificados/certificado-laboral', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni: agente.dni }),
+      });
+      triggerDownload(blob, filename || `certificado_trabajo_${agente.dni}.docx`);
+    } catch (e: any) {
+      toast.error('Error al generar el certificado: ' + (e?.message || 'Error'));
+    } finally {
+      setDescargando(false);
+    }
+  };
+
   const descargarDocxIoma = async () => {
     setDescargando(true);
     try {
@@ -543,6 +580,13 @@ function DocModal({ agente, doc, onClose }: {
   };
 
   const renderPreview = () => {
+    if (doc.id === 1) {
+      if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando documento...</p>;
+      if (!certLaboralDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
+      if (!previewHtml) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se pudo cargar la vista previa.</p>;
+      return <iframe srcDoc={previewHtml} style={{ width: '100%', height: 620, border: 'none', borderRadius: 4 }} title="Preview Certificado de Trabajo" />;
+    }
+
     if (doc.id === 2) {
       if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando documento...</p>;
       if (!iomaDatos)   return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
@@ -1124,6 +1168,18 @@ function DocModal({ agente, doc, onClose }: {
           {doc.id === 7 && (
             <>
               <button className="btn" onClick={descargarDocxDispRect} disabled={descargando}
+                style={{ background: '#7c3aed', color: '#fff' }}>
+                {descargando ? 'Generando...' : 'Descargar DOCX'}
+              </button>
+              <button className="btn" onClick={imprimirDoc} disabled={!previewHtml}
+                style={{ background: '#0369a1', color: '#fff' }}>Imprimir</button>
+              <button className="btn" onClick={exportarPdf} disabled={!previewHtml}
+                style={{ background: '#dc2626', color: '#fff' }}>PDF</button>
+            </>
+          )}
+          {doc.id === 1 && (
+            <>
+              <button className="btn" onClick={descargarDocxCertLaboral} disabled={descargando || !certLaboralDatos}
                 style={{ background: '#7c3aed', color: '#fff' }}>
                 {descargando ? 'Generando...' : 'Descargar DOCX'}
               </button>

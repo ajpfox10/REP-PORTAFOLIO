@@ -828,6 +828,17 @@ async function ejecutarCiclo(rango: RangoFechas | null = null, opciones: { autom
       );
     }
 
+    // Sin fichadas nuevas no se genera ni se sube nada. El nombre del archivo solo tiene
+    // resolucion de minuto: con dos procesos corriendo el ciclo a la vez (pm2 cluster, 08-11/10),
+    // el segundo encontraba todo ya marcado y subia un .txt vacio con el MISMO nombre,
+    // pisando en el SFTP el archivo bueno del primero.
+    if (opciones.automatico && rows.length === 0) {
+      exitoso = true;
+      nombreArchivo = '(sin fichadas nuevas)';
+      logger.info({ msg: 'fichero: ciclo sin fichadas nuevas, no se sube archivo' });
+      return { ok: true, registros: 0, archivo: '', sn: filtroReloj?.sn ?? null, alias: filtroReloj?.alias ?? null };
+    }
+
     totalRegistros = rows.length;
     maxChecktimeSubido = rows
       .map(row => normalizarChecktime(row.checktime))

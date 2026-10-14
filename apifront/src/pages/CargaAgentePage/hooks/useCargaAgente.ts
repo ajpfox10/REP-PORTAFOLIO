@@ -361,10 +361,83 @@ export function useCargaAgente() {
     }
   }, [toast]);
 
+  // Payload del PATCH /personal/:dni (modo edición).
+  const buildEditPayload = useCallback(() => {
+    const payload: Record<string, any> = {
+      apellido: form.apellido.trim().toUpperCase(),
+      nombre:   form.nombre.trim().toUpperCase(),
+      ...(form.cuil              ? { cuil:               form.cuil }                         : {}),
+      ...(form.fecha_nacimiento  ? { fecha_nacimiento:   form.fecha_nacimiento }              : {}),
+      ...(form.sexo_id           ? { sexo_id:            Number(form.sexo_id) }               : {}),
+      ...(form.email             ? { email:              form.email }                         : {}),
+      ...(form.telefono          ? { telefono:           form.telefono }                      : {}),
+      ...(form.domicilio         ? { domicilio:          form.domicilio }                     : {}),
+      ...(form.numerodomicilio   ? { numerodomicilio:    Number(form.numerodomicilio) }       : {}),
+      ...(form.piso              ? { piso:               Number(form.piso) }                  : {}),
+      ...(form.depto             ? { depto:              form.depto }                         : {}),
+      ...(form.cp                ? { cp:                 form.cp }                            : {}),
+      ...(form.observaciones_direccion ? { observacionesdireccion: form.observaciones_direccion } : {}),
+      ...(form.localidad_id      ? { localidad_id:       Number(form.localidad_id) }          : {}),
+      ...(form.provincia_id      ? { provincia_id:       form.provincia_id }                  : {}),
+      ...(form.nacionalidad      ? { nacionalidad:       form.nacionalidad }                  : {}),
+      ...(form.mp                ? { mp:                 form.mp }                            : {}),
+      // cambio de especialidad: cierra la vigente y abre la nueva (historial)
+      ...(form.especialidad_id !== form.especialidad_original ? {
+        especialidad_cambio: {
+          especialidad_id: form.especialidad_id ? Number(form.especialidad_id) : null,
+          ...(form.especialidad_original ? { fecha_cierre: form.especialidad_fecha_cierre } : {}),
+          ...(form.especialidad_id ? { fecha_desde: form.especialidad_fecha_desde } : {}),
+        },
+      } : {}),
+      ...(form.observaciones     ? { observaciones:      form.observaciones }                 : {}),
+      // campos agente
+      estado_empleo: form.estado_empleo || 'ACTIVO',
+      ...(form.legajo            ? { legajo:             Number(form.legajo) }                : {}),
+      ...(form.ley_id            ? { ley_id:             Number(form.ley_id) }                : {}),
+      ...(form.planta_id         ? { planta_id:          Number(form.planta_id) }             : {}),
+      ...(form.categoria_id      ? { categoria_id:       Number(form.categoria_id) }          : {}),
+      ...(form.ocupacion_id      ? { ocupacion_id:       Number(form.ocupacion_id) }          : {}),
+      ...(form.regimen_horario_id? { regimen_horario_id: Number(form.regimen_horario_id) }    : {}),
+      ...(form.reparticion_id    ? { reparticion_id:     Number(form.reparticion_id) }        : {}),
+      ...(form.servicio_id       ? { servicio_id:        Number(form.servicio_id) }           : {}),
+      ...(form.sector_id         ? { sector_id:           Number(form.sector_id) }             : {}),
+      ...(form.funcion_id        ? { funcion_id:         Number(form.funcion_id) }            : {}),
+      ...(form.fecha_ingreso     ? { fecha_ingreso:      form.fecha_ingreso }                 : {}),
+      ...(form.fecha_egreso      ? { fecha_egreso:       form.fecha_egreso }                  : {}),
+      ...(form.fecha_baja        ? { fecha_baja:         form.fecha_baja }                    : {}),
+      ...(form.salario_mensual   ? { salario_mensual:    parseFloat(form.salario_mensual) }   : {}),
+      ...(form.decreto_designacion ? { decreto_designacion: form.decreto_designacion }        : {}),
+    };
+    return payload;
+  }, [form]);
+
+  // Pase a comisión desde la edición: no va por el PATCH (pide acto, destino y fecha en
+  // un modal y cierra el cargo + servicio). Antes se guarda el resto de lo editado.
+  const [pideComision, setPideComision] = useState(false);
+  const guardarAntesDeComision = useCallback(async () => {
+    const dniNum = Number(form.dni.replace(/\D/g, ''));
+    const payload = buildEditPayload();
+    delete payload.estado_empleo;
+    delete payload.fecha_egreso;
+    delete payload.fecha_baja;
+    const pRes = await apiFetch<any>(`/personal/${dniNum}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    if (!pRes?.ok) throw new Error(pRes?.error || 'Error al actualizar');
+  }, [form.dni, buildEditPayload]);
+  const comisionRegistrada = useCallback(() => {
+    setPideComision(false);
+    setSavedDni(Number(form.dni.replace(/\D/g, '')));
+    setSavedMode('edit');
+    setSaved(true);
+  }, [form.dni]);
+
   const save = useCallback(async () => {
     if (!validateStep(1) || !validateStep(2)) {
       toast.error('Completá los datos requeridos');
       setStep(1);
+      return;
+    }
+    if (editMode && form.estado_empleo === 'COMISION') {
+      setPideComision(true);
       return;
     }
     setSaving(true);
@@ -410,51 +483,7 @@ export function useCargaAgente() {
 
       } else if (editMode) {
         // ── MODO EDICIÓN: PATCH /personal/:dni ──────────────────────────────────
-        const payload: Record<string, any> = {
-          apellido: form.apellido.trim().toUpperCase(),
-          nombre:   form.nombre.trim().toUpperCase(),
-          ...(form.cuil              ? { cuil:               form.cuil }                         : {}),
-          ...(form.fecha_nacimiento  ? { fecha_nacimiento:   form.fecha_nacimiento }              : {}),
-          ...(form.sexo_id           ? { sexo_id:            Number(form.sexo_id) }               : {}),
-          ...(form.email             ? { email:              form.email }                         : {}),
-          ...(form.telefono          ? { telefono:           form.telefono }                      : {}),
-          ...(form.domicilio         ? { domicilio:          form.domicilio }                     : {}),
-          ...(form.numerodomicilio   ? { numerodomicilio:    Number(form.numerodomicilio) }       : {}),
-          ...(form.piso              ? { piso:               Number(form.piso) }                  : {}),
-          ...(form.depto             ? { depto:              form.depto }                         : {}),
-          ...(form.cp                ? { cp:                 form.cp }                            : {}),
-          ...(form.observaciones_direccion ? { observacionesdireccion: form.observaciones_direccion } : {}),
-          ...(form.localidad_id      ? { localidad_id:       Number(form.localidad_id) }          : {}),
-          ...(form.provincia_id      ? { provincia_id:       form.provincia_id }                  : {}),
-          ...(form.nacionalidad      ? { nacionalidad:       form.nacionalidad }                  : {}),
-          ...(form.mp                ? { mp:                 form.mp }                            : {}),
-          // cambio de especialidad: cierra la vigente y abre la nueva (historial)
-          ...(form.especialidad_id !== form.especialidad_original ? {
-            especialidad_cambio: {
-              especialidad_id: form.especialidad_id ? Number(form.especialidad_id) : null,
-              ...(form.especialidad_original ? { fecha_cierre: form.especialidad_fecha_cierre } : {}),
-              ...(form.especialidad_id ? { fecha_desde: form.especialidad_fecha_desde } : {}),
-            },
-          } : {}),
-          ...(form.observaciones     ? { observaciones:      form.observaciones }                 : {}),
-          // campos agente
-          estado_empleo: form.estado_empleo || 'ACTIVO',
-          ...(form.legajo            ? { legajo:             Number(form.legajo) }                : {}),
-          ...(form.ley_id            ? { ley_id:             Number(form.ley_id) }                : {}),
-          ...(form.planta_id         ? { planta_id:          Number(form.planta_id) }             : {}),
-          ...(form.categoria_id      ? { categoria_id:       Number(form.categoria_id) }          : {}),
-          ...(form.ocupacion_id      ? { ocupacion_id:       Number(form.ocupacion_id) }          : {}),
-          ...(form.regimen_horario_id? { regimen_horario_id: Number(form.regimen_horario_id) }    : {}),
-          ...(form.reparticion_id    ? { reparticion_id:     Number(form.reparticion_id) }        : {}),
-          ...(form.servicio_id       ? { servicio_id:        Number(form.servicio_id) }           : {}),
-          ...(form.sector_id         ? { sector_id:           Number(form.sector_id) }             : {}),
-          ...(form.funcion_id        ? { funcion_id:         Number(form.funcion_id) }            : {}),
-          ...(form.fecha_ingreso     ? { fecha_ingreso:      form.fecha_ingreso }                 : {}),
-          ...(form.fecha_egreso      ? { fecha_egreso:       form.fecha_egreso }                  : {}),
-          ...(form.fecha_baja        ? { fecha_baja:         form.fecha_baja }                    : {}),
-          ...(form.salario_mensual   ? { salario_mensual:    parseFloat(form.salario_mensual) }   : {}),
-          ...(form.decreto_designacion ? { decreto_designacion: form.decreto_designacion }        : {}),
-        };
+        const payload = buildEditPayload();
 
         const pRes = await apiFetch<any>(`/personal/${dniNum}`, {
           method: 'PATCH',
@@ -616,12 +645,13 @@ export function useCargaAgente() {
     } finally {
       setSaving(false);
     }
-  }, [form, photo, toast, validateStep, editMode, reentryMode]);
+  }, [form, photo, toast, validateStep, editMode, reentryMode, buildEditPayload]);
 
   const reset = useCallback(() => {
     setForm(EMPTY_FORM);
     setPhoto(null);
     setSaved(false);
+    setPideComision(false);
     setSavedDni(null);
     setSavedMode('create');
     setEditMode(false);
@@ -634,5 +664,6 @@ export function useCargaAgente() {
     step, form, photo, saving, saved, savedDni, savedMode, errors, cats,
     editMode, reentryMode, editLoading, checkDni,
     setField, setPhoto, nextStep, prevStep, goToStep, save, reset,
+    pideComision, setPideComision, guardarAntesDeComision, comisionRegistrada,
   };
 }

@@ -551,6 +551,9 @@ export function DashboardPage() {
           {hasPerm('crud:*:*') && (
             <Tile to="/app/casos-violencia" title="🛡️ Casos de Violencia" desc="Registro de casos: expediente, agresor interno o externo, intervención del equipo de violencia, recomendaciones (DAVSAL, cambio de horario o sector) y todo lo remitido." accent="#be185d" />
           )}
+          {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && (
+            <Tile to="/app/comisiones" title="🧳 Comisiones" desc="Agentes en comisión: acto, destino, vencimientos y regreso al servicio. Gráficos por destino, pases por mes y vencimientos." accent="#3987e5" />
+          )}
           <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación IPS para Leyes 10471 y 10430. Servicio nombrado, becas, ANSES, insalubridad y prorrateo." accent="#7c3aed" />
           <Tile to="/app/concursos" title="🏆 Concursos Ley 10471" desc="Concurso de ingreso por año, ley, servicio y agente. Concurso de funciones: Ley 10471 con más de 15 años de antigüedad. Exportación a Excel." accent="#6366f1" />
           <LegajoTile />

@@ -58,8 +58,10 @@ function crearFormularioLegajo() {
   txt('Apellido', null, true);
   txt('Nombres', null, true);
   txt('CUIL', 'Con o sin guiones');
-  txt('Correo electrónico', 'Para avisarte si falta algún dato').setValidation(
-    FormApp.createTextValidation().requireTextIsEmail().build());
+  txt('WhatsApp', 'Para avisarte si falta algún dato. Código de área + número, sin 0 ni 15 (ej: 1123456789)')
+    .setValidation(FormApp.createTextValidation()
+      .setHelpText('Solo números, sin 0 ni 15 ni espacios (ej: 1123456789)')
+      .requireTextMatchesPattern('^[0-9]{10,13}$').build());
 
   // Hoja 1 (datos personales) y familia son OBLIGATORIOS. Lo que no aplica a
   // todos se pregunta con Sí/No y, si corresponde, su página también es obligatoria.

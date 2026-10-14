@@ -21,6 +21,15 @@ interface ServicioANSES {
   es_insalubre: boolean;
 }
 
+// Tramo que un acto administrativo reconoce como insalubre (16%) antes de Jun/2015.
+interface ReconocimientoInsalubre {
+  fecha_desde: string;
+  fecha_hasta: string;
+  acto:        string;
+}
+
+type ModoInsalubre = 'COMUN' | 'INSALUBRE' | 'MIXTO';
+
 // Líneas leídas del PDF de ANSES (endpoint /jubilacion/parse-anses-pdf).
 // Se muestran para revisar y recién se cargan cuando el operador confirma.
 interface LineaPdfANSES {
@@ -92,6 +101,9 @@ interface Resultado {
   servicio_beca:                Periodo;
   servicio_nombrado:            Periodo;
   servicio_nombrado_antes_2015: Periodo;
+  servicio_antes_2015_comun?:      Periodo;
+  servicio_antes_2015_reconocido?: Periodo;
+  reconocimientos_insalubre?:   Array<{ desde: string; hasta: string; acto: string; periodo: Periodo }>;
   servicio_nombrado_desde_2015: Periodo;
   servicio_ips:                 Periodo;
   servicio_ips_ajustado:        Periodo;
@@ -607,7 +619,10 @@ export function HerramientasPage() {
   const [situacion,          setSituacion]          = useState<string>('NORMAL');
   const [becaAporto,         setBecaAporto]         = useState(false);
   const [ipsAporto,          setIpsAporto]          = useState(true);
-  const [esInsalubreIPS,     setEsInsalubreIPS]     = useState(false);
+  // Común hasta Jun/2015 · insalubre toda la carrera · mixto por actos de reconocimiento.
+  const [modoInsalubre,      setModoInsalubre]      = useState<ModoInsalubre>('COMUN');
+  const [reconocimientos,    setReconocimientos]    = useState<ReconocimientoInsalubre[]>([]);
+  const esInsalubreIPS = modoInsalubre === 'INSALUBRE';
   const [diferencial2Pagado, setDiferencial2Pagado] = useState(false);
 
   const [serviciosAnses,     setServiciosAnses]    = useState<ServicioANSES[]>([]);
@@ -752,7 +767,8 @@ export function HerramientasPage() {
 
       setAgente(d);
       setSituacion(d.situacion_sugerida ?? 'NORMAL');
-      setEsInsalubreIPS(!!d.ocupacion_es_insalubre);
+      setModoInsalubre(d.ocupacion_es_insalubre ? 'INSALUBRE' : 'COMUN');
+      setReconocimientos([]);
       setBecaAporto(false);
       setIpsAporto(!['RESIDENTE', 'CONCURRENTE', 'ARTICULO_48'].includes(d.situacion_sugerida ?? 'NORMAL'));
       setDiferencial2Pagado(false);
@@ -887,6 +903,9 @@ export function HerramientasPage() {
     ips_aporto:              ipsAporto,
     es_insalubre_ips:        esInsalubreIPS,
     diferencial_2pct_pagado: diferencial2Pagado,
+    reconocimientos_insalubre: modoInsalubre === 'MIXTO'
+      ? reconocimientos.filter(r => r.fecha_desde && r.fecha_hasta).map(r => ({ ...r, acto: r.acto.trim() }))
+      : [],
     fecha_calculo:           fechaCalculo || null,
     servicios_anses:         serviciosAnses.filter(s => s.fecha_desde && s.fecha_hasta),
     servicios_externos:      serviciosExternos.filter(s => s.organismo.trim() && s.fecha_desde && s.fecha_hasta),
@@ -939,7 +958,9 @@ export function HerramientasPage() {
     setSituacion(h.situacion_revista ?? 'NORMAL');
     setBecaAporto(!!h.beca_aporto);
     setIpsAporto(h.ips_aporto == null ? true : !!h.ips_aporto);
-    setEsInsalubreIPS(!!h.es_insalubre_ips);
+    const recosH: ReconocimientoInsalubre[] = parse(h.reconocimientos_insalubre, []);
+    setReconocimientos(recosH);
+    setModoInsalubre(h.es_insalubre_ips ? 'INSALUBRE' : recosH.length ? 'MIXTO' : 'COMUN');
     setDiferencial2Pagado(!!h.diferencial_2pct_pagado);
     setServiciosAnses(parse(h.servicios_anses, []));
     setServiciosExternos(parse(h.servicios_externos, []));
@@ -1008,6 +1029,8 @@ export function HerramientasPage() {
     filas.push({ Sección: 'IPS', Dato: 'Total IPS (bruto)',           Valor: fmtPeriodo(R.servicio_ips) });
     filas.push({ Sección: 'IPS', Dato: 'Total IPS neto (s/superp.)', Valor: fmtPeriodo(R.servicio_ips_ajustado) });
     filas.push({ Sección: 'IPS', Dato: 'Insalubre efectivo',         Valor: R.es_insalubre_efectivo ? 'SÍ' : 'NO' });
+    for (const rc of R.reconocimientos_insalubre ?? [])
+      filas.push({ Sección: 'IPS', Dato: `Reconocido insalubre${rc.acto ? ` (${rc.acto})` : ''}`, Valor: `${fmtFecha(rc.desde)} → ${fmtFecha(rc.hasta)} — computa ${fmtPeriodo(rc.periodo)}` });
     filas.push({ Sección: 'IPS', Dato: 'Cargo deudor 2%',            Valor: R.cargo_deudor_2pct ? `SÍ — ${fmtPeriodo(R.cargo_deudor_periodo)}` : 'NO' });
 
     if (serviciosAnses.length) {
@@ -2133,21 +2156,76 @@ export function HerramientasPage() {
                           : <span style={{ color: '#64748b', marginLeft: 6 }}>(no insalubre según DB)</span>}
                       </div>
                     )}
-                    <label style={S.chkRow}>
-                      <input type="checkbox" checked={esInsalubreIPS} onChange={e => {
-                        setEsInsalubreIPS(e.target.checked);
-                        if (!e.target.checked) setDiferencial2Pagado(false);
-                      }} style={S.chk} />
-                      <span style={{ fontSize: '0.84rem' }}>Profesión insalubre (Ley 10471 / Decretos 598/2015, 58/2015)</span>
-                    </label>
-                    {esInsalubreIPS && (
+                    {([
+                      ['COMUN',     'Común hasta Jun/2015 (14%)'],
+                      ['INSALUBRE', 'Profesión insalubre — toda la carrera (Ley 10471 / Decretos 598/2015, 58/2015)'],
+                      ['MIXTO',     'Mixto — tramos reconocidos insalubres por acto administrativo'],
+                    ] as Array<[ModoInsalubre, string]>).map(([modo, texto]) => (
+                      <label key={modo} style={S.chkRow}>
+                        <input type="radio" name="modo-insalubre" checked={modoInsalubre === modo} onChange={() => {
+                          setModoInsalubre(modo);
+                          if (modo === 'INSALUBRE') setDiferencial2Pagado(false);
+                          if (modo === 'MIXTO' && !reconocimientos.length)
+                            setReconocimientos([{ fecha_desde: '', fecha_hasta: '2015-05-31', acto: '' }]);
+                        }} style={S.chk} />
+                        <span style={{ fontSize: '0.84rem' }}>{texto}</span>
+                      </label>
+                    ))}
+                    {modoInsalubre === 'INSALUBRE' && (
                       <div style={{ marginTop: 6, fontSize: '0.74rem', color: '#fdba74' }}>
                         Prorrateo por tabla aplicado. Requisito: 50 años / 25 años servicio.
                       </div>
                     )}
-                    {!esInsalubreIPS && (
+                    {modoInsalubre === 'COMUN' && (
                       <div style={{ marginTop: 6, fontSize: '0.74rem', color: '#94a3b8' }}>
                         Desde Jun/2015: insalubre (16%) · Antes de Jun/2015: común (14%)
+                      </div>
+                    )}
+                    {modoInsalubre === 'MIXTO' && (
+                      <div style={{ marginTop: 8, background: 'rgba(251,146,60,0.06)', border: '1px solid rgba(251,146,60,0.25)', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: 8 }}>
+                          Antes de Jun/2015, lo que cubre un acto computa insalubre (16%); el resto sigue común (14%).
+                          Desde Jun/2015 todo es insalubre.
+                        </div>
+                        {reconocimientos.map((r, i) => {
+                          const upd = (f: keyof ReconocimientoInsalubre, v: string) =>
+                            setReconocimientos(p => p.map((x, k) => k === i ? { ...x, [f]: v } : x));
+                          const aplicado = resultado?.reconocimientos_insalubre?.find(a => a.desde === r.fecha_desde && a.hasta === r.fecha_hasta);
+                          return (
+                            <div key={i} style={{ marginBottom: 10 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 40px', gap: 8, alignItems: 'end' }}>
+                                <div>
+                                  <label style={S.label}>Desde</label>
+                                  <input type="date" style={S.input} value={r.fecha_desde} onChange={e => upd('fecha_desde', e.target.value)} />
+                                </div>
+                                <div>
+                                  <label style={S.label}>Hasta</label>
+                                  <input type="date" style={S.input} value={r.fecha_hasta} onChange={e => upd('fecha_hasta', e.target.value)} />
+                                </div>
+                                <button onClick={() => setReconocimientos(p => p.filter((_, k) => k !== i))}
+                                  style={{ ...S.btn, background: '#450a0a', color: '#fca5a5', padding: '7px 10px', fontSize: '0.82rem' }}>✕</button>
+                              </div>
+                              <div style={{ marginTop: 6 }}>
+                                <label style={S.label}>Acto administrativo (N° de resolución / disposición)</label>
+                                <input type="text" style={S.input} value={r.acto} maxLength={200}
+                                  placeholder="Ej.: Res. 1234/07" onChange={e => upd('acto', e.target.value)} />
+                              </div>
+                              {aplicado && (
+                                isZero(aplicado.periodo)
+                                  ? <div style={{ marginTop: 4, fontSize: '0.72rem', color: '#fca5a5' }}>
+                                      ⚠ No cae dentro del nombrado anterior a Jun/2015: no modifica el cálculo.
+                                    </div>
+                                  : <div style={{ marginTop: 4, fontSize: '0.72rem', color: '#fdba74' }}>
+                                      Computa insalubre: {fmtPeriodo(aplicado.periodo)}
+                                    </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <button onClick={() => setReconocimientos(p => [...p, { fecha_desde: '', fecha_hasta: '2015-05-31', acto: '' }])}
+                          style={{ ...S.btn, background: '#1e293b', color: '#fdba74', border: '1px solid rgba(251,146,60,0.35)', padding: '6px 12px', fontSize: '0.8rem' }}>
+                          + Agregar tramo reconocido
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2162,9 +2240,13 @@ export function HerramientasPage() {
                         <span style={{ fontSize: '0.84rem' }}>¿Pagó el diferencial del 2% de aportes?</span>
                       </label>
                       <div style={{ marginTop: 6, fontSize: '0.74rem', color: '#94a3b8' }}>
-                        {diferencial2Pagado
-                          ? 'El período antes de Jun/2015 se transforma en insalubre.'
-                          : 'Cargo deudor — puede pagar el 2% para transformar ese período en insalubre.'}
+                        {modoInsalubre === 'MIXTO'
+                          ? (diferencial2Pagado
+                              ? 'La parte común anterior a Jun/2015 (no reconocida por acto) se transforma en insalubre.'
+                              : 'Cargo deudor sólo por la parte común no reconocida — pagando el 2% pasa a insalubre.')
+                          : diferencial2Pagado
+                            ? 'El período antes de Jun/2015 se transforma en insalubre.'
+                            : 'Cargo deudor — puede pagar el 2% para transformar ese período en insalubre.'}
                       </div>
                     </div>
                   )}
@@ -2611,12 +2693,29 @@ export function HerramientasPage() {
                             tipo: R.es_insalubre_efectivo ? 'Insalubre' : 'Mixto',
                             estado: R.sin_aportes ? 'Sin aportes' : 'Computa',
                           } : null,
-                          !isZero(R.servicio_nombrado_antes_2015) ? {
-                            concepto: '  └ Antes Jun/2015 (14%)',
-                            p: R.servicio_nombrado_antes_2015,
-                            tipo: R.es_insalubre_efectivo ? 'Insalubre' : 'Común',
-                            estado: R.cargo_deudor_2pct ? '⚠ Puede pagar 2%' : 'OK',
-                          } : null,
+                          // Con actos de reconocimiento el tramo se abre: la parte común
+                          // (14%, o insalubre si pagó el 2%) y cada acto aparte (16%).
+                          ...(R.servicio_antes_2015_reconocido && !isZero(R.servicio_antes_2015_reconocido) ? [
+                            R.servicio_antes_2015_comun && !isZero(R.servicio_antes_2015_comun) ? {
+                              concepto: '  └ Antes Jun/2015 — no reconocido (14%)',
+                              p: R.servicio_antes_2015_comun,
+                              tipo: R.es_insalubre_efectivo ? 'Insalubre' : 'Común',
+                              estado: R.cargo_deudor_2pct ? '⚠ Puede pagar 2%' : 'OK',
+                            } : null,
+                            ...(R.reconocimientos_insalubre ?? []).filter(rc => !isZero(rc.periodo)).map(rc => ({
+                              concepto: `  └ Reconocido por acto${rc.acto ? ` ${rc.acto}` : ''} (16%) ${fmtFecha(rc.desde)} → ${fmtFecha(rc.hasta)}`,
+                              p: rc.periodo,
+                              tipo: 'Insalubre',
+                              estado: 'OK',
+                            })),
+                          ] : [
+                            !isZero(R.servicio_nombrado_antes_2015) ? {
+                              concepto: '  └ Antes Jun/2015 (14%)',
+                              p: R.servicio_nombrado_antes_2015,
+                              tipo: R.es_insalubre_efectivo ? 'Insalubre' : 'Común',
+                              estado: R.cargo_deudor_2pct ? '⚠ Puede pagar 2%' : 'OK',
+                            } : null,
+                          ]),
                           !isZero(R.servicio_nombrado_desde_2015) ? {
                             concepto: '  └ Desde Jun/2015 (16%)',
                             p: R.servicio_nombrado_desde_2015,

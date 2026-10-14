@@ -8,7 +8,7 @@ import { Sequelize, QueryTypes } from 'sequelize';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 import { registrarImportFormulario } from './legajoImportForm';
-import { generarLegajoPdf } from '../services/legajoPdf';
+import { generarLegajoPdf, FormatoLegajo } from '../services/legajoPdf';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -373,7 +373,7 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
     };
   }
 
-  // GET /legajo/:dni/pdf?hojas=1,2 — legajo impreso sobre el PDF original del Ministerio
+  // GET /legajo/:dni/pdf?hojas=1,2&formato=original|oficio|oficio-estirado — legajo impreso sobre el PDF original del Ministerio
   router.get('/:dni/pdf', read, async (req: Request, res: Response) => {
     const dni = Number(req.params.dni);
     if (!dni) return res.status(400).json({ ok: false, error: 'dni requerido' });
@@ -381,7 +381,9 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
       const data = await cargarLegajo(dni);
       if (!data) return res.status(404).json({ ok: false, error: 'Agente no encontrado' });
       const hojas = String(req.query.hojas ?? '').split(',').map(Number).filter(n => n >= 1 && n <= 16);
-      const pdf = await generarLegajoPdf(data, hojas);
+      const f = String(req.query.formato ?? '');
+      const formato: FormatoLegajo = f === 'oficio' || f === 'oficio-estirado' ? f : 'original';
+      const pdf = await generarLegajoPdf(data, hojas, formato);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="legajo_${dni}.pdf"`);
       return res.send(Buffer.from(pdf));

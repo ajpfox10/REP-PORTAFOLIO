@@ -127,7 +127,7 @@ export function LicenciasMedicasControlPage() {
   }));
 
   return (
-    <Layout title="Licencias médicas no otorgadas">
+    <Layout title="Licencias médicas no otorgadas" fluid>
       <div className="card" style={{ marginTop: 12, padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <div>

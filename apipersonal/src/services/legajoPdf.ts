@@ -1,6 +1,7 @@
 // src/services/legajoPdf.ts
 // Legajo Personal impreso sobre el PDF ORIGINAL del Ministerio (assets/legajo/plantilla_legajo.pdf):
 // se copian sus hojas tal cual (mismo tamaño: A4 apaisada y la hoja 6 en oficio) y se escriben
+// (opcionalmente al final se pasa todo a oficio, ver FormatoLegajo)
 // los datos encima, en la posición de cada línea de puntos y de cada casillero de las grillas.
 // Si una grilla tiene más registros que renglones, se agrega otra copia de esa hoja.
 import fs from 'fs';
@@ -91,7 +92,38 @@ function renglon(pg: PDFPage, c: Ctx, hoja: number, fila: number, celdas: any[],
 }
 
 // ── armado ───────────────────────────────────────────────────────────────────
-export async function generarLegajoPdf(d: any, hojas?: number[]): Promise<Uint8Array> {
+// Formato de salida: 'original' = tamaño de cada hoja de la plantilla (A4 apaisada, hoja 6 oficio);
+// 'oficio' = A4 agrandada proporcional y centrada en oficio apaisado; 'oficio-estirado' = A4 estirada
+// hasta ocupar todo el oficio (se deforma un poco a lo ancho).
+export type FormatoLegajo = 'original' | 'oficio' | 'oficio-estirado';
+const OFICIO = { w: 1008, h: 612 };
+
+async function pasarAOficio(doc: PDFDocument, estirar: boolean): Promise<PDFDocument> {
+  // pdf-lib escribe las fuentes incrustadas recién en save(): sin guardar y recargar,
+  // embedPages deja referencias rotas (se pierde la Helvetica-Bold)
+  const src = await PDFDocument.load(await doc.save());
+  const out = await PDFDocument.create();
+  const paginas = src.getPages();
+  const embebidas = await out.embedPages(paginas);
+  embebidas.forEach((emb, i) => {
+    const { width, height } = paginas[i].getSize();
+    const pg = out.addPage([OFICIO.w, OFICIO.h]);
+    if (Math.abs(width - OFICIO.w) < 2 && Math.abs(height - OFICIO.h) < 2) {
+      pg.drawPage(emb, { x: 0, y: 0, width: OFICIO.w, height: OFICIO.h });
+      return;
+    }
+    if (estirar) {
+      pg.drawPage(emb, { x: 0, y: 0, width: OFICIO.w, height: OFICIO.h });
+    } else {
+      const k = Math.min(OFICIO.w / width, OFICIO.h / height);
+      const w = width * k, h = height * k;
+      pg.drawPage(emb, { x: (OFICIO.w - w) / 2, y: (OFICIO.h - h) / 2, width: w, height: h });
+    }
+  });
+  return out;
+}
+
+export async function generarLegajoPdf(d: any, hojas?: number[], formato: FormatoLegajo = 'original'): Promise<Uint8Array> {
   const tpl = await PDFDocument.load(plantilla());
   const doc = await PDFDocument.create();
   const c: Ctx = { font: await doc.embedFont(StandardFonts.Helvetica), bold: await doc.embedFont(StandardFonts.HelveticaBold) };
@@ -271,6 +303,7 @@ export async function generarLegajoPdf(d: any, hojas?: number[]): Promise<Uint8A
   if (quiere(16)) await grilla(16, (d.declaracionBienes ?? []).map((b: any) => [
     b.descripcion, '', fecha(b.fecha)]), [2]);
 
-  doc.setTitle(`Legajo Personal — ${nombre} — DNI ${s(pd.dni)}`);
-  return doc.save();
+  const final = formato === 'original' ? doc : await pasarAOficio(doc, formato === 'oficio-estirado');
+  final.setTitle(`Legajo Personal — ${nombre} — DNI ${s(pd.dni)}`);
+  return final.save();
 }

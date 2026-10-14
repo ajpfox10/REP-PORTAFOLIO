@@ -32,6 +32,7 @@ import { LicenciasMedicasModal, contarLicenciasMedicas } from './components/moda
 import { ANIO_ACTUAL, type Resp as RespLicenciasMedicas } from '../LicenciasMedicasControlPage/shared';
 import { GestionDocumentPreview }        from './components/components/GestionDocumentPreview';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
+import { PaseComisionModal, ComisionAgenteBanner } from '../../components/Comisiones';
 
 import './styles/GestionPage.css';
 
@@ -534,7 +535,45 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
     if (!form.municipio_id && loc.raw?.municipio_id != null) set('municipio_id', String(loc.raw.municipio_id));
   }, [form.localidad_id, catalogs.localidad_id]); // eslint-disable-line
 
+  // Payload del PATCH /personal/:dni a partir del form.
+  const buildPayload = () => {
+    const payload: any = {};
+    const INT_FIELDS    = new Set(['numerodomicilio','piso','legajo']);
+    const FLOAT_FIELDS  = new Set(['salario_mensual']);
+    const STRING_FIELDS = new Set(['provincia_id']); // provincia_id es VARCHAR, no numérico
+    const SKIP_IF_EMPTY = new Set(['cuil','apellido','nombre']);
+    ALL_PATCH_COLS.forEach(k => {
+      if (form[k] === undefined) return;
+      const v = form[k];
+      if (SKIP_IF_EMPTY.has(k)) { if (v === '' || v === null) return; payload[k] = v; return; }
+      if (STRING_FIELDS.has(k)) { payload[k] = (v === '' || v === null) ? null : String(v); return; }
+      if (k.endsWith('_id') || INT_FIELDS.has(k)) {
+        payload[k] = (v === '' || v === null) ? null : Number(v) || null;
+      } else if (FLOAT_FIELDS.has(k)) {
+        payload[k] = (v === '' || v === null) ? null : parseFloat(v) || null;
+      } else {
+        payload[k] = v === '' ? null : v;
+      }
+    });
+    return payload;
+  };
+
+  // El pase a comisión no es una edición: pide acto/destino/fecha (modal) y cierra el
+  // cargo y el servicio con esa fecha. Antes guarda el resto de lo editado en el form.
+  const [paseComision, setPaseComision] = useState(false);
+  const guardarAntesDeComision = async () => {
+    const payload = buildPayload();
+    delete payload.estado_empleo;
+    delete payload.fecha_egreso;
+    const res = await apiFetch<any>(`/personal/${row.dni}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    if (!res?.ok) throw new Error(res?.error || 'Error al guardar los datos del agente');
+  };
+
   const save = async () => {
+    if (form.estado_empleo === 'COMISION' && row.estado_empleo !== 'COMISION') {
+      setPaseComision(true);
+      return;
+    }
     if (form.fecha_egreso && (!form.estado_empleo || form.estado_empleo === 'ACTIVO')) {
       toast.error(
         'Seleccioná el motivo del egreso',
@@ -545,24 +584,7 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
     }
     setSaving(true);
     try {
-      const payload: any = {};
-      const INT_FIELDS    = new Set(['numerodomicilio','piso','legajo']);
-      const FLOAT_FIELDS  = new Set(['salario_mensual']);
-      const STRING_FIELDS = new Set(['provincia_id']); // provincia_id es VARCHAR, no numérico
-      const SKIP_IF_EMPTY = new Set(['cuil','apellido','nombre']);
-      ALL_PATCH_COLS.forEach(k => {
-        if (form[k] === undefined) return;
-        const v = form[k];
-        if (SKIP_IF_EMPTY.has(k)) { if (v === '' || v === null) return; payload[k] = v; return; }
-        if (STRING_FIELDS.has(k)) { payload[k] = (v === '' || v === null) ? null : String(v); return; }
-        if (k.endsWith('_id') || INT_FIELDS.has(k)) {
-          payload[k] = (v === '' || v === null) ? null : Number(v) || null;
-        } else if (FLOAT_FIELDS.has(k)) {
-          payload[k] = (v === '' || v === null) ? null : parseFloat(v) || null;
-        } else {
-          payload[k] = v === '' ? null : v;
-        }
-      });
+      const payload = buildPayload();
       const res = await apiFetch<any>(`/personal/${row.dni}`, { method: 'PATCH', body: JSON.stringify(payload) });
       if (!res?.ok) throw new Error(res?.error || 'Error al guardar');
       toast.ok(
@@ -741,6 +763,11 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
                 <option value="COMISION">COMISION</option>
                 <option value="TRAMITE">TRAMITE</option>
               </select>
+              {form.estado_empleo === 'COMISION' && row.estado_empleo !== 'COMISION' && (
+                <div style={{ fontSize: '0.7rem', color: '#fbbf24', marginTop: 3 }}>
+                  Al guardar se piden N° de acto, destino y fecha de la comisión.
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label htmlFor="gp-edit-obs" style={labelStyle}>OBSERVACIONES</label>
@@ -806,9 +833,20 @@ function AgenteEditPanel({ row, onSaved }: { row: any; onSaved: () => void }) {
         )}
         <button className="btn" type="button" disabled={saving} onClick={save}
           style={{ background: '#2563eb', color: '#fff', borderColor: '#1d4ed8' }}>
-          {saving ? '⏳ Guardando…' : '💾 Guardar'}
+          {saving ? '⏳ Guardando…' : form.estado_empleo === 'COMISION' && row.estado_empleo !== 'COMISION' ? '🧳 Pasar a comisión…' : '💾 Guardar'}
         </button>
       </div>
+
+      {paseComision && (
+        <PaseComisionModal
+          dni={row.dni}
+          nombre={`${row.apellido ?? ''}, ${row.nombre ?? ''}`}
+          fechaInicial={form.fecha_egreso || undefined}
+          beforeSave={guardarAntesDeComision}
+          onClose={() => setPaseComision(false)}
+          onDone={() => { setPaseComision(false); onSaved(); }}
+        />
+      )}
     </div>
   );
 }
@@ -1051,6 +1089,10 @@ export function GestionPage() {
               hasAgente={!!row?.dni}
               fotoUrl={documentos.fotoUrl}
             />
+            {canEdit && row?.dni && (
+              <ComisionAgenteBanner key={`${row.dni}-${row.estado_empleo}-${row.fecha_egreso ?? ""}`}
+                dni={row.dni} estadoEmpleo={row.estado_empleo} onChanged={onAgenteEdited} />
+            )}
             {canEdit && row?.dni && (
               <AgenteEditPanel row={row} onSaved={onAgenteEdited} />
             )}

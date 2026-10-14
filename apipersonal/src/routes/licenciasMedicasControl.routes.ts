@@ -413,6 +413,21 @@ async function ensureWhatsappTable(sequelize: Sequelize) {
       CONSTRAINT fk_lmwe_personal_dni FOREIGN KEY (dni) REFERENCES personal (dni)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // Licencias que no se avisan por WhatsApp (una fila por licencia; quitar = borrar la fila)
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS licencias_medicas_whatsapp_omitidos (
+      id          INT AUTO_INCREMENT PRIMARY KEY,
+      dni         INT          NOT NULL,
+      desde       DATE         NOT NULL,
+      hasta       DATE         NOT NULL,
+      novedad     VARCHAR(120) NOT NULL,
+      motivo      VARCHAR(255) NULL,
+      omitido_por INT          NULL,
+      created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_lmwo_licencia (dni, desde, hasta, novedad),
+      CONSTRAINT fk_lmwo_personal_dni FOREIGN KEY (dni) REFERENCES personal (dni)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
 }
 
 /** Celular para WhatsApp (549 + área + número, sin 0 ni 15) a partir del texto libre de
@@ -803,7 +818,7 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
     try {
       await tablaWhatsapp;
       const dnis = [...new Set(String(req.query.dni ?? '').split(',').map(x => Number(x.trim())).filter(n => Number.isInteger(n) && n > 0))];
-      if (!dnis.length) return res.json({ ok: true, contactos: [], envios: [] });
+      if (!dnis.length) return res.json({ ok: true, contactos: [], envios: [], omitidos: [] });
       const personas = await sequelize.query<any>(
         'SELECT dni, apellido, nombre, telefono FROM personal WHERE dni IN (:dnis)',
         { replacements: { dnis }, type: QueryTypes.SELECT },
@@ -816,7 +831,18 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
           ORDER BY e.id`,
         { replacements: { dnis }, type: QueryTypes.SELECT },
       );
+      const omitidos = await sequelize.query<any>(
+        `SELECT o.dni, o.desde, o.hasta, o.novedad, o.motivo, o.created_at, u.nombre AS omitido_por
+           FROM licencias_medicas_whatsapp_omitidos o
+           LEFT JOIN usuarios u ON u.id = o.omitido_por
+          WHERE o.dni IN (:dnis)`,
+        { replacements: { dnis }, type: QueryTypes.SELECT },
+      );
       return res.json({
+        omitidos: omitidos.map(o => ({
+          dni: String(o.dni), desde: fechaStr(o.desde), hasta: fechaStr(o.hasta), novedad: o.novedad,
+          motivo: o.motivo ?? null, created_at: isoDe(o.created_at), omitido_por: o.omitido_por ?? null,
+        })),
         ok: true,
         contactos: personas.map(p => ({
           dni: String(p.dni), apellido: p.apellido ?? '', nombre: p.nombre ?? '', telefono: p.telefono ?? '',
@@ -830,6 +856,65 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
       });
     } catch (err: any) {
       return errorRes(res, err, 'Error leyendo los teléfonos');
+    }
+  });
+
+  // Omitir / quitar omitido de una licencia en la pestaña WhatsApp.
+  // Body: { dni, desde, hasta, novedad, motivo? }
+  const licenciaDe = (b: any) => (Number(b?.dni) > 0 && esFecha(b?.desde) && esFecha(b?.hasta) && b?.novedad
+    ? { dni: Number(b.dni), desde: b.desde, hasta: b.hasta, novedad: String(b.novedad).slice(0, 120) } : null);
+  router.post('/whatsapp/omitido', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
+    try {
+      await tablaWhatsapp;
+      const lic = licenciaDe(req.body);
+      if (!lic) return res.status(400).json({ ok: false, error: 'Faltan datos de la licencia' });
+      const motivo = String(req.body?.motivo ?? '').trim().slice(0, 255) || null;
+      const userId = (req as any).auth?.principalId ?? null;
+      await sequelize.query(
+        `INSERT INTO licencias_medicas_whatsapp_omitidos (dni, desde, hasta, novedad, motivo, omitido_por)
+         VALUES (:dni, :desde, :hasta, :novedad, :motivo, :userId)
+         ON DUPLICATE KEY UPDATE motivo = VALUES(motivo), omitido_por = VALUES(omitido_por), created_at = CURRENT_TIMESTAMP`,
+        { replacements: { ...lic, motivo, userId } },
+      );
+      return res.json({ ok: true });
+    } catch (err: any) {
+      return errorRes(res, err, 'Error omitiendo la licencia');
+    }
+  });
+  router.delete('/whatsapp/omitido', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
+    try {
+      await tablaWhatsapp;
+      const lic = licenciaDe(req.body);
+      if (!lic) return res.status(400).json({ ok: false, error: 'Faltan datos de la licencia' });
+      await sequelize.query(
+        'DELETE FROM licencias_medicas_whatsapp_omitidos WHERE dni = :dni AND desde = :desde AND hasta = :hasta AND novedad = :novedad',
+        { replacements: lic },
+      );
+      return res.json({ ok: true });
+    } catch (err: any) {
+      return errorRes(res, err, 'Error quitando el omitido');
+    }
+  });
+
+  // Corrige el teléfono de la ficha (personal.telefono, texto libre) desde la pestaña WhatsApp.
+  // Body: { dni, telefono } → devuelve el contacto recalculado.
+  router.put('/whatsapp/telefono', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
+    try {
+      const dni = Number(req.body?.dni);
+      const telefono = String(req.body?.telefono ?? '').trim();
+      if (!Number.isInteger(dni) || dni <= 0) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      if (telefono.length > 30) return res.status(400).json({ ok: false, error: 'Máximo 30 caracteres' });
+      const [, meta]: any = await sequelize.query(
+        'UPDATE personal SET telefono = :telefono WHERE dni = :dni',
+        { replacements: { dni, telefono: telefono || null } },
+      );
+      if (!(meta?.affectedRows ?? meta)) {
+        const existe = await sequelize.query<any>('SELECT 1 FROM personal WHERE dni = :dni', { replacements: { dni }, type: QueryTypes.SELECT });
+        if (!existe.length) return res.status(404).json({ ok: false, error: 'No existe el agente en personal' });
+      }
+      return res.json({ ok: true, contacto: { dni: String(dni), telefono, ...celularDe(telefono) } });
+    } catch (err: any) {
+      return errorRes(res, err, 'Error guardando el teléfono');
     }
   });
 

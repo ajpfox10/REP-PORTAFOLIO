@@ -1,8 +1,8 @@
 // src/services/guarderiaDdjjPdf.ts
 // DDJJ para Reintegro de Guardería y/o Jardín Maternal impresa sobre el PDF ORIGINAL del
 // Ministerio (assets/guarderia/ddjj_guarderia.pdf, IF-2024-18854671-GDEBA, oficio 612x1008):
-// se abre la plantilla tal cual (2 hojas + hoja de firmas GDE) y se escriben los datos encima
-// de cada línea de guiones. Coordenadas medidas de la plantilla (base de los guiones, en pt).
+// se abre la plantilla tal cual (2 hojas + hoja de firmas GDE, que se descarta al final) y se
+// escriben los datos encima de cada línea de guiones. Coordenadas medidas de la plantilla (base de los guiones, en pt).
 // Con más de 2 menores se agrega otra copia de la hoja 2 por cada par extra ("planilla anexa").
 import fs from 'fs';
 import path from 'path';
@@ -133,6 +133,9 @@ export async function generarGuarderiaDdjjPdf(d: any, menores: DdjjMenor[]): Pro
     menor(pg, c, menores[k * 2 + 1], DY);
     pieFirmas(pg, c, d);
   });
+
+  // la plantilla trae al final la hoja de firmas GDE (IF-...-GDEBA): no se imprime
+  if (tpl.getPageCount() > 2) doc.removePage(doc.getPageCount() - 1);
 
   doc.setTitle(`DDJJ Guardería — ${s(d.apellido_nombre)} — DNI ${s(d.documento)}`);
   return doc.save();

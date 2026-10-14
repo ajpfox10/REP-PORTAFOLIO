@@ -56,6 +56,7 @@ import { buildTareasLivianasRouter } from '../routes/tareasLivianas.routes';
 import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildHerramientasRouter } from '../routes/herramientas.routes';
+import { buildComisionesRouter } from '../routes/comisiones.routes';
 import { buildWhatsappRouter } from '../routes/whatsapp.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildStressRouter }   from '../routes/stress.routes';
@@ -199,6 +200,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/bajas-estructura`, ...protect, buildBajasRouter(sequelize));
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
   app.use(`${apiPrefix}/herramientas`,     ...protect, buildHerramientasRouter(sequelize));
+  app.use(`${apiPrefix}/comisiones`,       ...protect, buildComisionesRouter(sequelize));
   app.use(`${apiPrefix}/whatsapp`,         ...protect, buildWhatsappRouter(sequelize));
   app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
   app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));

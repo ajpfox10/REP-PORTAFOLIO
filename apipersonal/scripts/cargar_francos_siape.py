@@ -160,6 +160,22 @@ def log(msg=""):
             _LOG_FH.flush()
         except Exception:
             pass
+    _rearmar_perro()
+
+
+# Perro guardian: una llamada JAB a SiAPe puede no volver nunca (12/10: 30 min colgado
+# en BOLIG sin CPU). Si pasan SIAPE_COLGADO_MIN sin ninguna linea de log, se vuelca en
+# que linea estaba y el proceso termina; el estado va por dia, el proximo arranque sigue.
+SIAPE_COLGADO_MIN = float(os.environ.get("SIAPE_COLGADO_MIN", "10") or "10")
+
+
+def _rearmar_perro():
+    try:
+        import faulthandler
+        faulthandler.dump_traceback_later(SIAPE_COLGADO_MIN * 60, exit=True,
+                                          file=_LOG_FH if _LOG_FH is not None else sys.stderr)
+    except Exception:
+        pass
 
 # Coordenadas relativas al AREA CLIENTE de la ventana del SiAPe.
 # Se calibran con --calibrar. Guardadas segun la captura de referencia (1456x816).
@@ -1964,9 +1980,21 @@ def abrir_agente(r):
     try:
         _buscar_agente_en_ficheros_jab(r["nombre"], cuil=r["cuil"], exigir="completo")
     except RuntimeError as e:
-        # Ficheros no lo trae, o trae a otra persona: se marca y se sigue con el proximo.
-        if "sin resultado" in str(e) or "nombre completo" in str(e):
-            raise AgenteNoEncontrado(str(e))
+        # Ficheros no lo trae, o trae a OTRA persona con el mismo apellido: se marca y se
+        # sigue. Si la fila ni siquiera tiene el apellido buscado es la grilla del agente
+        # anterior que no se refresco ("Ficheros no quedo activo"): falla del robot, no se
+        # marca (12/10: BOLIG quedo "no esta" por la fila vieja de CAMPOS ALDERETE).
+        msg = str(e)
+        apellido = (r["nombre"] or "").split()[0].upper() if r.get("nombre") else ""
+        if "sin resultado" in msg:
+            raise AgenteNoEncontrado(msg)
+        if "nombre completo" in msg:
+            import re
+            m = re.search(r"dice '([^']*)'", msg)
+            fila = (m.group(1) if m else "").upper()
+            if apellido and apellido in fila.split():
+                raise AgenteNoEncontrado(msg)
+            raise RuntimeError(f"Ficheros mostro una fila vieja ('{fila}'): {msg}")
         raise
     if not _jab_select_tab(TAB_AUSENCIAS):
         _click_abs("tab_ausencias")
@@ -2486,6 +2514,7 @@ def ir_a_fecha_grilla(dia, max_vueltas=15):
     time.sleep(PAUSA_MEDIA)
     _contestar_avisos()
     ultima_vista = None
+    modo = "flechas"
     for _vuelta in range(max_vueltas):
         filas = leer_grilla_ausencias()
         fechas = [_fecha_txt(f) for f, _t, _i in filas]
@@ -2502,23 +2531,119 @@ def ir_a_fecha_grilla(dia, max_vueltas=15):
             return []                             # la grilla pasa de largo: ese dia no hay nada
         vista = tuple(fechas_ok)
         if vista == ultima_vista:
-            log(f"   la grilla no se movio ({vieja:%d/%m/%Y}..{nueva:%d/%m/%Y})")
-            return None
+            log(f"   la grilla no se movio con {modo} ({vieja:%d/%m/%Y}..{nueva:%d/%m/%Y}); "
+                f"foco en: '{_titulo_foco()}'")
+            if modo == "barra":
+                return None
+            modo = "barra"                        # 12/10 BOLIG: las flechas no movian la grilla
         ultima_vista = vista
         if dia < vieja:
             n, tecla = min(max((vieja - dia).days, 1), 60), "down"
         else:
             n, tecla = min(max((dia - nueva).days, 1), 60), "up"
-        # el foco tiene que quedar en la fila de la punta para que la grilla corra
+        if modo == "barra":
+            _mover_con_barra(filas, tecla, n)
+        else:
+            # el foco tiene que quedar en la fila de la punta para que la grilla corra
+            _jab_click_bounds(filas[-1][2] if tecla == "down" else filas[0][2])
+            time.sleep(PAUSA_CORTA)
+            _exigir_siape_al_frente("aprieto flechas")
+            for _ in range(n):
+                pyautogui.press(tecla)
+                time.sleep(0.08)
+        time.sleep(PAUSA_MEDIA)
+        _contestar_avisos()
+    return None
+
+
+def _titulo_foco():
+    try:
+        import win32gui
+        return win32gui.GetWindowText(win32gui.GetForegroundWindow()) or "(sin ventana al frente)"
+    except Exception:
+        return "?"
+
+
+def _desplazar_grilla(filas, tecla, n, est):
+    """Corre la grilla n registros: flechas; si ya se vio que no mueven, la barra."""
+    if est["modo"] == "barra":
+        _mover_con_barra(filas, tecla, n)
+    else:
         _jab_click_bounds(filas[-1][2] if tecla == "down" else filas[0][2])
         time.sleep(PAUSA_CORTA)
         _exigir_siape_al_frente("aprieto flechas")
         for _ in range(n):
             pyautogui.press(tecla)
             time.sleep(0.08)
-        time.sleep(PAUSA_MEDIA)
-        _contestar_avisos()
+    time.sleep(PAUSA_MEDIA)
+    _contestar_avisos()
+
+
+def mapa_grilla(desde, hasta, max_vueltas=40):
+    """
+    {fecha: set(tipos)} de la grilla del agente entre `desde` y `hasta`, recorriendola
+    UNA vez hacia abajo (viene de la fecha mas nueva a la mas vieja, 6 filas por vista).
+    None si no la pude recorrer (se sigue dia por dia como antes).
+    """
+    _contestar_avisos()
+    asegurar_pestana_ausencias()
+    filas = leer_grilla_ausencias()
+    if not filas:
+        return {}
+    _jab_click_bounds(filas[0][2])
+    time.sleep(PAUSA_MEDIA)
+    _contestar_avisos()
+    est = {"modo": "flechas"}
+    mapa, ultima = {}, None
+    for _ in range(max_vueltas):
+        filas = leer_grilla_ausencias()
+        ok = [(f, t) for f, t in ((_fecha_txt(f), t) for f, t, _i in filas) if f]
+        if not ok:
+            return None
+        for f, t in ok:
+            if desde <= f <= hasta:
+                mapa.setdefault(f, set()).add(t)
+        vieja, nueva = min(f for f, _ in ok), max(f for f, _ in ok)
+        log(f"   grilla {vieja:%d/%m/%Y}..{nueva:%d/%m/%Y} (rango {desde:%d/%m/%Y}..{hasta:%d/%m/%Y})")
+        if vieja <= desde:
+            return mapa
+        vista = tuple(f for f, _ in ok)
+        if vista == ultima:
+            if est["modo"] == "barra":
+                log("   la grilla no baja mas: fin de las novedades del agente")
+                return mapa
+            log(f"   las flechas no movieron la grilla (foco: '{_titulo_foco()}'); uso la barra")
+            est["modo"] = "barra"
+        ultima = vista
+        if vieja > hasta:
+            n = min(max((vieja - hasta).days, 1), 60)
+        else:
+            n = max(len(ok) - 1, 1)        # dentro del rango: una vista menos una fila
+        _desplazar_grilla(filas, "down", n, est)
     return None
+
+
+def _mover_con_barra(filas, tecla, n):
+    """Corre la grilla con las flechitas de SU barra de desplazamiento (clics, no teclado)."""
+    fe = _frame_ausencias(max_segundos=15)
+    c0, c1 = filas[0][2]["bounds"], filas[-1][2]["bounds"]
+    y_ini, y_fin = c0["y"] - 30, c1["y"] + c1["height"] + 30
+    barras = [info for _e, _d, info in _jab_walk(root=fe, max_depth=30, max_segundos=20, max_nodes=8000)
+              if info.get("role") == "scroll bar" and _bounds_ok(info)
+              and y_ini <= info["bounds"]["y"] <= c0["y"] + 10
+              and info["bounds"]["height"] >= (c1["y"] - c0["y"])
+              and c0["x"] + 300 < info["bounds"]["x"] < c0["x"] + 600]
+    if not barras:
+        log("   no encuentro la barra de desplazamiento de la grilla")
+        return
+    b = min(barras, key=lambda i: i["bounds"]["x"])["bounds"]
+    punta = {"bounds": {"x": b["x"], "width": b["width"], "height": 10,
+                        "y": (b["y"] + b["height"] - 10) if tecla == "down" else b["y"]}}
+    _exigir_siape_al_frente("clickeo la barra de la grilla")
+    log(f"   muevo la grilla con la barra: {n} clic(s) {tecla}")
+    for _ in range(n):
+        _jab_click_bounds(punta)
+        time.sleep(0.15)
 
 
 def _fecha_ficha_arriba():
@@ -2860,11 +2985,20 @@ def main():
         log("Flujo SIAPE: legacy Ausencias Eventuales")
 
     ficha_sucia = {"v": False}
+    no_encontrados = {}              # dni -> motivo: ya dio "no esta en SiAPe" en esta corrida
     for r in pendientes:
         log(f"-- #{r['id']} {r['nombre']} ---------------------")
         dias_a_cargar = dias_del_registro(r)
         if not dias_a_cargar and not args.solo_abrir:
             log("   nada para intentar (todo cargado/ya existia o errores agotados); no abro el agente.")
+            cerrar_registro_si_completo(cn, r)
+            continue
+        if str(r["dni"]) in no_encontrados and not args.solo_abrir:
+            # cada busqueda fallida cuesta un reinicio (~4 min): no se repite en la corrida
+            log("   este DNI ya dio 'no esta en SiAPe' en esta corrida; lo marco sin buscarlo")
+            for dia in dias_a_cargar:
+                registrar_dia(cn, r["id"], r["dni"], dia, "ERROR", "AGENTE_NO_ENCONTRADO",
+                              no_encontrados[str(r["dni"])], cuenta="agotar")
             cerrar_registro_si_completo(cn, r)
             continue
 
@@ -2885,6 +3019,7 @@ def main():
         def _marcar_no_encontrado(e):
             # SiAPe no lo tiene: se marca como definitivo (no se reintenta solo) y sigo.
             log(f"   NO ESTA EN SiAPe: {e} -> lo marco y sigo con el siguiente")
+            no_encontrados[str(r["dni"])] = str(e)
             for dia in dias_a_cargar:
                 registrar_dia(cn, r["id"], r["dni"], dia, "ERROR", "AGENTE_NO_ENCONTRADO", str(e),
                               cuenta="agotar")
@@ -2936,7 +3071,49 @@ def main():
         cargados = salteados = 0
         seguidos_robot = 0              # errores del robot seguidos en este agente
         reinicios = 0
+
+        # La grilla del agente se lee UNA vez para todo el rango (antes se bajaba
+        # dia por dia: 2-10 min por dia). Con eso cada dia se decide sin tocar SiAPe
+        # si ya es franco, se CAMBIA si tiene otro tipo, y solo se carga si esta vacio.
+        mapa = None
+        if usar_agente_ausencias and dias_a_cargar:
+            try:
+                mapa = mapa_grilla(min(dias_a_cargar), max(dias_a_cargar))
+            except Exception as e:
+                log(f"   no pude leer la grilla del rango ({e}); sigo dia por dia")
+                mapa = None
+            if mapa is not None:
+                log(f"   grilla leida: {len(mapa)} dia(s) del rango ya tienen novedad")
+
         for dia in dias_a_cargar:
+            if mapa is not None and dia in mapa:
+                tipos = mapa[dia]
+                if any(t.upper().startswith("FRANCO COMPENSATORIO") for t in tipos):
+                    registrar_dia(cn, r["id"], r["dni"], dia, "YA_EXISTIA", "YA_EXISTE",
+                                  "franco ya cargado (visto en la grilla)")
+                    log(f"   SKIP [YA_EXISTE] {dia:%d/%m/%Y}: ya era franco (grilla)")
+                    continue
+                log(f"   {dia:%d/%m/%Y} tiene {sorted(tipos)} -> lo paso a franco")
+                try:
+                    ok_r, motivo_r, _tipo = reemplazar_dia(
+                        cn, r, dia, reabrir=lambda: (volver_a_ficheros(), abrir_agente(r)))
+                except Exception as e:
+                    ok_r, motivo_r = False, f"{dia:%d/%m/%Y}: no pude cambiar a franco: {e}"
+                if ok_r and motivo_r == "YA_ERA_FRANCO":
+                    registrar_dia(cn, r["id"], r["dni"], dia, "YA_EXISTIA", "YA_EXISTE", motivo_r)
+                    continue
+                if ok_r:
+                    cargados += 1
+                    seguidos_robot = 0
+                    registrar_dia(cn, r["id"], r["dni"], dia, "CARGADO", "REEMPLAZO_OK", motivo_r)
+                    log(f"   OK   {dia:%d/%m/%Y} ({motivo_r})")
+                    continue
+                salteados += 1
+                est, cat = categorizar(motivo_r)
+                registrar_dia(cn, r["id"], r["dni"], dia, est, cat, motivo_r)
+                log(f"   SKIP [{cat}] {motivo_r}")
+                ficha_sucia["v"] = True
+                continue
             log(f"   cargando {dia:%d/%m/%Y}...")
             try:
                 if usar_agente_ausencias:

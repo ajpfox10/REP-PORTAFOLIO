@@ -6,6 +6,8 @@ import JSZip from "jszip";
 import { Sequelize, QueryTypes } from "sequelize";
 import { generateCvJpg } from "../services/cvImage";
 import { env } from "../config/env";
+import { finResidencia } from "../services/certificadoLaboral";
+import { armarCertificadoLaboral, renderCertificadoLaboralHtml, renderCertificadoLaboralDocx } from "../services/certificadoLaboralDoc";
 
 let ExcelJS: any;
 try { ExcelJS = require("exceljs"); } catch { ExcelJS = null; }
@@ -281,6 +283,19 @@ function calcHasta(leyTxt: string): string {
     l.includes("art. 48") || l.includes("art48") || l.includes("perinatal") ||
     l.includes("vacunacion") || l.includes("contingencia");
   return esBecaOResidente ? `31/12/${new Date().getFullYear()}` : "y continúa";
+}
+
+/** IOMA "cesará el": residente → fin de su residencia (vacío si no se puede calcular). */
+async function calcHastaIoma(sequelize: Sequelize, dni: number, leyTxt: string): Promise<string> {
+  const fin = await finResidencia(sequelize, dni);
+  if (fin.esResidente) return fin.finTxt;
+  return calcHasta(leyTxt);
+}
+
+/** Base Vieja: el residente termina "HASTA EL dd/mm/aaaa" en vez de "HASTA LA ACTUALIDAD". */
+async function hastaBaseVieja(sequelize: Sequelize, dni: number): Promise<Record<string, string>> {
+  const fin = await finResidencia(sequelize, dni);
+  return fin.finTxt ? { "HASTA LA ACTUALIDAD": `HASTA EL ${fin.finTxt}` } : {};
 }
 
 function firstText(...values: any[]): string {
@@ -671,7 +686,7 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
 
     const ingresoTxt    = formatDateDMY(p.fecha_ingreso) + " ";
-    const hasta         = calcHasta(p.ley);
+    const hasta         = await calcHastaIoma(sequelize, dni, p.ley);
     const hoy           = new Date();
     const lugarFecha    = `González Catán, ${formatDateDMY(hoy)}`;
     const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
@@ -704,7 +719,7 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
 
     const ingresoTxt     = formatDateDMY(p.fecha_ingreso) + " ";
-    const hastaTxt       = calcHasta(p.ley);
+    const hastaTxt       = await calcHastaIoma(sequelize, dni, p.ley);
     const lugarFechaAuto = `González Catán, ${formatDateDMY(new Date())}`;
     const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
 
@@ -772,7 +787,7 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     if (!p) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
 
     const ingresoTxt     = formatDateDMY(p.fecha_ingreso) + " ";
-    const hastaTxt       = calcHasta(p.ley);
+    const hastaTxt       = await calcHastaIoma(sequelize, dni, p.ley);
     const lugarFechaAuto = `González Catán, ${formatDateDMY(new Date())}`;
     const apellidoNombre = `${p.apellido ?? ""} ${p.nombre ?? ""}`.trim();
 
@@ -823,6 +838,47 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="certificado_ioma_${dni}.docx"`);
+    res.setHeader("Content-Length", String(out.length));
+    return res.status(200).send(out);
+  });
+
+  // ─── Certificado de Trabajo (con historial + fin de residencia) ──────────
+
+  // GET /api/v1/certificados/certificado-laboral/datos?dni=X
+  router.get("/certificado-laboral/datos", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const c = await armarCertificadoLaboral(sequelize, dni);
+    if (!c) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    return res.json({ ok: true, data: c });
+  });
+
+  // GET /api/v1/certificados/certificado-laboral/preview?dni=X
+  router.get("/certificado-laboral/preview", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const c = await armarCertificadoLaboral(sequelize, dni);
+    if (!c) return res.status(404).send("<p>Persona no encontrada</p>");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(renderCertificadoLaboralHtml(c));
+  });
+
+  // POST /api/v1/certificados/certificado-laboral { dni }
+  router.post("/certificado-laboral", async (req: Request, res: Response) => {
+    const dni = Number(req.body?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido (number)" });
+    const c = await armarCertificadoLaboral(sequelize, dni);
+    if (!c) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    const out = await renderCertificadoLaboralDocx(c);
+    (res.locals as any).audit = {
+      action: "certificado_laboral_generate",
+      table_name: "personaldetalle",
+      record_pk: dni,
+      request_json: { dni },
+      response_json: { status: 200, bytes: out.length },
+    };
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="certificado_trabajo_${dni}.docx"`);
     res.setHeader("Content-Length", String(out.length));
     return res.status(200).send(out);
   });
@@ -997,6 +1053,7 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
         servicio:    String(p.servicio ?? ""),
         cargo:       String(p.cargo ?? ""),
         hsSemanales: p.hs_semanales != null ? String(p.hs_semanales) : "",
+        hasta:       (await finResidencia(sequelize, dni)).finTxt,
       },
     });
   });
@@ -1015,6 +1072,7 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
       "CARGO":          String(req.query?.cargo ?? ""),
       "HSSEMANALES":    String(req.query?.hsSemanales ?? ""),
       "SERVICIO":       firstText(req.query?.servicio, p.servicio),
+      ...(await hastaBaseVieja(sequelize, dni)),
     };
     const templatePath = resolveTemplatePath("certBaseVieja.docx");
     if (!fs.existsSync(templatePath)) return res.status(500).send("<p>Plantilla certBaseVieja.docx no encontrada</p>");
@@ -1043,6 +1101,7 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
       "CARGO":          String(req.body?.cargo ?? ""),
       "HSSEMANALES":    String(req.body?.hsSemanales ?? ""),
       "SERVICIO":       firstText(req.body?.servicio, p.servicio),
+      ...(await hastaBaseVieja(sequelize, dni)),
     };
     const templatePath = resolveTemplatePath("certBaseVieja.docx");
     if (!fs.existsSync(templatePath)) return res.status(500).json({ ok: false, error: "Plantilla certBaseVieja.docx no encontrada" });

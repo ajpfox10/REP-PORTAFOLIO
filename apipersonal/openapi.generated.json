@@ -1408,6 +1408,231 @@
         }
       }
     },
+    "/api/v1/agentes_comisiones": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List agentes_comisiones",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_agentes_comisiones"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create agentes_comisiones",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_comisiones_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/agentes_comisiones/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get agentes_comisiones by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update agentes_comisiones by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_comisiones"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch agentes_comisiones by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_agentes_comisiones_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete agentes_comisiones by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/agentes_especialidades": {
       "get": {
         "tags": [
@@ -6788,6 +7013,231 @@
           }
         ],
         "summary": "Delete becarios_art_errores by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/bkp_personal_nacionalidad_20261013": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List bkp_personal_nacionalidad_20261013",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_bkp_personal_nacionalidad_20261013"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create bkp_personal_nacionalidad_20261013",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_bkp_personal_nacionalidad_20261013_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/bkp_personal_nacionalidad_20261013/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get bkp_personal_nacionalidad_20261013 by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update bkp_personal_nacionalidad_20261013 by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_bkp_personal_nacionalidad_20261013"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch bkp_personal_nacionalidad_20261013 by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_bkp_personal_nacionalidad_20261013_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete bkp_personal_nacionalidad_20261013 by id",
         "parameters": [
           {
             "name": "id",
@@ -23596,6 +24046,231 @@
         }
       }
     },
+    "/api/v1/licencias_medicas_whatsapp_omitidos": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List licencias_medicas_whatsapp_omitidos",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_licencias_medicas_whatsapp_omitidos"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create licencias_medicas_whatsapp_omitidos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_licencias_medicas_whatsapp_omitidos_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/licencias_medicas_whatsapp_omitidos/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get licencias_medicas_whatsapp_omitidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update licencias_medicas_whatsapp_omitidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_licencias_medicas_whatsapp_omitidos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch licencias_medicas_whatsapp_omitidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_licencias_medicas_whatsapp_omitidos_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete licencias_medicas_whatsapp_omitidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/localidades": {
       "get": {
         "tags": [
@@ -24251,6 +24926,231 @@
           }
         ],
         "summary": "Delete migrations by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/ministerio_codigos": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List ministerio_codigos",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_ministerio_codigos"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create ministerio_codigos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_ministerio_codigos_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/ministerio_codigos/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get ministerio_codigos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update ministerio_codigos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_ministerio_codigos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch ministerio_codigos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_ministerio_codigos_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete ministerio_codigos by id",
         "parameters": [
           {
             "name": "id",
@@ -35296,6 +36196,456 @@
         }
       }
     },
+    "/api/v1/siape_carga_dias": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List siape_carga_dias",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_siape_carga_dias"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create siape_carga_dias",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_siape_carga_dias_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/siape_carga_dias/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get siape_carga_dias by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update siape_carga_dias by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_siape_carga_dias"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch siape_carga_dias by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_siape_carga_dias_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete siape_carga_dias by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/siape_carga_reemplazos": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List siape_carga_reemplazos",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_siape_carga_reemplazos"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create siape_carga_reemplazos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_siape_carga_reemplazos_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/siape_carga_reemplazos/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get siape_carga_reemplazos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update siape_carga_reemplazos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_siape_carga_reemplazos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch siape_carga_reemplazos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_siape_carga_reemplazos_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete siape_carga_reemplazos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/v1/sin_salida_ausentes": {
       "get": {
         "tags": [
@@ -41731,6 +43081,277 @@
           }
         }
       },
+      "Table_agentes_comisiones": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "agente_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "tipo_acto": {
+            "type": "string",
+            "nullable": true
+          },
+          "numero_acto": {
+            "type": "string"
+          },
+          "destino": {
+            "type": "string"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio_origen_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_origen_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_regreso": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "agente_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "numero_acto",
+          "destino",
+          "fecha_desde"
+        ]
+      },
+      "Table_agentes_comisiones_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "agente_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "tipo_acto": {
+            "type": "string",
+            "nullable": true
+          },
+          "numero_acto": {
+            "type": "string"
+          },
+          "destino": {
+            "type": "string"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio_origen_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_origen_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_regreso": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "agente_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dni",
+          "numero_acto",
+          "destino",
+          "fecha_desde"
+        ]
+      },
+      "Table_agentes_comisiones_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "agente_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "tipo_acto": {
+            "type": "string",
+            "nullable": true
+          },
+          "numero_acto": {
+            "type": "string"
+          },
+          "destino": {
+            "type": "string"
+          },
+          "fecha_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fecha_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio_origen_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_origen_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "fecha_regreso": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "servicio_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "sector_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "agente_regreso_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "number",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
       "Table_agentes_especialidades": {
         "type": "object",
         "additionalProperties": false,
@@ -45153,6 +46774,51 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "Table_bkp_personal_nacionalidad_20261013": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "nacionalidad": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dni"
+        ]
+      },
+      "Table_bkp_personal_nacionalidad_20261013_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "nacionalidad": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dni"
+        ]
+      },
+      "Table_bkp_personal_nacionalidad_20261013_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "nacionalidad": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -54420,6 +56086,10 @@
           "diferencial_2pct_pagado": {
             "type": "number"
           },
+          "reconocimientos_insalubre": {
+            "type": "string",
+            "nullable": true
+          },
           "fecha_calculo": {
             "type": "string",
             "format": "date-time",
@@ -54535,6 +56205,10 @@
           },
           "diferencial_2pct_pagado": {
             "type": "number"
+          },
+          "reconocimientos_insalubre": {
+            "type": "string",
+            "nullable": true
           },
           "fecha_calculo": {
             "type": "string",
@@ -54653,6 +56327,10 @@
           },
           "diferencial_2pct_pagado": {
             "type": "number"
+          },
+          "reconocimientos_insalubre": {
+            "type": "string",
+            "nullable": true
           },
           "fecha_calculo": {
             "type": "string",
@@ -58739,6 +60417,121 @@
           }
         }
       },
+      "Table_licencias_medicas_whatsapp_omitidos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hasta": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "omitido_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "dni",
+          "desde",
+          "hasta",
+          "novedad"
+        ]
+      },
+      "Table_licencias_medicas_whatsapp_omitidos_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dni": {
+            "type": "number"
+          },
+          "desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hasta": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "omitido_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "dni",
+          "desde",
+          "hasta",
+          "novedad"
+        ]
+      },
+      "Table_licencias_medicas_whatsapp_omitidos_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "number"
+          },
+          "desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hasta": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "omitido_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "Table_localidades": {
         "type": "object",
         "additionalProperties": false,
@@ -59050,6 +60843,98 @@
             "type": "string"
           },
           "applied_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Table_ministerio_codigos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "type": "string"
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "vigente": {
+            "type": "number"
+          },
+          "visto_primero": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "visto_ultimo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "codigo",
+          "novedad"
+        ]
+      },
+      "Table_ministerio_codigos_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "type": "string"
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "vigente": {
+            "type": "number"
+          },
+          "visto_primero": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "visto_ultimo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "codigo",
+          "novedad"
+        ]
+      },
+      "Table_ministerio_codigos_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "type": "string"
+          },
+          "novedad": {
+            "type": "string"
+          },
+          "vigente": {
+            "type": "number"
+          },
+          "visto_primero": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "visto_ultimo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -66389,6 +68274,272 @@
           },
           "updated_by": {
             "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "Table_siape_carga_dias": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "reconocimiento_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "categoria": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "intentos": {
+            "type": "number"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "reconocimiento_id",
+          "dni",
+          "fecha",
+          "estado"
+        ]
+      },
+      "Table_siape_carga_dias_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reconocimiento_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "categoria": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "intentos": {
+            "type": "number"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "reconocimiento_id",
+          "dni",
+          "fecha",
+          "estado"
+        ]
+      },
+      "Table_siape_carga_dias_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "reconocimiento_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "categoria": {
+            "type": "string",
+            "nullable": true
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "intentos": {
+            "type": "number"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Table_siape_carga_reemplazos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "reconocimiento_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tipo_anterior": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "reconocimiento_id",
+          "dni",
+          "fecha",
+          "tipo_anterior"
+        ]
+      },
+      "Table_siape_carga_reemplazos_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reconocimiento_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tipo_anterior": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "reconocimiento_id",
+          "dni",
+          "fecha",
+          "tipo_anterior"
+        ]
+      },
+      "Table_siape_carga_reemplazos_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "reconocimiento_id": {
+            "type": "number"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tipo_anterior": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "detalle": {
+            "type": "string",
+            "nullable": true
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         }

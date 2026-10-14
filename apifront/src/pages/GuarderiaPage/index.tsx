@@ -6,6 +6,7 @@ import { useToast } from '../../ui/toast';
 import { apiFetch } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { DdjjModal } from './DdjjModal';
+import { ImportarFormularioDdjj } from './ImportarFormularioDdjj';
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -390,6 +391,7 @@ export function GuarderiaPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [showAllEmbPend, setShowAllEmbPend] = useState(false);
   const [ddjjFor, setDdjjFor] = useState<{ dni: string; nombre: string } | null>(null);
+  const [importarDdjj, setImportarDdjj] = useState(false);
 
   // form cargar
   const [fechaNacimiento, setFechaNacimiento] = useState('');
@@ -749,6 +751,10 @@ export function GuarderiaPage() {
             {t.label}
           </button>
         ))}
+        <button className="btn" type="button" onClick={() => setImportarDdjj(true)}
+          style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: '0.78rem' }}>
+          📥 Importar DDJJ (Google Form)
+        </button>
       </div>
 
       {/* ── TAB: CARGAR ── */}
@@ -1035,6 +1041,7 @@ export function GuarderiaPage() {
       )}
 
       {ddjjFor && <DdjjModal dni={ddjjFor.dni} nombre={ddjjFor.nombre} onClose={() => setDdjjFor(null)} />}
+      {importarDdjj && <ImportarFormularioDdjj onClose={() => setImportarDdjj(false)} />}
 
     </Layout>
   );

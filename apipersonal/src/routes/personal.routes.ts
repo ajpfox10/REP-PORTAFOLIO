@@ -587,6 +587,15 @@ export function buildPersonalRouter(sequelize: Sequelize) {
           }
 
           const estadoResultante = agenteFields.estado_empleo ?? agenteActual[0].estado_empleo;
+          // El pase a comision necesita acto, destino y fecha, y se registra en
+          // agentes_comisiones: va por POST /comisiones, no por la edicion generica.
+          if (estadoResultante === 'COMISION') {
+            await t.rollback();
+            return res.status(400).json({
+              ok: false,
+              error: 'Para pasar a comision usa "Pase a comision" (pide numero de acto, destino y fecha).',
+            });
+          }
           const egresoResultante = Object.prototype.hasOwnProperty.call(agenteFields, 'fecha_egreso')
             ? agenteFields.fecha_egreso
             : agenteActual[0].fecha_egreso;

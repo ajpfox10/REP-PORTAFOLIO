@@ -263,6 +263,7 @@ export function Layout({ title, children, showBack, fluid }: {
                       {navLink('/app/jefedeptos', '🏛️ Historial Jefaturas')}
                       {navLink('/app/guarderia', '👶 Guardería y Salario')}
                       {navLink('/app/alertas-agente', '🚨 Alertas por Agente')}
+                      {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && navLink('/app/comisiones', '🧳 Comisiones')}
                       {hasPerm('app:director_ejecutivo:access') && navLink('/app/director', '🏛️ Dirección Ejecutiva')}
                       {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
                       {canSeeJubilablesEstadistica && navLink('/app/jubilables-estadistica', '📈 Jubilables (estadística)')}

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch } from '../../api/http';
 import { useNavigate } from 'react-router-dom';
 import { useCargaAgente, ESTADO_EMPLEO_OPTS, ESTADO_CAMBIO_OCUPACION, addDaysIso } from './hooks/useCargaAgente';
+import { PaseComisionModal } from '../../components/Comisiones';
 import { useCamera } from './hooks/useCamera';
 import { EscaneoAgentePage } from '../EscaneoAgentePage';
 import './styles/CargaAgente.css';
@@ -332,6 +333,11 @@ function StepLaboral({ form, setField, errors, cats, editMode }: any) {
             {editMode && <option value="CAMBIO DE OCUPACION">CAMBIO DE OCUPACION</option>}
           </select>
           {errors.estado_empleo && <span className="ca-field-error">⚠ {errors.estado_empleo}</span>}
+          {editMode && form.estado_empleo === 'COMISION' && (
+            <span className="ca-field-hint" style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 500, marginTop: 4, display: 'block' }}>
+              🧳 Al guardar se piden N° de acto, destino y fecha de la comisión; se cierra el cargo y el servicio con esa fecha.
+            </span>
+          )}
           {editMode && form.estado_empleo === 'CAMBIO DE OCUPACION' && (
             <span className="ca-field-hint" style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 500, marginTop: 4, display: 'block' }}>
               ⚠ Se cerrará el cargo actual (con esta “Fecha de Egreso” como cierre, o hoy si la dejás vacía) y se abrirá un cargo nuevo al día siguiente con los datos laborales de abajo. Actualizá la ocupación antes de guardar.
@@ -744,6 +750,17 @@ export function CargaAgentePage() {
         {/* Resumen visible desde paso 2 en adelante */}
         {carga.step >= 2 && (
           <Resumen form={carga.form} photo={carga.photo} cats={carga.cats} />
+        )}
+
+        {carga.pideComision && (
+          <PaseComisionModal
+            dni={carga.form.dni.replace(/\D/g, '')}
+            nombre={`${carga.form.apellido}, ${carga.form.nombre}`}
+            fechaInicial={carga.form.fecha_egreso || undefined}
+            beforeSave={carga.guardarAntesDeComision}
+            onClose={() => carga.setPideComision(false)}
+            onDone={carga.comisionRegistrada}
+          />
         )}
 
         {/* Navegación inferior */}

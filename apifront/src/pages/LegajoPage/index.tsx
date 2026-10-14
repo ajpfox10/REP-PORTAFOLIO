@@ -1361,13 +1361,16 @@ export function LegajoPage() {
   }, [activeDni, cargar]);
 
   // Abre el legajo completado sobre el PDF original del Ministerio (lo arma la API)
-  const imprimir = async () => {
+  // formato: 'original' (A4 + hoja 6 oficio, como la plantilla) | 'oficio' (proporcional) | 'oficio-estirado'
+  const imprimir = async (formato: 'original' | 'oficio' | 'oficio-estirado') => {
     if (!activeDni) return;
     const w = window.open('', '_blank');  // se abre antes del await para que no lo bloquee el navegador
     if (!w) { toast.error('El navegador bloqueó la ventana del PDF'); return; }
     w.document.write('<p style="font-family:sans-serif">Generando el legajo…</p>');
     try {
-      const blob = await apiFetchBlob(`/legajo/${activeDni}/pdf${hojaImprimir ? `?hojas=${hojaImprimir}` : ''}`);
+      const qs = new URLSearchParams({ formato });
+      if (hojaImprimir) qs.set('hojas', String(hojaImprimir));
+      const blob = await apiFetchBlob(`/legajo/${activeDni}/pdf?${qs}`);
       w.location.href = URL.createObjectURL(blob);
     } catch (e: any) {
       w.close();
@@ -1421,8 +1424,17 @@ export function LegajoPage() {
                 {HOJAS_LEGAJO.map(h => <option key={h.n} value={h.n}>Hoja {h.n} — {h.label}</option>)}
               </select>
             </div>
-            <button className="btn" onClick={imprimir} style={{ height: 38 }}>
-              🖨️ Imprimir
+            <button className="btn" onClick={() => imprimir('original')} style={{ height: 38 }}
+              title="Tamaño original de cada hoja: A4 apaisada (la hoja 6 en oficio)">
+              🖨️ A4 original
+            </button>
+            <button className="btn" onClick={() => imprimir('oficio')} style={{ height: 38 }}
+              title="Todo en oficio: la hoja A4 agrandada proporcional y centrada (sin deformar)">
+              🖨️ Oficio
+            </button>
+            <button className="btn" onClick={() => imprimir('oficio-estirado')} style={{ height: 38 }}
+              title="Todo en oficio estirado a hoja completa (se ensancha un poco)">
+              🖨️ Oficio estirado
             </button>
           </div>
         )}

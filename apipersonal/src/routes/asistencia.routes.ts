@@ -1105,7 +1105,12 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       // para que "Guardar" nunca las convierta en generales
       const mapeo = await loadMapeoGeneral(sequelize);
       const reglasCie = await listReglasCie(sequelize);
-      return res.json({ ok: true, mapeo, reglasCie });
+      // combo completo de la Intranet (mig 074, lo mantiene el robot intranet_control_codigos):
+      // así el editor ofrece también los códigos que nunca aparecieron en el Excel del Ministerio
+      const [codigosMinisterio] = await sequelize
+        .query(`SELECT codigo, novedad, vigente FROM ministerio_codigos ORDER BY novedad`)
+        .catch(() => [[]] as any);
+      return res.json({ ok: true, mapeo, reglasCie, codigosMinisterio });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }

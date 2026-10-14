@@ -66,6 +66,7 @@ if not exist "%DST%" mkdir "%DST%"
 robocopy "%SRC%\dist"          "%DST%\dist"       /MIR /NFL /NDL >> %LOG% 2>&1
 robocopy "%SRC%\scripts"       "%DST%\scripts"    /MIR /NFL /NDL >> %LOG% 2>&1
 robocopy "%SRC%\src\templates" "%DST%\templates"  /MIR /NFL /NDL >> %LOG% 2>&1
+robocopy "%SRC%\assets"        "%DST%\assets"     /MIR /NFL /NDL >> %LOG% 2>&1
 copy /Y "%SRC%\package.json"        "%DST%\package.json"        >> %LOG% 2>&1
 copy /Y "%SRC%\package-lock.json"   "%DST%\package-lock.json"   >> %LOG% 2>&1
 copy /Y "%SRC%\ecosystem.config.js" "%DST%\ecosystem.config.js" >> %LOG% 2>&1

@@ -497,6 +497,7 @@ function MapeoEditor({
   saving,
   novedadesMin,
   novedadesSiap,
+  codigosMinisterio,
   reglasCie,
   onReglasCie,
 }: {
@@ -507,6 +508,7 @@ function MapeoEditor({
   saving: boolean;
   novedadesMin: NovedadItem[];
   novedadesSiap: NovedadItem[];
+  codigosMinisterio: { codigo: string; novedad: string; vigente: number }[];
   reglasCie: ReglaCie[];
   onReglasCie: (r: ReglaCie[]) => void;
 }) {
@@ -530,6 +532,13 @@ function MapeoEditor({
 
   const minMapeadas = new Set(Object.keys(mapeo ?? {}).map((k) => norm(k)));
   const minSinMapear = novedadesMin.filter((n) => !minMapeadas.has(norm(n.name)));
+  // Novedades del mapeo que no están (o ya no están) en el combo de la Intranet
+  const enCombo = new Set(
+    codigosMinisterio.filter((c) => Number(c.vigente) === 1).map((c) => norm(c.novedad))
+  );
+  const fueraDelCombo = codigosMinisterio.length
+    ? Object.keys(mapeo ?? {}).filter((k) => !enCombo.has(norm(k)))
+    : [];
 
   // SIAP sin mapear: las del Excel SIAP que no figuran como equivalente en ninguna fila
   const siapUsadas = new Set(
@@ -751,6 +760,22 @@ function MapeoEditor({
               …y {minSinMapear.length - 5} más
             </span>
           )}
+        </div>
+      )}
+
+      {fueraDelCombo.length > 0 && (
+        <div
+          style={{
+            background: "rgba(148,163,184,.08)",
+            border: "1px solid rgba(148,163,184,.25)",
+            borderRadius: 8,
+            padding: "8px 12px",
+            fontSize: "0.75rem",
+            color: "#cbd5e1",
+          }}
+        >
+          ℹ No están en el combo de la Intranet (solo sirven para comparar, el robot no puede
+          cargarlas): {fueraDelCombo.join(" · ")}
         </div>
       )}
 
@@ -1044,6 +1069,16 @@ export function AsistenciaPage() {
   // Novedades únicas de los Excel
   const [novedadesMin, setNovedadesMin] = useState<NovedadItem[]>([]);
   const [novedadesSiap, setNovedadesSiap] = useState<NovedadItem[]>([]);
+  // Combo completo de la Intranet (tabla ministerio_codigos): se suma a las del Excel
+  // del Ministerio con cantidad 0, así se pueden mapear códigos que todavía no se usaron
+  const [codigosMinisterio, setCodigosMinisterio] = useState<{ codigo: string; novedad: string; vigente: number }[]>([]);
+  const novedadesMinEditor = React.useMemo(() => {
+    const vistas = new Set(novedadesMin.map((n) => norm(n.name)));
+    const extra = codigosMinisterio
+      .filter((c) => Number(c.vigente) === 1 && !vistas.has(norm(c.novedad)))
+      .map((c) => ({ name: c.novedad, count: 0 }));
+    return [...novedadesMin, ...extra];
+  }, [novedadesMin, codigosMinisterio]);
   const [loadingNovedades, setLoadingNovedades] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -1266,6 +1301,7 @@ export function AsistenciaPage() {
         if (r?.ok) {
           setMapeo(r.mapeo ?? r.data ?? {});
           setReglasCie(r.reglasCie ?? []);
+          setCodigosMinisterio(r.codigosMinisterio ?? []);
           setMapeoFromDisk(r.fromDisk ?? false);
         }
       })
@@ -1875,8 +1911,9 @@ export function AsistenciaPage() {
               onSave={saveMapeo}
               onReset={resetMapeo}
               saving={savingMapeo}
-              novedadesMin={novedadesMin}
+              novedadesMin={novedadesMinEditor}
               novedadesSiap={novedadesSiap}
+              codigosMinisterio={codigosMinisterio}
               reglasCie={reglasCie}
               onReglasCie={setReglasCie}
             />
