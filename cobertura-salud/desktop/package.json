@@ -1,6 +1,6 @@
 {
   "name": "cobertura-salud-desktop",
-  "version": "0.2.14",
+  "version": "0.2.18",
   "description": "App de escritorio: navegador embebido para consultas de cobertura de salud.",
   "main": "main.js",
   "author": "Cobertura Salud",

@@ -511,14 +511,14 @@ btnIniciar.addEventListener('click', async () => {
   if (cuil && (!dni || dni.length === 11)) dni = dniDeCuil(cuil)
   document.getElementById('dni').value = dni
   if (cuil) document.getElementById('cuil').value = cuil
-  // DNI, sexo y fecha de nacimiento son obligatorios.
+  // DNI y sexo son obligatorios; la fecha de nacimiento es opcional (si se carga, se valida).
   const sexo = document.getElementById('sexo').value
   const fnac = document.getElementById('fnac').value // yyyy-mm-dd
   const hoy = new Date().toISOString().slice(0, 10)
   const faltan = []
   if (dni.length < 7 || dni.length > 8) faltan.push(['dni', 'DNI (7 u 8 digitos)'])
   if (!sexo) faltan.push(['sexo', 'sexo'])
-  if (!fnac || fnac > hoy || fnac < '1900-01-01') faltan.push(['fnac', 'fecha de nacimiento valida'])
+  if (fnac && (fnac > hoy || fnac < '1900-01-01')) faltan.push(['fnac', 'fecha de nacimiento valida'])
   if (faltan.length) {
     faltan.forEach(([id]) => document.getElementById(id).classList.add('falta'))
     msgEl.textContent = 'Faltan datos obligatorios: ' + faltan.map((f) => f[1]).join(', ') + '.'

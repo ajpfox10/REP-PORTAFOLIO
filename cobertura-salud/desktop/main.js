@@ -77,6 +77,69 @@ function quitarInstalacionVieja() {
   } catch (e) {}
 }
 
+// Cada vez que se abre el programa borra de la PC todo rastro de los instaladores:
+// los que bajo el auto-update (carpeta del updater, ~150 MB) y cualquier
+// "Cobertura Salud Setup*.exe" / "Cobertura-Salud-Setup.exe" que haya quedado en el
+// Escritorio (del usuario o publico) o en Descargas. Corre antes de buscar updates.
+function borrarInstaladoresDescargados() {
+  if (!app.isPackaged) return
+  const path = require('path')
+  const fs = require('fs')
+  const local = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local')
+  try { fs.rmSync(path.join(local, 'cobertura-salud-desktop-updater'), { recursive: true, force: true }) } catch (e) {}
+  const carpetas = [app.getPath('desktop'), app.getPath('downloads'), path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Desktop')]
+  for (const dir of carpetas) {
+    let archivos = []
+    try { archivos = fs.readdirSync(dir) } catch (e) {}
+    for (const f of archivos) {
+      if (/^Cobertura[ -]Salud[ -]Setup.*\.exe$/i.test(f)) { try { fs.unlinkSync(path.join(dir, f)) } catch (e) {} }
+    }
+  }
+  limpiarAccesosDirectos()
+}
+
+// Accesos directos: borra los que abren una copia vieja (otro .exe), los repetidos
+// ("Cobertura Salud (2)", "- copia", etc.) y los que apuntan a un instalador, en
+// Escritorio, menu Inicio, barra de tareas e Inicio automatico. Deja UNO solo en el
+// Escritorio, "Cobertura Salud.lnk", apuntando a esta version.
+function limpiarAccesosDirectos() {
+  const path = require('path')
+  const fs = require('fs')
+  const { shell } = require('electron')
+  const exe = process.execPath.toLowerCase()
+  const appData = app.getPath('appData')
+  const programData = process.env.ProgramData || 'C:\\ProgramData'
+  const escritorio = app.getPath('desktop')
+  const carpetas = [
+    escritorio,
+    path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Desktop'),
+    path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    path.join(programData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'),
+    path.join(appData, 'Microsoft', 'Internet Explorer', 'Quick Launch'),
+    path.join(appData, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar')
+  ]
+  for (const dir of carpetas) {
+    let archivos = []
+    try { archivos = fs.readdirSync(dir) } catch (e) {}
+    for (const f of archivos) {
+      if (!/\.lnk$/i.test(f)) continue
+      const lnk = path.join(dir, f)
+      let destino = ''
+      try { destino = (shell.readShortcutLink(lnk).target || '').toLowerCase() } catch (e) {}
+      const esNuestro = /cobertura/i.test(f) || destino.includes('cobertura')
+      if (!esNuestro) continue
+      const apuntaAEsta = destino === exe
+      const nombreOk = f.toLowerCase() === 'cobertura salud.lnk'
+      // En el Escritorio queda solo el oficial; en el resto, solo los que abren esta version.
+      const esEscritorio = dir === escritorio || /\\desktop$/i.test(dir)
+      if (!apuntaAEsta || (esEscritorio && !nombreOk)) { try { fs.unlinkSync(lnk) } catch (e) {} }
+    }
+  }
+  const oficial = path.join(escritorio, 'Cobertura Salud.lnk')
+  try { if (!fs.existsSync(oficial)) shell.writeShortcutLink(oficial, { target: process.execPath, icon: process.execPath, iconIndex: 0 }) } catch (e) {}
+}
+
 // Una sola ventana: si la app ya esta abierta (o el instalador la abre dos veces
 // tras actualizar), la segunda se cierra y se trae al frente la primera.
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -87,6 +150,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   quitarInstalacionVieja()
+  borrarInstaladoresDescargados() // antes del updater, que usa esa carpeta
   const win = createWindow()
   iniciarAutoUpdate(win)
   app.on('activate', () => {

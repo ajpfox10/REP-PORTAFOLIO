@@ -91,7 +91,9 @@ const LINEA: CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOve
 const BTN: CSSProperties = { padding: '2px 6px', fontSize: '0.72rem', width: '100%' };
 const BTN_ICONO: CSSProperties = { padding: '1px 5px', fontSize: '0.72rem', flex: '0 0 auto', lineHeight: 1.2 };
 
-export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
+/** foco = la página la abrió desde el botón 📲 de una licencia: `licencias` trae solo esa y se muestra
+ *  aunque ya esté avisada u omitida; onQuitarFoco vuelve a la lista completa. */
+export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licencias: Licencia[]; foco?: boolean; onQuitarFoco?: () => void }) {
   const toast = useToast();
   const cfg0 = useMemo(leerCfg, []);
   const [plantilla, setPlantilla] = useState<string>(
@@ -200,9 +202,9 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
   };
 
   const filas = useMemo(
-    () => licencias.filter(l => (!ocultarAvisados || !avisoDe(l)?.avisado) && (!ocultarOmitidos || !omitidoDe(l))),
+    () => foco ? licencias : licencias.filter(l => (!ocultarAvisados || !avisoDe(l)?.avisado) && (!ocultarOmitidos || !omitidoDe(l))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [licencias, ocultarAvisados, avisos, ocultarOmitidos, omitidos],
+    [licencias, foco, ocultarAvisados, avisos, ocultarOmitidos, omitidos],
   );
   const nOmitidos = licencias.filter(l => omitidoDe(l)).length;
 
@@ -324,19 +326,20 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
     return r;
   };
 
-  // ↻ Reenviar una sola licencia (sin tildar ni tanda)
+  // ↻ Reenviar / 📲 Enviar una sola licencia (sin tildar ni tanda)
   const reenviar = async (l: Licencia) => {
-    if (!ext) { toast.error('Sin extensión', 'Para reenviar automático hace falta la extensión; usá "Abrir"'); return; }
+    const verbo = avisoDe(l) ? 'Reenviar' : 'Enviar';
+    if (!ext) { toast.error('Sin extensión', `Para ${verbo.toLowerCase()} automático hace falta la extensión; usá "Abrir"`); return; }
     if (!validarPrueba()) return;
     const tel = objetivoDe(l).telefono;
-    if (!prueba && !window.confirm(`Reenviar el WhatsApp REAL a ${l.nombre}${tel ? ` (+${tel})` : ''}?`)) return;
+    if (!prueba && !window.confirm(`¿${verbo} el WhatsApp REAL a ${l.nombre}${tel ? ` (+${tel})` : ''}?`)) return;
     detener.current = false;
     setEnviando(true);
     setLog([]);
     setProgreso({ i: 1, n: 1, espera: 0, actual: l.nombre });
     try {
       const r = await enviarUno(l);
-      if (r.ok) toast.ok(prueba ? 'Reenviado (prueba)' : 'Reenviado', l.nombre);
+      if (r.ok) toast.ok(`${verbo === 'Reenviar' ? 'Reenviado' : 'Enviado'}${prueba ? ' (prueba)' : ''}`, l.nombre);
       else toast.error(TXT_ESTADO[r.estado || 'ERROR'] ?? 'No salió', r.detalle || l.nombre);
     } finally {
       setEnviando(false);
@@ -470,6 +473,14 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
         </div>
       </div>
 
+      {foco && (
+        <div className="card" style={{ padding: '8px 12px', marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+          background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.4)', fontSize: '0.85rem' }}>
+          <span>📌 Mostrando solo <b>{licencias[0]?.nombre ?? 'la licencia elegida'}</b>{licencias[0] ? ` · ${licencias[0].novedad} ${fmtFecha(licencias[0].desde)}${licencias[0].hasta !== licencias[0].desde ? ` → ${fmtFecha(licencias[0].hasta)}` : ''}` : ''}. Revisá el número y el modo prueba, y mandalo con el botón verde de la fila.</span>
+          {onQuitarFoco && <button type="button" className="btn" style={{ padding: '1px 8px', fontSize: '0.75rem' }} onClick={onQuitarFoco} disabled={enviando}>Ver todas</button>}
+        </div>
+      )}
+
       {/* Barra de acciones */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 8px' }}>
         <button type="button" className="btn" onClick={enviarTanda} disabled={!ext || enviando || !nTild}
@@ -526,7 +537,7 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
             <th style={TD}>Licencia</th>
             <th style={TD}>Celular</th>
             <th style={TD}>Último aviso</th>
-            <th style={TD}>Manual</th>
+            <th style={TD}>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -630,10 +641,10 @@ export function WhatsappTab({ licencias }: { licencias: Licencia[] }) {
                       <button type="button" className="btn" style={BTN} onClick={() => quitarOmitido(l)} disabled={enviando}
                         title={om.motivo ? `Motivo: ${om.motivo}` : 'Volver a incluirla para avisar'}>↩ Quitar omitido</button>
                     ) : <>
-                    {av && (
-                      <button type="button" className="btn" style={{ ...BTN, background: 'rgba(34,197,94,0.2)' }} onClick={() => reenviar(l)} disabled={enviando || !ext}
-                        title={ext ? `Volver a mandar solo a este agente${prueba ? ' (modo prueba)' : ''}` : 'Necesita la extensión; usá "Abrir"'}>↻ Reenviar</button>
-                    )}
+                    <button type="button" className="btn" style={{ ...BTN, background: 'rgba(34,197,94,0.2)' }} onClick={() => reenviar(l)} disabled={enviando || !ext}
+                      title={ext ? `${av ? 'Volver a mandar' : 'Mandar'} solo a este agente${prueba ? ' (modo prueba)' : ''}` : 'Necesita la extensión; usá "Abrir"'}>
+                      {av ? '↻ Reenviar' : '📲 Enviar'}
+                    </button>
                     <button type="button" className="btn" style={BTN} onClick={() => abrirManual(l)} disabled={enviando}
                       title="Abre WhatsApp Web con el chat y el mensaje ya escrito">Abrir</button>
                     <button type="button" className="btn" style={BTN} onClick={() => marcarManual(l)} disabled={enviando}

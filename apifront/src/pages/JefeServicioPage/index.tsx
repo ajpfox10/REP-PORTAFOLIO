@@ -66,6 +66,17 @@ function fmt(d?: string | null): string {
   } catch { return String(d); }
 }
 
+function hoyISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function sumarDiasISO(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 function fmtDateTime(dt?: string | null): string {
   if (!dt) return '—';
   try {
@@ -830,20 +841,27 @@ function SectoresAgente({ agente, servicioId, sectores, jefeNombre }: SectoresAg
 // ─── Panel de reconocimientos médicos (solo lectura) ─────────────────────────
 interface RecMedicosProps {
   dni: string | number;
+  verCargo?: boolean; // solo admin ve quién cargó
 }
-function RecMedicos({ dni }: RecMedicosProps) {
+function RecMedicos({ dni, verCargo = false }: RecMedicosProps) {
   const [recs, setRecs]       = useState<any[]>([]);
+  const [turnos, setTurnos]   = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!dni) return;
     setLoading(true);
-    fetchAll(`/reconocimientos_medicos?dni=${dni}&sort=-fecha_desde`)
-      .then(rows => setRecs(rows))
-      .catch(() => setRecs([]))
+    Promise.all([
+      fetchAll(`/reconocimientos_medicos?dni=${dni}&sort=-fecha_desde`).catch(() => []),
+      apiFetch<any>(`/turnos-salud-laboral?dni=${dni}`).then(r => r?.data ?? []).catch(() => []),
+    ])
+      .then(([rows, ts]) => { setRecs(rows); setTurnos(ts); })
       .finally(() => setLoading(false));
   }, [dni]);
+
+  const hoy = hoyISO();
+  const turnosPendientes = turnos.filter((t: any) => t.fecha_turno >= hoy || t.fecha_hasta >= hoy);
 
   const total     = recs.length;
   const totalDias = recs.reduce((acc: number, r: any) => acc + (Number(r.cantidad_dias) || 0), 0);
@@ -856,6 +874,11 @@ function RecMedicos({ dni }: RecMedicosProps) {
           <span style={{ marginLeft: 8, fontSize: '0.7rem', color: '#64748b' }}>
             {total} registros · {totalDias} días total
           </span>
+          {turnosPendientes.length > 0 && (
+            <span style={{ marginLeft: 8, fontSize: '0.7rem', color: '#fcd34d' }}>
+              🩺 {turnosPendientes.length} turno{turnosPendientes.length === 1 ? '' : 's'} pendiente{turnosPendientes.length === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
         <button className="btn" type="button"
           style={{ padding: '2px 8px', fontSize: '0.75rem' }}
@@ -866,9 +889,28 @@ function RecMedicos({ dni }: RecMedicosProps) {
       {expanded && (
         loading ? (
           <div style={{ color: '#64748b', fontSize: '0.8rem' }}>🔄 Cargando…</div>
-        ) : recs.length === 0 ? (
+        ) : recs.length === 0 && turnos.length === 0 ? (
           <div style={{ color: '#475569', fontSize: '0.8rem' }}>Sin reconocimientos registrados</div>
         ) : (
+          <>
+          {turnos.map((t: any) => (
+            <div key={`t${t.id}`} style={{
+              padding: '7px 10px', marginBottom: 5, borderRadius: 7,
+              background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.25)',
+              fontSize: '0.78rem',
+            }}>
+              <div style={{ fontWeight: 600, color: '#fcd34d', marginBottom: 3 }}>
+                🩺 Turno con Salud Laboral: {fmt(t.fecha_turno)}{t.hora_turno ? ` ${t.hora_turno} hs` : ''}
+              </div>
+              <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                <span>Días a justificar: <b>{fmt(t.fecha_desde)} al {fmt(t.fecha_hasta)}</b></span>
+                {verCargo && t.cargado_por && <span>Cargó: {t.cargado_por}</span>}
+              </div>
+              {t.observaciones && (
+                <div style={{ color: '#64748b', marginTop: 3, fontStyle: 'italic' }}>{t.observaciones}</div>
+              )}
+            </div>
+          ))}
           <div style={{ maxHeight: 200, overflowY: 'auto' }}>
             {recs.map((r: any) => (
               <div key={r.id} style={{
@@ -885,8 +927,9 @@ function RecMedicos({ dni }: RecMedicosProps) {
                 </div>
                 <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
                   {r.fecha_desde && <span>Desde: <b>{fmt(r.fecha_desde)}</b></span>}
-                  {r.fecha_hasta && <span>Hasta: <b>{fmt(r.fecha_hasta)}</b></span>}
+                  {r.fecha_hasta && <span>Justificado hasta: <b>{fmt(r.fecha_hasta)}</b></span>}
                   {r.resultado   && <span>Resultado: {r.resultado}</span>}
+                  {verCargo && (r.created_by_nombre || r.created_by_email) && <span>Cargó: {r.created_by_nombre || r.created_by_email}</span>}
                 </div>
                 {r.observaciones && (
                   <div style={{ color: '#64748b', marginTop: 3, fontStyle: 'italic' }}>{r.observaciones}</div>
@@ -894,6 +937,7 @@ function RecMedicos({ dni }: RecMedicosProps) {
               </div>
             ))}
           </div>
+          </>
         )
       )}
     </div>
@@ -2337,6 +2381,8 @@ export function JefeServicioPage() {
   const [licenciasActivas, setLicenciasActivas] = useState<any[]>([]);
   const [loadingLicencias, setLoadingLicencias] = useState(false);
   const [licenciasSet, setLicenciasSet] = useState<Set<string>>(new Set());
+  // Turnos con la médica de Salud Laboral (pendientes de justificar) del sector
+  const [turnosSL, setTurnosSL] = useState<any[]>([]);
 
   // Todos los pases del sector (tab 2)
   const [todosPases,      setTodosPases]      = useState<any[]>([]);
@@ -2366,15 +2412,28 @@ export function JefeServicioPage() {
     setLoadingLicencias(true);
     try {
       const dniSet = new Set(sectorAgentes.map((a: any) => String(a.dni)));
-      const all = await fetchAll('/reconocimientos_medicos?sort=-fecha_desde');
-      // global: todos sin fecha_hasta; jefe: solo los de su sector
-      const activos = isGlobal
-        ? all.filter((r: any) => !r.fecha_hasta)
-        : all.filter((r: any) => !r.fecha_hasta && dniSet.has(String(r.dni)));
+      const hoy = hoyISO();
+      const [all, resTurnos] = await Promise.all([
+        fetchAll('/reconocimientos_medicos?sort=-fecha_desde'),
+        apiFetch<any>(`/turnos-salud-laboral?desde=${sumarDiasISO(hoy, -30)}`).catch(() => null),
+      ]);
+      // Vigente = justificado por Salud Laboral hoy (desde <= hoy <= hasta; sin hasta = abierto)
+      const vigente = (r: any) => {
+        const d = String(r.fecha_desde || '').slice(0, 10);
+        const h = String(r.fecha_hasta || '').slice(0, 10);
+        return !!d && d <= hoy && (!h || h >= hoy);
+      };
+      // global: todos; jefe: solo los de su sector
+      const activos = all.filter((r: any) => vigente(r) && (isGlobal || dniSet.has(String(r.dni))));
       setLicenciasActivas(activos);
       setLicenciasSet(new Set(activos.map((r: any) => String(r.dni))));
+      // Turnos todavía útiles: el turno es hoy o después, o el rango a cubrir sigue abierto
+      const turnos = ((resTurnos?.data ?? []) as any[]).filter((t: any) =>
+        (t.fecha_turno >= hoy || t.fecha_hasta >= hoy) && (isGlobal || dniSet.has(String(t.dni))));
+      setTurnosSL(turnos);
     } catch {
       setLicenciasActivas([]);
+      setTurnosSL([]);
     } finally {
       setLoadingLicencias(false);
     }
@@ -2932,12 +2991,24 @@ export function JefeServicioPage() {
                               />
                             )}
                             {a.apellido}, {a.nombre}
-                            {licenciasSet.has(dniStr) && (
-                              <span title="De licencia médica" style={{
-                                fontSize: '0.65rem', background: 'rgba(220,38,38,0.2)',
-                                color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
-                              }}>🏥 LICENCIA</span>
-                            )}
+                            {licenciasSet.has(dniStr) && (() => {
+                              const lic = licenciasActivas.find((r: any) => String(r.dni) === dniStr);
+                              return (
+                                <span title="Justificado por Salud Laboral" style={{
+                                  fontSize: '0.65rem', background: 'rgba(220,38,38,0.2)',
+                                  color: '#fca5a5', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                                }}>🏥 LICENCIA{lic?.fecha_hasta ? ` hasta ${fmt(lic.fecha_hasta)}` : ''}</span>
+                              );
+                            })()}
+                            {(() => {
+                              const t = turnosSL.find((x: any) => String(x.dni) === dniStr);
+                              return t ? (
+                                <span title={`Turno con Salud Laboral para justificar del ${fmt(t.fecha_desde)} al ${fmt(t.fecha_hasta)}${isGlobal && t.cargado_por ? ` · cargó ${t.cargado_por}` : ''}`} style={{
+                                  fontSize: '0.65rem', background: 'rgba(251,191,36,0.2)',
+                                  color: '#fcd34d', borderRadius: 4, padding: '1px 5px', fontWeight: 600,
+                                }}>🩺 TURNO {fmt(t.fecha_turno)}</span>
+                              ) : null;
+                            })()}
                             {dniConArt26.has(dniStr) && (
                               <span title="Tiene Artículo 26" style={{
                                 fontSize: '0.65rem', background: 'rgba(99,102,241,0.2)',
@@ -3250,6 +3321,12 @@ export function JefeServicioPage() {
                     borderRadius: 99, fontSize: '0.68rem', padding: '1px 7px', fontWeight: 700,
                   }}>{licenciasActivas.length}</span>
                 )}
+                {turnosSL.length > 0 && (
+                  <span title="Turnos con Salud Laboral pendientes" style={{
+                    marginLeft: 4, background: '#d97706', color: '#fff',
+                    borderRadius: 99, fontSize: '0.68rem', padding: '1px 7px', fontWeight: 700,
+                  }}>🩺 {turnosSL.length}</span>
+                )}
               </button>
               <button
                 type="button"
@@ -3353,7 +3430,7 @@ export function JefeServicioPage() {
                     {/* Reconocimientos médicos (solo lectura) — titulares: por SIAPE */}
                     {!titularSiape && (
                       <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 12, paddingTop: 10 }}>
-                        <RecMedicos dni={agenteActivo.dni} />
+                        <RecMedicos dni={agenteActivo.dni} verCargo={isGlobal} />
                       </div>
                     )}
 
@@ -3619,10 +3696,10 @@ export function JefeServicioPage() {
             <div className="card js-card">
               <div className="js-section-header">
                 <div className="js-section-title">
-                  🏥 Agentes de licencia médica activa
+                  🏥 Justificados por Salud Laboral (vigentes hoy)
                   {licenciasActivas.length > 0 && (
                     <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#fca5a5' }}>
-                      {licenciasActivas.length} con licencia activa
+                      {licenciasActivas.length} con licencia vigente
                     </span>
                   )}
                 </div>
@@ -3632,7 +3709,7 @@ export function JefeServicioPage() {
                 <div className="js-loading">🔄 Cargando licencias…</div>
               ) : licenciasActivas.length === 0 ? (
                 <div className="js-empty">
-                  {loadingAg ? 'Esperando agentes…' : 'No hay agentes con licencia médica activa en este sector.'}
+                  {loadingAg ? 'Esperando agentes…' : 'No hay agentes con licencia médica vigente en este sector.'}
                 </div>
               ) : (
                 <div className="js-tabla-wrap">
@@ -3643,8 +3720,10 @@ export function JefeServicioPage() {
                         <th>Agente</th>
                         <th>Tipo</th>
                         <th>Desde</th>
+                        <th>Justificado hasta</th>
                         <th>Días</th>
                         <th>Resultado</th>
+                        {isGlobal && <th>Cargado por</th>}
                         <th>Observaciones</th>
                       </tr>
                     </thead>
@@ -3659,10 +3738,61 @@ export function JefeServicioPage() {
                             </td>
                             <td style={{ fontWeight: 600, color: '#fca5a5' }}>{r.tipo || '—'}</td>
                             <td>{fmt(r.fecha_desde)}</td>
+                            <td style={{ fontWeight: 700, color: '#fbbf24' }}>{r.fecha_hasta ? fmt(r.fecha_hasta) : 'Sin fecha de fin'}</td>
                             <td>{r.cantidad_dias ? `${r.cantidad_dias}d` : '—'}</td>
                             <td className="js-td-muted">{r.resultado || '—'}</td>
+                            {isGlobal && <td className="js-td-muted">{r.created_by_nombre || r.created_by_email || '—'}</td>}
                             <td className="js-td-muted" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {r.observaciones || '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Turnos con la médica de Salud Laboral para justificar días */}
+              <div className="js-section-header" style={{ marginTop: 18 }}>
+                <div className="js-section-title">
+                  🩺 Turnos con Salud Laboral para justificar
+                  {turnosSL.length > 0 && (
+                    <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#fcd34d' }}>
+                      {turnosSL.length} pendiente{turnosSL.length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {loadingLicencias ? null : turnosSL.length === 0 ? (
+                <div className="js-empty">No hay turnos con Salud Laboral pendientes en este sector.</div>
+              ) : (
+                <div className="js-tabla-wrap">
+                  <table className="js-tabla">
+                    <thead>
+                      <tr>
+                        <th>DNI</th>
+                        <th>Agente</th>
+                        <th>Turno</th>
+                        <th>Días a justificar</th>
+                        {isGlobal && <th>Cargado por</th>}
+                        <th>Observaciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {turnosSL.map((t: any) => {
+                        const ag = agentes.find((a: any) => String(a.dni) === String(t.dni));
+                        return (
+                          <tr key={t.id} style={{ background: 'rgba(251,191,36,0.06)' }}>
+                            <td className="js-td-dni">{t.dni}</td>
+                            <td>{ag ? `${ag.apellido}, ${ag.nombre}` : (t.nombre || '—')}</td>
+                            <td style={{ fontWeight: 600, color: '#fcd34d', whiteSpace: 'nowrap' }}>
+                              {fmt(t.fecha_turno)}{t.hora_turno ? ` ${t.hora_turno} hs` : ''}
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{fmt(t.fecha_desde)} al {fmt(t.fecha_hasta)}</td>
+                            {isGlobal && <td className="js-td-muted">{t.cargado_por || '—'}</td>}
+                            <td className="js-td-muted" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t.observaciones || '—'}
                             </td>
                           </tr>
                         );

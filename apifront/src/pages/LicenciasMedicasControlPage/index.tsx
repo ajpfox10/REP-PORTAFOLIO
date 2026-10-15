@@ -12,13 +12,14 @@
 // Datos: GET /licencias-medicas-control?desde&hasta
 // La tabla y el modal de nota viven en ./shared (los reusa el modal de Gestión).
 // Tarjeta "📲 Avisados por WhatsApp" = agentes del período con algún envío real OK; click → lista de a quién.
+// Botón 📲 Enviar / ↻ Reenviar en la tabla y en esa lista → abre la pestaña WhatsApp con solo esa licencia (focoWsp).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { exportToExcel } from '../../utils/export';
 import {
-  ANIOS, ANIO_ACTUAL, DIA_CORTO, LicenciasMedicasTabla, MESES, Resp, Tab,
-  BadgeWhatsapp, enTab, fmtFecha, hoy, noJustificada, normTxt, rangoDe, txtFichada, txtNota, txtTocaba, txtWhatsapp, useReclamoAcciones,
+  ANIOS, ANIO_ACTUAL, DIA_CORTO, Licencia, LicenciasMedicasTabla, MESES, Resp, Tab,
+  BadgeWhatsapp, enTab, fmtFecha, hoy, keyDe, noJustificada, normTxt, rangoDe, txtFichada, txtNota, txtTocaba, txtWhatsapp, useReclamoAcciones,
 } from './shared';
 import { WhatsappTab } from './WhatsappTab';
 
@@ -37,6 +38,9 @@ export function LicenciasMedicasControlPage() {
   const [resolucion, setResolucion] = useState('TODAS');
   const [verNoReclamar, setVerNoReclamar] = useState(false);
   const [verAvisados, setVerAvisados] = useState(false);
+  // Licencia elegida con el botón 📲 (keyDe): la pestaña WhatsApp muestra solo esa, sin importar filtros ni si ya se avisó
+  const [focoWsp, setFocoWsp] = useState<string | null>(null);
+  const irAWhatsapp = (l: Licencia) => { setFocoWsp(keyDe(l)); setVerAvisados(false); setWhatsapp(true); };
 
   const cargar = useCallback(async (refresh = false, silencioso = false) => {
     if (!silencioso) setLoading(true);
@@ -189,7 +193,7 @@ export function LicenciasMedicasControlPage() {
 
         <div style={{ display: 'flex', gap: 0, marginTop: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           {(['reclamar', 'observadas', 'reclamaron', 'resueltas', 'pendientes'] as const).map(t => (
-            <button key={t} type="button" onClick={() => { setTab(t); setWhatsapp(false); }} style={{
+            <button key={t} type="button" onClick={() => { setTab(t); setWhatsapp(false); setFocoWsp(null); }} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '10px 22px', fontSize: '0.9rem', fontWeight: !whatsapp && tab === t ? 700 : 400,
               color: !whatsapp && tab === t ? '#e2e8f0' : '#64748b',
@@ -203,7 +207,7 @@ export function LicenciasMedicasControlPage() {
                 : `⏳ Pendientes${r ? ` · ${r.pendientes}` : ''}`}
             </button>
           ))}
-          <button type="button" onClick={() => setWhatsapp(true)} style={{
+          <button type="button" onClick={() => { setWhatsapp(true); setFocoWsp(null); }} style={{
             background: 'none', border: 'none', cursor: 'pointer',
             padding: '10px 22px', fontSize: '0.9rem', fontWeight: whatsapp ? 700 : 400,
             color: whatsapp ? '#e2e8f0' : '#64748b',
@@ -267,7 +271,9 @@ export function LicenciasMedicasControlPage() {
 
       {whatsapp ? (
         <div className="card" style={{ marginTop: 12, padding: 0, overflowX: 'auto' }}>
-          <WhatsappTab licencias={filtrados} />
+          {focoWsp
+            ? <WhatsappTab foco licencias={(data?.data ?? []).filter(l => keyDe(l) === focoWsp)} onQuitarFoco={() => setFocoWsp(null)} />
+            : <WhatsappTab licencias={filtrados} />}
         </div>
       ) : (
       <div className="card" style={{ marginTop: 12, padding: 0, overflowX: 'auto' }}>
@@ -280,6 +286,7 @@ export function LicenciasMedicasControlPage() {
           onTildar={tildar}
           onAbrirNota={abrirNota}
           resetKey={`${tab}|${q}|${servicio}|${resolucion}|${verNoReclamar}|${anio}|${mes}`}
+          onWhatsapp={tab === 'reclamar' || tab === 'observadas' || tab === 'reclamaron' ? irAWhatsapp : undefined}
         />
       </div>
       )}
@@ -311,11 +318,12 @@ export function LicenciasMedicasControlPage() {
                   <th style={{ padding: 6 }}>WhatsApp</th>
                   <th style={{ padding: 6 }}>Enviado por</th>
                   <th style={{ padding: 6 }}>Destino</th>
+                  <th style={{ padding: 6 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {!conWhatsapp.length && (
-                  <tr><td colSpan={5} className="muted" style={{ padding: 16, textAlign: 'center' }}>No se mandó ningún WhatsApp en este período.</td></tr>
+                  <tr><td colSpan={6} className="muted" style={{ padding: 16, textAlign: 'center' }}>No se mandó ningún WhatsApp en este período.</td></tr>
                 )}
                 {conWhatsapp.map(l => {
                   const w = l.whatsapp!;
@@ -335,6 +343,10 @@ export function LicenciasMedicasControlPage() {
                       </td>
                       <td style={{ padding: 6 }} className={w.enviado_por ? '' : 'muted'}>{w.enviado_por || '—'}</td>
                       <td style={{ padding: 6 }} className={w.destino ? '' : 'muted'}>{w.destino || '—'}</td>
+                      <td style={{ padding: 6, whiteSpace: 'nowrap' }}>
+                        <button type="button" className="btn" style={{ padding: '1px 8px', fontSize: '0.72rem' }} onClick={() => irAWhatsapp(l)}
+                          title="Ir a la pestaña WhatsApp con esta licencia para volver a mandarlo">↻ Reenviar</button>
+                      </td>
                     </tr>
                   );
                 })}

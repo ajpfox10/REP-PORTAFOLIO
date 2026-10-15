@@ -159,6 +159,13 @@ const fmtPeriodo = (p: Periodo | null | undefined): string => {
   return parts.length ? parts.join(', ') : '0 días';
 };
 
+// Servicio que falta, aclarando si es trabajando como común o como insalubre
+// (en insalubre son menos días de almanaque: computan más por la tabla).
+const fmtFaltaServicio = (f: { falta_servicio: Periodo; falta_servicio_comun?: Periodo; falta_servicio_insalubre?: Periodo }): string => {
+  const comun = `${fmtPeriodo(f.falta_servicio_comun ?? f.falta_servicio)} común`;
+  return f.falta_servicio_insalubre ? `${comun} o ${fmtPeriodo(f.falta_servicio_insalubre)} insalubre` : comun;
+};
+
 const fmtFecha = (v: string | null | undefined): string => {
   if (!v) return '—';
   const [y, m, d] = String(v).split('T')[0].split('-');
@@ -232,6 +239,8 @@ interface FilaProyeccion {
   cumple_servicio:    boolean;
   falta_edad:         Periodo;
   falta_servicio:     Periodo;
+  falta_servicio_comun?:     Periodo;
+  falta_servicio_insalubre?: Periodo;
   tipo_jubilacion:    string | null;
   tipo_al_cumplir:    string | null;
   caja_jubilatoria:   'IPS' | 'ANSES';
@@ -1067,7 +1076,7 @@ export function HerramientasPage() {
       filas.push({ Sección: 'Por caja', Dato: d.label, Valor: `${fmtPeriodo(d.total)} — insalubre ${fmtPeriodo(d.insalubre)} · común ${fmtPeriodo(d.comun)}` });
     }
     filas.push({ Sección: 'Resultado', Dato: 'Tipo jubilación', Valor: R.tipo_jubilacion ? (TIPOS_JUBILACION[R.tipo_jubilacion] ?? R.tipo_jubilacion) : 'AÚN NO ALCANZA' });
-    if (!R.cumple_servicio) filas.push({ Sección: 'Falta', Dato: 'Servicio', Valor: fmtPeriodo(R.falta_servicio) });
+    if (!R.cumple_servicio) filas.push({ Sección: 'Falta', Dato: 'Servicio', Valor: fmtFaltaServicio(R) });
     if (!R.cumple_edad)    filas.push({ Sección: 'Falta', Dato: 'Edad',     Valor: fmtPeriodo(R.falta_edad) });
     if (observaciones) filas.push({ Sección: 'Observaciones', Dato: '', Valor: observaciones });
 
@@ -1740,7 +1749,7 @@ export function HerramientasPage() {
       'Cargo deudor 2%': f.cargo_deudor_2pct ? fmtPeriodo(f.cargo_deudor_periodo) : '',
       'Cumple si paga': f.pago_posible ? fmtFecha(f.fecha_cumple_con_pago) : '',
       'Falta edad':     fmtPeriodo(f.falta_edad),
-      'Falta servicio': fmtPeriodo(f.falta_servicio),
+      'Falta servicio': f.cumple_servicio ? '' : fmtFaltaServicio(f),
       'Datos ANSES':    f.sin_datos_anses ? 'SIN CARGAR' : 'Cargados',
       Origen:           f.origen_datos === 'CALCULO' ? 'Cálculo guardado' : 'Estimado del legajo',
       'En Posibles':    f.estado_posible ?? '',
@@ -3253,7 +3262,7 @@ export function HerramientasPage() {
                                ) : (
                                 <>
                                   {!f.cumple_edad && <div>Edad: {fmtPeriodo(f.falta_edad)}</div>}
-                                  {!f.cumple_servicio && <div>Servicio: {fmtPeriodo(f.falta_servicio)}</div>}
+                                  {!f.cumple_servicio && <div>Servicio: {fmtFaltaServicio(f)}</div>}
                                 </>
                               )}
                             </td>
@@ -3753,7 +3762,7 @@ export function HerramientasPage() {
                                         </td>
                                         <td style={{ padding: '6px' }}>
                                           <div>Edad {f.cumple_edad ? '✓' : fmtPeriodo(f.falta_edad)}</div>
-                                          <div>Servicio {f.cumple_servicio ? '✓' : fmtPeriodo(f.falta_servicio)}</div>
+                                          <div>Servicio {f.cumple_servicio ? '✓' : fmtFaltaServicio(f)}</div>
                                         </td>
                                         <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
                                           {excluido ? (

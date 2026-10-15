@@ -52,9 +52,11 @@ const SELECT_TURNO = `
          DATE_FORMAT(t.fecha_desde, '%Y-%m-%d') AS fecha_desde,
          DATE_FORMAT(t.fecha_hasta, '%Y-%m-%d') AS fecha_hasta,
          t.observaciones, t.created_at,
-         TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS nombre
+         TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS nombre,
+         COALESCE(u.nombre, u.email) AS cargado_por
     FROM turnos_salud_laboral t
-    LEFT JOIN personal p ON p.dni = t.dni`;
+    LEFT JOIN personal p ON p.dni = t.dni
+    LEFT JOIN usuarios u ON u.id = t.created_by`;
 
 export function buildTurnosSaludLaboralRouter(sequelize: Sequelize) {
   const router = Router();

@@ -351,7 +351,7 @@ export function useReclamoAcciones(recargar: () => Promise<void>) {
  * día por día) y paginado. Vuelve a la página 1 cuando cambia `resetKey`.
  */
 export function LicenciasMedicasTabla({
-  filas, tab, loading, licenciasActualizado, guardando, onTildar, onAbrirNota, resetKey, porPagina = 25,
+  filas, tab, loading, licenciasActualizado, guardando, onTildar, onAbrirNota, resetKey, porPagina = 25, onWhatsapp,
 }: {
   filas: Licencia[];
   tab: Tab;
@@ -362,6 +362,8 @@ export function LicenciasMedicasTabla({
   onAbrirNota: (l: Licencia, nota: Nota | null) => void;
   resetKey: string;
   porPagina?: number;
+  /** Si viene, cada fila muestra un botón 📲 que lleva a enviar/reenviar el WhatsApp de esa licencia. */
+  onWhatsapp?: (l: Licencia) => void;
 }) {
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [pagina, setPagina] = useState(0);
@@ -416,7 +418,16 @@ export function LicenciasMedicasTabla({
                     <div className="muted" style={{ fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={l.servicio || undefined}>
                       {l.servicio || '—'}
                     </div>
-                    <BadgeWhatsapp w={l.whatsapp} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      <BadgeWhatsapp w={l.whatsapp} />
+                      {onWhatsapp && (
+                        <button type="button" className="btn" style={{ padding: '0 6px', fontSize: '0.68rem', marginTop: 2, lineHeight: 1.4 }}
+                          onClick={e => { e.stopPropagation(); onWhatsapp(l); }}
+                          title={l.whatsapp ? 'Volver a mandar el WhatsApp de esta licencia' : 'Mandar el WhatsApp de esta licencia'}>
+                          {l.whatsapp ? '↻ Reenviar' : '📲 Enviar'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                   {conReclamo && (
                     <td style={{ padding: '6px 6px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>

@@ -926,8 +926,8 @@ function calcular(input: CalculoInput) {
     falta_servicio_comun:         fromDias(faltaComunDias),
     falta_servicio_insalubre:     fromDias(faltaInsalubreDias),
     falta_edad:                   fromDias(Math.max(0, reqEdadDias - edadDias)),
-    pct_servicio_completado:      reqServicioDias > 0 ? Math.min(100, Math.round(baseServicioDias / reqServicioDias * 100)) : 0,
-    pct_edad_completada:          reqEdadDias    > 0 ? Math.min(100, Math.round(edadDias        / reqEdadDias    * 100)) : 0,
+    pct_servicio_completado:      reqServicioDias > 0 ? Math.min(100, Math.floor(baseServicioDias / reqServicioDias * 1000) / 10) : 0,
+    pct_edad_completada:          reqEdadDias    > 0 ? Math.min(100, Math.floor(edadDias        / reqEdadDias    * 1000) / 10) : 0,
   };
 }
 
@@ -2265,6 +2265,8 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         cumple_servicio:     resBase.cumple_servicio,
         falta_edad:          resBase.falta_edad,
         falta_servicio:      resBase.falta_servicio,
+        falta_servicio_comun:     resBase.falta_servicio_comun,
+        falta_servicio_insalubre: resBase.falta_servicio_insalubre,
         tipo_jubilacion:     resBase.tipo_jubilacion,
         // Régimen con el que llegaría a cumplir (el de la fecha proyectada).
         tipo_al_cumplir:     proy.resultado.tipo_jubilacion,

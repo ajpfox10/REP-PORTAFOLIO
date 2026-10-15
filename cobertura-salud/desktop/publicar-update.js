@@ -16,6 +16,16 @@ if (!fs.existsSync(dist)) {
 }
 fs.mkdirSync(destino, { recursive: true })
 
+// Solo se publica la version actual: los instaladores de versiones anteriores se
+// borran del servidor y de dist/ (no queda rastro de ellos).
+const versionActual = require('./package.json').version
+const viejo = (f) => /^Cobertura Salud Setup .+\.exe(\.blockmap)?$/i.test(f) && !f.startsWith(`Cobertura Salud Setup ${versionActual}.exe`)
+for (const dir of [destino, dist]) {
+  for (const f of fs.readdirSync(dir)) {
+    if (viejo(f)) { fs.rmSync(path.join(dir, f), { force: true }); console.log('borrado viejo: ' + f) }
+  }
+}
+
 // electron-updater (provider generic) necesita: latest.yml, el .exe y el .exe.blockmap
 const patrones = [/^latest\.yml$/i, /\.exe$/i, /\.exe\.blockmap$/i]
 let copiados = 0
