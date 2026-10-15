@@ -2,6 +2,7 @@
 REM ================================================================
 REM  sync-repos.cmd — copia el FUENTE de personaldev al repo git,
 REM  limpio (sin node_modules/dist/.env/fichadas/etc).
+REM  Exclusiones propias de esta PC: C:\apps\sync-exclusiones-locales.cmd
 REM  NO toca git. Despues subis vos con git_sync.bat.
 REM  Uso:  sync-repos.cmd dry   (prueba, no copia)
 REM        sync-repos.cmd       (copia de verdad)
@@ -11,9 +12,14 @@ set "MODE=%~1"
 set "DRY="
 if /i "%MODE%"=="dry" set "DRY=/L"
 
+REM Exclusiones locales (no versionadas): define XD_LOCAL / XF_LOCAL
+set "XD_LOCAL="
+set "XF_LOCAL="
+if exist "C:\apps\sync-exclusiones-locales.cmd" call "C:\apps\sync-exclusiones-locales.cmd"
+
 REM Carpetas y archivos que NO se copian
-set "XD=node_modules dist .git .cache logs tmp coverage .vs fichadas bin obj __pycache__ .playwright .chrome-debug chrome-dev-visible chrome-dev-visible-2 storage uploads capturas screenshots .venv venv test-results playwright-report siape_map_baja siape_catalogo"
-set "XF=.env*reformas.txt PENDIENTES.txt fichadas_log.txt *fichad*.txt attlog*.txt *.log *.err *.jpg *.jpeg Thumbs.db .DS_Store fichero_config.json *.bak *.bak_* *.pyc *.pem *.key *.pfx *.p12 id_rsa* *.pdf *.csv *.xlsx *.xls *.webp *.bmp *.out *.exe *.msi dump_*.txt logs_*.txt"
+set "XD=node_modules dist .git .cache logs tmp coverage .vs fichadas bin obj __pycache__ .playwright .chrome-debug chrome-dev-visible chrome-dev-visible-2 storage uploads capturas screenshots .venv venv test-results playwright-report siape_map_baja siape_catalogo %XD_LOCAL%"
+set "XF=.env* reformas.txt PENDIENTES.txt fichadas_log.txt *fichad*.txt attlog*.txt *.log *.err *.jpg *.jpeg Thumbs.db .DS_Store fichero_config.json *.bak *.bak_* *.pyc *.pem *.key *.pfx *.p12 id_rsa* *.pdf *.csv *.xlsx *.xls *.webp *.bmp *.out *.exe *.msi dump_*.txt logs_*.txt %XF_LOCAL%"
 
 echo ================================================================
 echo   SYNC personaldev -^> D:\Repositorios   (modo: %MODE%)
