@@ -172,7 +172,7 @@ kubectl get pods -o wide | grep -v Running
 
 ## 7. Escenario E: Compromiso de credenciales
 
-> ⚠️ No rotar credentials sin coordinación — ver instrucción "si arranca pero no rotes por ahora credenciales".
+> No rotar credentials sin coordinación — ver instrucción "si arranca pero no rotes por ahora credenciales".
 
 Pasos a seguir en orden:
 1. **Contener:** revocar la credencial comprometida en la consola del provider (AWS IAM, etc.) antes de rotar.

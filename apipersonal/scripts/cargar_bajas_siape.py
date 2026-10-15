@@ -611,7 +611,7 @@ def siape_encima(F):
     """Deja la ventana de SiAPe 'siempre visible' mientras corre el robot.
 
     Los clicks y el tipeo van por coordenadas: si otra ventana (p.ej. una app
-    maximizado) tapa a SiAPe, caen en esa otra ventana. Windows ademas no deja
+    maximizada) tapa a SiAPe, caen en esa otra ventana. Windows ademas no deja
     traer al frente desde un proceso en segundo plano ("SiAPe no quedo al
     frente"). Se engancha en F._activar_ventana (se llama antes de cada click,
     tambien en el login) y al salir se saca el TOPMOST."""
@@ -621,18 +621,25 @@ def siape_encima(F):
     puestos = set()
     original = F._activar_ventana
 
+    # Titulos exactos de ventanas "siempre visible" que pueden tapar a SiAPe
+    # (SIAPE_VENTANAS_A_MINIMIZAR en .env, separados por coma; vacio = nada).
+    titulos = [t.strip() for t in os.getenv("SIAPE_VENTANAS_A_MINIMIZAR", "").split(",") if t.strip()]
+
     def _minimizar_otras():
-        # Ventana TOPMOST que se restaura sola (p.ej. al llegarle una
-        # mensaje): antes de cada click se le saca el TOPMOST y se minimiza.
+        # Ventanas TOPMOST que se restauran solas (p.ej. al llegarles una
+        # notificacion): antes de cada click se les saca el TOPMOST y se minimizan.
+        if not titulos:
+            return
         try:
             import pygetwindow as gw
-            for v in gw.getWindowsWithTitle(os.getenv("SIAPE_VENTANAS_A_MINIMIZAR", "")):
-                if (v.title or "").strip() != os.getenv("SIAPE_VENTANAS_A_MINIMIZAR", ""):
-                    continue
-                ctypes.windll.user32.SetWindowPos(v._hWnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
-                if not v.isMinimized:
-                    v.minimize()
-                    time.sleep(0.4)
+            for titulo in titulos:
+                for v in gw.getWindowsWithTitle(titulo):
+                    if (v.title or "").strip() != titulo:
+                        continue
+                    ctypes.windll.user32.SetWindowPos(v._hWnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
+                    if not v.isMinimized:
+                        v.minimize()
+                        time.sleep(0.4)
         except Exception as e:
             F.log(f"AVISO: no pude minimizar otras ventanas: {e}")
 

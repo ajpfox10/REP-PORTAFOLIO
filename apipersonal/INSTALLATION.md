@@ -1,6 +1,6 @@
-# 🚀 Instalación y Configuración - IMPORTANTE
+# Instalación y Configuración - IMPORTANTE
 
-## ⚠️ ANTES DE CORRER TESTS O LA API
+## ANTES DE CORRER TESTS O LA API
 
 **DEBES ejecutar la migración SQL para arreglar el schema de tu base de datos.**
 
@@ -53,32 +53,32 @@ SHOW TABLES LIKE '%two_factor%';
 SELECT * FROM usuarios WHERE email = 'admin@local.com';
 ```
 
-## ✅ Ahora sí puedes correr los tests
+## Ahora sí puedes correr los tests
 
 ```bash
 npm install
 npm test
 ```
 
-## 📝 Qué Hace la Migración
+## Qué Hace la Migración
 
 La migración `000__fix_schema_for_production.sql`:
 
-1. ✅ Agrega `created_at` y `updated_at` a la tabla `roles`
-2. ✅ Renombra `password` → `password_hash` en `usuarios`
-3. ✅ Agrega columna `active` en `usuarios` 
-4. ✅ Agrega columna `rol_id` en `usuarios`
-5. ✅ Agrega columna `two_factor_enabled` en `usuarios`
-6. ✅ Renombra `creado_en` → `created_at` en `usuarios`
-7. ✅ Renombra `actualizado_en` → `updated_at` en `usuarios`
-8. ✅ Crea tabla `password_reset_tokens`
-9. ✅ Crea tabla `two_factor_codes`
-10. ✅ Crea rol `admin` si no existe
-11. ✅ Crea permisos necesarios
-12. ✅ Asigna permisos al rol admin
-13. ✅ Agrega timestamps a `roles_permisos` y `permisos`
+1. Agrega `created_at` y `updated_at` a la tabla `roles`
+2. Renombra `password` → `password_hash` en `usuarios`
+3. Agrega columna `active` en `usuarios` 
+4. Agrega columna `rol_id` en `usuarios`
+5. Agrega columna `two_factor_enabled` en `usuarios`
+6. Renombra `creado_en` → `created_at` en `usuarios`
+7. Renombra `actualizado_en` → `updated_at` en `usuarios`
+8. Crea tabla `password_reset_tokens`
+9. Crea tabla `two_factor_codes`
+10. Crea rol `admin` si no existe
+11. Crea permisos necesarios
+12. Asigna permisos al rol admin
+13. Agrega timestamps a `roles_permisos` y `permisos`
 
-## 🔧 Si algo sale mal
+## Si algo sale mal
 
 Si la migración falla:
 
@@ -95,7 +95,7 @@ SHOW WARNINGS;
 
 La mayoría de los `ALTER TABLE` usan `IF NOT EXISTS` o ignorarán errores si la columna ya existe.
 
-## 📊 Estructura Final Esperada
+## Estructura Final Esperada
 
 ### Tabla `roles`
 ```sql
@@ -149,7 +149,7 @@ La mayoría de los `ALTER TABLE` usan `IF NOT EXISTS` o ignorarán errores si la
 - updated_at DATETIME
 ```
 
-## 🎯 Luego de la migración
+## Luego de la migración
 
 Una vez ejecutada la migración, todos los tests deberían pasar:
 
@@ -158,13 +158,13 @@ npm test
 ```
 
 Deberías ver:
-- ✅ Auth tests passing
-- ✅ API Keys tests passing
-- ✅ Webhooks tests passing
-- ✅ Documents tests passing
-- ✅ Eventos tests passing
+- Auth tests passing
+- API Keys tests passing
+- Webhooks tests passing
+- Documents tests passing
+- Eventos tests passing
 
-## 🆘 Soporte
+## Soporte
 
 Si tienes problemas:
 1. Verifica que MySQL esté corriendo

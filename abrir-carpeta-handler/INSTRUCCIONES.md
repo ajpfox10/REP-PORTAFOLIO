@@ -18,7 +18,7 @@ el Explorador es la PC donde estás mirando el navegador — no el servidor.
 
 1. **Copiá esta carpeta completa** a un lugar fijo de la PC, por ejemplo
    `C:\personalv5\abrir-carpeta-handler\`.
-   ⚠️ No la borres ni la muevas después de instalar: el registro apunta al archivo
+   No la borres ni la muevas después de instalar: el registro apunta al archivo
    `abrir-carpeta.ps1` que está acá adentro.
 2. Doble click en **`Instalar.cmd`**.
    - No hace falta ser administrador (se instala solo para tu usuario de Windows).

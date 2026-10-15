@@ -1,6 +1,6 @@
 # Actualizaciones automáticas de la app de escritorio
 
-## 📁 CARPETA donde van las versiones nuevas (para que se auto-instalen)
+## CARPETA donde van las versiones nuevas (para que se auto-instalen)
 
 ```
 C:\apps\cobertura-salud\backend\wwwroot\updates\
@@ -23,7 +23,7 @@ mayor, la descargan y se actualizan solas.
 
 ---
 
-## 🚀 Cómo publicar una versión nueva (2 pasos)
+## Cómo publicar una versión nueva (2 pasos)
 
 1. Subir el número de versión en `desktop\package.json`
    (ej: `"version": "0.2.4"` → `"0.2.5"`).  **ES OBLIGATORIO subirlo**, si no, no actualiza.
@@ -41,7 +41,7 @@ Listo: las PC se actualizan al siguiente arranque (o dentro de 4 h).
 
 ---
 
-## ⚠️ Primer rollout (una sola vez por PC)
+## Primer rollout (una sola vez por PC)
 
 El auto-update recién funciona en PC que ya tienen **v0.2.0 o superior** instalada.
 En cada PC nueva hay que instalar una vez el `.exe`:

@@ -1,9 +1,9 @@
-# 📦 personalv5-enterprise-api
+# personalv5-enterprise-api
 Documentación completa – **de cero a producción, sin magia**
 
 ---
 
-## 🎯 Qué es este proyecto (explicado fácil)
+## Qué es este proyecto (explicado fácil)
 
 Este proyecto es una **API backend** hecha con:
 
@@ -11,20 +11,20 @@ Este proyecto es una **API backend** hecha con:
 - TypeScript
 - Express
 
-👉 Su objetivo es **exponer datos y funcionalidades vía HTTP** de forma:
+Su objetivo es **exponer datos y funcionalidades vía HTTP** de forma:
 - ordenada
 - segura
 - controlada
 - predecible
 
-📌 **Idea clave:**  
+**Idea clave:**  
 Nada se ejecuta solo.  
 Nada se oculta.  
 Todo se puede explicar con un dibujo.
 
 ---
 
-## 🧠 Principios del diseño (lo más importante)
+## Principios del diseño (lo más importante)
 
 Este proyecto se apoya en **5 principios**:
 
@@ -38,7 +38,7 @@ Si entendés estos 5 puntos, entendés todo el sistema.
 
 ---
 
-## 🗂️ Estructura general del proyecto
+## Estructura general del proyecto
 
 ```
 api_personal/
@@ -76,7 +76,7 @@ api_personal/
 
 ---
 
-## 📁 src/ (el corazón)
+## src/ (el corazón)
 
 ### app.ts
 Configura Express:
@@ -93,18 +93,18 @@ No levanta el servidor.
 
 ---
 
-## 📁 src/routes/
+## src/routes/
 
 ### routes/index.ts (rutas “viejas”)
 - Contiene rutas ya existentes
 - Está probado
 - **NO se toca automáticamente**
 
-👉 Esto evita romper producción.
+Esto evita romper producción.
 
 ---
 
-## 🆕 Sistema de auto-rutas (`src/routes/auto/`)
+## Sistema de auto-rutas (`src/routes/auto/`)
 
 Este es el **sistema nuevo**, incremental.
 
@@ -124,7 +124,7 @@ Evita:
 
 ---
 
-### 📄 Formato de una auto-route
+### Formato de una auto-route
 
 ```ts
 export const basePath = "/algo";
@@ -138,8 +138,8 @@ export function buildRouter(ctx) {
 
 ---
 
-### 📄 auto.manifest.ts
-🚫 **NO TOCAR**
+### auto.manifest.ts
+**NO TOCAR**
 
 - Se genera solo
 - Lista las rutas
@@ -148,9 +148,9 @@ export function buildRouter(ctx) {
 
 ---
 
-## ⚙️ Scripts (quién hace qué)
+## Scripts (quién hace qué)
 
-### arranque.mjs 🧭
+### arranque.mjs
 Wizard interactivo.
 
 ```bash
@@ -172,11 +172,11 @@ Nada corre sin preguntar.
 - Genera el manifest
 - Evita errores TS
 
-❌ Nunca corre solo.
+Nunca corre solo.
 
 ---
 
-## 🚀 Flujo completo (diagrama mental)
+## Flujo completo (diagrama mental)
 
 ```
 DESARROLLO
@@ -205,7 +205,7 @@ Si algo falla → se corta.
 
 ---
 
-## 🧪 Qué se controla antes de producción
+## Qué se controla antes de producción
 
 1. TypeScript compila
 2. Las rutas existen
@@ -215,7 +215,7 @@ Si algo falla → se corta.
 
 ---
 
-## ❓ Preguntas clave
+## Preguntas clave
 
 ### ¿Las rutas viejas cuentan como auto-routes?
 No.
@@ -229,7 +229,7 @@ Sí, con wrappers.
 
 ---
 
-## 🧠 Regla de oro
+## Regla de oro
 
 > “Producción no es un experimento.”
 
@@ -239,7 +239,7 @@ Nada entra si:
 - no está claro
 
 ---
-### 📱 Controles de calidad
+### Controles de calidad
 
 - Herramientas instaladas (lint, formateo automático y hooks de Git).
 - La ejecución estricta puede estar temporalmente deshabilitada.
@@ -247,7 +247,7 @@ Nada entra si:
 
 ---
 
-### 🔧 Tests
+### Tests
 
 - Infraestructura de testing presente.
 - Cobertura incompleta en algunos módulos.
@@ -255,7 +255,7 @@ Nada entra si:
 
 ---
 
-### 📢 Documentación OpenAPI
+### Documentación OpenAPI
 
 - OpenAPI funcional.
 - Sin una úníca fuente de verdad definitiva.
@@ -263,14 +263,14 @@ Nada entra si:
 
 ---
 
-### 🐋 Despliegue
+### Despliegue
 
 - No incluye Docker.
 - No existe guía de despliegue final.
 
 ---
 
-### 🔗 Higiene del repositorio
+### Higiene del repositorio
 
 - Pueden existir logs.
 - Pueden existir archivos generados.
@@ -278,12 +278,12 @@ Nada entra si:
 
 ---
 
-### 🗠 Regla importante
+### Regla importante
 
 Nada de lo anterior rompe el proyecto ni impide avanzar.
 Lo que falta no es rehacer, es cerrar.
 
-## 🏁 Resumen final
+## Resumen final
 
 - Proyecto **predecible**
 - Arquitectura **explicable**
@@ -294,4 +294,4 @@ Lo que falta no es rehacer, es cerrar.
 Si alguien entiende este README,
 entiende el proyecto completo.
 
-👑 Fin.
+Fin.

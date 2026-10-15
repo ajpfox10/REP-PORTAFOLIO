@@ -1,4 +1,4 @@
-# 🐾 Ejemplo: Dominio Veterinaria
+# Ejemplo: Dominio Veterinaria
 
 Estructura mínima para un nuevo dominio usando el mismo kernel de PersonalV5.
 
@@ -65,16 +65,16 @@ await mountGateway({ ..., domain: VeterinariaDoamin });
 
 ## Lo que hereda GRATIS del kernel
 
-- ✅ JWT + Refresh tokens + 2FA
-- ✅ RBAC (roles y permisos)
-- ✅ Audit log automático
-- ✅ Rate limiting
-- ✅ Cache Redis con invalidate-on-write
-- ✅ Webhooks con firma HMAC
-- ✅ Métricas Prometheus
-- ✅ Logs estructurados
-- ✅ Health checks
-- ✅ Swagger/OpenAPI
-- ✅ CRUD dinámico para cualquier tabla
-- ✅ Schema introspection
-- ✅ Migración SQL automática
+- JWT + Refresh tokens + 2FA
+- RBAC (roles y permisos)
+- Audit log automático
+- Rate limiting
+- Cache Redis con invalidate-on-write
+- Webhooks con firma HMAC
+- Métricas Prometheus
+- Logs estructurados
+- Health checks
+- Swagger/OpenAPI
+- CRUD dinámico para cualquier tabla
+- Schema introspection
+- Migración SQL automática

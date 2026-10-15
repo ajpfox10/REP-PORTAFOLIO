@@ -1,6 +1,6 @@
-# 🚀 Guía de Despliegue a Producción - Personal v5 Enterprise API
+# Guía de Despliegue a Producción - Personal v5 Enterprise API
 
-## ✅ Pre-requisitos
+## Pre-requisitos
 
 ### Infraestructura requerida:
 - **Servidor**: Ubuntu 20.04+ / Debian 11+ / RHEL 8+
@@ -19,7 +19,7 @@
 
 ---
 
-## 📦 Paso 1: Preparar el servidor
+## Paso 1: Preparar el servidor
 
 ```bash
 # Actualizar sistema
@@ -55,7 +55,7 @@ sudo systemctl start clamav-daemon
 
 ---
 
-## 📂 Paso 2: Desplegar la aplicación
+## Paso 2: Desplegar la aplicación
 
 ```bash
 # Crear usuario para la aplicación
@@ -81,7 +81,7 @@ npm run build
 
 ---
 
-## 🗄️ Paso 3: Configurar la base de datos
+## Paso 3: Configurar la base de datos
 
 ```bash
 # Conectar a MySQL
@@ -101,7 +101,7 @@ npm run db:migrate
 
 ---
 
-## ⚙️ Paso 4: Configurar variables de entorno
+## Paso 4: Configurar variables de entorno
 
 ```bash
 # Crear archivo .env en producción
@@ -110,7 +110,7 @@ cp .env.example .env
 nano .env
 ```
 
-### ⚠️ CRÍTICO - Variables obligatorias en producción:
+### CRÍTICO - Variables obligatorias en producción:
 
 ```env
 NODE_ENV=production
@@ -190,7 +190,7 @@ sudo chmod 750 /home/api-personal/documents
 
 ---
 
-## 🔄 Paso 5: Configurar PM2
+## Paso 5: Configurar PM2
 
 ```bash
 cd /home/api-personal/app
@@ -233,7 +233,7 @@ Contenido:
 
 ---
 
-## 🌐 Paso 6: Configurar Nginx como Reverse Proxy
+## Paso 6: Configurar Nginx como Reverse Proxy
 
 ```bash
 sudo nano /etc/nginx/sites-available/api-personal
@@ -330,7 +330,7 @@ sudo certbot --nginx -d api.tu-dominio.com
 
 ---
 
-## 🔒 Paso 7: Configurar Firewall
+## Paso 7: Configurar Firewall
 
 ```bash
 # UFW (Ubuntu Firewall)
@@ -343,7 +343,7 @@ sudo ufw status
 
 ---
 
-## 📊 Paso 8: Configurar Monitoreo
+## Paso 8: Configurar Monitoreo
 
 ### 1. Prometheus (opcional)
 ```bash
@@ -366,7 +366,7 @@ pm2 web  # Dashboard web en puerto 9615
 
 ---
 
-## 🔐 Paso 9: Crear usuario administrador
+## Paso 9: Crear usuario administrador
 
 ```bash
 cd /home/api-personal/app
@@ -381,7 +381,7 @@ Esto creará:
 
 ---
 
-## 🧪 Paso 10: Verificar despliegue
+## Paso 10: Verificar despliegue
 
 ```bash
 # Health check
@@ -398,7 +398,7 @@ curl -X POST https://api.tu-dominio.com/api/v1/auth/login \
 
 ---
 
-## 🔄 Actualización de la aplicación
+## Actualización de la aplicación
 
 ```bash
 # Entrar como usuario api-personal
@@ -426,7 +426,7 @@ pm2 reload ecosystem.config.js
 
 ---
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Ver logs:
 ```bash
@@ -469,7 +469,7 @@ pm2 status
 
 ---
 
-## 📋 Checklist de Seguridad
+## Checklist de Seguridad
 
 - [ ] **JWT_ACCESS_SECRET y JWT_REFRESH_SECRET** con mínimo 32 caracteres aleatorios
 - [ ] **METRICS_TOKEN** con mínimo 16 caracteres aleatorios
@@ -488,7 +488,7 @@ pm2 status
 
 ---
 
-## 🔄 Backups Automáticos
+## Backups Automáticos
 
 ### Configurar backup automático:
 ```bash
@@ -512,7 +512,7 @@ npm run restore
 
 ---
 
-## 📝 Mantenimiento Periódico
+## Mantenimiento Periódico
 
 ### Semanal:
 - Revisar logs de errores
@@ -532,7 +532,7 @@ npm run restore
 
 ---
 
-## 🆘 Contacto y Soporte
+## Contacto y Soporte
 
 Para soporte técnico, reportar bugs o contribuir:
 - **GitHub**: [tu-repo]
@@ -541,7 +541,7 @@ Para soporte técnico, reportar bugs o contribuir:
 
 ---
 
-## 📚 Referencias Adicionales
+## Referencias Adicionales
 
 - [Node.js Best Practices](https://github.com/goldbergyoni/nodebestpractices)
 - [PM2 Documentation](https://pm2.keymetrics.io/docs/usage/quick-start/)

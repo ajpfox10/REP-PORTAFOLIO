@@ -9,7 +9,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [1.0.0] - 2026-02-17
 
-### ✨ Agregado
+### Agregado
 
 #### Autenticación y Seguridad
 - **Password Reset** - Sistema completo de recuperación de contraseña
@@ -103,7 +103,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
-### 🐛 Corregido
+### Corregido
 
 #### Tests
 - **jest.env.ts** - Agregado `DOCS_PROTECT='false'` para evitar 403 en tests del contrato OpenAPI
@@ -129,7 +129,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
-### 📝 Cambiado
+### Cambiado
 
 #### Autenticación
 - **auth.routes.ts** - Agregados endpoints de password reset
@@ -147,7 +147,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
-### 🔒 Seguridad
+### Seguridad
 
 #### Tokens
 - **Password reset tokens** usan SHA-256 hash para almacenamiento
@@ -161,7 +161,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
-### ⚡ Rendimiento
+### Rendimiento
 
 #### Queries Optimizadas
 - Índices agregados en `password_reset_tokens`:
