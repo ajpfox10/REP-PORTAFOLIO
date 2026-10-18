@@ -27,6 +27,9 @@ const app = buildApp('reports', (app, requirePerm) => {
 const PORT = parseInt(process.env.PORT || '3008', 10);
 if (process.env.NODE_ENV !== 'test') {
   startService(app, 'reports', PORT);
+  if (process.env.REPORTS_SCHEDULER_ENABLED !== 'false') {
+    require('./scheduler').startScheduler();
+  }
 }
 
 module.exports = app;

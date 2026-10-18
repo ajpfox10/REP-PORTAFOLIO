@@ -4,16 +4,9 @@ const { Router } = require('express');
 const {
   R,
   db,
-  log,
-  sendReportEmail,
   calcNextRun,
-  fetchReportData,
-  defaultCols,
-  toExcel,
-  generateRevenuePdf,
-  generateAppointmentsReportPdf,
-  generateDiagnosesReportPdf,
 } = require('../reports.common');
+const { startRun, executeScheduledReport } = require('../scheduler');
 
 const router = Router();
 
@@ -182,78 +175,8 @@ router.post('/:id/run', async (req, res, next) => {
     );
     if (!sr) return R.notFound(res);
 
-    const [runRow] = await db.query(
-      `INSERT INTO report_runs (scheduled_report_id, org_id, branch_id, report_type, format, status, params, triggered_by, started_at)
-       VALUES (:sid, :orgId, :bid, :type, :fmt, 'running', :params, :uid, NOW())`,
-      {
-        sid: sr.id, orgId: req.user.orgId, bid: sr.branch_id,
-        type: sr.report_type, fmt: sr.format,
-        params: sr.params, uid: req.user.userId,
-      }
-    );
-    const runId = runRow.insertId;
-
-    setImmediate(async () => {
-      try {
-        const params = sr.params ? JSON.parse(sr.params) : {};
-        const data = await fetchReportData(sr.report_type, sr.branch_id, sr.org_id, params);
-        const meta = { from: params.from, to: params.to, generatedBy: 'Programado' };
-        let fileSize = 0;
-        let subject = `Reporte: ${sr.name}`;
-
-        if (sr.format === 'excel') {
-          const cols = defaultCols(sr.report_type);
-          const rows = Array.isArray(data) ? data : (data.byType || []);
-          const buffer = await toExcel({ title: sr.name, columns: cols, rows, meta });
-          fileSize = buffer.length;
-          const recipients = JSON.parse(sr.recipients);
-          for (const email of recipients) {
-            await sendReportEmail({
-              email,
-              subject,
-              reportName: sr.name,
-              buffer,
-              filename: `${sr.report_type}.xlsx`,
-              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            }).catch((err) => log.warn('scheduled report email failed', { err: err.message, scheduledReportId: sr.id, email }));
-          }
-        } else if (sr.format === 'pdf') {
-          let buf;
-          if (sr.report_type === 'revenue') buf = await generateRevenuePdf({ rows: data, meta });
-          else if (sr.report_type === 'appointments') buf = await generateAppointmentsReportPdf({ ...data, meta });
-          else if (sr.report_type === 'diagnoses') buf = await generateDiagnosesReportPdf({ rows: data, meta });
-          if (buf) {
-            fileSize = buf.length;
-            const recipients = JSON.parse(sr.recipients);
-            for (const email of recipients) {
-              await sendReportEmail({
-                email,
-                subject,
-                reportName: sr.name,
-                buffer: buf,
-                filename: `${sr.report_type}.pdf`,
-                mimeType: 'application/pdf',
-              }).catch((err) => log.warn('scheduled report email failed', { err: err.message, scheduledReportId: sr.id, email }));
-            }
-          }
-        }
-
-        await db.query(
-          `UPDATE report_runs SET status='completed', file_size_bytes=:sz, finished_at=NOW() WHERE id=:id`,
-          { sz: fileSize, id: runId }
-        );
-        await db.query(
-          `UPDATE scheduled_reports SET last_run_at=NOW(), next_run_at=:next WHERE id=:id`,
-          { next: calcNextRun(sr.frequency, sr.day_of_week, sr.day_of_month), id: sr.id }
-        );
-      } catch (err) {
-        log.error('scheduled report run failed', { err: err.message, scheduledReportId: sr.id, runId });
-        await db.query(
-          `UPDATE report_runs SET status='failed', error_message=:msg, finished_at=NOW() WHERE id=:id`,
-          { msg: err.message, id: runId }
-        );
-      }
-    });
+    const runId = await startRun(sr, req.user.userId);
+    setImmediate(() => { executeScheduledReport(sr, runId); });
 
     return R.accepted(res, { runId, message: 'Reporte en proceso. Se enviará por email al terminar.' });
   } catch (e) { next(e); }
