@@ -113,6 +113,45 @@ paths:
       responses:
         '200':
           description: OK
+  /subscription:
+    get:
+      summary: Estado de la suscripción, planes y consumo del mes
+      responses:
+        '200':
+          description: OK
+  /subscription/checkout:
+    post:
+      summary: Iniciar la suscripción a un plan (MercadoPago)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, enum: [basic, pro, enterprise] }
+      responses:
+        '200':
+          description: init_point de MercadoPago, o plan activado en modo demo
+        '403':
+          description: Solo administradores de la organización
+        '503':
+          description: Cobros no configurados
+  /subscription/cancel:
+    post:
+      summary: Cancelar la renovación de la suscripción
+      responses:
+        '200':
+          description: Suscripción cancelada
+  /subscription/mp/webhook:
+    post:
+      summary: Notificaciones de suscripciones de MercadoPago
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Invalid signature
   /payments/mp/webhook:
     post:
       responses:

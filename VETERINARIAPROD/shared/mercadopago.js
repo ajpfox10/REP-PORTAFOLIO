@@ -11,7 +11,7 @@
  * Docs: https://www.mercadopago.com.ar/developers/es/docs
  */
 
-const { MercadoPagoConfig, Preference, Payment, Refund } = require('mercadopago');
+const { MercadoPagoConfig, Preference, Payment, Refund, PreApproval } = require('mercadopago');
 const crypto = require('crypto');
 const { createLogger } = require('./logger');
 const { CircuitBreaker } = require('./circuitBreaker');
@@ -138,6 +138,99 @@ async function refundPayment(mpPaymentId, amount) {
   }
 }
 
+// ── Suscripciones (débito automático / preapproval) ──────────────────────────
+async function withBreaker(fn) {
+  if (!mpBreaker.canRequest()) throw Object.assign(new Error('MercadoPago circuit open'), { code: 'MP_CIRCUIT_OPEN' });
+  try {
+    const result = await fn();
+    mpBreaker.onSuccess();
+    return result;
+  } catch (err) {
+    mpBreaker.onFailure();
+    throw err;
+  }
+}
+
+/**
+ * Crea una suscripción mensual sin plan asociado. MercadoPago devuelve un
+ * `init_point` donde la persona autoriza el débito con su cuenta o tarjeta.
+ *
+ * @param {object} opts
+ * @param {number} opts.orgId
+ * @param {string} opts.plan             id del plan comercial
+ * @param {string} opts.reason           texto que ve la persona al pagar
+ * @param {number} opts.amount           monto mensual
+ * @param {string} [opts.currency='ARS']
+ * @param {string} opts.payerEmail
+ * @param {string} opts.backUrl          a dónde vuelve después de autorizar
+ * @returns {Promise<{ id: string, initPoint: string, status: string }>}
+ */
+async function createPreapproval(opts) {
+  const { orgId, plan, reason, amount, currency = 'ARS', payerEmail, backUrl } = opts;
+  const appUrl = process.env.APP_URL || 'http://localhost:4050';
+  const V = process.env.API_VERSION || 'v1';
+  const result = await withBreaker(() => new PreApproval(getClient()).create({
+    body: {
+      reason,
+      external_reference: `org:${orgId}:plan:${plan}`,
+      payer_email: payerEmail,
+      back_url: backUrl,
+      notification_url: `${appUrl}/api/${V}/subscription/mp/webhook`,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: Number(amount),
+        currency_id: currency,
+      },
+      status: 'pending',
+    },
+    requestOptions: { idempotencyKey: `sub-${orgId}-${plan}-${Date.now()}` },
+  }));
+  return { id: result.id, initPoint: result.init_point, status: result.status };
+}
+
+async function getPreapproval(preapprovalId) {
+  return withBreaker(() => new PreApproval(getClient()).get({ id: preapprovalId }));
+}
+
+async function cancelPreapproval(preapprovalId) {
+  return withBreaker(() => new PreApproval(getClient()).update({ id: preapprovalId, body: { status: 'cancelled' } }));
+}
+
+/**
+ * Cobro de una cuota de suscripción (topic subscription_authorized_payment).
+ * El SDK no expone este recurso, se consulta la API REST directamente.
+ */
+async function getAuthorizedPayment(authorizedPaymentId) {
+  const token = process.env.MP_ACCESS_TOKEN;
+  if (!token) throw new Error('MP_ACCESS_TOKEN no configurado');
+  const id = encodeURIComponent(String(authorizedPaymentId));
+  return withBreaker(async () => {
+    const res = await fetch(`https://api.mercadopago.com/authorized_payments/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw Object.assign(new Error(`MercadoPago authorized_payments ${res.status}`), { status: res.status });
+    return res.json();
+  });
+}
+
+/**
+ * Estado de preapproval de MercadoPago → estado de suscripción interno.
+ */
+function mapPreapprovalStatus(mpStatus) {
+  switch (mpStatus) {
+    case 'authorized': return 'active';
+    case 'paused':     return 'past_due';
+    case 'cancelled':  return 'cancelled';
+    default:           return null; // pending: todavía no autorizó
+  }
+}
+
+function isConfigured() {
+  return Boolean(process.env.MP_ACCESS_TOKEN);
+}
+
 // ── Validar firma de webhook ──────────────────────────────────────────────────
 /**
  * MercadoPago envía x-signature con ts y hash.
@@ -219,4 +312,10 @@ module.exports = {
   refundPayment,
   validateWebhookSignature,
   mapMpStatus,
+  createPreapproval,
+  getPreapproval,
+  cancelPreapproval,
+  getAuthorizedPayment,
+  mapPreapprovalStatus,
+  isConfigured,
 };

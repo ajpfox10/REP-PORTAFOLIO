@@ -326,6 +326,44 @@ paths:
         '409': { description: El email ya tiene una cuenta }
         '429': { description: Demasiados registros desde la misma red }
 
+  /subscription:
+    get:
+      tags: [Billing]
+      summary: Estado de la suscripción SaaS, planes y consumo del mes
+      responses:
+        '200': { description: OK }
+  /subscription/checkout:
+    post:
+      tags: [Billing]
+      summary: Iniciar la suscripción a un plan con MercadoPago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, enum: [basic, pro, enterprise] }
+      responses:
+        '200': { description: init_point de MercadoPago o plan activado en modo demo }
+        '403': { description: Solo administradores de la organización }
+        '503': { description: Cobros no configurados }
+  /subscription/cancel:
+    post:
+      tags: [Billing]
+      summary: Cancelar la renovación de la suscripción
+      responses:
+        '200': { description: Suscripción cancelada }
+  /subscription/mp/webhook:
+    post:
+      tags: [Billing]
+      summary: Webhook de suscripciones de MercadoPago (firma x-signature)
+      security: []
+      responses:
+        '200': { description: Recibido }
+        '401': { description: Firma inválida }
+
   /auth/captcha/config:
     get:
       tags: [Auth]

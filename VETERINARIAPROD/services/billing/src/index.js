@@ -6,6 +6,7 @@ const path = require('path');
 const express = require('express');
 const { buildApp, startService, guardWrite } = require('../../../shared/serviceBase');
 const { router: stripeRouter, stripeWebhookHandler } = require('./routes/stripe.routes');
+const { subscriptionRouter, subscriptionWebhookRouter } = require('./routes/subscription.routes');
 const { invoicesRouter, paymentsRouter, priceListsRouter, inventoryRouter, suppliersRouter, purchaseOrdersRouter, consolidatedRouter, mpRouter, mpWebhookRouter, afipRouter } = require('./routes/billing.routes');
 
 const stripeRawBody = express.raw({
@@ -24,6 +25,13 @@ const app = buildApp('billing', (app, requirePerm) => {
     return next();
   });
   app.post('/payments/stripe/webhook', stripeWebhookHandler);
+  app.use('/subscription/mp/webhook', (req, res, next) => {
+    if (req.method === 'POST' && (req.path === '/' || req.path === '')) {
+      return subscriptionWebhookRouter(req, res, next);
+    }
+    return next();
+  });
+  app.use('/subscription', requirePerm('billing:read'), subscriptionRouter);
   app.use('/payments/mp', requirePerm('payments:read'), mpRouter);
   app.use('/payments', requirePerm('payments:read'), guardWrite('payments'), paymentsRouter);
   app.use('/price-lists', requirePerm('invoices:read'), guardWrite('invoices'), priceListsRouter);

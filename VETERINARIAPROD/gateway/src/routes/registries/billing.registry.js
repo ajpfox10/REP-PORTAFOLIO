@@ -30,6 +30,8 @@ function registerBillingRoutes(app, registerVersioned) {
   // Webhook endpoints are public (no JWT) but must be rate-limited to prevent flooding
   registerVersioned(app, 'post', 'payments/mp/webhook', apiLimiter, makeServiceProxy('billing'));
   registerVersioned(app, 'post', 'payments/stripe/webhook', apiLimiter, makeServiceProxy('billing'));
+  registerVersioned(app, 'post', 'subscription/mp/webhook', apiLimiter, makeServiceProxy('billing'));
+  registerVersioned(app, 'use', 'subscription', authMiddleware, requireGatewayPerm('billing:read'), tenantMismatchGuard, tenantLimiter, makeServiceProxy('billing'));
   registerVersioned(app, 'use', 'payments', authMiddleware, requirePaymentsPerm, tenantMismatchGuard, tenantLimiter, makeServiceProxy('billing'));
   registerVersioned(app, 'use', 'price-lists', authMiddleware, requireMethodPerm({ read: 'invoices:read', write: 'invoices:write' }), tenantMismatchGuard, tenantLimiter, makeServiceProxy('billing'));
   registerVersioned(app, 'use', 'inventory', authMiddleware, requireMethodPerm({ read: 'inventory:read', write: 'inventory:write' }), tenantMismatchGuard, tenantLimiter, makeServiceProxy('billing'));

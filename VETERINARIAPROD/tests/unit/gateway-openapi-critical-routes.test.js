@@ -72,8 +72,10 @@ describe('Gateway OpenAPI - critical frontend routes', () => {
     const spec = YAML.load(path.join(__dirname, '../../gateway/docs/openapi.yaml'));
     const schema = spec.paths['/medical-records'].post.requestBody.content['application/json'].schema;
 
-    expect(Array.isArray(schema.oneOf)).toBe(true);
-    expect(schema.oneOf).toEqual(expect.arrayContaining([
+    // anyOf (no oneOf): abrir una HC desde un turno manda appointmentId y patientId
+    // juntos, y ese body cumple ambas variantes.
+    expect(Array.isArray(schema.anyOf)).toBe(true);
+    expect(schema.anyOf).toEqual(expect.arrayContaining([
       expect.objectContaining({
         required: expect.arrayContaining(['appointmentId', 'chiefComplaint']),
       }),
