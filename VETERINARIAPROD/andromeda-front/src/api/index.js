@@ -216,6 +216,21 @@ export const reportsApi = {
     paymentMethods: (p) => http.get('/reports/charts/payment-methods', { params: p }),
   },
   exportRevenue: (d) => http.post('/reports/revenue/export', d, { responseType: 'blob' }),
+  revenueByService: (p) => http.get('/reports/revenue-by-service', { params: p }),
+  topClients: (p) => http.get('/reports/top-clients', { params: p }),
+  newPatients: (p) => http.get('/reports/new-patients', { params: p }),
+  diagnoses: (p) => http.get('/reports/diagnoses', { params: p }),
+  vaccinationCompliance: (p) => http.get('/reports/vaccination-compliance', { params: p }),
+  // type: revenue | appointments | diagnoses · format: excel | pdf | csv
+  exportReport: (type, format, params) => http.post(`/reports/${type}/export`, { format, ...params }, { responseType: 'blob' }),
+  scheduled: {
+    list:   ()         => http.get('/reports/scheduled'),
+    runs:   ()         => http.get('/reports/scheduled/runs'),
+    create: (d)        => http.post('/reports/scheduled', d),
+    update: (id, d)    => http.patch(`/reports/scheduled/${id}`, d),
+    remove: (id)       => http.delete(`/reports/scheduled/${id}`),
+    run:    (id)       => http.post(`/reports/scheduled/${id}/run`, {}),
+  },
 }
 
 export const notificationsApi = {

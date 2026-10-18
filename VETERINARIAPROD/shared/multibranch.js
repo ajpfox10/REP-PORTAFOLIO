@@ -355,13 +355,22 @@ async function consolidatedFinancials (orgId, from, to) {
     ),
   ]);
 
-  // Totales consolidados
-  const totals = revenue.reduce((acc, r) => ({
-    invoices    : acc.invoices    + (r.invoices    || 0),
-    gross       : acc.gross       + (r.gross_revenue || 0),
-    collected   : acc.collected   + (r.collected   || 0),
-    outstanding : acc.outstanding + (r.outstanding || 0),
+  // Totales consolidados. mysql2 devuelve DECIMAL como string: sin Number() la
+  // suma concatenaba ("0" + "27000.00" = "027000.00").
+  const money = (value) => Number(value) || 0;
+  const sums = revenue.reduce((acc, r) => ({
+    invoices    : acc.invoices    + money(r.invoices),
+    gross       : acc.gross       + money(r.gross_revenue),
+    collected   : acc.collected   + money(r.collected),
+    outstanding : acc.outstanding + money(r.outstanding),
   }), { invoices: 0, gross: 0, collected: 0, outstanding: 0 });
+  const round2 = (value) => Math.round(value * 100) / 100;
+  const totals = {
+    invoices: sums.invoices,
+    gross: round2(sums.gross),
+    collected: round2(sums.collected),
+    outstanding: round2(sums.outstanding),
+  };
 
   return { totals, revenueByBranch: revenue, metricsByBranch: branches, topClients };
 }

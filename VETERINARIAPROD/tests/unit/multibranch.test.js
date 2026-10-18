@@ -251,3 +251,23 @@ describe('multibranch — tipos de transferencia', () => {
     expect(TRANSFER_TYPES.includes('loan')).toBe(false);
   });
 });
+
+// ─── consolidatedFinancials ──────────────────────────────────────────────────
+
+describe('multibranch — consolidatedFinancials', () => {
+  beforeEach(resetDbMocks);
+
+  test('suma los importes DECIMAL (strings de mysql2) como números', async () => {
+    db.query
+      .mockResolvedValueOnce([
+        { branch_name: 'Centro', branch_id: 1, invoices: 2, gross_revenue: '27000.00', collected: '20000.50', outstanding: '6999.50' },
+        { branch_name: 'Norte', branch_id: 2, invoices: 1, gross_revenue: '1500.25', collected: '1500.25', outstanding: '0.00' },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const { totals } = await mb.consolidatedFinancials(1, '2026-10-01', '2026-10-31');
+
+    expect(totals).toEqual({ invoices: 3, gross: 28500.25, collected: 21500.75, outstanding: 6999.5 });
+  });
+});

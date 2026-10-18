@@ -41,6 +41,11 @@
   --brand-mark-fg: #FFFFFF;
   --brand-mark-accent: #FBBF24;
 
+  /* Serie única de gráficos (validada: luminosidad, croma y contraste ≥ 3:1) */
+  --chart-series: #008F72;
+  --chart-series-soft: rgba(0, 143, 114, 0.12);
+  --chart-grid: #E6EBEF;
+
   --sidebar-bg: #FFFFFF;
   --sidebar-active: #E3F4F0;
   --overlay: rgba(15, 23, 42, 0.45);
@@ -87,6 +92,9 @@
     --info-light: rgba(96, 165, 250, 0.14);
     --brand-mark-bg: #2BB59C;
     --brand-mark-fg: #04211C;
+    --chart-series: #1FA88E;
+    --chart-series-soft: rgba(31, 168, 142, 0.16);
+    --chart-grid: #22313B;
     --sidebar-bg: #0E171C;
     --sidebar-active: rgba(43, 181, 156, 0.14);
     --overlay: rgba(0, 0, 0, 0.6);
@@ -123,6 +131,9 @@
   --info-light: rgba(96, 165, 250, 0.14);
   --brand-mark-bg: #2BB59C;
   --brand-mark-fg: #04211C;
+  --chart-series: #1FA88E;
+  --chart-series-soft: rgba(31, 168, 142, 0.16);
+  --chart-grid: #22313B;
   --sidebar-bg: #0E171C;
   --sidebar-active: rgba(43, 181, 156, 0.14);
   --overlay: rgba(0, 0, 0, 0.6);

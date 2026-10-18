@@ -1,408 +1,687 @@
 <template>
-  <div class="page">
+  <div class="page reports">
     <div class="page-header">
       <div class="page-header__left">
         <span class="page-icon" aria-hidden="true"><AppIcon name="reports" :size="22" /></span>
         <div>
-          <h2 class="page-title">{{ t('reports.title') }}</h2>
-          <p class="page-sub">{{ t('reports.subtitle') }}</p>
+          <h2 class="page-title">Reportes</h2>
+          <p class="page-sub">Ingresos, atención y pacientes de tu clínica.</p>
         </div>
       </div>
 
-      <BaseButton type="button" @click="exportReport">
-        {{ t('reports.export') }}
-      </BaseButton>
-    </div>
-
-    <div class="period-bar" aria-label="report-period-controls">
-      <span class="period-label">{{ t('reports.periodLabel') }}</span>
-      <BaseButton
-        v-for="p in PERIODS"
-        :key="p.value"
-        type="button"
-        variant="ghost"
-        size="sm"
-        class="period-btn"
-        :class="{ 'period-btn--active': period === p.value }"
-        :aria-pressed="period === p.value"
-        @click="setPeriod(p.value)"
-      >
-        {{ p.label }}
-      </BaseButton>
-      <div class="period-custom">
-        <label for="rep-date-from" class="sr-only">{{ t('reports.dateFrom') }}</label>
-        <input id="rep-date-from" name="rep-date-from" v-model="dateFrom" type="date" class="filter-input" @change="load()" />
-        <span aria-hidden="true">{{ t('common.rangeSeparator') }}</span>
-        <label for="rep-date-to" class="sr-only">{{ t('reports.dateTo') }}</label>
-        <input id="rep-date-to" name="rep-date-to" v-model="dateTo" type="date" class="filter-input" @change="load()" />
+      <div ref="exportRef" class="export">
+        <button type="button" class="btn-primary" :aria-expanded="exportOpen" aria-haspopup="menu" :disabled="exporting" @click="exportOpen = !exportOpen">
+          <AppIcon name="download" :size="16" /> {{ exporting ? 'Exportando…' : 'Exportar' }}
+        </button>
+        <div v-if="exportOpen" class="export__menu" role="menu">
+          <div v-for="report in EXPORTABLE" :key="report.type" class="export__group">
+            <span class="export__title">{{ report.label }}</span>
+            <div class="export__formats">
+              <button v-for="format in report.formats" :key="format" type="button" role="menuitem" @click="exportReport(report.type, format)">
+                {{ FORMAT_LABELS[format] }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div v-if="loading" class="loading-state" role="status">
-      <span class="spin spin--dark" />
-      {{ t('reports.loading') }}
+    <!-- Período: un solo control arriba de todos los gráficos -->
+    <div class="toolbar" role="group" aria-label="Período del reporte">
+      <div class="segmented">
+        <button v-for="p in PERIODS" :key="p.value" type="button" :aria-pressed="period === p.value" @click="setPeriod(p.value)">
+          {{ p.label }}
+        </button>
+      </div>
+      <div class="toolbar__dates">
+        <label class="sr-only" for="rep-from">Desde</label>
+        <input id="rep-from" v-model="from" type="date" :max="to" @change="customRange" />
+        <span aria-hidden="true">—</span>
+        <label class="sr-only" for="rep-to">Hasta</label>
+        <input id="rep-to" v-model="to" type="date" :min="from" @change="customRange" />
+      </div>
     </div>
-    <div v-else-if="error" class="alert alert--error" role="alert">{{ error }}</div>
 
-    <template v-else>
-      <div class="kpi-grid">
-        <div class="kpi-card" style="--bc:#D6F3EC;--tc:#1A9E7F;">
-          <div class="kpi-card__icon" aria-hidden="true">{{ t('reports.kpiPatientsIcon') }}</div>
-          <div>
-            <strong>{{ data.totalPatients ?? '—' }}</strong>
-            <span>{{ t('reports.totalPatients') }}</span>
-          </div>
-        </div>
-        <div class="kpi-card" style="--bc:#D6EEFF;--tc:#1A5FAA;">
-          <div class="kpi-card__icon" aria-hidden="true">{{ t('reports.kpiAppointmentsIcon') }}</div>
-          <div>
-            <strong>{{ data.totalAppointments ?? '—' }}</strong>
-            <span>{{ t('reports.totalAppointments') }}</span>
-          </div>
-        </div>
-        <div class="kpi-card" style="--bc:#FFF3CC;--tc:#8A6200;">
-          <div class="kpi-card__icon" aria-hidden="true">{{ t('reports.kpiVaccinesIcon') }}</div>
-          <div>
-            <strong>{{ data.totalVaccinations ?? '—' }}</strong>
-            <span>{{ t('reports.totalVaccinations') }}</span>
-          </div>
-        </div>
-        <div class="kpi-card" style="--bc:#FFE4D6;--tc:#c0392b;">
-          <div class="kpi-card__icon" aria-hidden="true">{{ t('reports.kpiGroomingIcon') }}</div>
-          <div>
-            <strong>{{ data.totalGrooming ?? '—' }}</strong>
-            <span>{{ t('reports.totalGrooming') }}</span>
-          </div>
-        </div>
-        <div class="kpi-card" style="--bc:#EEE0FF;--tc:#7A3DAA;">
-          <div class="kpi-card__icon" aria-hidden="true">{{ t('reports.kpiTelemedicineIcon') }}</div>
-          <div>
-            <strong>{{ data.totalTelemedicine ?? '—' }}</strong>
-            <span>{{ t('reports.totalTelemedicine') }}</span>
-          </div>
-        </div>
-        <div class="kpi-card" style="--bc:#E0FFE8;--tc:#2E8B57;">
-          <div class="kpi-card__icon" aria-hidden="true">{{ t('reports.kpiRevenueIcon') }}</div>
-          <div>
-            <strong>${{ formatMoney(data.totalRevenue) }}</strong>
-            <span>{{ t('reports.totalRevenue') }}</span>
-          </div>
-        </div>
+    <nav class="report-tabs" aria-label="Secciones de reportes">
+      <button v-for="tab in TABS" :key="tab.key" type="button" class="tab" :class="{ 'tab--active': activeTab === tab.key }"
+        :aria-current="activeTab === tab.key ? 'page' : undefined" @click="activeTab = tab.key">
+        <AppIcon :name="tab.icon" :size="16" /> {{ tab.label }}
+      </button>
+    </nav>
+
+    <div v-if="error" class="alert alert--error" role="alert">{{ error }}</div>
+
+    <!-- ── Resumen ───────────────────────────────────────────────────────── -->
+    <section v-if="activeTab === 'summary'" class="grid">
+      <div class="tiles">
+        <article v-for="tile in summaryTiles" :key="tile.label" class="tile">
+          <span class="tile__label">{{ tile.label }}</span>
+          <strong class="tile__value">{{ loading ? '…' : tile.value }}</strong>
+          <span v-if="tile.hint" class="tile__hint">{{ tile.hint }}</span>
+        </article>
       </div>
 
-      <div class="section-grid">
-        <section class="report-section" aria-labelledby="report-status-title">
-          <h3 id="report-status-title" class="section-title">{{ t('reports.appointmentsByStatus') }}</h3>
-          <div class="bar-chart">
-            <div v-for="(count, status) in data.appointmentsByStatus" :key="status" class="bar-row">
-              <span class="bar-label">{{ STATUS_LABELS[status] || status }}</span>
-              <div class="bar-track">
-                <div class="bar-fill" :style="{ width: barWidth(count, maxApptStatus) + '%', background: statusColor(status) }" />
-              </div>
-              <span class="bar-count">{{ count }}</span>
-            </div>
+      <article class="card card--wide">
+        <header class="card__head">
+          <div>
+            <h3>Facturación por período</h3>
+            <p>Ingreso bruto facturado · {{ periodLabel }}</p>
           </div>
-        </section>
+          <button type="button" class="link-button" @click="showTable.revenue = !showTable.revenue">
+            {{ showTable.revenue ? 'Ver gráfico' : 'Ver tabla' }}
+          </button>
+        </header>
+        <ColumnChart v-if="!showTable.revenue" :items="revenueSeries" :format="money" aria-label="Facturación por período" />
+        <DataTable v-else :columns="REVENUE_COLUMNS" :rows="revenueRows" />
+      </article>
 
-        <section class="report-section" aria-labelledby="report-species-title">
-          <h3 id="report-species-title" class="section-title">{{ t('reports.patientsBySpecies') }}</h3>
-          <div class="species-list">
-            <div v-for="(count, species) in data.patientsBySpecies" :key="species" class="species-row">
-              <span class="species-emoji" aria-hidden="true"><SpeciesIcon :species="species" /></span>
-              <span class="species-name">{{ speciesLabel(species) }}</span>
-              <div class="species-bar-track">
-                <div class="species-bar" :style="{ width: barWidth(count, maxSpecies) + '%' }" />
-              </div>
-              <span class="species-count">{{ count }}</span>
-            </div>
-          </div>
-        </section>
+      <article class="card">
+        <header class="card__head"><div><h3>Pacientes por especie</h3><p>Pacientes activos</p></div></header>
+        <BarList :items="speciesItems" />
+      </article>
+
+      <article class="card">
+        <header class="card__head"><div><h3>Medios de pago</h3><p>Monto cobrado en el período</p></div></header>
+        <BarList :items="paymentItems" :format="money" />
+      </article>
+    </section>
+
+    <!-- ── Finanzas ──────────────────────────────────────────────────────── -->
+    <section v-else-if="activeTab === 'finance'" class="grid">
+      <div class="tiles">
+        <article v-for="tile in financeTiles" :key="tile.label" class="tile">
+          <span class="tile__label">{{ tile.label }}</span>
+          <strong class="tile__value">{{ loading ? '…' : tile.value }}</strong>
+        </article>
       </div>
 
-      <section v-if="data.topDiagnoses?.length" class="report-section" aria-labelledby="report-diagnoses-title">
-        <h3 id="report-diagnoses-title" class="section-title">{{ t('reports.topDiagnoses') }}</h3>
-        <div class="top-list">
-          <div v-for="(d, idx) in data.topDiagnoses" :key="idx" class="top-item">
-            <span class="top-rank">{{ idx + 1 }}</span>
-            <span class="top-name">{{ d.diagnosis }}</span>
-            <div class="top-bar-track">
-              <div class="top-bar" :style="{ width: barWidth(d.count, data.topDiagnoses[0]?.count) + '%' }" />
-            </div>
-            <span class="top-count">{{ t('reports.casesCount', { count: d.count }) }}</span>
+      <article class="card card--wide">
+        <header class="card__head">
+          <div><h3>Detalle de facturación</h3><p>Agrupado por {{ GROUP_LABELS[groupBy] }}</p></div>
+          <div class="segmented segmented--sm">
+            <button v-for="g in ['day', 'week', 'month']" :key="g" type="button" :aria-pressed="groupBy === g" @click="setGroupBy(g)">
+              {{ GROUP_LABELS[g] }}
+            </button>
           </div>
-        </div>
-      </section>
+        </header>
+        <DataTable :columns="REVENUE_COLUMNS" :rows="revenueRows" />
+      </article>
 
-      <section v-if="data.topVaccines?.length" class="report-section" aria-labelledby="report-vaccines-title">
-        <h3 id="report-vaccines-title" class="section-title">{{ t('reports.topVaccines') }}</h3>
-        <div class="vaccine-chips">
-          <div v-for="(v, idx) in data.topVaccines" :key="idx" class="vaccine-chip">
-            <span class="vaccine-rank">{{ idx + 1 }}°</span>
-            <span class="vaccine-name">{{ v.vaccine_name }}</span>
-            <span class="vaccine-count">{{ v.count }}</span>
-          </div>
-        </div>
-      </section>
+      <article class="card">
+        <header class="card__head"><div><h3>Ingresos por rubro</h3><p>Según la categoría de cada ítem facturado</p></div></header>
+        <BarList :items="serviceItems" :format="money" />
+      </article>
 
-      <section v-if="data.revenueByMonth?.length" class="report-section" aria-labelledby="report-revenue-title">
-        <h3 id="report-revenue-title" class="section-title">{{ t('reports.revenueByMonth') }}</h3>
-        <div class="revenue-chart">
-          <div v-for="m in data.revenueByMonth" :key="m.month" class="rev-col">
-            <div class="rev-bar-wrap">
-              <div class="rev-bar" :style="{ height: barWidth(m.total, maxRevenue) + '%' }" />
-            </div>
-            <span class="rev-label">${{ formatMoneyShort(m.total) }}</span>
-            <span class="rev-month">{{ formatMonth(m.month) }}</span>
-          </div>
-        </div>
-      </section>
+      <article class="card">
+        <header class="card__head"><div><h3>Mejores clientes</h3><p>Por monto facturado</p></div></header>
+        <DataTable :columns="CLIENT_COLUMNS" :rows="topClients" />
+      </article>
+    </section>
 
-      <div v-if="!hasData" class="empty-state">
-        <span class="empty-state__emoji" aria-hidden="true">{{ t('reports.emoji') }}</span>
-        <p>{{ t('reports.emptyState') }}</p>
+    <!-- ── Atención clínica ─────────────────────────────────────────────── -->
+    <section v-else-if="activeTab === 'clinical'" class="grid">
+      <div class="tiles">
+        <article v-for="tile in clinicalTiles" :key="tile.label" class="tile">
+          <span class="tile__label">{{ tile.label }}</span>
+          <strong class="tile__value">{{ loading ? '…' : tile.value }}</strong>
+          <span v-if="tile.hint" class="tile__hint">{{ tile.hint }}</span>
+        </article>
       </div>
-    </template>
+
+      <article class="card">
+        <header class="card__head"><div><h3>Turnos por tipo</h3><p>{{ periodLabel }}</p></div></header>
+        <BarList :items="appointmentTypeItems" />
+      </article>
+
+      <article class="card">
+        <header class="card__head"><div><h3>Diagnósticos más frecuentes</h3><p>Diagnóstico principal de cada consulta</p></div></header>
+        <BarList :items="diagnosisItems" />
+      </article>
+
+      <article class="card card--wide">
+        <header class="card__head"><div><h3>Pacientes nuevos</h3><p>Altas por período y especie</p></div></header>
+        <DataTable :columns="NEW_PATIENT_COLUMNS" :rows="newPatientRows" />
+      </article>
+    </section>
+
+    <!-- ── Programados ──────────────────────────────────────────────────── -->
+    <section v-else class="grid">
+      <article class="card card--wide">
+        <header class="card__head">
+          <div><h3>Envíos programados</h3><p>Reportes que llegan solos por email</p></div>
+          <button type="button" class="btn-primary" @click="openScheduleForm()"><AppIcon name="plus" :size="16" /> Nuevo envío</button>
+        </header>
+
+        <p v-if="!scheduled.length" class="empty-text">Todavía no programaste envíos. Por ejemplo: ingresos del mes, todos los lunes a las 7 h, para el equipo de administración.</p>
+        <ul v-else class="schedule-list">
+          <li v-for="item in scheduled" :key="item.id" class="schedule">
+            <div class="schedule__info">
+              <strong>{{ item.name }}</strong>
+              <span>{{ REPORT_LABELS[item.report_type] || item.report_type }} · {{ frequencyLabel(item) }} · {{ FORMAT_LABELS[item.format] || item.format }}</span>
+              <span class="schedule__meta">Para {{ recipientsLabel(item.recipients) }} · Próximo envío {{ formatDateTime(item.next_run_at) }}</span>
+            </div>
+            <span class="badge" :class="item.is_active === 0 ? 'badge--muted' : 'badge--ok'">{{ item.is_active === 0 ? 'Pausado' : 'Activo' }}</span>
+            <div class="schedule__actions">
+              <button type="button" class="icon-btn" title="Enviar ahora" aria-label="Enviar ahora" @click="runNow(item)"><AppIcon name="send" :size="16" /></button>
+              <button type="button" class="icon-btn" :title="item.is_active === 0 ? 'Reanudar' : 'Pausar'" :aria-label="item.is_active === 0 ? 'Reanudar' : 'Pausar'" @click="toggleActive(item)">
+                <AppIcon :name="item.is_active === 0 ? 'refresh' : 'clock'" :size="16" />
+              </button>
+              <button type="button" class="icon-btn icon-btn--danger" title="Eliminar" aria-label="Eliminar" @click="removeSchedule(item)"><AppIcon name="trash" :size="16" /></button>
+            </div>
+          </li>
+        </ul>
+      </article>
+
+      <article v-if="runs.length" class="card card--wide">
+        <header class="card__head"><div><h3>Últimos envíos</h3></div></header>
+        <DataTable :columns="RUN_COLUMNS" :rows="runs" />
+      </article>
+    </section>
+
+    <!-- Formulario de envío programado -->
+    <div v-if="scheduleForm.open" class="modal-backdrop" @click.self="scheduleForm.open = false">
+      <form class="modal" role="dialog" aria-modal="true" aria-labelledby="schedule-title" @submit.prevent="saveSchedule">
+        <div class="modal__header">
+          <h3 id="schedule-title">Nuevo envío programado</h3>
+          <button type="button" class="modal__close" aria-label="Cerrar" @click="scheduleForm.open = false"><AppIcon name="close" :size="18" /></button>
+        </div>
+        <div class="form-body">
+          <div class="field">
+            <label for="sf-name">Nombre</label>
+            <input id="sf-name" v-model.trim="scheduleForm.name" required maxlength="120" placeholder="Ingresos semanales" />
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="sf-type">Reporte</label>
+              <select id="sf-type" v-model="scheduleForm.reportType">
+                <option v-for="report in EXPORTABLE" :key="report.type" :value="report.type">{{ report.label }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="sf-format">Formato</label>
+              <select id="sf-format" v-model="scheduleForm.format">
+                <option v-for="format in formatsFor(scheduleForm.reportType)" :key="format" :value="format">{{ FORMAT_LABELS[format] }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="sf-frequency">Frecuencia</label>
+              <select id="sf-frequency" v-model="scheduleForm.frequency">
+                <option value="daily">Todos los días</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensual</option>
+              </select>
+            </div>
+            <div v-if="scheduleForm.frequency === 'weekly'" class="field">
+              <label for="sf-dow">Día</label>
+              <select id="sf-dow" v-model.number="scheduleForm.dayOfWeek">
+                <option v-for="(day, index) in WEEKDAYS" :key="day" :value="index">{{ day }}</option>
+              </select>
+            </div>
+            <div v-if="scheduleForm.frequency === 'monthly'" class="field">
+              <label for="sf-dom">Día del mes</label>
+              <input id="sf-dom" v-model.number="scheduleForm.dayOfMonth" type="number" min="1" max="28" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="sf-recipients">Destinatarios</label>
+            <input id="sf-recipients" v-model="scheduleForm.recipients" required placeholder="admin@clinica.com, contador@clinica.com" />
+            <span class="hint">Separá los emails con comas. Se envía a las 7 h.</span>
+          </div>
+          <p v-if="scheduleForm.error" class="field-error">{{ scheduleForm.error }}</p>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn-ghost" @click="scheduleForm.open = false">Cancelar</button>
+          <button type="submit" class="btn-primary" :disabled="scheduleForm.saving">{{ scheduleForm.saving ? 'Guardando…' : 'Programar envío' }}</button>
+        </div>
+      </form>
+    </div>
   </div>
 </template>
 
 <script setup>
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
-import SpeciesIcon from '../components/SpeciesIcon.vue'
-import { computed, onMounted, ref } from 'vue'
-import { appointmentsApi, patientsApi, reportsApi } from '../api'
-import BaseButton from '../components/base/BaseButton.vue'
-import { t } from '../i18n'
-import { extractDetailedErrorMessage, logError } from '../utils/errors'
+import ColumnChart from '../components/charts/ColumnChart.vue'
+import BarList from '../components/charts/BarList.vue'
+import DataTable from '../components/charts/DataTable.vue'
+import { reportsApi } from '../api'
 import { useUiFeedback } from '../composables/useUiFeedback'
+import { extractDetailedErrorMessage, logError } from '../utils/errors'
 
-const { notifyError, success } = useUiFeedback()
-
-const loading = ref(false)
-const error = ref('')
-const period = ref('month')
-const dateFrom = ref('')
-const dateTo = ref('')
-
-const data = ref({
-  totalPatients: null,
-  totalAppointments: null,
-  totalVaccinations: null,
-  totalGrooming: null,
-  totalTelemedicine: null,
-  totalRevenue: 0,
-  appointmentsByStatus: {},
-  patientsBySpecies: {},
-  topDiagnoses: [],
-  topVaccines: [],
-  revenueByMonth: [],
-})
-
+const TABS = [
+  { key: 'summary', label: 'Resumen', icon: 'dashboard' },
+  { key: 'finance', label: 'Finanzas', icon: 'billing' },
+  { key: 'clinical', label: 'Atención clínica', icon: 'vet' },
+  { key: 'scheduled', label: 'Envíos programados', icon: 'send' },
+]
 const PERIODS = [
-  { value: 'today', label: t('reports.periodToday') },
-  { value: 'week', label: t('reports.periodWeek') },
-  { value: 'month', label: t('reports.periodMonth') },
-  { value: 'year', label: t('reports.periodYear') },
+  { value: 'week', label: '7 días' },
+  { value: 'month', label: 'Este mes' },
+  { value: 'lastMonth', label: 'Mes anterior' },
+  { value: 'quarter', label: '90 días' },
+  { value: 'year', label: 'Este año' },
+]
+const EXPORTABLE = [
+  { type: 'revenue', label: 'Facturación', formats: ['excel', 'pdf', 'csv'] },
+  { type: 'appointments', label: 'Turnos', formats: ['excel', 'pdf', 'csv'] },
+  { type: 'diagnoses', label: 'Diagnósticos', formats: ['excel', 'pdf', 'csv'] },
+]
+const REPORT_LABELS = { revenue: 'Facturación', appointments: 'Turnos', diagnoses: 'Diagnósticos' }
+const FORMAT_LABELS = { excel: 'Excel', pdf: 'PDF', csv: 'CSV' }
+const GROUP_LABELS = { day: 'día', week: 'semana', month: 'mes' }
+const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const PAYMENT_LABELS = { cash: 'Efectivo', card: 'Tarjeta', credit_card: 'Tarjeta de crédito', debit_card: 'Tarjeta de débito',
+  transfer: 'Transferencia', bank_transfer: 'Transferencia', mercadopago: 'MercadoPago', check: 'Cheque', other: 'Otro' }
+const APPOINTMENT_TYPE_FALLBACK = 'Sin tipo'
+
+const REVENUE_COLUMNS = [
+  { key: 'period', label: 'Período' },
+  { key: 'invoices', label: 'Facturas', align: 'right' },
+  { key: 'gross_revenue', label: 'Bruto', align: 'right', money: true },
+  { key: 'discounts', label: 'Descuentos', align: 'right', money: true },
+  { key: 'net_revenue', label: 'Neto', align: 'right', money: true },
+  { key: 'collected', label: 'Cobrado', align: 'right', money: true },
+  { key: 'outstanding', label: 'Pendiente', align: 'right', money: true },
+]
+const CLIENT_COLUMNS = [
+  { key: 'client_name', label: 'Cliente' },
+  { key: 'total_patients', label: 'Mascotas', align: 'right' },
+  { key: 'total_invoices', label: 'Facturas', align: 'right' },
+  { key: 'total_spent', label: 'Facturado', align: 'right', money: true },
+]
+const NEW_PATIENT_COLUMNS = [
+  { key: 'period', label: 'Período' },
+  { key: 'species', label: 'Especie' },
+  { key: 'species_count', label: 'Pacientes nuevos', align: 'right' },
+]
+const RUN_COLUMNS = [
+  { key: 'scheduled_name', label: 'Envío' },
+  { key: 'status_label', label: 'Estado' },
+  { key: 'created_label', label: 'Fecha' },
 ]
 
-const STATUS_LABELS = {
-  scheduled: t('reports.statusScheduled'),
-  confirmed: t('reports.statusConfirmed'),
-  in_progress: t('reports.statusInProgress'),
-  completed: t('reports.statusCompleted'),
-  cancelled: t('reports.statusCancelled'),
-  no_show: t('reports.statusNoShow'),
+const { success, notifyError, confirm } = useUiFeedback()
+
+const activeTab = ref('summary')
+const period = ref('month')
+const from = ref('')
+const to = ref('')
+const groupBy = ref('day')
+const loading = ref(false)
+const error = ref('')
+const exportOpen = ref(false)
+const exporting = ref(false)
+const exportRef = ref(null)
+const showTable = reactive({ revenue: false })
+
+const kpis = ref({})
+const revenue = ref([])
+const species = ref({ labels: [], values: [], percents: [] })
+const payments = ref({ labels: [], values: [], percents: [] })
+const services = ref([])
+const topClients = ref([])
+const appointments = ref({ summary: {}, byType: [] })
+const diagnoses = ref([])
+const newPatients = ref([])
+const compliance = ref({})
+const scheduled = ref([])
+const runs = ref([])
+
+const scheduleForm = reactive({
+  open: false, saving: false, error: '', name: '', reportType: 'revenue', format: 'excel',
+  frequency: 'weekly', dayOfWeek: 1, dayOfMonth: 1, recipients: '',
+})
+
+// ── Período ─────────────────────────────────────────────────────────────────
+function dateKey(date) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-const maxApptStatus = computed(() => Math.max(1, ...Object.values(data.value.appointmentsByStatus || {})))
-const maxSpecies = computed(() => Math.max(1, ...Object.values(data.value.patientsBySpecies || {})))
-const maxRevenue = computed(() => Math.max(1, ...(data.value.revenueByMonth || []).map((m) => m.total)))
-const hasData = computed(() => data.value.totalPatients !== null || Object.keys(data.value.appointmentsByStatus || {}).length > 0)
-
-function barWidth(val, max) {
-  return max ? Math.round((val / max) * 100) : 0
-}
-
-
-function speciesLabel(species) {
-  const map = {
-    dog: t('reports.speciesDog'),
-    cat: t('reports.speciesCat'),
-    rabbit: t('reports.speciesRabbit'),
-    bird: t('reports.speciesBird'),
-    fish: t('reports.speciesFish'),
-    reptile: t('reports.speciesReptile'),
-    hamster: t('reports.speciesHamster'),
+function rangeFor(value) {
+  const now = new Date()
+  const start = new Date(now)
+  let end = new Date(now)
+  if (value === 'week') start.setDate(now.getDate() - 6)
+  if (value === 'month') start.setDate(1)
+  if (value === 'lastMonth') {
+    start.setMonth(now.getMonth() - 1, 1)
+    end = new Date(now.getFullYear(), now.getMonth(), 0)
   }
-  return map[species] || species
-}
-
-function statusColor(status) {
-  const map = {
-    scheduled: '#90D5F0',
-    confirmed: '#06D6A0',
-    in_progress: '#FFB703',
-    completed: '#1A9E7F',
-    cancelled: '#EF5350',
-    no_show: '#C8E8DC',
-  }
-  return map[status] || 'var(--primary)'
-}
-
-function formatMoney(value) {
-  return parseFloat(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
-}
-
-function formatMoneyShort(value) {
-  const numeric = parseFloat(value || 0)
-  if (numeric >= 1000000) return `${(numeric / 1000000).toFixed(1)}M`
-  if (numeric >= 1000) return `${(numeric / 1000).toFixed(1)}K`
-  return numeric.toFixed(0)
-}
-
-function formatMonth(month) {
-  if (!month) return ''
-  const date = new Date(`${month}-01`)
-  return date.toLocaleDateString('es-AR', { month: 'short' })
+  if (value === 'quarter') start.setDate(now.getDate() - 89)
+  if (value === 'year') start.setMonth(0, 1)
+  return { from: dateKey(start), to: dateKey(end) }
 }
 
 function setPeriod(value) {
   period.value = value
-  const now = new Date()
-  const today = now.toISOString().split('T')[0]
-
-  if (value === 'today') {
-    dateFrom.value = today
-    dateTo.value = today
-  } else if (value === 'week') {
-    const monday = new Date(now)
-    monday.setDate(now.getDate() - now.getDay() + 1)
-    dateFrom.value = monday.toISOString().split('T')[0]
-    dateTo.value = today
-  } else if (value === 'month') {
-    dateFrom.value = `${today.slice(0, 7)}-01`
-    dateTo.value = today
-  } else if (value === 'year') {
-    dateFrom.value = `${today.slice(0, 4)}-01-01`
-    dateTo.value = today
-  }
-
+  const range = rangeFor(value)
+  from.value = range.from
+  to.value = range.to
+  groupBy.value = value === 'year' || value === 'quarter' ? 'month' : 'day'
   load()
 }
 
-function validateDateRange() {
-  if (!dateFrom.value || !dateTo.value) return true // usa defaults
-  const from = new Date(dateFrom.value)
-  const to = new Date(dateTo.value)
-  if (to < from) {
-    error.value = 'La fecha de inicio debe ser anterior a la fecha de fin'
-    return false
+function customRange() {
+  if (!from.value || !to.value || from.value > to.value) return
+  period.value = 'custom'
+  load()
+}
+
+function setGroupBy(value) {
+  groupBy.value = value
+  loadRevenue()
+}
+
+const periodLabel = computed(() => (period.value === 'custom'
+  ? `${formatDate(from.value)} al ${formatDate(to.value)}`
+  : PERIODS.find((p) => p.value === period.value)?.label || ''))
+
+// ── Formato ─────────────────────────────────────────────────────────────────
+function money(value) {
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value) || 0)
+}
+
+function number(value) {
+  return new Intl.NumberFormat('es-AR').format(Number(value) || 0)
+}
+
+function percent(value) {
+  return `${Math.round((Number(value) || 0) * 10) / 10}%`
+}
+
+function formatDate(value) {
+  if (!value) return '—'
+  const [y, m, d] = String(value).slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function shortPeriod(value) {
+  const text = String(value || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text.slice(8, 10)}/${text.slice(5, 7)}`
+  if (/^\d{4}-\d{2}$/.test(text)) {
+    return new Date(`${text}-01T12:00:00`).toLocaleDateString('es-AR', { month: 'short' })
   }
-  const diffDays = (to - from) / (1000 * 60 * 60 * 24)
-  if (diffDays > 730) {
-    error.value = 'El rango máximo de consulta es de 2 años'
-    return false
+  return text
+}
+
+// ── Datos derivados ─────────────────────────────────────────────────────────
+const summaryTiles = computed(() => {
+  const k = kpis.value
+  const total = Number(k.totalAppointments) || 0
+  return [
+    { label: 'Facturado', value: money(k.grossRevenue), hint: `${number(k.totalInvoices)} facturas` },
+    { label: 'Cobrado', value: money(k.collectedRevenue), hint: `Pendiente ${money(k.outstandingRevenue)}` },
+    { label: 'Turnos', value: number(total), hint: total ? `${percent((Number(k.completedAppointments) / total) * 100)} atendidos` : 'Sin turnos en el período' },
+    { label: 'Pacientes nuevos', value: number(k.newPatients), hint: `${number(k.totalPatients)} activos en total` },
+  ]
+})
+
+const financeTiles = computed(() => {
+  const totals = revenue.value.reduce((acc, row) => ({
+    gross: acc.gross + Number(row.gross_revenue || 0),
+    discounts: acc.discounts + Number(row.discounts || 0),
+    collected: acc.collected + Number(row.collected || 0),
+    outstanding: acc.outstanding + Number(row.outstanding || 0),
+  }), { gross: 0, discounts: 0, collected: 0, outstanding: 0 })
+  return [
+    { label: 'Facturado bruto', value: money(totals.gross) },
+    { label: 'Descuentos', value: money(totals.discounts) },
+    { label: 'Cobrado', value: money(totals.collected) },
+    { label: 'Por cobrar', value: money(totals.outstanding) },
+  ]
+})
+
+const clinicalTiles = computed(() => {
+  const s = appointments.value.summary || {}
+  const c = compliance.value || {}
+  return [
+    { label: 'Turnos atendidos', value: number(s.completed), hint: `de ${number(s.total_scheduled)} agendados` },
+    { label: 'Ausentismo', value: percent(s.no_show_rate), hint: `${number(s.no_show)} pacientes no vinieron` },
+    { label: 'Duración promedio', value: s.avg_duration_minutes ? `${Math.round(Number(s.avg_duration_minutes))} min` : '—' },
+    { label: 'Vacunación al día', value: percent(c.compliance_rate), hint: `${number(c.vaccinated_last_year)} de ${number(c.total_active_patients)} pacientes` },
+  ]
+})
+
+const revenueRows = computed(() => revenue.value.map((row) => ({ ...row, period: shortPeriodLong(row.period) })))
+
+function shortPeriodLong(value) {
+  const text = String(value || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return formatDate(text)
+  if (/^\d{4}-\d{2}$/.test(text)) {
+    const label = new Date(`${text}-01T12:00:00`).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+    return label.charAt(0).toUpperCase() + label.slice(1)
   }
-  return true
+  return text
+}
+
+const newPatientRows = computed(() => newPatients.value.map((row) => ({ ...row, period: shortPeriodLong(row.period) })))
+
+const revenueSeries = computed(() => revenue.value.map((row) => ({
+  label: shortPeriodLong(row.period),
+  short: shortPeriod(row.period),
+  value: Number(row.gross_revenue) || 0,
+})))
+
+function zip(chart, labelMap = {}) {
+  return (chart.labels || []).map((label, index) => ({
+    label: labelMap[label] || label,
+    value: Number(chart.values?.[index]) || 0,
+    pct: chart.percents?.[index] ?? null,
+  }))
+}
+
+const speciesItems = computed(() => zip(species.value))
+const paymentItems = computed(() => zip(payments.value, PAYMENT_LABELS))
+const serviceItems = computed(() => services.value.map((row) => ({ label: row.category || 'Sin rubro', value: row.revenue, pct: row.pct })))
+const appointmentTypeItems = computed(() => (appointments.value.byType || []).map((row) => ({
+  label: row.type || row.appointment_type || APPOINTMENT_TYPE_FALLBACK,
+  value: row.count ?? row.total ?? 0,
+  pct: row.pct ?? null,
+})))
+const diagnosisItems = computed(() => diagnoses.value.map((row) => ({ label: row.diagnosis_name, value: row.frequency, pct: row.pct })))
+
+// ── Carga ───────────────────────────────────────────────────────────────────
+function unwrap(res) {
+  return res?.data?.data ?? res?.data
+}
+
+async function loadRevenue() {
+  try {
+    revenue.value = unwrap(await reportsApi.revenue({ from: from.value, to: to.value, groupBy: groupBy.value })) || []
+  } catch (err) {
+    logError('reports.revenue', err)
+  }
 }
 
 async function load() {
-  if (!validateDateRange()) return
   loading.value = true
   error.value = ''
-  const from = dateFrom.value
-  const to = dateTo.value
+  const params = { from: from.value, to: to.value }
+  const results = await Promise.allSettled([
+    reportsApi.kpis(params),
+    reportsApi.revenue({ ...params, groupBy: groupBy.value }),
+    reportsApi.charts.speciesDistribution(params),
+    reportsApi.charts.paymentMethods(params),
+    reportsApi.revenueByService(params),
+    reportsApi.topClients({ ...params, limit: 10 }),
+    reportsApi.appointments(params),
+    reportsApi.diagnoses({ ...params, limit: 10 }),
+    reportsApi.newPatients(params),
+    reportsApi.vaccinationCompliance(params),
+  ])
+  const [k, rev, sp, pay, svc, clients, appts, diag, newPts, comp] = results
+  const value = (r, fallback) => (r.status === 'fulfilled' ? (unwrap(r.value) ?? fallback) : fallback)
+  kpis.value = value(k, {})
+  revenue.value = value(rev, [])
+  species.value = value(sp, { labels: [] })
+  payments.value = value(pay, { labels: [] })
+  services.value = value(svc, [])
+  topClients.value = value(clients, [])
+  appointments.value = value(appts, { summary: {}, byType: [] })
+  diagnoses.value = value(diag, [])
+  newPatients.value = value(newPts, [])
+  compliance.value = value(comp, {})
 
+  const failed = results.filter((r) => r.status === 'rejected')
+  if (failed.length === results.length) {
+    error.value = extractDetailedErrorMessage(failed[0].reason, 'No pudimos cargar los reportes.', { context: 'Reportes' })
+  } else {
+    failed.forEach((r) => logError('reports.load', r.reason))
+  }
+  loading.value = false
+}
+
+async function loadScheduled() {
   try {
-    const [appts, patients, revenue, apptReport] = await Promise.allSettled([
-      appointmentsApi.list({ limit: 1 }),
-      patientsApi.list({ limit: 1 }),
-      reportsApi.revenue({ from, to }),
-      reportsApi.appointments({ from, to }),
-    ])
-
-    const apptMeta = appts.status === 'fulfilled' ? appts.value.data?.meta : null
-    const patientMeta = patients.status === 'fulfilled' ? patients.value.data?.meta : null
-    const revenueRows = revenue.status === 'fulfilled' ? (revenue.value.data?.data || revenue.value.data || []) : []
-    const apptData = apptReport.status === 'fulfilled' ? (apptReport.value.data?.data || apptReport.value.data || {}) : {}
-
-    const totalRevenue = Array.isArray(revenueRows)
-      ? revenueRows.reduce((sum, row) => sum + parseFloat(row.gross_revenue || row.total_amount || 0), 0)
-      : 0
-
-    data.value = {
-      totalPatients: patientMeta?.total ?? null,
-      totalAppointments: apptMeta?.total ?? null,
-      totalVaccinations: null,
-      totalGrooming: null,
-      totalTelemedicine: null,
-      totalRevenue,
-      appointmentsByStatus: {},
-      patientsBySpecies: {},
-      topDiagnoses: [],
-      topVaccines: [],
-      revenueByMonth: Array.isArray(revenueRows)
-        ? revenueRows.slice(0, 12).map((row) => ({ month: row.period, total: row.gross_revenue || 0 }))
-        : [],
-    }
-
-    if (apptData.summary) {
-      data.value.appointmentsByStatus = {
-        scheduled: Number(apptData.summary.total_scheduled || 0),
-        confirmed: Number(apptData.summary.confirmed || 0),
-        in_progress: Number(apptData.summary.in_progress || 0),
-        completed: Number(apptData.summary.completed || 0),
-        cancelled: Number(apptData.summary.cancelled || 0),
-        no_show: Number(apptData.summary.no_show || 0),
-      }
-    }
-  } catch (e) {
-    logError('reportes.load', e)
-    error.value = extractDetailedErrorMessage(e, t('reports.loadError'), { context: 'Carga de reportes' })
-  } finally {
-    loading.value = false
+    scheduled.value = unwrap(await reportsApi.scheduled.list()) || []
+    const runRows = unwrap(await reportsApi.scheduled.runs()) || []
+    const STATUS = { completed: 'Enviado', failed: 'Falló', running: 'En curso', pending: 'Pendiente' }
+    runs.value = runRows.slice(0, 10).map((run) => ({
+      ...run,
+      status_label: STATUS[run.status] || run.status,
+      created_label: formatDateTime(run.created_at || run.started_at),
+    }))
+  } catch (err) {
+    logError('reports.scheduled', err)
   }
 }
 
-async function exportReport() {
-  try {
-    const payload = { format: 'csv' }
-    if (dateFrom.value) payload.from = dateFrom.value
-    if (dateTo.value) payload.to = dateTo.value
+watch(activeTab, (tab) => {
+  if (tab === 'scheduled') loadScheduled()
+})
 
-    const { data: blob } = await reportsApi.exportRevenue(payload)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `reporte_${dateFrom.value || 'periodo'}.csv`
-    a.click()
+// ── Exportar ────────────────────────────────────────────────────────────────
+async function exportReport(type, format) {
+  exportOpen.value = false
+  exporting.value = true
+  try {
+    const res = await reportsApi.exportReport(type, format, { from: from.value, to: to.value, groupBy: groupBy.value })
+    const ext = { excel: 'xlsx', pdf: 'pdf', csv: 'csv' }[format]
+    const url = URL.createObjectURL(res.data)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `reporte-${type}-${from.value}-${to.value}.${ext}`
+    link.click()
     URL.revokeObjectURL(url)
-  } catch (error) {
-    notifyError('reportes.exportCsv', error, t('reports.exportError'), {
-      context: 'Exportación de reporte',
-      meta: { dateFrom: dateFrom.value, dateTo: dateTo.value },
-    })
+  } catch (err) {
+    notifyError('reports.export', err, 'No pudimos generar el archivo.')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function onDocumentClick(event) {
+  if (exportOpen.value && exportRef.value && !exportRef.value.contains(event.target)) exportOpen.value = false
+}
+
+// ── Envíos programados ──────────────────────────────────────────────────────
+function formatsFor(type) {
+  return EXPORTABLE.find((r) => r.type === type)?.formats || ['excel']
+}
+
+function frequencyLabel(item) {
+  if (item.frequency === 'daily') return 'todos los días'
+  if (item.frequency === 'weekly') return `los ${WEEKDAYS[item.day_of_week ?? 1]?.toLowerCase()}`
+  if (item.frequency === 'monthly') return `el día ${item.day_of_month || 1} de cada mes`
+  return item.frequency
+}
+
+function recipientsLabel(value) {
+  let list = value
+  if (typeof value === 'string') {
+    try { list = JSON.parse(value) } catch { list = value.split(',') }
+  }
+  return (Array.isArray(list) ? list : []).join(', ') || '—'
+}
+
+function openScheduleForm() {
+  Object.assign(scheduleForm, { open: true, saving: false, error: '', name: '', reportType: 'revenue', format: 'excel',
+    frequency: 'weekly', dayOfWeek: 1, dayOfMonth: 1, recipients: '' })
+}
+
+async function saveSchedule() {
+  const recipients = scheduleForm.recipients.split(',').map((e) => e.trim()).filter(Boolean)
+  if (!recipients.length || recipients.some((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) {
+    scheduleForm.error = 'Revisá los emails de los destinatarios.'
     return
   }
-  success('Reporte exportado correctamente.')
+  scheduleForm.saving = true
+  scheduleForm.error = ''
+  try {
+    await reportsApi.scheduled.create({
+      name: scheduleForm.name,
+      reportType: scheduleForm.reportType,
+      format: scheduleForm.format,
+      frequency: scheduleForm.frequency,
+      dayOfWeek: scheduleForm.frequency === 'weekly' ? scheduleForm.dayOfWeek : undefined,
+      dayOfMonth: scheduleForm.frequency === 'monthly' ? scheduleForm.dayOfMonth : undefined,
+      recipients,
+    })
+    scheduleForm.open = false
+    success('Vas a recibir el reporte automáticamente.', { title: 'Envío programado' })
+    loadScheduled()
+  } catch (err) {
+    scheduleForm.error = extractDetailedErrorMessage(err, 'No pudimos programar el envío.', { context: 'Reportes' })
+  } finally {
+    scheduleForm.saving = false
+  }
 }
 
-onMounted(() => setPeriod('month'))
+async function runNow(item) {
+  try {
+    await reportsApi.scheduled.run(item.id)
+    success(`Enviamos "${item.name}" a sus destinatarios.`)
+    loadScheduled()
+  } catch (err) {
+    notifyError('reports.runNow', err, 'No pudimos enviar el reporte.')
+  }
+}
+
+async function toggleActive(item) {
+  try {
+    await reportsApi.scheduled.update(item.id, { isActive: item.is_active === 0 })
+    loadScheduled()
+  } catch (err) {
+    notifyError('reports.toggle', err, 'No pudimos actualizar el envío.')
+  }
+}
+
+async function removeSchedule(item) {
+  const ok = await confirm({ title: 'Eliminar envío programado', message: `"${item.name}" dejará de enviarse.`, confirmText: 'Eliminar', variant: 'danger' })
+  if (!ok) return
+  try {
+    await reportsApi.scheduled.remove(item.id)
+    loadScheduled()
+  } catch (err) {
+    notifyError('reports.remove', err, 'No pudimos eliminar el envío.')
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  setPeriod('month')
+})
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 </script>
 
 <style scoped>
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-
-.page {
+.reports {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+  max-width: 1280px;
 }
 
 .page-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
 }
 
@@ -412,398 +691,305 @@ onMounted(() => setPeriod('month'))
   gap: 14px;
 }
 
-
-.page-title {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--text);
+.export {
+  position: relative;
 }
 
-.page-sub {
-  font-size: 0.82rem;
-  color: var(--text-2);
-  margin-top: 2px;
+.export__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  width: 260px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
 }
 
-.period-bar {
+.export__group {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  padding: 8px;
+}
+
+.export__group + .export__group {
+  border-top: 1px solid var(--border);
+}
+
+.export__title {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.export__formats {
+  display: flex;
+  gap: 4px;
+}
+
+.export__formats button {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.export__formats button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.period-label {
-  font-size: 0.82rem;
-  font-weight: 600;
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.segmented button {
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
   color: var(--text-2);
+  font-size: 0.86rem;
+  cursor: pointer;
 }
 
-.period-btn {
-  min-width: auto;
+.segmented button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
 }
 
-.period-btn--active {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
+.segmented--sm button {
+  padding: 4px 10px;
+  font-size: 0.8rem;
 }
 
-.period-custom {
+.toolbar__dates {
   display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+}
+
+.toolbar__dates input {
+  padding: 6px 10px;
+  min-height: 36px;
+}
+
+.report-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.tab {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: 8px;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.filter-input {
-  padding: 7px 11px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  background: var(--white);
-  color: var(--text);
-  outline: none;
+.tab--active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
 }
 
-.filter-input:focus {
-  border-color: var(--primary);
-}
-
-.kpi-grid {
+.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.kpi-card {
-  background: var(--bc);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.kpi-card__icon {
-  font-size: 1.8rem;
-}
-
-.kpi-card strong {
-  display: block;
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--tc);
-  line-height: 1;
-}
-
-.kpi-card span {
-  font-size: 0.72rem;
-  color: var(--tc);
-  opacity: 0.75;
-  margin-top: 4px;
-  display: block;
-}
-
-.section-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-.report-section {
-  background: var(--white);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
-  padding: 20px 22px;
+.tiles {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.section-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 16px;
-}
-
-.bar-chart {
+.tile {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
-.bar-row {
-  display: grid;
-  grid-template-columns: 100px 1fr 36px;
-  align-items: center;
-  gap: 10px;
-}
-
-.bar-label {
-  font-size: 0.78rem;
-  color: var(--text-2);
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bar-track {
-  background: var(--surface-2);
-  border-radius: 4px;
-  height: 10px;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.6s ease;
-}
-
-.bar-count {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.species-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.species-row {
-  display: grid;
-  grid-template-columns: 24px 80px 1fr 36px;
-  align-items: center;
-  gap: 8px;
-}
-
-.species-emoji {
-  font-size: 1.2rem;
-}
-
-.species-name {
+.tile__label {
   font-size: 0.82rem;
   color: var(--text-2);
 }
 
-.species-bar-track {
-  background: var(--surface-2);
-  border-radius: 4px;
-  height: 10px;
-}
-
-.species-bar {
-  background: var(--primary);
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.6s ease;
-}
-
-.species-count {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.top-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.top-item {
-  display: grid;
-  grid-template-columns: 24px 1fr 2fr 70px;
-  align-items: center;
-  gap: 10px;
-}
-
-.top-rank {
-  width: 22px;
-  height: 22px;
-  background: var(--primary-xlight);
-  color: var(--primary);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.72rem;
+.tile__value {
+  font-size: 1.55rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
-.top-name {
-  font-size: 0.85rem;
-  color: var(--text);
-}
-
-.top-bar-track {
-  background: var(--surface-2);
-  border-radius: 4px;
-  height: 8px;
-}
-
-.top-bar {
-  background: var(--accent-mint);
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.6s ease;
-}
-
-.top-count {
+.tile__hint {
   font-size: 0.78rem;
   color: var(--text-3);
-  text-align: right;
 }
 
-.vaccine-chips {
+.card {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.card--wide {
+  grid-column: 1 / -1;
+}
+
+.card__head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.vaccine-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #fdeaea;
-  border-radius: var(--radius);
-  padding: 8px 14px;
-}
-
-.vaccine-rank {
-  width: 20px;
-  height: 20px;
-  background: #ef5350;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
-.vaccine-name {
-  font-size: 0.85rem;
-  color: var(--text);
-  font-weight: 500;
-}
-
-.vaccine-count {
-  font-size: 0.75rem;
-  color: #c0392b;
-  font-weight: 600;
-}
-
-.revenue-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  height: 140px;
-}
-
-.rev-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  height: 100%;
-  justify-content: flex-end;
-}
-
-.rev-bar-wrap {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  width: 100%;
-}
-
-.rev-bar {
-  width: 100%;
-  background: linear-gradient(to top, var(--primary), var(--accent-mint));
-  border-radius: 6px 6px 0 0;
-  transition: height 0.6s ease;
-}
-
-.rev-label {
-  font-size: 0.65rem;
-  color: var(--text-2);
-  font-weight: 600;
-}
-
-.rev-month {
-  font-size: 0.7rem;
-  color: var(--text-3);
-}
-
-.alert {
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-}
-
-.alert--error {
-  background: #fdeaea;
-  color: #c0392b;
-  border-left: 3px solid var(--danger);
-}
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
-  padding: 60px 20px;
+  margin-bottom: 16px;
+}
+
+.card__head h3 {
+  font-size: 1rem;
+}
+
+.card__head p {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.link-button {
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.empty-text {
   color: var(--text-3);
   font-size: 0.9rem;
-  background: var(--white);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
+  line-height: 1.5;
 }
 
-.empty-state__emoji {
-  font-size: 3rem;
+.schedule-list {
+  list-style: none;
 }
 
-.spin {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
+.schedule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
 }
 
-.spin--dark {
-  border-color: rgba(0, 0, 0, 0.1);
-  border-top-color: var(--primary);
+.schedule + .schedule {
+  border-top: 1px solid var(--border);
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.schedule__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-@media (max-width: 700px) {
-  .section-grid {
-    grid-template-columns: 1fr;
-  }
+.schedule__info span {
+  font-size: 0.84rem;
+  color: var(--text-2);
+}
 
-  .bar-row {
-    grid-template-columns: 70px 1fr 30px;
-  }
+.schedule__meta {
+  color: var(--text-3) !important;
+  font-size: 0.78rem !important;
+}
 
-  .top-item {
-    grid-template-columns: 22px 1fr 50px;
-  }
+.badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
 
-  .top-bar-track {
-    display: none;
-  }
+.badge--ok { background: var(--success-light); color: var(--success); }
+.badge--muted { background: var(--surface-3); color: var(--text-3); }
+
+.schedule__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.icon-btn--danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+
+@media (max-width: 1000px) {
+  .grid { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .tiles { grid-template-columns: 1fr; }
+  .toolbar__dates { width: 100%; }
+  .toolbar__dates input { flex: 1; }
 }
 </style>
