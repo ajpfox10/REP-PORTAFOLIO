@@ -14,6 +14,10 @@ const {
   validate,
   buildOwnerToken,
   buildOwnerRefresh,
+  sendOwnerSession,
+  clearOwnerSession,
+  readCookie,
+  PORTAL_REFRESH_COOKIE,
   publishPortalEvent,
   PASSWORD_POLICY,
   vBody,
@@ -128,7 +132,7 @@ router.post('/register',
         const refreshToken = buildOwnerRefresh(client);
         sendWelcome({ to: email, name: firstName, orgName: 'VetManager Pro' }).catch((err) => log.warn('welcome email failed', { err: err.message }));
         publishPortalEvent('portal.owner.registered', { clientId: client.id, email, orgId: client.organization_id || orgId || null }, req);
-        return R.created(res, { accessToken, refreshToken });
+        return sendOwnerSession(req, res, { accessToken, refreshToken }, {}, 201);
       }
 
       if (!allowSelfRegistration && !activation) return R.unauthorized(res, 'Se requiere invitacion para registrar una cuenta portal');
@@ -169,7 +173,7 @@ router.post('/register',
       const refreshToken = buildOwnerRefresh({ id: created.insertId });
       sendWelcome({ to: email, name: firstName, orgName: 'VetManager Pro' }).catch((err) => log.warn('welcome email failed', { err: err.message }));
       publishPortalEvent('portal.owner.registered', { clientId: created.insertId, email, orgId: effectiveOrgId }, req);
-      return R.created(res, { accessToken, refreshToken });
+      return sendOwnerSession(req, res, { accessToken, refreshToken }, {}, 201);
     } catch (e) { next(e); }
   }
 );
@@ -237,17 +241,21 @@ router.post('/login',
       ).catch((err) => log.warn('login history insert failed', { err: err.message }));
 
       publishPortalEvent('portal.owner.logged_in', { clientId: client.id, email: client.email, orgId: client.organization_id || null, ip }, req, { ip });
-      return R.ok(res, { accessToken, refreshToken, owner: { id: client.id, name: `${client.first_name} ${client.last_name}`, email: client.email } });
+      return sendOwnerSession(req, res, { accessToken, refreshToken }, {
+        owner: { id: client.id, name: `${client.first_name} ${client.last_name}`, email: client.email },
+      });
     } catch (e) { next(e); }
   }
 );
 
 router.post('/refresh',
-  vBody('refreshToken').notEmpty(),
+  vBody('refreshToken').optional().isString().notEmpty(),
   validate,
   async (req, res, next) => {
     try {
-      const decoded = jwt.verifyRefresh(req.body.refreshToken);
+      const refreshToken = req.body.refreshToken || readCookie(req, PORTAL_REFRESH_COOKIE);
+      if (!refreshToken) return R.unauthorized(res, 'Sesión no iniciada');
+      const decoded = jwt.verifyRefresh(refreshToken);
       if (decoded.role !== 'owner') return R.unauthorized(res, 'Token invalido');
 
       const client = await db.queryOne(
@@ -259,13 +267,19 @@ router.post('/refresh',
       );
       if (!client) return R.unauthorized(res, 'Cuenta no encontrada');
 
-      return R.ok(res, { accessToken: buildOwnerToken(client), refreshToken: buildOwnerRefresh(client) });
+      return sendOwnerSession(req, res, { accessToken: buildOwnerToken(client), refreshToken: buildOwnerRefresh(client) });
     } catch (err) {
       log.warn('portal refresh failed', { err: err.message });
+      clearOwnerSession(res);
       return R.unauthorized(res, 'Token invalido o expirado');
     }
   }
 );
+
+router.post('/logout', (_req, res) => {
+  clearOwnerSession(res);
+  return R.ok(res, { authenticated: false });
+});
 
 router.post('/forgot-password',
   authLimiter,

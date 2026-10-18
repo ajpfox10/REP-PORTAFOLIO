@@ -2,51 +2,48 @@ import axios from 'axios'
 import { http, ensureCsrfToken } from './client'
 import { logError } from '../utils/errors'
 
-const STORAGE_KEY_ACCESS = 'portal.owner.accessToken'
-const STORAGE_KEY_REFRESH = 'portal.owner.refreshToken'
-const STORAGE_KEY_PERSIST = 'portal.owner.session'
+// Los tokens del portal viven en cookies httpOnly que pone el backend: el
+// frontend nunca los ve. Acá solo se recuerda si hay sesión y quién es el
+// dueño, para pintar la interfaz sin esperar a la red.
+const STORAGE_KEY_SESSION = 'portal.owner.session'
+const LEGACY_TOKEN_KEYS = ['portal.owner.accessToken', 'portal.owner.refreshToken']
 const SAFE_METHODS = new Set(['get', 'head', 'options'])
+const EMPTY_SESSION = { authenticated: false, owner: null }
 
 function getBaseURL() {
   return http.defaults.baseURL || '/api/v1'
 }
 
 function readStoredSession() {
-  if (typeof window === 'undefined') return { accessToken: null, refreshToken: null, owner: null }
+  if (typeof window === 'undefined') return { ...EMPTY_SESSION }
   try {
-    const accessToken = window.sessionStorage.getItem(STORAGE_KEY_ACCESS) || null
-    // refreshToken en sessionStorage (no en localStorage) para evitar extracción por XSS cross-sesión
-    const refreshToken = window.sessionStorage.getItem(STORAGE_KEY_REFRESH) || null
-    const raw = window.localStorage.getItem(STORAGE_KEY_PERSIST)
-    const owner = raw ? (JSON.parse(raw).owner || null) : null
-    return { accessToken, refreshToken, owner }
+    // Limpia tokens que versiones anteriores guardaban en sessionStorage
+    LEGACY_TOKEN_KEYS.forEach((key) => window.sessionStorage.removeItem(key))
+    const raw = window.localStorage.getItem(STORAGE_KEY_SESSION)
+    const parsed = raw ? JSON.parse(raw) : null
+    return { authenticated: Boolean(parsed?.authenticated), owner: parsed?.owner || null }
   } catch (error) {
     logError('portal.readSession', error)
-    return { accessToken: null, refreshToken: null, owner: null }
+    return { ...EMPTY_SESSION }
   }
 }
 
 function writeStoredSession(session) {
   if (typeof window === 'undefined') return
-  if (session?.accessToken) {
-    window.sessionStorage.setItem(STORAGE_KEY_ACCESS, session.accessToken)
-  } else {
-    window.sessionStorage.removeItem(STORAGE_KEY_ACCESS)
+  try {
+    window.localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify({ authenticated: Boolean(session?.authenticated), owner: session?.owner || null }))
+  } catch (error) {
+    logError('portal.writeSession', error)
   }
-  if (session?.refreshToken) {
-    window.sessionStorage.setItem(STORAGE_KEY_REFRESH, session.refreshToken)
-  } else {
-    window.sessionStorage.removeItem(STORAGE_KEY_REFRESH)
-  }
-  // Solo persistir metadata no sensible en localStorage (owner info para UI)
-  window.localStorage.setItem(STORAGE_KEY_PERSIST, JSON.stringify({ owner: session?.owner || null }))
 }
 
 function clearStoredSession() {
   if (typeof window === 'undefined') return
-  window.sessionStorage.removeItem(STORAGE_KEY_ACCESS)
-  window.sessionStorage.removeItem(STORAGE_KEY_REFRESH)
-  window.localStorage.removeItem(STORAGE_KEY_PERSIST)
+  try {
+    window.localStorage.removeItem(STORAGE_KEY_SESSION)
+  } catch (error) {
+    logError('portal.clearSession', error)
+  }
 }
 
 let currentSession = readStoredSession()
@@ -70,17 +67,13 @@ function subscribeSession(listener) {
 }
 
 function getSession() {
-  if (!currentSession.accessToken && !currentSession.refreshToken) {
-    currentSession = readStoredSession()
-  }
   return { ...currentSession }
 }
 
 function setSession(session) {
   currentSession = {
-    accessToken: session?.accessToken || null,
-    refreshToken: session?.refreshToken || null,
-    owner: session?.owner || null,
+    authenticated: session?.authenticated !== false,
+    owner: session?.owner || currentSession.owner || null,
   }
   writeStoredSession(currentSession)
   notifySessionChanged()
@@ -88,7 +81,7 @@ function setSession(session) {
 }
 
 function clearSession() {
-  currentSession = { accessToken: null, refreshToken: null, owner: null }
+  currentSession = { ...EMPTY_SESSION }
   clearStoredSession()
   notifySessionChanged()
 }
@@ -121,33 +114,14 @@ async function attachCsrf(cfg) {
 
 refreshClient.interceptors.request.use(attachCsrf)
 
-portalHttp.interceptors.request.use(async (cfg) => {
-  cfg.headers = cfg.headers || {}
-  const session = getSession()
-  if (session.accessToken) {
-    cfg.headers.Authorization = `Bearer ${session.accessToken}`
-  }
-  return attachCsrf(cfg)
-})
+portalHttp.interceptors.request.use(attachCsrf)
 
 async function refreshSession() {
   if (refreshingPromise) return refreshingPromise
-  const session = getSession()
-  if (!session.refreshToken) {
-    throw new Error('No portal refresh token available')
-  }
-
+  // El refresh token va solo en su cookie httpOnly
   refreshingPromise = refreshClient
-    .post('/portal/auth/refresh', { refreshToken: session.refreshToken })
-    .then((response) => {
-      const payload = unwrap(response)
-      const next = setSession({
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken || session.refreshToken,
-        owner: session.owner,
-      })
-      return next
-    })
+    .post('/portal/auth/refresh', {})
+    .then(() => setSession({ authenticated: true }))
     .finally(() => {
       refreshingPromise = null
     })
@@ -164,13 +138,12 @@ portalHttp.interceptors.response.use(
       || url.includes('/portal/auth/register')
       || url.includes('/portal/auth/forgot-password')
       || url.includes('/portal/auth/refresh')
+      || url.includes('/portal/auth/logout')
 
     if (error.response?.status === 401 && !original._portalRetry && !isAuthRoute) {
       original._portalRetry = true
       try {
-        const nextSession = await refreshSession()
-        original.headers = original.headers || {}
-        original.headers.Authorization = `Bearer ${nextSession.accessToken}`
+        await refreshSession()
         return portalHttp(original)
       } catch (refreshError) {
         logError('portal.refresh', refreshError, { url, method: original.method })
@@ -184,6 +157,10 @@ portalHttp.interceptors.response.use(
 
 export const portalApi = {
   login: (data) => portalHttp.post('/portal/auth/login', data).then(unwrap),
+  logout: () => {
+    clearSession()
+    return refreshClient.post('/portal/auth/logout', {}).then(unwrap)
+  },
   register: (data) => portalHttp.post('/portal/auth/register', data).then(unwrap),
   forgotPassword: (data) => portalHttp.post('/portal/auth/forgot-password', data).then(unwrap),
   confirmPasswordReset: (data) => portalHttp.post('/portal/auth/password-reset/confirm', data).then(unwrap),
@@ -222,7 +199,7 @@ export const portalApi = {
   setSession,
   clearSession,
   subscribeSession,
-  hasSession: () => Boolean(getSession().accessToken),
+  hasSession: () => getSession().authenticated,
   unwrap,
 }
 

@@ -622,7 +622,7 @@ const fcmForm = reactive({
   deviceName: '',
 })
 
-const isAuthenticated = computed(() => Boolean(session.value.accessToken))
+const isAuthenticated = computed(() => Boolean(session.value.authenticated))
 const ownerLabel = computed(() => ownerLabelFrom(profile.value, owner.value, session.value.owner))
 const sessionSummary = computed(() => sessionSummaryFrom(profile.value, owner.value, session.value.owner))
 const profileSummary = computed(() => profileSummaryFrom(profile.value))
@@ -750,8 +750,7 @@ async function handleLogin() {
   try {
     const payload = await loginPortalOwner(loginForm)
     syncSession({
-      accessToken: payload.accessToken,
-      refreshToken: payload.refreshToken,
+      authenticated: true,
       owner: payload.owner || null,
     })
     await loadDashboard()
@@ -773,8 +772,7 @@ async function handleRegister() {
   try {
     const payload = await registerPortalOwner(registerForm)
     syncSession({
-      accessToken: payload.accessToken,
-      refreshToken: payload.refreshToken,
+      authenticated: true,
       owner: { firstName: registerForm.firstName, lastName: registerForm.lastName, email: registerForm.email },
     })
     await loadDashboard()

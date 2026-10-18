@@ -191,7 +191,8 @@ export async function registerPortalFcmDevice(form) {
 }
 
 export function clearPortalViewSessionState(state) {
-  portalApi.clearSession()
+  // Borra las cookies de sesión en el servidor; la vista se limpia igual si falla
+  portalApi.logout().catch((error) => logError('portal.logout', error))
   state.session.value = portalApi.getSession()
   state.owner.value = null
   state.profile.value = null

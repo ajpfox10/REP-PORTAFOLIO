@@ -25,6 +25,11 @@ paths:
       responses:
         '200':
           description: OK
+  /portal/auth/logout:
+    post:
+      responses:
+        '200':
+          description: OK
   /portal/auth/forgot-password:
     post:
       responses:
