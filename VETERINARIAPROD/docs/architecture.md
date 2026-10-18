@@ -2,7 +2,7 @@
 
 ## Resumen
 
-VetManager Pro usa un `gateway` Node/Express delante de microservicios Node. El gateway valida auth, aplica controles de seguridad, inyecta contexto de usuario y proxyea a los servicios internos con firma HMAC.
+Andromeda usa un `gateway` Node/Express delante de microservicios Node. El gateway valida auth, aplica controles de seguridad, inyecta contexto de usuario y proxyea a los servicios internos con firma HMAC.
 
 ## Diagrama
 

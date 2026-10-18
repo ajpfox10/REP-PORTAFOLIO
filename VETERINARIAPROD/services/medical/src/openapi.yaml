@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: VetManager Medical Service
+  title: Andromeda Medical Service
   version: "1.0.0"
   description: Medical appointments, records, triage, prescriptions and rules
 

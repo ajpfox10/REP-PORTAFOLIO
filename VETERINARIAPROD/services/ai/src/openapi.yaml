@@ -1,6 +1,6 @@
 openapi: '3.0.3'
 info:
-  title: VetManager AI Service
+  title: Andromeda AI Service
   version: '1.0.0'
 servers:
   - url: /

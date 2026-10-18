@@ -50,7 +50,7 @@ function header(doc, clinicName, clinicAddress, clinicCuit, clinicPhone) {
   drawRect(doc, 0, 0, 595, 80, C.primary);
 
   doc.fillColor(C.white).fontSize(20).font('Helvetica-Bold')
-    .text(clinicName || 'VetManager Pro', 40, 25);
+    .text(clinicName || 'Andromeda', 40, 25);
   doc.fontSize(9).font('Helvetica')
     .text(clinicAddress || '', 40, 50)
     .text(clinicPhone ? `Tel: ${clinicPhone}` : '', 40, 62);
@@ -194,7 +194,7 @@ async function generateInvoicePdf({ invoice, items = [], payments = [], clinic =
   // ── Pie ───────────────────────────────────────────────────────────────────
   drawRect(doc, 0, 790, 595, 52, C.lightGray);
   doc.fillColor(C.gray).font('Helvetica').fontSize(8)
-    .text('Documento generado por VetManager Pro', 40, 805, { align: 'center', width: 515 });
+    .text('Documento generado por Andromeda', 40, 805, { align: 'center', width: 515 });
 
   doc.end();
   return buf;
@@ -264,7 +264,7 @@ async function generateRevenuePdf ({ rows, meta = {}, clinic = {} }) {
   // ── Header ──
   doc.rect(0, 0, 595, 70).fill(C.primary);
   doc.fillColor(C.white).font('Helvetica-Bold').fontSize(18)
-    .text(clinic.name || 'VetManager Pro', 40, 18);
+    .text(clinic.name || 'Andromeda', 40, 18);
   doc.font('Helvetica').fontSize(10)
     .text('Reporte de Ingresos', 40, 40);
   if (meta.branch) doc.text(`Sucursal: ${meta.branch}`, 40, 52);
@@ -326,7 +326,7 @@ async function generateAppointmentsReportPdf ({ summary, byType, meta = {}, clin
 
   // Header
   doc.rect(0, 0, 595, 70).fill(C.primary);
-  doc.fillColor(C.white).font('Helvetica-Bold').fontSize(18).text(clinic.name || 'VetManager Pro', 40, 18);
+  doc.fillColor(C.white).font('Helvetica-Bold').fontSize(18).text(clinic.name || 'Andromeda', 40, 18);
   doc.font('Helvetica').fontSize(10).text('Reporte de Turnos', 40, 40);
   doc.font('Helvetica').fontSize(9).text(`${meta.from || ''} → ${meta.to || 'hoy'}`, 400, 30, { width: 155, align: 'right' });
 
@@ -376,7 +376,7 @@ async function generateDiagnosesReportPdf ({ rows, meta = {}, clinic = {} }) {
   const buf = streamToBuffer(doc);
 
   doc.rect(0, 0, 595, 70).fill(C.primary);
-  doc.fillColor(C.white).font('Helvetica-Bold').fontSize(18).text(clinic.name || 'VetManager Pro', 40, 18);
+  doc.fillColor(C.white).font('Helvetica-Bold').fontSize(18).text(clinic.name || 'Andromeda', 40, 18);
   doc.font('Helvetica').fontSize(10).text('Diagnósticos más frecuentes', 40, 40);
   doc.font('Helvetica').fontSize(9).text(`${meta.from || ''} → ${meta.to || 'hoy'}`, 400, 30, { width: 155, align: 'right' });
 
@@ -449,7 +449,7 @@ function _pdfFooter (doc, generatedBy) {
   const pages = doc.bufferedPageRange ? doc.bufferedPageRange() : null;
   doc.fontSize(8).fillColor(C.gray)
     .text(
-      `Generado por: ${generatedBy || 'VetManager'} — ${formatDateTime(new Date())}`,
+      `Generado por: ${generatedBy || 'Andromeda'} — ${formatDateTime(new Date())}`,
       40, 800, { align: 'center', width: 515 }
     );
 }

@@ -10,7 +10,7 @@
 
 const ical = require('ical-generator');
 
-const CLINIC_NAME = process.env.CLINIC_DEFAULT_NAME || 'VetManager';
+const CLINIC_NAME = process.env.CLINIC_DEFAULT_NAME || 'Andromeda';
 const TZ          = process.env.TZ                  || 'America/Argentina/Buenos_Aires';
 
 // ─── Generar .ics para una sola cita ─────────────────────────────────────────
@@ -25,7 +25,7 @@ function generateAppointmentIcs (appt, clinic = {}) {
   const cal = ical.default({
     name     : clinic.name || CLINIC_NAME,
     timezone : TZ,
-    prodId   : `//VetManager//VetManager API//ES`,
+    prodId   : `//Andromeda//Andromeda API//ES`,
   });
 
   _addAppointmentEvent(cal, appt, clinic);
@@ -43,7 +43,7 @@ function generateAgendaIcs (appointments, clinic = {}) {
   const cal = ical.default({
     name     : `Agenda ${clinic.name || CLINIC_NAME}`,
     timezone : TZ,
-    prodId   : `//VetManager//VetManager API//ES`,
+    prodId   : `//Andromeda//Andromeda API//ES`,
   });
 
   for (const appt of appointments) {
@@ -63,7 +63,7 @@ function generateVaccinationReminder (vaccination, clinic = {}) {
   const cal = ical.default({
     name     : clinic.name || CLINIC_NAME,
     timezone : TZ,
-    prodId   : `//VetManager//VetManager API//ES`,
+    prodId   : `//Andromeda//Andromeda API//ES`,
   });
 
   const dueDate = new Date(vaccination.due_date);

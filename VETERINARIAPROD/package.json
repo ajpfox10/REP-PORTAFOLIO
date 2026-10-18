@@ -1,7 +1,7 @@
 {
   "name": "vetmanager-api",
   "version": "1.0.0",
-  "description": "VetManager Pro — shared dependencies for microservices",
+  "description": "Andromeda — shared dependencies for microservices",
   "private": true,
   "dependencies": {
     "@afipsdk/afip.js": "^1.2.3",

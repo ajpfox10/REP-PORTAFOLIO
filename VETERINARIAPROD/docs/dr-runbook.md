@@ -1,4 +1,4 @@
-# DR Runbook — VetManager
+# DR Runbook — Andromeda
 
 > **Última revisión:** 2026-05-22  
 > **Owner:** Infra / SRE  

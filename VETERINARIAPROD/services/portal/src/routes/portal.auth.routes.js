@@ -130,7 +130,7 @@ router.post('/register',
 
         const accessToken = buildOwnerToken({ ...client, email });
         const refreshToken = buildOwnerRefresh(client);
-        sendWelcome({ to: email, name: firstName, orgName: 'VetManager Pro' }).catch((err) => log.warn('welcome email failed', { err: err.message }));
+        sendWelcome({ to: email, name: firstName, orgName: 'Andromeda' }).catch((err) => log.warn('welcome email failed', { err: err.message }));
         publishPortalEvent('portal.owner.registered', { clientId: client.id, email, orgId: client.organization_id || orgId || null }, req);
         return sendOwnerSession(req, res, { accessToken, refreshToken }, {}, 201);
       }
@@ -171,7 +171,7 @@ router.post('/register',
 
       const accessToken = buildOwnerToken({ id: created.insertId, organization_id: effectiveOrgId, email });
       const refreshToken = buildOwnerRefresh({ id: created.insertId });
-      sendWelcome({ to: email, name: firstName, orgName: 'VetManager Pro' }).catch((err) => log.warn('welcome email failed', { err: err.message }));
+      sendWelcome({ to: email, name: firstName, orgName: 'Andromeda' }).catch((err) => log.warn('welcome email failed', { err: err.message }));
       publishPortalEvent('portal.owner.registered', { clientId: created.insertId, email, orgId: effectiveOrgId }, req);
       return sendOwnerSession(req, res, { accessToken, refreshToken }, {}, 201);
     } catch (e) { next(e); }

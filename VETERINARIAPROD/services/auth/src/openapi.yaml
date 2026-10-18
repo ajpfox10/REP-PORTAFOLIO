@@ -1,6 +1,6 @@
 openapi: '3.0.3'
 info:
-  title: VetManager Auth Service
+  title: Andromeda Auth Service
   version: '1.0.0'
   description: Authentication, sessions, 2FA and API key management
 

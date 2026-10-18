@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: VetManager Pro API
+  title: Andromeda API
   description: |
-    API REST para el sistema veterinario SaaS multinacional VetManager Pro.
+    API REST para el sistema veterinario SaaS multinacional Andromeda.
 
     **Autenticación:** Bearer JWT (access token de 15min + refresh token de 7 días)
 
@@ -11,7 +11,7 @@ info:
     **RBAC:** Cada endpoint requiere un permiso específico según el rol del usuario.
   version: "1.0.0"
   contact:
-    name: VetManager Pro
+    name: Andromeda
     email: api@vetmanagerpro.com
 
 servers:

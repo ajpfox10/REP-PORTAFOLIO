@@ -99,7 +99,7 @@ const templates = {
 
   /** Alerta de resultado crítico de lab */
   labCritical: ({ vetName, patientName, testName }) =>
-    `⚠️ ALERTA: Resultado crítico de *${testName}* para *${patientName}*. Por favor revise inmediatamente. — VetManager Pro`,
+    `⚠️ ALERTA: Resultado crítico de *${testName}* para *${patientName}*. Por favor revise inmediatamente. — Andromeda`,
 
   /** Recordatorio de vacunación próxima */
   vaccinationReminder: ({ ownerName, petName, vaccineName, dueDate, clinicName }) =>

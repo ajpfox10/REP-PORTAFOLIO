@@ -1,7 +1,7 @@
 {
   "name": "vetmanager-portal",
   "version": "1.0.0",
-  "description": "VetManager Pro client portal service",
+  "description": "Andromeda client portal service",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

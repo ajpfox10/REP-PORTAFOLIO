@@ -81,7 +81,7 @@ async function createPreference(opts) {
         pending: `${process.env.FRONTEND_URL || appUrl}/payments/pending`,
       },
       auto_return: 'approved',
-      statement_descriptor: 'VetManager Pro',
+      statement_descriptor: 'Andromeda',
       expires: true,
       expiration_date_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     },

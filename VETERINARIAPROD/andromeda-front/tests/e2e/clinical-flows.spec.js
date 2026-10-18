@@ -9,6 +9,8 @@ function makeJwt(payload) {
 async function mockAuthenticatedSession(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'es-AR' })
+    // La app solo intenta restaurar la sesión si hubo un login previo
+    window.localStorage.setItem('vet_session', '1')
   })
 
   const token = makeJwt({
@@ -518,7 +520,7 @@ test('cirugias can create, change status and register anesthesia', async ({ page
   const form = modal.locator('form')
 
   await form.locator('input[type="search"]').fill('Toby')
-  await page.getByRole('option', { name: /Seleccionar Toby/i }).click()
+  await page.getByRole('option', { name: /Seleccionar( paciente)? Toby/i }).click()
   await form.locator('select').first().selectOption('1')
   await form.locator('input[type="datetime-local"]').fill('2026-05-03T09:00')
   await form.locator('input[type="number"]').fill('90')
@@ -550,18 +552,10 @@ test('laboratorio can create an order and submit results', async ({ page }) => {
   await page.goto('/laboratorio')
   await expect(page.getByText('Luna')).toBeVisible()
 
-  await page.getByRole('button', { name: /\+ Nueva/i }).click()
-  const modal = page.locator('div.modal').first()
-  const form = modal.locator('form')
-
-  await form.locator('input[type="search"]').fill('Milo')
-  await page.getByRole('option', { name: /Seleccionar Milo/i }).click()
-  await form.locator('label.test-checkbox-label').first().click()
-  await form.locator('label.test-checkbox-label').nth(1).click()
-  await form.locator('textarea').fill('Seguimiento rutinario')
-  await form.locator('button[type="submit"]').click()
-
-  await expect(form.locator('.selected-patient')).toContainText('Milo')
+  // Las órdenes nuevas nacen desde una evolución clínica
+  await expect(page.getByRole('link', { name: /Crear desde evoluci/i })).toHaveAttribute('href', '/evoluciones')
+  await page.evaluate(() => fetch('/api/v1/lab/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }))
+  await page.reload()
 
   const labRow = page.getByRole('row', { name: /Milo/ })
   await labRow.getByRole('button', { name: /Resultados/i }).click()
@@ -581,17 +575,9 @@ test('imagenes can create a study and publish a report', async ({ page }) => {
   await page.goto('/imagenes')
   await expect(page.getByText('Luna')).toBeVisible()
 
-  await page.getByRole('button', { name: /\+ Nueva/i }).click()
-  const modal = page.locator('div.modal').first()
-  const form = modal.locator('form')
-
-  await form.locator('input[type="search"]').fill('Kira')
-  await page.getByRole('option', { name: /Seleccionar paciente Kira/i }).click()
-  await form.locator('select').first().selectOption('2')
-  await form.locator('textarea').fill('Control abdominal')
-  await form.locator('button[type="submit"]').click()
-
-  await expect(form.locator('.selected-patient')).toContainText('Kira')
+  // Simula una orden creada desde una evolución clínica
+  await page.evaluate(() => fetch('/api/v1/imaging/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }))
+  await page.reload()
 
   const imagingRow = page.getByRole('row', { name: /Kira/ })
   await imagingRow.getByRole('button', { name: /Informe/i }).click()

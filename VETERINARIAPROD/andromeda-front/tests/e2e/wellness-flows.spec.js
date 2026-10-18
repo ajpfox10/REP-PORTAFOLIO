@@ -9,6 +9,8 @@ function makeJwt(payload) {
 async function mockAuthenticatedSession(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'es-AR' })
+    // La app solo intenta restaurar la sesión si hubo un login previo
+    window.localStorage.setItem('vet_session', '1')
   })
 
   const token = makeJwt({
@@ -357,9 +359,9 @@ test('vacunas can register vaccine and deworming records', async ({ page }) => {
   await page.getByRole('button', { name: /Registrar vacuna/i }).click()
   const vaccineForm = page.locator('div.modal').first().locator('form')
   await vaccineForm.locator('input[type="search"]').fill('Toby')
-  await page.getByRole('option', { name: /Seleccionar Toby/i }).click()
+  await page.getByRole('option', { name: /Seleccionar( paciente)? Toby/i }).click()
   await vaccineForm.locator('select').first().selectOption('1')
-  await vaccineForm.locator('input[type="text"]').fill('LOT-123')
+  await vaccineForm.locator('#vac-m-lot').fill('LOT-123')
   await vaccineForm.locator('input[type="date"]').first().fill('2026-05-01')
   await vaccineForm.locator('button[type="submit"]').click()
   await expect(vaccineForm.locator('.selected-patient')).toContainText('Toby')
@@ -368,7 +370,7 @@ test('vacunas can register vaccine and deworming records', async ({ page }) => {
   await page.getByRole('button', { name: /Registrar desparasitaci/i }).click()
   const dewForm = page.locator('div.modal').first().locator('form')
   await dewForm.locator('input[type="search"]').fill('Toby')
-  await page.getByRole('option', { name: /Seleccionar Toby/i }).click()
+  await page.getByRole('option', { name: /Seleccionar( paciente)? Toby/i }).click()
   await dewForm.locator('select').first().selectOption('11')
   await dewForm.locator('input[type="date"]').first().fill('2026-05-01')
   await dewForm.locator('button[type="submit"]').click()
@@ -399,7 +401,7 @@ test('telemedicine can schedule a session and change status', async ({ page }) =
   const form = page.locator('div.modal').first().locator('form')
   await form.locator('input[type="datetime-local"]').fill('2026-05-01T15:30')
   await form.locator('input[type="search"]').fill('Toby')
-  await page.getByRole('option', { name: /Seleccionar Toby/i }).click()
+  await page.getByRole('option', { name: /Seleccionar( paciente)? Toby/i }).click()
   await form.locator('select').first().selectOption('30')
   await form.locator('select').nth(1).selectOption({ label: 'Veterinaria Demo' })
   await form.locator('textarea').fill('Control general')

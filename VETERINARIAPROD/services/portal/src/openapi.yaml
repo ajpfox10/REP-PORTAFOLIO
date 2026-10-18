@@ -1,6 +1,6 @@
 openapi: '3.0.3'
 info:
-  title: VetManager Portal Service
+  title: Andromeda Portal Service
   version: '1.0.0'
 servers:
   - url: /

@@ -9,6 +9,8 @@ function makeJwt(payload) {
 async function mockAuthenticatedSession(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'es-AR' })
+    // La app solo intenta restaurar la sesión si hubo un login previo
+    window.localStorage.setItem('vet_session', '1')
   })
 
   const token = makeJwt({
@@ -294,10 +296,10 @@ test('hospitalizations can admit a patient and open discharge flow', async ({ pa
   const admitForm = admitModal.locator('form')
 
   await admitForm.locator('input[type="search"]').fill('Luna')
-  await page.getByRole('option', { name: /Seleccionar Luna/i }).click()
+  await page.getByRole('option', { name: /Seleccionar( paciente)? Luna/i }).click()
   await admitForm.locator('select').first().selectOption('10')
   await admitForm.locator('input[type="text"]').first().fill('42')
-  await admitForm.locator('textarea').fill('Post operatorio')
+  await admitForm.locator('#hosp-m-reason').fill('Post operatorio')
   await admitForm.locator('button[type="submit"]').click()
 
   await expect(page.getByText('Milo')).toBeVisible()

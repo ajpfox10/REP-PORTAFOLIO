@@ -1,0 +1,34 @@
+name: Andromeda CodeQL
+
+on:
+  push:
+    branches: [main]
+    paths: ['VETERINARIAPROD/**']
+  pull_request:
+    paths: ['VETERINARIAPROD/**']
+  schedule:
+    - cron: '0 5 * * 1'
+
+jobs:
+  analyze:
+    name: Análisis de seguridad
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          config: |
+            paths:
+              - VETERINARIAPROD
+            paths-ignore:
+              - VETERINARIAPROD/node_modules
+              - VETERINARIAPROD/andromeda-front/node_modules
+              - VETERINARIAPROD/andromeda-front/dist
+
+      - uses: github/codeql-action/analyze@v3

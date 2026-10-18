@@ -79,43 +79,43 @@
     </div>
 
     <div v-else class="tele-list">
-      <div v-for="t in items" :key="t.id" :id="`tele-session-${t.id}`" class="tele-card">
+      <div v-for="session in items" :key="session.id" :id="`tele-session-${session.id}`" class="tele-card">
         <div class="tele-card__left">
-          <div class="tele-time" :id="`tele-session-${t.id}-time`">{{ formatTime(t.scheduled_date || t.start_time) }}</div>
-          <span class="badge" :class="`status--${t.status}`" :id="`tele-session-${t.id}-status`">{{ STATUS[t.status] || t.status }}</span>
+          <div class="tele-time" :id="`tele-session-${session.id}-time`">{{ formatTime(session.scheduled_date || session.start_time) }}</div>
+          <span class="badge" :class="`status--${session.status}`" :id="`tele-session-${session.id}-status`">{{ STATUS[session.status] || session.status }}</span>
         </div>
         <div class="tele-card__mid">
           <div class="tele-pet">
-            <span><SpeciesIcon :species="t.patient?.species" /></span>
+            <span><SpeciesIcon :species="session.patient?.species" /></span>
             <div>
-              <strong :id="`tele-session-${t.id}-patient`">{{ t.patient?.name || t.patient_name || '—' }}</strong>
-              <span class="sub" :id="`tele-session-${t.id}-owner`">{{ t.patient?.owner?.full_name || t.owner_name || '' }}</span>
+              <strong :id="`tele-session-${session.id}-patient`">{{ session.patient?.name || session.patient_name || '—' }}</strong>
+              <span class="sub" :id="`tele-session-${session.id}-owner`">{{ session.patient?.owner?.full_name || session.owner_name || '' }}</span>
             </div>
           </div>
-          <p class="tele-reason" :id="`tele-session-${t.id}-reason`">{{ t.reason || t.chief_complaint || t('telemedicine.generalConsultation') }}</p>
-          <p class="tele-vet" v-if="t.vet_name" :id="`tele-session-${t.id}-vet`"><AppIcon name="vet" :size="16" /> {{ t.vet_name }}</p>
-          <p class="tele-phone" v-if="t.client_phone" :id="`tele-session-${t.id}-phone`"><AppIcon name="phone" :size="16" /> {{ t.client_phone }}</p>
+          <p class="tele-reason" :id="`tele-session-${session.id}-reason`">{{ session.reason || session.chief_complaint || t('telemedicine.generalConsultation') }}</p>
+          <p class="tele-vet" v-if="session.vet_name" :id="`tele-session-${session.id}-vet`"><AppIcon name="vet" :size="16" /> {{ session.vet_name }}</p>
+          <p class="tele-phone" v-if="session.client_phone" :id="`tele-session-${session.id}-phone`"><AppIcon name="phone" :size="16" /> {{ session.client_phone }}</p>
         </div>
         <div class="tele-card__right">
           <button
-            v-if="t.status === 'scheduled'"
+            v-if="session.status === 'scheduled'"
             type="button"
             class="btn-join"
-            @click="joinCall(t)"
+            @click="joinCall(session)"
           >
             <AppIcon name="telemedicine" :size="16" /> Unirse
           </button>
           <button
-            v-if="t.status === 'in_progress'"
+            v-if="session.status === 'in_progress'"
             type="button"
             class="btn-xs btn-xs--green"
-            @click="changeStatus(t, 'completed')"
+            @click="changeStatus(session, 'completed')"
           >{{ t('telemedicine.finish') }}</button>
           <button
-            v-if="t.status !== 'completed' && t.status !== 'cancelled'"
+            v-if="session.status !== 'completed' && session.status !== 'cancelled'"
             type="button"
             class="btn-xs btn-xs--red"
-            @click="changeStatus(t, 'cancelled')"
+            @click="changeStatus(session, 'cancelled')"
           >{{ t('telemedicine.cancelSession') }}</button>
         </div>
       </div>

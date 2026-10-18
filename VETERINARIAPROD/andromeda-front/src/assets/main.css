@@ -376,6 +376,9 @@ body #app .table th:last-child {
 
 body #app .btn-primary {
   min-height: 38px;
+  padding: 0 16px;
+  white-space: nowrap;
+  text-decoration: none;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -400,6 +403,9 @@ body #app .btn-primary:hover:not(:disabled) {
 
 body #app .btn-ghost {
   min-height: 38px;
+  padding: 0 16px;
+  white-space: nowrap;
+  text-decoration: none;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;

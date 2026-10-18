@@ -38,7 +38,7 @@ async function createPreference(req, res, next) {
       currency: inv.currency,
       payerEmail: inv.client_email,
       payerName: inv.client_name,
-      description: `Factura ${inv.invoice_number} - VetManager Pro`,
+      description: `Factura ${inv.invoice_number} - Andromeda`,
       orgId: req.user.orgId,
       branchId: req.user.branchId,
       idempotencyKey: `inv-${inv.id}-org-${req.user.orgId}-amount-${Math.round(balance * 100)}`,

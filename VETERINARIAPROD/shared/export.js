@@ -52,7 +52,7 @@ async function toExcel ({ title, subtitle, columns, rows, totals, meta = {}, aut
     rows = rows.slice(0, MAX_EXPORT_ROWS);
   }
   const wb = new ExcelJS.Workbook();
-  wb.creator   = 'VetManager API';
+  wb.creator   = 'Andromeda API';
   wb.created   = new Date();
   wb.modified  = new Date();
 
@@ -166,7 +166,7 @@ async function toExcel ({ title, subtitle, columns, rows, totals, meta = {}, aut
     currentRow++;
     ws.mergeCells(`A${currentRow}:${colLetter(columns.length)}${currentRow}`);
     const foot = ws.getCell(`A${currentRow}`);
-    foot.value = `Generado por: ${meta.generatedBy || 'VetManager'} — ${formatDateTime(new Date())}`;
+    foot.value = `Generado por: ${meta.generatedBy || 'Andromeda'} — ${formatDateTime(new Date())}`;
     foot.font  = { name: 'Calibri', size: 8, italic: true, color: { argb: '94A3B8' } };
     foot.alignment = { horizontal: 'right' };
   }

@@ -1,22 +1,56 @@
-# VetManager Pro
+# Andromeda
 
-Plataforma de gestión integral para clínicas veterinarias multi-sucursal, construida con una arquitectura de microservicios en Node.js y un frontend en Vue 3.
+[![Andromeda CI](https://github.com/ajpfox10/REP-PORTAFOLIO/actions/workflows/veterinaria-ci.yml/badge.svg)](https://github.com/ajpfox10/REP-PORTAFOLIO/actions/workflows/veterinaria-ci.yml)
 
-Cubre el circuito completo de una clínica: turnos, pacientes y propietarios, historia clínica, vacunación, laboratorio e imágenes, cirugías e internación, inventario, facturación (MercadoPago, Stripe y AFIP), telemedicina, peluquería, reportes, notificaciones multicanal y un portal de autogestión para los dueños de las mascotas.
+Plataforma SaaS de gestión para clínicas veterinarias multi-sucursal. Backend de microservicios en Node.js y frontend en Vue 3.
+
+Una clínica se registra sola, prueba el plan Pro gratis por 14 días y después se suscribe con MercadoPago. Desde ahí maneja todo el circuito de la clínica: turnos, pacientes y dueños, historia clínica, vacunación, laboratorio e imágenes, cirugías e internación, inventario, facturación, telemedicina, peluquería, reportes y un portal de autogestión para los dueños de las mascotas.
+
+![Panel de inicio en modo oscuro](docs/screenshots/inicio-oscuro.png)
+
+## Modelo SaaS
+
+| | Free | Básico | Pro | Enterprise |
+|---|---|---|---|---|
+| Sucursales | 1 | 1 | 3 | Sin límite |
+| Usuarios | 2 | 3 | 15 | Sin límite |
+| Precio mensual (ARS) | $0 | $29.900 | $59.900 | $119.900 |
+
+- **Registro autoservicio**: crea la organización, la sede principal y el usuario administrador, y arranca una prueba Pro de 14 días.
+- **Suscripciones con MercadoPago** (Preapproval): checkout, cancelación y webhook con firma verificada y eventos deduplicados. Sin credenciales y fuera de producción funciona en modo demo.
+- **Límites por plan**: al superar el cupo de sucursales o usuarios, la API responde `402 PLAN_LIMIT_REACHED` y la interfaz invita a cambiar de plan. También aplica al alta por SSO.
+- **Cuotas de uso** por funcionalidad (IA, SMS, etc.) en Redis, con tope absoluto incluso en planes ilimitados.
+
+| Landing | Suscripción y uso |
+|---|---|
+| ![Landing](docs/screenshots/landing.png) | ![Suscripción](docs/screenshots/suscripcion.png) |
+
+## Reportes
+
+Centro de reportes con resumen, finanzas, atención clínica y envíos programados:
+
+- KPIs del período, facturación por día, semana o mes, medios de pago, especies, diagnósticos y turnos.
+- Cada gráfico tiene su vista de tabla accesible.
+- Exportación a Excel, CSV y PDF.
+- **Envíos programados**: reportes diarios, semanales o mensuales que llegan por email. El scheduler reclama cada envío de forma atómica, así varias réplicas nunca mandan el mismo reporte dos veces.
+
+![Reportes](docs/screenshots/reportes.png)
 
 ## Funcionalidades
 
 | Área | Qué incluye |
 |---|---|
-| Operación | Agenda de turnos con control de concurrencia, triage, dashboard del día |
-| Clínica | Pacientes y propietarios, evoluciones médicas, diagnósticos, recetas, vacunas y desparasitaciones |
+| Operación | Agenda de turnos con control de concurrencia, triage, panel del día con primeros pasos |
+| Clínica | Pacientes y dueños, evoluciones, diagnósticos, recetas, vacunas y desparasitaciones |
 | Diagnóstico | Órdenes de laboratorio, diagnóstico por imágenes y patología |
-| Internación | Cirugías, hospitalizaciones y seguimiento |
-| Gestión | Inventario multi-sucursal con lotes, facturación electrónica, reportes programados y exportables |
-| Servicios | Telemedicina (WebRTC), grooming, asistente de IA con circuit breaker |
-| Comunicación | Bandeja interna, email, SMS, WhatsApp y push (FCM) con cola de reintentos |
-| Documentos | Ingesta de documentos por correo (Gmail, IMAP, Outlook) con OCR y asociación a pacientes |
-| Portal | Acceso de los dueños a turnos, historia y facturas de sus mascotas |
+| Internación | Cirugías, hospitalizaciones, monitoreo y alta |
+| Gestión | Inventario multi-sucursal, facturación (MercadoPago, Stripe, AFIP), sucursales y equipo |
+| Servicios | Telemedicina (WebRTC), peluquería con comisiones, asistente de IA con circuit breaker |
+| Comunicación | Email, SMS, WhatsApp y push (FCM) con cola de reintentos |
+| Documentos | Ingesta por correo (Gmail, IMAP, Outlook) con OCR y asociación a pacientes |
+| Portal | Los dueños ven turnos, historia clínica, vacunas y facturas de sus mascotas |
+
+La interfaz tiene modo claro y oscuro, búsqueda global con `Ctrl+K` y está en español (con inglés disponible).
 
 ## Arquitectura
 
@@ -31,12 +65,14 @@ flowchart LR
   AU & PA & ME & BI & OT --> DB[(MySQL + réplica)]
   AU & PA & ME & BI & OT --> RD[(Redis)]
   ME & OT --> S3[(MinIO)]
+  MP[MercadoPago] -->|webhook firmado| GW
 ```
 
-- **`gateway/`**: punto de entrada HTTP y WebSocket. Autenticación, WAF, rate limiting, CSRF, versionado de API y proxy hacia los servicios con firma HMAC.
-- **`services/`**: 12 microservicios independientes (`auth`, `patients`, `medical`, `lab-imaging`, `billing`, `telemedicine`, `grooming`, `reports`, `notifications`, `portal`, `ai`, `documents`), cada uno con su contrato OpenAPI.
-- **`shared/`**: capa de plataforma común (base de servicio, base de datos, JWT, RBAC/ABAC, cifrado de campos, auditoría, event bus con outbox, tracing, métricas, feature flags).
+- **`gateway/`**: punto de entrada HTTP y WebSocket. Autenticación, WAF, rate limiting, CSRF, versionado de API y proxy firmado con HMAC hacia los servicios.
+- **`services/`**: 12 microservicios (`auth`, `patients`, `medical`, `lab-imaging`, `billing`, `telemedicine`, `grooming`, `reports`, `notifications`, `portal`, `ai`, `documents`), cada uno con su contrato OpenAPI.
+- **`shared/`**: plataforma común (base de servicio, base de datos, JWT, RBAC/ABAC, suscripciones, cifrado de campos, auditoría, event bus con outbox, tracing, métricas).
 - **`andromeda-front/`**: SPA en Vue 3 + Vite + Pinia.
+- **`scripts/migrations/`**: esquema completo versionado (141 tablas, vistas y procedimientos), compatible con MySQL 8 y MariaDB.
 
 Más detalle en [docs/architecture.md](docs/architecture.md).
 
@@ -44,20 +80,22 @@ Más detalle en [docs/architecture.md](docs/architecture.md).
 
 | Capa | Tecnologías |
 |---|---|
-| Backend | Node.js 20, Express, Zod / express-validator, OpenAPI |
+| Backend | Node.js 20, Express, express-validator, OpenAPI |
 | Datos | MySQL 8 (primaria + réplica de lectura), Redis, MinIO (S3) |
-| Frontend | Vue 3, Vite, Pinia, Vue Router, Playwright |
-| Seguridad | JWT RS256 con rotación de claves, Argon2, CSRF, RBAC dinámico, 2FA, cifrado AES-256-GCM de datos sensibles |
-| Observabilidad | Prometheus, Grafana, Alertmanager, Tempo (OpenTelemetry), logs estructurados con Winston |
+| Frontend | Vue 3, Vite, Pinia, Vue Router, Lucide, Playwright |
+| Pagos | MercadoPago (suscripciones y cobros), Stripe, AFIP (factura electrónica) |
+| Seguridad | JWT RS256 con rotación de claves, Argon2, CSRF, RBAC dinámico, 2FA, cifrado AES-256-GCM |
+| Observabilidad | Prometheus, Grafana, Alertmanager, Tempo (OpenTelemetry), logs estructurados |
 | Infraestructura | Docker Compose, Kubernetes, Terraform, Railway |
-| Calidad | Jest, Supertest, tests de contrato, mutation testing (Stryker), k6, CodeQL, Trivy |
+| Calidad | Jest, Supertest, tests de contrato, Playwright, CodeQL, GitHub Actions |
 
 ## Seguridad
 
-- Access y refresh token en cookies `httpOnly`, con token CSRF separado.
-- JWT firmados con RS256 y soporte de rotación de claves (keyring con `kid`).
+- Sesiones del staff y del portal de dueños en cookies `httpOnly`: el JavaScript de la página nunca ve los tokens. CSRF con token separado.
+- JWT firmados con RS256 y rotación de claves (keyring con `kid`).
 - RBAC dinámico por organización y ABAC por sucursal; aislamiento multi-tenant en cada consulta.
 - Comunicación entre servicios firmada con HMAC y ventana de validez.
+- Webhooks de pago con verificación de firma e idempotencia.
 - Cifrado a nivel de campo para datos clínicos y personales.
 - WAF, protección SSRF, rate limiting distribuido, detección de fuerza bruta y fingerprint de dispositivo.
 - Auditoría de accesos y de cambios de permisos, exportable a SIEM.
@@ -71,10 +109,19 @@ Requisitos: Node.js 20, MySQL 8 y Redis 7 (o Docker).
 ```bash
 cp .env.example .env          # completar credenciales y secretos
 npm ci
-npm run migrate
+npm run migrate               # crea el esquema completo y los catálogos base
 ```
 
-Con Docker Compose se levanta el stack completo (gateway, servicios, frontend, Redis, MinIO y observabilidad):
+Variables principales del modelo SaaS (ver `.env.example`):
+
+| Variable | Para qué |
+|---|---|
+| `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET` | Suscripciones con MercadoPago. Sin ellas, fuera de producción, el checkout funciona en modo demo |
+| `TRIAL_DAYS` | Días de prueba gratuita (14 por defecto) |
+| `PLAN_PRICE_BASIC`, `PLAN_PRICE_PRO`, `PLAN_PRICE_ENTERPRISE` | Precios mensuales |
+| `REPORTS_SCHEDULER_ENABLED` | Activa los envíos programados de reportes |
+
+Con Docker Compose se levanta el stack completo:
 
 ```bash
 docker compose up -d
@@ -99,8 +146,11 @@ npm run dev
 npm run test:unit         # unitarios
 npm run test:security     # CORS, CSRF, rate limit, sanitización
 npm run test:contract     # contratos entre gateway y servicios
-npm test                  # suite completa (requiere MySQL y Redis)
+npx jest tests/integration --forceExit   # integración de servicios
+cd andromeda-front && npm run e2e        # end-to-end con Playwright
 ```
+
+El CI ([`.github/workflows/veterinaria-ci.yml`](../.github/workflows/veterinaria-ci.yml)) corre las migraciones desde cero sobre MySQL 8, toda la suite del backend, el chequeo de tipos, el build y los e2e del frontend. CodeQL analiza el código en cada push.
 
 ## Documentación operativa
 

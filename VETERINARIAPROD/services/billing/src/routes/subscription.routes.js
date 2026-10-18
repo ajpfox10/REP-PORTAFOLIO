@@ -133,7 +133,7 @@ router.post('/checkout',
       const preapproval = await mp.createPreapproval({
         orgId,
         plan: plan.id,
-        reason: `VetManager Pro — Plan ${plan.name}`,
+        reason: `Andromeda — Plan ${plan.name}`,
         amount: plan.monthlyPrice,
         currency: subscriptions.CURRENCY,
         payerEmail: row.billing_email || req.user.email,

@@ -1,6 +1,6 @@
-# Andromeda: frontend de VetManager Pro
+# Andromeda: frontend
 
-Aplicación web de VetManager Pro, construida con Vue 3, Vite, Pinia y Vue Router.
+Aplicación web de Andromeda, construida con Vue 3, Vite, Pinia y Vue Router.
 
 ## Estructura
 

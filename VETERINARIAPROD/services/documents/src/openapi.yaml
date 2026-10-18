@@ -1,6 +1,6 @@
 openapi: '3.0.3'
 info:
-  title: VetManager Documents Service
+  title: Andromeda Documents Service
   version: '1.0.0'
 servers:
   - url: /

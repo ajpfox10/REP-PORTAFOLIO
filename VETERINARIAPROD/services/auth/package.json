@@ -1,7 +1,7 @@
 {
   "name": "vetmanager-auth",
   "version": "1.0.0",
-  "description": "VetManager Pro — Auth Service",
+  "description": "Andromeda — Auth Service",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

@@ -15,7 +15,7 @@ const { authenticator } = require('otplib');
 const QRCode            = require('qrcode');
 const { createLogger }  = require('./logger');
 
-const APP_NAME = process.env.APP_NAME || 'VetManager Pro';
+const APP_NAME = process.env.APP_NAME || 'Andromeda';
 const log = createLogger('two-factor');
 
 // OTP window: accept 1 period before/after to handle clock drift

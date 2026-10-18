@@ -1,5 +1,5 @@
 ###############################################################################
-# Upsun configuration — VetManager Pro
+# Upsun configuration — Andromeda
 # Single-app deployment: all microservices managed by PM2
 # Gateway exposes port 8888 to the web; internal services on localhost ports.
 ###############################################################################

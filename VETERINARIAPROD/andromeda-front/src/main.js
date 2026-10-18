@@ -26,11 +26,11 @@ function showUnhandledError(scope, error, fallback) {
 }
 
 app.config.errorHandler = (error) => {
-  showUnhandledError('app', error, 'La pantalla encontro un error inesperado.')
+  showUnhandledError('app', error, 'La pantalla encontró un error inesperado.')
 }
 
 window.addEventListener('unhandledrejection', (event) => {
-  showUnhandledError('unhandledrejection', event.reason, 'Una operación fallo sin manejarse.')
+  showUnhandledError('unhandledrejection', event.reason, 'Una operación falló sin manejarse.')
 })
 
 app.use(router)

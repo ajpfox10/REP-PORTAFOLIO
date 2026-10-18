@@ -9,6 +9,8 @@ function makeJwt(payload) {
 async function mockAuthenticatedSession(page, overrides = {}) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'es-AR' })
+    // La app solo intenta restaurar la sesión si hubo un login previo
+    window.localStorage.setItem('vet_session', '1')
   })
 
   const token = makeJwt({
@@ -146,7 +148,8 @@ test('authenticated dashboard loads today appointments and can logout', async ({
   await expect(page.getByText('Turnos de hoy')).toBeVisible()
   await expect(page.getByText('Luna')).toBeVisible()
 
-  await page.getByTitle(/Cerrar sesi/i).click()
+  await page.locator('.user-menu__trigger').click()
+  await page.getByRole('menuitem', { name: /Cerrar sesi/i }).click()
 
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByTestId('login-page')).toBeVisible()

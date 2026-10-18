@@ -1,6 +1,6 @@
 openapi: '3.0.3'
 info:
-  title: VetManager Patients Service
+  title: Andromeda Patients Service
   version: '1.0.0'
   description: Patients, clients, species, breeds and branches management
 

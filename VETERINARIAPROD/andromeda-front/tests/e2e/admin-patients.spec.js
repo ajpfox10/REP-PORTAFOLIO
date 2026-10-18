@@ -9,6 +9,8 @@ function makeJwt(payload) {
 async function mockAuthenticatedSession(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'es-AR' })
+    // La app solo intenta restaurar la sesión si hubo un login previo
+    window.localStorage.setItem('vet_session', '1')
   })
 
   const token = makeJwt({
@@ -378,7 +380,7 @@ test('admin can manage policy, role overrides and user creation', async ({ page 
   await form.locator('input[placeholder="VET-0001"]').fill('VET-1234')
   await form.getByRole('button', { name: /Crear usuario/i }).click()
 
-  await expect(page.getByText('bruno@example.com')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'bruno@example.com' })).toBeVisible()
 })
 
 test('patients can create and edit a patient', async ({ page }) => {

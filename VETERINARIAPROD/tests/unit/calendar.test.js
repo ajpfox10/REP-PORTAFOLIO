@@ -211,7 +211,7 @@ describe('shared/calendar — listEvents', () => {
 // ─── Tests: ical.js ───────────────────────────────────────────────────────────
 
 describe('shared/ical — generateAppointmentIcs', () => {
-  const clinic = { name: 'VetManager', address: 'Av. Corrientes 1234', phone: '011-4444-5555', email: 'info@vet.com' };
+  const clinic = { name: 'Andromeda', address: 'Av. Corrientes 1234', phone: '011-4444-5555', email: 'info@vet.com' };
 
   test('genera un string .ics con cabeceras válidas', () => {
     const ics = generateAppointmentIcs(APPT, clinic);
@@ -236,7 +236,7 @@ describe('shared/ical — generateAppointmentIcs', () => {
     expect(ics).toContain('BEGIN:VALARM');
   });
 
-  test('incluye ID de VetManager en propiedades extendidas', () => {
+  test('incluye ID de Andromeda en propiedades extendidas', () => {
     const ics = generateAppointmentIcs(APPT, clinic);
     expect(ics).toContain('X-VETMANAGER-APPOINTMENT-ID:42');
   });
@@ -264,7 +264,7 @@ describe('shared/ical — generateAgendaIcs', () => {
       { ...APPT, id: 2, patient_name: 'Max'  },
       { ...APPT, id: 3, patient_name: 'Coco' },
     ];
-    const ics = generateAgendaIcs(appts, { name: 'VetManager' });
+    const ics = generateAgendaIcs(appts, { name: 'Andromeda' });
     expect((ics.match(/BEGIN:VEVENT/g) || []).length).toBe(3);
     expect(ics).toContain('Luna');
     expect(ics).toContain('Max');
@@ -272,7 +272,7 @@ describe('shared/ical — generateAgendaIcs', () => {
   });
 
   test('genera .ics vacío sin eventos', () => {
-    const ics = generateAgendaIcs([], { name: 'VetManager' });
+    const ics = generateAgendaIcs([], { name: 'Andromeda' });
     expect(ics).toContain('BEGIN:VCALENDAR');
     expect(ics).not.toContain('BEGIN:VEVENT');
   });
@@ -290,18 +290,18 @@ describe('shared/ical — generateVaccinationReminder', () => {
   };
 
   test('incluye el nombre de la vacuna', () => {
-    const ics = generateVaccinationReminder(vacc, { name: 'VetManager' });
+    const ics = generateVaccinationReminder(vacc, { name: 'Andromeda' });
     expect(ics).toContain('Triple Felina');
     expect(ics).toContain('Toby');
   });
 
   test('incluye alarma VALARM', () => {
-    const ics = generateVaccinationReminder(vacc, { name: 'VetManager' });
+    const ics = generateVaccinationReminder(vacc, { name: 'Andromeda' });
     expect(ics).toContain('BEGIN:VALARM');
   });
 
   test('incluye ID de vacunación en propiedades extendidas', () => {
-    const ics = generateVaccinationReminder(vacc, { name: 'VetManager' });
+    const ics = generateVaccinationReminder(vacc, { name: 'Andromeda' });
     expect(ics).toContain('X-VETMANAGER-VACCINATION-ID:10');
   });
 });

@@ -51,7 +51,7 @@ function createTransport() {
 
 const transport = createTransport();
 
-const FROM = process.env.EMAIL_FROM || '"VetManager Pro" <no-reply@vetmanager.com>';
+const FROM = process.env.EMAIL_FROM || '"Andromeda" <no-reply@vetmanager.com>';
 const APP_URL = process.env.APP_URL || 'http://localhost:4050';
 
 // ── Low-level send ────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ async function send({ to, subject, html, text }) {
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────
-function baseHtml(content, title = 'VetManager Pro') {
+function baseHtml(content, title = 'Andromeda') {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -83,9 +83,9 @@ function baseHtml(content, title = 'VetManager Pro') {
 </head>
 <body>
   <div class="card">
-    <div class="header"><h1>VetManager Pro</h1></div>
+    <div class="header"><h1>Andromeda</h1></div>
     <div class="content">${content}</div>
-    <div class="footer">Este email fue enviado desde VetManager Pro. Por favor no responda a este mensaje.</div>
+    <div class="footer">Este email fue enviado desde Andromeda. Por favor no responda a este mensaje.</div>
   </div>
 </body>
 </html>`;
@@ -105,7 +105,7 @@ async function sendPasswordReset({ to, token, expiresInMinutes = 60, portal = fa
 
   return send({
     to,
-    subject: 'Restablecer contraseña — VetManager Pro',
+    subject: 'Restablecer contraseña — Andromeda',
     html,
     text: `Restablezca su contraseña: ${link} (expira en ${expiresInMinutes} min)`,
   });
@@ -120,13 +120,13 @@ async function sendWelcome({ to, name, orgName, tempPassword = null }) {
 
   const html = baseHtml(`
     <p>Hola <strong>${escHtml(name)}</strong>,</p>
-    <p>Su cuenta en <strong>${escHtml(orgName)}</strong> ha sido creada exitosamente en VetManager Pro.</p>
+    <p>Su cuenta en <strong>${escHtml(orgName)}</strong> ha sido creada exitosamente en Andromeda.</p>
     ${credBlock}
     <a href="${APP_URL}/login" class="btn">Iniciar sesión</a>
     <p style="font-size:12px;color:#6b7280;">Si no esperaba este correo, ignórelo o contáctenos.</p>
-  `, 'Bienvenido a VetManager Pro');
+  `, 'Bienvenido a Andromeda');
 
-  return send({ to, subject: `Bienvenido a VetManager Pro — ${orgName}`, html });
+  return send({ to, subject: `Bienvenido a Andromeda — ${orgName}`, html });
 }
 
 // ── New device / IP login alert ───────────────────────────────────────────────
@@ -147,7 +147,7 @@ async function sendNewDeviceLogin({ to, name, ip, userAgent, time, appUrl }) {
 
   return send({
     to,
-    subject: '⚠️ Nuevo inicio de sesión en su cuenta — VetManager Pro',
+    subject: '⚠️ Nuevo inicio de sesión en su cuenta — Andromeda',
     html,
     text: `Inicio de sesión detectado desde IP ${ip} el ${time}. Si no fue usted, visite ${url}/security/sessions`,
   });
@@ -161,7 +161,7 @@ async function send2faEnabled({ to, name }) {
     <p>Si no realizó este cambio, contáctenos inmediatamente.</p>
   `, 'Autenticación 2FA activada');
 
-  return send({ to, subject: 'Autenticación 2FA activada — VetManager Pro', html });
+  return send({ to, subject: 'Autenticación 2FA activada — Andromeda', html });
 }
 
 // ── Appointment reminder ──────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ async function sendInvoiceReceipt({ to, ownerName, invoiceNumber, total, paidAt,
       <li><strong>Fecha:</strong> ${escHtml(paidAt)}</li>
       <li><strong>Clínica:</strong> ${escHtml(clinicName)}</li>
     </ul>
-    <p>Gracias por confiar en VetManager Pro.</p>
+    <p>Gracias por confiar en Andromeda.</p>
   `, 'Comprobante de pago');
 
   return send({ to, subject: `Comprobante de pago #${invoiceNumber} — ${clinicName}`, html });
@@ -221,7 +221,7 @@ async function sendReportEmail({ email, subject, reportName, buffer, filename, m
   const safeSubject = sanitizeHeader(subject);
   const safeTo      = sanitizeHeader(email);
   await transport.sendMail({
-    from    : sanitizeHeader(`"VetManager Reportes" <${process.env.FROM_EMAIL || 'reportes@vetmanager.com'}>`),
+    from    : sanitizeHeader(`"Andromeda Reportes" <${process.env.FROM_EMAIL || 'reportes@vetmanager.com'}>`),
     to      : safeTo,
     subject : safeSubject,
     html    : `
@@ -231,7 +231,7 @@ async function sendReportEmail({ email, subject, reportName, buffer, filename, m
         <p>Se adjunta el reporte <strong>${escHtml(reportName)}</strong> generado automáticamente el
            <strong>${escHtml(formatDate(new Date()))}</strong>.</p>
         <p style="color:#64748b;font-size:13px;">
-          Este correo fue generado autom&#xE1;ticamente por VetManager Pro.<br>
+          Este correo fue generado autom&#xE1;ticamente por Andromeda.<br>
           Para cambiar la configuraci&#xF3;n de reportes programados, ingres&#xE1; al panel de administraci&#xF3;n.
         </p>
       </div>`,

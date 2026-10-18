@@ -52,7 +52,7 @@ function registerDocsRoutes(app, version) {
             url: server.url.replace(`/api/${version}`, `/api/${supportedVersion}`),
           })),
         }, {
-          customSiteTitle: 'VetManager Pro API',
+          customSiteTitle: 'Andromeda API',
           swaggerOptions: { persistAuthorization: false },
         }));
       }

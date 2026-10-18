@@ -232,7 +232,7 @@ async function exportPersonalData (clientId, orgId) {
 
   const exportPackage = {
     exportDate   : new Date().toISOString(),
-    dataController: process.env.ORG_NAME || 'VetManager Pro',
+    dataController: process.env.ORG_NAME || 'Andromeda',
     legalBasis   : 'Ley 25.326 (Argentina) / GDPR Art. 15 & 20',
     client,
     patients,
