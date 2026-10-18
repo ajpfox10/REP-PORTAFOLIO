@@ -36,6 +36,10 @@
   --danger-light: #FEE2E2;
   --info: #2563EB;
   --info-light: #DBEAFE;
+  --violet: #7C3AED;
+  --violet-light: #EDE9FE;
+  --orange: #C2410C;
+  --orange-light: #FFEDD5;
 
   --brand-mark-bg: #0E7C6B;
   --brand-mark-fg: #FFFFFF;
@@ -90,6 +94,10 @@
     --danger-light: rgba(248, 113, 113, 0.14);
     --info: #60A5FA;
     --info-light: rgba(96, 165, 250, 0.14);
+    --violet: #A78BFA;
+    --violet-light: rgba(167, 139, 250, 0.16);
+    --orange: #FB923C;
+    --orange-light: rgba(251, 146, 60, 0.15);
     --brand-mark-bg: #2BB59C;
     --brand-mark-fg: #04211C;
     --chart-series: #1FA88E;
@@ -129,6 +137,10 @@
   --danger-light: rgba(248, 113, 113, 0.14);
   --info: #60A5FA;
   --info-light: rgba(96, 165, 250, 0.14);
+  --violet: #A78BFA;
+  --violet-light: rgba(167, 139, 250, 0.16);
+  --orange: #FB923C;
+  --orange-light: rgba(251, 146, 60, 0.15);
   --brand-mark-bg: #2BB59C;
   --brand-mark-fg: #04211C;
   --chart-series: #1FA88E;

@@ -22,21 +22,21 @@
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card" style="--c:#FFF3CC;--ct:#8A6200">
+      <div class="stat-card" style="--c:var(--warning-light);--ct:var(--warning)">
         <span class="stat-card__icon"><AppIcon name="patients" :size="16" /></span>
         <div>
           <strong>{{ stats.pendingReport }}</strong>
           <span>{{ t('imaging.pendingReport') }}</span>
         </div>
       </div>
-      <div class="stat-card" style="--c:#D6F3EC;--ct:#1A9E7F">
+      <div class="stat-card" style="--c:var(--success-light);--ct:var(--success)">
         <span class="stat-card__icon"><AppIcon name="check" :size="16" /></span>
         <div>
           <strong>{{ stats.completed }}</strong>
           <span>{{ t('imaging.completed') }}</span>
         </div>
       </div>
-      <div class="stat-card" style="--c:#D6EEFF;--ct:#1A5FAA">
+      <div class="stat-card" style="--c:var(--info-light);--ct:var(--info)">
         <span class="stat-card__icon"><AppIcon name="patients" :size="16" /></span>
         <div>
           <strong>{{ stats.topModality }}</strong>
@@ -496,24 +496,24 @@ onUnmounted(() => clearTimeout(loadTimer))
 .pet-cell div { display: flex; flex-direction: column; gap: 1px; }
 .pet-cell strong { font-size: 0.88rem; color: var(--text); }
 .sub { font-size: 0.75rem; color: var(--text-3); }
-.record-link { font-size: 0.78rem; font-weight: 800; color: #1d4ed8; white-space: nowrap; }
+.record-link { font-size: 0.78rem; font-weight: 800; color: var(--info); white-space: nowrap; }
 .modality-name { font-size: 0.88rem; color: var(--text); display: block; }
 
 /* Badges */
 .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.73rem; font-weight: 700; white-space: nowrap; }
-.badge--gray   { background: #EAEAEA; color: #555; }
-.badge--yellow { background: #FFF3CC; color: #8A6200; }
-.badge--blue   { background: #D6EEFF; color: #1A5FAA; }
-.badge--green  { background: #D6F3EC; color: #1A9E7F; }
-.badge--red    { background: #FDEAEA; color: #c0392b; }
-.badge--purple { background: #EDE6FF; color: #5B21B6; }
-.badge--orange { background: #FEF0E0; color: #B45309; }
+.badge--gray   { background: var(--border); color: var(--text-2); }
+.badge--yellow { background: var(--warning-light); color: var(--warning); }
+.badge--blue   { background: var(--info-light); color: var(--info); }
+.badge--green  { background: var(--success-light); color: var(--success); }
+.badge--red    { background: var(--danger-light); color: var(--danger); }
+.badge--purple { background: var(--violet-light); color: var(--violet); }
+.badge--orange { background: var(--orange-light); color: var(--warning); }
 
 /* Acciones */
 .action-btns { display: flex; gap: 6px; }
 .btn-action { padding: 5px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: none; font-size: 0.78rem; font-weight: 500; color: var(--text-2); cursor: pointer; transition: background 0.12s; }
 .btn-action:hover { background: var(--surface); }
-.btn-action--primary { background: var(--primary); color: white; border-color: var(--primary); }
+.btn-action--primary { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
 .btn-action--primary:hover { opacity: 0.88; }
 
 /* Paginación */
@@ -523,7 +523,7 @@ onUnmounted(() => clearTimeout(loadTimer))
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Botones */
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background var(--transition); }
@@ -567,7 +567,7 @@ onUnmounted(() => clearTimeout(loadTimer))
 /* Info tipo estudio */
 .type-info { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 10px 14px; gap: 6px; }
 .type-info__desc { font-size: 0.84rem; color: var(--text-2); }
-.type-info__prep { font-size: 0.82rem; color: #8A6200; background: #FFF3CC; border-radius: var(--radius-sm); padding: 6px 10px; margin-top: 4px; }
+.type-info__prep { font-size: 0.82rem; color: var(--warning); background: var(--warning-light); border-radius: var(--radius-sm); padding: 6px 10px; margin-top: 4px; }
 
 /* Informe solo lectura */
 .report-readonly { display: flex; flex-direction: column; gap: 16px; }
@@ -577,7 +577,7 @@ onUnmounted(() => clearTimeout(loadTimer))
 
 /* Alertas */
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 
 /* Estados */

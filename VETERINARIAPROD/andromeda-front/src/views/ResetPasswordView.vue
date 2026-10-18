@@ -213,13 +213,13 @@ async function handleSubmit() {
 }
 
 .alert--error {
-  background: #fdf3f3;
-  color: #a93226;
+  background: var(--danger-light);
+  color: var(--danger);
 }
 
 .alert--success {
-  background: #eafaf3;
-  color: #1e8449;
+  background: var(--success-light);
+  color: var(--success);
 }
 
 @media (max-width: 520px) {

@@ -203,13 +203,13 @@ defineProps({
   gap: 4px;
   padding: 12px 14px;
   margin-bottom: 14px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
   border-radius: var(--radius);
-  background: #eff6ff;
+  background: var(--info-light);
 }
 
 .orders-intro strong {
-  color: #1e3a8a;
+  color: var(--info);
   font-size: 0.9rem;
 }
 

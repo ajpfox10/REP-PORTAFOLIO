@@ -14,28 +14,28 @@
 
     <!-- KPI Stats bar -->
     <div class="kpi-row">
-      <div class="kpi" style="--c:#D6EEFF;--ct:#1A5FAA">
+      <div class="kpi" style="--c:var(--info-light);--ct:var(--info)">
         <span><AppIcon name="telemedicine" :size="16" /></span>
         <div>
           <strong>{{ statsData.total }}</strong>
           <span>{{ t('telemedicine.totalSessions') }}</span>
         </div>
       </div>
-      <div class="kpi" style="--c:#D6F3EC;--ct:#1A9E7F">
+      <div class="kpi" style="--c:var(--success-light);--ct:var(--success)">
         <span><AppIcon name="check" :size="16" /></span>
         <div>
           <strong>{{ statsData.completed }}</strong>
           <span>{{ t('telemedicine.completed') }}</span>
         </div>
       </div>
-      <div class="kpi" style="--c:#FFF3CC;--ct:#8A6200">
+      <div class="kpi" style="--c:var(--warning-light);--ct:var(--warning)">
         <span><AppIcon name="clock" :size="16" /></span>
         <div>
           <strong>{{ statsData.avgDuration }} min</strong>
           <span>Duración promedio</span>
         </div>
       </div>
-      <div class="kpi" style="--c:#F0E6FF;--ct:#6B21A8">
+      <div class="kpi" style="--c:var(--violet-light);--ct:var(--violet)">
         <span><AppIcon name="appointments" :size="16" /></span>
         <div>
           <strong>{{ statsData.today }}</strong>
@@ -518,15 +518,15 @@ onMounted(() => { load(); loadStats(); loadVets(); loadPlatforms() })
 
 /* KPI Stats bar */
 .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.kpi { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--c, #D6EEFF); border-radius: var(--radius-lg); }
+.kpi { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--c, var(--info-light)); border-radius: var(--radius-lg); }
 .kpi > span:first-child { font-size: 1.6rem; flex-shrink: 0; }
 .kpi > div { display: flex; flex-direction: column; gap: 2px; }
-.kpi strong { font-size: 1.25rem; font-weight: 700; color: var(--ct, #1A5FAA); line-height: 1.1; }
-.kpi > div > span { font-size: 0.75rem; color: var(--ct, #1A5FAA); opacity: 0.8; white-space: nowrap; }
+.kpi strong { font-size: 1.25rem; font-weight: 700; color: var(--ct, var(--info)); line-height: 1.1; }
+.kpi > div > span { font-size: 0.75rem; color: var(--ct, var(--info)); opacity: 0.8; white-space: nowrap; }
 @media (max-width: 700px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 400px) { .kpi-row { grid-template-columns: 1fr; } }
 
-.info-banner { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; background: #EEF6FF; border-radius: var(--radius-lg); border-left: 3px solid #90D5F0; font-size: 0.85rem; }
+.info-banner { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; background: var(--info-light); border-radius: var(--radius-lg); border-left: 3px solid color-mix(in srgb, var(--info) 35%, transparent); font-size: 0.85rem; }
 .info-banner span:first-child { font-size: 1.4rem; flex-shrink: 0; }
 .info-banner strong { display: block; color: var(--text); margin-bottom: 2px; }
 .info-banner span:last-child { color: var(--text-2); }
@@ -556,21 +556,21 @@ onMounted(() => { load(); loadStats(); loadVets(); loadPlatforms() })
 
 /* Badges */
 .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-.status--scheduled   { background: #D6EEFF; color: #1A5FAA; }
-.status--in_progress { background: #FFF3CC; color: #8A6200; }
-.status--completed   { background: #D6F3EC; color: #1A9E7F; }
-.status--cancelled   { background: #FDEAEA; color: #c0392b; }
+.status--scheduled   { background: var(--info-light); color: var(--info); }
+.status--in_progress { background: var(--warning-light); color: var(--warning); }
+.status--completed   { background: var(--success-light); color: var(--success); }
+.status--cancelled   { background: var(--danger-light); color: var(--danger); }
 .status--no_show     { background: var(--surface-2); color: var(--text-3); }
 
-.btn-join { padding: 8px 14px; background: linear-gradient(135deg, #4A90D9 0%, #2C6FAC 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity var(--transition); }
+.btn-join { padding: 8px 14px; background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity var(--transition); }
 .btn-join:hover { opacity: 0.9; }
 
 .btn-xs { padding: 4px 10px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
 .btn-xs:hover { opacity: 0.8; }
-.btn-xs--green { background: #D6F3EC; color: #1A9E7F; }
-.btn-xs--red   { background: #FDEAEA; color: #c0392b; }
+.btn-xs--green { background: var(--success-light); color: var(--success); }
+.btn-xs--red   { background: var(--danger-light); color: var(--danger); }
 
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background var(--transition); }
@@ -594,7 +594,7 @@ onMounted(() => { load(); loadStats(); loadVets(); loadPlatforms() })
 .req { color: var(--danger); }
 .modal__actions { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px 24px; }
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 .loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--text-3); font-size: 0.9rem; background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
 .empty-state__emoji { font-size: 3rem; }

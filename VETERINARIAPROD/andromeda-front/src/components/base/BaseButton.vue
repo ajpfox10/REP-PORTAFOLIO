@@ -74,8 +74,8 @@ defineProps({
 }
 
 .base-button--danger:hover:not(:disabled) {
-  background: #B91C1C;
-  border-color: #B91C1C;
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 .base-button--sm {

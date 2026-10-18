@@ -553,8 +553,8 @@ function boolLabel(value) {
 
 /* Badges */
 .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-.badge--active   { background: #D6F3EC; color: #1A9E7F; }
-.badge--inactive { background: #FDEAEA; color: #c0392b; }
+.badge--active   { background: var(--success-light); color: var(--success); }
+.badge--inactive { background: var(--danger-light); color: var(--danger); }
 .badge--species  { font-size: 0.72rem; }
 
 /* Paginación */
@@ -574,7 +574,7 @@ function boolLabel(value) {
 .btn-primary {
   padding: 10px 20px;
   background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%);
-  color: white; border: none; border-radius: var(--radius);
+  color: var(--primary-contrast); border: none; border-radius: var(--radius);
   font-size: 0.9rem; font-weight: 600; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px;
   transition: opacity var(--transition), transform var(--transition);
@@ -629,8 +629,8 @@ function boolLabel(value) {
 }
 
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
-.alert--warning { background: #fff8e6; color: #8a5a00; border-left: 3px solid #f0b429; }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
+.alert--warning { background: var(--warning-light); color: var(--warning); border-left: 3px solid var(--warning); }
 .mx { margin: 0 24px 8px; }
 
 .loading-state, .empty-state {

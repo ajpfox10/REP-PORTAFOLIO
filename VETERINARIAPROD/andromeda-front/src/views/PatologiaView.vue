@@ -14,13 +14,13 @@
 
     <!-- KPIs -->
     <div class="kpi-row">
-      <div class="kpi" style="--c:#FFF3CC;--ct:#8A6200">
+      <div class="kpi" style="--c:var(--warning-light);--ct:var(--warning)">
         <span><AppIcon name="check" :size="16" /></span><div><strong>{{ kpis.pending }}</strong><span>{{ t('pathology.pending') }}</span></div>
       </div>
-      <div class="kpi" style="--c:#E8D6FF;--ct:#6A1AAA">
+      <div class="kpi" style="--c:var(--violet-light);--ct:var(--violet)">
         <span><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.processing }}</strong><span>{{ t('pathology.processing') }}</span></div>
       </div>
-      <div class="kpi" style="--c:#D6F3EC;--ct:#1A9E7F">
+      <div class="kpi" style="--c:var(--success-light);--ct:var(--success)">
         <span><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.reported }}</strong><span>{{ t('pathology.reported') }}</span></div>
       </div>
     </div>
@@ -624,20 +624,20 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 .action-btns { display: flex; gap: 6px; }
 
 .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-.status--pending    { background: #FFF3CC; color: #8A6200; }
-.status--processing { background: #E8D6FF; color: #6A1AAA; }
-.status--reported   { background: #D6F3EC; color: #1A9E7F; }
-.beh--benign    { background: #D6F3EC; color: #1A9E7F; }
-.beh--malignant { background: #FDEAEA; color: #c0392b; }
-.beh--borderline { background: #FFF3CC; color: #8A6200; }
+.status--pending    { background: var(--warning-light); color: var(--warning); }
+.status--processing { background: var(--violet-light); color: var(--violet); }
+.status--reported   { background: var(--success-light); color: var(--success); }
+.beh--benign    { background: var(--success-light); color: var(--success); }
+.beh--malignant { background: var(--danger-light); color: var(--danger); }
+.beh--borderline { background: var(--warning-light); color: var(--warning); }
 
 .btn-xs { padding: 4px 10px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
 .btn-xs:hover { opacity: 0.8; }
-.btn-xs--blue   { background: #D6EEFF; color: #1A5FAA; }
-.btn-xs--purple { background: #E8D6FF; color: #6A1AAA; }
-.btn-xs--red    { background: #FDEAEA; color: #c0392b; }
+.btn-xs--blue   { background: var(--info-light); color: var(--info); }
+.btn-xs--purple { background: var(--violet-light); color: var(--violet); }
+.btn-xs--red    { background: var(--danger-light); color: var(--danger); }
 
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.15s, transform 0.15s; }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.15s, transform 0.15s; }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; }
@@ -673,7 +673,7 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 
 .modal__actions { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px 24px; }
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 
 .loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--text-3); font-size: 0.9rem; background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
@@ -703,6 +703,6 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 .tnm-row { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: 0.88rem; }
 .sample-detail { background: var(--surface); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
 .sample-detail__header { font-size: 0.82rem; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
-.result-section { background: #F0FFF8; border-radius: var(--radius); padding: 14px; border: 1px solid #b2e4d0; }
+.result-section { background: var(--success-light); border-radius: var(--radius); padding: 14px; border: 1px solid color-mix(in srgb, var(--success) 30%, transparent); }
 .no-result-note { font-size: 0.85rem; color: var(--text-3); padding: 12px 0; font-style: italic; }
 </style>

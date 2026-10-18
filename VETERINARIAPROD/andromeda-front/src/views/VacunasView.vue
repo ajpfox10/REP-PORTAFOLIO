@@ -30,28 +30,28 @@
     <template v-if="mainTab === 'vacunas'">
       <!-- Stats rápidos -->
       <div class="stats-row">
-        <div class="stat-card" style="--c:#D6F3EC;--ct:#1A9E7F">
+        <div class="stat-card" style="--c:var(--success-light);--ct:var(--success)">
           <span class="stat-card__icon" aria-hidden="true"><AppIcon name="check" :size="16" /></span>
           <div>
             <strong>{{ stats.upToDate }}</strong>
             <span>{{ t('vaccines.upToDate') }}</span>
           </div>
         </div>
-        <div class="stat-card" style="--c:#FFF3CC;--ct:#8A6200">
+        <div class="stat-card" style="--c:var(--warning-light);--ct:var(--warning)">
           <span class="stat-card__icon" aria-hidden="true"><AppIcon name="warning" :size="16" /></span>
           <div>
             <strong>{{ stats.dueSoon }}</strong>
             <span>{{ t('vaccines.dueSoon') }}</span>
           </div>
         </div>
-        <div class="stat-card" style="--c:#FDEAEA;--ct:#c0392b">
+        <div class="stat-card" style="--c:var(--danger-light);--ct:var(--danger)">
           <span class="stat-card__icon" aria-hidden="true"><AppIcon name="warning" :size="16" /></span>
           <div>
             <strong>{{ stats.overdue }}</strong>
             <span>{{ t('vaccines.overdue') }}</span>
           </div>
         </div>
-        <div class="stat-card" style="--c:#D6EEFF;--ct:#1A5FAA">
+        <div class="stat-card" style="--c:var(--info-light);--ct:var(--info)">
           <span class="stat-card__icon" aria-hidden="true"><AppIcon name="evolutions" :size="16" /></span>
           <div>
             <strong>{{ stats.total }}</strong>
@@ -436,6 +436,7 @@ function normalizeVaccine(row) {
     name: row.name ?? row.vaccine_name ?? row.vaccineName ?? '',
     manufacturer: row.manufacturer ?? row.brand ?? '',
     next_dose_due: row.next_dose_due ?? row.next_due_date ?? row.nextDoseDue ?? row.nextDueDate ?? null,
+    administered_date: row.administered_date ?? row.vaccination_date ?? row.administeredDate ?? row.vaccinationDate ?? null,
     patient_name: row.patient_name ?? row.patient?.name ?? row.patientName ?? '',
     lot_number: row.lot_number ?? row.batch_number ?? row.lotNumber ?? row.batchNumber ?? '',
     expiry_date: row.expiry_date ?? row.expiryDate ?? null,
@@ -809,21 +810,22 @@ onUnmounted(() => {
 .card { background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow); overflow: hidden; }
 .table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .table th { text-align: left; padding: 12px 14px; font-size: 0.78rem; font-weight: 600; color: var(--text-3); letter-spacing: 0.05em; text-transform: uppercase; background: var(--surface); border-bottom: 1px solid var(--border); }
-.table td { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; color: var(--text); vertical-align: middle; }
+.table td { padding: 12px 14px; border-bottom: 1px solid var(--surface-2); color: var(--text); vertical-align: middle; }
 .table tr:last-child td { border-bottom: none; }
 .table tr:hover td { background: var(--surface); }
 
 .pet-cell { display: flex; align-items: center; gap: 8px; font-size: 1.2rem; }
 .pet-cell strong { display: block; font-size: 0.9rem; }
-.sub { display: block; font-size: 0.75rem; color: var(--text-3); }
-.overdue  { color: #c0392b; font-weight: 600; }
-.due-soon { color: #d68910; font-weight: 600; }
+.sub { font-size: 0.75rem; color: var(--text-3); }
+:not(td).sub { display: block; }
+.overdue  { color: var(--danger); font-weight: 600; }
+.due-soon { color: var(--warning); font-weight: 600; }
 
 /* Badges */
 .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-.badge--green   { background: #D6F3EC; color: #1A9E7F; }
-.badge--yellow  { background: #FFF3CC; color: #8A6200; }
-.badge--red     { background: #FDEAEA; color: #c0392b; }
+.badge--green   { background: var(--success-light); color: var(--success); }
+.badge--yellow  { background: var(--warning-light); color: var(--warning); }
+.badge--red     { background: var(--danger-light); color: var(--danger); }
 .badge--neutral { background: var(--surface-2); color: var(--text-3); }
 
 /* Paginación */
@@ -832,7 +834,7 @@ onUnmounted(() => {
 .pagination button:hover:not(:disabled) { background: var(--surface-2); }
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background var(--transition); }
@@ -856,7 +858,7 @@ onUnmounted(() => {
 .req { color: var(--danger); }
 .modal__actions { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px 24px; }
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 .loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--text-3); font-size: 0.9rem; background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
 .empty-state__emoji { font-size: 3rem; }

@@ -351,13 +351,13 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 }
 
 .btn--light {
-  background: #FFFFFF;
-  color: #0B6457;
+  background: var(--surface);
+  color: var(--primary-hover);
 }
 
 .btn--light:hover {
-  background: #E3F4F0;
-  color: #0B6457;
+  background: var(--primary-xlight);
+  color: var(--primary-hover);
 }
 
 /* ── Navegación ──────────────────────────────────────────────────────────── */
@@ -847,8 +847,8 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 .closing {
   padding: 48px 32px;
   border-radius: var(--radius-xl);
-  background: linear-gradient(135deg, #0E7C6B, #0B6457);
-  color: #FFFFFF;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: var(--primary-contrast);
   text-align: center;
 }
 

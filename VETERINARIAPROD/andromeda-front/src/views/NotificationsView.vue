@@ -279,10 +279,10 @@ onMounted(loadAll)
 .notification-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; background: var(--bg); }
 .notification-card--unread { border-color: rgba(32, 134, 126, 0.35); box-shadow: inset 3px 0 0 var(--primary); }
 .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 0.72rem; margin-left: 8px; text-transform: uppercase; }
-.badge--info { background: #e8f1ff; color: #295b98; }
-.badge--warning { background: #fff4db; color: #9a6b00; }
-.badge--error { background: #ffe4e1; color: #bf3b2f; }
-.badge--success { background: #e7f7ef; color: #1f8a5c; }
+.badge--info { background: var(--info-light); color: var(--info); }
+.badge--warning { background: var(--warning-light); color: var(--warning); }
+.badge--error { background: var(--danger-light); color: var(--danger); }
+.badge--success { background: var(--success-light); color: var(--success); }
 .message { color: var(--text); margin: 10px 0; line-height: 1.45; }
 .date, .read-ok, .notification-meta { font-size: 0.82rem; color: var(--text-3); }
 .table-wrap { overflow-x: auto; }

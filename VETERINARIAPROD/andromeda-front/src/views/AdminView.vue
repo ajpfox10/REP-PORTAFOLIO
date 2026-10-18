@@ -1015,7 +1015,7 @@ onMounted(async () => {
 }
 
 .portal-health-card {
-  border: 1px solid var(--border-light, #eef2f4);
+  border: 1px solid var(--border-light, var(--surface-2));
   border-radius: var(--radius);
   padding: 16px;
   background: var(--surface);
@@ -1024,23 +1024,23 @@ onMounted(async () => {
 }
 
 .portal-health-card--ok {
-  border-color: #d6f2e3;
-  background: linear-gradient(180deg, #f7fdf9 0%, #ffffff 100%);
+  border-color: var(--success-light);
+  background: linear-gradient(180deg, var(--success-light) 0%, var(--surface) 100%);
 }
 
 .portal-health-card--degraded {
-  border-color: #f4e0b2;
-  background: linear-gradient(180deg, #fffaf0 0%, #ffffff 100%);
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: linear-gradient(180deg, var(--warning-light) 0%, var(--surface) 100%);
 }
 
 .portal-health-card--error {
-  border-color: #f3c2c2;
-  background: linear-gradient(180deg, #fff7f7 0%, #ffffff 100%);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  background: linear-gradient(180deg, var(--danger-light) 0%, var(--surface) 100%);
 }
 
 .portal-health-card--unknown {
-  border-color: var(--border-light, #eef2f4);
-  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+  border-color: var(--border-light, var(--surface-2));
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
 }
 
 .portal-health-card__top {
@@ -1114,7 +1114,7 @@ onMounted(async () => {
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--white);
-  border: 1px solid var(--border-light, #eef2f4);
+  border: 1px solid var(--border-light, var(--surface-2));
 }
 
 .portal-health-check__name {
@@ -1169,7 +1169,7 @@ onMounted(async () => {
 .table td {
   padding: 14px 16px;
   text-align: left;
-  border-bottom: 1px solid var(--border-light, #eef2f4);
+  border-bottom: 1px solid var(--border-light, var(--surface-2));
 }
 
 .table th {
@@ -1215,17 +1215,17 @@ onMounted(async () => {
 }
 
 .badge--active {
-  background: #eafaf3;
-  color: #1e8449;
+  background: var(--success-light);
+  color: var(--success);
 }
 
 .badge--inactive {
-  background: #fdf3f3;
-  color: #c0392b;
+  background: var(--danger-light);
+  color: var(--danger);
 }
 
 .badge--role {
-  background: var(--surface-2, #f4f6f8);
+  background: var(--surface-2, var(--surface-2));
   color: var(--text-2);
 }
 
@@ -1269,12 +1269,12 @@ onMounted(async () => {
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--danger, #e74c3c);
+  color: var(--danger, var(--danger));
   cursor: pointer;
 }
 
 .btn-icon:hover {
-  background: #fdf3f3;
+  background: var(--danger-light);
 }
 
 .pagination {
@@ -1335,8 +1335,8 @@ onMounted(async () => {
   width: 48px;
   height: 48px;
   border-radius: 999px;
-  background: #eafaf3;
-  color: #1e8449;
+  background: var(--success-light);
+  color: var(--success);
   font-weight: 700;
 }
 
@@ -1359,12 +1359,12 @@ onMounted(async () => {
 }
 
 .field-error {
-  color: var(--danger, #e74c3c);
+  color: var(--danger, var(--danger));
   font-size: 0.8rem;
 }
 
 .req {
-  color: var(--danger, #e74c3c);
+  color: var(--danger, var(--danger));
 }
 
 .modal__actions {
@@ -1405,7 +1405,7 @@ onMounted(async () => {
 }
 
 .log-row--danger td {
-  background: #fff8f8;
+  background: var(--danger-light);
 }
 
 .db-table-pills {
@@ -1451,7 +1451,7 @@ onMounted(async () => {
 }
 
 .db-glossary {
-  border: 1px solid var(--border-light, #eef2f4);
+  border: 1px solid var(--border-light, var(--surface-2));
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -1469,7 +1469,7 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1px;
-  background: var(--border-light, #eef2f4);
+  background: var(--border-light, var(--surface-2));
 }
 
 .db-col-card {
@@ -1494,7 +1494,7 @@ onMounted(async () => {
   font-weight: 400;
   font-size: 0.75rem;
   color: var(--text-3);
-  background: var(--surface-2, #f4f6f8);
+  background: var(--surface-2, var(--surface-2));
   padding: 1px 6px;
   border-radius: 4px;
 }
@@ -1546,7 +1546,7 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
-  border: 1px solid var(--border-light, #eef2f4);
+  border: 1px solid var(--border-light, var(--surface-2));
   border-radius: var(--radius);
   background: var(--surface);
 }

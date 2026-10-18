@@ -17,16 +17,16 @@
 
     <!-- KPIs -->
     <div class="kpi-row">
-      <div class="kpi" style="--c:#FFE4D6;--ct:#c0392b">
+      <div class="kpi" style="--c:var(--orange-light);--ct:var(--danger)">
         <span aria-hidden="true"><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.today }}</strong><span>{{ t('common.today') }}</span></div>
       </div>
-      <div class="kpi" style="--c:#FFF3CC;--ct:#8A6200">
+      <div class="kpi" style="--c:var(--warning-light);--ct:var(--warning)">
         <span aria-hidden="true"><AppIcon name="check" :size="16" /></span><div><strong>{{ kpis.pending }}</strong><span>{{ t('common.pending') }}</span></div>
       </div>
-      <div class="kpi" style="--c:#D6F3EC;--ct:#1A9E7F">
+      <div class="kpi" style="--c:var(--success-light);--ct:var(--success)">
         <span aria-hidden="true"><AppIcon name="check" :size="16" /></span><div><strong>{{ kpis.completed }}</strong><span>{{ t('grooming.completed') }}</span></div>
       </div>
-      <div class="kpi" style="--c:#D6EEFF;--ct:#1A5FAA">
+      <div class="kpi" style="--c:var(--info-light);--ct:var(--info)">
         <span aria-hidden="true"><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.revenue }}</strong><span>{{ t('grooming.revenueToday') }}</span></div>
       </div>
     </div>
@@ -540,10 +540,10 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 .groom-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
 
 .groom-card__header { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-.header--scheduled   { background: #D6EEFF; }
-.header--in_progress { background: #FFF3CC; }
-.header--completed   { background: #D6F3EC; }
-.header--cancelled   { background: #FDEAEA; }
+.header--scheduled   { background: var(--info-light); }
+.header--in_progress { background: var(--warning-light); }
+.header--completed   { background: var(--success-light); }
+.header--cancelled   { background: var(--danger-light); }
 
 .groom-card__time { display: flex; align-items: center; justify-content: space-between; }
 .groom-card__hour { font-size: 1.1rem; font-weight: 700; color: var(--text); }
@@ -552,10 +552,11 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 .groom-card__pet { display: flex; align-items: center; gap: 10px; }
 .groom-emoji { font-size: 2rem; }
 .groom-card__pet strong { display: block; font-size: 0.95rem; color: var(--text); }
-.sub { display: block; font-size: 0.75rem; color: var(--text-3); }
+.sub { font-size: 0.75rem; color: var(--text-3); }
+:not(td).sub { display: block; }
 
 .groom-card__services { display: flex; flex-wrap: wrap; gap: 4px; }
-.svc-chip { background: #FFE4D6; color: #c0392b; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; }
+.svc-chip { background: var(--orange-light); color: var(--danger); padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; }
 
 .groom-card__row { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--text-2); }
 .notes-text { font-size: 0.8rem; color: var(--text-3); }
@@ -564,18 +565,18 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 
 /* Badges */
 .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-.status--scheduled   { background: #D6EEFF; color: #1A5FAA; }
-.status--in_progress { background: #FFF3CC; color: #8A6200; }
-.status--completed   { background: #D6F3EC; color: #1A9E7F; }
-.status--cancelled   { background: #FDEAEA; color: #c0392b; }
+.status--scheduled   { background: var(--info-light); color: var(--info); }
+.status--in_progress { background: var(--warning-light); color: var(--warning); }
+.status--completed   { background: var(--success-light); color: var(--success); }
+.status--cancelled   { background: var(--danger-light); color: var(--danger); }
 
 .btn-xs { padding: 4px 10px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: opacity var(--transition); }
 .btn-xs:hover { opacity: 0.8; }
-.btn-xs--green  { background: #D6F3EC; color: #1A9E7F; }
-.btn-xs--yellow { background: #FFF3CC; color: #8A6200; }
-.btn-xs--red    { background: #FDEAEA; color: #c0392b; }
+.btn-xs--green  { background: var(--success-light); color: var(--success); }
+.btn-xs--yellow { background: var(--warning-light); color: var(--warning); }
+.btn-xs--red    { background: var(--danger-light); color: var(--danger); }
 
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background var(--transition); }
@@ -604,7 +605,7 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 
 .modal__actions { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px 24px; }
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 .loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--text-3); font-size: 0.9rem; background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
 .empty-state__emoji { font-size: 3rem; }

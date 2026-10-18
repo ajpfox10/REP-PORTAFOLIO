@@ -14,21 +14,21 @@
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card" style="--c:#D6EEFF;--ct:#1A5FAA">
+      <div class="stat-card" style="--c:var(--info-light);--ct:var(--info)">
         <span class="stat-card__icon"><AppIcon name="appointments" :size="16" /></span>
         <div>
           <strong>{{ stats.scheduled }}</strong>
           <span>{{ t('surgery.scheduled') }}</span>
         </div>
       </div>
-      <div class="stat-card" style="--c:#FFF3CC;--ct:#8A6200">
+      <div class="stat-card" style="--c:var(--warning-light);--ct:var(--warning)">
         <span class="stat-card__icon"><AppIcon name="zap" :size="16" /></span>
         <div>
           <strong>{{ stats.inProgress }}</strong>
           <span>{{ t('surgery.inProgress') }}</span>
         </div>
       </div>
-      <div class="stat-card" style="--c:#D6F3EC;--ct:#1A9E7F">
+      <div class="stat-card" style="--c:var(--success-light);--ct:var(--success)">
         <span class="stat-card__icon"><AppIcon name="check" :size="16" /></span>
         <div>
           <strong>{{ stats.completedToday }}</strong>
@@ -521,7 +521,7 @@
                 </div>
                 <p class="sub" style="margin-top:4px">{{ t('surgery.agentsLabel') }}: {{ rec.anesthetic_agents }}</p>
                 <p v-if="rec.monitoring_notes" class="sub">{{ t('surgery.monitoringLabel') }}: {{ rec.monitoring_notes }}</p>
-                <p v-if="rec.complication_notes" class="sub" style="color:#c0392b">{{ rec.complication_notes }}</p>
+                <p v-if="rec.complication_notes" class="sub" style="color:var(--danger)">{{ rec.complication_notes }}</p>
               </div>
             </template>
             <div v-else class="sub" style="margin-top:12px; padding:12px; background:var(--surface); border-radius:var(--radius)">
@@ -870,18 +870,18 @@ onUnmounted(() => {
 
 /* Badges */
 .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.73rem; font-weight: 700; white-space: nowrap; }
-.badge--gray     { background: #EAEAEA; color: #555; }
-.badge--yellow   { background: #FFF3CC; color: #8A6200; }
-.badge--blue     { background: #D6EEFF; color: #1A5FAA; }
-.badge--green    { background: #D6F3EC; color: #1A9E7F; }
-.badge--red      { background: #FDEAEA; color: #c0392b; }
-.badge--red-dark { background: #7B0000; color: #fff; }
+.badge--gray     { background: var(--border); color: var(--text-2); }
+.badge--yellow   { background: var(--warning-light); color: var(--warning); }
+.badge--blue     { background: var(--info-light); color: var(--info); }
+.badge--green    { background: var(--success-light); color: var(--success); }
+.badge--red      { background: var(--danger-light); color: var(--danger); }
+.badge--red-dark { background: var(--danger); color: var(--surface); }
 
 /* Acciones */
 .action-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .btn-action { padding: 5px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: none; font-size: 0.78rem; font-weight: 500; color: var(--text-2); cursor: pointer; transition: background 0.12s; }
 .btn-action:hover { background: var(--surface); }
-.btn-action--primary { background: var(--primary); color: white; border-color: var(--primary); }
+.btn-action--primary { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
 .btn-action--primary:hover { opacity: 0.88; }
 
 /* Paginación */
@@ -891,7 +891,7 @@ onUnmounted(() => {
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Botones */
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background var(--transition); }
@@ -944,10 +944,10 @@ onUnmounted(() => {
 .status-opt { width: 100%; padding: 11px 16px; border: 1.5px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; text-align: left; transition: filter 0.12s, transform 0.1s; background: var(--white); color: var(--text); }
 .status-opt:hover:not(:disabled) { filter: brightness(0.95); transform: translateX(2px); }
 .status-opt:disabled { opacity: 0.5; cursor: not-allowed; }
-.status-opt--yellow { border-color: #8A6200; color: #8A6200; background: #FFF3CC; }
-.status-opt--green  { border-color: #1A9E7F; color: #1A9E7F; background: #D6F3EC; }
-.status-opt--gray   { border-color: #888; color: #555; background: #EAEAEA; }
-.status-opt--red    { border-color: var(--danger); color: var(--danger); background: #FDEAEA; }
+.status-opt--yellow { border-color: var(--warning); color: var(--warning); background: var(--warning-light); }
+.status-opt--green  { border-color: var(--success); color: var(--success); background: var(--success-light); }
+.status-opt--gray   { border-color: var(--text-3); color: var(--text-2); background: var(--border); }
+.status-opt--red    { border-color: var(--danger); color: var(--danger); background: var(--danger-light); }
 
 /* Detalle */
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -961,7 +961,7 @@ onUnmounted(() => {
 
 /* Alertas */
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 
 /* {{ t('surgery.tableStatus') }}s */

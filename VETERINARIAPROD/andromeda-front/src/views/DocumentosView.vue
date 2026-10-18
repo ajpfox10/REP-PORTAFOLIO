@@ -897,14 +897,14 @@ onMounted(loadAll)
 }
 
 .alert--error {
-  background: #fff4f4;
-  color: #b94034;
+  background: var(--danger-light);
+  color: var(--danger);
 }
 
 .alert--warning {
-  background: #fff8e6;
-  color: #8a6200;
-  border: 1px solid #f2d58d;
+  background: var(--warning-light);
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
 }
 
 .empty-state {
@@ -924,7 +924,7 @@ onMounted(loadAll)
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, #ffffff 0%, #f9fbfb 100%);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
 }
 
 .account-card__meta,
@@ -935,7 +935,7 @@ onMounted(loadAll)
 
 .account-card__error {
   margin: 0;
-  color: #b94034;
+  color: var(--danger);
   font-size: 0.83rem;
 }
 
@@ -974,18 +974,18 @@ onMounted(loadAll)
 }
 
 .badge--active {
-  background: #eafaf3;
-  color: #1e8449;
+  background: var(--success-light);
+  color: var(--success);
 }
 
 .badge--inactive {
-  background: #fdf3f3;
-  color: #c0392b;
+  background: var(--danger-light);
+  color: var(--danger);
 }
 
 .badge--warning {
-  background: #fff7df;
-  color: #9c6a00;
+  background: var(--warning-light);
+  color: var(--warning);
 }
 
 .modal__header {

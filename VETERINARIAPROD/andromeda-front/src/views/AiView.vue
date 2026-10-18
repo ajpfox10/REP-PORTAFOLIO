@@ -324,7 +324,7 @@ onMounted(() => {
 .chat-input textarea { flex: 1; min-height: 88px; }
 .empty-state, .alert { padding: 18px; border-radius: var(--radius-lg); background: var(--white); box-shadow: var(--shadow-sm); }
 .alert--error { color: var(--danger); }
-.alert--warning { color: #8a5a00; background: #fff8e6; border: 1px solid #f0d38a; box-shadow: none; }
+.alert--warning { color: var(--warning); background: var(--warning-light); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); box-shadow: none; }
 @media (max-width: 768px) {
   .page-header, .chat-toolbar, .chat-input, .result-head { align-items: stretch; flex-direction: column; }
   .chat-msg { max-width: 100%; }

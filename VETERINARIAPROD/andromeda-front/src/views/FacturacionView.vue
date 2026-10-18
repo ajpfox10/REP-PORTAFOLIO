@@ -31,28 +31,28 @@
 
       <!-- KPIs financieros -->
       <div class="kpi-row">
-        <div class="kpi-card" style="--bc:#D6F3EC;--tc:#1A9E7F">
+        <div class="kpi-card" style="--bc:var(--success-light);--tc:var(--success)">
           <span class="kpi-icon"><AppIcon name="cash" :size="16" /></span>
           <div>
             <strong>${{ summary.paid }}</strong>
             <span>{{ t('billing.paidToday') }}</span>
           </div>
         </div>
-        <div class="kpi-card" style="--bc:#FFF3CC;--tc:#8A6200">
+        <div class="kpi-card" style="--bc:var(--warning-light);--tc:var(--warning)">
           <span class="kpi-icon"><AppIcon name="clock" :size="16" /></span>
           <div>
             <strong>{{ summary.pending }}</strong>
             <span>{{ t('billing.pending') }}</span>
           </div>
         </div>
-        <div class="kpi-card" style="--bc:#FDEAEA;--tc:#c0392b">
+        <div class="kpi-card" style="--bc:var(--danger-light);--tc:var(--danger)">
           <span class="kpi-icon"><AppIcon name="cancel" :size="16" /></span>
           <div>
             <strong>{{ summary.overdue }}</strong>
             <span>{{ t('billing.overdue') }}</span>
           </div>
         </div>
-        <div class="kpi-card" style="--bc:#D6EEFF;--tc:#1A5FAA">
+        <div class="kpi-card" style="--bc:var(--info-light);--tc:var(--info)">
           <span class="kpi-icon"><AppIcon name="evolutions" :size="16" /></span>
           <div>
             <strong>{{ summary.total }}</strong>
@@ -163,7 +163,7 @@
         <div class="section-title">{{ t('billing.summaryTitle') }}</div>
         <div class="kpi-row">
           <template v-for="(value, key) in consolSummary" :key="key">
-            <div v-if="value !== null && value !== undefined" class="kpi-card" style="--bc:#EEF2FF;--tc:#3730A3">
+            <div v-if="value !== null && value !== undefined" class="kpi-card" style="--bc:var(--info-light);--tc:var(--info)">
               <span class="kpi-icon"><AppIcon name="reports" :size="16" /></span>
               <div>
                 <strong>{{ formatConsolValue(key, value) }}</strong>
@@ -829,29 +829,30 @@ onUnmounted(() => clearTimeout(timer))
 .card { background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow); overflow: hidden; }
 .table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .table th { text-align: left; padding: 12px 14px; font-size: 0.78rem; font-weight: 600; color: var(--text-3); letter-spacing: 0.05em; text-transform: uppercase; background: var(--surface); border-bottom: 1px solid var(--border); }
-.table td { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; color: var(--text); vertical-align: middle; }
+.table td { padding: 12px 14px; border-bottom: 1px solid var(--surface-2); color: var(--text); vertical-align: middle; }
 .table tr:last-child td { border-bottom: none; }
 .table tr:hover td { background: var(--surface); }
 .table--compact th, .table--compact td { padding: 9px 12px; }
 
 .inv-num { font-family: monospace; font-size: 0.9rem; color: var(--primary); }
-.sub { display: block; font-size: 0.75rem; color: var(--text-3); }
-.overdue  { color: #c0392b; font-weight: 600; }
-.due-soon { color: #d68910; }
-.text-danger { color: #c0392b; }
+.sub { font-size: 0.75rem; color: var(--text-3); }
+:not(td).sub { display: block; }
+.overdue  { color: var(--danger); font-weight: 600; }
+.due-soon { color: var(--warning); }
+.text-danger { color: var(--danger); }
 
 .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
 .inv-draft     { background: var(--surface-2); color: var(--text-3); }
-.inv-pending   { background: #FFF3CC; color: #8A6200; }
-.inv-paid      { background: #D6F3EC; color: #1A9E7F; }
-.inv-overdue   { background: #FDEAEA; color: #c0392b; }
+.inv-pending   { background: var(--warning-light); color: var(--warning); }
+.inv-paid      { background: var(--success-light); color: var(--success); }
+.inv-overdue   { background: var(--danger-light); color: var(--danger); }
 .inv-cancelled { background: var(--surface-2); color: var(--text-3); }
 
 .row-actions { display: flex; gap: 6px; }
 .btn-xs { padding: 4px 10px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
 .btn-xs:hover { opacity: 0.8; }
-.btn-xs--green { background: #D6F3EC; color: #1A9E7F; }
-.btn-xs--blue  { background: #D6EEFF; color: #1A5FAA; }
+.btn-xs--green { background: var(--success-light); color: var(--success); }
+.btn-xs--blue  { background: var(--info-light); color: var(--info); }
 
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 0.85rem; color: var(--text-2); }
 .pagination button { padding: 6px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: none; cursor: pointer; font-size: 0.82rem; color: var(--text-2); }
@@ -859,13 +860,13 @@ onUnmounted(() => clearTimeout(timer))
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Buttons ── */
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background var(--transition); }
 .btn-ghost:hover:not(:disabled) { background: var(--surface-2); }
-.btn-danger { padding: 10px 20px; background: #FDEAEA; color: #c0392b; border: 1.5px solid #f5c6c6; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background var(--transition); }
-.btn-danger:hover:not(:disabled) { background: #f8d7d7; }
+.btn-danger { padding: 10px 20px; background: var(--danger-light); color: var(--danger); border: 1.5px solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background var(--transition); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-light); }
 .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ── Modals ── */
@@ -907,7 +908,7 @@ onUnmounted(() => clearTimeout(timer))
 
 .modal__actions { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px 24px; }
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 .loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--text-3); font-size: 0.9rem; background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
 .empty-state__emoji { font-size: 3rem; }

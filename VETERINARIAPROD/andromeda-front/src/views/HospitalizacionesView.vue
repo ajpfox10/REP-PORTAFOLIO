@@ -14,21 +14,21 @@
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card" style="--c:#D6EEFF;--ct:#1A5FAA">
+      <div class="stat-card" style="--c:var(--info-light);--ct:var(--info)">
         <span class="stat-card__icon"><AppIcon name="hospitalization" :size="16" /></span>
         <div>
           <strong>{{ stats.active }}</strong>
           <span>{{ t('hospitalizations.activeHospitalized') }}</span>
         </div>
       </div>
-      <div class="stat-card" style="--c:#D6F3EC;--ct:#1A9E7F">
+      <div class="stat-card" style="--c:var(--success-light);--ct:var(--success)">
         <span class="stat-card__icon"><AppIcon name="door" :size="16" /></span>
         <div>
           <strong>{{ stats.dischargedToday }}</strong>
           <span>{{ t('hospitalizations.dischargeToday') }}</span>
         </div>
       </div>
-      <div class="stat-card" style="--c:#FFF3CC;--ct:#8A6200">
+      <div class="stat-card" style="--c:var(--warning-light);--ct:var(--warning)">
         <span class="stat-card__icon"><AppIcon name="appointments" :size="16" /></span>
         <div>
           <strong>{{ stats.avgDays }}</strong>
@@ -963,7 +963,7 @@ onUnmounted(() => {
 .view-toggle { display: flex; gap: 0; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; width: fit-content; }
 .toggle-btn { padding: 8px 18px; background: var(--white); border: none; font-size: 0.85rem; font-weight: 500; color: var(--text-2); cursor: pointer; transition: background 0.12s, color 0.12s; }
 .toggle-btn:first-child { border-right: 1.5px solid var(--border); }
-.toggle-btn--active { background: var(--primary); color: white; font-weight: 700; }
+.toggle-btn--active { background: var(--primary); color: var(--primary-contrast); font-weight: 700; }
 .toggle-btn:hover:not(.toggle-btn--active) { background: var(--surface); }
 
 /* Filtros */
@@ -992,17 +992,17 @@ onUnmounted(() => {
 
 /* Badges */
 .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.73rem; font-weight: 700; white-space: nowrap; }
-.badge--gray   { background: #EAEAEA; color: #555; }
-.badge--yellow { background: #FFF3CC; color: #8A6200; }
-.badge--blue   { background: #D6EEFF; color: #1A5FAA; }
-.badge--green  { background: #D6F3EC; color: #1A9E7F; }
-.badge--red    { background: #FDEAEA; color: #c0392b; }
+.badge--gray   { background: var(--border); color: var(--text-2); }
+.badge--yellow { background: var(--warning-light); color: var(--warning); }
+.badge--blue   { background: var(--info-light); color: var(--info); }
+.badge--green  { background: var(--success-light); color: var(--success); }
+.badge--red    { background: var(--danger-light); color: var(--danger); }
 
 /* Acciones */
 .action-btns { display: flex; gap: 6px; }
 .btn-action { padding: 5px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: none; font-size: 0.78rem; font-weight: 500; color: var(--text-2); cursor: pointer; transition: background 0.12s; }
 .btn-action:hover { background: var(--surface); }
-.btn-action--primary { background: var(--primary); color: white; border-color: var(--primary); }
+.btn-action--primary { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
 .btn-action--primary:hover { opacity: 0.88; }
 .btn-action--danger { background: var(--danger); color: white; border-color: var(--danger); }
 .btn-action--danger:hover { opacity: 0.88; }
@@ -1022,12 +1022,12 @@ onUnmounted(() => {
 .kennel-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .kennel-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: var(--radius); font-size: 0.85rem; font-weight: 700; border: 2px solid; cursor: default; transition: transform 0.1s; }
 .kennel-chip:hover { transform: scale(1.06); }
-.kennel-chip--free     { background: #D6F3EC; color: #1A9E7F; border-color: #A7E5D4; }
-.kennel-chip--occupied { background: #FDEAEA; color: #c0392b; border-color: #F5BCBC; }
+.kennel-chip--free     { background: var(--success-light); color: var(--success); border-color: color-mix(in srgb, var(--success) 30%, transparent); }
+.kennel-chip--occupied { background: var(--danger-light); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
 .kennel-type { font-size: 0.6rem; font-weight: 400; opacity: 0.8; }
 
 /* Botones */
-.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: white; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
+.btn-primary { padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent-mint) 100%); color: var(--primary-contrast); border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity var(--transition), transform var(--transition); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { padding: 10px 20px; background: none; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--text-2); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background var(--transition); }
@@ -1087,11 +1087,11 @@ onUnmounted(() => {
 .monitoring-record { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
 .monitoring-record__time { margin-bottom: 6px; }
 .monitoring-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.mon-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; background: #EAEAEA; color: #555; }
-.mon-chip--green  { background: #D6F3EC; color: #1A9E7F; }
-.mon-chip--yellow { background: #FFF3CC; color: #8A6200; }
-.mon-chip--orange { background: #FEF0E0; color: #B45309; }
-.mon-chip--red    { background: #FDEAEA; color: #c0392b; }
+.mon-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; background: var(--border); color: var(--text-2); }
+.mon-chip--green  { background: var(--success-light); color: var(--success); }
+.mon-chip--yellow { background: var(--warning-light); color: var(--warning); }
+.mon-chip--orange { background: var(--orange-light); color: var(--warning); }
+.mon-chip--red    { background: var(--danger-light); color: var(--danger); }
 
 /* Medicamentos */
 .med-list { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
@@ -1106,11 +1106,11 @@ onUnmounted(() => {
 .empty-inline { padding: 20px; text-align: center; font-size: 0.85rem; color: var(--text-3); background: var(--surface); border-radius: var(--radius); }
 
 /* Dar alta */
-.discharge-confirm { background: #FFF3CC; border-left: 3px solid #8A6200; border-radius: var(--radius-sm); padding: 12px 16px; font-size: 0.88rem; color: #8A6200; }
+.discharge-confirm { background: var(--warning-light); border-left: 3px solid var(--warning); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 0.88rem; color: var(--warning); }
 
 /* Alertas */
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.875rem; }
-.alert--error { background: #FDEAEA; color: #c0392b; border-left: 3px solid var(--danger); }
+.alert--error { background: var(--danger-light); color: var(--danger); border-left: 3px solid var(--danger); }
 .mx { margin: 0 24px 8px; }
 
 /* Estados */

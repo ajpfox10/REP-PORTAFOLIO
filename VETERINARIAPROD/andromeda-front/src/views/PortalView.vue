@@ -1001,7 +1001,7 @@ onBeforeUnmount(unsubscribePortalSession)
 
 .portal-hero__copy {
   padding: 28px;
-  background: linear-gradient(135deg, #f8fcfb 0%, #edf7f1 100%);
+  background: linear-gradient(135deg, var(--surface-2) 0%, var(--success-light) 100%);
 }
 
 .eyebrow {
@@ -1047,17 +1047,17 @@ onBeforeUnmount(unsubscribePortalSession)
 
 .status-pill--ok {
   background: rgba(6, 214, 160, 0.14);
-  color: #0f8f6f;
+  color: var(--success);
 }
 
 .status-pill--warn {
   background: rgba(255, 183, 3, 0.14);
-  color: #8c6100;
+  color: var(--warning);
 }
 
 .status-pill--bad {
   background: rgba(239, 83, 80, 0.14);
-  color: #b02825;
+  color: var(--danger);
 }
 
 .portal-hero__status {
@@ -1247,13 +1247,13 @@ textarea:focus {
 .notice--success {
   background: rgba(6, 214, 160, 0.12);
   border-color: rgba(6, 214, 160, 0.2);
-  color: #0f8f6f;
+  color: var(--success);
 }
 
 .notice--error {
   background: rgba(239, 83, 80, 0.12);
   border-color: rgba(239, 83, 80, 0.2);
-  color: #b02825;
+  color: var(--danger);
 }
 
 .dashboard-grid {
@@ -1275,7 +1275,7 @@ textarea:focus {
   justify-content: space-between;
   align-items: flex-start;
   gap: 14px;
-  background: linear-gradient(135deg, #f8fcfb 0%, #edf7f1 100%);
+  background: linear-gradient(135deg, var(--surface-2) 0%, var(--success-light) 100%);
 }
 
 .banner-copy {

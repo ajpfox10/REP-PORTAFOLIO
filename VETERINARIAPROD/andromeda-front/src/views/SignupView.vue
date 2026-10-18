@@ -427,8 +427,8 @@ form {
 }
 
 .auth-page__aside {
-  background: linear-gradient(160deg, #0E7C6B, #0A4F45);
-  color: #FFFFFF;
+  background: linear-gradient(160deg, var(--primary), var(--primary-hover));
+  color: var(--primary-contrast);
   display: flex;
   align-items: center;
   padding: 48px;
