@@ -1,0 +1,342 @@
+<Window x:Class="PersonalContableApp.Vistas.VentanaPrincipal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:PersonalContableApp.Conversores"
+        Title="Personal Contable"
+        Width="1280" Height="820" MinWidth="1040" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Style="{StaticResource VentanaBase}">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolAVisibilidad" />
+        <conv:HayValorAVisibilidad x:Key="HayValor" />
+        <conv:ProporcionAPorcentaje x:Key="APorcentaje" />
+        <conv:EnumANombre x:Key="Nombre" />
+
+        <DataTemplate x:Key="PlantillaEnum">
+            <TextBlock Text="{Binding Converter={StaticResource Nombre}}" />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Gesture="Ctrl+N" Command="{Binding NuevoCommand}" />
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding GuardarCommand}" />
+        <KeyBinding Gesture="Ctrl+E" Command="{Binding ExportarCommand}" />
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}" />
+    </Window.InputBindings>
+
+    <Grid Margin="24,20,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- ── Encabezado ─────────────────────────────────────────────────── -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,16">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Exportar CSV" Command="{Binding ExportarCommand}" ToolTip="Ctrl+E" Margin="0,0,8,0" />
+                <Button Content="Editar" Command="{Binding EditarCommand}" Margin="0,0,8,0" />
+                <Button Content="Eliminar" Command="{Binding EliminarCommand}" Style="{StaticResource BotonPeligro}" Margin="0,0,8,0" />
+                <Button Content="+ Nueva persona" Command="{Binding NuevoCommand}" Style="{StaticResource BotonPrimario}" ToolTip="Ctrl+N" />
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Personal Contable" Style="{StaticResource Titulo}" />
+                <TextBlock Text="Planta de personal, sueldos y costo laboral estimado." Style="{StaticResource Secundario}" FontSize="13" />
+            </StackPanel>
+        </DockPanel>
+
+        <!-- ── Aviso (datos importados o archivo dañado) ──────────────────── -->
+        <Border Grid.Row="1" Background="{StaticResource AvisoSuave}" CornerRadius="8" Padding="14,10" Margin="0,0,0,14"
+                Visibility="{Binding Aviso, Converter={StaticResource HayValor}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Entendido" Style="{StaticResource BotonEnlace}" Foreground="{StaticResource Aviso}"
+                        Command="{Binding CerrarAvisoCommand}" />
+                <TextBlock Text="{Binding Aviso}" Foreground="{StaticResource Aviso}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <!-- ── Indicadores ────────────────────────────────────────────────── -->
+        <UniformGrid Grid.Row="2" Rows="1" Margin="-6,0,-6,16">
+            <Border Style="{StaticResource Tarjeta}" Margin="6,0">
+                <StackPanel>
+                    <TextBlock Text="Personas" Style="{StaticResource Etiqueta}" />
+                    <TextBlock Text="{Binding Resumen.Cantidad}" Style="{StaticResource KpiValor}" />
+                    <TextBlock Style="{StaticResource Secundario}">
+                        <Run Text="Antigüedad promedio" />
+                        <Run Text="{Binding Resumen.AntiguedadPromedio, StringFormat={}{0:0.#} años, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tarjeta}" Margin="6,0">
+                <StackPanel>
+                    <TextBlock Text="Masa salarial bruta" Style="{StaticResource Etiqueta}" />
+                    <TextBlock Text="{Binding Resumen.MasaSalarialBruta, StringFormat=C0}" Style="{StaticResource KpiValor}" />
+                    <TextBlock Text="Mensual, sin cargas sociales" Style="{StaticResource Secundario}" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tarjeta}" Margin="6,0">
+                <StackPanel>
+                    <TextBlock Text="Neto a pagar (estimado)" Style="{StaticResource Etiqueta}" />
+                    <TextBlock Text="{Binding Resumen.NetoTotal, StringFormat=C0}" Style="{StaticResource KpiValor}" />
+                    <TextBlock Text="Descontando aportes del empleado" Style="{StaticResource Secundario}" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tarjeta}" Margin="6,0">
+                <StackPanel>
+                    <TextBlock Text="Costo laboral (estimado)" Style="{StaticResource Etiqueta}" />
+                    <TextBlock Text="{Binding Resumen.CostoLaboralTotal, StringFormat=C0}" Style="{StaticResource KpiValor}" />
+                    <TextBlock Text="Bruto + contribuciones patronales" Style="{StaticResource Secundario}" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tarjeta}" Margin="6,0">
+                <StackPanel>
+                    <TextBlock Text="Sueldo promedio" Style="{StaticResource Etiqueta}" />
+                    <TextBlock Text="{Binding Resumen.SueldoPromedio, StringFormat=C0}" Style="{StaticResource KpiValor}" />
+                    <TextBlock Style="{StaticResource Secundario}" Visibility="{Binding SinCuil, Converter={StaticResource HayValor}}">
+                        <Run Text="{Binding SinCuil, Mode=OneWay}" Foreground="{StaticResource Aviso}" />
+                        <Run Text="sin CUIL cargado" Foreground="{StaticResource Aviso}" />
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <!-- ── Contenido ──────────────────────────────────────────────────── -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="380" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Listado -->
+            <Border Grid.Column="0" Style="{StaticResource Tarjeta}" Padding="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Margin="16,14,16,12">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding TextoConteo}" Style="{StaticResource Secundario}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                        <ComboBox DockPanel.Dock="Right" Width="170" Margin="8,0,0,0"
+                                  ItemsSource="{Binding OpcionesCategoria}" SelectedItem="{Binding FiltroCategoria}"
+                                  DisplayMemberPath="Texto" AutomationProperties.Name="Filtrar por categoría" />
+                        <ComboBox DockPanel.Dock="Right" Width="170" Margin="8,0,0,0"
+                                  ItemsSource="{Binding OpcionesPuesto}" SelectedItem="{Binding FiltroPuesto}"
+                                  DisplayMemberPath="Texto" AutomationProperties.Name="Filtrar por puesto" />
+                        <Grid>
+                            <TextBox x:Name="Buscador" Style="{StaticResource Busqueda}"
+                                     Text="{Binding Busqueda, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Buscar" />
+                            <TextBlock Text="Buscar por nombre, CUIL, localidad o sector…" IsHitTestVisible="False"
+                                       Foreground="{StaticResource Texto3}" VerticalAlignment="Center" Margin="13,0,0,0"
+                                       Visibility="{Binding Busqueda, Converter={StaticResource HayValor}, ConverterParameter=invertir}" />
+                        </Grid>
+                    </DockPanel>
+
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Filas}" SelectedItem="{Binding Seleccionada}"
+                              AutomationProperties.Name="Listado de personal">
+                        <DataGrid.InputBindings>
+                            <MouseBinding Gesture="LeftDoubleClick" Command="{Binding EditarCommand}" />
+                            <KeyBinding Key="Enter" Command="{Binding EditarCommand}" />
+                            <KeyBinding Key="Delete" Command="{Binding EliminarCommand}" />
+                        </DataGrid.InputBindings>
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="APELLIDO Y NOMBRE" Width="2*" SortMemberPath="ApellidoNombre">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding ApellidoNombre}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Cuil}" Style="{StaticResource Secundario}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="PUESTO" Binding="{Binding Puesto}" Width="*" />
+                            <DataGridTextColumn Header="CATEGORÍA" Binding="{Binding Categoria}" Width="*" />
+                            <DataGridTextColumn Header="SECTOR" Binding="{Binding Sector}" Width="*" />
+                            <DataGridTextColumn Header="INGRESO" Binding="{Binding FechaIngreso, StringFormat=dd/MM/yyyy}" Width="90" />
+                            <DataGridTextColumn Header="ANTIGÜEDAD" Binding="{Binding AntiguedadTexto}" SortMemberPath="Antiguedad" Width="95" />
+                            <DataGridTextColumn Header="SUELDO BRUTO" Binding="{Binding SueldoBruto, StringFormat=C0}" Width="120"
+                                                ElementStyle="{StaticResource CeldaDerecha}" />
+                            <DataGridTextColumn Header="NETO ESTIMADO" Binding="{Binding SueldoNeto, StringFormat=C0}" Width="120"
+                                                ElementStyle="{StaticResource CeldaDerecha}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Estados vacíos -->
+                    <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding HayPersonal, Converter={StaticResource HayValor}, ConverterParameter=invertir}">
+                        <TextBlock Text="Todavía no cargaste personal" Style="{StaticResource Subtitulo}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Agregá la primera persona para ver el resumen de sueldos." Style="{StaticResource Secundario}" Margin="0,4,0,12" HorizontalAlignment="Center" />
+                        <Button Content="+ Nueva persona" Command="{Binding NuevoCommand}" Style="{StaticResource BotonPrimario}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding SinResultados, Converter={StaticResource BoolAVisibilidad}}">
+                        <TextBlock Text="No hay coincidencias" Style="{StaticResource Subtitulo}" HorizontalAlignment="Center" />
+                        <Button Content="Limpiar filtros" Command="{Binding LimpiarFiltrosCommand}" Style="{StaticResource BotonEnlace}" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Distribución (cuando el formulario está cerrado) -->
+            <Border Grid.Column="2" Style="{StaticResource Tarjeta}"
+                    Visibility="{Binding PanelAbierto, Converter={StaticResource HayValor}, ConverterParameter=invertir}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Masa salarial por puesto" Style="{StaticResource Subtitulo}" />
+                        <TextBlock Text="Sueldo bruto mensual y cantidad de personas." Style="{StaticResource Secundario}" Margin="0,2,0,14" />
+                        <ItemsControl ItemsSource="{Binding Resumen.PorPuesto}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,14">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding MasaSalarial, StringFormat=C0}" FontWeight="SemiBold" />
+                                            <TextBlock>
+                                                <Run Text="{Binding Nombre, Mode=OneWay}" />
+                                                <Run Text="{Binding Cantidad, StringFormat=· {0}, Mode=OneWay}" Foreground="{StaticResource Texto3}" />
+                                            </TextBlock>
+                                        </DockPanel>
+                                        <ProgressBar Style="{StaticResource Barra}" Margin="0,6,0,0"
+                                                     Value="{Binding Proporcion, Converter={StaticResource APorcentaje}, Mode=OneWay}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Por categoría" Style="{StaticResource Subtitulo}" Margin="0,10,0,12" />
+                        <ItemsControl ItemsSource="{Binding Resumen.PorCategoria}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding MasaSalarial, StringFormat=C0}" />
+                                        <TextBlock>
+                                            <Run Text="{Binding Nombre, Mode=OneWay}" />
+                                            <Run Text="{Binding Cantidad, StringFormat=· {0}, Mode=OneWay}" Foreground="{StaticResource Texto3}" />
+                                        </TextBlock>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Style="{StaticResource Secundario}" TextWrapping="Wrap" Margin="0,14,0,0"
+                                   Text="Estimación con aportes del régimen general (jubilación 11 %, Ley 19.032 3 %, obra social 3 %) y contribuciones patronales del 24 %. No reemplaza la liquidación oficial." />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Formulario (alta y edición) -->
+            <Border Grid.Column="2" Style="{StaticResource Tarjeta}" Padding="0"
+                    Visibility="{Binding PanelAbierto, Converter={StaticResource BoolAVisibilidad}}">
+                <DockPanel DataContext="{Binding Formulario}">
+                    <DockPanel DockPanel.Dock="Top" Margin="18,16,12,4">
+                        <Button DockPanel.Dock="Right" Content="Cerrar" Style="{StaticResource BotonEnlace}"
+                                Command="{Binding DataContext.CancelarCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        <TextBlock Text="{Binding Titulo}" Style="{StaticResource Subtitulo}" VerticalAlignment="Center" />
+                    </DockPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="18,10,18,16">
+                        <Button Content="Cancelar" Margin="0,0,8,0"
+                                Command="{Binding DataContext.CancelarCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        <Button Content="{Binding TextoGuardar}" Style="{StaticResource BotonPrimario}" ToolTip="Ctrl+S"
+                                Command="{Binding DataContext.GuardarCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    </StackPanel>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="18,6,18,6">
+                        <StackPanel>
+                            <TextBlock Text="Apellido y nombre" Style="{StaticResource Etiqueta}" />
+                            <TextBox Text="{Binding ApellidoNombre, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" MaxLength="60" />
+
+                            <TextBlock Text="CUIL" Style="{StaticResource Etiqueta}" />
+                            <TextBox Text="{Binding Cuil, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" MaxLength="13"
+                                     ToolTip="11 dígitos, con o sin guiones" />
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Puesto" Style="{StaticResource Etiqueta}" />
+                                    <ComboBox ItemsSource="{Binding Puestos}" SelectedItem="{Binding Puesto}" ItemTemplate="{StaticResource PlantillaEnum}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Categoría" Style="{StaticResource Etiqueta}" />
+                                    <ComboBox ItemsSource="{Binding Categorias}" SelectedItem="{Binding Categoria}" ItemTemplate="{StaticResource PlantillaEnum}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Fecha de ingreso" Style="{StaticResource Etiqueta}" />
+                                    <DatePicker SelectedDate="{Binding FechaIngreso}" SelectedDateFormat="Short" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Sueldo bruto mensual" Style="{StaticResource Etiqueta}" />
+                                    <TextBox Text="{Binding SueldoNominal, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Right" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Vista previa de la liquidación -->
+                            <Border Background="{StaticResource Superficie2}" CornerRadius="8" Padding="12" Margin="0,0,0,14"
+                                    Visibility="{Binding Liquidacion, Converter={StaticResource HayValor}}">
+                                <StackPanel>
+                                    <TextBlock Text="Liquidación estimada" Style="{StaticResource Etiqueta}" />
+                                    <DockPanel Margin="0,2,0,0">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Liquidacion.TotalAportes, StringFormat=- {0:C}}" Foreground="{StaticResource Peligro}" />
+                                        <TextBlock Text="Aportes (jubilación, PAMI, obra social)" Foreground="{StaticResource Texto2}" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,4,0,0">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Liquidacion.SueldoNeto, StringFormat=C}" FontWeight="Bold" />
+                                        <TextBlock Text="Neto a cobrar" FontWeight="SemiBold" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,4,0,0">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Liquidacion.CostoLaboral, StringFormat=C}" Foreground="{StaticResource Texto2}" />
+                                        <TextBlock Text="Costo laboral para la empresa" Foreground="{StaticResource Texto2}" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Sector asignado" Style="{StaticResource Etiqueta}" />
+                            <TextBox Text="{Binding SectorAsignado, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" MaxLength="60" />
+
+                            <TextBlock Text="Actividad" Style="{StaticResource Etiqueta}" />
+                            <TextBox Text="{Binding Actividad, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16" MaxLength="80" />
+
+                            <TextBlock Text="DOMICILIO" Style="{StaticResource Secundario}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <TextBlock Text="Calle y número" Style="{StaticResource Etiqueta}" />
+                            <TextBox Text="{Binding Domicilio, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" MaxLength="120" />
+
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="110" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Localidad" Style="{StaticResource Etiqueta}" />
+                                    <TextBox Text="{Binding Localidad, UpdateSourceTrigger=PropertyChanged}" MaxLength="80" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Código postal" Style="{StaticResource Etiqueta}" />
+                                    <TextBox Text="{Binding CodigoPostal, UpdateSourceTrigger=PropertyChanged}" MaxLength="8" CharacterCasing="Upper" />
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Text="Provincia" Style="{StaticResource Etiqueta}" />
+                            <ComboBox ItemsSource="{Binding Provincias}" SelectedItem="{Binding Provincia}" Margin="0,0,0,8" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

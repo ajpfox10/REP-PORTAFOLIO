@@ -1,0 +1,52 @@
+name: Personal Contable CI
+
+# CI de la app de escritorio (carpeta PersonalContableApp). Solo corre cuando cambia esa carpeta.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'PersonalContableApp/**'
+      - '.github/workflows/personal-contable-ci.yml'
+  pull_request:
+    paths:
+      - 'PersonalContableApp/**'
+      - '.github/workflows/personal-contable-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Tests y compilación (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: PersonalContableApp
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Tests
+        run: dotnet test tests/PersonalContable.Tests --configuration Release
+
+      - name: Compilar la app WPF
+        run: dotnet build src/PersonalContableApp --configuration Release
+
+      - name: Publicar ejecutable
+        run: dotnet publish src/PersonalContableApp --configuration Release --runtime win-x64 --self-contained false -p:PublishSingleFile=true -o publicado
+
+      - name: Subir ejecutable
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalContable-win-x64
+          path: PersonalContableApp/publicado/
+          retention-days: 30

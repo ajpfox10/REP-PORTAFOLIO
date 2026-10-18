@@ -1,0 +1,231 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ── Paleta ─────────────────────────────────────────────────────────── -->
+    <Color x:Key="ColorPrimario">#1D4ED8</Color>
+    <SolidColorBrush x:Key="Fondo" Color="#F4F6FA" />
+    <SolidColorBrush x:Key="Superficie" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Superficie2" Color="#F1F4F9" />
+    <SolidColorBrush x:Key="Borde" Color="#E1E6EF" />
+    <SolidColorBrush x:Key="BordeFuerte" Color="#C6CFDD" />
+    <SolidColorBrush x:Key="Texto" Color="#0F172A" />
+    <SolidColorBrush x:Key="Texto2" Color="#475569" />
+    <SolidColorBrush x:Key="Texto3" Color="#64748B" />
+    <SolidColorBrush x:Key="Primario" Color="{StaticResource ColorPrimario}" />
+    <SolidColorBrush x:Key="PrimarioHover" Color="#1E40AF" />
+    <SolidColorBrush x:Key="PrimarioSuave" Color="#E7EEFF" />
+    <SolidColorBrush x:Key="Peligro" Color="#B91C1C" />
+    <SolidColorBrush x:Key="PeligroSuave" Color="#FDECEC" />
+    <SolidColorBrush x:Key="Aviso" Color="#92400E" />
+    <SolidColorBrush x:Key="AvisoSuave" Color="#FEF3C7" />
+    <SolidColorBrush x:Key="Exito" Color="#15803D" />
+
+    <FontFamily x:Key="Fuente">Segoe UI</FontFamily>
+
+    <!-- ── Base ───────────────────────────────────────────────────────────── -->
+    <Style x:Key="VentanaBase" TargetType="Window">
+        <Setter Property="FontFamily" Value="{StaticResource Fuente}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{StaticResource Texto}" />
+        <Setter Property="Background" Value="{StaticResource Fondo}" />
+    </Style>
+
+    <Style x:Key="Tarjeta" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Superficie}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Borde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style x:Key="Titulo" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="Subtitulo" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="Etiqueta" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource Texto2}" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style x:Key="Secundario" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource Texto3}" />
+    </Style>
+
+    <Style x:Key="KpiValor" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="21" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Margin" Value="0,4,0,2" />
+    </Style>
+
+    <!-- ── Botones ────────────────────────────────────────────────────────── -->
+    <Style x:Key="BotonBase" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Background" Value="{StaticResource Superficie}" />
+        <Setter Property="Foreground" Value="{StaticResource Texto}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BordeFuerte}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Fondo"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Fondo" Property="Opacity" Value="0.88" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Fondo" Property="BorderBrush" Value="{StaticResource Primario}" />
+                            <Setter TargetName="Fondo" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Fondo" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Button" BasedOn="{StaticResource BotonBase}" />
+
+    <Style x:Key="BotonPrimario" TargetType="Button" BasedOn="{StaticResource BotonBase}">
+        <Setter Property="Background" Value="{StaticResource Primario}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Primario}" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <Style x:Key="BotonPeligro" TargetType="Button" BasedOn="{StaticResource BotonBase}">
+        <Setter Property="Background" Value="{StaticResource PeligroSuave}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PeligroSuave}" />
+        <Setter Property="Foreground" Value="{StaticResource Peligro}" />
+    </Style>
+
+    <Style x:Key="BotonEnlace" TargetType="Button" BasedOn="{StaticResource BotonBase}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource Primario}" />
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <!-- ── Campos ─────────────────────────────────────────────────────────── -->
+    <!-- El mensaje de error aparece debajo del campo, no en un cartel emergente -->
+    <ControlTemplate x:Key="ErrorDebajo">
+        <StackPanel>
+            <Border BorderBrush="{StaticResource Peligro}" BorderThickness="1.5" CornerRadius="6">
+                <AdornedElementPlaceholder x:Name="Campo" />
+            </Border>
+            <TextBlock Text="{Binding ElementName=Campo, Path=AdornedElement.(Validation.Errors)/ErrorContent}" Foreground="{StaticResource Peligro}" FontSize="11.5" Margin="2,3,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+    </ControlTemplate>
+
+    <Style x:Key="CampoBase" TargetType="Control">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="BorderBrush" Value="{StaticResource BordeFuerte}" />
+        <Setter Property="Background" Value="{StaticResource Superficie}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Validation.ErrorTemplate" Value="{StaticResource ErrorDebajo}" />
+        <Style.Triggers>
+            <Trigger Property="Validation.HasError" Value="True">
+                <Setter Property="Margin" Value="0,0,0,20" />
+                <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style TargetType="TextBox" BasedOn="{StaticResource CampoBase}" />
+    <Style TargetType="ComboBox" BasedOn="{StaticResource CampoBase}" />
+    <Style TargetType="DatePicker" BasedOn="{StaticResource CampoBase}" />
+
+    <Style x:Key="Busqueda" TargetType="TextBox" BasedOn="{StaticResource CampoBase}">
+        <Setter Property="Padding" Value="10,6" />
+    </Style>
+
+    <!-- ── Tabla ──────────────────────────────────────────────────────────── -->
+    <Style TargetType="DataGrid">
+        <Setter Property="Background" Value="{StaticResource Superficie}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Borde}" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="RowHeight" Value="46" />
+        <Setter Property="AutoGenerateColumns" Value="False" />
+        <Setter Property="CanUserAddRows" Value="False" />
+        <Setter Property="CanUserDeleteRows" Value="False" />
+        <Setter Property="CanUserResizeRows" Value="False" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="SelectionUnit" Value="FullRow" />
+        <Setter Property="RowBackground" Value="{StaticResource Superficie}" />
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource Superficie}" />
+    </Style>
+
+    <Style TargetType="DataGridColumnHeader">
+        <Setter Property="Background" Value="{StaticResource Superficie2}" />
+        <Setter Property="Foreground" Value="{StaticResource Texto3}" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Padding" Value="10,9" />
+        <Setter Property="BorderBrush" Value="{StaticResource Borde}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+
+    <Style TargetType="DataGridCell">
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{StaticResource PrimarioSuave}" />
+                <Setter Property="Foreground" Value="{StaticResource Texto}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="CeldaDerecha" TargetType="TextBlock">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
+    <Style x:Key="Insignia" TargetType="Border">
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="Background" Value="{StaticResource Superficie2}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style x:Key="Barra" TargetType="ProgressBar">
+        <Setter Property="Height" Value="8" />
+        <Setter Property="Minimum" Value="0" />
+        <Setter Property="Maximum" Value="100" />
+        <Setter Property="Foreground" Value="{StaticResource Primario}" />
+        <Setter Property="Background" Value="{StaticResource Superficie2}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+</ResourceDictionary>
