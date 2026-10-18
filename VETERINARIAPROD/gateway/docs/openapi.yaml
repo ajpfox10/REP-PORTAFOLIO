@@ -2544,6 +2544,25 @@ paths:
       summary: Listar sucursales
       responses:
         '200': { description: Lista de sucursales }
+    post:
+      tags: [Clients]
+      summary: Crear sucursal (administradores, según el plan)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                address: { type: string, nullable: true }
+                phone: { type: string, nullable: true }
+                email: { type: string, nullable: true }
+                timezone: { type: string }
+      responses:
+        '201': { description: Sucursal creada }
+        '402': { description: El plan no permite más sucursales }
 
   /branches/{id}:
     get:
@@ -2556,6 +2575,30 @@ paths:
           schema: { type: integer }
       responses:
         '200': { description: Sucursal encontrada }
+    put:
+      tags: [Clients]
+      summary: Editar, activar o desactivar una sucursal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                address: { type: string, nullable: true }
+                phone: { type: string, nullable: true }
+                email: { type: string, nullable: true }
+                timezone: { type: string }
+                isActive: { type: boolean }
+      responses:
+        '204': { description: Sucursal actualizada }
+        '402': { description: El plan no permite más sucursales }
 
   /branches/{id}/settings:
     patch:

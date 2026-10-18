@@ -102,7 +102,7 @@
       </div>
       <div class="field">
         <label>{{ t('evolutions.duration') }}</label>
-        <input v-model.trim="form.illnessDuration" type="text" placeholder="Ej: 3 dias, 2 semanas" :disabled="saving" />
+        <input v-model.trim="form.illnessDuration" type="text" placeholder="Ej: 3 días, 2 semanas" :disabled="saving" />
       </div>
       <div class="field">
         <label>{{ t('evolutions.onset') }}</label>
@@ -218,7 +218,7 @@
       <div class="field field--full">
         <label>{{ t('evolutions.previousSurgeries') }}
           <span v-if="loadingHistory" class="history-loading"><AppIcon name="clock" :size="16" /> cargando...</span>
-          <span v-else-if="form.patientId && !form.previousSurgeries" class="history-empty">sin cirugias</span>
+          <span v-else-if="form.patientId && !form.previousSurgeries" class="history-empty">sin cirugías</span>
         </label>
         <textarea v-model.trim="form.previousSurgeries" rows="3" :placeholder="t('evolutions.previousProceduresPlaceholder')" :disabled="saving" />
       </div>

@@ -639,7 +639,7 @@ async function openDetail(record) {
     relatedOrders.hospitalizations = related.hospitalizations
   } catch (e) {
     logError('evoluciones.openDetail', e, { recordId: record?.id })
-    detailError.value = extractDetailedErrorMessage(e, 'No se pudo cargar el detalle de la ficha', { context: 'Detalle de evolucion' })
+    detailError.value = extractDetailedErrorMessage(e, 'No se pudo cargar el detalle de la ficha', { context: 'Detalle de evolución' })
   } finally {
     detailLoading.value = false
   }

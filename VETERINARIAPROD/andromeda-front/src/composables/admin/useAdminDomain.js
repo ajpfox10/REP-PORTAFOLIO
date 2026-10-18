@@ -4,19 +4,19 @@ import { platformApi } from '../../api/platform'
 import { extractErrorMessage } from '../../utils/errors'
 
 export const ADMIN_ROLES = [
-  { value: 'org_admin', label: 'Administrador de organizacion' },
+  { value: 'org_admin', label: 'Administrador de organización' },
   { value: 'branch_manager', label: 'Gerente de sucursal' },
   { value: 'veterinarian', label: 'Veterinario' },
-  { value: 'vet_technician', label: 'Tecnico veterinario' },
+  { value: 'vet_technician', label: 'Técnico veterinario' },
   { value: 'surgeon', label: 'Cirujano' },
   { value: 'tele_vet', label: 'Veterinario (telemedicina)' },
   { value: 'receptionist', label: 'Recepcionista' },
   { value: 'groomer', label: 'Groomer' },
   { value: 'grooming_manager', label: 'Jefe de grooming' },
-  { value: 'pharmacist', label: 'Farmaceutico' },
+  { value: 'pharmacist', label: 'Farmacéutico' },
   { value: 'accountant', label: 'Contador' },
-  { value: 'lab_technician', label: 'Tecnico de laboratorio' },
-  { value: 'imaging_tech', label: 'Tecnico de imagenes' },
+  { value: 'lab_technician', label: 'Técnico de laboratorio' },
+  { value: 'imaging_tech', label: 'Técnico de imágenes' },
   { value: 'read_only', label: 'Solo lectura' },
 ]
 

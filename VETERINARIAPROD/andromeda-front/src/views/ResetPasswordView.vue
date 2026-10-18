@@ -8,14 +8,14 @@
       </p>
 
       <div v-if="!token" class="alert alert--error" role="alert">
-        El enlace no contiene un token de recuperacion valido.
+        El enlace no contiene un token de recuperación valido.
       </div>
 
       <div v-else-if="completed" class="reset-result" role="status">
         <div class="alert alert--success">
           Tu contrasena fue actualizada correctamente.
         </div>
-        <RouterLink class="primary-button" to="/login">Ir al inicio de sesion</RouterLink>
+        <RouterLink class="primary-button" to="/login">Ir al inicio de sesión</RouterLink>
       </div>
 
       <form v-else class="reset-form" @submit.prevent="handleSubmit">
@@ -46,7 +46,7 @@
         </label>
 
         <p class="reset-card__hint">
-          Usa al menos 10 caracteres, con mayuscula, minuscula, numero y simbolo.
+          Usa al menos 10 caracteres, con mayuscula, minuscula, número y simbolo.
         </p>
 
         <div v-if="errorMessage" class="alert alert--error" role="alert">
@@ -59,7 +59,7 @@
       </form>
 
       <RouterLink v-if="!completed" class="reset-card__link" to="/login">
-        Volver al inicio de sesion
+        Volver al inicio de sesión
       </RouterLink>
     </section>
   </main>
@@ -84,7 +84,7 @@ async function handleSubmit() {
   errorMessage.value = ''
 
   if (!token.value) {
-    errorMessage.value = 'El enlace de recuperacion no es valido.'
+    errorMessage.value = 'El enlace de recuperación no es valido.'
     return
   }
   if (newPassword.value !== confirmPassword.value) {

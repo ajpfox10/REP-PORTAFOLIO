@@ -20,6 +20,7 @@ const { requireInternalSig } = require('../../../../shared/internalAuth');
 const { getRedisSingleton }   = require('../../../../shared/redis');
 const { enqueueJob }         = require('../../../../shared/notificationRetry');
 const { fromHeaders }        = require('../../../../shared/requestContext');
+const subscriptions          = require('../../../../shared/subscriptions');
 
 const router = Router();
 
@@ -124,6 +125,12 @@ router.post('/users',
         { branchId, orgId: req.user.orgId }
       );
       if (!branch) return R.badRequest(res, 'Sucursal inválida o no pertenece a su organización');
+
+      const seats = await subscriptions.checkSeatLimit(req.user.orgId, 'users');
+      if (!seats.allowed) {
+        return R.error(res, 402, subscriptions.seatLimitMessage('users', seats),
+          { limit: seats.limit, current: seats.current }, 'PLAN_LIMIT_REACHED');
+      }
 
       // Rol debe existir
       const roleRow = await db.queryOne(

@@ -431,7 +431,7 @@ async function load() {
     kpis.value.reported   = items.value.filter(o => o.status === 'reported').length
   } catch (e) {
     logError('patologia.load', e)
-    error.value = extractDetailedErrorMessage(e, 'No se pudieron cargar las ordenes', { context: 'Carga de ordenes de patologia' })
+    error.value = extractDetailedErrorMessage(e, 'No se pudieron cargar las órdenes', { context: 'Carga de órdenes de patología' })
   } finally { loading.value = false }
 }
 
@@ -513,7 +513,7 @@ async function handleCreate() {
     })
     closeOrderModal(); await load()
   } catch (e) {
-    saveError.value = extractDetailedErrorMessage(e, 'No se pudo crear la orden', { context: 'Creacion de orden de patologia' })
+    saveError.value = extractDetailedErrorMessage(e, 'No se pudo crear la orden', { context: 'Creación de orden de patología' })
   } finally { saving.value = false }
 }
 
@@ -526,7 +526,7 @@ async function viewOrder(o) {
     detailOrder.value = data.data || data
     showDetailModal.value = true
   } catch (e) {
-    notifyError('patologia.viewOrder', e, 'No se pudo cargar el detalle', { context: 'Detalle de patologia' })
+    notifyError('patologia.viewOrder', e, 'No se pudo cargar el detalle', { context: 'Detalle de patología' })
   }
 }
 
@@ -583,7 +583,7 @@ async function handleResult() {
     await labApi.pathology.result(resultOrderId.value, payload)
     closeResultModal(); await load()
   } catch (e) {
-    resultError.value = extractDetailedErrorMessage(e, 'No se pudo guardar el informe', { context: 'Informe de patologia' })
+    resultError.value = extractDetailedErrorMessage(e, 'No se pudo guardar el informe', { context: 'Informe de patología' })
   } finally { resultSaving.value = false }
 }
 

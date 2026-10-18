@@ -165,8 +165,8 @@
                   </label>
                 </div>
                 <div v-if="form.pickupRequired" class="field field--full">
-                  <label for="groom-m-pickup-addr">Direccion de retiro</label>
-                  <input id="groom-m-pickup-addr" name="groom-m-pickup-addr" v-model.trim="form.pickupAddress" type="text" placeholder="Direccion de retiro" :disabled="saving" />
+                  <label for="groom-m-pickup-addr">Dirección de retiro</label>
+                  <input id="groom-m-pickup-addr" name="groom-m-pickup-addr" v-model.trim="form.pickupAddress" type="text" placeholder="Dirección de retiro" :disabled="saving" />
                 </div>
                 <div class="field field--full">
                   <label class="check-item">
@@ -175,8 +175,8 @@
                   </label>
                 </div>
                 <div v-if="form.deliveryRequired" class="field field--full">
-                  <label for="groom-m-delivery-addr">Direccion de entrega</label>
-                  <input id="groom-m-delivery-addr" name="groom-m-delivery-addr" v-model.trim="form.deliveryAddress" type="text" placeholder="Direccion de entrega" :disabled="saving" />
+                  <label for="groom-m-delivery-addr">Dirección de entrega</label>
+                  <input id="groom-m-delivery-addr" name="groom-m-delivery-addr" v-model.trim="form.deliveryAddress" type="text" placeholder="Dirección de entrega" :disabled="saving" />
                 </div>
                 <div class="field field--full">
                   <label for="groom-m-notes">{{ t('grooming.notes') }}</label>

@@ -1294,6 +1294,9 @@ async function ssoCallback(req, res) {
     const firstName = claims.given_name || claims.name?.split(' ')[0] || 'SSO';
     const lastName = claims.family_name || claims.name?.split(' ').slice(1).join(' ') || provider.toUpperCase();
 
+    const seats = await require('../../../../shared/subscriptions').checkSeatLimit(configRow.organization_id, 'users');
+    if (!seats.allowed) return res.redirect(`${frontendUrl}/login?sso_error=plan_limit`);
+
     const role = await db.queryOne(`SELECT id FROM roles WHERE name = :name`, { name: configRow.default_role });
     // Crear usuario + rol de forma atómica: si falla la asignación de rol, se revierte
     // el alta para no dejar usuarios SSO sin rol (estado inconsistente).

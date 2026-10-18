@@ -8,7 +8,7 @@ export function useUiFeedback() {
     const info = getErrorInfo(error, fallback)
     logError(scope, error, options.meta)
     feedback.error(buildUserErrorMessage(info, fallback, options), {
-      title: options.title || 'No se pudo completar la accion',
+      title: options.title || 'No se pudo completar la acción',
       detail: options.detail || '',
     })
     return info.message

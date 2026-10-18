@@ -788,7 +788,7 @@ async function loadConsolidated() {
     consolSummary.value = summary
     consolOutstanding.value = outstanding
   } catch (e) {
-    consolError.value = extractDetailedErrorMessage(e, 'No se pudo cargar el consolidado', { context: 'Consolidado de facturacion' })
+    consolError.value = extractDetailedErrorMessage(e, 'No se pudo cargar el consolidado', { context: 'Consolidado de facturación' })
   } finally {
     consolLoading.value = false
   }

@@ -86,7 +86,7 @@
               <th>{{ t('hospitalizations.veterinarian') }}</th>
               <th>{{ t('hospitalizations.admission') }}</th>
               <th>{{ t('hospitalizations.days') }}</th>
-              <th>Clinica</th>
+              <th>Clínica</th>
               <th>{{ t('hospitalizations.status') }}</th>
               <th>{{ t('hospitalizations.actions') }}</th>
             </tr>
@@ -283,8 +283,8 @@
                   <input id="hosp-m-discharge-est" name="hosp-m-discharge-est" v-model="admitForm.estimatedDischargeDate" type="date" :disabled="admitSaving" />
                 </div>
                 <div class="field field--full">
-                  <label for="hosp-m-diag">Diagnostico de ingreso</label>
-                  <textarea id="hosp-m-diag" name="hosp-m-diag" v-model.trim="admitForm.admissionDiagnosis" rows="2" placeholder="Diagnostico inicial" :disabled="admitSaving" />
+                  <label for="hosp-m-diag">Diagnóstico de ingreso</label>
+                  <textarea id="hosp-m-diag" name="hosp-m-diag" v-model.trim="admitForm.admissionDiagnosis" rows="2" placeholder="Diagnóstico inicial" :disabled="admitSaving" />
                 </div>
                 <div class="field field--full">
                   <label for="hosp-m-instructions">Indicaciones especiales</label>
@@ -353,7 +353,7 @@
                   <span>{{ detailData.admission_reason || '—' }}</span>
                 </div>
                 <div v-if="detailData.admission_diagnosis" class="detail-item detail-item--full">
-                  <span class="detail-label">Diagnostico de ingreso</span>
+                  <span class="detail-label">Diagnóstico de ingreso</span>
                   <span>{{ detailData.admission_diagnosis }}</span>
                 </div>
                 <div v-if="detailData.admission_weight" class="detail-item">
@@ -361,7 +361,7 @@
                   <span>{{ detailData.admission_weight }} kg</span>
                 </div>
                 <div v-if="detailData.medical_record_id" class="detail-item">
-                  <span class="detail-label">Ficha medica</span>
+                  <span class="detail-label">Ficha médica</span>
                   <span>#{{ detailData.medical_record_id }}</span>
                 </div>
                 <div v-if="detailData.special_instructions" class="detail-item detail-item--full">
@@ -908,7 +908,7 @@ async function handleMedication() {
     detailData.value = await getHospitalizationDetailRequest(detailData.value.id)
     resetMedForm()
   } catch (e) {
-    medError.value = extractDetailedErrorMessage(e, 'No se pudo prescribir el medicamento.', { context: 'Prescripcion de medicamento' })
+    medError.value = extractDetailedErrorMessage(e, 'No se pudo prescribir el medicamento.', { context: 'Prescripción de medicamento' })
   } finally { medSaving.value = false }
 }
 
@@ -933,7 +933,7 @@ async function handleDischarge() {
     showDischarge.value = false
     await load()
   } catch (e) {
-    dischargeError.value = extractDetailedErrorMessage(e, 'No se pudo registrar el alta.', { context: 'Alta de internacion' })
+    dischargeError.value = extractDetailedErrorMessage(e, 'No se pudo registrar el alta.', { context: 'Alta de internación' })
   } finally { dischargeSaving.value = false }
 }
 

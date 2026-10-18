@@ -76,6 +76,14 @@ const PLANS = {
   },
 };
 
+// Cupos por tier efectivo (null = sin límite). La prueba usa los del plan Profesional.
+const SEAT_LIMITS = {
+  free: { branches: 1, users: 2 },
+  basic: { branches: PLANS.basic.limits.branches, users: PLANS.basic.limits.users },
+  pro: { branches: PLANS.pro.limits.branches, users: PLANS.pro.limits.users },
+  enterprise: { branches: null, users: null },
+};
+
 function isPaidPlan(plan) {
   return Object.prototype.hasOwnProperty.call(PLANS, plan);
 }
@@ -222,6 +230,41 @@ async function recordEvent({ orgId, provider, providerEventId, eventType, payloa
   return { duplicate: providerEventId ? result?.affectedRows === 0 : false };
 }
 
+/**
+ * Verifica si la organización puede sumar una sucursal o un usuario más.
+ * Las organizaciones previas al SaaS (sin fila en tenants) no tienen cupo.
+ * @param {number} orgId
+ * @param {'branches'|'users'} resource
+ * @returns {Promise<{ allowed: boolean, limit: number|null, current: number, tier: string }>}
+ */
+async function checkSeatLimit(orgId, resource, conn = db) {
+  const row = await getSubscription(orgId, conn);
+  const tier = effectiveTier(row);
+  const limit = row ? (SEAT_LIMITS[tier] || SEAT_LIMITS.free)[resource] : null;
+  if (limit === null || limit === undefined) return { allowed: true, limit: null, current: 0, tier };
+
+  const counted = resource === 'branches'
+    ? await conn.queryOne(
+      'SELECT COUNT(*) AS total FROM branches WHERE organization_id = :orgId AND is_active = 1',
+      { orgId }
+    )
+    : await conn.queryOne(
+      `SELECT COUNT(*) AS total FROM users u JOIN branches b ON b.id = u.branch_id
+        WHERE b.organization_id = :orgId AND u.is_active = 1`,
+      { orgId }
+    );
+  const current = Number(counted?.total || 0);
+  return { allowed: current < limit, limit, current, tier };
+}
+
+function seatLimitMessage(resource, check) {
+  const singular = check.limit === 1;
+  const what = resource === 'branches'
+    ? (singular ? 'sucursal' : 'sucursales')
+    : (singular ? 'usuario activo' : 'usuarios activos');
+  return `Tu plan permite hasta ${check.limit} ${what}. Pasá a un plan superior desde Suscripción para sumar más.`;
+}
+
 async function listEvents(orgId, limit = 20) {
   return db.query(
     `SELECT id, provider, event_type, created_at
@@ -244,6 +287,9 @@ module.exports = {
   effectiveTier,
   summarize,
   getSubscription,
+  checkSeatLimit,
+  seatLimitMessage,
+  SEAT_LIMITS,
   startTrial,
   applyProviderUpdate,
   recordEvent,

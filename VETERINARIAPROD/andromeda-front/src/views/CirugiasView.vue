@@ -583,7 +583,7 @@ async function load(page = 1) {
     computeStats()
   } catch (e) {
     logError('cirugias.load', e)
-    error.value = extractDetailedErrorMessage(e, 'No se pudieron cargar las cirugias', { context: 'Carga de cirugias' })
+    error.value = extractDetailedErrorMessage(e, 'No se pudieron cargar las cirugías', { context: 'Carga de cirugías' })
   } finally { loading.value = false }
 }
 
@@ -730,7 +730,7 @@ async function handleCreate() {
     showNew.value = false
     await load()
   } catch (e) {
-    saveError.value = extractDetailedErrorMessage(e, 'No se pudo programar la cirugia.', { context: 'Programacion de cirugia' })
+    saveError.value = extractDetailedErrorMessage(e, 'No se pudo programar la cirugía.', { context: 'Programación de cirugía' })
   } finally { saving.value = false }
 }
 

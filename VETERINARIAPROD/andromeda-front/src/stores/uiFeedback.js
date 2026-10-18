@@ -44,8 +44,8 @@ export const useUiFeedbackStore = defineStore('uiFeedback', {
       return new Promise((resolve) => {
         this.confirmRequest = {
           id: nextConfirmId++,
-          title: options.title || 'Confirmar accion',
-          message: options.message || 'Esta accion requiere confirmacion.',
+          title: options.title || 'Confirmar acción',
+          message: options.message || 'Esta acción requiere confirmación.',
           confirmText: options.confirmText || 'Confirmar',
           cancelText: options.cancelText || 'Cancelar',
           variant: options.variant || 'danger',

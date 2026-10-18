@@ -2,7 +2,7 @@
   <div class="modal-backdrop" @click.self="emit('close')">
     <div class="modal modal--wide">
       <div class="modal__header">
-        <h3><AppIcon name="evolutions" :size="16" /> Detalle evolucion</h3>
+        <h3><AppIcon name="evolutions" :size="16" /> Detalle evolución</h3>
         <button type="button" class="modal__close" @click="emit('close')">&times;</button>
       </div>
       <div v-if="detailLoading" class="loading-state">
@@ -32,7 +32,7 @@
         </div>
 
         <div v-if="detailRecord.diagnoses?.length" class="detail-block">
-          <b>Diagnosticos</b>
+          <b>Diagnósticos</b>
           <ul class="detail-list">
             <li v-for="diag in detailRecord.diagnoses" :key="diag.id || diag.diagnosis_name">
               {{ diag.diagnosis_name || diag.name || '-' }}
@@ -46,7 +46,7 @@
           <ul class="detail-list">
             <li v-for="tx in detailRecord.treatments" :key="tx.id || tx.treatment_name">
               {{ tx.treatment_name || tx.name || '-' }}
-              <span class="sub">{{ [tx.route, tx.frequency, tx.duration_days ? tx.duration_days + ' dias' : ''].filter(Boolean).join(' | ') || 'sin detalle' }}</span>
+              <span class="sub">{{ [tx.route, tx.frequency, tx.duration_days ? tx.duration_days + ' días' : ''].filter(Boolean).join(' | ') || 'sin detalle' }}</span>
             </li>
           </ul>
         </div>
@@ -78,40 +78,40 @@
               <span v-else class="sub">Sin ordenes de laboratorio vinculadas.</span>
             </div>
             <div class="detail-related-card">
-              <strong>Imagenes</strong>
+              <strong>Imágenes</strong>
               <ul v-if="relatedOrders.imaging.length" class="detail-list">
                 <li v-for="order in relatedOrders.imaging" :key="`img-${order.id}`">
                   {{ order.order_number || ('#' + order.id) }}
                   <span class="sub">{{ [order.imaging_type, order.status, order.body_region, order.ordered_at ? formatDate(order.ordered_at) : ''].filter(Boolean).join(' | ') }}</span>
                 </li>
               </ul>
-              <span v-else class="sub">Sin ordenes de imagenes vinculadas.</span>
+              <span v-else class="sub">Sin ordenes de imágenes vinculadas.</span>
             </div>
             <div class="detail-related-card">
-              <strong>Internacion</strong>
+              <strong>Internación</strong>
               <ul v-if="relatedOrders.hospitalizations.length" class="detail-list">
                 <li v-for="item in relatedOrders.hospitalizations" :key="`hos-${item.id}`">
-                  Internacion #{{ item.id }}
+                  Internación #{{ item.id }}
                   <span class="sub">{{ [item.hospitalization_status, item.ward_name, item.kennel_number ? 'Jaula ' + item.kennel_number : '', item.admission_date ? formatDate(item.admission_date) : ''].filter(Boolean).join(' | ') }}</span>
                 </li>
               </ul>
               <span v-else class="sub">Sin internaciones vinculadas.</span>
             </div>
             <div class="detail-related-card">
-              <strong>Cirugia</strong>
+              <strong>Cirugía</strong>
               <ul v-if="relatedOrders.surgeries.length" class="detail-list">
                 <li v-for="item in relatedOrders.surgeries" :key="`sur-${item.id}`">
-                  {{ item.surgery_type || ('Cirugia #' + item.id) }}
+                  {{ item.surgery_type || ('Cirugía #' + item.id) }}
                   <span class="sub">{{ [item.status, item.lead_surgeon, item.scheduled_date ? formatDate(item.scheduled_date) : ''].filter(Boolean).join(' | ') }}</span>
                 </li>
               </ul>
-              <span v-else class="sub">Sin cirugias vinculadas.</span>
+              <span v-else class="sub">Sin cirugías vinculadas.</span>
             </div>
           </div>
         </div>
 
         <div class="detail-block">
-          <b>Acciones clinicas</b>
+          <b>Acciones clínicas</b>
           <div v-if="orderCatalogError" class="alert alert--error" style="margin-top:12px; margin-bottom:12px">{{ orderCatalogError }}</div>
           <div class="detail-actions-grid">
             <div class="detail-action-card">
@@ -126,7 +126,7 @@
                   </select>
                 </div>
                 <div class="field field--full">
-                  <label>Notas clinicas</label>
+                  <label>Notas clínicas</label>
                   <textarea v-model.trim="detailOrders.lab.clinicalNotes" rows="2" :disabled="detailActionSaving" />
                 </div>
               </div>
@@ -150,7 +150,7 @@
             </div>
 
             <div class="detail-action-card">
-              <strong>Imagenes</strong>
+              <strong>Imágenes</strong>
               <div class="form-grid">
                 <div class="field">
                   <label>Tipo de estudio</label>
@@ -168,7 +168,7 @@
                   </select>
                 </div>
                 <div class="field">
-                  <label>Region anatomica</label>
+                  <label>Región anatomica</label>
                   <input v-model.trim="detailOrders.imaging.bodyRegion" type="text" :disabled="detailActionSaving" />
                 </div>
                 <label class="checkbox-label">
@@ -176,15 +176,15 @@
                   Requiere sedacion
                 </label>
                 <div class="field field--full">
-                  <label>Indicacion clinica</label>
+                  <label>Indicacion clínica</label>
                   <textarea v-model.trim="detailOrders.imaging.clinicalIndication" rows="2" :disabled="detailActionSaving" />
                 </div>
               </div>
-              <button type="button" class="btn-primary btn-sm" :disabled="detailActionSaving || !detailOrders.imaging.imagingTypeId" @click="emit('submit-imaging')">Crear orden de imagenes</button>
+              <button type="button" class="btn-primary btn-sm" :disabled="detailActionSaving || !detailOrders.imaging.imagingTypeId" @click="emit('submit-imaging')">Crear orden de imágenes</button>
             </div>
 
             <div class="detail-action-card">
-              <strong>Internacion</strong>
+              <strong>Internación</strong>
               <div class="form-grid">
                 <div class="field">
                   <label>Veterinario responsable</label>
@@ -216,11 +216,11 @@
                   <input v-model="detailOrders.hospitalization.estimatedDischargeDate" type="date" :disabled="detailActionSaving" />
                 </div>
                 <div class="field field--full">
-                  <label>Motivo de internacion</label>
+                  <label>Motivo de internación</label>
                   <textarea v-model.trim="detailOrders.hospitalization.hospitalizationReason" rows="2" :disabled="detailActionSaving" />
                 </div>
                 <div class="field field--full">
-                  <label>Diagnostico de ingreso</label>
+                  <label>Diagnóstico de ingreso</label>
                   <textarea v-model.trim="detailOrders.hospitalization.admissionDiagnosis" rows="2" :disabled="detailActionSaving" />
                 </div>
                 <div class="field field--full">
@@ -228,16 +228,16 @@
                   <textarea v-model.trim="detailOrders.hospitalization.specialInstructions" rows="2" :disabled="detailActionSaving" />
                 </div>
               </div>
-              <button type="button" class="btn-primary btn-sm" :disabled="detailActionSaving || !detailOrders.hospitalization.hospitalizationReason || !detailOrders.hospitalization.responsibleVetId" @click="emit('submit-hospitalization')">Crear internacion</button>
+              <button type="button" class="btn-primary btn-sm" :disabled="detailActionSaving || !detailOrders.hospitalization.hospitalizationReason || !detailOrders.hospitalization.responsibleVetId" @click="emit('submit-hospitalization')">Crear internación</button>
             </div>
 
             <div class="detail-action-card">
-              <strong>Cirugia</strong>
+              <strong>Cirugía</strong>
               <div class="form-grid">
                 <div class="field">
-                  <label>Tipo de cirugia</label>
+                  <label>Tipo de cirugía</label>
                   <select v-model="detailOrders.surgery.surgeryTypeId" :disabled="detailActionSaving || loadingSurgeryTypes">
-                    <option value="">{{ loadingSurgeryTypes ? 'Cargando tipos...' : 'Seleccionar cirugia' }}</option>
+                    <option value="">{{ loadingSurgeryTypes ? 'Cargando tipos...' : 'Seleccionar cirugía' }}</option>
                     <optgroup v-for="(types, category) in groupedSurgeryTypes" :key="category" :label="category">
                       <option v-for="type in types" :key="type.id" :value="type.id">{{ type.name }}{{ type.estimated_duration_minutes ? ' | ' + type.estimated_duration_minutes + ' min est.' : '' }}</option>
                     </optgroup>
@@ -267,7 +267,7 @@
                   </select>
                 </div>
                 <div class="field field--full">
-                  <label>Diagnostico preoperatorio</label>
+                  <label>Diagnóstico preoperatorio</label>
                   <textarea v-model.trim="detailOrders.surgery.preoperativeDiagnosis" rows="2" :disabled="detailActionSaving" />
                 </div>
                 <div class="field field--full">
@@ -279,7 +279,7 @@
                   <textarea v-model.trim="detailOrders.surgery.notes" rows="2" :disabled="detailActionSaving" />
                 </div>
               </div>
-              <button type="button" class="btn-primary btn-sm" :disabled="detailActionSaving || !detailOrders.surgery.surgeryTypeId || !detailOrders.surgery.leadSurgeonId || !detailOrders.surgery.scheduledDate" @click="emit('submit-surgery')">Crear cirugia</button>
+              <button type="button" class="btn-primary btn-sm" :disabled="detailActionSaving || !detailOrders.surgery.surgeryTypeId || !detailOrders.surgery.leadSurgeonId || !detailOrders.surgery.scheduledDate" @click="emit('submit-surgery')">Crear cirugía</button>
             </div>
           </div>
 

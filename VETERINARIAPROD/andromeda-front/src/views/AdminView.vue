@@ -9,13 +9,95 @@
         <BaseButton :aria-label="t('admin.newUser')" @click="openModal">
           + {{ t('admin.newUser') }}
         </BaseButton>
-        <button class="btn-logout" type="button" @click="handleLogout" title="Cerrar sesión">
-          <AppIcon name="logout" :size="16" /> Cerrar sesión
-        </button>
       </div>
     </section>
 
     <div v-if="globalError" class="alert alert--error" role="alert">{{ globalError }}</div>
+
+    <section class="panel">
+      <BaseTable :label="t('admin.title')" :caption="t('admin.subtitle')">
+        <div v-if="loading" class="table-loading" role="status">
+          <span class="spinner spinner--dark" />
+          <span>{{ t('common.loading') }}</span>
+        </div>
+
+        <table v-else class="table">
+          <thead>
+            <tr>
+              <th>{{ t('admin.name') }}</th>
+              <th>{{ t('admin.email') }}</th>
+              <th>{{ t('admin.role') }}</th>
+              <th>{{ t('admin.branch') }}</th>
+              <th>{{ t('admin.status') }}</th>
+              <th>{{ t('admin.created') }}</th>
+              <th>{{ t('admin.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="users.length === 0">
+              <td colspan="7" class="table__empty">{{ t('admin.noUsers') }}</td>
+            </tr>
+            <tr v-for="user in users" :key="user.id">
+              <td>
+                <div class="table__name">
+                  <span class="avatar">{{ initials(user) }}</span>
+                  <span>{{ user.first_name }} {{ user.last_name }}</span>
+                </div>
+              </td>
+              <td class="table__email">{{ user.email }}</td>
+              <td>
+                <div class="role-cell">
+                  <select
+                    :id="`admin-role-${user.id}`"
+                    :name="`admin-role-${user.id}`"
+                    class="role-select"
+                    :value="firstRole(user.roles)"
+                    :aria-label="`${t('admin.role')}: ${user.email}`"
+                    :disabled="changingRoleId === user.id"
+                    @change="handleRoleChange(user, $event.target.value)"
+                  >
+                    <option v-for="role in ADMIN_ROLES" :key="role.value" :value="role.value">
+                      {{ role.label }}
+                    </option>
+                  </select>
+                </div>
+              </td>
+              <td>{{ user.branch_name || t('common.none') }}</td>
+              <td>
+                <span class="badge" :class="user.is_active ? 'badge--active' : 'badge--inactive'">
+                  {{ user.is_active ? t('common.active') : t('common.inactive') }}
+                </span>
+              </td>
+              <td class="table__date">{{ formatDate(user.created_at) }}</td>
+              <td>
+                <button
+                  v-if="user.is_active"
+                  class="btn-icon btn-icon--danger"
+                  type="button"
+                  :title="t('admin.deactivateUser')"
+                  :aria-label="t('admin.deactivateUser')"
+                  @click="confirmDeactivate(user)"
+                >
+                  {{ t('common.delete') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div v-if="meta.totalPages > 1" class="pagination">
+          <button type="button" :disabled="meta.page <= 1" @click="loadPage(meta.page - 1)">
+            {{ t('common.previous') }}
+          </button>
+          <span>{{ t('admin.pagination', { page: meta.page, total: meta.totalPages }) }}</span>
+          <button type="button" :disabled="meta.page >= meta.totalPages" @click="loadPage(meta.page + 1)">
+            {{ t('common.next') }}
+          </button>
+        </div>
+      </BaseTable>
+    </section>
+
+    <BranchesPanel />
 
     <section class="panel panel--stacked">
       <header class="section-head">
@@ -81,88 +163,6 @@
       </div>
     </section>
 
-    <section class="panel">
-      <BaseTable :label="t('admin.title')" :caption="t('admin.subtitle')">
-        <div v-if="loading" class="table-loading" role="status">
-          <span class="spinner spinner--dark" />
-          <span>{{ t('common.loading') }}</span>
-        </div>
-
-        <table v-else class="table">
-          <thead>
-            <tr>
-              <th>{{ t('admin.name') }}</th>
-              <th>{{ t('admin.email') }}</th>
-              <th>{{ t('admin.role') }}</th>
-              <th>{{ t('admin.branch') }}</th>
-              <th>{{ t('admin.status') }}</th>
-              <th>{{ t('admin.created') }}</th>
-              <th>{{ t('admin.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="users.length === 0">
-              <td colspan="7" class="table__empty">{{ t('admin.noUsers') }}</td>
-            </tr>
-            <tr v-for="user in users" :key="user.id">
-              <td class="table__name">
-                <span class="avatar">{{ initials(user) }}</span>
-                <span>{{ user.first_name }} {{ user.last_name }}</span>
-              </td>
-              <td class="table__email">{{ user.email }}</td>
-              <td>
-                <div class="role-cell">
-                  <span class="badge badge--role">{{ formatRole(user.roles) }}</span>
-                  <select
-                    :id="`admin-role-${user.id}`"
-                    :name="`admin-role-${user.id}`"
-                    class="role-select"
-                    :value="firstRole(user.roles)"
-                    :aria-label="`${t('admin.role')}: ${user.email}`"
-                    :disabled="changingRoleId === user.id"
-                    @change="handleRoleChange(user, $event.target.value)"
-                  >
-                    <option v-for="role in ADMIN_ROLES" :key="role.value" :value="role.value">
-                      {{ role.label }}
-                    </option>
-                  </select>
-                </div>
-              </td>
-              <td>{{ user.branch_name || t('common.none') }}</td>
-              <td>
-                <span class="badge" :class="user.is_active ? 'badge--active' : 'badge--inactive'">
-                  {{ user.is_active ? t('common.active') : t('common.inactive') }}
-                </span>
-              </td>
-              <td class="table__date">{{ formatDate(user.created_at) }}</td>
-              <td>
-                <button
-                  v-if="user.is_active"
-                  class="btn-icon btn-icon--danger"
-                  type="button"
-                  :title="t('admin.deactivateUser')"
-                  :aria-label="t('admin.deactivateUser')"
-                  @click="confirmDeactivate(user)"
-                >
-                  {{ t('common.delete') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div v-if="meta.totalPages > 1" class="pagination">
-          <button type="button" :disabled="meta.page <= 1" @click="loadPage(meta.page - 1)">
-            {{ t('common.previous') }}
-          </button>
-          <span>{{ t('admin.pagination', { page: meta.page, total: meta.totalPages }) }}</span>
-          <button type="button" :disabled="meta.page >= meta.totalPages" @click="loadPage(meta.page + 1)">
-            {{ t('common.next') }}
-          </button>
-        </div>
-      </BaseTable>
-    </section>
-
     <section class="panel panel--stacked">
       <header class="section-head">
         <div>
@@ -195,7 +195,7 @@
       <header class="section-head">
         <div>
           <h3>Features de acceso</h3>
-          <p>Controla features por organizacion sin tocar el RBAC base.</p>
+          <p>Controla features por organización sin tocar el RBAC base.</p>
         </div>
       </header>
 
@@ -505,8 +505,8 @@
 
 <script setup>
 import AppIcon from '../components/AppIcon.vue'
+import BranchesPanel from '../components/admin/BranchesPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseModal from '../components/base/BaseModal.vue'
 import BaseTable from '../components/base/BaseTable.vue'
@@ -538,7 +538,6 @@ import { useAuthStore } from '../stores/auth'
 import { logError } from '../utils/errors'
 
 const auth   = useAuthStore()
-const router = useRouter()
 const { confirm, success } = useUiFeedback()
 const isSuperAdmin = computed(() => auth.hasRole('superadmin'))
 
@@ -726,7 +725,7 @@ async function loadAuthPolicy() {
   try {
     authPolicy.twoFactorOptionalEnabled = await loadAuthPolicyRequest()
   } catch (error) {
-    authPolicyError.value = extractAdminError(error, 'No se pudo cargar la politica de autenticacion.')
+    authPolicyError.value = extractAdminError(error, 'No se pudo cargar la politica de autenticación.')
   }
 }
 
@@ -736,7 +735,7 @@ async function toggleTwoFactorPolicy(enabled) {
   try {
     await updateAuthPolicyRequest(enabled)
     authPolicy.twoFactorOptionalEnabled = enabled
-    success('Politica de autenticacion actualizada.')
+    success('Politica de autenticación actualizada.')
   } catch (error) {
     authPolicyError.value = extractAdminError(error, 'No se pudo actualizar la politica de 2FA.')
   } finally {
@@ -779,7 +778,7 @@ async function toggleFeatureFlag(key, enabled) {
   } catch (error) {
     featureFlags[key] = previous
     if (error.response?.status === 404) {
-      featureFlagsError.value = 'Este ambiente todavia no tiene feature flags desplegados.'
+      featureFlagsError.value = 'Este ambiente todavía no tiene feature flags desplegados.'
       return
     }
     featureFlagsError.value = extractAdminError(error, 'No se pudo actualizar el feature flag.')
@@ -866,11 +865,6 @@ function formatDateTime(iso) {
 function formatLatency(ms) {
   if (ms === null || ms === undefined || Number.isNaN(Number(ms))) return '—'
   return `${ms} ms`
-}
-
-async function handleLogout() {
-  await auth.logout()
-  await router.replace('/login')
 }
 
 async function loadLogs() {
@@ -1392,21 +1386,6 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-.btn-logout {
-  min-height: 38px;
-  padding: 0 16px;
-  border: 1.5px solid var(--danger, #e74c3c);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--danger, #e74c3c);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--transition), color var(--transition);
-}
-.btn-logout:hover {
-  background: var(--danger-light, #fdf3f3);
-}
 
 .table--logs {
   font-size: 0.82rem;

@@ -890,7 +890,7 @@ async function handleOrderCreate() {
     closeOrderModal()
     await loadOrders()
   } catch (e) {
-    orderSaveError.value = extractDetailedErrorMessage(e, 'No se pudo crear la orden de compra', { context: 'Creacion de orden de compra' })
+    orderSaveError.value = extractDetailedErrorMessage(e, 'No se pudo crear la orden de compra', { context: 'Creación de orden de compra' })
   } finally { orderSaving.value = false }
 }
 

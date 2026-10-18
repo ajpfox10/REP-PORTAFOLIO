@@ -30,12 +30,12 @@ app.config.errorHandler = (error) => {
 }
 
 window.addEventListener('unhandledrejection', (event) => {
-  showUnhandledError('unhandledrejection', event.reason, 'Una operacion fallo sin manejarse.')
+  showUnhandledError('unhandledrejection', event.reason, 'Una operación fallo sin manejarse.')
 })
 
 app.use(router)
 app.mount('#app')
 
 auth.bootstrap().catch((error) => {
-  showUnhandledError('bootstrap', error, 'No se pudo iniciar la sesion.')
+  showUnhandledError('bootstrap', error, 'No se pudo iniciar la sesión.')
 })

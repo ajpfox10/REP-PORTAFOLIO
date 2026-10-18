@@ -88,6 +88,33 @@ describe('subscriptions.applyProviderUpdate', () => {
   });
 });
 
+describe('subscriptions.checkSeatLimit', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('organizaciones previas al SaaS no tienen cupo', async () => {
+    db.queryOne.mockResolvedValueOnce(null);
+    await expect(subscriptions.checkSeatLimit(1, 'users')).resolves.toMatchObject({ allowed: true, limit: null });
+  });
+
+  test('plan Esencial: 1 sucursal', async () => {
+    db.queryOne
+      .mockResolvedValueOnce({ status: 'active', plan: 'basic' })
+      .mockResolvedValueOnce({ total: 1 });
+    const check = await subscriptions.checkSeatLimit(1, 'branches');
+    expect(check).toMatchObject({ allowed: false, limit: 1, current: 1, tier: 'basic' });
+    expect(subscriptions.seatLimitMessage('branches', check)).toBe(
+      'Tu plan permite hasta 1 sucursal. Pasá a un plan superior desde Suscripción para sumar más.'
+    );
+  });
+
+  test('la prueba gratuita usa los cupos del plan Profesional', async () => {
+    db.queryOne
+      .mockResolvedValueOnce({ status: 'trialing', plan: 'pro', trial_ends_at: new Date(Date.now() + 86400000) })
+      .mockResolvedValueOnce({ total: 14 });
+    await expect(subscriptions.checkSeatLimit(1, 'users')).resolves.toMatchObject({ allowed: true, limit: 15, current: 14 });
+  });
+});
+
 describe('subscriptions.recordEvent', () => {
   test('detecta eventos duplicados del proveedor', async () => {
     db.query.mockResolvedValueOnce([{ affectedRows: 0 }]);

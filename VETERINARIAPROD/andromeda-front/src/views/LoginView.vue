@@ -281,7 +281,7 @@ async function handleLogin() {
   } catch (e) {
     resetLoginCaptcha()
     const msg = getLoginError(e, 'Error al iniciar sesión')
-    if (isCaptchaError(e)) error.value = 'Completa el CAPTCHA para iniciar sesion.'
+    if (isCaptchaError(e)) error.value = 'Completa el CAPTCHA para iniciar sesión.'
     else if (e.response?.status === 401) error.value = 'Credenciales incorrectas.'
     else if (e.response?.status === 429) error.value = 'Demasiados intentos. Espera unos minutos.'
     else error.value = msg || 'Error al iniciar sesión'
@@ -328,11 +328,21 @@ function handleSso(provider) {
   startSso(provider, form.email)
 }
 
+const SSO_ERRORS = {
+  plan_limit: 'Tu clínica alcanzó el máximo de usuarios de su plan. Pedile a un administrador que pase a un plan superior.',
+  user_not_allowed: 'Tu cuenta corporativa no tiene acceso a esta clínica.',
+  branch_missing: 'Tu clínica todavía no tiene una sucursal configurada para el ingreso corporativo.',
+  domain_not_allowed: 'El dominio de tu email no está habilitado para el ingreso corporativo de esta clínica.',
+  sso_not_configured: 'El ingreso corporativo no está configurado para esta clínica.',
+  invalid_state: 'La sesión de ingreso venció. Volvé a intentarlo.',
+  invalid_id_token: 'No pudimos validar tu identidad con el proveedor. Volvé a intentarlo.',
+}
+
 onMounted(() => {
   loadCaptchaConfig()
   if (route.query.sso_error) {
     const ssoErr = String(route.query.sso_error).replace(/[<>"'&]/g, '').slice(0, 200)
-    error.value = `SSO: ${ssoErr}`
+    error.value = SSO_ERRORS[ssoErr] || `No pudimos iniciar sesión con tu cuenta corporativa (${ssoErr}).`
   }
   if (route.query.sso === 'success') {
     success.value = 'Inicio de sesión corporativo completado.'

@@ -9,7 +9,7 @@
           turnos, facturas, notificaciones y telemedicina.
         </p>
         <div class="hero-chips">
-          <span>Sesion propia</span>
+          <span>Sesión propia</span>
           <span>Mascotas</span>
           <span>Turnos</span>
           <span>Facturas</span>
@@ -19,7 +19,7 @@
 
       <div class="portal-hero__status card">
         <template v-if="isAuthenticated">
-          <div class="status-pill status-pill--ok">Sesion activa</div>
+          <div class="status-pill status-pill--ok">Sesión activa</div>
           <h2>{{ ownerLabel }}</h2>
           <p>{{ sessionSummary }}</p>
           <div class="status-grid">
@@ -121,7 +121,7 @@
             <input id="portal-register-email" name="portal-register-email" v-model.trim="registerForm.email" type="email" autocomplete="email" required />
           </label>
           <label for="portal-register-phone">
-            <span>Telefono</span>
+            <span>Teléfono</span>
             <input id="portal-register-phone" name="portal-register-phone" v-model.trim="registerForm.phone" type="tel" autocomplete="tel" />
           </label>
           <label for="portal-register-password">
@@ -139,7 +139,7 @@
             <input id="portal-forgot-email" name="portal-forgot-email" v-model.trim="forgotForm.email" type="email" autocomplete="email" required />
           </label>
           <button class="primary-button" type="submit" :disabled="authBusy">
-            {{ authBusy ? 'Enviando...' : 'Solicitar recuperacion' }}
+            {{ authBusy ? 'Enviando...' : 'Solicitar recuperación' }}
           </button>
         </form>
       </div>
@@ -147,7 +147,7 @@
       <div class="card info-card">
         <h3>Qué puede hacer el dueño</h3>
         <ul class="bullet-list">
-          <li>Ver mascotas, fichas resumidas e historial medico firmado.</li>
+          <li>Ver mascotas, fichas resumidas e historial médico firmado.</li>
           <li>Solicitar, cancelar y seguir turnos desde la misma sesión.</li>
           <li>Revisar facturas y generar pagos con MercadoPago.</li>
           <li>Ver notificaciones y sesiones de telemedicina.</li>
@@ -247,7 +247,7 @@
 
             <div class="subgrid">
               <div>
-                <h5>Historia medica</h5>
+                <h5>Historia médica</h5>
                 <div v-if="petHistory.length" class="mini-list">
                   <article v-for="row in petHistory" :key="row.id" :id="`portal-history-${row.id}`">
                     <strong :id="`portal-history-${row.id}-date`">{{ formatDate(row.visit_date) }}</strong>
@@ -255,7 +255,7 @@
                     <small v-if="row.weight_kg || row.temperature_celsius" :id="`portal-history-${row.id}-vitals`">
                       {{ [row.weight_kg ? `${row.weight_kg} kg` : null, row.temperature_celsius ? `${row.temperature_celsius}°C` : null].filter(Boolean).join(' · ') }}
                     </small>
-                    <small :id="`portal-history-${row.id}-vet`">{{ row.vet_name || 'Equipo medico' }}</small>
+                    <small :id="`portal-history-${row.id}-vet`">{{ row.vet_name || 'Equipo médico' }}</small>
                     <span v-if="row.status" :id="`portal-history-${row.id}-status`" class="status-pill">{{ row.status }}</span>
                   </article>
                 </div>
@@ -268,7 +268,7 @@
                   <article v-for="row in petVaccinations" :key="row.id" :id="`portal-vaccination-${row.id}`">
                     <strong :id="`portal-vaccination-${row.id}-name`">{{ row.vaccine_name }}</strong>
                     <p :id="`portal-vaccination-${row.id}-date`">{{ formatDate(row.administered_date) }} - {{ row.applied_by || 'Sin profesional' }}</p>
-                    <small :id="`portal-vaccination-${row.id}-next`">Proxima: {{ formatDate(row.next_due_date) }}</small>
+                    <small :id="`portal-vaccination-${row.id}-next`">Próxima: {{ formatDate(row.next_due_date) }}</small>
                     <small v-if="row.lot_number" :id="`portal-vaccination-${row.id}-lot`">Lote: {{ row.lot_number }}</small>
                     <small v-if="row.manufacturer" :id="`portal-vaccination-${row.id}-manufacturer`">{{ row.manufacturer }}</small>
                   </article>
@@ -336,7 +336,7 @@
             <article v-for="item in appointments" :key="item.id" :id="`portal-appointment-item-${item.id}`" class="list-item">
               <div>
                 <strong :id="`portal-appointment-item-${item.id}-patient`">{{ item.patient_name }}</strong>
-                <p :id="`portal-appointment-item-${item.id}-date`">{{ formatDateTime(item.appointment_date) }} - {{ item.clinic_name || 'Clinica' }}</p>
+                <p :id="`portal-appointment-item-${item.id}-date`">{{ formatDateTime(item.appointment_date) }} - {{ item.clinic_name || 'Clínica' }}</p>
               </div>
               <div class="list-item__right">
                 <span class="status-pill" :class="statusClass(item.status)">{{ item.status }}</span>
@@ -397,7 +397,7 @@
           <div class="list-block">
             <article v-for="note in notifications" :key="note.id" class="list-item">
               <div>
-                <strong>{{ note.title || note.notification_type || 'Notificacion' }}</strong>
+                <strong>{{ note.title || note.notification_type || 'Notificación' }}</strong>
                 <p>{{ note.message }}</p>
                 <small>{{ formatDateTime(note.sent_at) }}</small>
               </div>
@@ -456,7 +456,7 @@
             </div>
             <div class="two-cols">
               <label for="portal-profile-phone">
-                <span>Telefono</span>
+                <span>Teléfono</span>
                 <input id="portal-profile-phone" name="portal-profile-phone" v-model.trim="profileForm.phone" type="tel" />
               </label>
               <label for="portal-profile-city">
@@ -465,7 +465,7 @@
               </label>
             </div>
             <label for="portal-profile-address">
-              <span>Direccion</span>
+              <span>Dirección</span>
               <input id="portal-profile-address" name="portal-profile-address" v-model.trim="profileForm.address" type="text" />
             </label>
             <button class="primary-button" type="submit" :disabled="portalBusy === 'profile'">
@@ -755,7 +755,7 @@ async function handleLogin() {
       owner: payload.owner || null,
     })
     await loadDashboard()
-    showSuccess('Sesion iniciada correctamente')
+    showSuccess('Sesión iniciada correctamente')
   } catch (error) {
     showError(error, 'No se pudo iniciar sesión')
   } finally {
@@ -795,9 +795,9 @@ async function handleForgotPassword() {
   resetMessage()
   try {
     const payload = await requestPortalPasswordReset(forgotForm.email)
-    showSuccess(payload?.message || 'Si el email existe, recibira un enlace de recuperacion')
+    showSuccess(payload?.message || 'Si el email existe, recibira un enlace de recuperación')
   } catch (error) {
-    showError(error, 'No se pudo enviar la recuperacion')
+    showError(error, 'No se pudo enviar la recuperación')
   } finally {
     authBusy.value = false
   }
@@ -850,7 +850,7 @@ async function payInvoice(invoice) {
     const link = payload?.init_point || payload?.sandbox_init_point || payload?.url || null
     if (link) {
       invoicePaymentLinks[invoice.id] = link
-      showSuccess('Se genero el enlace de pago')
+      showSuccess('Se generó el enlace de pago')
     } else {
       showSuccess('Pago solicitado')
     }
