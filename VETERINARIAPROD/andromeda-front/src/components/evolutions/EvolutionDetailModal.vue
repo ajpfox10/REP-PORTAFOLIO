@@ -2,7 +2,7 @@
   <div class="modal-backdrop" @click.self="emit('close')">
     <div class="modal modal--wide">
       <div class="modal__header">
-        <h3>&#x1F4CB; Detalle evolucion</h3>
+        <h3><AppIcon name="evolutions" :size="16" /> Detalle evolucion</h3>
         <button type="button" class="modal__close" @click="emit('close')">&times;</button>
       </div>
       <div v-if="detailLoading" class="loading-state">
@@ -295,6 +295,7 @@
 </template>
 
 <script setup>
+import AppIcon from '../../components/AppIcon.vue'
 import { t } from '../../i18n'
 
 const {
@@ -322,7 +323,6 @@ const {
   loadingSurgeryTypes,
   formatDate,
   statusLabel,
-  petEmoji,
 } = defineProps({
   detailLoading: { type: Boolean, default: false },
   detailError: { type: String, default: '' },
@@ -348,7 +348,6 @@ const {
   loadingSurgeryTypes: { type: Boolean, default: false },
   formatDate: { type: Function, required: true },
   statusLabel: { type: Function, required: true },
-  petEmoji: { type: Function, required: true },
 })
 
 const emit = defineEmits(['close', 'submit-lab', 'submit-imaging', 'submit-hospitalization', 'submit-surgery'])

@@ -2,7 +2,7 @@
   <div class="dashboard" aria-live="polite">
     <div class="welcome">
       <div>
-        <h2 class="welcome__title">{{ t('dashboard.greeting') }}, {{ firstName }} <span aria-hidden="true">&#x1F44B;</span></h2>
+        <h2 class="welcome__title">{{ t('dashboard.greeting') }}, {{ firstName }} <span aria-hidden="true"><AppIcon name="help" :size="16" /></span></h2>
         <p class="welcome__sub">{{ today }}</p>
       </div>
       <div class="welcome__summary" aria-label="Resumen operativo">
@@ -36,7 +36,7 @@
         {{ appointmentsError }}
       </div>
       <div v-else-if="todayAppointments.length === 0" class="empty-state">
-        <span aria-hidden="true">&#x1F4C5;</span> {{ t('dashboard.noAppointments') }}
+        <span aria-hidden="true"><AppIcon name="appointments" :size="16" /></span> {{ t('dashboard.noAppointments') }}
       </div>
       <div v-else class="appt-list">
         <div
@@ -93,6 +93,7 @@
 </template>
 
 <script setup lang="ts">
+import AppIcon from '../components/AppIcon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { appointmentsApi, patientsApi } from '../api'

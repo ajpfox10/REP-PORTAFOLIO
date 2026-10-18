@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji" aria-hidden="true">{{ t('reports.emoji') }}</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="reports" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('reports.title') }}</h2>
           <p class="page-sub">{{ t('reports.subtitle') }}</p>
@@ -108,7 +108,7 @@
           <h3 id="report-species-title" class="section-title">{{ t('reports.patientsBySpecies') }}</h3>
           <div class="species-list">
             <div v-for="(count, species) in data.patientsBySpecies" :key="species" class="species-row">
-              <span class="species-emoji" aria-hidden="true">{{ petEmoji(species) }}</span>
+              <span class="species-emoji" aria-hidden="true"><SpeciesIcon :species="species" /></span>
               <span class="species-name">{{ speciesLabel(species) }}</span>
               <div class="species-bar-track">
                 <div class="species-bar" :style="{ width: barWidth(count, maxSpecies) + '%' }" />
@@ -166,6 +166,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { appointmentsApi, patientsApi, reportsApi } from '../api'
 import BaseButton from '../components/base/BaseButton.vue'
@@ -220,18 +222,6 @@ function barWidth(val, max) {
   return max ? Math.round((val / max) * 100) : 0
 }
 
-function petEmoji(species) {
-  const map = {
-    dog: '\u{1F43E}',
-    cat: '\u{1F43E}',
-    rabbit: '\u{1F43E}',
-    bird: '\u{1F43E}',
-    fish: '\u{1F43E}',
-    reptile: '\u{1F43E}',
-    hamster: '\u{1F43E}',
-  }
-  return map[species] || '\u{1F43E}'
-}
 
 function speciesLabel(species) {
   const map = {
@@ -422,9 +412,6 @@ onMounted(() => setPeriod('month'))
   gap: 14px;
 }
 
-.page-emoji {
-  font-size: 2rem;
-}
 
 .page-title {
   font-size: 1.35rem;

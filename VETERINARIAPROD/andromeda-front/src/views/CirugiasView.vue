@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">🔪</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="surgery" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('surgery.title') }}</h2>
           <p class="page-sub">{{ t('surgery.subtitle') }}</p>
@@ -15,21 +15,21 @@
     <!-- Stats -->
     <div class="stats-row">
       <div class="stat-card" style="--c:#D6EEFF;--ct:#1A5FAA">
-        <span class="stat-card__icon">📅</span>
+        <span class="stat-card__icon"><AppIcon name="appointments" :size="16" /></span>
         <div>
           <strong>{{ stats.scheduled }}</strong>
           <span>{{ t('surgery.scheduled') }}</span>
         </div>
       </div>
       <div class="stat-card" style="--c:#FFF3CC;--ct:#8A6200">
-        <span class="stat-card__icon">⚡</span>
+        <span class="stat-card__icon"><AppIcon name="zap" :size="16" /></span>
         <div>
           <strong>{{ stats.inProgress }}</strong>
           <span>{{ t('surgery.inProgress') }}</span>
         </div>
       </div>
       <div class="stat-card" style="--c:#D6F3EC;--ct:#1A9E7F">
-        <span class="stat-card__icon">✅</span>
+        <span class="stat-card__icon"><AppIcon name="check" :size="16" /></span>
         <div>
           <strong>{{ stats.completedToday }}</strong>
           <span>{{ t('surgery.completedToday') }}</span>
@@ -65,7 +65,7 @@
     </div>
     <div v-else-if="error" class="alert alert--error" role="alert">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji">🔪</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="surgery" :size="28" /></span>
       <p>{{ t('surgery.empty') }}</p>
     </div>
 
@@ -86,7 +86,7 @@
           <tr v-for="s in items" :key="s.id">
             <td>
               <div class="pet-cell">
-                <span>{{ petEmoji(s.species) }}</span>
+                <span><SpeciesIcon :species="s.species" /></span>
                 <div>
                   <strong>{{ s.patient_name || '—' }}</strong>
                   <span class="sub">{{ s.vet_name || '' }}</span>
@@ -102,7 +102,7 @@
             <td class="sub">{{ s.surgeon_name || '—' }}</td>
             <td>
               <span class="badge" :class="surgeryStatusClass(s.status)">{{ surgeryStatusLabel(s.status) }}</span>
-              <span v-if="s.complications" class="badge badge--red" style="margin-left:4px" :title="t('surgery.complicationsLabel')">⚠</span>
+              <span v-if="s.complications" class="badge badge--red" style="margin-left:4px" :title="t('surgery.complicationsLabel')"><AppIcon name="warning" :size="16" /></span>
             </td>
             <td class="sub">{{ formatDate(s.scheduled_date) }}</td>
             <td class="sub">{{ s.duration_minutes ? s.duration_minutes + ' min' : '—' }}</td>
@@ -149,7 +149,7 @@
       <div v-if="showNew" class="modal-backdrop" @click.self="showNew = false">
         <div class="modal modal--wide">
           <div class="modal__header">
-            <h3>🔪 {{ t('surgery.newModalTitle') }}</h3>
+            <h3><AppIcon name="surgery" :size="16" /> {{ t('surgery.newModalTitle') }}</h3>
             <BaseButton type="button" variant="ghost" class="modal__close" :aria-label="t('common.close')" @click="showNew = false">×</BaseButton>
           </div>
 
@@ -179,12 +179,12 @@
                     :aria-label="`${t('common.selectPatient')} ${pt.name}`"
                     @click="selectPatient(pt)"
                   >
-                    {{ petEmoji(pt.species) }} <b>{{ pt.name }}</b>
+                    <SpeciesIcon :species="pt.species" /> <b>{{ pt.name }}</b>
                     <span v-if="pt.hc_number" class="autocomplete__owner"> · HC {{ pt.hc_number }}</span>
                     <span class="autocomplete__owner">— {{ pt.primary_owner || '' }}</span>
                   </button>
                 </div>
-                <div v-if="newForm.patientId" class="selected-patient">✅ {{ selectedPatientLabel }}</div>
+                <div v-if="newForm.patientId" class="selected-patient"><AppIcon name="check" :size="16" /> {{ selectedPatientLabel }}</div>
                 <span v-if="fe.patientId" class="field-error">{{ fe.patientId }}</span>
               </div>
 
@@ -267,8 +267,8 @@
       <div v-if="showAnesthesia" class="modal-backdrop" @click.self="showAnesthesia = false">
         <div class="modal modal--wide">
           <div class="modal__header">
-            <h3>💉 {{ t('surgery.anesthesiaTitle') }} — {{ selectedSurgery?.patient_name }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="showAnesthesia = false">✕</BaseButton>
+            <h3><AppIcon name="vaccines" :size="16" /> {{ t('surgery.anesthesiaTitle') }} — {{ selectedSurgery?.patient_name }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="showAnesthesia = false"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
 
           <form @submit.prevent="handleAnesthesia" novalidate>
@@ -369,8 +369,8 @@
       <div v-if="showStatus" class="modal-backdrop" @click.self="showStatus = false">
         <div class="modal modal--sm">
           <div class="modal__header">
-            <h3>🔄 {{ t('surgery.statusTitle') }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="showStatus = false">✕</BaseButton>
+            <h3><AppIcon name="refresh" :size="16" /> {{ t('surgery.statusTitle') }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="showStatus = false"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
           <div class="form-body">
             <p class="sub" style="margin-bottom:8px">
@@ -384,7 +384,7 @@
                 @click="changeStatus('in_progress')"
                 :disabled="statusSaving"
               >
-                ⚡ {{ t('surgery.statusScheduled') }}
+                <AppIcon name="zap" :size="16" /> {{ t('surgery.statusScheduled') }}
               </button>
               <button
                 v-if="selectedSurgery?.status === 'scheduled' || selectedSurgery?.status === 'in_progress'"
@@ -393,7 +393,7 @@
                 @click="changeStatus('completed')"
                 :disabled="statusSaving"
               >
-                ✅ {{ t('surgery.statusCompleted') }}
+                <AppIcon name="check" :size="16" /> {{ t('surgery.statusCompleted') }}
               </button>
               <button
                 v-if="selectedSurgery?.status === 'scheduled'"
@@ -402,7 +402,7 @@
                 @click="changeStatus('postponed')"
                 :disabled="statusSaving"
               >
-                📌 {{ t('surgery.statusPostponed') }}
+                <AppIcon name="pin" :size="16" /> {{ t('surgery.statusPostponed') }}
               </button>
               <button
                 v-if="selectedSurgery?.status !== 'cancelled' && selectedSurgery?.status !== 'completed'"
@@ -411,7 +411,7 @@
                 @click="changeStatus('cancelled')"
                 :disabled="statusSaving"
               >
-                ✕ {{ t('surgery.statusCancelled') }}
+                <AppIcon name="close" :size="16" /> {{ t('surgery.statusCancelled') }}
               </button>
             </div>
           </div>
@@ -428,8 +428,8 @@
       <div v-if="showDetail" class="modal-backdrop" @click.self="showDetail = false">
         <div class="modal modal--wide">
           <div class="modal__header">
-            <h3>🔪 {{ t('surgery.detailTitle') }} — {{ detailData?.patient_name }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="showDetail = false">✕</BaseButton>
+            <h3><AppIcon name="surgery" :size="16" /> {{ t('surgery.detailTitle') }} — {{ detailData?.patient_name }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="showDetail = false"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
           <div v-if="detailLoading" class="loading-state" style="min-height:200px" role="status" aria-live="polite">
             <span class="spin spin--dark" /> {{ t('surgery.detailLoading') }}
@@ -516,7 +516,7 @@
               >
                 <div class="ane-record__header">
                   <span class="badge badge--blue">{{ aneTypeLabel(rec.anesthesia_type) }}</span>
-                  <span v-if="rec.complications" class="badge badge--red">⚠ {{ t('surgery.detailComplications') }}</span>
+                  <span v-if="rec.complications" class="badge badge--red"><AppIcon name="warning" :size="16" /> {{ t('surgery.detailComplications') }}</span>
                   <span class="sub">{{ rec.total_duration_minutes ? rec.total_duration_minutes + ' min' : '' }}</span>
                 </div>
                 <p class="sub" style="margin-top:4px">{{ t('surgery.agentsLabel') }}: {{ rec.anesthetic_agents }}</p>
@@ -539,6 +539,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import { t } from '../i18n'
@@ -602,11 +604,6 @@ let loadTimer = null
 function debouncedLoad() { clearTimeout(loadTimer); loadTimer = setTimeout(load, 350) }
 
 // Helpers
-function petEmoji(s) {
-  if (!s) return '🐾'
-  const m = { perro:'🐶', dog:'🐶', gato:'🐱', cat:'🐱', conejo:'🐰', rabbit:'🐰', loro:'🦜', bird:'🦜', pez:'🐟', fish:'🐟', tortuga:'🐢', reptile:'🦎', hamster:'🐹' }
-  return m[s.toLowerCase()] || '🐾'
-}
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -838,7 +835,6 @@ onUnmounted(() => {
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

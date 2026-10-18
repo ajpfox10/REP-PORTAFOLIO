@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">&#x1F43E;</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="pathology" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('pathology.title') }}</h2>
           <p class="page-sub">{{ t('pathology.subtitle') }}</p>
@@ -15,13 +15,13 @@
     <!-- KPIs -->
     <div class="kpi-row">
       <div class="kpi" style="--c:#FFF3CC;--ct:#8A6200">
-        <span>&#x2713;</span><div><strong>{{ kpis.pending }}</strong><span>{{ t('pathology.pending') }}</span></div>
+        <span><AppIcon name="check" :size="16" /></span><div><strong>{{ kpis.pending }}</strong><span>{{ t('pathology.pending') }}</span></div>
       </div>
       <div class="kpi" style="--c:#E8D6FF;--ct:#6A1AAA">
-        <span>&#x1F43E;</span><div><strong>{{ kpis.processing }}</strong><span>{{ t('pathology.processing') }}</span></div>
+        <span><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.processing }}</strong><span>{{ t('pathology.processing') }}</span></div>
       </div>
       <div class="kpi" style="--c:#D6F3EC;--ct:#1A9E7F">
-        <span>&#x1F43E;</span><div><strong>{{ kpis.reported }}</strong><span>{{ t('pathology.reported') }}</span></div>
+        <span><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.reported }}</strong><span>{{ t('pathology.reported') }}</span></div>
       </div>
     </div>
 
@@ -41,7 +41,7 @@
     <div v-if="loading" class="loading-state"><span class="spin spin--dark" /> {{ t('pathology.loading') }}</div>
     <div v-else-if="error" class="alert alert--error">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji">&#x1F43E;</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="patients" :size="28" /></span>
       <p>{{ t('pathology.empty') }}</p>
     </div>
 
@@ -98,11 +98,11 @@
                   <input id="path-m-patient" name="path-m-patient" v-model.trim="patientSearch" type="search" :placeholder="t('pathology.patientPlaceholder')" :disabled="saving" @input="searchPatients" autocomplete="off" />
                   <div v-if="patientResults.length" class="autocomplete">
                     <div v-for="pt in patientResults" :key="pt.id" class="autocomplete__item" @click="selectPatient(pt)">
-                      &#x1F43E; <b>{{ pt.name }}</b>
+                      <AppIcon name="patients" :size="16" /> <b>{{ pt.name }}</b>
                       <span class="autocomplete__owner">— {{ pt.primary_owner || '' }}</span>
                     </div>
                   </div>
-                  <div v-if="orderForm.patientId" class="selected-patient">&#x2713; {{ selectedPatientLabel }}</div>
+                  <div v-if="orderForm.patientId" class="selected-patient"><AppIcon name="check" :size="16" /> {{ selectedPatientLabel }}</div>
                   <span v-if="fe.patientId" class="field-error">{{ fe.patientId }}</span>
                 </div>
                 <div class="field field--full">
@@ -187,7 +187,7 @@
       <div v-if="showDetailModal && detailOrder" class="modal-backdrop" @click.self="showDetailModal = false">
         <div class="modal modal--lg">
           <div class="modal__header">
-            <h3>&#x1F43E; {{ detailOrder.order_number }} — {{ detailOrder.patient_name }}</h3>
+            <h3><AppIcon name="patients" :size="16" /> {{ detailOrder.order_number }} — {{ detailOrder.patient_name }}</h3>
             <button type="button" class="modal__close" @click="showDetailModal = false">&times;</button>
           </div>
           <div class="form-body detail-body">
@@ -222,7 +222,7 @@
             </div>
 
             <div v-if="detailOrder.result" class="detail-section result-section">
-              <h4>&#x1F43E; {{ t('pathology.resultTitle') }}</h4>
+              <h4><AppIcon name="patients" :size="16" /> {{ t('pathology.resultTitle') }}</h4>
               <div class="detail-grid">
                 <div><span class="detail-label">{{ t('pathology.detailPathologist') }}</span><span>{{ detailOrder.result.pathologist_name }}</span></div>
                 <div><span class="detail-label">{{ t('pathology.reportDate') }}</span><span>{{ formatDate(detailOrder.result.reported_at) }}</span></div>
@@ -244,7 +244,7 @@
           </div>
           <div class="modal__actions">
             <button type="button" class="btn-ghost" @click="showDetailModal = false">{{ t('common.close') }}</button>
-            <button v-if="detailOrder.status !== 'reported'" type="button" class="btn-primary" @click="showDetailModal = false; openResultModal(detailOrder)">&#x1F43E; {{ t('pathology.loadReport') }}</button>
+            <button v-if="detailOrder.status !== 'reported'" type="button" class="btn-primary" @click="showDetailModal = false; openResultModal(detailOrder)"><AppIcon name="patients" :size="16" /> {{ t('pathology.loadReport') }}</button>
           </div>
         </div>
       </div>
@@ -255,7 +255,7 @@
       <div v-if="showResultModal" class="modal-backdrop" @click.self="closeResultModal()">
         <div class="modal modal--lg">
           <div class="modal__header">
-            <h3>&#x1F43E; {{ t('pathology.resultTitle') }} — {{ resultOrderNum }}</h3>
+            <h3><AppIcon name="patients" :size="16" /> {{ t('pathology.resultTitle') }} — {{ resultOrderNum }}</h3>
             <button type="button" class="modal__close" @click="closeResultModal()">&times;</button>
           </div>
           <form @submit.prevent="handleResult" novalidate>
@@ -337,6 +337,7 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { labApi, patientsApi } from '../api'
 import { t } from '../i18n'
@@ -595,7 +596,6 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

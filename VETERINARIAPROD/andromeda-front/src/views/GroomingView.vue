@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji" aria-hidden="true">&#x1F43E;</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="grooming" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('grooming.title') }}</h2>
           <p class="page-sub">{{ t('grooming.subtitle') }}</p>
@@ -15,16 +15,16 @@
     <!-- KPIs -->
     <div class="kpi-row">
       <div class="kpi" style="--c:#FFE4D6;--ct:#c0392b">
-        <span aria-hidden="true">&#x1F43E;</span><div><strong>{{ kpis.today }}</strong><span>{{ t('common.today') }}</span></div>
+        <span aria-hidden="true"><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.today }}</strong><span>{{ t('common.today') }}</span></div>
       </div>
       <div class="kpi" style="--c:#FFF3CC;--ct:#8A6200">
-        <span aria-hidden="true">&#x2713;</span><div><strong>{{ kpis.pending }}</strong><span>{{ t('common.pending') }}</span></div>
+        <span aria-hidden="true"><AppIcon name="check" :size="16" /></span><div><strong>{{ kpis.pending }}</strong><span>{{ t('common.pending') }}</span></div>
       </div>
       <div class="kpi" style="--c:#D6F3EC;--ct:#1A9E7F">
-        <span aria-hidden="true">&#x2713;</span><div><strong>{{ kpis.completed }}</strong><span>{{ t('grooming.completed') }}</span></div>
+        <span aria-hidden="true"><AppIcon name="check" :size="16" /></span><div><strong>{{ kpis.completed }}</strong><span>{{ t('grooming.completed') }}</span></div>
       </div>
       <div class="kpi" style="--c:#D6EEFF;--ct:#1A5FAA">
-        <span aria-hidden="true">&#x1F43E;</span><div><strong>{{ kpis.revenue }}</strong><span>{{ t('grooming.revenueToday') }}</span></div>
+        <span aria-hidden="true"><AppIcon name="patients" :size="16" /></span><div><strong>{{ kpis.revenue }}</strong><span>{{ t('grooming.revenueToday') }}</span></div>
       </div>
     </div>
 
@@ -46,7 +46,7 @@
     <div v-if="loading" class="loading-state" role="status"><span class="spin spin--dark" /> {{ t('grooming.loading') }}</div>
     <div v-else-if="error" class="alert alert--error">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji" aria-hidden="true">&#x1F43E;</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="patients" :size="28" /></span>
       <p>{{ t('grooming.emptyState') }}</p>
     </div>
 
@@ -60,7 +60,7 @@
         </div>
         <div class="groom-card__body">
           <div class="groom-card__pet">
-            <span class="groom-emoji" aria-hidden="true">{{ petEmoji(g.patient?.species) }}</span>
+            <span class="groom-emoji" aria-hidden="true"><SpeciesIcon :species="g.patient?.species" /></span>
             <div>
               <strong>{{ g.patient?.name || g.patient_name || '—' }}</strong>
               <span class="sub">{{ g.patient?.owner?.full_name || g.owner_name || '' }}</span>
@@ -132,11 +132,11 @@
                   <input id="groom-m-patient" name="groom-m-patient" v-model.trim="patientSearch" type="search" :placeholder="t('grooming.patientSearch')" :disabled="saving" @input="searchPatients" autocomplete="off" />
                   <div v-if="patientResults.length" class="autocomplete" role="listbox" :aria-label="t('common.searchResults')">
                     <button v-for="pt in patientResults" :key="pt.id" type="button" class="autocomplete__item" role="option" :aria-label="`${t('common.selectPatient')} ${pt.name}`" @click="selectPatient(pt)">
-                      {{ petEmoji(pt.species) }} <b>{{ pt.name }}</b>
+                      <SpeciesIcon :species="pt.species" /> <b>{{ pt.name }}</b>
                       <span class="autocomplete__owner">— {{ pt.primary_owner || '' }}</span>
                     </button>
                   </div>
-                  <div v-if="form.patientId" class="selected-patient">&#x2713; {{ selectedPatientLabel }}</div>
+                  <div v-if="form.patientId" class="selected-patient"><AppIcon name="check" :size="16" /> {{ selectedPatientLabel }}</div>
                   <span v-if="fe.patientId" class="field-error">{{ fe.patientId }}</span>
                 </div>
                 <div class="field field--full">
@@ -199,6 +199,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { groomingApi, patientsApi } from '../api'
 import { t } from '../i18n'
@@ -299,25 +301,6 @@ async function loadServiceTypes() {
   }
 }
 
-function petEmoji(s) {
-  const sl = String(s || '').toLowerCase()
-  const m = {
-    perro: '\u{1F436}',
-    dog: '\u{1F436}',
-    gato: '\u{1F431}',
-    cat: '\u{1F431}',
-    conejo: '\u{1F430}',
-    rabbit: '\u{1F430}',
-    loro: '\u{1F99C}',
-    bird: '\u{1F99C}',
-    pez: '\u{1F41F}',
-    fish: '\u{1F41F}',
-    tortuga: '\u{1F422}',
-    reptile: '\u{1F98E}',
-    hamster: '\u{1F439}',
-  }
-  return m[sl] || '\u{1F43E}'
-}
 
 function parseServices(s) {
   if (!s) return []
@@ -523,7 +506,6 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">🏥</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="hospitalization" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('hospitalizations.title') }}</h2>
           <p class="page-sub">{{ t('hospitalizations.subtitle') }}</p>
@@ -15,21 +15,21 @@
     <!-- Stats -->
     <div class="stats-row">
       <div class="stat-card" style="--c:#D6EEFF;--ct:#1A5FAA">
-        <span class="stat-card__icon">🛏️</span>
+        <span class="stat-card__icon"><AppIcon name="hospitalization" :size="16" /></span>
         <div>
           <strong>{{ stats.active }}</strong>
           <span>{{ t('hospitalizations.activeHospitalized') }}</span>
         </div>
       </div>
       <div class="stat-card" style="--c:#D6F3EC;--ct:#1A9E7F">
-        <span class="stat-card__icon">🚪</span>
+        <span class="stat-card__icon"><AppIcon name="door" :size="16" /></span>
         <div>
           <strong>{{ stats.dischargedToday }}</strong>
           <span>{{ t('hospitalizations.dischargeToday') }}</span>
         </div>
       </div>
       <div class="stat-card" style="--c:#FFF3CC;--ct:#8A6200">
-        <span class="stat-card__icon">📅</span>
+        <span class="stat-card__icon"><AppIcon name="appointments" :size="16" /></span>
         <div>
           <strong>{{ stats.avgDays }}</strong>
           <span>{{ t('hospitalizations.averageDays') }}</span>
@@ -40,10 +40,10 @@
     <!-- Toggle de vista -->
     <div class="view-toggle">
       <button type="button" :class="['toggle-btn', { 'toggle-btn--active': viewMode === 'list' }]" @click="viewMode = 'list'">
-        ☰ {{ t('hospitalizations.listView') }}
+        <AppIcon name="list" :size="16" /> {{ t('hospitalizations.listView') }}
       </button>
       <button type="button" :class="['toggle-btn', { 'toggle-btn--active': viewMode === 'board' }]" @click="switchToBoard()">
-        🏠 {{ t('hospitalizations.boardView') }}
+        <AppIcon name="home" :size="16" /> {{ t('hospitalizations.boardView') }}
       </button>
     </div>
 
@@ -73,7 +73,7 @@
         <span class="spin spin--dark" /> {{ t('hospitalizations.loading') }}</div>
       <div v-else-if="error" class="alert alert--error" role="alert">{{ error }}</div>
       <div v-else-if="items.length === 0" class="empty-state">
-        <span class="empty-state__emoji">🏥</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="hospitalization" :size="28" /></span>
         <p>{{ t('hospitalizations.empty') }}</p>
       </div>
 
@@ -95,7 +95,7 @@
             <tr v-for="h in items" :key="h.id">
               <td>
                 <div class="pet-cell">
-                  <span>{{ petEmoji(h.species) }}</span>
+                  <span><SpeciesIcon :species="h.species" /></span>
                   <div>
                     <strong>{{ h.patient_name || '—' }}</strong>
                     <span class="sub">{{ h.admission_reason || '' }}</span>
@@ -156,7 +156,7 @@
         <span class="spin spin--dark" /> {{ t('hospitalizations.boardLoading') }}</div>
       <div v-else-if="boardError" class="alert alert--error" role="alert">{{ boardError }}</div>
       <div v-else-if="boardData.length === 0" class="empty-state">
-        <span class="empty-state__emoji">🏠</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="home" :size="28" /></span>
         <p>{{ t('hospitalizations.boardEmpty') }}</p>
       </div>
       <div v-else class="board">
@@ -191,7 +191,7 @@
       <div v-if="showAdmit" class="modal-backdrop" @click.self="showAdmit = false">
         <div class="modal modal--wide">
           <div class="modal__header">
-            <h3>🏥 {{ t('hospitalizations.admitTitle') }}</h3>
+            <h3><AppIcon name="hospitalization" :size="16" /> {{ t('hospitalizations.admitTitle') }}</h3>
             <button type="button" class="modal__close" :aria-label="t('common.close')" @click="showAdmit = false">×</button>
           </div>
 
@@ -213,12 +213,12 @@
                 />
                 <div v-if="patientResults.length" class="autocomplete" role="listbox" :aria-label="t('hospitalizations.searchByName')">
                     <button v-for="pt in patientResults" :key="pt.id" type="button" class="autocomplete__item" role="option" :aria-label="`${t('common.selectPatient')} ${pt.name}`" @click="selectPatient(pt)">
-                    {{ petEmoji(pt.species) }} <b>{{ pt.name }}</b>
+                    <SpeciesIcon :species="pt.species" /> <b>{{ pt.name }}</b>
                     <span v-if="pt.hc_number" class="autocomplete__owner"> · HC {{ pt.hc_number }}</span>
                     <span class="autocomplete__owner">— {{ pt.primary_owner || '' }}</span>
                   </button>
                 </div>
-                <div v-if="admitForm.patientId" class="selected-patient">✅ {{ selectedPatientLabel }}</div>
+                <div v-if="admitForm.patientId" class="selected-patient"><AppIcon name="check" :size="16" /> {{ selectedPatientLabel }}</div>
                 <span v-if="afe.patientId" class="field-error">{{ afe.patientId }}</span>
               </div>
 
@@ -300,7 +300,7 @@
               <BaseButton type="button" variant="ghost" @click="showAdmit = false" :disabled="admitSaving">{{ t('common.cancel') }}</BaseButton>
               <button type="submit" class="btn-primary" :disabled="admitSaving">
                 <span v-if="admitSaving" class="spin spin--sm" />
-                <span v-else>🏥 {{ t('hospitalizations.admit') }}</span>
+                <span v-else><AppIcon name="hospitalization" :size="16" /> {{ t('hospitalizations.admit') }}</span>
               </button>
             </div>
           </form>
@@ -313,8 +313,8 @@
       <div v-if="showDetail" class="modal-backdrop" @click.self="showDetail = false">
         <div class="modal modal--wide">
           <div class="modal__header">
-            <h3>🏥 {{ t('hospitalizations.detailTitle') }} — {{ detailData?.patient_name }}</h3>
-            <button type="button" class="modal__close" @click="showDetail = false">✕</button>
+            <h3><AppIcon name="hospitalization" :size="16" /> {{ t('hospitalizations.detailTitle') }} — {{ detailData?.patient_name }}</h3>
+            <button type="button" class="modal__close" @click="showDetail = false"><AppIcon name="close" :size="16" /></button>
           </div>
 
           <div v-if="detailLoading" class="loading-state" style="min-height:200px" role="status" aria-live="polite">
@@ -374,10 +374,10 @@
             <!-- Tabs -->
             <div class="tabs">
               <button type="button" :class="['tab', { 'tab--active': detailTab === 'monitoring' }]" @click="detailTab = 'monitoring'">
-                📊 {{ t('hospitalizations.monitoringLabel') }}
+                <AppIcon name="reports" :size="16" /> {{ t('hospitalizations.monitoringLabel') }}
               </button>
               <button type="button" :class="['tab', { 'tab--active': detailTab === 'medications' }]" @click="detailTab = 'medications'">
-                💊 {{ t('hospitalizations.medicationsLabel') }}
+                <AppIcon name="medication" :size="16" /> {{ t('hospitalizations.medicationsLabel') }}
               </button>
             </div>
 
@@ -388,12 +388,12 @@
                 <div v-for="(m, i) in detailData.monitoring" :key="i" class="monitoring-record">
                   <div class="monitoring-record__time sub">{{ formatDate(m.recorded_at || m.created_at) }}</div>
                   <div class="monitoring-chips">
-                    <span v-if="m.heart_rate" class="mon-chip">❤️ {{ m.heart_rate }} lpm</span>
-                    <span v-if="m.respiratory_rate" class="mon-chip">🫁 {{ m.respiratory_rate }} rpm</span>
-                    <span v-if="m.temperature" class="mon-chip">🌡️ {{ m.temperature }}°C</span>
-                    <span v-if="m.systolic_bp" class="mon-chip">🩺 {{ m.systolic_bp }} mmHg</span>
+                    <span v-if="m.heart_rate" class="mon-chip"><AppIcon name="heart" :size="16" /> {{ m.heart_rate }} lpm</span>
+                    <span v-if="m.respiratory_rate" class="mon-chip"><AppIcon name="activity" :size="16" /> {{ m.respiratory_rate }} rpm</span>
+                    <span v-if="m.temperature" class="mon-chip"><AppIcon name="temperature" :size="16" /> {{ m.temperature }}°C</span>
+                    <span v-if="m.systolic_bp" class="mon-chip"><AppIcon name="vet" :size="16" /> {{ m.systolic_bp }} mmHg</span>
                     <span v-if="m.mucous_membranes" class="mon-chip">{{ m.mucous_membranes }}</span>
-                    <span v-if="m.hydration_status" class="mon-chip">💧 {{ m.hydration_status }}</span>
+                    <span v-if="m.hydration_status" class="mon-chip"><AppIcon name="drop" :size="16" /> {{ m.hydration_status }}</span>
                     <span v-if="m.consciousness_level" class="mon-chip" :class="consciousnessClass(m.consciousness_level)">
                       {{ consciousnessLabel(m.consciousness_level) }}
                     </span>
@@ -450,7 +450,7 @@
                 <div style="margin-top:10px;display:flex;justify-content:flex-end">
                   <BaseButton type="button" style="padding:8px 18px;font-size:0.85rem" @click="handleMonitoring" :disabled="monSaving">
                     <span v-if="monSaving" class="spin spin--sm" />
-                    <span v-else>💾 {{ t('hospitalizations.saveMonitoring') }}</span>
+                    <span v-else><AppIcon name="save" :size="16" /> {{ t('hospitalizations.saveMonitoring') }}</span>
                   </BaseButton>
                 </div>
               </div>
@@ -526,7 +526,7 @@
                 <div style="margin-top:10px;display:flex;justify-content:flex-end">
                   <BaseButton type="button" style="padding:8px 18px;font-size:0.85rem" @click="handleMedication" :disabled="medSaving">
                     <span v-if="medSaving" class="spin spin--sm" />
-                    <span v-else>💊 {{ t('hospitalizations.prescribe') }}</span>
+                    <span v-else><AppIcon name="medication" :size="16" /> {{ t('hospitalizations.prescribe') }}</span>
                   </BaseButton>
                 </div>
               </div>
@@ -539,7 +539,7 @@
                 variant="danger"
                 @click="openDischarge(detailData); showDetail = false"
               >
-                🚪 {{ t('hospitalizations.discharge') }}
+                <AppIcon name="door" :size="16" /> {{ t('hospitalizations.discharge') }}
               </BaseButton>
             <BaseButton type="button" variant="ghost" @click="showDetail = false">{{ t('common.close') }}</BaseButton>
           </div>
@@ -552,8 +552,8 @@
       <div v-if="showDischarge" class="modal-backdrop" @click.self="showDischarge = false">
         <div class="modal modal--sm">
           <div class="modal__header">
-            <h3>🚪 {{ t('hospitalizations.dischargeTitle') }} — {{ dischargeTarget?.patient_name }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="showDischarge = false">✕</BaseButton>
+            <h3><AppIcon name="door" :size="16" /> {{ t('hospitalizations.dischargeTitle') }} — {{ dischargeTarget?.patient_name }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="showDischarge = false"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
           <form @submit.prevent="handleDischarge" novalidate>
             <div class="form-body">
@@ -581,7 +581,7 @@
               <BaseButton type="button" variant="ghost" @click="showDischarge = false" :disabled="dischargeSaving">{{ t('common.cancel') }}</BaseButton>
               <BaseButton type="submit" variant="danger" :disabled="dischargeSaving">
                 <span v-if="dischargeSaving" class="spin spin--sm" />
-                <span v-else>🚪 {{ t('hospitalizations.confirmDischarge') }}</span>
+                <span v-else><AppIcon name="door" :size="16" /> {{ t('hospitalizations.confirmDischarge') }}</span>
               </BaseButton>
             </div>
           </form>
@@ -593,6 +593,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { t } from '../i18n'
 import BaseButton from '../components/base/BaseButton.vue'
@@ -703,11 +705,6 @@ const freeKennelsForWard = computed(() => {
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function petEmoji(s) {
-  if (!s) return '🐾'
-  const m = { perro:'🐶', dog:'🐶', gato:'🐱', cat:'🐱', conejo:'🐰', rabbit:'🐰', loro:'🦜', bird:'🦜', pez:'🐟', fish:'🐟', tortuga:'🐢', reptile:'🦎', hamster:'🐹' }
-  return m[s.toLowerCase()] || '🐾'
-}
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -952,7 +949,6 @@ onUnmounted(() => {
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

@@ -3,13 +3,13 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">📋</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="evolutions" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('evolutions.title') }}</h2>
           <p class="page-sub">{{ t('evolutions.subtitle') }}</p>
         </div>
       </div>
-      <button type="button" class="btn-primary" @click="openModal()">✏️ {{ t('evolutions.newEvolution') }}</button>
+      <button type="button" class="btn-primary" @click="openModal()"><AppIcon name="edit" :size="16" /> {{ t('evolutions.newEvolution') }}</button>
     </div>
 
     <div class="filters">
@@ -27,14 +27,14 @@
     <div v-else-if="error" class="alert alert--error">{{ error }}</div>
 
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji">🐱</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="patients" :size="28" /></span>
       <p>{{ t('evolutions.empty') }}</p>
     </div>
 
     <div v-else class="evol-list">
       <div v-for="ev in items" :key="ev.id" class="evol-card">
         <div class="evol-card__aside">
-          <span class="evol-card__emoji">{{ petEmoji(ev.species) }}</span>
+          <span class="evol-card__emoji"><SpeciesIcon :species="ev.species" /></span>
           <div class="evol-card__meta">
             <strong>{{ ev.patient_name || '—' }}</strong>
             <span>{{ formatDate(ev.visit_date || ev.opened_at) }}</span>
@@ -46,12 +46,12 @@
             <p>{{ ev.chief_complaint }}</p>
           </div>
           <div class="evol-card__vitals" v-if="ev.weight_kg || ev.temperature_celsius">
-            <span v-if="ev.weight_kg" class="vital-chip">⚖️ {{ ev.weight_kg }} kg</span>
-            <span v-if="ev.temperature_celsius" class="vital-chip">🌡️ {{ ev.temperature_celsius }}°C</span>
+            <span v-if="ev.weight_kg" class="vital-chip"><AppIcon name="weight" :size="16" /> {{ ev.weight_kg }} kg</span>
+            <span v-if="ev.temperature_celsius" class="vital-chip"><AppIcon name="temperature" :size="16" /> {{ ev.temperature_celsius }}°C</span>
           </div>
         </div>
         <div class="evol-card__vet" v-if="ev.vet_name">
-          <span>👨‍⚕️ {{ ev.vet_name }}</span>
+          <span><AppIcon name="vet" :size="16" /> {{ ev.vet_name }}</span>
           <span class="evol-status" :class="`status--${ev.status}`">{{ statusLabel(ev.status) }}</span>
         </div>
         <div class="appt-card__actions">
@@ -93,7 +93,6 @@
         :loading-surgery-types="loadingSurgeryTypes"
         :format-date="formatDate"
         :status-label="statusLabel"
-        :pet-emoji="petEmoji"
         @close="closeDetail"
         @submit-lab="submitDetailLabOrder"
         @submit-imaging="submitDetailImagingOrder"
@@ -107,8 +106,8 @@
       <div v-if="showModal" class="modal-backdrop" @click.self="closeModal()">
         <div class="modal">
           <div class="modal__header">
-            <h3>📋 {{ t('evolutions.newModalTitle') }}</h3>
-            <button type="button" class="modal__close" @click="closeModal()">✕</button>
+            <h3><AppIcon name="evolutions" :size="16" /> {{ t('evolutions.newModalTitle') }}</h3>
+            <button type="button" class="modal__close" @click="closeModal()"><AppIcon name="close" :size="16" /></button>
           </div>
 
           <!-- Tabs -->
@@ -374,7 +373,7 @@
                 <button type="button" class="btn-ghost" @click="closeModal()" :disabled="saving">{{ t('evolutions.cancel') }}</button>
                 <button type="submit" class="btn-primary" :disabled="saving">
                   <span v-if="saving" class="spin spin--sm" />
-                  <span v-else>💾 {{ t('evolutions.saveEvolution') }}</span>
+                  <span v-else><AppIcon name="save" :size="16" /> {{ t('evolutions.saveEvolution') }}</span>
                 </button>
               </div>
             </div>
@@ -386,6 +385,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 import { t } from '../i18n'
 import { useAuthStore } from '../stores/auth'
@@ -433,13 +434,13 @@ const HOSPITALIZATION_ROLES = ['veterinarian', 'surgeon', 'tele_vet']
 const SURGERY_ROLES = ['veterinarian', 'surgeon']
 
 const tabs = [
-  { label: t('evolutions.generalData'), icon: '📝' },
-  { label: t('evolutions.history'), icon: '🗒️'  },
-  { label: t('evolutions.physicalExam'), icon: '🔬' },
-  { label: t('evolutions.diagnosis'), icon: '🩺' },
-  { label: t('evolutions.treatment'), icon: '💊' },
-  { label: 'Órdenes', icon: '🧪' },
-  { label: t('evolutions.prescription'), icon: '📄' },
+  { label: t('evolutions.generalData'), icon: '' },
+  { label: t('evolutions.history'), icon: ''  },
+  { label: t('evolutions.physicalExam'), icon: '' },
+  { label: t('evolutions.diagnosis'), icon: '' },
+  { label: t('evolutions.treatment'), icon: '' },
+  { label: 'Órdenes', icon: '' },
+  { label: t('evolutions.prescription'), icon: '' },
 ]
 const activeTab = ref(0)
 const labTests = ref([])
@@ -503,12 +504,6 @@ const freeKennelsForDetailWard = computed(() => {
   return ward.kennels.filter((kennel) => kennel.status === 'available' || kennel.status === 'free')
 })
 
-function petEmoji(s) {
-  if (!s) return '🐾'
-  const sl = s.toLowerCase()
-  const m = { perro:'🐶', dog:'🐶', gato:'🐱', cat:'🐱', conejo:'🐰', rabbit:'🐰', loro:'🦜', bird:'🦜', pez:'🐟', fish:'🐟', tortuga:'🐢', reptile:'🦎', hamster:'🐹' }
-  return m[sl] || '🐾'
-}
 
 function statusLabel(s) {
   const map = { open: 'Abierta', signed: 'Firmada', amended: 'Enmendada' }
@@ -854,7 +849,6 @@ onUnmounted(() => {
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

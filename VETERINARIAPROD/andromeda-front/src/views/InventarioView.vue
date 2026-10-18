@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">📦</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="inventory" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('inventory.title') }}</h2>
           <p class="page-sub">{{ t('inventory.subtitle') }}</p>
@@ -35,7 +35,7 @@
     <template v-if="activeTab === 'products'">
       <!-- Alertas de stock bajo -->
       <div v-if="lowStock.length > 0" class="stock-alert">
-        <span>⚠️</span>
+        <span><AppIcon name="warning" :size="16" /></span>
         <span><strong>{{ lowStock.length }} {{ t('inventory.lowStock') }}</strong>: {{ lowStock.slice(0,3).map(p => p.name).join(', ') }}{{ lowStock.length > 3 ? '…' : '' }}</span>
       </div>
 
@@ -46,25 +46,25 @@
         <label for="inv-category" class="sr-only">{{ t('inventory.allCategories') }}</label>
         <select id="inv-category" name="inv-category" v-model="categoryFilter" class="filter-select" @change="load()">
           <option value="">{{ t('inventory.allCategories') }}</option>
-          <option value="medication">💊 {{ t('inventory.categoryMedication') }}</option>
-          <option value="vaccine">💉 {{ t('inventory.categoryVaccine') }}</option>
-          <option value="supply">📦 {{ t('inventory.categorySupply') }}</option>
-          <option value="food">🦴 {{ t('inventory.categoryFood') }}</option>
-          <option value="equipment">🔧 {{ t('inventory.categoryEquipment') }}</option>
-          <option value="other">📦 {{ t('inventory.categoryOther') }}</option>
+          <option value="medication">{{ t('inventory.categoryMedication') }}</option>
+          <option value="vaccine">{{ t('inventory.categoryVaccine') }}</option>
+          <option value="supply">{{ t('inventory.categorySupply') }}</option>
+          <option value="food">{{ t('inventory.categoryFood') }}</option>
+          <option value="equipment">{{ t('inventory.categoryEquipment') }}</option>
+          <option value="other">{{ t('inventory.categoryOther') }}</option>
         </select>
         <label for="inv-stock" class="sr-only">{{ t('inventory.allStock') }}</label>
         <select id="inv-stock" name="inv-stock" v-model="stockFilter" class="filter-select" @change="load()">
           <option value="">{{ t('inventory.allStock') }}</option>
-          <option value="low">⚠️ {{ t('inventory.lowStock') }}</option>
-          <option value="zero">🔴 {{ t('inventory.noStock') }}</option>
+          <option value="low">{{ t('inventory.lowStock') }}</option>
+          <option value="zero">{{ t('inventory.noStock') }}</option>
         </select>
       </div>
 
       <div v-if="loading" class="loading-state" role="status" aria-live="polite"><span class="spin spin--dark" /> {{ t('inventory.loading') }}</div>
       <div v-else-if="error" class="alert alert--error" role="alert">{{ error }}</div>
       <div v-else-if="items.length === 0" class="empty-state">
-        <span class="empty-state__emoji">📦</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="package" :size="28" /></span>
         <p>{{ t('inventory.empty') }}</p>
       </div>
 
@@ -128,7 +128,7 @@
       <div v-if="alertsLoading" class="loading-state" role="status" aria-live="polite"><span class="spin spin--dark" /> {{ t('inventory.loading') }}</div>
       <div v-else-if="alertsError" class="alert alert--error" role="alert">{{ alertsError }}</div>
       <div v-else-if="alerts.length === 0" class="empty-state">
-        <span class="empty-state__emoji">✅</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="check" :size="28" /></span>
         <p>{{ t('inventory.noAlerts') }}</p>
       </div>
       <div v-else class="card">
@@ -171,7 +171,7 @@
       <div v-if="suppliersLoading" class="loading-state" role="status" aria-live="polite"><span class="spin spin--dark" /> {{ t('inventory.loading') }}</div>
       <div v-else-if="suppliersError" class="alert alert--error" role="alert">{{ suppliersError }}</div>
       <div v-else-if="suppliers.length === 0" class="empty-state">
-        <span class="empty-state__emoji">🚚</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="truck" :size="28" /></span>
         <p>{{ t('inventory.noSuppliers') }}</p>
       </div>
       <div v-else class="card">
@@ -197,7 +197,7 @@
               <td>{{ s.payment_terms ?? '—' }}</td>
               <td>
                 <div class="action-btns">
-                  <button class="btn-sm btn-sm--icon" :title="t('common.edit')" @click="openSupplierModal(s)">✏️</button>
+                  <button class="btn-sm btn-sm--icon" :title="t('common.edit')" @click="openSupplierModal(s)"><AppIcon name="edit" :size="16" /></button>
                   <button type="button" class="btn-sm btn-sm--danger" :disabled="deletingSupplier === s.id" @click="deleteSupplier(s.id)">
                     <span v-if="deletingSupplier === s.id" class="spin spin--sm spin--dark" />
                     <span v-else>{{ t('common.delete') }}</span>
@@ -217,7 +217,7 @@
       <div v-if="ordersLoading" class="loading-state" role="status" aria-live="polite"><span class="spin spin--dark" /> {{ t('inventory.loading') }}</div>
       <div v-else-if="ordersError" class="alert alert--error" role="alert">{{ ordersError }}</div>
       <div v-else-if="orders.length === 0" class="empty-state">
-        <span class="empty-state__emoji">🛒</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="cart" :size="28" /></span>
         <p>{{ t('inventory.noOrders') }}</p>
       </div>
       <div v-else class="card">
@@ -276,8 +276,8 @@
       <div v-if="showModal" class="modal-backdrop" @click.self="closeModal()">
         <div class="modal">
           <div class="modal__header">
-            <h3>📦 {{ t('inventory.newProduct') }}</h3>
-            <button type="button" class="modal__close" @click="closeModal()">✕</button>
+            <h3><AppIcon name="package" :size="16" /> {{ t('inventory.newProduct') }}</h3>
+            <button type="button" class="modal__close" @click="closeModal()"><AppIcon name="close" :size="16" /></button>
           </div>
           <form @submit.prevent="handleCreate" novalidate>
             <div class="form-body">
@@ -291,12 +291,12 @@
                   <label for="inv-m-cat">{{ t('inventory.type') }} <span class="req">*</span></label>
                   <select id="inv-m-cat" name="inv-m-cat" v-model="form.category" :disabled="saving" required>
                     <option value="">{{ t('common.choose') }}</option>
-                    <option value="medication">💊 {{ t('inventory.categoryMedication') }}</option>
-                    <option value="vaccine">💉 {{ t('inventory.categoryVaccine') }}</option>
-                    <option value="supply">📦 {{ t('inventory.categorySupply') }}</option>
-                    <option value="food">🦴 {{ t('inventory.categoryFood') }}</option>
-                    <option value="equipment">🔧 {{ t('inventory.categoryEquipment') }}</option>
-                    <option value="other">📦 {{ t('inventory.categoryOther') }}</option>
+                    <option value="medication">{{ t('inventory.categoryMedication') }}</option>
+                    <option value="vaccine">{{ t('inventory.categoryVaccine') }}</option>
+                    <option value="supply">{{ t('inventory.categorySupply') }}</option>
+                    <option value="food">{{ t('inventory.categoryFood') }}</option>
+                    <option value="equipment">{{ t('inventory.categoryEquipment') }}</option>
+                    <option value="other">{{ t('inventory.categoryOther') }}</option>
                   </select>
                   <span v-if="fe.category" class="field-error">{{ fe.category }}</span>
                 </div>
@@ -370,8 +370,8 @@
       <div v-if="showSupplierModal" class="modal-backdrop" @click.self="closeSupplierModal()">
         <div class="modal">
           <div class="modal__header">
-            <h3>🚚 {{ editingSupplier ? t('inventory.editSupplier') : t('inventory.newSupplier') }}</h3>
-            <button type="button" class="modal__close" @click="closeSupplierModal()">✕</button>
+            <h3><AppIcon name="truck" :size="16" /> {{ editingSupplier ? t('inventory.editSupplier') : t('inventory.newSupplier') }}</h3>
+            <button type="button" class="modal__close" @click="closeSupplierModal()"><AppIcon name="close" :size="16" /></button>
           </div>
           <form @submit.prevent="handleSupplierSave" novalidate>
             <div class="form-body">
@@ -431,8 +431,8 @@
       <div v-if="showOrderModal" class="modal-backdrop" @click.self="closeOrderModal()">
         <div class="modal modal--wide">
           <div class="modal__header">
-            <h3>🛒 {{ t('inventory.newOrder') }}</h3>
-            <button type="button" class="modal__close" @click="closeOrderModal()">✕</button>
+            <h3><AppIcon name="cart" :size="16" /> {{ t('inventory.newOrder') }}</h3>
+            <button type="button" class="modal__close" @click="closeOrderModal()"><AppIcon name="close" :size="16" /></button>
           </div>
           <form @submit.prevent="handleOrderCreate" novalidate>
             <div class="form-body">
@@ -485,7 +485,7 @@
                     <label>{{ t('inventory.unitCost') }}</label>
                     <input v-model.number="item.unitCost" type="number" min="0" step="0.01" placeholder="0.00" :disabled="orderSaving" />
                   </div>
-                  <button type="button" class="btn-sm btn-sm--danger oc-item-remove" @click="removeOrderItem(idx)" :disabled="orderSaving">✕</button>
+                  <button type="button" class="btn-sm btn-sm--danger oc-item-remove" @click="removeOrderItem(idx)" :disabled="orderSaving"><AppIcon name="close" :size="16" /></button>
                 </div>
 
                 <div v-if="orderForm.items.length > 0" class="oc-total">
@@ -510,6 +510,7 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { t } from '../i18n'
 import { extractDetailedErrorMessage, logError } from '../utils/errors'
@@ -534,10 +535,10 @@ const { confirm, success, notifyError } = useUiFeedback()
 // TABS
 // ---------------------------------------------------------------
 const tabs = [
-  { key: 'products',  label: '📦 Productos' },
-  { key: 'alerts',    label: '⚠️ Alertas' },
-  { key: 'suppliers', label: '🚚 Proveedores' },
-  { key: 'orders',    label: '🛒 Órdenes de compra' },
+  { key: 'products',  label: 'Productos' },
+  { key: 'alerts',    label: 'Alertas' },
+  { key: 'suppliers', label: 'Proveedores' },
+  { key: 'orders',    label: 'Órdenes de compra' },
 ]
 const activeTab = ref('products')
 
@@ -569,7 +570,7 @@ function isLow(p) {
 }
 
 function catLabel(c) {
-  const m = { medication:'💊 Medicamento', vaccine:'💉 Vacuna', supply:'📦 Insumo', food:'🦴 Alimento', equipment:'🔧 Equipamiento', other:'📦 Otro' }
+  const m = { medication:'Medicamento', vaccine:'Vacuna', supply:'Insumo', food:'Alimento', equipment:'Equipamiento', other:'Otro' }
   return m[c] || c || '—'
 }
 
@@ -936,7 +937,6 @@ onUnmounted(() => {
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

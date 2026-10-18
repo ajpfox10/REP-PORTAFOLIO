@@ -64,11 +64,6 @@ export function speciesBg(species) {
   return SPECIES_COLORS[speciesKey(species)]?.bg || 'var(--surface-2)'
 }
 
-export function petEmoji(species) {
-  const key = speciesKey(species || '')
-  const map = { perro: '🐶', gato: '🐱', conejo: '🐰', ave: '🐦', pez: '🐟', reptil: '🦎', hámster: '🐹' }
-  return map[key] || '🐾'
-}
 
 export function sexLabel(sex) {
   return sex === 'male' ? 'Macho' : sex === 'female' ? 'Hembra' : '—'

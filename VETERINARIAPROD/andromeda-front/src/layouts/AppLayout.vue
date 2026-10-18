@@ -1,12 +1,20 @@
 <template>
   <div v-if="auth.isAuthenticated" class="app-layout">
-    <aside class="sidebar" :class="{ 'sidebar--open': sidebarOpen }">
+    <aside class="sidebar" :class="{ 'sidebar--open': sidebarOpen }" aria-label="Menú principal">
       <div class="sidebar__header">
-        <AppLogo size="sm" />
-        <button class="icon-button sidebar__close" @click="sidebarOpen = false" aria-label="Cerrar menú">
-          <span aria-hidden="true">&times;</span>
+        <RouterLink to="/" class="sidebar__brand" @click="sidebarOpen = false">
+          <AppLogo size="sm" />
+        </RouterLink>
+        <button class="icon-button sidebar__close" type="button" aria-label="Cerrar menú" @click="sidebarOpen = false">
+          <AppIcon name="close" />
         </button>
       </div>
+
+      <button type="button" class="sidebar__search" @click="palette?.show()">
+        <AppIcon name="search" :size="16" />
+        <span>Buscar</span>
+        <kbd>{{ shortcutLabel }}</kbd>
+      </button>
 
       <nav class="sidebar__nav" aria-label="Navegación principal">
         <section v-for="group in groupedMenuItems" :key="group.name" class="sidebar__group">
@@ -16,202 +24,281 @@
             :key="item.key"
             :to="item.to"
             class="sidebar__link"
-            active-class="sidebar__link--active"
+            :class="{ 'sidebar__link--active': isActive(item) }"
+            :aria-current="isActive(item) ? 'page' : undefined"
             @click="sidebarOpen = false"
           >
-            <span class="sidebar__icon">{{ item.icon }}</span>
+            <AppIcon :name="item.icon" :size="18" />
             <span class="sidebar__label">{{ item.label }}</span>
           </RouterLink>
         </section>
       </nav>
 
-      <div class="sidebar__footer">
-        <div class="sidebar__user">
-          <div class="sidebar__avatar">{{ initials }}</div>
-          <div class="sidebar__user-info">
-            <span class="sidebar__user-name">{{ displayName }}</span>
-            <span class="sidebar__user-role">{{ displayRole }}</span>
-          </div>
+      <RouterLink
+        v-if="isAdmin && subscription.summary"
+        to="/suscripcion"
+        class="plan-card"
+        :class="{ 'plan-card--alert': subscription.needsAttention }"
+        @click="sidebarOpen = false"
+      >
+        <div class="plan-card__row">
+          <AppIcon name="sparkles" :size="16" />
+          <strong>{{ planCardTitle }}</strong>
         </div>
-        <button class="icon-button sidebar__logout" @click="handleLogout" title="Cerrar sesión" aria-label="Cerrar sesión">
-          <span aria-hidden="true">⏻</span>
-        </button>
-      </div>
+        <p class="plan-card__text">{{ planCardText }}</p>
+        <div v-if="subscription.isTrial" class="plan-card__bar" aria-hidden="true">
+          <span :style="{ width: trialProgress + '%' }" />
+        </div>
+      </RouterLink>
     </aside>
 
     <div v-if="sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false" />
 
     <div class="main">
       <header class="topbar">
-        <button class="icon-button topbar__menu" @click="sidebarOpen = true" aria-label="Abrir menú">
-          <span aria-hidden="true"></span>
+        <button class="icon-button topbar__menu" type="button" aria-label="Abrir menú" @click="sidebarOpen = true">
+          <AppIcon name="menu" />
         </button>
         <div class="topbar__heading">
-          <span class="topbar__kicker">Andromeda</span>
+          <span class="topbar__kicker">{{ currentSection }}</span>
           <h1 class="topbar__title">{{ currentTitle }}</h1>
         </div>
+
         <div class="topbar__right">
-          <span class="topbar__greeting">Hola, {{ firstName }}</span>
+          <button type="button" class="icon-button" :aria-label="themeLabel" :title="themeLabel" @click="toggleTheme">
+            <AppIcon :name="isDark() ? 'sun' : 'moon'" />
+          </button>
+          <RouterLink to="/notificaciones" class="icon-button" aria-label="Notificaciones" title="Notificaciones">
+            <AppIcon name="notifications" />
+          </RouterLink>
+
+          <div ref="userMenuRef" class="user-menu">
+            <button
+              type="button"
+              class="user-menu__trigger"
+              :aria-expanded="userMenuOpen"
+              aria-haspopup="menu"
+              @click="userMenuOpen = !userMenuOpen"
+            >
+              <span class="avatar">{{ initials }}</span>
+              <span class="user-menu__name">{{ firstName }}</span>
+              <AppIcon name="chevronDown" :size="16" />
+            </button>
+            <div v-if="userMenuOpen" class="user-menu__panel" role="menu">
+              <div class="user-menu__header">
+                <strong>{{ displayName }}</strong>
+                <span>{{ auth.user?.email }}</span>
+                <span v-if="displayRole" class="user-menu__role">{{ displayRole }}</span>
+              </div>
+              <div class="user-menu__section">
+                <span class="user-menu__label">Tema</span>
+                <div class="segmented" role="group" aria-label="Tema">
+                  <button v-for="opt in THEME_OPTIONS" :key="opt.value" type="button" :aria-pressed="theme === opt.value" @click="setTheme(opt.value)">
+                    {{ opt.label }}
+                  </button>
+                </div>
+              </div>
+              <div class="user-menu__section">
+                <span class="user-menu__label">Idioma</span>
+                <div class="segmented" role="group" aria-label="Idioma">
+                  <button type="button" :aria-pressed="locale === 'es-AR'" @click="changeLocale('es-AR')">Español</button>
+                  <button type="button" :aria-pressed="locale === 'en-US'" @click="changeLocale('en-US')">English</button>
+                </div>
+              </div>
+              <RouterLink v-if="isAdmin" to="/suscripcion" class="user-menu__item" role="menuitem" @click="userMenuOpen = false">
+                <AppIcon name="subscription" :size="17" /> Suscripción y plan
+              </RouterLink>
+              <button type="button" class="user-menu__item user-menu__item--danger" role="menuitem" @click="handleLogout">
+                <AppIcon name="logout" :size="17" /> Cerrar sesión
+              </button>
+            </div>
+          </div>
         </div>
       </header>
+
+      <div v-if="showTrialBanner" class="trial-banner" :class="`trial-banner--${bannerTone}`" role="status">
+        <AppIcon :name="bannerTone === 'danger' ? 'warning' : 'clock'" :size="17" />
+        <span>{{ bannerText }}</span>
+        <RouterLink to="/suscripcion" class="trial-banner__action">Elegir un plan</RouterLink>
+        <button type="button" class="trial-banner__close" aria-label="Ocultar aviso" @click="bannerDismissed = true">
+          <AppIcon name="close" :size="15" />
+        </button>
+      </div>
 
       <main class="page-content">
         <RouterView />
       </main>
     </div>
+
+    <CommandPalette ref="palette" :items="paletteItems" />
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import AppIcon from '../components/AppIcon.vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useSubscriptionStore, PLAN_LABELS } from '../stores/subscription'
+import { usePreferences } from '../composables/usePreferences'
 import AppLogo from '../components/AppLogo.vue'
+import CommandPalette from '../components/CommandPalette.vue'
 
 const auth = useAuthStore()
+const subscription = useSubscriptionStore()
 const router = useRouter()
 const route = useRoute()
+const { theme, isDark, setTheme, toggleTheme, locale, changeLocale } = usePreferences()
 
 const sidebarOpen = ref(false)
+const userMenuOpen = ref(false)
+const userMenuRef = ref(null)
+const palette = ref(null)
+const bannerDismissed = ref(false)
 
-const PREVIEW_MENU = [
-  { key: 'dashboard', section: 'Operación', label: 'Inicio', icon: '\u{1F3E0}', to: '/' },
-  { key: 'appointments', section: 'Operación', label: 'Turnos', icon: '\u{1F4C5}', to: '/turnos' },
-  { key: 'patients', section: 'Clínica', label: 'Pacientes', icon: '\u{1F43E}', to: '/pacientes' },
-  { key: 'medical', section: 'Clínica', label: 'Evoluciones', icon: '\u{1F4CB}', to: '/evoluciones' },
-  { key: 'vaccinations', section: 'Clínica', label: 'Vacunas', icon: '\u{1F489}', to: '/vacunas' },
-  { key: 'laboratorio', section: 'Diagnóstico', label: 'Laboratorio', icon: '\u{1F9EA}', to: '/laboratorio' },
-  { key: 'imagenes', section: 'Diagnóstico', label: 'Imágenes', icon: '\u{1FA7B}', to: '/imagenes' },
-  { key: 'patologia', section: 'Diagnóstico', label: 'Patología', icon: '\u{1F52C}', to: '/patologia' },
-  { key: 'cirugias', section: 'Clínica', label: 'Cirugías', icon: '\u{1F52A}', to: '/cirugias' },
-  { key: 'hospitalizaciones', section: 'Clínica', label: 'Internados', icon: '\u{1F3E5}', to: '/hospitalizaciones' },
-  { key: 'inventory', section: 'Gestión', label: 'Inventario', icon: '\u{1F4E6}', to: '/inventario' },
-  { key: 'grooming', section: 'Servicios', label: 'Grooming', icon: '\u2702\uFE0F', to: '/grooming' },
-  { key: 'telemedicine', section: 'Servicios', label: 'Telemedicina', icon: '\u{1F4BB}', to: '/telemedicina' },
-  { key: 'billing', section: 'Gestión', label: 'Facturación', icon: '\u{1F4B0}', to: '/facturacion' },
-  { key: 'reports', section: 'Gestión', label: 'Reportes', icon: '\u{1F4CA}', to: '/reportes' },
-  { key: 'admin', section: 'Gestión', label: 'Administrar', icon: '\u2699\uFE0F', to: '/admin' },
-  { key: 'notifications', section: 'Gestión', label: 'Notificaciones', icon: '\u{1F514}', to: '/notificaciones' },
-  { key: 'documents', section: 'Gestión', label: 'Documentos', icon: '\u{1F4E8}', to: '/documentos' },
-  { key: 'ai', section: 'Servicios', label: 'IA', icon: '\u{1F9E0}', to: '/ai' },
+const THEME_OPTIONS = [
+  { value: 'system', label: 'Sistema' },
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Oscuro' },
 ]
 
-const menuItems = computed(() => auth.allowedMenu?.length ? auth.allowedMenu : PREVIEW_MENU)
+const shortcutLabel = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘K' : 'Ctrl K'
 
-const SECTION_ORDER = ['Operación', 'Clínica', 'Diagnóstico', 'Servicios', 'Gestión']
+const SECTION_BY_KEY = {
+  dashboard: 'Operación', appointments: 'Operación',
+  patients: 'Clínica', medical: 'Clínica', vaccinations: 'Clínica', cirugias: 'Clínica', hospitalizaciones: 'Clínica',
+  laboratorio: 'Diagnóstico', imagenes: 'Diagnóstico', patologia: 'Diagnóstico',
+  grooming: 'Servicios', telemedicine: 'Servicios', ai: 'Servicios', portal: 'Servicios',
+  inventory: 'Gestión', billing: 'Gestión', reports: 'Gestión', notifications: 'Gestión', documents: 'Gestión',
+  admin: 'Configuración', subscription: 'Configuración',
+}
+const SECTION_ORDER = ['Operación', 'Clínica', 'Diagnóstico', 'Servicios', 'Gestión', 'Configuración']
 
-const MENU_SECTION_BY_KEY = PREVIEW_MENU.reduce((sections, item) => {
-  sections[item.key] = item.section
-  return sections
-}, {})
+const menuItems = computed(() => (auth.allowedMenu || []).map((item) => ({
+  ...item,
+  section: item.section || SECTION_BY_KEY[item.key] || 'Gestión',
+})))
 
 const groupedMenuItems = computed(() => {
   const groups = new Map()
-  menuItems.value.forEach((item) => {
-    const section = item.section || MENU_SECTION_BY_KEY[item.key] || 'Gestión'
-    if (!groups.has(section)) groups.set(section, [])
-    groups.get(section).push(item)
-  })
-
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => {
-      const ia = SECTION_ORDER.indexOf(a)
-      const ib = SECTION_ORDER.indexOf(b)
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
-    })
+  for (const item of menuItems.value) {
+    if (!groups.has(item.section)) groups.set(item.section, [])
+    groups.get(item.section).push(item)
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => SECTION_ORDER.indexOf(a) - SECTION_ORDER.indexOf(b))
     .map(([name, items]) => ({ name, items }))
 })
+
+const paletteItems = computed(() => menuItems.value.filter((item) => !String(item.to).includes('?')))
+
+function isActive(item) {
+  const target = String(item.to).split('?')[0]
+  if (target === '/') return route.path === '/'
+  return route.path === target || route.path.startsWith(`${target}/`)
+}
+
+const isAdmin = computed(() => auth.hasRole('org_admin', 'superadmin'))
 
 const displayName = computed(() => {
   const u = auth.user
   if (!u) return ''
-  return u.name || u.email?.split('@')[0] || 'Usuario'
+  const full = [u.first_name, u.last_name].filter(Boolean).join(' ')
+  return u.name || full || u.email?.split('@')[0] || 'Usuario'
 })
-
 const firstName = computed(() => displayName.value.split(' ')[0])
-
-const initials = computed(() =>
-  displayName.value.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')
-)
-
-function normalizeRoleList(input) {
-  if (!input) return []
-  if (Array.isArray(input)) {
-    return input
-      .map((role) => {
-        if (!role) return null
-        if (typeof role === 'string') return role.trim()
-        if (typeof role === 'object') return String(role.name || role.role || role.value || '').trim()
-        return null
-      })
-      .filter(Boolean)
-  }
-  if (typeof input === 'string') {
-    return input.split(',').map((role) => role.trim()).filter(Boolean)
-  }
-  return []
-}
+const initials = computed(() => displayName.value.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase()).join(''))
 
 const ROLE_LABELS = {
-  superadmin: 'Super Admin',
-  org_admin: 'Admin',
-  branch_manager: 'Gerente',
-  veterinarian: 'Veterinario/a',
-  vet_technician: 'Técnico/a Vet.',
-  receptionist: 'Recepcionista',
-  groomer: 'Peluquero/a',
-  grooming_manager: 'Gerente Grooming',
-  tele_vet: 'Vet. Telemedicina',
-  pharmacist: 'Farmacéutico/a',
-  accountant: 'Contador/a',
-  lab_technician: 'Técnico/a Lab.',
-  imaging_tech: 'Técnico/a Imágenes',
-  surgeon: 'Cirujano/a',
-  read_only: 'Solo Lectura',
+  superadmin: 'Super admin', org_admin: 'Administrador/a', branch_manager: 'Gerente', veterinarian: 'Veterinario/a',
+  vet_technician: 'Técnico/a veterinario', receptionist: 'Recepción', groomer: 'Peluquería', grooming_manager: 'Gerente de grooming',
+  tele_vet: 'Telemedicina', pharmacist: 'Farmacia', accountant: 'Contaduría', lab_technician: 'Laboratorio',
+  imaging_tech: 'Imágenes', surgeon: 'Cirugía', read_only: 'Solo lectura',
 }
-
-const displayRole = computed(() =>
-  normalizeRoleList(auth.roles).map((r) => ROLE_LABELS[r] || r).join(', ') || ''
-)
+const displayRole = computed(() => (auth.roles || []).map((r) => ROLE_LABELS[r] || r).join(' · '))
 
 const PAGE_TITLES = {
-  dashboard: 'Inicio',
-  turnos: 'Gestión de Turnos',
-  pacientes: 'Pacientes',
-  evoluciones: 'Evoluciones Médicas',
-  vacunas: 'Vacunaciones',
-  inventario: 'Inventario',
-  grooming: 'Grooming',
-  telemedicina: 'Telemedicina',
-  facturacion: 'Facturación',
-  reportes: 'Reportes',
-  notificaciones: 'Notificaciones',
-  documentos: 'Documentos por Mail',
-  portal: 'Portal de Dueños',
-  ai: 'Inteligencia Artificial',
-  laboratorio: 'Laboratorio',
-  imagenes: 'Diagnóstico por Imágenes',
-  cirugias: 'Cirugías',
-  hospitalizaciones: 'Hospitalizaciones',
-  patologia: 'Patología',
-  admin: 'Administración',
+  dashboard: 'Inicio', turnos: 'Turnos', pacientes: 'Pacientes', evoluciones: 'Evoluciones médicas',
+  vacunas: 'Vacunación', inventario: 'Inventario', grooming: 'Grooming', telemedicina: 'Telemedicina',
+  facturacion: 'Facturación', reportes: 'Reportes', notificaciones: 'Notificaciones', documentos: 'Documentos por mail',
+  ai: 'Asistente de IA', laboratorio: 'Laboratorio', imagenes: 'Diagnóstico por imágenes', cirugias: 'Cirugías',
+  hospitalizaciones: 'Internación', patologia: 'Patología', admin: 'Administración', suscripcion: 'Suscripción y plan',
+}
+const ROUTE_KEY = {
+  dashboard: 'dashboard', turnos: 'appointments', pacientes: 'patients', evoluciones: 'medical', vacunas: 'vaccinations',
+  inventario: 'inventory', grooming: 'grooming', telemedicina: 'telemedicine', facturacion: 'billing', reportes: 'reports',
+  notificaciones: 'notifications', documentos: 'documents', ai: 'ai', laboratorio: 'laboratorio', imagenes: 'imagenes',
+  cirugias: 'cirugias', hospitalizaciones: 'hospitalizaciones', patologia: 'patologia', admin: 'admin', suscripcion: 'subscription',
+}
+const currentTitle = computed(() => PAGE_TITLES[route.name] || 'Andromeda')
+const currentSection = computed(() => SECTION_BY_KEY[ROUTE_KEY[route.name]] || 'Andromeda')
+
+const themeLabel = computed(() => (isDark() ? 'Usar tema claro' : 'Usar tema oscuro'))
+
+// ── Suscripción: tarjeta del menú y aviso de prueba ─────────────────────────
+const planCardTitle = computed(() => {
+  const s = subscription.summary
+  if (!s) return ''
+  if (s.status === 'trialing') return 'Prueba gratuita'
+  if (s.status === 'expired') return 'Prueba finalizada'
+  if (s.status === 'past_due') return 'Pago pendiente'
+  return `Plan ${PLAN_LABELS[s.plan] || s.plan || ''}`.trim()
+})
+const planCardText = computed(() => {
+  const s = subscription.summary
+  if (!s) return ''
+  if (s.status === 'trialing') return s.trialDaysLeft === 1 ? 'Te queda 1 día' : `Te quedan ${s.trialDaysLeft} días`
+  if (s.status === 'expired') return 'Elegí un plan para seguir usando todo'
+  if (s.status === 'past_due') return 'Revisá tu medio de pago'
+  if (s.status === 'cancelled') return 'No se renovará'
+  return 'Ver consumo y facturación'
+})
+const trialProgress = computed(() => {
+  const days = subscription.data?.trialDays || 14
+  const left = subscription.summary?.trialDaysLeft || 0
+  return Math.max(4, Math.min(100, ((days - left) / days) * 100))
+})
+
+const showTrialBanner = computed(() => isAdmin.value && !bannerDismissed.value && subscription.needsAttention
+  && route.name !== 'suscripcion')
+const bannerTone = computed(() => (['expired', 'past_due'].includes(subscription.summary?.status) ? 'danger' : 'info'))
+const bannerText = computed(() => {
+  const s = subscription.summary
+  if (!s) return ''
+  if (s.status === 'expired') return 'Tu prueba gratuita terminó. Algunas funciones quedaron limitadas.'
+  if (s.status === 'past_due') return 'No pudimos cobrar tu suscripción. Actualizá el medio de pago para evitar limitaciones.'
+  if (s.status === 'cancelled') return 'Cancelaste tu suscripción: mantenés el plan hasta el fin del período pago.'
+  return s.trialDaysLeft === 1 ? 'Te queda 1 día de prueba gratuita.' : `Te quedan ${s.trialDaysLeft} días de prueba gratuita.`
+})
+
+// ── Menú de usuario ─────────────────────────────────────────────────────────
+function onDocumentClick(event) {
+  if (userMenuOpen.value && userMenuRef.value && !userMenuRef.value.contains(event.target)) {
+    userMenuOpen.value = false
+  }
 }
 
-const currentTitle = computed(() => PAGE_TITLES[route.name] || 'Sistema Andromeda')
-
 async function handleLogout() {
+  userMenuOpen.value = false
+  subscription.reset()
   await auth.logout()
   await router.replace('/login')
 }
 
+watch(() => route.fullPath, () => { userMenuOpen.value = false })
+
 watch(
   () => auth.isAuthenticated,
   (isAuthenticated) => {
-    if (!isAuthenticated && route.path !== '/login') {
-      router.replace('/login')
-    }
+    if (!isAuthenticated && route.path !== '/login') router.replace('/login')
   }
 )
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  if (isAdmin.value) subscription.load()
+})
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 </script>
 
 <style scoped>
@@ -222,35 +309,71 @@ watch(
   background: var(--bg);
 }
 
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
 .sidebar {
-  width: 268px;
-  min-width: 268px;
+  width: 256px;
+  min-width: 256px;
   height: 100vh;
-  background: var(--surface);
+  background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  transition: transform var(--transition), box-shadow var(--transition);
+  transition: transform var(--transition);
   z-index: 100;
 }
 
 .sidebar__header {
-  min-height: 72px;
-  padding: 18px 18px 16px;
-  border-bottom: 1px solid var(--border);
+  height: 64px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.sidebar__close {
+.sidebar__brand {
+  color: inherit;
+}
+
+.sidebar .sidebar__close {
   display: none;
+}
+
+.sidebar__search {
+  margin: 4px 12px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+
+.sidebar__search span {
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar__search:hover {
+  border-color: var(--border-strong);
+}
+
+kbd {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
 }
 
 .sidebar__nav {
   flex: 1;
-  padding: 14px 10px 18px;
+  overflow-y: auto;
+  padding: 6px 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -259,260 +382,353 @@ watch(
 .sidebar__group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
 }
 
 .sidebar__group-title {
-  margin: 0 12px 5px;
-  color: var(--text-3);
-  font-size: 0.66rem;
-  font-weight: 900;
+  padding: 0 10px 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--text-3);
 }
 
 .sidebar__link {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 42px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 7px 10px;
   border-radius: var(--radius);
   color: var(--text-2);
   font-size: 0.9rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: background var(--transition), color var(--transition), border-color var(--transition);
-}
-
-.sidebar__link::before {
-  content: "";
-  width: 3px;
-  height: 18px;
-  border-radius: 99px;
-  background: transparent;
+  font-weight: 500;
+  transition: background var(--transition), color var(--transition);
 }
 
 .sidebar__link:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
   color: var(--text);
 }
 
-.sidebar__link--active {
-  background: var(--primary-xlight);
-  color: var(--primary-hover);
-}
-
-.sidebar__link--active::before {
-  background: var(--primary);
-}
-
-.sidebar__icon {
-  width: 24px;
-  min-width: 24px;
-  text-align: center;
-  font-size: 1.05rem;
-  line-height: 1;
+.sidebar__link--active,
+.sidebar__link--active:hover {
+  background: var(--sidebar-active);
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .sidebar__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar__footer {
-  padding: 14px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--surface);
-}
-
-.sidebar__user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.sidebar__avatar {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent-blue) 100%);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 800;
-}
-
-.sidebar__user-info {
-  min-width: 0;
-}
-
-.sidebar__user-name {
-  display: block;
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.sidebar__user-role {
-  display: block;
-  margin-top: 2px;
-  font-size: 0.72rem;
-  color: var(--text-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.icon-button {
-  min-width: 36px;
-  height: 36px;
+.plan-card {
+  margin: 8px 12px 14px;
+  padding: 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background var(--transition), color var(--transition), border-color var(--transition);
-}
-
-.icon-button:hover {
+  border-radius: var(--radius-lg);
   background: var(--surface-2);
   color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.sidebar__logout {
-  font-size: 1rem;
-  font-weight: 800;
+.plan-card:hover {
+  border-color: var(--primary);
+  color: var(--text);
 }
 
-.sidebar__logout:hover {
-  border-color: var(--danger);
-  background: var(--danger-light);
-  color: var(--danger);
+.plan-card--alert {
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: var(--warning-light);
 }
 
+.plan-card__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  font-size: 0.86rem;
+}
+
+.plan-card__row strong {
+  color: var(--text);
+}
+
+.plan-card__text {
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.plan-card__bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.plan-card__bar span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  border-radius: inherit;
+}
+
+/* ── Main ────────────────────────────────────────────────────────────────── */
 .main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .topbar {
-  min-height: 72px;
-  padding: 0 28px;
+  height: 64px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 16px;
-  background: rgba(255, 255, 255, 0.94);
+  gap: 12px;
+  padding: 0 24px;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
-  box-shadow: none;
-  flex-shrink: 0;
 }
 
-.topbar__menu {
+.topbar .topbar__menu {
   display: none;
-}
-
-.topbar__menu span,
-.topbar__menu span::before,
-.topbar__menu span::after {
-  display: block;
-  width: 16px;
-  height: 2px;
-  border-radius: 99px;
-  background: currentColor;
-  content: "";
-}
-
-.topbar__menu span {
-  position: relative;
-}
-
-.topbar__menu span::before,
-.topbar__menu span::after {
-  position: absolute;
-  left: 0;
-}
-
-.topbar__menu span::before {
-  top: -5px;
-}
-
-.topbar__menu span::after {
-  top: 5px;
 }
 
 .topbar__heading {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .topbar__kicker {
-  display: block;
-  margin-bottom: 2px;
   font-size: 0.72rem;
-  font-weight: 800;
-  color: var(--primary);
-  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-3);
 }
 
 .topbar__title {
-  font-size: 1.12rem;
-  font-weight: 800;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text);
-  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.topbar__greeting {
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
+  justify-content: center;
+  border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--surface-2);
-  font-size: 0.84rem;
-  font-weight: 600;
+  background: transparent;
   color: var(--text-2);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.user-menu {
+  position: relative;
+  margin-left: 4px;
+}
+
+.user-menu__trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.user-menu__trigger:hover {
+  border-color: var(--border-strong);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.user-menu__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.user-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  z-index: 300;
+}
+
+.user-menu__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+.user-menu__header strong {
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.user-menu__role {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.user-menu__section {
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-menu__label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.segmented button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.user-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.user-menu__item:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.user-menu__item--danger {
+  color: var(--danger);
+}
+
+.trial-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 24px;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.trial-banner--info {
+  background: var(--primary-xlight);
+  color: var(--text);
+}
+
+.trial-banner--danger {
+  background: var(--danger-light);
+  color: var(--text);
+}
+
+.trial-banner span {
+  flex: 1;
+}
+
+.trial-banner__action {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trial-banner__close {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: inline-flex;
 }
 
 .page-content {
   flex: 1;
   overflow-y: auto;
-  padding: 28px;
-}
-
-.page-content > :deep(*) {
-  max-width: 1480px;
+  padding: 24px;
 }
 
 .sidebar-overlay {
   display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.42);
-  z-index: 99;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .sidebar {
     position: fixed;
     left: 0;
@@ -525,23 +741,33 @@ watch(
     transform: translateX(0);
   }
 
-  .sidebar__close,
-  .sidebar-overlay,
-  .topbar__menu {
+  .sidebar .sidebar__close,
+  .topbar .topbar__menu {
     display: inline-flex;
   }
 
-  .topbar {
-    min-height: 64px;
-    padding: 0 16px;
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--overlay);
+    z-index: 90;
   }
 
-  .topbar__greeting {
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .user-menu__name {
     display: none;
   }
 
+  .trial-banner {
+    padding: 9px 16px;
+  }
+
   .page-content {
-    padding: 18px 14px;
+    padding: 16px;
   }
 }
 </style>

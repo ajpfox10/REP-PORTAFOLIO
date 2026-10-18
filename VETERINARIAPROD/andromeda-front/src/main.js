@@ -4,14 +4,15 @@ import router from './router'
 import App from './App.vue'
 import { useAuthStore } from './stores/auth'
 import { useUiFeedbackStore } from './stores/uiFeedback'
-import { setLocale } from './i18n'
+import { initPreferences } from './composables/usePreferences'
 import { buildUserErrorMessage, getErrorInfo, logError } from './utils/errors'
+import '@fontsource-variable/inter'
 import './assets/main.css'
 
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
-setLocale(navigator.language?.startsWith('en') ? 'en-US' : 'es-AR')
+initPreferences()
 
 const auth = useAuthStore(pinia)
 const feedback = useUiFeedbackStore(pinia)

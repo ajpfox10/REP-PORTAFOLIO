@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">💰</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="billing" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('billing.title') }}</h2>
           <p class="page-sub">{{ t('billing.subtitle') }}</p>
@@ -18,12 +18,12 @@
         class="tab-btn"
         :class="{ 'tab-btn--active': activeTab === 'facturas' }"
         @click="activeTab = 'facturas'"
-      >💰 {{ t('billing.invoicesTab') }}</button>
+      ><AppIcon name="billing" :size="16" /> {{ t('billing.invoicesTab') }}</button>
       <button
         class="tab-btn"
         :class="{ 'tab-btn--active': activeTab === 'consolidado' }"
         @click="activeTab = 'consolidado'"
-      >📊 {{ t('billing.consolidatedTab') }}</button>
+      ><AppIcon name="reports" :size="16" /> {{ t('billing.consolidatedTab') }}</button>
     </div>
 
     <!-- ===== TAB: FACTURAS ===== -->
@@ -32,28 +32,28 @@
       <!-- KPIs financieros -->
       <div class="kpi-row">
         <div class="kpi-card" style="--bc:#D6F3EC;--tc:#1A9E7F">
-          <span class="kpi-icon">💵</span>
+          <span class="kpi-icon"><AppIcon name="cash" :size="16" /></span>
           <div>
             <strong>${{ summary.paid }}</strong>
             <span>{{ t('billing.paidToday') }}</span>
           </div>
         </div>
         <div class="kpi-card" style="--bc:#FFF3CC;--tc:#8A6200">
-          <span class="kpi-icon">⏳</span>
+          <span class="kpi-icon"><AppIcon name="clock" :size="16" /></span>
           <div>
             <strong>{{ summary.pending }}</strong>
             <span>{{ t('billing.pending') }}</span>
           </div>
         </div>
         <div class="kpi-card" style="--bc:#FDEAEA;--tc:#c0392b">
-          <span class="kpi-icon">❌</span>
+          <span class="kpi-icon"><AppIcon name="cancel" :size="16" /></span>
           <div>
             <strong>{{ summary.overdue }}</strong>
             <span>{{ t('billing.overdue') }}</span>
           </div>
         </div>
         <div class="kpi-card" style="--bc:#D6EEFF;--tc:#1A5FAA">
-          <span class="kpi-icon">📋</span>
+          <span class="kpi-icon"><AppIcon name="evolutions" :size="16" /></span>
           <div>
             <strong>{{ summary.total }}</strong>
             <span>{{ t('billing.issuedToday') }}</span>
@@ -83,7 +83,7 @@
       <div v-if="loading" class="loading-state" role="status" aria-live="polite"><span class="spin spin--dark" /> {{ t('billing.loading') }}</div>
       <div v-else-if="error" class="alert alert--error" role="alert">{{ error }}</div>
       <div v-else-if="items.length === 0" class="empty-state">
-        <span class="empty-state__emoji">💰</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="billing" :size="28" /></span>
         <p>{{ t('billing.empty') }}</p>
       </div>
 
@@ -120,7 +120,7 @@
               <td>
                 <div class="row-actions">
                   <button type="button" v-if="inv.status === 'pending' || inv.status === 'draft'" class="btn-xs btn-xs--green" @click="openPayModal(inv)">{{ t('billing.markPaid') }}</button>
-                  <button type="button" class="btn-xs btn-xs--blue" @click="viewInvoice(inv)" :title="t('billing.viewDetail')">👁</button>
+                  <button type="button" class="btn-xs btn-xs--blue" @click="viewInvoice(inv)" :title="t('billing.viewDetail')"><AppIcon name="view" :size="16" /></button>
                 </div>
               </td>
             </tr>
@@ -164,7 +164,7 @@
         <div class="kpi-row">
           <template v-for="(value, key) in consolSummary" :key="key">
             <div v-if="value !== null && value !== undefined" class="kpi-card" style="--bc:#EEF2FF;--tc:#3730A3">
-              <span class="kpi-icon">📊</span>
+              <span class="kpi-icon"><AppIcon name="reports" :size="16" /></span>
               <div>
                 <strong>{{ formatConsolValue(key, value) }}</strong>
                 <span>{{ formatConsolLabel(key) }}</span>
@@ -176,7 +176,7 @@
         <!-- Outstanding Table -->
         <div class="section-title" style="margin-top:8px">{{ t('billing.overdueByBranchTitle') }}</div>
         <div v-if="!consolOutstanding || consolOutstanding.length === 0" class="empty-state" style="padding:30px">
-          <span class="empty-state__emoji">✅</span>
+          <span class="empty-state__icon" aria-hidden="true"><AppIcon name="check" :size="28" /></span>
           <p>{{ t('billing.emptyOverdue') }}</p>
         </div>
         <div v-else class="card">
@@ -202,7 +202,7 @@
       </template>
 
       <div v-else class="empty-state">
-        <span class="empty-state__emoji">📊</span>
+        <span class="empty-state__icon" aria-hidden="true"><AppIcon name="reports" :size="28" /></span>
         <p>{{ t('billing.selectRangePrompt') }}</p>
       </div>
     </template>
@@ -212,8 +212,8 @@
       <div v-if="showModal" class="modal-backdrop" @click.self="closeModal()">
         <div class="modal">
           <div class="modal__header">
-            <h3>💰 {{ t('billing.newModalTitle') }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="closeModal()">✕</BaseButton>
+            <h3><AppIcon name="billing" :size="16" /> {{ t('billing.newModalTitle') }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="closeModal()"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
           <form @submit.prevent="handleCreate" novalidate>
             <div class="form-body">
@@ -267,7 +267,7 @@
                     <input :id="`billing-item-tax-${idx}`" :name="`billing-item-tax-${idx}`" v-model.number="item.tax_pct" type="number" min="0" step="0.01" placeholder="% IVA" class="item-tax" :disabled="saving" aria-label="IVA del item" />
                     <input :id="`billing-item-discount-${idx}`" :name="`billing-item-discount-${idx}`" v-model.number="item.discount_pct" type="number" min="0" step="0.01" placeholder="% Desc." class="item-tax" :disabled="saving" aria-label="Descuento del item" />
                     <span class="item-total">${{ ((item.quantity || 0) * (item.unit_price || 0)).toFixed(2) }}</span>
-                    <button type="button" class="btn-del-item" @click="removeItem(idx)" :disabled="form.items.length <= 1">✕</button>
+                    <button type="button" class="btn-del-item" @click="removeItem(idx)" :disabled="form.items.length <= 1"><AppIcon name="close" :size="16" /></button>
                   </div>
                 </div>
                 <div class="items-total">
@@ -298,8 +298,8 @@
       <div v-if="showViewModal" class="modal-backdrop" @click.self="closeViewModal()">
         <div class="modal modal--detail">
           <div class="modal__header">
-            <h3>📄 {{ t('billing.detailTitle') }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="closeViewModal()">✕</BaseButton>
+            <h3><AppIcon name="file" :size="16" /> {{ t('billing.detailTitle') }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="closeViewModal()"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
 
           <div v-if="detailLoading" class="detail-loading" role="status" aria-live="polite">
@@ -453,8 +453,8 @@
       <div v-if="showPayModal" class="modal-backdrop" @click.self="closePayModal()">
         <div class="modal modal--sm">
           <div class="modal__header">
-            <h3>💳 {{ t('billing.registerPayment') }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="closePayModal()">✕</BaseButton>
+            <h3><AppIcon name="subscription" :size="16" /> {{ t('billing.registerPayment') }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="closePayModal()"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
           <div class="form-body">
             <p class="pay-invoice-ref">
@@ -490,6 +490,7 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { t } from '../i18n'
 import BaseButton from '../components/base/BaseButton.vue'
@@ -802,7 +803,6 @@ onUnmounted(() => clearTimeout(timer))
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

@@ -4,13 +4,13 @@
     <!-- Encabezado -->
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">&#x1F43E;</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="appointments" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('appointments.title') }}</h2>
           <p class="page-sub">{{ t('appointments.subtitle') }}</p>
         </div>
       </div>
-      <button type="button" class="btn-primary" @click="openModal()">&#x1F43E; {{ t('appointments.newAppointment') }}</button>
+      <button type="button" class="btn-primary" @click="openModal()"><AppIcon name="patients" :size="16" /> {{ t('appointments.newAppointment') }}</button>
     </div>
 
     <!-- Filtros -->
@@ -34,7 +34,7 @@
     <div v-else-if="error" class="alert alert--error" role="alert">{{ error }}</div>
 
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji">&#x1F43E;</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="patients" :size="28" /></span>
       <p>{{ t('appointments.empty') }}</p>
       <button type="button" class="btn-ghost" @click="openModal()">{{ t('appointments.scheduleFirst') }}</button>
     </div>
@@ -52,7 +52,7 @@
         </div>
         <div class="appt-card__body">
           <div class="appt-card__patient">
-            <span class="appt-card__pet-emoji">{{ petEmoji(a.species) }}</span>
+            <span class="appt-card__pet-emoji"><SpeciesIcon :species="a.species" /></span>
             <div>
               <strong>{{ a.patient_name || a.patient?.name || '—' }}</strong>
               <span class="appt-card__owner">{{ a.owner_name || a.owner?.full_name || '' }}</span>
@@ -60,12 +60,12 @@
           </div>
           <p class="appt-card__reason">{{ a.reason || a.appointment_type || 'Consulta general' }}</p>
           <div class="appt-card__meta-chips">
-            <span v-if="a.duration_minutes" class="vital-chip">&#x2713; {{ a.duration_minutes }} min</span>
-            <span v-if="a.is_emergency" class="vital-chip vital-chip--danger">&#x1F43E; Emergencia</span>
-            <span v-if="a.record_status" class="vital-chip">&#x1F43E; {{ a.record_status }}</span>
+            <span v-if="a.duration_minutes" class="vital-chip"><AppIcon name="check" :size="16" /> {{ a.duration_minutes }} min</span>
+            <span v-if="a.is_emergency" class="vital-chip vital-chip--danger"><AppIcon name="patients" :size="16" /> Emergencia</span>
+            <span v-if="a.record_status" class="vital-chip"><AppIcon name="patients" :size="16" /> {{ a.record_status }}</span>
           </div>
-          <p v-if="a.owner_phone" class="appt-card__vet">&#x1F43E; {{ a.owner_phone }}</p>
-          <p v-if="a.vet_name" class="appt-card__vet">&#x1F43E; {{ a.vet_name }}</p>
+          <p v-if="a.owner_phone" class="appt-card__vet"><AppIcon name="patients" :size="16" /> {{ a.owner_phone }}</p>
+          <p v-if="a.vet_name" class="appt-card__vet"><AppIcon name="patients" :size="16" /> {{ a.vet_name }}</p>
           <p v-if="a.notes" class="appt-card__notes">{{ a.notes }}</p>
         </div>
         <div class="appt-card__actions">
@@ -93,7 +93,7 @@
       <div v-if="showModal" class="modal-backdrop" @click.self="closeModal()">
         <div class="modal">
           <div class="modal__header">
-            <h3>&#x1F43E; {{ t('appointments.newAppointment') }}</h3>
+            <h3><AppIcon name="patients" :size="16" /> {{ t('appointments.newAppointment') }}</h3>
             <button type="button" class="modal__close" @click="closeModal()">&times;</button>
           </div>
           <form @submit.prevent="handleCreate" novalidate>
@@ -143,7 +143,7 @@
                     :aria-label="`Seleccionar ${pt.name}`"
                     @click="selectPatient(pt)"
                   >
-                    {{ petEmoji(pt.species) }} <b>{{ pt.name }}</b>
+                    <SpeciesIcon :species="pt.species" /> <b>{{ pt.name }}</b>
                     <span class="autocomplete__owner">— {{ pt.primary_owner || pt.owner_name }}</span>
                   </button>
                 </div>
@@ -185,6 +185,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { appointmentsApi, patientsApi } from '../api'
@@ -297,10 +299,6 @@ const STATUS_LABELS = {
   no_show:     'Ausente',
 }
 
-function petEmoji(species) {
-  const map = { dog: '\u{1F43E}', cat: '\u{1F43E}', rabbit: '\u{1F43E}', bird: '\u{1F43E}', fish: '\u{1F43E}', reptile: '\u{1F43E}', hamster: '\u{1F43E}' }
-  return map[species?.toLowerCase()] || '\u{1F43E}'
-}
 
 function formatTime(dt) {
   if (!dt) return '—'
@@ -466,7 +464,6 @@ onUnmounted(() => {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
 }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

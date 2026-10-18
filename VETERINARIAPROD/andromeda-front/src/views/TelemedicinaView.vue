@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">💻</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="telemedicine" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('telemedicine.title') }}</h2>
           <p class="page-sub">{{ t('telemedicine.subtitle') }}</p>
@@ -15,28 +15,28 @@
     <!-- KPI Stats bar -->
     <div class="kpi-row">
       <div class="kpi" style="--c:#D6EEFF;--ct:#1A5FAA">
-        <span>💻</span>
+        <span><AppIcon name="telemedicine" :size="16" /></span>
         <div>
           <strong>{{ statsData.total }}</strong>
           <span>{{ t('telemedicine.totalSessions') }}</span>
         </div>
       </div>
       <div class="kpi" style="--c:#D6F3EC;--ct:#1A9E7F">
-        <span>✅</span>
+        <span><AppIcon name="check" :size="16" /></span>
         <div>
           <strong>{{ statsData.completed }}</strong>
           <span>{{ t('telemedicine.completed') }}</span>
         </div>
       </div>
       <div class="kpi" style="--c:#FFF3CC;--ct:#8A6200">
-        <span>⏱️</span>
+        <span><AppIcon name="clock" :size="16" /></span>
         <div>
           <strong>{{ statsData.avgDuration }} min</strong>
           <span>Duración promedio</span>
         </div>
       </div>
       <div class="kpi" style="--c:#F0E6FF;--ct:#6B21A8">
-        <span>📅</span>
+        <span><AppIcon name="appointments" :size="16" /></span>
         <div>
           <strong>{{ statsData.today }}</strong>
           <span>{{ t('telemedicine.sessionsToday') }}</span>
@@ -46,7 +46,7 @@
 
     <!-- Info banner -->
     <div class="info-banner">
-      <span>🎥</span>
+      <span><AppIcon name="telemedicine" :size="16" /></span>
       <div>
         <strong>{{ t('telemedicine.infoTitle') }}</strong>
         <span>Los dueños reciben un enlace por email para unirse a la videollamada en el horario pactado.</span>
@@ -67,13 +67,13 @@
         <option value="no_show">{{ t('telemedicine.statusNoShow') }}</option>
       </select>
       <label for="tele-search" class="sr-only">Buscar paciente</label>
-      <input id="tele-search" name="tele-search" v-model.trim="search" type="search" placeholder="🔍 Buscar paciente…" class="filter-input filter-input--grow" @input="debouncedLoad()" />
+      <input id="tele-search" name="tele-search" v-model.trim="search" type="search" placeholder="Buscar paciente…" class="filter-input filter-input--grow" @input="debouncedLoad()" />
     </div>
 
     <div v-if="loading" class="loading-state"><span class="spin spin--dark" /> {{ t('telemedicine.loading') }}</div>
     <div v-else-if="error" class="alert alert--error">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji">🐱</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="patients" :size="28" /></span>
       <p>{{ t('telemedicine.emptyState') }}</p>
       <button type="button" class="btn-ghost" @click="openModal()">{{ t('telemedicine.programConsultation') }}</button>
     </div>
@@ -86,15 +86,15 @@
         </div>
         <div class="tele-card__mid">
           <div class="tele-pet">
-            <span>{{ petEmoji(t.patient?.species) }}</span>
+            <span><SpeciesIcon :species="t.patient?.species" /></span>
             <div>
               <strong :id="`tele-session-${t.id}-patient`">{{ t.patient?.name || t.patient_name || '—' }}</strong>
               <span class="sub" :id="`tele-session-${t.id}-owner`">{{ t.patient?.owner?.full_name || t.owner_name || '' }}</span>
             </div>
           </div>
           <p class="tele-reason" :id="`tele-session-${t.id}-reason`">{{ t.reason || t.chief_complaint || t('telemedicine.generalConsultation') }}</p>
-          <p class="tele-vet" v-if="t.vet_name" :id="`tele-session-${t.id}-vet`">👨‍⚕️ {{ t.vet_name }}</p>
-          <p class="tele-phone" v-if="t.client_phone" :id="`tele-session-${t.id}-phone`">📞 {{ t.client_phone }}</p>
+          <p class="tele-vet" v-if="t.vet_name" :id="`tele-session-${t.id}-vet`"><AppIcon name="vet" :size="16" /> {{ t.vet_name }}</p>
+          <p class="tele-phone" v-if="t.client_phone" :id="`tele-session-${t.id}-phone`"><AppIcon name="phone" :size="16" /> {{ t.client_phone }}</p>
         </div>
         <div class="tele-card__right">
           <button
@@ -103,7 +103,7 @@
             class="btn-join"
             @click="joinCall(t)"
           >
-            🎥 Unirse
+            <AppIcon name="telemedicine" :size="16" /> Unirse
           </button>
           <button
             v-if="t.status === 'in_progress'"
@@ -158,11 +158,11 @@
                   <input id="tele-m-patient" name="tele-m-patient" v-model.trim="patientSearch" type="search" :placeholder="t('telemedicine.patientSearch')" :disabled="saving" @input="searchPatients" autocomplete="off" />
                   <div v-if="patientResults.length" class="autocomplete" role="listbox" :aria-label="t('common.searchResults')">
                     <button v-for="pt in patientResults" :key="pt.id" type="button" class="autocomplete__item" role="option" :aria-label="`${t('common.selectPatient')} ${pt.name}`" @click="selectPatient(pt)">
-                      🐾 <b>{{ pt.name }}</b>
+                      <AppIcon name="patients" :size="16" /> <b>{{ pt.name }}</b>
                       <span class="autocomplete__owner">— {{ pt.primary_owner || '' }}</span>
                     </button>
                   </div>
-                  <div v-if="form.patientId" class="selected-patient">✅ {{ selectedPatientLabel }}</div>
+                  <div v-if="form.patientId" class="selected-patient"><AppIcon name="check" :size="16" /> {{ selectedPatientLabel }}</div>
                   <span v-if="fe.patientId" class="field-error">{{ fe.patientId }}</span>
                 </div>
                 <div class="field field--full">
@@ -212,6 +212,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import http from '../api/client'
@@ -300,10 +302,6 @@ const totalPages    = computed(() => Math.max(1, Math.ceil(totalSessions.value /
 
 const STATUS = { scheduled: t('telemedicine.statusScheduled'), in_progress: t('telemedicine.statusInProgress'), completed: t('telemedicine.statusCompleted'), cancelled: t('telemedicine.statusCancelled'), no_show: t('telemedicine.statusNoShow') }
 
-function petEmoji(s) {
-  const m = { dog:'🐶', cat:'🐱', rabbit:'🐰', bird:'🐦', fish:'🐟', reptile:'🦎' }
-  return m[s] || '🐾'
-}
 
 function formatTime(dt) {
   if (!dt) return '—'
@@ -515,7 +513,6 @@ onMounted(() => { load(); loadStats(); loadVets(); loadPlatforms() })
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

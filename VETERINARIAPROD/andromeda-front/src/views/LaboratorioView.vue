@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">&#x1F43E;</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="lab" :size="22" /></span>
         <div>
           <h2 class="page-title">Bandeja de laboratorio</h2>
           <p class="page-sub">Órdenes generadas desde evoluciones clínicas y seguimiento de resultados.</p>
@@ -23,21 +23,21 @@
     <!-- Stats -->
     <div class="stats-row">
       <div class="stat-card" style="--c:#FFF3CC;--ct:#8A6200">
-        <span class="stat-card__icon">&#x2713;</span>
+        <span class="stat-card__icon"><AppIcon name="check" :size="16" /></span>
         <div>
           <strong>{{ stats.pending }}</strong>
           <span>{{ t('laboratory.pending') }}</span>
         </div>
       </div>
       <div class="stat-card" style="--c:#D6EEFF;--ct:#1A5FAA">
-        <span class="stat-card__icon">&#x1F43E;</span>
+        <span class="stat-card__icon"><AppIcon name="patients" :size="16" /></span>
         <div>
           <strong>{{ stats.inProgress }}</strong>
           <span>{{ t('laboratory.inProgress') }}</span>
         </div>
       </div>
       <div class="stat-card" style="--c:#D6F3EC;--ct:#1A9E7F">
-        <span class="stat-card__icon">&#x2713;</span>
+        <span class="stat-card__icon"><AppIcon name="check" :size="16" /></span>
         <div>
           <strong>{{ stats.completedToday }}</strong>
           <span>{{ t('laboratory.completedToday') }}</span>
@@ -72,7 +72,7 @@
     </div>
     <div v-else-if="error" class="alert alert--error" role="alert">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji">&#x1F43E;</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="patients" :size="28" /></span>
       <p>{{ t('laboratory.empty') }}</p>
     </div>
 
@@ -94,7 +94,7 @@
           <tr v-for="order in items" :key="order.id">
             <td>
               <div class="pet-cell">
-                <span>{{ petEmoji(order.species) }}</span>
+                <span><SpeciesIcon :species="order.species" /></span>
                 <div>
                   <strong>{{ order.patient_name || '—' }}</strong>
                   <span class="sub">{{ order.vet_name || '' }}</span>
@@ -241,6 +241,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import { labApi } from '../api'
@@ -333,11 +335,6 @@ let loadTimer = null
 function debouncedLoad() { clearTimeout(loadTimer); loadTimer = setTimeout(load, 350) }
 
 // -- Helpers -----------------------------------------------------------------
-function petEmoji(s) {
-  if (!s) return '\u{1F43E}'
-  const m = { perro:'\u{1F43E}', dog:'\u{1F43E}', gato:'\u{1F43E}', cat:'\u{1F43E}', conejo:'\u{1F43E}', rabbit:'\u{1F43E}', loro:'\u{1F43E}', bird:'\u{1F43E}', pez:'\u{1F43E}', fish:'\u{1F43E}', tortuga:'\u{1F43E}', reptile:'\u{1F43E}', hamster:'\u{1F43E}' }
-  return m[s.toLowerCase()] || '\u{1F43E}'
-}
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -429,7 +426,6 @@ onUnmounted(() => clearTimeout(loadTimer))
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 .route-action { white-space: nowrap; }

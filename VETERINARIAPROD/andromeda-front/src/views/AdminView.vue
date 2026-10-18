@@ -10,7 +10,7 @@
           + {{ t('admin.newUser') }}
         </BaseButton>
         <button class="btn-logout" type="button" @click="handleLogout" title="Cerrar sesión">
-          ⏻ Cerrar sesión
+          <AppIcon name="logout" :size="16" /> Cerrar sesión
         </button>
       </div>
     </section>
@@ -504,6 +504,7 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '../components/base/BaseButton.vue'

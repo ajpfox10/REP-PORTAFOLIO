@@ -3,7 +3,7 @@
 
     <div class="page-header">
       <div class="page-header__left">
-        <span class="page-emoji">🐾</span>
+        <span class="page-icon" aria-hidden="true"><AppIcon name="patients" :size="22" /></span>
         <div>
           <h2 class="page-title">{{ t('patients.title') }}</h2>
           <p class="page-sub">{{ t('patients.subtitle') }}</p>
@@ -20,7 +20,7 @@
       <select id="pat-species" name="pat-species" v-model="speciesFilter" class="filter-select" @change="load()">
         <option value="">{{ t('patients.allSpecies') }}</option>
         <option v-for="sp in speciesList" :key="sp.id" :value="sp.common_name">
-          {{ petEmoji(sp.slug) }} {{ sp.common_name }}
+          {{ sp.common_name }}
         </option>
       </select>
     </div>
@@ -34,7 +34,7 @@
 
     <!-- Grid de pacientes -->
     <div v-else-if="items.length === 0" class="empty-state">
-      <span class="empty-state__emoji">🐾</span>
+      <span class="empty-state__icon" aria-hidden="true"><AppIcon name="patients" :size="28" /></span>
       <p>{{ t('patients.empty') }}</p>
       <BaseButton type="button" variant="ghost" @click="openModal()">{{ t('patients.registerFirst') }}</BaseButton>
     </div>
@@ -42,7 +42,7 @@
     <div v-else class="patient-grid">
       <div v-for="p in items" :key="p.id" class="patient-card" :style="{ '--pet-color': speciesColor(p.species) }">
         <div class="patient-card__top">
-          <span class="patient-card__emoji">{{ petEmoji(p.species) }}</span>
+          <span class="patient-card__emoji"><SpeciesIcon :species="p.species" /></span>
           <div class="patient-card__info">
             <strong class="patient-card__name">{{ p.name }}</strong>
             <span class="patient-card__species">{{ p.species }}</span>
@@ -53,23 +53,23 @@
         </div>
         <div class="patient-card__body">
           <div class="patient-card__row">
-            <span>📁</span>
+            <span><AppIcon name="folder" :size="16" /></span>
             <span>{{ p.hc_number || '—' }}</span>
           </div>
           <div class="patient-card__row">
-            <span>👤</span>
+            <span><AppIcon name="user" :size="16" /></span>
             <span>{{ p.primary_owner || p.owner_name || '—' }}</span>
           </div>
           <div class="patient-card__row">
-            <span>🎂</span>
+            <span><AppIcon name="birthday" :size="16" /></span>
             <span>{{ p.birth_date ? formatAge(p.birth_date) : '—' }}</span>
           </div>
           <div class="patient-card__row">
-            <span>⚖️</span>
+            <span><AppIcon name="weight" :size="16" /></span>
             <span>{{ p.weight_kg ? p.weight_kg + ' kg' : '—' }}</span>
           </div>
           <div v-if="p.coat_color" class="patient-card__row">
-            <span>🎨</span>
+            <span><AppIcon name="color" :size="16" /></span>
             <span>{{ p.coat_color }}</span>
           </div>
         </div>
@@ -78,8 +78,8 @@
             {{ p.is_active !== false ? t('common.active') : t('common.inactive') }}
           </span>
           <div class="patient-card__actions">
-            <button type="button" class="btn-card" :title="t('patients.history')" :aria-label="t('patients.history')" @click="openDetail(p)">📋</button>
-            <button type="button" class="btn-card" :title="t('patients.edit')" :aria-label="t('patients.edit')" @click="openEdit(p)">✏️</button>
+            <button type="button" class="btn-card" :title="t('patients.history')" :aria-label="t('patients.history')" @click="openDetail(p)"><AppIcon name="evolutions" :size="16" /></button>
+            <button type="button" class="btn-card" :title="t('patients.edit')" :aria-label="t('patients.edit')" @click="openEdit(p)"><AppIcon name="edit" :size="16" /></button>
           </div>
         </div>
       </div>
@@ -97,8 +97,8 @@
       <div v-if="showDetail" class="modal-backdrop" @click.self="showDetail = false">
         <div class="modal">
           <div class="modal__header">
-            <h3>{{ petEmoji(detailPatient?.species) }} {{ detailPatient?.name }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="showDetail = false">✕</BaseButton>
+            <h3><SpeciesIcon :species="detailPatient?.species" /> {{ detailPatient?.name }}</h3>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="showDetail = false"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
           <div v-if="detailLoading" class="loading-state" role="status" aria-live="polite">
             <span class="spin spin--dark" /> {{ t('patients.loading') }}
@@ -168,7 +168,7 @@
         <div class="modal">
           <div class="modal__header">
             <h3>{{ editingId ? t('patients.editPatient') : t('patients.newPatientModal') }}</h3>
-            <BaseButton type="button" variant="ghost" class="modal__close" @click="closeModal()">✕</BaseButton>
+            <BaseButton type="button" variant="ghost" class="modal__close" @click="closeModal()"><AppIcon name="close" :size="16" /></BaseButton>
           </div>
           <form @submit.prevent="handleSave" novalidate>
             <div class="form-body">
@@ -184,7 +184,7 @@
                   <select id="pat-species-id" name="pat-species-id" v-model="form.speciesId" :disabled="saving || !!editingId" required>
                     <option value="">{{ t('common.choose') }}</option>
                     <option v-for="sp in speciesList" :key="sp.id" :value="sp.id">
-                      {{ petEmoji(sp.slug) }} {{ sp.common_name }}
+                      {{ sp.common_name }}
                     </option>
                   </select>
                   <span v-if="editingId" class="field-hint">{{ t('patients.cannotChangeSpecies') }}</span>
@@ -292,6 +292,8 @@
 </template>
 
 <script setup>
+import AppIcon from '../components/AppIcon.vue'
+import SpeciesIcon from '../components/SpeciesIcon.vue'
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import {
@@ -304,7 +306,6 @@ import {
   listPatients,
   loadSpeciesCatalog,
   normalizePatient,
-  petEmoji,
   sexLabel,
   speciesBg,
   speciesColor,
@@ -492,7 +493,6 @@ function boolLabel(value) {
 
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
-.page-emoji { font-size: 2rem; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

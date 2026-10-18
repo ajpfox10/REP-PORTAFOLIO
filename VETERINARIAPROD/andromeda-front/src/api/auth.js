@@ -5,6 +5,8 @@ const AUTH_BOOTSTRAP_TIMEOUT_MS = 30000
 export const authApi = {
   captchaConfig: ()           => http.get('/auth/captcha/config', { timeout: 10000, _noAutoRefresh: true }),
   login:        (data)          => http.post('/auth/login', data),
+  signup:       (data)          => http.post('/auth/signup', data, { _noAutoRefresh: true }),
+  plans:        ()              => http.get('/auth/plans', { timeout: 10000, _noAutoRefresh: true }),
   twoFaChallenge: (data)        => http.post('/auth/2fa/challenge', data),
   ssoRedirect:  (provider, query = {}) => {
     const params = new URLSearchParams(query).toString()

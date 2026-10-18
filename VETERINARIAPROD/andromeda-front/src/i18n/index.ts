@@ -57,7 +57,7 @@ const messages = {
     grooming: {
       title: 'Grooming',
       subtitle: 'Servicios de estética y cuidado',
-      newSession: '✂️ Nueva sesión',
+      newSession: 'Nueva sesión',
       completed: 'Completados',
       revenueToday: 'Facturado hoy',
       dateFilter: 'Fecha',
@@ -69,12 +69,12 @@ const messages = {
       statusConfirmed: 'Confirmado',
       statusReady: 'Listo',
       statusNoShow: 'No se presentó',
-      searchPlaceholder: '🔍 Buscar mascota…',
+      searchPlaceholder: 'Buscar mascota…',
       loading: 'Cargando sesiones…',
       emptyState: 'No hay sesiones de grooming para esta fecha',
       start: 'Iniciar',
       finish: 'Finalizar',
-      modalTitle: '✂️ Nueva sesión de grooming',
+      modalTitle: 'Nueva sesión de grooming',
       scheduledAt: 'Fecha y hora',
       groomer: 'Groomer',
       selectGroomer: 'Seleccioná un groomer…',
@@ -97,16 +97,16 @@ const messages = {
     vaccines: {
       title: 'Vacunas y Desparasitación',
       subtitle: 'Control y registro del plan sanitario',
-      registerVaccination: '💉 Registrar vacuna',
-      registerDeworming: '🐛 Registrar desparasitación',
-      tabVaccines: '💉 Vacunas',
-      tabDeworming: '🐛 Desparasitación',
+      registerVaccination: 'Registrar vacuna',
+      registerDeworming: 'Registrar desparasitación',
+      tabVaccines: 'Vacunas',
+      tabDeworming: 'Desparasitación',
       upToDate: 'Al día',
       dueSoon: 'Vencen pronto',
       overdue: 'Vencidas',
       totalRecords: 'Total registros',
-      searchPlaceholder: '🔍 Buscar paciente o vacuna…',
-      searchDewormingPlaceholder: '🔍 Buscar paciente o producto…',
+      searchPlaceholder: 'Buscar paciente o vacuna…',
+      searchDewormingPlaceholder: 'Buscar paciente o producto…',
       allStatuses: 'Todos los estados',
       statusUpToDate: 'Al día',
       statusDueSoon: 'Vence pronto',
@@ -151,7 +151,7 @@ const messages = {
     telemedicine: {
       title: 'Telemedicina',
       subtitle: 'Consultas veterinarias a distancia',
-      newSession: '🐾 Nueva teleconsulta',
+      newSession: 'Nueva teleconsulta',
       totalSessions: 'Total sesiones',
       completed: 'Completadas',
       avgDuration: 'Duración promedio',
@@ -167,7 +167,7 @@ const messages = {
       loading: 'Cargando consultas…',
       emptyState: 'No hay teleconsultas para esta fecha',
       programConsultation: 'Programar consulta',
-      modalTitle: '💻 Nueva teleconsulta',
+      modalTitle: 'Nueva teleconsulta',
       scheduledAt: 'Fecha y hora',
       duration: 'Duración estimada',
       duration15: '15 minutos',
@@ -200,7 +200,7 @@ const messages = {
       activeSessionsLabel: 'sesiones activas',
     },
     reports: {
-      emoji: '📊',
+      emoji: '',
       title: 'Reportes',
       subtitle: 'Estadísticas y análisis del sistema',
       export: 'Exportar',
@@ -240,12 +240,12 @@ const messages = {
       speciesFish: 'Pez',
       speciesReptile: 'Reptil',
       speciesHamster: 'Hámster',
-      kpiPatientsIcon: '🐾',
-      kpiAppointmentsIcon: '📅',
-      kpiVaccinesIcon: '💉',
-      kpiGroomingIcon: '✂️',
-      kpiTelemedicineIcon: '💻',
-      kpiRevenueIcon: '💰',
+      kpiPatientsIcon: '',
+      kpiAppointmentsIcon: '',
+      kpiVaccinesIcon: '',
+      kpiGroomingIcon: '',
+      kpiTelemedicineIcon: '',
+      kpiRevenueIcon: '',
     },
     admin: {
       title: 'Administracion de usuarios',
@@ -710,7 +710,7 @@ const messages = {
       statusNoShow: 'No show',
     },
     reports: {
-      emoji: '📊',
+      emoji: '',
       title: 'Reports',
       subtitle: 'System statistics and analysis',
       export: 'Export',
@@ -750,12 +750,12 @@ const messages = {
       speciesFish: 'Fish',
       speciesReptile: 'Reptile',
       speciesHamster: 'Hamster',
-      kpiPatientsIcon: '🐾',
-      kpiAppointmentsIcon: '📅',
-      kpiVaccinesIcon: '💉',
-      kpiGroomingIcon: '✂️',
-      kpiTelemedicineIcon: '💻',
-      kpiRevenueIcon: '💰',
+      kpiPatientsIcon: '',
+      kpiAppointmentsIcon: '',
+      kpiVaccinesIcon: '',
+      kpiGroomingIcon: '',
+      kpiTelemedicineIcon: '',
+      kpiRevenueIcon: '',
     },
     admin: {
       title: 'User administration',
@@ -1430,7 +1430,7 @@ Object.assign(runtimeMessages['en-US'], {
   grooming: {
     title: 'Grooming',
     subtitle: 'Pet styling and care services',
-    newSession: '✂️ New session',
+    newSession: 'New session',
     completed: 'Completed',
     revenueToday: 'Billed today',
     dateFilter: 'Date',
@@ -1442,12 +1442,12 @@ Object.assign(runtimeMessages['en-US'], {
     statusConfirmed: 'Confirmed',
     statusReady: 'Ready',
     statusNoShow: 'No show',
-    searchPlaceholder: '🔍 Search pet…',
+    searchPlaceholder: 'Search pet…',
     loading: 'Loading sessions…',
     emptyState: 'No grooming sessions for this date',
     start: 'Start',
     finish: 'Finish',
-    modalTitle: '✂️ New grooming session',
+    modalTitle: 'New grooming session',
     scheduledAt: 'Date and time',
     groomer: 'Groomer',
     selectGroomer: 'Select a groomer…',
@@ -1470,16 +1470,16 @@ Object.assign(runtimeMessages['en-US'], {
   vaccines: {
     title: 'Vaccines and Deworming',
     subtitle: 'Sanitary plan tracking and registration',
-    registerVaccination: '💉 Register vaccine',
-    registerDeworming: '🐛 Register deworming',
-    tabVaccines: '💉 Vaccines',
-    tabDeworming: '🐛 Deworming',
+    registerVaccination: 'Register vaccine',
+    registerDeworming: 'Register deworming',
+    tabVaccines: 'Vaccines',
+    tabDeworming: 'Deworming',
     upToDate: 'Up to date',
     dueSoon: 'Due soon',
     overdue: 'Overdue',
     totalRecords: 'Total records',
-    searchPlaceholder: '🔍 Search by patient or vaccine…',
-    searchDewormingPlaceholder: '🔍 Search by patient or product…',
+    searchPlaceholder: 'Search by patient or vaccine…',
+    searchDewormingPlaceholder: 'Search by patient or product…',
     allStatuses: 'All statuses',
     statusUpToDate: 'Up to date',
     statusDueSoon: 'Due soon',
@@ -1524,7 +1524,7 @@ Object.assign(runtimeMessages['en-US'], {
   telemedicine: {
     title: 'Telemedicine',
     subtitle: 'Remote veterinary consultations',
-    newSession: '🐾 New teleconsultation',
+    newSession: 'New teleconsultation',
     totalSessions: 'Total sessions',
     completed: 'Completed',
     avgDuration: 'Average duration',
@@ -1540,7 +1540,7 @@ Object.assign(runtimeMessages['en-US'], {
     loading: 'Loading consultations…',
     emptyState: 'No teleconsultations for this date',
     programConsultation: 'Schedule consultation',
-    modalTitle: '💻 New teleconsultation',
+    modalTitle: 'New teleconsultation',
     scheduledAt: 'Date and time',
     duration: 'Estimated duration',
     duration15: '15 minutes',
@@ -1903,21 +1903,30 @@ Object.assign(runtimeMessages['en-US'], {
 })
 
 let currentLocale: Locale = 'es-AR'
+const FALLBACK_LOCALE: Locale = 'es-AR'
 
 export function setLocale(locale: Locale) {
   currentLocale = locale
 }
 
-export function t(path: string, params?: Record<string, string | number>): string {
-  const parts = path.split('.')
-  let value: unknown = messages[currentLocale]
+export function getLocale(): Locale {
+  return currentLocale
+}
+
+function lookup(locale: Locale, parts: string[]): string | null {
+  let value: unknown = messages[locale]
   for (const part of parts) {
-    if (!value || typeof value !== 'object' || !(part in value)) return path
+    if (!value || typeof value !== 'object' || !(part in value)) return null
     value = (value as Record<string, unknown>)[part]
   }
-  if (typeof value !== 'string') return path
+  return typeof value === 'string' ? value : null
+}
+
+export function t(path: string, params?: Record<string, string | number>): string {
+  const parts = path.split('.')
+  // Si falta la traducción en el idioma actual se usa el español, nunca la clave cruda.
+  const value = lookup(currentLocale, parts) ?? lookup(FALLBACK_LOCALE, parts)
+  if (value === null) return path
   if (!params) return value
   return value.replace(/\{(\w+)\}/g, (_, key) => String(params[key] ?? `{${key}}`))
 }
-
-
