@@ -1,0 +1,34 @@
+# Levanta la tienda completa: docker compose up --build  →  http://localhost:4000
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root-local}
+      MYSQL_DATABASE: nueva_esperanza
+      MYSQL_USER: nueva_esperanza
+      MYSQL_PASSWORD: ${DB_PASSWORD:-clave-local}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_NAME: nueva_esperanza
+      DB_USER: nueva_esperanza
+      DB_PASSWORD: ${DB_PASSWORD:-clave-local}
+      SESSION_SECRET: ${SESSION_SECRET:-cambiar-este-secreto-de-sesion-en-produccion-0123456789}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@nuevaesperanza.test}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin.Nueva2026}
+    ports:
+      - "4000:4000"
+
+volumes:
+  db-data:

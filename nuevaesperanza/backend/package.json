@@ -1,0 +1,40 @@
+{
+  "name": "nueva-esperanza-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API del supermercado online Nueva Esperanza",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js",
+    "seed:demo": "node scripts/seed.js --demo",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3",
+    "cookie-parser": "1.4.7",
+    "express": "4.21.2",
+    "express-rate-limit": "7.4.1",
+    "helmet": "8.0.0",
+    "jsonwebtoken": "9.0.2",
+    "mysql2": "3.11.5",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "jest": "29.7.0",
+    "supertest": "7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "./tests/env.js"
+    ],
+    "globalSetup": "./tests/globalSetup.js",
+    "testTimeout": 20000
+  }
+}

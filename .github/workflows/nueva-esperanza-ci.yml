@@ -1,0 +1,102 @@
+name: Nueva Esperanza CI
+
+# CI del supermercado online (carpeta nuevaesperanza). Solo corre cuando cambia esa carpeta.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'nuevaesperanza/**'
+      - '.github/workflows/nueva-esperanza-ci.yml'
+  pull_request:
+    paths:
+      - 'nuevaesperanza/**'
+      - '.github/workflows/nueva-esperanza-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: API, tipos y e2e
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: nueva_esperanza
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -prootpass"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: nueva_esperanza
+      ADMIN_EMAIL: admin@nuevaesperanza.test
+      ADMIN_PASSWORD: Admin.Nueva2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            nuevaesperanza/backend/package-lock.json
+            nuevaesperanza/frontend/package-lock.json
+
+      - name: Base de datos de tests
+        run: mysql -h 127.0.0.1 -u root -prootpass -e "CREATE DATABASE IF NOT EXISTS nueva_esperanza_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+      - name: Instalar API
+        working-directory: nuevaesperanza/backend
+        run: npm ci
+
+      - name: Tests de la API
+        working-directory: nuevaesperanza/backend
+        run: npm test
+
+      - name: Migraciones y datos de demo
+        working-directory: nuevaesperanza/backend
+        run: npm run migrate && npm run seed:demo
+
+      - name: Instalar frontend
+        working-directory: nuevaesperanza/frontend
+        run: npm ci
+
+      - name: Chequeo de tipos
+        working-directory: nuevaesperanza/frontend
+        run: npm run typecheck
+
+      - name: Instalar Chromium
+        working-directory: nuevaesperanza/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests end-to-end
+        working-directory: nuevaesperanza/frontend
+        run: npm run e2e
+
+      - name: Reporte de e2e
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: nuevaesperanza/frontend/test-results/
+          retention-days: 7
+
+  docker:
+    name: Imagen Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen
+        run: docker build -t nueva-esperanza:ci nuevaesperanza
