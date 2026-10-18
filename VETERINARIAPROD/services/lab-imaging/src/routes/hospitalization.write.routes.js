@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { body } = require('express-validator');
 const { db, R, validate, resolveMedicalRecordId, logHospitalizationError } = require('./hospitalization.common');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 
@@ -159,7 +160,7 @@ router.post('/:id(\\d+)/monitoring',
          VALUES (:hid,:at,:temp,:hr,:rr,:sbp,:dbp,:spo2,:wt,
                  :cons,:pain,:hyd,:app,:uri,:def,:wound,:iv,:notes,:uid)` ,
         {
-          hid: req.params.id, at: recordedAt,
+          hid: req.params.id, at: toMySqlDateTime(recordedAt),
           temp: temperature ?? null, hr: heartRate ?? null, rr: respiratoryRate ?? null,
           sbp: systolicBp ?? null, dbp: diastolicBp ?? null, spo2: spo2 ?? null,
           wt: weight ?? null, cons: consciousness || null, pain: painScore ?? null,
@@ -269,7 +270,7 @@ router.patch('/:id(\\d+)/discharge',
           {
             id: req.params.id,
             bid: req.user.branchId,
-            dischargeDate: req.body.dischargeDate,
+            dischargeDate: toMySqlDateTime(req.body.dischargeDate),
             diagnosis: req.body.dischargeDiagnosis || null,
             instructions: req.body.dischargeInstructions || null,
             followUpDate: req.body.followUpDate || null,

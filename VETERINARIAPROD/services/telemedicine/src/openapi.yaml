@@ -15,6 +15,15 @@ paths:
       responses:
         '200':
           description: OK
+  /follow-ups:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '201':
+          description: Created
   /tele/sessions:
     get:
       responses:

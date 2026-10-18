@@ -9,7 +9,10 @@
           <p class="page-sub">{{ t('grooming.subtitle') }}</p>
         </div>
       </div>
-      <button type="button" class="btn-primary" @click="openModal()">{{ t('grooming.newSession') }}</button>
+      <div class="page-header__actions">
+        <button type="button" class="btn-ghost" @click="showGroomers = true"><AppIcon name="clients" :size="16" /> Groomers</button>
+        <button type="button" class="btn-primary" @click="openModal()">{{ t('grooming.newSession') }}</button>
+      </div>
     </div>
 
     <!-- KPIs -->
@@ -126,6 +129,10 @@
                     <option v-for="g in groomerList" :key="g.id" :value="g.id">{{ g.name }}</option>
                   </select>
                   <span v-if="fe.groomerId" class="field-error">{{ fe.groomerId }}</span>
+                  <p v-if="!groomerList.length" class="field-hint">
+                    No hay groomers en esta sucursal.
+                    <button type="button" class="link-btn" @click="showGroomers = true">Agregar uno</button>
+                  </p>
                 </div>
                 <div class="field field--full">
                   <label for="groom-m-patient">{{ t('grooming.patient') }} <span class="req">*</span></label>
@@ -195,12 +202,15 @@
         </div>
       </div>
     </Transition>
+
+    <GroomersDialog v-if="showGroomers" :groomers="groomerList" @close="showGroomers = false" @changed="loadGroomers" />
   </div>
 </template>
 
 <script setup>
 import AppIcon from '../components/AppIcon.vue'
 import SpeciesIcon from '../components/SpeciesIcon.vue'
+import GroomersDialog from '../components/grooming/GroomersDialog.vue'
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { groomingApi, patientsApi } from '../api'
 import { t } from '../i18n'
@@ -355,6 +365,7 @@ async function changeStatus(g, status) {
 
 // Groomer list
 const groomerList = ref([])
+const showGroomers = ref(false)
 async function loadGroomers() {
   try {
     const { data } = await groomingApi.groomers()
@@ -506,6 +517,10 @@ onUnmounted(() => { clearTimeout(timer); clearTimeout(patientTimer) })
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-header__left { display: flex; align-items: center; gap: 14px; }
+.page-header__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.page-header__actions .btn-ghost { display: inline-flex; align-items: center; gap: 6px; }
+.field-hint { margin-top: 6px; font-size: 0.8rem; color: var(--text-3); }
+.link-btn { padding: 0; border: none; background: none; color: var(--primary); font: inherit; font-weight: 600; cursor: pointer; }
 .page-title { font-size: 1.35rem; font-weight: 700; color: var(--text); }
 .page-sub   { font-size: 0.82rem; color: var(--text-2); margin-top: 2px; }
 

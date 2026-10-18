@@ -6,7 +6,6 @@ export const appointmentsApi = {
   list:         (p)             => http.get('/appointments', { params: p }),
   get:          (id)            => http.get(`/appointments/${id}`),
   create:       (d)             => http.post('/appointments', d),
-  update:       (id, d)         => http.put(`/appointments/${id}`, d),
   changeStatus: (id, status, notes) => http.patch(`/appointments/${id}/status`, { status, notes }),
   cancel:       (id, reason)    => http.patch(`/appointments/${id}/status`, { status: 'cancelled', notes: reason }),
   types:        ()              => http.get('/appointments/types'),
@@ -30,14 +29,12 @@ export const clientsApi = {
   get:      (id)    => http.get(`/clients/${id}`),
   create:   (d)     => http.post('/clients', d),
   update:   (id, d) => http.put(`/clients/${id}`, d),
-  patients: (id)    => http.get(`/clients/${id}/patients`),
 }
 
 export const medicalApi = {
   list:   (p)     => http.get('/medical-records', { params: p }),
   get:    (id)    => http.get(`/medical-records/${id}`),
   create: (d)     => http.post('/medical-records', d),
-  update: (id, d) => http.put(`/medical-records/${id}`, d),
   anamnesis:    (recordId, d) => http.post(`/medical-records/${recordId}/anamnesis`, d),
   physicalExam: (recordId, d) => http.post(`/medical-records/${recordId}/physical-exam`, d),
   diagnoses:    (recordId, d) => http.post(`/medical-records/${recordId}/diagnoses`, d),
@@ -181,6 +178,8 @@ export const groomingApi = {
     today:        ()      => http.get('/grooming/appointments/today'),
   },
   groomers: () => http.get('/grooming/groomers'),
+  groomerCandidates: () => http.get('/grooming/groomers/candidates'),
+  createGroomer: (d) => http.post('/grooming/groomers', d),
   services: () => http.get('/grooming/service-types'),
 }
 

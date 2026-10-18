@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { body } = require('express-validator');
 const { db, R, validate, resolveMedicalRecordId, logImagingError } = require('./imaging.common');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 
@@ -92,7 +93,7 @@ router.post('/orders/:id/studies',
             technique, contrast_used, contrast_agent, performed_by)
          VALUES (:oid,:dt,:dicom,:pacs,:tech,:contrast,:agent,:uid)`,
         {
-          oid: req.params.id, dt: studyDatetime,
+          oid: req.params.id, dt: toMySqlDateTime(studyDatetime),
           dicom: dicomStudyUid || null, pacs: pacsUrl || null,
           tech: technique || null, contrast: contrastUsed ? 1 : 0,
           agent: contrastAgent || null, uid: req.user.userId,

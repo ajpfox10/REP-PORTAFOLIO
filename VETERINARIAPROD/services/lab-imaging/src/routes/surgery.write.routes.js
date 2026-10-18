@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { body } = require('express-validator');
 const { db, R, validate, resolveMedicalRecordId, logSurgeryError } = require('./surgery.common');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 
@@ -67,7 +68,7 @@ router.post('/',
               AND DATE(scheduled_date) = DATE(:date)
               AND status NOT IN ('cancelled', 'completed')
             LIMIT 1`,
-          { bid: req.user.branchId, pid: patientId, date: scheduledDate }
+          { bid: req.user.branchId, pid: patientId, date: toMySqlDateTime(scheduledDate) }
         );
         if (clash) return R.conflict(res, 'El paciente ya tiene una cirugía programada para ese día');
       }
@@ -84,7 +85,7 @@ router.post('/',
           bid: req.user.branchId, pid: patientId, mid: resolvedMedicalRecordId,
           type: surgeryTypeId, lead: leadSurgeonId,
           asst: assistantSurgeonId || null, anes: anesthesiologistId || null,
-          nurse: surgicalNurseId || null, date: scheduledDate,
+          nurse: surgicalNurseId || null, date: toMySqlDateTime(scheduledDate),
           time: startTime || null, urg: urgency,
           prediag: preoperativeDiagnosis || null, approach: surgicalApproach || null,
           notes: notes || null,

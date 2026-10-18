@@ -1,7 +1,7 @@
 'use strict';
 
 const { Router } = require('express');
-const { param, query } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const { db, R, validate, logGroomingError } = require('../grooming.common');
 
 const router = Router();
@@ -19,6 +19,73 @@ router.get('/', async (req, res, next) => {
     next(e);
   }
 });
+
+// Personas del equipo de la sucursal que todavía no son groomers activos
+router.get('/candidates', async (req, res, next) => {
+  try {
+    const rows = await db.query(
+      `SELECT u.id, CONCAT(u.first_name,' ',u.last_name) AS name, u.email
+         FROM users u
+         LEFT JOIN groomers g ON g.user_id = u.id AND g.branch_id = :bid AND g.is_active = TRUE
+        WHERE u.branch_id = :bid AND u.is_active = TRUE AND u.deleted_at IS NULL AND g.id IS NULL
+        ORDER BY u.first_name, u.last_name`,
+      { bid: req.user.branchId }
+    );
+    return R.ok(res, rows);
+  } catch (e) {
+    logGroomingError('GET /grooming/groomers/candidates', e, { branchId: req.user?.branchId });
+    next(e);
+  }
+});
+
+// Habilita a una persona del equipo como groomer (o la reactiva si ya lo fue)
+router.post('/',
+  body('userId').isInt({ min: 1 }).toInt(),
+  body('commissionType').optional().isIn(['percentage', 'fixed']),
+  body('commissionValue').optional().isFloat({ min: 0, max: 1000000 }).toFloat(),
+  body('specializations').optional({ nullable: true }).isString().trim().isLength({ max: 255 }),
+  validate,
+  async (req, res, next) => {
+    try {
+      const { userId, commissionType = 'percentage', specializations = null } = req.body;
+      const commissionValue = req.body.commissionValue ?? 0;
+      if (commissionType === 'percentage' && commissionValue > 1) {
+        return R.badRequest(res, 'La comisión porcentual se expresa como fracción (0.18 = 18%)');
+      }
+
+      const user = await db.queryOne(
+        'SELECT id FROM users WHERE id = :uid AND branch_id = :bid AND is_active = TRUE AND deleted_at IS NULL',
+        { uid: userId, bid: req.user.branchId }
+      );
+      if (!user) return R.notFound(res, 'La persona no pertenece a esta sucursal');
+
+      const existing = await db.queryOne(
+        'SELECT id, is_active FROM groomers WHERE user_id = :uid AND branch_id = :bid ORDER BY id DESC LIMIT 1',
+        { uid: userId, bid: req.user.branchId }
+      );
+      if (existing?.is_active) return R.conflict(res, 'Esta persona ya es groomer de la sucursal');
+
+      const params = { uid: userId, bid: req.user.branchId, type: commissionType, value: commissionValue, spec: specializations || null };
+      if (existing) {
+        await db.query(
+          `UPDATE groomers SET is_active = TRUE, commission_type = :type, commission_value = :value, specializations = :spec
+            WHERE id = :id`,
+          { ...params, id: existing.id }
+        );
+        return R.created(res, { id: existing.id, reactivated: true });
+      }
+      const [r] = await db.query(
+        `INSERT INTO groomers (branch_id, user_id, commission_type, commission_value, specializations, is_active)
+         VALUES (:bid, :uid, :type, :value, :spec, TRUE)`,
+        params
+      );
+      return R.created(res, { id: r.insertId });
+    } catch (e) {
+      logGroomingError('POST /grooming/groomers', e, { branchId: req.user?.branchId });
+      next(e);
+    }
+  }
+);
 
 router.get('/performance', async (req, res, next) => {
   try {

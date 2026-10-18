@@ -9,6 +9,7 @@
 
 const { Router } = require('express');
 const { body, validateRequest, db, R, crypto } = require('./_common');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 
@@ -109,7 +110,7 @@ router.post('/',
           vid:  vetId,
           code: sessionCode,
           plat: platformId || null,
-          sched: scheduledAt,
+          sched: toMySqlDateTime(scheduledAt),
           dur:  durationMinutes,
           cc:   chiefComplaint || null,
           notes: notes || null,

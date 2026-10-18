@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { db, R, portalAuth, sendTemplate, publishPortalEvent, vBody, validate, log } = require('../portal.common');
 const { formatDate, formatTime } = require('../../../../shared/locale');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 
@@ -74,7 +75,7 @@ router.post('/',
         `INSERT INTO appointments
            (patient_id, client_id, branch_id, scheduled_date, reason, notes, status, appointment_type_id, created_by_portal)
          VALUES (:pid, :cid, :bid, :date, :reason, :notes, 'requested', NULL, 1)`,
-        { pid: patientId, cid: req.owner.clientId, bid: effectiveBranchId, date: appointmentDate, reason, notes: notes || null }
+        { pid: patientId, cid: req.owner.clientId, bid: effectiveBranchId, date: toMySqlDateTime(appointmentDate), reason, notes: notes || null }
       );
 
       const client = await db.queryOne(`SELECT phone, first_name FROM clients WHERE id=:id`, { id: req.owner.clientId });

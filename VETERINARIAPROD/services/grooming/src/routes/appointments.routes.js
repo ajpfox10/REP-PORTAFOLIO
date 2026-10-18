@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const { requirePerm } = require('../../../../shared/serviceBase');
 const { db, R, body, validate, logGroomingError } = require('../grooming.common');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 
@@ -160,7 +161,7 @@ router.post('/',
              AND scheduled_at < DATE_ADD(:sched, INTERVAL :dur MINUTE)
              AND DATE_ADD(scheduled_at, INTERVAL COALESCE(estimated_duration_minutes, 60) MINUTE) > :sched
            LIMIT 1 FOR UPDATE`,
-          { gid: groomerId, bid: req.user.branchId, sched: scheduledAt, dur: estimatedDurationMinutes || 60 }
+          { gid: groomerId, bid: req.user.branchId, sched: toMySqlDateTime(scheduledAt), dur: estimatedDurationMinutes || 60 }
         );
         if (groomerConflict) {
           throw httpError(409, 'El groomer ya tiene un turno en ese horario');
@@ -175,7 +176,7 @@ router.post('/',
              AND scheduled_at < DATE_ADD(:sched, INTERVAL :dur MINUTE)
              AND DATE_ADD(scheduled_at, INTERVAL COALESCE(estimated_duration_minutes, 60) MINUTE) > :sched
            LIMIT 1 FOR UPDATE`,
-          { pid: patientId, bid: req.user.branchId, sched: scheduledAt, dur: estimatedDurationMinutes || 60 }
+          { pid: patientId, bid: req.user.branchId, sched: toMySqlDateTime(scheduledAt), dur: estimatedDurationMinutes || 60 }
         );
         if (patientConflict) {
           throw httpError(409, 'El paciente ya tiene un turno en ese horario');
@@ -188,7 +189,7 @@ router.post('/',
               delivery_required, delivery_address, notes, status)
            VALUES (:bid,:pid,:cid,:gid,:sched,:dur,:pickup,:paddr,:del,:daddr,:notes,'scheduled')`,
           {
-            bid: req.user.branchId, pid: patientId, cid: clientId, gid: groomerId, sched: scheduledAt, dur: estimatedDurationMinutes,
+            bid: req.user.branchId, pid: patientId, cid: clientId, gid: groomerId, sched: toMySqlDateTime(scheduledAt), dur: estimatedDurationMinutes,
             pickup: pickupRequired ? 1 : 0, paddr: pickupAddress || null, del: deliveryRequired ? 1 : 0, daddr: deliveryAddress || null,
             notes: notes || null,
           }

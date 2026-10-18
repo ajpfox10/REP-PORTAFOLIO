@@ -74,6 +74,27 @@ paths:
       responses:
         '200':
           description: OK
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: integer, minimum: 1 }
+                commissionType: { type: string, enum: [percentage, fixed] }
+                commissionValue: { type: number, minimum: 0 }
+                specializations: { type: string, nullable: true, maxLength: 255 }
+      responses:
+        '201':
+          description: Created
+  /grooming/groomers/candidates:
+    get:
+      responses:
+        '200':
+          description: OK
   /grooming/groomers/performance:
     get:
       responses:

@@ -14,6 +14,7 @@ const {
   sendTemplate,
   log,
 } = require('./_common');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 
@@ -189,7 +190,7 @@ router.post('/',
         {
           bid: req.user.branchId, pid: patientId, cid: clientId, vid: vetId,
           code: sessionCode, type: sessionType, plat: platformId || null,
-          sched: scheduledAt, dur: durationMinutes,
+          sched: toMySqlDateTime(scheduledAt), dur: durationMinutes,
           cc: chiefComplaint || null, notes: notes || null,
         }
       );

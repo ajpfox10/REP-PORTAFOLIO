@@ -5,6 +5,7 @@ const { Router } = require('express');
 const multer = require('multer');
 const { body, param, validationResult } = require('express-validator');
 const { db, R, requirePerm, uploadFile, BUCKETS, sha256, validate, isPdf, hasPdfMagic, ensurePatientInOrg, parseJson, logDocumentsError } = require('../documents.common');
+const { toMySqlDateTime } = require('../../../../shared/datetime');
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 10 } });
@@ -32,7 +33,7 @@ router.post('/manual',
     try {
       const attachments = req.body.attachments || [];
       const createdIds = [];
-      const receivedAt = req.body.receivedAt || new Date().toISOString();
+      const receivedAt = toMySqlDateTime(req.body.receivedAt || new Date());
 
       if (req.body.accountId) {
         const account = await db.queryOne(
@@ -112,7 +113,7 @@ router.post('/upload',
       const documentCategory = VALID_CATS_SET.has(req.body.documentCategory) ? req.body.documentCategory : 'external_lab';
       const accountId = req.body.accountId ? Number(req.body.accountId) : null;
       const patientId = req.body.patientId ? Number(req.body.patientId) : null;
-      const receivedAt = req.body.receivedAt || new Date().toISOString();
+      const receivedAt = toMySqlDateTime(req.body.receivedAt || new Date());
 
       if (accountId) {
         const account = await db.queryOne(
