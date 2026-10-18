@@ -30,7 +30,7 @@ Variables de entorno (opcionales):
 |---|---|
 | `VITE_API_URL` | URL del gateway. Por defecto `/api/v1` en el mismo origen |
 | `VITE_CAPTCHA_ENABLED` / `VITE_HCAPTCHA_SITE_KEY` | Captcha en el login |
-| `VITE_PREVIEW_AUTH` | Solo en desarrollo: `false` desactiva la sesión de demostración |
+| `VITE_PREVIEW_AUTH` | Solo en desarrollo: `true` entra con una sesión de demostración sin backend |
 
 ## Scripts
 

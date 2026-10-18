@@ -4,34 +4,33 @@
       <div class="login-brand">
         <AppLogo size="xl" />
         <div class="login-brand__copy">
-          <p class="login-brand__eyebrow">Gestión veterinaria modular</p>
-          <h1>Operación clínica conectada</h1>
+          <p class="login-brand__eyebrow">Software para clínicas veterinarias</p>
+          <h1>Tu clínica, organizada de punta a punta</h1>
           <p>
-            Agenda, pacientes, historia clínica, laboratorio, facturación y administración
-            trabajando sobre el mismo contrato de servicios.
+            Turnos, historia clínica, vacunas, internación, facturación y reportes
+            en un solo lugar, desde cualquier dispositivo.
           </p>
         </div>
 
-        <div class="login-metrics" aria-hidden="true">
-          <div>
-            <strong>24/7</strong>
-            <span>acceso operativo</span>
-          </div>
-          <div>
-            <strong>API</strong>
-            <span>gateway central</span>
-          </div>
-          <div>
-            <strong>RDS</strong>
-            <span>datos productivos</span>
-          </div>
-        </div>
+        <ul class="login-metrics" aria-label="Qué incluye">
+          <li>
+            <strong>AFIP</strong>
+            <span>factura electrónica</span>
+          </li>
+          <li>
+            <strong>MercadoPago</strong>
+            <span>cobros integrados</span>
+          </li>
+          <li>
+            <strong>AES-256</strong>
+            <span>datos cifrados</span>
+          </li>
+        </ul>
       </div>
 
       <div class="login-card">
         <div class="login-card__header">
-          <p class="login-card__eyebrow">Sistema Andromeda</p>
-          <h2>Ingresar</h2>
+          <h2>Ingresá a tu clínica</h2>
           <p>{{ t('login.subtitle') }}</p>
         </div>
 
@@ -96,6 +95,7 @@
           <div class="login-card__links">
             <button type="button" class="login-card__link" @click="step = 'forgot'">{{ t('login.forgotPassword') }}</button>
           </div>
+          <p class="login-card__signup">¿Tu clínica todavía no usa Andromeda? <RouterLink to="/registro">Probala gratis</RouterLink></p>
         </form>
 
         <form v-else-if="step === 'twofa'" @submit.prevent="handleTwoFa" novalidate>
@@ -177,7 +177,7 @@
       </div>
     </section>
 
-    <p class="login-page__copy">© {{ year }} Sistema Andromeda</p>
+    <p class="login-page__copy">© {{ year }} Andromeda · <RouterLink to="/">Conocé el producto</RouterLink></p>
   </div>
 </template>
 
@@ -427,12 +427,13 @@ onMounted(() => {
 .login-metrics {
   position: relative;
   z-index: 1;
+  list-style: none;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.login-metrics div {
+.login-metrics li {
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-lg);
@@ -620,6 +621,28 @@ onMounted(() => {
   text-align: center;
   margin-top: 16px;
   font-size: 0.84rem;
+}
+
+.login-card__signup {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--text-2);
+}
+
+.login-card__signup a {
+  font-weight: 700;
+}
+
+/* El logo va sobre fondo oscuro en este panel */
+.login-brand :deep(.logo__name) {
+  color: #FFFFFF;
+}
+
+.login-brand :deep(.logo__tagline) {
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .login-card__link {

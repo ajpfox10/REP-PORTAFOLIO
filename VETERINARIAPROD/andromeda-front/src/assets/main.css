@@ -361,7 +361,9 @@ body #app .btn-primary {
   border: 1px solid var(--primary) !important;
   border-radius: var(--radius) !important;
   box-shadow: none !important;
-  font-weight: 800 !important;
+  color: var(--primary-contrast) !important;
+  font-size: 0.9rem;
+  font-weight: 700 !important;
   letter-spacing: 0 !important;
   transform: none !important;
 }
@@ -383,7 +385,8 @@ body #app .btn-ghost {
   border-radius: var(--radius) !important;
   background: var(--surface) !important;
   color: var(--text-2) !important;
-  font-weight: 700 !important;
+  font-size: 0.9rem;
+  font-weight: 600 !important;
 }
 
 body #app .btn-ghost:hover:not(:disabled) {

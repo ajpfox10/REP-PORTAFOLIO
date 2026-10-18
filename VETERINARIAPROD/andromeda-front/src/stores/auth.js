@@ -19,7 +19,8 @@ const PREVIEW_USER = {
 
 function isPreviewAuthEnabled() {
   if (!IS_DEV_MODE) return false
-  return import.meta.env.VITE_PREVIEW_AUTH !== 'false' || localStorage.getItem(PREVIEW_AUTH_KEY) === '1'
+  // Opt-in: la sesión de demostración (superadmin sin contraseña) solo se activa a propósito.
+  return import.meta.env.VITE_PREVIEW_AUTH === 'true' || localStorage.getItem(PREVIEW_AUTH_KEY) === '1'
 }
 
 function decodeBase64Url(value) {

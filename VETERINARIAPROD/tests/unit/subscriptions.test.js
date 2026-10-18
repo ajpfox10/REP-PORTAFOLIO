@@ -60,6 +60,16 @@ describe('subscriptions.summarize', () => {
   });
 });
 
+describe('subscriptions.startTrial', () => {
+  test('la prueba dura exactamente TRIAL_DAYS, sin milisegundos que redondeen a un día más', async () => {
+    const conn = { query: jest.fn().mockResolvedValue([{ insertId: 1 }]) };
+    const now = new Date('2026-10-18T21:54:11.640Z');
+    const { trialEndsAt } = await subscriptions.startTrial(conn, { orgId: 5, subdomain: 'demo', now });
+    expect(trialEndsAt.toISOString()).toBe('2026-11-01T21:54:11.000Z');
+    expect(subscriptions.summarize({ status: 'trialing', trial_ends_at: trialEndsAt }, now).trialDaysLeft).toBe(14);
+  });
+});
+
 describe('subscriptions.applyProviderUpdate', () => {
   beforeEach(() => jest.clearAllMocks());
 

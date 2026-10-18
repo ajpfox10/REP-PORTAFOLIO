@@ -8,7 +8,7 @@
         :class="`feedback-toast--${toast.type}`"
         role="status"
       >
-        <div class="feedback-toast__icon" aria-hidden="true">{{ iconFor(toast.type) }}</div>
+        <div class="feedback-toast__icon" aria-hidden="true"><AppIcon :name="iconFor(toast.type)" :size="15" :stroke-width="2.4" /></div>
         <div class="feedback-toast__body">
           <strong v-if="toast.title">{{ toast.title }}</strong>
           <p>{{ toast.message }}</p>
@@ -23,7 +23,7 @@
     <div v-if="feedback.confirmRequest" class="confirm-backdrop" @click.self="feedback.resolveConfirm(false)">
       <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
         <div class="confirm-dialog__icon" :class="`confirm-dialog__icon--${feedback.confirmRequest.variant}`" aria-hidden="true">
-          {{ feedback.confirmRequest.variant === 'danger' ? '!' : '?' }}
+          <AppIcon :name="feedback.confirmRequest.variant === 'danger' ? 'warning' : 'help'" :size="18" />
         </div>
         <div class="confirm-dialog__body">
           <h2 id="confirm-title">{{ feedback.confirmRequest.title }}</h2>
@@ -48,17 +48,18 @@
 </template>
 
 <script setup>
+import AppIcon from './AppIcon.vue'
 import { useUiFeedbackStore } from '../stores/uiFeedback'
 
 const feedback = useUiFeedbackStore()
 
 function iconFor(type) {
   return {
-    success: 'OK',
-    error: '!',
-    warning: '!',
-    info: 'i',
-  }[type] || 'i'
+    success: 'check',
+    error: 'warning',
+    warning: 'warning',
+    info: 'info',
+  }[type] || 'info'
 }
 </script>
 

@@ -164,7 +164,9 @@ async function getSubscription(orgId, conn = db) {
  * Crea la suscripción en período de prueba para una organización nueva.
  */
 async function startTrial(conn, { orgId, subdomain, billingEmail, now = new Date() }) {
-  const trialEndsAt = addDays(now, TRIAL_DAYS);
+  // DATETIME redondea los milisegundos: se truncan antes para que la prueba dure
+  // exactamente TRIAL_DAYS y el contador no muestre un día de más.
+  const trialEndsAt = addDays(new Date(Math.floor(now.getTime() / 1000) * 1000), TRIAL_DAYS);
   await conn.query(
     `INSERT INTO tenants (org_id, plan, status, subdomain, billing_email, trial_ends_at)
      VALUES (:orgId, :plan, 'trialing', :subdomain, :billingEmail, :trialEndsAt)`,
