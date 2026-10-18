@@ -125,8 +125,6 @@ jobs:
   audit:
     name: Auditoría de dependencias
     runs-on: ubuntu-latest
-    # Informativo: braces (vía http-proxy-middleware) no tiene versión corregida publicada.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -134,9 +132,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # Informativo: braces (vía http-proxy-middleware) no tiene versión corregida
+      # publicada. El job queda en verde y los hallazgos aparecen como advertencia.
       - name: npm audit (backend)
+        continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
 
       - name: npm audit (frontend)
+        continue-on-error: true
         working-directory: VETERINARIAPROD/andromeda-front
         run: npm audit --omit=dev --audit-level=high

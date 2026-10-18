@@ -892,6 +892,11 @@ async function loadPortalHealth() {
   portalHealthError.value = ''
   try {
     const payload = await loadPortalHealthRequest()
+    if (payload.error) {
+      portalHealthChecks.value = []
+      portalHealthError.value = 'No se pudo consultar el estado del portal.'
+      return
+    }
     portalHealth.status = payload.status
     portalHealth.statusLabel = payload.statusLabel
     portalHealth.statusClass = payload.statusClass
@@ -900,7 +905,7 @@ async function loadPortalHealth() {
     portalHealth.source = payload.source
     portalHealth.target = payload.target
     portalHealth.checkedAt = payload.checkedAt
-    portalHealthChecks.value = payload.checks
+    portalHealthChecks.value = Array.isArray(payload.checks) ? payload.checks : []
   } catch (error) {
     portalHealthError.value = extractAdminError(error, 'No se pudo cargar el estado del portal.')
   } finally {
