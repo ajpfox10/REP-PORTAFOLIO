@@ -10,11 +10,17 @@ jest.mock('redis', () => {
     incr: jest.fn(async (k) => { const n = (parseInt(store.get(k) || 0, 10)) + 1; store.set(k, String(n)); return n; }),
     incrBy: jest.fn(async (k, a) => { const n = (parseInt(store.get(k) || 0, 10)) + a; store.set(k, String(n)); return n; }),
     expire: jest.fn().mockResolvedValue(1),
-    multi: jest.fn(() => ({
-      incrBy: jest.fn().mockReturnThis(),
-      expire: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([1, 1]),
-    })),
+    setEx: jest.fn(async (k, _ttl, v) => { store.set(k, v); return 'OK'; }),
+    del: jest.fn(async (k) => (store.delete(k) ? 1 : 0)),
+    multi: jest.fn(() => {
+      const ops = [];
+      const pipe = {
+        incrBy: (k, a) => { ops.push(() => client.incrBy(k, a)); return pipe; },
+        expire: () => { ops.push(async () => 1); return pipe; },
+        exec: async () => { const out = []; for (const op of ops) out.push(await op()); return out; },
+      };
+      return pipe;
+    }),
     _store: store,
     _reset: () => store.clear(),
   };
@@ -71,17 +77,29 @@ describe('requireUsageLimit middleware', () => {
     expect(res.body.error.current).toBe(5);
   });
 
-  test('200 enterprise plan has unlimited usage', async () => {
+  test('200 enterprise plan is only bounded by the absolute safety cap', async () => {
     redis._store.set('org:plan:2', 'enterprise');
     const month = new Date().toISOString().slice(0, 7);
-    redis._store.set(`usage:2:ai_diagnosis:${month}`, '999999');
+    redis._store.set(`usage:2:ai_diagnosis:${month}`, '1500');
 
     const res = await request(buildApp('ai_diagnosis'))
       .get('/test')
       .set('X-Org-Id', '2');
 
     expect(res.status).toBe(200);
-    expect(res.headers['x-ratelimit-limit']).toBe('unlimited');
+    expect(res.headers['x-ratelimit-limit']).toBe('2000');
+  });
+
+  test('429 enterprise plan stops at the absolute safety cap', async () => {
+    redis._store.set('org:plan:2', 'enterprise');
+    const month = new Date().toISOString().slice(0, 7);
+    redis._store.set(`usage:2:ai_diagnosis:${month}`, '2000');
+
+    const res = await request(buildApp('ai_diagnosis'))
+      .get('/test')
+      .set('X-Org-Id', '2');
+
+    expect(res.status).toBe(429);
   });
 
   test('200 unknown feature is always allowed', async () => {

@@ -30,6 +30,7 @@ jest.mock('../../shared/stripe', () => ({
 }));
 jest.mock('../../services/billing/src/routes/stripe.routes', () => ({
   router: require('express')(),
+  stripeWebhookHandler: (_req, res) => res.sendStatus(200),
 }));
 
 const request = require('supertest');
@@ -67,7 +68,8 @@ describe('billing service', () => {
           }
           return [{}];
         }),
-        queryOne: jest.fn(),
+        // cliente, paciente y moneda pertenecen a la sucursal
+        queryOne: jest.fn(async () => ({ id: 1 })),
       };
       return fn(conn);
     });
@@ -87,6 +89,18 @@ describe('billing service', () => {
     expect(executed.some(sql => sql.includes('sp_generate_invoice'))).toBe(false);
     expect(executed.some(sql => sql.includes('INSERT INTO invoices'))).toBe(true);
     expect(executed.some(sql => sql.includes('INSERT INTO invoice_items'))).toBe(true);
+  });
+
+  test('POST /invoices rechaza un cliente de otra sucursal', async () => {
+    db.transaction.mockImplementation(async (fn) => fn({ query: jest.fn(), queryOne: jest.fn().mockResolvedValue(null) }));
+
+    const res = await request(app)
+      .post('/invoices')
+      .set(AUTH)
+      .send({ clientId: 999, items: [{ description: 'Consulta', quantity: 1, unitPrice: 1000 }] });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('CLIENT_SCOPE_DENIED');
   });
 
   test('POST /payments records payment without stored procedure', async () => {

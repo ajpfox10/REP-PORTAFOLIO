@@ -26,6 +26,7 @@ const db = require('../../shared/db');
 
 process.env.INTERNAL_SECRET = '';
 process.env.NODE_ENV = 'test';
+process.env.FIELD_ENCRYPTION_SECRET = process.env.FIELD_ENCRYPTION_SECRET || 'test-field-encryption-secret-32-bytes!!';
 
 const app = require('../../services/medical/src/index');
 

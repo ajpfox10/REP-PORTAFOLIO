@@ -52,7 +52,7 @@ beforeEach(() => {
 
 describe('reports service', () => {
   test('GET /reports/dashboard uses direct branch aggregates', async () => {
-    db.query
+    db.queryRead
       .mockResolvedValueOnce([{ total_patients: 50, new_patients: 3 }])
       .mockResolvedValueOnce([{ total_appointments: 10, completed_appointments: 8, cancelled_appointments: 1, no_show_appointments: 1, avg_duration_minutes: 25 }])
       .mockResolvedValueOnce([{ total_invoices: 4, gross_revenue: 1000, collected_revenue: 800, outstanding_revenue: 200 }])
@@ -67,7 +67,7 @@ describe('reports service', () => {
   });
 
   test('GET /reports/kpis no longer depends on v_branch_daily_kpis', async () => {
-    db.query
+    db.queryRead
       .mockResolvedValueOnce([{ total_patients: 40, new_patients: 5 }])
       .mockResolvedValueOnce([{ total_appointments: 20, completed_appointments: 12, cancelled_appointments: 3, no_show_appointments: 2, avg_duration_minutes: 30 }])
       .mockResolvedValueOnce([{ total_invoices: 7, gross_revenue: 2000, collected_revenue: 1500, outstanding_revenue: 500 }])
@@ -81,7 +81,7 @@ describe('reports service', () => {
   });
 
   test('GET /reports/security falls back to base tables', async () => {
-    db.query
+    db.queryRead
       .mockResolvedValueOnce([{ id: 1, email: 'u@example.com' }])
       .mockResolvedValueOnce([{ id: 2, user_id: 1 }])
       .mockResolvedValueOnce([{ id: 3, alert_type: 'dlp' }]);
@@ -101,7 +101,7 @@ describe('reports service', () => {
       metricsByBranch: [{ branch_id: 11, active_patients: 33, appointments: 44, completion_rate: 90 }],
       topClients: [{ client_name: 'Jane Doe', total_spent: 1000 }],
     });
-    db.query
+    db.queryRead
       .mockResolvedValueOnce([{ diagnosis_name: 'Otitis', frequency: 6 }])
       .mockResolvedValueOnce([{ branch_id: 11, occupancy_pct: 50 }]);
 

@@ -91,6 +91,8 @@ describe('notifications service', () => {
     const executed = [];
     db.query.mockImplementation((sql) => {
       if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) return Promise.resolve(SCHEMA_ROWS);
+      // el destinatario pertenece a la organización
+      if (sql.includes('FROM users u JOIN branches')) return Promise.resolve([{ id: 8 }]);
       executed.push(sql);
       return Promise.resolve([{ affectedRows: 1 }]);
     });

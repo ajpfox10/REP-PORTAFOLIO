@@ -48,6 +48,8 @@ describe('lab-imaging service', () => {
           }
           return [{}];
         }),
+        // paciente, veterinario e historia clínica pertenecen a la sucursal
+        queryOne: jest.fn(async () => ({ id: 55 })),
       };
       return fn(conn);
     });
@@ -70,7 +72,11 @@ describe('lab-imaging service', () => {
   });
 
   test('PATCH /hospitalizations/:id/discharge updates base columns directly', async () => {
-    db.query.mockResolvedValue([{ affectedRows: 1 }]);
+    const conn = {
+      queryOne: jest.fn().mockResolvedValue({ id: 88, admission_date: '2026-05-01T09:00:00.000Z', hospitalization_status: 'admitted' }),
+      query: jest.fn().mockResolvedValue([{ affectedRows: 1 }]),
+    };
+    db.transaction.mockImplementation(async (fn) => fn(conn));
 
     const res = await request(app)
       .patch('/hospitalizations/88/discharge')
@@ -84,6 +90,9 @@ describe('lab-imaging service', () => {
 
     expect(res.status).toBe(200);
     expect(db.callProc).not.toHaveBeenCalled();
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE hospitalizations'), expect.any(Object));
+    expect(conn.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE hospitalizations'),
+      expect.objectContaining({ dischargeDate: '2026-05-03 10:00:00' })
+    );
   });
 });
