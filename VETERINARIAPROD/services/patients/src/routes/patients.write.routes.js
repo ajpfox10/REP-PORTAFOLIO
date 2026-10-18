@@ -40,7 +40,7 @@ router.post('/',
       const clientCols = schema.clients || new Set();
       const ownerCols = schema.patient_owners || new Set();
 
-      await db.transaction(async (conn) => {
+      const created = await db.transaction(async (conn) => {
         const userBranchId = req.user.branchId || null;
         let ownerQuery;
         let ownerParams;
@@ -52,7 +52,9 @@ router.post('/',
           ownerParams = { clientId: primaryOwnerId, orgId: req.user.orgId };
         }
         const owner = await conn.queryOne(ownerQuery, ownerParams);
-        if (!owner) throw new Error('Primary owner not found in current organization/branch');
+        if (!owner) {
+          throw Object.assign(new Error('Primary owner not found in current organization/branch'), { code: 'OWNER_NOT_FOUND' });
+        }
 
         const branchId = userBranchId || owner.branch_id || null;
 
@@ -137,10 +139,15 @@ router.post('/',
            VALUES (${ownerValues.join(', ')})`,
           { patientId, clientId: primaryOwnerId }
         );
+
+        return { id: patientId, hcNumber: patientCols.has('hc_number') ? `HC${String(patientId).padStart(6, '0')}` : null };
       });
 
-      return R.created(res, { message: 'Patient created' });
+      return R.created(res, { ...created, message: 'Patient created' });
     } catch (e) {
+      if (e.code === 'OWNER_NOT_FOUND') {
+        return R.notFound(res, 'El propietario no existe en esta organización o sucursal');
+      }
       logPatientsError('POST /patients', e, {
         branchId: req.user?.branchId,
         orgId: req.user?.orgId,

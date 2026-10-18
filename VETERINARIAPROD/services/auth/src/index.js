@@ -29,6 +29,8 @@ const revocationSyncIntervalMs = Math.max(30000, parseInt(process.env.AUTH_REVOC
 const AUTH_PUBLIC_PATHS = [
   '/captcha/config',
   '/login',
+  '/signup',
+  '/plans',
   '/refresh',
   '/logout',
   '/password-reset/request',

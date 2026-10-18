@@ -5,7 +5,7 @@ const { authLimiter, authBackoffLimiter, passwordResetLimiter, twoFaLimiter, ten
 const { tenantMismatchGuard } = require('../../middleware/subdomain');
 const { makeServiceProxy } = require('../proxy.factory');
 
-const AUTH_PUBLIC = ['/captcha', '/login', '/refresh', '/logout', '/password-reset', '/2fa/challenge', '/google', '/sso', '/.well-known'];
+const AUTH_PUBLIC = ['/captcha', '/login', '/signup', '/plans', '/refresh', '/logout', '/password-reset', '/2fa/challenge', '/google', '/sso', '/.well-known'];
 // Ancla de límite de palabra (\b o /) para evitar que /api/v1/auth@evil.com
 // coincida y deje "@evil.com/..." como path reescrito.
 const STRIP_AUTH_PREFIX = (_path, req) => req.originalUrl.replace(/^\/api\/v[12]\/auth(?=\/|$|\?)/, '') || '/';
@@ -24,6 +24,7 @@ function registerAuthRoutes(app, registerVersioned) {
   // OT-105: authBackoffLimiter adds exponential backoff on top of the base authLimiter
   registerVersioned(app, 'use', 'auth/login', authBackoffLimiter, authLimiter);
   registerVersioned(app, 'use', 'auth/refresh', authLimiter);
+  registerVersioned(app, 'use', 'auth/signup', authBackoffLimiter, authLimiter);
   registerVersioned(app, 'use', 'auth/password-reset', passwordResetLimiter);
   registerVersioned(app, 'use', 'auth/2fa/challenge', twoFaLimiter);
 

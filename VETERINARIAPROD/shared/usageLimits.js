@@ -13,8 +13,8 @@
  *   - The Redis key expires at the end of the month automatically.
  *   - Unlimited is represented as Infinity (stored as -1 in Redis config).
  *
- * Plan tier is stored in Redis: `org:plan:{orgId}` → tier string.
- * Set via admin API (see setPlanTier).
+ * Plan tier comes from the org's subscription (`tenants`, see shared/subscriptions)
+ * and is cached in Redis: `org:plan:{orgId}` → tier string (PLAN_CACHE_TTL_S).
  *
  * Usage:
  *   const { requireUsageLimit } = require('../../../shared/usageLimits');
@@ -141,34 +141,69 @@ function secsUntilMonthEnd() {
   return Math.max(1, Math.floor((next - now) / 1000));
 }
 
+const PLAN_CACHE_TTL_S = parseInt(process.env.PLAN_CACHE_TTL_S || '300', 10);
+
+function planCacheKey(orgId) {
+  return `org:plan:${orgId}`;
+}
+
 /**
- * Get the plan tier for an org.
- * Falls back to DEFAULT_PLAN when Redis unavailable or key not set.
+ * Get the effective plan tier for an org.
+ * Reads the Redis cache first and falls back to the subscription in the DB.
+ * Falls back to DEFAULT_PLAN when both are unavailable.
  * @param {string|number} orgId
  * @returns {Promise<string>}
  */
 async function getPlanTier(orgId, { mode = 'degraded' } = {}) {
+  let redis = null;
   try {
-    const redis = await getRedis();
-    const tier  = await redis.get(`org:plan:${orgId}`);
-    return tier || DEFAULT_PLAN;
+    redis = await getRedis();
+    const cached = await redis.get(planCacheKey(orgId));
+    if (cached) return cached;
   } catch (err) {
     recordDependencyDegradation('usage_limits', mode, mode === 'strict' ? 'blocked' : 'degraded', { service: 'shared' });
-    logDependencyIssue(log, 'usage_limits', mode, 'Plan tier read failed', err, { orgId });
+    logDependencyIssue(log, 'usage_limits', mode, 'Plan tier cache read failed', err, { orgId });
+    if (mode === 'strict') throw err;
+  }
+
+  let tier = DEFAULT_PLAN;
+  try {
+    const subscriptions = require('./subscriptions');
+    tier = subscriptions.effectiveTier(await subscriptions.getSubscription(orgId));
+  } catch (err) {
+    logDependencyIssue(log, 'usage_limits', mode, 'Plan tier DB read failed', err, { orgId });
     if (mode === 'strict') throw err;
     return DEFAULT_PLAN;
+  }
+
+  if (redis) await redis.setEx(planCacheKey(orgId), PLAN_CACHE_TTL_S, tier).catch(() => {});
+  return tier;
+}
+
+/**
+ * Drop the cached tier so the next request recomputes it from the subscription.
+ * Call it after any change to the org's subscription.
+ * @param {string|number} orgId
+ */
+async function invalidatePlanTier(orgId) {
+  try {
+    const redis = await getRedis();
+    await redis.del(planCacheKey(orgId));
+  } catch (err) {
+    log.warn('Plan tier cache invalidation failed', { orgId, message: err?.message });
   }
 }
 
 /**
- * Set the plan tier for an org (admin use).
+ * Override the cached plan tier for an org (admin/testing use).
+ * The subscription in the DB remains the source of truth once the cache expires.
  * @param {string|number} orgId
  * @param {'free'|'basic'|'pro'|'enterprise'} tier
  */
 async function setPlanTier(orgId, tier) {
   if (!PLAN_LIMITS[tier]) throw new Error(`Unknown plan tier: ${tier}`);
   const redis = await getRedis();
-  await redis.set(`org:plan:${orgId}`, tier);
+  await redis.setEx(planCacheKey(orgId), PLAN_CACHE_TTL_S, tier);
 }
 
 /**
@@ -574,6 +609,7 @@ module.exports = {
   ALERT_THRESHOLD,
   getPlanTier,
   setPlanTier,
+  invalidatePlanTier,
   getLimit,
   getUsage,
   recordUsage,

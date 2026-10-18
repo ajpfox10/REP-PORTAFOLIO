@@ -1342,6 +1342,7 @@ module.exports = {
   setup2fa, verify2fa, disable2fa, challenge2fa,
   ssoConnect, ssoCallback,
   syncRecentRevocations,
+  finalizeLogin,
   // Exported for unit testing only
   _checkBruteForce: checkBruteForce,
   _recordFailedAttempt: recordFailedAttempt,

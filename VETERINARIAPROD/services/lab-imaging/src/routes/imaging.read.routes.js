@@ -31,7 +31,7 @@ router.get('/orders', async (req, res, next) => {
               it.name AS imaging_type,
               CONCAT(u.first_name,' ',u.last_name) AS ordered_by,
               COUNT(img.id) AS images_count,
-              ir.id AS report_id
+              MAX(ir.id) AS report_id
        FROM imaging_orders io
        JOIN patients p       ON io.patient_id      = p.id
        JOIN species  sp      ON p.species_id        = sp.id

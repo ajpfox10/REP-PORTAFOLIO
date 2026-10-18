@@ -3,6 +3,7 @@
 const { Router } = require('express');
 const rateLimit = require('express-rate-limit');
 const ctrl = require('../../controllers/auth.controller');
+const signupCtrl = require('../../controllers/signup.controller');
 const {
   body,
   captchaMiddleware,
@@ -56,6 +57,32 @@ const ssoConnectLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, error: { message: 'Too many SSO requests', code: 'RATE_LIMIT_EXCEEDED' } },
 });
+// Alta de clínicas: cada IP puede crear pocas cuentas por hora.
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: parseInt(process.env.SIGNUP_RATE_LIMIT_PER_HOUR || '5', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: { message: 'Demasiados registros desde esta red. Intentá de nuevo más tarde.', code: 'RATE_LIMIT_EXCEEDED' } },
+});
+
+router.get('/plans', signupCtrl.listPlans);
+
+router.post('/signup',
+  signupLimiter,
+  captchaMiddleware,
+  body('clinicName').isString().trim().isLength({ min: 2, max: 120 }),
+  body('firstName').isString().trim().isLength({ min: 1, max: 80 }),
+  body('lastName').isString().trim().isLength({ min: 1, max: 80 }),
+  body('email').isEmail().normalizeEmail().isLength({ max: 191 }),
+  body('phone').optional({ values: 'falsy' }).isString().trim().isLength({ max: 40 }),
+  strongPasswordField('password'),
+  body('acceptTerms').isBoolean(),
+  body('isVeterinarian').optional().isBoolean(),
+  validateRequest,
+  signupCtrl.signup
+);
+
 router.post('/refresh', refreshLimiter, ctrl.refresh);
 router.post('/logout', ctrl.logout);
 router.get('/sso/:provider/connect', ssoConnectLimiter, ctrl.ssoConnect);

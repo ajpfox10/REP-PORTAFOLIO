@@ -50,3 +50,6 @@ PENDIENTES.txt
 
 # Salida generada por scripts/runtime-route-audit.js (contiene URL de produccion)
 runtime-route-audit-report.json
+
+# Volcado local de Redis
+dump.rdb

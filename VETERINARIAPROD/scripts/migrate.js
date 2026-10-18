@@ -40,6 +40,75 @@ async function getConnection() {
   });
 }
 
+// MySQL 8 no soporta `ADD COLUMN IF NOT EXISTS` ni `ADD INDEX IF NOT EXISTS`
+// (son extensiones de MariaDB). En MySQL se reescriben como sentencias
+// condicionales sobre information_schema. El checksum se calcula siempre sobre
+// el archivo original, así que esto no genera drift en bases ya migradas.
+function splitTopLevel(text, separator) {
+  const parts = [];
+  let depth = 0;
+  let quote = null;
+  let current = '';
+  for (const ch of text) {
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch;
+    } else if (ch === '(') {
+      depth += 1;
+    } else if (ch === ')') {
+      depth -= 1;
+    } else if (ch === separator && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) parts.push(current);
+  return parts;
+}
+
+function conditionalStatement(existsQuery, statement) {
+  const escaped = statement.replace(/'/g, "''");
+  return [
+    `SET @migrate_exists = (${existsQuery});`,
+    `SET @migrate_sql = IF(@migrate_exists = 0, '${escaped}', 'SELECT 1');`,
+    'PREPARE migrate_stmt FROM @migrate_sql;',
+    'EXECUTE migrate_stmt;',
+    'DEALLOCATE PREPARE migrate_stmt;',
+  ].join('\n');
+}
+
+function toMySqlCompatible(sql) {
+  return sql.replace(
+    /ALTER\s+TABLE\s+`?(\w+)`?\s+((?:ADD\s+(?:COLUMN|INDEX|KEY)\s+IF\s+NOT\s+EXISTS[\s\S]*?))\s*;/gi,
+    (_match, table, clauses) => splitTopLevel(clauses, ',').map((clause) => {
+      const column = clause.match(/ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+`?(\w+)`?\s+([\s\S]*)/i);
+      if (column) {
+        const definition = column[2].replace(/\s+(AFTER\s+`?\w+`?|FIRST)\s*$/i, '').trim();
+        return conditionalStatement(
+          `SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${table}' AND COLUMN_NAME = '${column[1]}'`,
+          `ALTER TABLE \`${table}\` ADD COLUMN \`${column[1]}\` ${definition}`
+        );
+      }
+      const index = clause.match(/ADD\s+(?:INDEX|KEY)\s+IF\s+NOT\s+EXISTS\s+`?(\w+)`?\s*(\([\s\S]*\))/i);
+      if (index) {
+        return conditionalStatement(
+          `SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${table}' AND INDEX_NAME = '${index[1]}'`,
+          `ALTER TABLE \`${table}\` ADD INDEX \`${index[1]}\` ${index[2].trim()}`
+        );
+      }
+      return `ALTER TABLE \`${table}\` ${clause.trim()};`;
+    }).join('\n')
+  );
+}
+
+async function isMariaDb(conn) {
+  const [rows] = await conn.query('SELECT VERSION() AS version');
+  return /mariadb/i.test(String(rows[0]?.version || ''));
+}
+
 function checksum(content) {
   return require('crypto').createHash('sha256').update(content).digest('hex');
 }
@@ -105,6 +174,7 @@ async function rollback(conn, files, applied, rollbackCount, isDry) {
 }
 
 async function applyPending(conn, files, applied, isDry) {
+  const mariaDb = isDry ? true : await isMariaDb(conn);
   const pending = files.filter((file) => !applied.has(file));
   if (!pending.length) {
     console.log('All migrations already applied.');
@@ -125,7 +195,7 @@ async function applyPending(conn, files, applied, isDry) {
 
     const t0 = Date.now();
     try {
-      await conn.query(content);
+      await conn.query(mariaDb ? content : toMySqlCompatible(content));
       const ms = Date.now() - t0;
       await conn.execute(
         'INSERT INTO migration_history (filename, checksum, duration_ms) VALUES (?, ?, ?)',
@@ -190,7 +260,11 @@ async function run() {
   }
 }
 
-run().catch((err) => {
-  console.error('Migration runner error:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch((err) => {
+    console.error('Migration runner error:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { toMySqlCompatible };

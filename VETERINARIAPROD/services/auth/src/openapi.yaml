@@ -188,6 +188,67 @@ paths:
                       siteKey:
                         type: string
 
+  /plans:
+    get:
+      summary: Catálogo público de planes y precios
+      responses:
+        '200':
+          description: Planes disponibles y días de prueba gratuita
+
+  /signup:
+    post:
+      summary: Registrar una clínica nueva con prueba gratuita
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clinicName, firstName, lastName, email, password, acceptTerms]
+              properties:
+                clinicName:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                firstName:
+                  type: string
+                  maxLength: 80
+                lastName:
+                  type: string
+                  maxLength: 80
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                  maxLength: 40
+                password:
+                  type: string
+                  minLength: 10
+                acceptTerms:
+                  type: boolean
+                isVeterinarian:
+                  type: boolean
+                captchaToken:
+                  type: string
+      responses:
+        '201':
+          description: Clínica creada y sesión iniciada
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: El email ya tiene una cuenta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Demasiados registros desde la misma red
+
   /login:
     post:
       summary: Authenticate user
