@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="admin" aria-live="polite">
     <section class="hero">
       <div>

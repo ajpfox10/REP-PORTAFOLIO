@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="dashboard" aria-live="polite">
     <div class="welcome">
       <div>

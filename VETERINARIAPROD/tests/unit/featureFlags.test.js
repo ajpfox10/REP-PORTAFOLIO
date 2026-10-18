@@ -62,9 +62,10 @@ describe('getFlags()', () => {
     expect(flags).toMatchObject(DEFAULT_FLAGS);
   });
 
-  test('miss de cache → guarda en cache y retorna defaults', async () => {
-    await getFlags('99');
-    expect(cache.set).toHaveBeenCalledWith('ff:org:99', expect.any(Object), expect.any(Number));
+  test('miss de cache → retorna defaults sin escribir en cache', async () => {
+    const flags = await getFlags('99');
+    expect(flags).toMatchObject(DEFAULT_FLAGS);
+    expect(cache.set).not.toHaveBeenCalled();
   });
 
   test('hit de cache → retorna valores sin llamar set', async () => {
@@ -114,11 +115,12 @@ describe('requireFeature() middleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('pasa cuando cache falla (fail-open)', async () => {
+  test('deniega con 503 cuando cache falla (fail-closed)', async () => {
     cache.get.mockRejectedValue(new Error('Redis down'));
     cache.set.mockRejectedValue(new Error('Redis down'));
     const { req, res, next } = makeReqRes('42');
     await requireFeature('ai_diagnosis')(req, res, next);
-    expect(next).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(503);
   });
 });

@@ -1331,7 +1331,7 @@ paths:
   /pathology/orders:
     get:
       tags: [Lab]
-      summary: Listar Ã³rdenes de patologÃ­a
+      summary: Listar órdenes de patología
       parameters:
         - in: query
           name: patientId
@@ -1346,7 +1346,7 @@ paths:
           name: limit
           schema: { type: integer, minimum: 1, maximum: 100 }
       responses:
-        '200': { description: Lista de Ã³rdenes de patologÃ­a }
+        '200': { description: Lista de órdenes de patología }
     post:
       tags: [Pathology]
       summary: Crear orden de patología
@@ -1380,9 +1380,9 @@ paths:
   /pathology/types:
     get:
       tags: [Lab]
-      summary: CatÃ¡logo de tipos de patologÃ­a
+      summary: Catálogo de tipos de patología
       responses:
-        '200': { description: Lista de tipos de patologÃ­a }
+        '200': { description: Lista de tipos de patología }
 
   # OT-067: GET /imaging → redirect 307 a /imaging/orders (backend alias)
   /imaging:

@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const YAML = require('yamljs');
+const YAML = require('../setup/yaml');
 
 describe('Gateway OpenAPI - critical frontend routes', () => {
   it('documents every route family registered in the gateway proxy', () => {

@@ -1,4 +1,4 @@
-﻿export type Locale = 'es-AR' | 'en-US'
+export type Locale = 'es-AR' | 'en-US'
 
 const messages = {
   'es-AR': {

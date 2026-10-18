@@ -5,6 +5,8 @@
  * Tests unitarios para shared/calendar.js y shared/ical.js
  */
 
+process.env.FIELD_ENCRYPTION_SECRET = process.env.FIELD_ENCRYPTION_SECRET || 'test_encryption_secret_for_unit_tests_32chars!!';
+
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 const mockInsert   = jest.fn();

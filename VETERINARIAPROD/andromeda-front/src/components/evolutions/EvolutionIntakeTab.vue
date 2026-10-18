@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div v-show="active === 0">
     <div class="section-title">{{ t('evolutions.generalData') }}</div>
     <div class="form-grid">

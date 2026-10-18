@@ -10,6 +10,7 @@ afterEach(() => {
 describe('gateway websocket token extraction', () => {
   test('prefers Authorization header over query token', () => {
     process.env.NODE_ENV = 'production';
+    process.env.METRICS_TOKEN = 'test-metrics-token';
     const { getTokenFromRequest } = require('../../gateway/src/websocket');
 
     const token = getTokenFromRequest({
@@ -22,6 +23,7 @@ describe('gateway websocket token extraction', () => {
 
   test('rejects query token fallback in production', () => {
     process.env.NODE_ENV = 'production';
+    process.env.METRICS_TOKEN = 'test-metrics-token';
     const { getTokenFromRequest } = require('../../gateway/src/websocket');
 
     const token = getTokenFromRequest({

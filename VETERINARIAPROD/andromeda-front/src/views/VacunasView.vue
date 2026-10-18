@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="page">
 
     <div class="page-header">
@@ -208,7 +208,7 @@
         </table>
       </div>
 
-      <!-- PaginaciÃ³n deworming -->
+      <!-- Paginación deworming -->
       <div v-if="dewPagination.totalPages > 1" class="pagination">
         <button type="button" :disabled="dewPagination.page <= 1" @click="loadDew(dewPagination.page - 1)">{{ t('common.previous') }}</button>
         <span>{{ dewPagination.page }} / {{ dewPagination.totalPages }}</span>
@@ -467,10 +467,10 @@ function normalizeDewRecord(row) {
   }
 }
 
-// â”€â”€ Tab principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tab principal ──────────────────────────────────────────────
 const mainTab = ref('vacunas')
 
-// â”€â”€ Helpers compartidos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers compartidos ────────────────────────────────────────
 function petEmoji(s) {
   if (!s) return '\u{1F43E}'
   const sl = s.toLowerCase()
@@ -509,7 +509,7 @@ function routeLabel(route) {
   return { oral: 'Oral', topical: 'Tópica', injectable: 'Inyectable', other: 'Otra' }[route] || route || '—'
 }
 
-// â”€â”€ Modal compartido â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Modal compartido ───────────────────────────────────────────
 const showModal = ref(false)
 const saving    = ref(false)
 
@@ -529,9 +529,9 @@ function openModal()  {
 }
 function closeModal() { showModal.value = false; resetForm(); resetDewForm() }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════════════════════════════════════════════════
 //  VACUNAS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════════════════════════════════════════════════
 const items       = ref([])
 const loading     = ref(false)
 const error       = ref('')
@@ -674,9 +674,9 @@ async function handleCreate() {
   } finally { saving.value = false }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  DESPARASITACIÃ“N
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════════════════════════════════════════════════
+//  DESPARASITACIÓN
+// ════════════════════════════════════════════════════════════════
 const dewItems      = ref([])
 const dewLoading    = ref(false)
 const dewError      = ref('')
@@ -781,7 +781,7 @@ async function handleCreateDew() {
   } finally { saving.value = false }
 }
 
-// â”€â”€ InicializaciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Inicialización ─────────────────────────────────────────────
 onMounted(() => {
   load()
   loadVaccines()
@@ -845,7 +845,7 @@ onUnmounted(() => {
 .badge--red     { background: #FDEAEA; color: #c0392b; }
 .badge--neutral { background: var(--surface-2); color: var(--text-3); }
 
-/* PaginaciÃ³n */
+/* Paginación */
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 0.85rem; color: var(--text-2); }
 .pagination button { padding: 6px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: none; cursor: pointer; font-size: 0.82rem; color: var(--text-2); }
 .pagination button:hover:not(:disabled) { background: var(--surface-2); }

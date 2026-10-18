@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="page">
 
     <div class="page-header">
@@ -218,6 +218,9 @@ import http from '../api/client'
 import { adminUsersApi } from '../api/adminUsers'
 import { t } from '../i18n'
 import { logError } from '../utils/errors'
+import { useUiFeedback } from '../composables/useUiFeedback'
+
+const { warning, notifyError } = useUiFeedback()
 
 function asArray(value) {
   if (Array.isArray(value)) return value
@@ -341,20 +344,20 @@ async function load() {
 let timer = null
 function debouncedLoad() { clearTimeout(timer); timer = setTimeout(load, 350) }
 
-function joinCall(t) {
-  if (t.meeting_url) {
-    window.open(t.meeting_url, '_blank', 'noopener,noreferrer')
+function joinCall(session) {
+  if (session.meeting_url) {
+    window.open(session.meeting_url, '_blank', 'noopener,noreferrer')
   } else {
-    alert('El enlace de videollamada no está disponible aún.')
+    warning('El enlace de videollamada no está disponible aún.')
   }
 }
 
-async function changeStatus(t, status) {
+async function changeStatus(session, status) {
   try {
-    await http.patch(`/tele/sessions/${t.id}/status`, { status })
-    t.status = status
+    await http.patch(`/tele/sessions/${session.id}/status`, { status })
+    session.status = status
   } catch (e) {
-    alert(e.response?.data?.message || t('telemedicine.updateError'))
+    notifyError('telemedicine.changeStatus', e, t('telemedicine.updateError'))
   }
 }
 

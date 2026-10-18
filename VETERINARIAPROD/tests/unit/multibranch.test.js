@@ -5,18 +5,35 @@
  * Tests para shared/multibranch.js — lógica pura sin DB real.
  */
 
-jest.mock('../../shared/db', () => ({
-  query    : jest.fn(),
-  queryOne : jest.fn(),
-}));
+jest.mock('../../shared/db', () => {
+  const mockDb = {
+    query    : jest.fn(),
+    queryOne : jest.fn(),
+  };
+  // La transacción recibe una conexión que delega en los mismos mocks,
+  // así los tests encadenan respuestas sin importar si se usa conn o db.
+  mockDb.transaction = jest.fn(async (fn) => fn({
+    query    : (...args) => mockDb.query(...args),
+    queryOne : (...args) => mockDb.queryOne(...args),
+  }));
+  return mockDb;
+});
 
 const db = require('../../shared/db');
 const mb = require('../../shared/multibranch');
 
+// mockReset descarta las respuestas encoladas con mockResolvedValueOnce que un
+// test no llegó a consumir, para que no se filtren al test siguiente.
+function resetDbMocks() {
+  jest.clearAllMocks();
+  db.query.mockReset();
+  db.queryOne.mockReset();
+}
+
 // ─── assertSameOrg ────────────────────────────────────────────────────────────
 
 describe('multibranch — assertSameOrg', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(resetDbMocks);
 
   test('no lanza error si ambas sucursales son del mismo org', async () => {
     db.queryOne
@@ -43,7 +60,7 @@ describe('multibranch — assertSameOrg', () => {
 // ─── assertBranchAccess ───────────────────────────────────────────────────────
 
 describe('multibranch — assertBranchAccess', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(resetDbMocks);
 
   test('permite acceso si el usuario tiene acceso', async () => {
     db.queryOne.mockResolvedValue({ id: 7 });
@@ -59,7 +76,7 @@ describe('multibranch — assertBranchAccess', () => {
 // ─── transferPatient ─────────────────────────────────────────────────────────
 
 describe('multibranch — transferPatient', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(resetDbMocks);
 
   test('transfiere paciente con éxito (visit)', async () => {
     // assertSameOrg: ambas del mismo org
@@ -114,13 +131,13 @@ describe('multibranch — transferPatient', () => {
 // ─── transferStock ────────────────────────────────────────────────────────────
 
 describe('multibranch — transferStock', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(resetDbMocks);
 
   test('transfiere stock con éxito', async () => {
     db.queryOne
       .mockResolvedValueOnce({ organization_id: 1 })   // branch from
       .mockResolvedValueOnce({ organization_id: 1 })   // branch to
-      .mockResolvedValueOnce({ stock_quantity: 100 });  // item with enough stock
+      .mockResolvedValueOnce({ quantity_available: 100 });  // item with enough stock
     db.query.mockResolvedValue([{ insertId: 5 }]);
 
     const result = await mb.transferStock({
@@ -134,7 +151,7 @@ describe('multibranch — transferStock', () => {
     db.queryOne
       .mockResolvedValueOnce({ organization_id: 1 })
       .mockResolvedValueOnce({ organization_id: 1 })
-      .mockResolvedValueOnce({ stock_quantity: 3 });  // solo 3 disponibles
+      .mockResolvedValueOnce({ quantity_available: 3 });  // solo 3 disponibles
     await expect(mb.transferStock({
       itemId: 1, fromBranchId: 1, toBranchId: 2,
       quantity: 10, requestedByUserId: 7,
@@ -180,7 +197,7 @@ describe('multibranch — getOrgBranches', () => {
 // ─── consolidatedFinancials ───────────────────────────────────────────────────
 
 describe('multibranch — consolidatedFinancials', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(resetDbMocks);
 
   test('calcula totales correctamente desde múltiples sucursales', async () => {
     db.query

@@ -2,6 +2,9 @@
 
 const request = require('supertest');
 
+// Las recetas se guardan cifradas (shared/encryption)
+process.env.FIELD_ENCRYPTION_SECRET = process.env.FIELD_ENCRYPTION_SECRET || 'test_encryption_secret_for_unit_tests_32chars!!';
+
 jest.mock('../../shared/db', () => ({
   query: jest.fn(),
   queryOne: jest.fn(),
@@ -47,6 +50,9 @@ const USER_HEADERS = {
 describe('Contract - medical aliases', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Descarta respuestas encoladas e implementaciones de tests anteriores.
+    db.query.mockReset();
+    db.queryOne.mockReset();
   });
 
   it('maps POST /triage/:id to the appointment triage handler', async () => {
@@ -62,6 +68,8 @@ describe('Contract - medical aliases', () => {
   });
 
   it('maps GET /prescriptions/:id to the medical record prescriptions handler', async () => {
+    // La ficha debe pertenecer a la org/sucursal del usuario (ensureMedicalRecordInScope)
+    db.queryOne.mockResolvedValueOnce({ id: 42 });
     db.query.mockResolvedValueOnce([
       { id: 3, medication_name: 'Amoxicillin', dose: '250mg' },
     ]);
@@ -78,6 +86,7 @@ describe('Contract - medical aliases', () => {
 
   it('maps POST /prescriptions/:id and adapts inserts to stricter runtime schemas', async () => {
     const executed = [];
+    db.queryOne.mockResolvedValue({ id: 42 });
     db.query.mockImplementation((sql) => {
       executed.push(sql);
       if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) {

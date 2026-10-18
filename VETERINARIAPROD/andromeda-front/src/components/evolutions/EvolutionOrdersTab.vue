@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div v-show="active">
     <div class="orders-intro">
       <strong>Órdenes vinculadas a esta evolución</strong>

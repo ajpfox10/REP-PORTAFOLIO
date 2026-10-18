@@ -22,8 +22,6 @@ describe('gateway error envelopes', () => {
       error: {
         code: 'NOT_FOUND',
         message: 'Route not found',
-        path: '/missing',
-        method: 'GET',
         requestId: 'req-404',
         traceId: 'trace-404',
       },

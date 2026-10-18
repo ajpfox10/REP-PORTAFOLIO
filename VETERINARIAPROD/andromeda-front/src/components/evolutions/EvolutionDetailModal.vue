@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="modal-backdrop" @click.self="emit('close')">
     <div class="modal modal--wide">
       <div class="modal__header">

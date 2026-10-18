@@ -3,7 +3,7 @@
 const path = require('path');
 const express = require('express');
 const request = require('supertest');
-const YAML = require('yamljs');
+const YAML = require('../setup/yaml');
 const { middleware: openApiValidator } = require('express-openapi-validator');
 
 describe('Gateway OpenAPI - billing invoices', () => {

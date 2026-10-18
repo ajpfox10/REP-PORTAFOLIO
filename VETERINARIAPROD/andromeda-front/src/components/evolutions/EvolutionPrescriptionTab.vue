@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div v-show="active">
     <div class="section-title">{{ t('evolutions.prescription') }}</div>
 

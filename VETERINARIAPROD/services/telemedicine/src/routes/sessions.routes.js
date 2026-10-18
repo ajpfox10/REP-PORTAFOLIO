@@ -409,8 +409,8 @@ router.post('/:id/room', async (req, res, next) => {
       }).catch(() => {});
     }
     await fcm.sendToTopic(`owner_${session.client_id}`, {
-      title: 'ðŸ”¹ Tu videoconsulta estÃ¡ lista',
-      body: `Dr. ${session.vet_name} estÃ¡ listo. HacÃ© click para unirte.`,
+      title: 'Tu videoconsulta está lista',
+      body: `Dr. ${session.vet_name} está listo. Hacé click para unirte.`,
       data: { sessionId: String(session.id), roomUrl: room.roomUrl || '' },
     }).catch((err) => log.warn('fcm.send.failed', { err: err.message, sessionId: session.id }));
 
@@ -431,7 +431,7 @@ router.get('/:id/room', async (req, res, next) => {
        ORDER BY wr.created_at DESC LIMIT 1`,
       { sid: req.params.id }
     );
-    if (!room) return R.notFound(res, 'Sala no creada todavÃ­a');
+    if (!room) return R.notFound(res, 'Sala no creada todavía');
     return R.ok(res, room);
   } catch (e) { next(e); }
 });
@@ -546,7 +546,7 @@ router.post('/:id/room/recording/stop', async (req, res, next) => {
        ORDER BY wrec.started_at DESC LIMIT 1`,
       { sid: req.params.id }
     );
-    if (!rec) return R.notFound(res, 'No hay grabaciÃ³n activa');
+    if (!rec) return R.notFound(res, 'No hay grabación activa');
 
     const result = await webrtc.stopRecording(rec.room_name, rec.provider_rec_id);
 

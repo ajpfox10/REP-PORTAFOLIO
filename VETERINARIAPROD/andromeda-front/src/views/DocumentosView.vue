@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="documents">
     <section class="hero">
       <div>

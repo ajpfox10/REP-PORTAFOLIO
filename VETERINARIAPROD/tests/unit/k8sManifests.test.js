@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const YAML = require('yamljs');
+const YAML = require('../setup/yaml');
 
 const K8S_DIR = path.join(__dirname, '..', '..', 'k8s');
 
@@ -67,7 +67,9 @@ describe('Kubernetes manifests', () => {
 
   test('application deployments load shared ConfigMap and Secret', () => {
     const docs = loadK8sDocs();
-    const deployments = docs.filter(({ doc }) => doc?.kind === 'Deployment');
+    // El stack de observabilidad (Prometheus, Grafana, Tempo, Alertmanager) es
+    // infraestructura de terceros y no consume la config de la aplicación.
+    const deployments = docs.filter(({ file, doc }) => doc?.kind === 'Deployment' && file !== 'observability.yaml');
 
     for (const { doc: deployment } of deployments) {
       const container = deployment.spec.template.spec.containers[0];

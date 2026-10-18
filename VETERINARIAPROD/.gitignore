@@ -47,3 +47,6 @@ file_list.json
 sql_validation_report.txt
 analyze_sql.js
 PENDIENTES.txt
+
+# Salida generada por scripts/runtime-route-audit.js (contiene URL de produccion)
+runtime-route-audit-report.json

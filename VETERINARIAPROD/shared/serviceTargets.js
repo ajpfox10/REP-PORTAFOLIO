@@ -196,7 +196,19 @@ async function gatherCandidateTargets(name) {
 // SEC: lista de prefijos de hostnames permitidos para service discovery health probes.
 // Evita SSRF si un valor malicioso llega al registry de servicios.
 // Solo se permiten dominios de la red interna de servicios conocidos.
-const ALLOWED_SERVICE_HOSTS_RE = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|[a-zA-Z0-9-]+\.railway\.internal|[a-zA-Z0-9-]+\.internal)$/;
+// Incluye hostnames de una sola etiqueta (nombres de servicio de Docker/Kubernetes
+// como "auth"), que no resuelven a Internet, y los sufijos internos de k8s.
+const ALLOWED_SERVICE_HOSTS_RE = new RegExp('^(' + [
+  'localhost',
+  '127(\\.\\d{1,3}){3}',
+  '10(\\.\\d{1,3}){3}',
+  '172\\.(1[6-9]|2\\d|3[01])(\\.\\d{1,3}){2}',
+  '192\\.168(\\.\\d{1,3}){2}',
+  '[a-zA-Z0-9-]+',
+  '[a-zA-Z0-9-]+\\.railway\\.internal',
+  '[a-zA-Z0-9-]+\\.internal',
+  '[a-zA-Z0-9.-]+\\.svc\\.cluster\\.local',
+].join('|') + ')$');
 
 function isAllowedServiceUrl(url) {
   try {
