@@ -1,56 +1,75 @@
 import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard, ListChecks, PlusCircle, Map, Phone, Truck, Waves, Building2, Users, ScrollText,
+} from 'lucide-react';
 import useAuthStore from '../../store/authStore';
+import DefensaCivilLogo from '../common/DefensaCivilLogo';
 
-const ALL_ROLES = ['admin', 'medium', 'read', 'telefonista', 'chofer'];
+const ALL = ['admin', 'medium', 'read', 'telefonista', 'chofer'];
 
-const LINKS = [
-  { to:'/dashboard',   label:'Dashboard',          icon:'📊', roles: ALL_ROLES },
-  { to:'/incidents',   label:'Incidentes',          icon:'🚨', roles: ALL_ROLES },
-  { to:'/incidents/new', label:'Nuevo Incidente',   icon:'➕', roles:['admin','medium','telefonista'] },
-  { to:'/mapa',        label:'Mapa',                icon:'🗺️', roles: ALL_ROLES },
-  // ── Páginas específicas por rol ──────────────────────────────────────────
-  { to:'/telefonista', label:'Central Telefonista', icon:'📞', roles:['admin','telefonista'] },
-  { to:'/chofer',      label:'Panel Chofer',         icon:'🚗', roles:['admin','chofer'] },
-  // ── Admin ────────────────────────────────────────────────────────────────
-  { to:'/usuarios',    label:'Usuarios',             icon:'👥', roles:['admin'] },
-  { to:'/auditoria',   label:'Auditoría',            icon:'📋', roles:['admin'] },
+const SECTIONS = [
+  {
+    title: 'Operación',
+    links: [
+      { to: '/dashboard',     label: 'Tablero',          icon: LayoutDashboard, roles: ALL },
+      { to: '/incidents',     label: 'Incidentes',       icon: ListChecks,      roles: ALL, end: true },
+      { to: '/incidents/new', label: 'Nuevo incidente',  icon: PlusCircle,      roles: ['admin', 'medium', 'telefonista'] },
+      { to: '/mapa',          label: 'Mapa',             icon: Map,             roles: ALL },
+      { to: '/inundaciones',  label: 'Inundaciones',     icon: Waves,           roles: ALL },
+    ],
+  },
+  {
+    title: 'Puestos',
+    links: [
+      { to: '/telefonista', label: 'Central telefónica', icon: Phone, roles: ['admin', 'telefonista'] },
+      { to: '/chofer',      label: 'Móvil en calle',     icon: Truck, roles: ['admin', 'chofer'] },
+    ],
+  },
+  {
+    title: 'Recursos',
+    links: [
+      { to: '/infraestructura', label: 'Infraestructura', icon: Building2, roles: ALL },
+    ],
+  },
+  {
+    title: 'Administración',
+    links: [
+      { to: '/usuarios',  label: 'Usuarios',  icon: Users,      roles: ['admin'] },
+      { to: '/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['admin'] },
+    ],
+  },
 ];
 
-export default function Sidebar({ isOpen }) {
-  const { user } = useAuthStore();
-  const role = user?.role;
-
-  const linkStyle = ({ isActive }) => ({
-    display:'flex', alignItems:'center', gap:'0.75rem',
-    padding:'0.625rem 1rem', borderRadius:'var(--radius)',
-    fontSize:'0.875rem', fontWeight: isActive ? 600 : 400,
-    background: isActive ? '#eff6ff' : 'transparent',
-    color: isActive ? '#1d4ed8' : '#475569',
-    transition:'all 0.15s',
-    textDecoration:'none',
-  });
+export default function Sidebar({ open, onNavigate }) {
+  const role = useAuthStore(s => s.user?.role);
 
   return (
-    <aside style={{
-      width: isOpen ? 220 : 0,
-      background:'#fff', borderRight:'1px solid var(--color-border)',
-      display:'flex', flexDirection:'column',
-      transition:'width 0.2s', overflow:'hidden', flexShrink:0,
-    }}>
-      <nav style={{ padding:'0.75rem', flex:1 }}>
-        {LINKS
-          .filter(l => !l.roles || l.roles.includes(role))
-          .map(link => (
-            <NavLink key={link.to} to={link.to} style={linkStyle} end={link.to === '/dashboard'}>
-              <span>{link.icon}</span>
-              <span style={{ whiteSpace:'nowrap' }}>{link.label}</span>
-            </NavLink>
-          ))
-        }
-      </nav>
-      <div style={{ padding:'0.75rem 1rem', borderTop:'1px solid var(--color-border)', fontSize:'0.7rem', color:'#94a3b8' }}>
-        Defensa Civil v1.0
+    <aside className={`sidebar${open ? ' open' : ''}`} aria-label="Menú principal">
+      <div className="sidebar-brand">
+        <DefensaCivilLogo size={34} />
+        <div>
+          <strong>Defensa Civil</strong>
+          <span>Gestión de emergencias</span>
+        </div>
       </div>
+      <nav>
+        {SECTIONS.map(section => {
+          const links = section.links.filter(l => l.roles.includes(role));
+          if (!links.length) return null;
+          return (
+            <div key={section.title}>
+              <div className="nav-section">{section.title}</div>
+              {links.map(({ to, label, icon: Icon, end }) => (
+                <NavLink key={to} to={to} end={end} className="nav-link" onClick={onNavigate}>
+                  <Icon size={18} aria-hidden="true" />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
+          );
+        })}
+      </nav>
+      <div className="sidebar-footer">Sistema de reporte de incidentes</div>
     </aside>
   );
 }

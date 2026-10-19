@@ -1,102 +1,79 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { X, ScrollText } from 'lucide-react';
 import api from '../api/axios';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { PageHeader, Card, Loading, EmptyState, Pagination } from '../components/common/ui';
 import Button from '../components/common/Button';
+import { ACTION_LABELS } from '../lib/constants';
+import { fmtDateTime } from '../lib/format';
 
-const ACTIONS = ['LOGIN','LOGOUT','CREATE_INCIDENT','UPDATE_INCIDENT','DELETE_INCIDENT','STATUS_CHANGE','CREATE_USER','UPDATE_USER','RESET_PASSWORD','TOGGLE_USER'];
+const EMPTY = { action: '', dateFrom: '', dateTo: '', page: 1 };
+
+function Changes({ entry }) {
+  const parse = v => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
+  const before = parse(entry.old_values) || {};
+  const after = parse(entry.new_values) || {};
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => String(before[k]) !== String(after[k]));
+  if (!keys.length) return <span className="muted">—</span>;
+  return (
+    <span style={{ fontSize: 12.5 }}>
+      {keys.map(k => <span key={k} style={{ display: 'block' }}><span className="muted">{k}:</span> {before[k] != null && <><s className="muted">{String(before[k])}</s> → </>}{String(after[k] ?? '—')}</span>)}
+    </span>
+  );
+}
 
 export default function AuditLog() {
-  const [entries,    setEntries]    = useState([]);
-  const [pagination, setPagination] = useState({ page:1, pages:1, total:0 });
-  const [loading,    setLoading]    = useState(true);
-  const [filters,    setFilters]    = useState({ action:'', dateFrom:'', dateTo:'', page:1 });
+  const [filters, setFilters] = useState(EMPTY);
+  const [result, setResult] = useState(null);
 
-  const sel = { padding:'0.5rem', border:'1px solid #d1d5db', borderRadius:'var(--radius)', fontSize:'0.8125rem', background:'#fff' };
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = Object.fromEntries(Object.entries(filters).filter(([,v]) => v));
-      const { data } = await api.get('/audit', { params });
-      setEntries(data.data);
-      setPagination({ page: data.page, pages: data.pages, total: data.total });
-    } finally { setLoading(false); }
+  useEffect(() => {
+    setResult(null);
+    const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v));
+    api.get('/audit', { params }).then(r => setResult(r.data));
   }, [filters]);
 
-  useEffect(() => { load(); }, [load]);
-
-  const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val, page: key==='page' ? val : 1 }));
-
-  const ACTION_LABELS = {
-    LOGIN:'Inicio sesión', LOGOUT:'Cierre sesión',
-    CREATE_INCIDENT:'Crear incidente', UPDATE_INCIDENT:'Actualizar incidente',
-    DELETE_INCIDENT:'Eliminar incidente', STATUS_CHANGE:'Cambio estado',
-    CREATE_USER:'Crear usuario', UPDATE_USER:'Actualizar usuario',
-    RESET_PASSWORD:'Resetear contraseña', TOGGLE_USER:'Cambiar estado usuario',
-  };
+  const set = (key, value) => setFilters(f => ({ ...f, [key]: value, page: key === 'page' ? value : 1 }));
 
   return (
-    <div>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem' }}>
-        <h1 style={{ fontSize:'1.5rem', fontWeight:700 }}>Registro de Auditoría</h1>
-        <span style={{ fontSize:'0.875rem', color:'#64748b' }}>{pagination.total} registros</span>
-      </div>
-
-      <div style={{ background:'#fff', borderRadius:'var(--radius)', boxShadow:'var(--shadow)', padding:'0.75rem 1rem', marginBottom:'1rem', display:'flex', flexWrap:'wrap', gap:'0.75rem', alignItems:'center' }}>
-        <select style={sel} value={filters.action} onChange={e => setFilter('action', e.target.value)}>
-          <option value="">Todas las acciones</option>
-          {ACTIONS.map(a => <option key={a} value={a}>{ACTION_LABELS[a] || a}</option>)}
-        </select>
-        <input type="date" style={sel} value={filters.dateFrom} onChange={e => setFilter('dateFrom', e.target.value)} />
-        <input type="date" style={sel} value={filters.dateTo}   onChange={e => setFilter('dateTo',   e.target.value)} />
-        <Button size="sm" variant="secondary" onClick={() => setFilters({ action:'', dateFrom:'', dateTo:'', page:1 })}>Limpiar</Button>
-      </div>
-
-      <div style={{ background:'#fff', borderRadius:'var(--radius)', boxShadow:'var(--shadow)', overflow:'hidden' }}>
-        <div style={{ overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.8125rem' }}>
-            <thead>
-              <tr style={{ background:'#f8fafc' }}>
-                {['Fecha/Hora','Usuario','Acción','Entidad','IP'].map(h => (
-                  <th key={h} style={{ padding:'0.75rem 1rem', textAlign:'left', color:'#64748b', fontWeight:500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={5} style={{ textAlign:'center', padding:'2rem', color:'#64748b' }}>Cargando...</td></tr>
-              ) : entries.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign:'center', padding:'2rem', color:'#64748b' }}>Sin registros</td></tr>
-              ) : entries.map(e => (
-                <tr key={e.id} style={{ borderTop:'1px solid var(--color-border)' }}>
-                  <td style={{ padding:'0.625rem 1rem', whiteSpace:'nowrap', color:'#64748b' }}>
-                    {format(new Date(e.created_at), 'dd/MM/yy HH:mm:ss', { locale:es })}
-                  </td>
-                  <td style={{ padding:'0.625rem 1rem', fontWeight:500 }}>{e.username || '—'}</td>
-                  <td style={{ padding:'0.625rem 1rem' }}>
-                    <span style={{ fontSize:'0.75rem', padding:'0.125rem 0.5rem', background:'#f1f5f9', borderRadius:'9999px' }}>
-                      {ACTION_LABELS[e.action] || e.action}
-                    </span>
-                  </td>
-                  <td style={{ padding:'0.625rem 1rem', color:'#64748b' }}>
-                    {e.entity_type && <span>{e.entity_type} {e.entity_id ? `/ ${e.entity_id.slice(0,8)}...` : ''}</span>}
-                  </td>
-                  <td style={{ padding:'0.625rem 1rem', color:'#94a3b8', fontFamily:'monospace', fontSize:'0.75rem' }}>{e.ip_address}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="page">
+      <PageHeader title="Auditoría" subtitle="Quién hizo qué y cuándo. Los registros no se pueden modificar." />
+      <Card bodyClass={null}>
+        <div className="toolbar">
+          <select className="select" value={filters.action} onChange={e => set('action', e.target.value)} aria-label="Acción">
+            <option value="">Todas las acciones</option>
+            {Object.entries(ACTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <input type="date" className="input" value={filters.dateFrom} onChange={e => set('dateFrom', e.target.value)} aria-label="Desde" />
+          <input type="date" className="input" value={filters.dateTo} onChange={e => set('dateTo', e.target.value)} aria-label="Hasta" />
+          {(filters.action || filters.dateFrom || filters.dateTo) && <Button variant="ghost" size="sm" icon={X} onClick={() => setFilters(EMPTY)}>Limpiar</Button>}
         </div>
-
-        {pagination.pages > 1 && (
-          <div style={{ padding:'0.75rem 1rem', borderTop:'1px solid var(--color-border)', display:'flex', alignItems:'center', gap:'0.5rem', justifyContent:'center' }}>
-            <Button size="sm" variant="secondary" disabled={pagination.page<=1} onClick={() => setFilter('page', pagination.page-1)}>← Anterior</Button>
-            <span style={{ fontSize:'0.875rem', color:'#64748b' }}>Pág {pagination.page}/{pagination.pages}</span>
-            <Button size="sm" variant="secondary" disabled={pagination.page>=pagination.pages} onClick={() => setFilter('page', pagination.page+1)}>Siguiente →</Button>
-          </div>
+        {!result ? <Loading /> : result.data.length === 0 ? <EmptyState icon={ScrollText} title="Sin registros" /> : (
+          <>
+            <div className="table-wrap">
+              <table className="table">
+                <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Cambios</th><th>IP</th></tr></thead>
+                <tbody>
+                  {result.data.map(e => (
+                    <tr key={e.id}>
+                      <td className="nowrap tabular muted">{fmtDateTime(e.created_at)}</td>
+                      <td className="nowrap">{e.full_name || e.username || <span className="muted">—</span>}</td>
+                      <td>
+                        <span className="badge">{ACTION_LABELS[e.action] || e.action}</span>
+                        {e.entity_type === 'incidents' && e.entity_id && e.action !== 'DELETE_INCIDENT' && (
+                          <div style={{ fontSize: 12, marginTop: 4 }}><Link to={`/incidents/${e.entity_id}`}>Ver incidente</Link></div>
+                        )}
+                      </td>
+                      <td><Changes entry={e} /></td>
+                      <td className="mono muted nowrap">{e.ip_address || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination page={result.page} pages={result.pages} total={result.total} noun="registros" onPage={p => set('page', p)} />
+          </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

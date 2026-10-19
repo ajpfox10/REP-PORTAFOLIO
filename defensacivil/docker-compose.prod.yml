@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   mysql_prod:
     image: mysql:8.0
@@ -9,8 +7,7 @@ services:
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "4075:3306"
+    # Sin puerto publicado: MySQL solo es accesible desde la red interna
     volumes:
       - mysql_prod_data:/var/lib/mysql
       - ./backend/database/init:/docker-entrypoint-initdb.d
@@ -28,12 +25,12 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
     container_name: dc_backend_prod
-    ports:
-      - "4073:4073"
     env_file:
       - .env.prod
     environment:
       DB_HOST: mysql_prod
+      NODE_ENV: production
+      PORT: 4073
     depends_on:
       mysql_prod:
         condition: service_healthy
@@ -46,8 +43,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    volumes:
-      - dc_logs_prod:/app/logs
 
   frontend_prod:
     build:
@@ -71,4 +66,3 @@ networks:
 
 volumes:
   mysql_prod_data:
-  dc_logs_prod:

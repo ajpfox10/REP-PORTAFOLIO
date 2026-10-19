@@ -1,12 +1,13 @@
-const config          = require('./config/env');
-const { testConnection, pool } = require('./config/database');
-const logger          = require('./config/logger');
-const app             = require('./app');
+const path   = require('path');
+const config = require('./config/env');
+const { testConnection, pool, query } = require('./config/database');
+const { runMigrations } = require('./db/migrations');
+const logger = require('./config/logger');
+const app    = require('./app');
 
-// Verifica si la base tiene datos geográficos e infraestructura.
-// Si está vacía, lanza el importador en segundo plano sin bloquear el arranque.
+// Si la base no tiene localidades ni infraestructura cargadas, lanza el
+// importador de datos oficiales en segundo plano, sin demorar el arranque.
 async function checkAndImportData() {
-  const { query } = require('./config/database');
   try {
     const [locCount]   = await query('SELECT COUNT(*) AS n FROM localities');
     const [infraCount] = await query('SELECT COUNT(*) AS n FROM infrastructure_points');
@@ -20,66 +21,55 @@ async function checkAndImportData() {
     }
 
     const args = [];
-    if (necesitaGeo   && !necesitaInfra) args.push('--solo-geo');
-    if (!necesitaGeo  && necesitaInfra)  args.push('--solo-infra');
+    if (necesitaGeo  && !necesitaInfra) args.push('--solo-geo');
+    if (!necesitaGeo && necesitaInfra)  args.push('--solo-infra');
 
-    logger.info('Base de datos sin datos iniciales — iniciando importación en segundo plano...');
-    logger.info('(El servidor ya está disponible. La importación puede tardar varios minutos.)');
+    logger.info('Base sin datos geográficos: importando en segundo plano (puede tardar varios minutos)');
 
     const { spawn } = require('child_process');
-    const path = require('path');
-    const scriptPath = path.resolve(__dirname, '../../scripts/import-data.js');
+    const scriptPath = path.resolve(__dirname, '../scripts/import-data.js');
     const child = spawn(process.execPath, [scriptPath, ...args], {
-      detached: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
+      stdio: ['ignore', 'inherit', 'inherit'],
+      env:   process.env,
     });
 
-    child.stdout.on('data', d => process.stdout.write(d));
-    child.stderr.on('data', d => process.stderr.write(d));
-    child.on('close', code => {
-      if (code === 0) logger.info('Importación de datos completada exitosamente');
-      else logger.warn(`Importación finalizada con código ${code} — algunos datos pueden estar incompletos`);
-    });
-    child.on('error', err => logger.error('Error al iniciar importador', { error: err.message }));
-
-    // Matar el proceso si tarda más de 20 minutos (evita zombies)
-    const IMPORT_TIMEOUT_MS = 20 * 60 * 1000;
+    // Corta el proceso si tarda más de 20 minutos
     const killTimer = setTimeout(() => {
-      logger.warn('Importación superó el tiempo límite (20 min), terminando proceso...');
+      logger.warn('La importación superó los 20 minutos, se detiene');
       child.kill('SIGTERM');
-    }, IMPORT_TIMEOUT_MS);
-    child.on('close', () => clearTimeout(killTimer));
+    }, 20 * 60 * 1000);
 
+    child.on('close', code => {
+      clearTimeout(killTimer);
+      if (code === 0) logger.info('Importación de datos completada');
+      else logger.warn(`Importación finalizada con código ${code}: algunos datos pueden faltar`);
+    });
+    child.on('error', err => logger.error('No se pudo iniciar el importador', { error: err.message }));
   } catch (err) {
-    // Si la tabla no existe todavía (antes de correr el schema), no hay problema
-    if (err.code !== 'ER_NO_SUCH_TABLE') {
-      logger.warn('No se pudo verificar datos iniciales', { error: err.message });
-    }
+    logger.warn('No se pudo verificar los datos iniciales', { error: err.message });
   }
 }
 
 async function start() {
   try {
     await testConnection();
+    await runMigrations();
   } catch (err) {
-    logger.error('No se pudo conectar a la base de datos', { error: err.message });
+    logger.error('No se pudo preparar la base de datos', { error: err.message });
     process.exit(1);
   }
 
   const server = app.listen(config.port, () => {
-    logger.info(`Servidor iniciado en puerto ${config.port} [${config.appEnv.toUpperCase()}]`);
-    logger.info(`Base de datos: ${config.db.name}`);
+    logger.info(`Servidor iniciado en puerto ${config.port} [${config.appEnv}]`);
   });
 
-  // Verificar e importar datos en segundo plano (no bloquea el arranque)
-  checkAndImportData();
+  if (config.autoImport) checkAndImportData();
 
-  async function shutdown(signal) {
+  function shutdown(signal) {
     logger.info(`${signal} recibido, cerrando servidor...`);
     server.close(async () => {
       await pool.end();
-      logger.info('Servidor detenido limpiamente');
+      logger.info('Servidor detenido');
       process.exit(0);
     });
   }

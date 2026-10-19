@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   username      VARCHAR(50)  NOT NULL,
   email         VARCHAR(100) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role          ENUM('admin','medium','read') NOT NULL DEFAULT 'read',
+  role          ENUM('admin','medium','read','telefonista','chofer') NOT NULL DEFAULT 'read',
   full_name     VARCHAR(100) NOT NULL,
   is_active     TINYINT(1)   NOT NULL DEFAULT 1,
   last_login    DATETIME     NULL,
@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS partidos (
   province_id INT UNSIGNED NOT NULL,
   name        VARCHAR(100) NOT NULL,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_partidos_province_name (province_id, name),
   KEY idx_partidos_province (province_id),
   CONSTRAINT fk_partidos_province FOREIGN KEY (province_id) REFERENCES provinces (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS localities (
   latitude    DECIMAL(10,8) NULL,
   longitude   DECIMAL(11,8) NULL,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_localities_partido_name (partido_id, name),
   KEY idx_localities_partido (partido_id),
   CONSTRAINT fk_localities_partido FOREIGN KEY (partido_id) REFERENCES partidos (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -277,8 +279,8 @@ CREATE TABLE IF NOT EXISTS incident_number_sequences (
 
 -- =============================================================
 -- EVENT: limpieza periódica de refresh tokens vencidos/revocados
+-- (el event_scheduler está activo por defecto desde MySQL 8.0)
 -- =============================================================
-SET GLOBAL event_scheduler = ON;
 
 CREATE EVENT IF NOT EXISTS evt_cleanup_refresh_tokens
   ON SCHEDULE EVERY 1 DAY

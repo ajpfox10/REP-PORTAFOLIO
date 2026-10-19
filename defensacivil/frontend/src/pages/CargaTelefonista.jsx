@@ -1,352 +1,142 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  MapContainer, TileLayer, Marker, Popup,
-  ZoomControl, ScaleControl, useMapEvents,
-} from 'react-leaflet';
-import MarkerClusterGroup from 'react-leaflet-markercluster';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet.markercluster/dist/MarkerCluster.css';
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import { MapContainer, TileLayer, Marker, ZoomControl } from 'react-leaflet';
+import { toast } from 'sonner';
+import { PhoneIncoming, MapPin, CheckCircle2, MousePointerClick, X } from 'lucide-react';
 import { incidentsApi } from '../api/incidents.api';
 import useGeoStore from '../store/geoStore';
 import Button from '../components/common/Button';
+import { PageHeader, Card, Field, Alert } from '../components/common/ui';
+import { StatusBadge } from '../components/common/Badge';
+import { IncidentMarkers, ClickHandler } from '../components/map/MapParts';
+import { TILE_URL, TILE_ATTRIBUTION, pickIcon } from '../lib/mapIcons';
+import { TypeChip } from '../lib/icons';
+import { PRIORITIES, PRIORITY_LABELS, ACTIVE_STATUSES, DEFAULT_CENTER } from '../lib/constants';
+import { apiError, fieldErrors, fmtCoords, fmtAgo } from '../lib/format';
 
-// ─── Leaflet icon fix ──────────────────────────────────────────────────────────
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+const EMPTY = { incident_type_id: '', description: '', priority: 'ALTA', address: '', caller: '' };
 
-// ─── Iconos ───────────────────────────────────────────────────────────────────
-function makeIncidentIcon(color, priority) {
-  const size = priority === 'CRITICA' ? 20 : priority === 'ALTA' ? 16 : 12;
-  return L.divIcon({
-    html: `<div style="width:${size}px;height:${size}px;background:${color || '#FF4500'};border:2px solid rgba(0,0,0,0.3);border-radius:50%;"></div>`,
-    className: '',
-    iconSize:  [size, size],
-    iconAnchor:[size / 2, size / 2],
-  });
-}
-
-function makeApproxIcon() {
-  return L.divIcon({
-    html: `<div style="
-      width:40px;height:40px;background:#f97316;
-      border:3px solid #fff;border-radius:50%;
-      display:flex;align-items:center;justify-content:center;
-      font-size:22px;color:#fff;font-weight:bold;
-      box-shadow:0 0 18px rgba(249,115,22,0.9);
-    ">?</div>`,
-    className: '',
-    iconSize:  [40, 40],
-    iconAnchor:[20, 20],
-  });
-}
-
-function MapClickHandler({ onMapClick }) {
-  useMapEvents({ click: (e) => onMapClick(e.latlng) });
-  return null;
-}
-
-// ─── Constantes ───────────────────────────────────────────────────────────────
-const PRIORITIES = ['BAJA', 'MEDIA', 'ALTA', 'CRITICA'];
-
-const STATUS_LABEL = {
-  RECIBIDO:'Recibido', EN_CAMINO:'En Camino', EN_ESCENA:'En Escena',
-  CONTROLADO:'Controlado', CERRADO:'Cerrado', CANCELADO:'Cancelado',
-};
-
-// ─── Estilos ──────────────────────────────────────────────────────────────────
-const card  = { background:'#fff', borderRadius:'var(--radius)', boxShadow:'var(--shadow)', padding:'1.25rem' };
-const fld   = { display:'flex', flexDirection:'column', gap:'0.35rem', marginBottom:'0.85rem' };
-const lbl   = { fontSize:'0.8rem', fontWeight:600, color:'#374151' };
-const inp   = { padding:'0.5rem 0.75rem', border:'1px solid #d1d5db', borderRadius:'var(--radius)', fontSize:'0.875rem', background:'#fff', width:'100%', boxSizing:'border-box' };
-const sel   = { ...inp, cursor:'pointer' };
-const tarea = { ...inp, resize:'vertical', minHeight:80 };
-
-// ─── Componente ───────────────────────────────────────────────────────────────
+// Central telefónica: se atiende la llamada, se marca el lugar y se registra en segundos
 export default function CargaTelefonista() {
-  const { incidentTypes, fetchIncidentTypes } = useGeoStore();
-  const [mapPoints,    setMapPoints]    = useState([]);
-  const [loadingPts,   setLoadingPts]   = useState(true);
+  const { incidentTypes } = useGeoStore();
+  const [points, setPoints] = useState([]);
+  const [loc, setLoc] = useState(null);
+  const [form, setForm] = useState(EMPTY);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [created, setCreated] = useState(null);
 
-  const [loc,          setLoc]          = useState(null);
-  const [form,         setForm]         = useState({ incident_type_id:'', description:'', priority:'ALTA', address:'' });
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState('');
-  const [created,      setCreated]      = useState(null);
+  const loadPoints = useCallback(() => incidentsApi.getMapPoints({}).then(r => setPoints(r.data.filter(p => ACTIVE_STATUSES.includes(p.status)))), []);
+  useEffect(() => { loadPoints(); }, [loadPoints]);
 
-  useEffect(() => {
-    fetchIncidentTypes();
-    loadPoints();
-  }, []);
+  const set = key => e => setForm(f => ({ ...f, [key]: e.target.value }));
 
-  async function loadPoints() {
-    setLoadingPts(true);
-    try { const r = await incidentsApi.getMapPoints({}); setMapPoints(r.data); }
-    finally { setLoadingPts(false); }
-  }
-
-  const handleMapClick = useCallback((latlng) => {
-    setLoc(latlng);
-    setError('');
-  }, []);
-
-  async function handleSubmit() {
-    if (!form.incident_type_id) { setError('Seleccione el tipo de incidente'); return; }
-    if (!form.description.trim()) { setError('Ingrese una descripción'); return; }
-    if (!loc)                     { setError('Haga click en el mapa para marcar la ubicación'); return; }
-
-    setLoading(true);
-    setError('');
+  const submit = async e => {
+    e.preventDefault();
+    setError(null);
+    if (!loc) { setError({ message: 'Marcá en el mapa el lugar del incidente.' }); return; }
+    const type = incidentTypes.find(t => String(t.id) === form.incident_type_id);
+    const title = `${type?.name || 'Incidente'}${form.address ? ` en ${form.address}` : ''}`.slice(0, 200);
+    setSaving(true);
     try {
-      const typeName = incidentTypes.find(t => String(t.id) === String(form.incident_type_id))?.name || 'Incidente';
-      const res = await incidentsApi.create({
+      const { data } = await incidentsApi.create({
         incident_type_id: Number(form.incident_type_id),
-        title:            `${typeName} — Telefonista`,
-        description:      form.description,
-        priority:         form.priority,
-        latitude:         loc.lat,
-        longitude:        loc.lng,
-        address:          form.address || undefined,
-        status:           'RECIBIDO',
+        title,
+        description: form.description,
+        priority: form.priority,
+        address: form.address || undefined,
+        notes: form.caller ? `Llamante: ${form.caller}` : undefined,
+        latitude: loc.lat,
+        longitude: loc.lng,
       });
-      setCreated(res.data);
+      setCreated(data);
+      toast.success(`Registrado ${data.incident_number}`);
+      setForm(EMPTY);
       setLoc(null);
-      setForm({ incident_type_id:'', description:'', priority:'ALTA', address:'' });
-      await loadPoints();
-    } catch (e) {
-      setError(e.response?.data?.error || 'Error al registrar el incidente');
+      loadPoints();
+    } catch (err) {
+      setError(err);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  }
+  };
 
-  function handleNuevoRegistro() {
-    setCreated(null);
-    setError('');
-  }
+  const errs = fieldErrors(error);
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 56px - 3rem)', gap:'0.75rem' }}>
+    <div className="page page-full">
+      <PageHeader title="Central telefónica" subtitle="Atendé la llamada, marcá el lugar en el mapa y registrá el incidente." />
 
-      {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div>
-          <h1 style={{ fontSize:'1.5rem', fontWeight:700, margin:0 }}>📞 Central Telefonista</h1>
-          <p style={{ fontSize:'0.8125rem', color:'#64748b', margin:'0.15rem 0 0' }}>
-            Registre llamadas entrantes y marque la ubicación aproximada en el mapa
-          </p>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
-          {loadingPts && <span style={{ fontSize:'0.8rem', color:'#94a3b8' }}>⟳ Actualizando...</span>}
-          <span style={{ fontSize:'0.8rem', color:'#64748b', background:'#f1f5f9', padding:'0.25rem 0.75rem', borderRadius:'9999px' }}>
-            {mapPoints.length} incidentes
-          </span>
-        </div>
-      </div>
-
-      {/* Cuerpo */}
-      <div style={{ flex:1, display:'flex', gap:'1rem', overflow:'hidden', minHeight:0 }}>
-
-        {/* Panel formulario */}
-        <div style={{ width:380, flexShrink:0, overflowY:'auto', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-
-          {/* Instrucciones */}
-          <div style={{ ...card, padding:'0.875rem 1rem', background:'#fffbeb', border:'1px solid #fde68a' }}>
-            <div style={{ fontSize:'0.8rem', color:'#92400e', lineHeight:1.6 }}>
-              <strong>① </strong>Haga click en el mapa para marcar la ubicación aproximada<br/>
-              <strong>② </strong>Complete el tipo y descripción del incidente<br/>
-              <strong>③ </strong>Presione <strong>Registrar</strong> para crear el incidente
-            </div>
-          </div>
-
-          {/* Éxito: último incidente registrado */}
+      <div className="split">
+        <div className="panel">
           {created && (
-            <div style={{ ...card, background:'#f0fdf4', border:'1px solid #86efac' }}>
-              <div style={{ fontWeight:700, color:'#15803d', fontSize:'0.9rem', marginBottom:'0.5rem' }}>
-                ✓ Incidente registrado
-              </div>
-              <div style={{ fontSize:'1.1rem', fontWeight:800, color:'#166534', letterSpacing:'0.03em', marginBottom:'0.4rem' }}>
-                {created.incident_number}
-              </div>
-              <div style={{ fontSize:'0.8rem', color:'#166534', marginBottom:'0.75rem' }}>
-                {created.title}
-              </div>
-              <div style={{ display:'flex', gap:'0.5rem' }}>
-                <Link to={`/incidents/${created.uuid}`}>
-                  <Button size="sm" variant="secondary">Ver detalle →</Button>
-                </Link>
-                <Button size="sm" onClick={handleNuevoRegistro}>
-                  + Nuevo registro
-                </Button>
-              </div>
-            </div>
+            <Alert type="success">
+              <strong>{created.incident_number}</strong> registrado. <Link to={`/incidents/${created.uuid}`}>Ver detalle</Link>
+            </Alert>
           )}
 
-          {/* Formulario */}
-          {!created && (
-            <div style={card}>
-              {/* Indicador de ubicación */}
-              {loc ? (
-                <div style={{ padding:'0.5rem 0.75rem', background:'#fef3c7', border:'1px solid #f59e0b', borderRadius:'var(--radius)', fontSize:'0.8rem', color:'#92400e', marginBottom:'0.85rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span>📍 {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</span>
-                  <button
-                    onClick={() => setLoc(null)}
-                    style={{ background:'none', border:'none', cursor:'pointer', color:'#92400e', fontWeight:700, fontSize:'1rem', lineHeight:1 }}
-                  >✕</button>
-                </div>
-              ) : (
-                <div style={{ padding:'0.625rem 0.75rem', background:'#fff7ed', border:'1px dashed #fb923c', borderRadius:'var(--radius)', fontSize:'0.8rem', color:'#c2410c', textAlign:'center', marginBottom:'0.85rem' }}>
-                  ← Haga click en el mapa para marcar la ubicación
-                </div>
-              )}
+          <Card title="Nueva llamada" actions={<PhoneIncoming size={18} className="muted" />}>
+            <form onSubmit={submit} className="stack" style={{ gap: 14 }} noValidate>
+              <div className="row" style={{ padding: '10px 12px', borderRadius: 10, border: `1px ${loc ? 'solid' : 'dashed'} var(--border-2)`, background: loc ? 'var(--success-soft)' : 'transparent', justifyContent: 'space-between' }}>
+                <span className="row" style={{ gap: 8, color: loc ? 'var(--success)' : 'var(--text-3)' }}>
+                  {loc ? <CheckCircle2 size={17} /> : <MousePointerClick size={17} />}
+                  {loc ? <span className="tabular">{fmtCoords(loc.lat, loc.lng)}</span> : 'Hacé clic en el mapa para marcar el lugar'}
+                </span>
+                {loc && <Button variant="ghost" size="sm" icon={X} aria-label="Quitar ubicación" onClick={() => setLoc(null)} />}
+              </div>
 
-              {/* Tipo */}
-              <div style={fld}>
-                <label style={lbl}>Tipo de Incidente *</label>
-                <select
-                  style={sel}
-                  value={form.incident_type_id}
-                  onChange={e => setForm(f => ({ ...f, incident_type_id: e.target.value }))}
-                >
-                  <option value="">Seleccionar tipo...</option>
-                  {incidentTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.icon} {t.name}</option>
-                  ))}
+              <Field label="Tipo de incidente" htmlFor="t-type" required error={errs.incident_type_id}>
+                <select id="t-type" className="select" value={form.incident_type_id} onChange={set('incident_type_id')} required>
+                  <option value="">Seleccionar…</option>
+                  {incidentTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-              </div>
-
-              {/* Descripción */}
-              <div style={fld}>
-                <label style={lbl}>Descripción de la llamada *</label>
-                <textarea
-                  style={tarea}
-                  placeholder="Describa el incidente reportado por el llamante..."
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                />
-              </div>
-
-              {/* Prioridad + Dirección */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 0.875rem' }}>
-                <div style={fld}>
-                  <label style={lbl}>Prioridad</label>
-                  <select style={sel} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+              </Field>
+              <Field label="Qué informa quien llama" htmlFor="t-desc" required error={errs.description} hint="Mínimo 10 caracteres.">
+                <textarea id="t-desc" className="textarea" rows={4} value={form.description} onChange={set('description')} placeholder="Ej.: Humo saliendo de un galpón, hay personas en la vereda…" />
+              </Field>
+              <div className="form-grid">
+                <Field label="Prioridad" htmlFor="t-priority">
+                  <select id="t-priority" className="select" value={form.priority} onChange={set('priority')}>
+                    {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
                   </select>
-                </div>
-                <div style={fld}>
-                  <label style={lbl}>Dirección / Referencia</label>
-                  <input
-                    style={inp}
-                    placeholder="Ej: Av. San Martín 123"
-                    value={form.address}
-                    onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                  />
-                </div>
+                </Field>
+                <Field label="Quién llama" htmlFor="t-caller">
+                  <input id="t-caller" className="input" value={form.caller} onChange={set('caller')} placeholder="Nombre y teléfono" />
+                </Field>
               </div>
+              <Field label="Dirección o referencia" htmlFor="t-address" error={errs.address}>
+                <input id="t-address" className="input" value={form.address} onChange={set('address')} placeholder="Ej.: Av. San Martín 1200" />
+              </Field>
 
-              {error && (
-                <div style={{ padding:'0.5rem 0.75rem', background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:'var(--radius)', fontSize:'0.8rem', color:'#991b1b', marginBottom:'0.75rem' }}>
-                  {error}
-                </div>
-              )}
+              {error && !Object.keys(errs).length && <Alert type="error">{error.message && !error.response ? error.message : apiError(error)}</Alert>}
+              <Button type="submit" size="lg" block isLoading={saving} disabled={!form.incident_type_id || form.description.trim().length < 10}>Registrar incidente</Button>
+            </form>
+          </Card>
 
-              <Button onClick={handleSubmit} isLoading={loading} style={{ width:'100%' }}>
-                Registrar Incidente
-              </Button>
+          <Card title="Activos" hint={`${points.length} en curso`} bodyClass={null}>
+            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+              {points.slice(0, 20).map(p => (
+                <Link key={p.uuid} to={`/incidents/${p.uuid}`} className="card-list-item" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <TypeChip icon={p.type_icon} color={p.color_hex} small />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="truncate" style={{ fontWeight: 600, color: 'var(--text)' }}>{p.title}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>{fmtAgo(p.started_at)}</div>
+                  </div>
+                  <StatusBadge status={p.status} />
+                </Link>
+              ))}
             </div>
-          )}
-
-          {/* Lista reciente de incidentes del mapa */}
-          {mapPoints.length > 0 && (
-            <div style={{ ...card, padding:'0.875rem 1rem' }}>
-              <div style={{ fontSize:'0.8rem', fontWeight:600, color:'#374151', marginBottom:'0.6rem' }}>
-                Incidentes activos en mapa ({mapPoints.filter(p => !['CERRADO','CANCELADO'].includes(p.status)).length})
-              </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:'0.4rem', maxHeight:200, overflowY:'auto' }}>
-                {mapPoints
-                  .filter(p => !['CERRADO','CANCELADO'].includes(p.status))
-                  .slice(0, 15)
-                  .map(p => (
-                    <div key={p.uuid} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.3rem 0', borderBottom:'1px solid #f1f5f9', fontSize:'0.78rem' }}>
-                      <span style={{ width:10, height:10, borderRadius:'50%', background: p.color_hex || '#94a3b8', flexShrink:0, display:'inline-block', border:'1px solid rgba(0,0,0,0.15)' }} />
-                      <span style={{ color:'#374151', fontWeight:600, flexShrink:0 }}>{p.incident_number}</span>
-                      <span style={{ color:'#64748b', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{p.title}</span>
-                      <span style={{ color:'#94a3b8', flexShrink:0 }}>{STATUS_LABEL[p.status] || p.status}</span>
-                    </div>
-                  ))
-                }
-              </div>
-            </div>
-          )}
+          </Card>
         </div>
 
-        {/* Mapa */}
-        <div style={{ flex:1, borderRadius:'var(--radius)', overflow:'hidden', boxShadow:'var(--shadow)', position:'relative', minHeight:0 }}>
-          <div style={{
-            position:'absolute', top:12, left:12, zIndex:1000,
-            background: loc ? 'rgba(16,163,74,0.9)' : 'rgba(249,115,22,0.92)',
-            color:'#fff', padding:'0.35rem 0.85rem',
-            borderRadius:'var(--radius)', fontSize:'0.75rem', fontWeight:600,
-            pointerEvents:'none',
-          }}>
-            {loc ? '✓ Ubicación marcada — puede ajustarla haciendo click de nuevo' : 'Click en el mapa → marcar ubicación aproximada'}
-          </div>
-
-          <MapContainer
-            center={[-34.770, -58.630]}
-            zoom={11}
-            style={{ height:'100%', width:'100%' }}
-            zoomControl={false}
-          >
+        <div className="map-card" style={{ minHeight: 480 }}>
+          <span className={`map-hint${loc ? ' ok' : ''}`}><MapPin size={14} />{loc ? 'Lugar marcado · clic para ajustar' : 'Clic en el mapa para marcar el lugar'}</span>
+          <MapContainer center={DEFAULT_CENTER} zoom={11} zoomControl={false}>
             <ZoomControl position="topright" />
-            <ScaleControl position="bottomright" imperial={false} />
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              maxZoom={19}
-            />
-            <MapClickHandler onMapClick={handleMapClick} />
-
-            {/* Incidentes existentes */}
-            <MarkerClusterGroup chunkedLoading maxClusterRadius={50} showCoverageOnHover={false}>
-              {mapPoints.map(p => (
-                <Marker
-                  key={p.uuid}
-                  position={[Number(p.latitude), Number(p.longitude)]}
-                  icon={makeIncidentIcon(p.color_hex, p.priority)}
-                >
-                  <Popup minWidth={190}>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:'0.8rem' }}>{p.incident_number}</div>
-                      <div style={{ fontSize:'0.78rem', color:'#475569', margin:'0.2rem 0' }}>{p.title}</div>
-                      <div style={{ fontSize:'0.74rem', color:'#64748b' }}>{p.type_name} · {STATUS_LABEL[p.status] || p.status}</div>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MarkerClusterGroup>
-
-            {/* Marcador de ubicación aproximada */}
-            {loc && (
-              <Marker position={[loc.lat, loc.lng]} icon={makeApproxIcon()}>
-                <Popup>
-                  <div>
-                    <div style={{ fontWeight:600, fontSize:'0.8rem', color:'#ea580c' }}>Ubicación aproximada</div>
-                    <div style={{ fontSize:'0.74rem', color:'#64748b', marginTop:'0.2rem' }}>
-                      {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}
-                    </div>
-                    <div style={{ fontSize:'0.74rem', color:'#94a3b8', marginTop:'0.1rem' }}>Click en el mapa para ajustar</div>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
+            <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
+            <ClickHandler onClick={ll => { setLoc(ll); setCreated(null); }} />
+            <IncidentMarkers points={points} />
+            {loc && <Marker position={[loc.lat, loc.lng]} icon={pickIcon()} />}
           </MapContainer>
         </div>
       </div>

@@ -1,20 +1,19 @@
 const { body } = require('express-validator');
 
-const loginRules = [
-  body('username').notEmpty().withMessage('El usuario es requerido').trim(),
-  body('password').notEmpty().withMessage('La contraseña es requerida'),
-];
+const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
 
-const refreshRules = [
-  body('refreshToken').notEmpty().withMessage('El refresh token es requerido'),
+const loginRules = [
+  body('username').isString().trim().notEmpty().withMessage('El usuario es requerido').isLength({ max: 50 }),
+  body('password').isString().notEmpty().withMessage('La contraseña es requerida').isLength({ max: 200 }),
 ];
 
 const changePasswordRules = [
-  body('currentPassword').notEmpty().withMessage('La contraseña actual es requerida'),
+  body('currentPassword').isString().notEmpty().withMessage('La contraseña actual es requerida'),
   body('newPassword')
-    .isLength({ min: 8 }).withMessage('Mínimo 8 caracteres')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .isString()
+    .isLength({ min: 8, max: 200 }).withMessage('Mínimo 8 caracteres')
+    .matches(PASSWORD_RULE)
     .withMessage('Debe contener mayúsculas, minúsculas y números'),
 ];
 
-module.exports = { loginRules, refreshRules, changePasswordRules };
+module.exports = { loginRules, changePasswordRules, PASSWORD_RULE };

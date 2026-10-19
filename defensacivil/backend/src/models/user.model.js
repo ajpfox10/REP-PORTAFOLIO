@@ -12,8 +12,14 @@ async function findByUuid(uuid) {
   return queryOne(`SELECT ${SAFE_FIELDS} FROM users WHERE uuid = ?`, [uuid]);
 }
 
+// Para el login: solo usuarios activos, incluye el hash de la contraseña
 async function findByUsername(username) {
   return queryOne('SELECT * FROM users WHERE username = ? AND is_active = 1', [username]);
+}
+
+// Para validar duplicados: incluye usuarios desactivados
+async function usernameExists(username) {
+  return !!(await queryOne('SELECT id FROM users WHERE username = ?', [username]));
 }
 
 async function findByEmail(email) {
@@ -22,6 +28,16 @@ async function findByEmail(email) {
 
 async function findById(id) {
   return queryOne(`SELECT ${SAFE_FIELDS} FROM users WHERE id = ?`, [id]);
+}
+
+async function getPasswordHash(id) {
+  const row = await queryOne('SELECT password_hash FROM users WHERE id = ?', [id]);
+  return row?.password_hash || null;
+}
+
+async function countActiveAdmins() {
+  const row = await queryOne("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND is_active = 1");
+  return row.n;
 }
 
 async function create({ username, email, password, role, full_name }) {
@@ -52,18 +68,13 @@ async function update(uuid, fields) {
   return findByUuid(uuid);
 }
 
-async function resetPassword(uuid, newPassword) {
-  const password_hash = await bcrypt.hash(newPassword, 12);
-  await query('UPDATE users SET password_hash = ? WHERE uuid = ?', [password_hash, uuid]);
-}
-
-async function changePassword(id, newPassword) {
+async function setPassword(id, newPassword) {
   const password_hash = await bcrypt.hash(newPassword, 12);
   await query('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash, id]);
 }
 
-async function toggleActive(uuid) {
-  await query('UPDATE users SET is_active = NOT is_active WHERE uuid = ?', [uuid]);
+async function setActive(uuid, active) {
+  await query('UPDATE users SET is_active = ? WHERE uuid = ?', [active ? 1 : 0, uuid]);
   return findByUuid(uuid);
 }
 
@@ -72,6 +83,6 @@ async function updateLastLogin(id) {
 }
 
 module.exports = {
-  findAll, findByUuid, findByUsername, findByEmail, findById,
-  create, update, resetPassword, changePassword, toggleActive, updateLastLogin,
+  findAll, findByUuid, findByUsername, usernameExists, findByEmail, findById, getPasswordHash,
+  countActiveAdmins, create, update, setPassword, setActive, updateLastLogin,
 };

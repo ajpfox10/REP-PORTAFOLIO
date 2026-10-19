@@ -1,14 +1,15 @@
-import { Link } from 'react-router-dom';
+import { MapPinOff } from 'lucide-react';
+import Button from '../components/common/Button';
 
 export default function NotFound() {
   return (
-    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#f1f5f9', gap:'1rem' }}>
-      <div style={{ fontSize:'5rem' }}>🚧</div>
-      <h1 style={{ fontSize:'2rem', fontWeight:700, color:'#1e293b' }}>404 — Página no encontrada</h1>
-      <p style={{ color:'#64748b' }}>La ruta solicitada no existe.</p>
-      <Link to="/dashboard" style={{ background:'#1d4ed8', color:'#fff', padding:'0.625rem 1.5rem', borderRadius:'var(--radius)', fontWeight:500 }}>
-        Ir al Dashboard
-      </Link>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div className="empty">
+        <div className="empty-icon"><MapPinOff size={22} /></div>
+        <h3>Página no encontrada</h3>
+        <p style={{ marginBottom: 16 }}>La dirección que buscás no existe o fue movida.</p>
+        <Button to="/dashboard">Ir al tablero</Button>
+      </div>
     </div>
   );
 }

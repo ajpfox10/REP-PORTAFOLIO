@@ -14,8 +14,9 @@ function createAuditLog(action, entityType) {
       if (res.statusCode >= 400) return;
       try {
         const entityId = req.params.uuid
+          || req.params.id
           || res.auditBody?.uuid
-          || res.auditBody?.data?.uuid
+          || res.auditBody?.id
           || null;
 
         await query(
@@ -25,7 +26,7 @@ function createAuditLog(action, entityType) {
             req.user?.id        || null,
             action,
             entityType          || null,
-            entityId,
+            entityId == null ? null : String(entityId),
             req.auditOld ? JSON.stringify(req.auditOld) : null,
             req.auditNew ? JSON.stringify(req.auditNew) : null,
             req.ip              || null,

@@ -1,170 +1,143 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Search, X, SearchX } from 'lucide-react';
 import { incidentsApi } from '../api/incidents.api';
-import useGeoStore   from '../store/geoStore';
-import useAuthStore  from '../store/authStore';
+import useGeoStore from '../store/geoStore';
+import useAuthStore from '../store/authStore';
 import { StatusBadge, PriorityBadge } from '../components/common/Badge';
-import Button        from '../components/common/Button';
-import ConfirmDialog from '../components/common/ConfirmDialog';
-import { format }   from 'date-fns';
-import { es }       from 'date-fns/locale';
+import { PageHeader, Card, EmptyState, Loading, Pagination, Alert } from '../components/common/ui';
+import Button from '../components/common/Button';
+import { TypeChip } from '../lib/icons';
+import { STATUSES, STATUS_LABELS, PRIORITIES, PRIORITY_LABELS } from '../lib/constants';
+import { fmtShort, apiError } from '../lib/format';
 
-const STATUSES   = ['RECIBIDO','EN_CAMINO','EN_ESCENA','CONTROLADO','CERRADO','CANCELADO'];
-const PRIORITIES = ['BAJA','MEDIA','ALTA','CRITICA'];
+const FILTER_KEYS = ['search', 'status', 'priority', 'incident_type_id', 'province_id', 'dateFrom', 'dateTo', 'page'];
 
 export default function IncidentList() {
-  const navigate         = useNavigate();
-  const { incidentTypes, provinces, partidos, fetchProvinces, fetchIncidentTypes, fetchPartidos } = useGeoStore();
-  const canWrite         = useAuthStore(s => s.canWrite());
-  const isAdmin          = useAuthStore(s => s.isAdmin());
+  const navigate = useNavigate();
+  const { incidentTypes, provinces } = useGeoStore();
+  const role = useAuthStore(s => s.user?.role);
+  const canCreate = ['admin', 'medium', 'telefonista'].includes(role);
 
-  const [incidents, setIncidents] = useState([]);
-  const [pagination, setPagination] = useState({ page:1, pages:1, total:0 });
-  const [loading, setLoading]     = useState(true);
-  const [toDelete, setToDelete]   = useState(null);
-  const [deleting, setDeleting]   = useState(false);
+  // Los filtros viven en la URL: se pueden compartir y sobreviven al volver atrás
+  const [params, setParams] = useSearchParams();
+  const filters = Object.fromEntries(FILTER_KEYS.map(k => [k, params.get(k) || '']));
+  const [search, setSearch] = useState(filters.search);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
 
-  const [filters, setFilters] = useState({
-    status:'', priority:'', incident_type_id:'', province_id:'', partido_id:'',
-    dateFrom:'', dateTo:'', search:'', page:1,
-  });
+  const setFilter = useCallback((key, value) => {
+    setParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value); else next.delete(key);
+      if (key !== 'page') next.delete('page');
+      return next;
+    }, { replace: true });
+  }, [setParams]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = Object.fromEntries(Object.entries(filters).filter(([,v]) => v));
-      const { data } = await incidentsApi.getAll(params);
-      setIncidents(data.data);
-      setPagination({ page: data.page, pages: data.pages, total: data.total });
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
-
-  useEffect(() => { fetchProvinces(); fetchIncidentTypes(); }, []);
+  // Búsqueda con una pequeña espera para no consultar en cada tecla
   useEffect(() => {
-    if (filters.province_id) fetchPartidos(filters.province_id);
-  }, [filters.province_id]);
-  useEffect(() => { load(); }, [load]);
+    const t = setTimeout(() => { if (search !== filters.search) setFilter('search', search.trim()); }, 350);
+    return () => clearTimeout(t);
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val, page: key === 'page' ? val : 1 }));
+  const query = params.toString();
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    incidentsApi.getAll(Object.fromEntries(new URLSearchParams(query)))
+      .then(r => { if (!cancelled) setResult(r.data); })
+      .catch(err => { if (!cancelled) setError(apiError(err)); });
+    return () => { cancelled = true; };
+  }, [query]);
 
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await incidentsApi.delete(toDelete);
-      setToDelete(null);
-      load();
-    } finally { setDeleting(false); }
-  };
-
-  const sel = { padding:'0.5rem', borderRadius:'var(--radius)', border:'1px solid #d1d5db', fontSize:'0.8125rem', background:'#fff' };
-  const inp = { ...sel, minWidth:140 };
+  const hasFilters = FILTER_KEYS.some(k => k !== 'page' && filters[k]);
 
   return (
-    <div>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem' }}>
-        <h1 style={{ fontSize:'1.5rem', fontWeight:700 }}>Incidentes</h1>
-        {canWrite && (
-          <Button onClick={() => navigate('/incidents/new')}>➕ Nuevo Incidente</Button>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div style={{ background:'#fff', borderRadius:'var(--radius)', boxShadow:'var(--shadow)', padding:'1rem', marginBottom:'1rem', display:'flex', flexWrap:'wrap', gap:'0.75rem', alignItems:'center' }}>
-        <input placeholder="Buscar..." value={filters.search} onChange={e => setFilter('search', e.target.value)} style={{ ...inp, flexGrow:1, minWidth:180 }} />
-        <select style={sel} value={filters.status} onChange={e => setFilter('status', e.target.value)}>
-          <option value="">Estado</option>
-          {STATUSES.map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
-        </select>
-        <select style={sel} value={filters.priority} onChange={e => setFilter('priority', e.target.value)}>
-          <option value="">Prioridad</option>
-          {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select style={sel} value={filters.incident_type_id} onChange={e => setFilter('incident_type_id', e.target.value)}>
-          <option value="">Tipo</option>
-          {incidentTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-        <select style={sel} value={filters.province_id} onChange={e => setFilter('province_id', e.target.value)}>
-          <option value="">Provincia</option>
-          {provinces.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        {filters.province_id && (
-          <select style={sel} value={filters.partido_id} onChange={e => setFilter('partido_id', e.target.value)}>
-            <option value="">Partido/Municipio</option>
-            {(partidos[filters.province_id] || []).map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        )}
-        <input type="date" style={sel} value={filters.dateFrom} onChange={e => setFilter('dateFrom', e.target.value)} />
-        <input type="date" style={sel} value={filters.dateTo}   onChange={e => setFilter('dateTo',   e.target.value)} />
-        <Button variant="secondary" size="sm" onClick={() => setFilters({ status:'', priority:'', incident_type_id:'', province_id:'', partido_id:'', dateFrom:'', dateTo:'', search:'', page:1 })}>
-          Limpiar
-        </Button>
-      </div>
-
-      {/* Table */}
-      <div style={{ background:'#fff', borderRadius:'var(--radius)', boxShadow:'var(--shadow)', overflow:'hidden' }}>
-        <div style={{ padding:'0.75rem 1rem', borderBottom:'1px solid var(--color-border)', color:'#64748b', fontSize:'0.875rem' }}>
-          {pagination.total} resultado{pagination.total !== 1 ? 's' : ''}
-        </div>
-        <div style={{ overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.875rem' }}>
-            <thead>
-              <tr style={{ background:'#f8fafc' }}>
-                {['Número','Tipo','Título','Estado','Prioridad','Provincia','Fecha','Acciones'].map(h => (
-                  <th key={h} style={{ padding:'0.75rem 1rem', textAlign:'left', color:'#64748b', fontWeight:500, whiteSpace:'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} style={{ textAlign:'center', padding:'2rem', color:'#64748b' }}>Cargando...</td></tr>
-              ) : incidents.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign:'center', padding:'2rem', color:'#64748b' }}>Sin resultados</td></tr>
-              ) : incidents.map(inc => (
-                <tr key={inc.uuid} style={{ borderTop:'1px solid var(--color-border)', cursor:'pointer' }}
-                  onClick={() => navigate(`/incidents/${inc.uuid}`)}>
-                  <td style={{ padding:'0.75rem 1rem', color:'#1d4ed8', fontWeight:600, whiteSpace:'nowrap' }}>{inc.incident_number}</td>
-                  <td style={{ padding:'0.75rem 1rem', whiteSpace:'nowrap' }}>{inc.type_name}</td>
-                  <td style={{ padding:'0.75rem 1rem', maxWidth:220 }}>
-                    <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{inc.title}</div>
-                  </td>
-                  <td style={{ padding:'0.75rem 1rem' }}><StatusBadge status={inc.status} /></td>
-                  <td style={{ padding:'0.75rem 1rem' }}><PriorityBadge priority={inc.priority} /></td>
-                  <td style={{ padding:'0.75rem 1rem', color:'#64748b', whiteSpace:'nowrap' }}>{inc.province_name || '-'}</td>
-                  <td style={{ padding:'0.75rem 1rem', color:'#64748b', whiteSpace:'nowrap' }}>
-                    {format(new Date(inc.started_at), 'dd/MM/yy HH:mm', { locale:es })}
-                  </td>
-                  <td style={{ padding:'0.75rem 1rem' }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display:'flex', gap:'0.375rem' }}>
-                      <Button size="sm" variant="secondary" onClick={() => navigate(`/incidents/${inc.uuid}`)}>Ver</Button>
-                      {canWrite && <Button size="sm" variant="ghost" onClick={() => navigate(`/incidents/${inc.uuid}/edit`)}>Editar</Button>}
-                      {isAdmin && <Button size="sm" variant="danger" onClick={() => setToDelete(inc.uuid)}>Borrar</Button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div style={{ padding:'0.75rem 1rem', borderTop:'1px solid var(--color-border)', display:'flex', alignItems:'center', gap:'0.5rem', justifyContent:'center' }}>
-            <Button size="sm" variant="secondary" disabled={pagination.page <= 1} onClick={() => setFilter('page', pagination.page - 1)}>← Anterior</Button>
-            <span style={{ fontSize:'0.875rem', color:'#64748b' }}>Página {pagination.page} de {pagination.pages}</span>
-            <Button size="sm" variant="secondary" disabled={pagination.page >= pagination.pages} onClick={() => setFilter('page', pagination.page + 1)}>Siguiente →</Button>
-          </div>
-        )}
-      </div>
-
-      <ConfirmDialog
-        isOpen={!!toDelete} onClose={() => setToDelete(null)} onConfirm={handleDelete}
-        isLoading={deleting} title="Eliminar Incidente"
-        message="¿Está seguro que desea eliminar este incidente? Esta acción no se puede deshacer."
+    <div className="page">
+      <PageHeader
+        title="Incidentes"
+        subtitle={role === 'medium' ? 'Incidentes que registraste' : 'Todos los incidentes registrados'}
+        actions={canCreate && <Button icon={Plus} to="/incidents/new">Nuevo incidente</Button>}
       />
+
+      <Card bodyClass={null}>
+        <div className="toolbar">
+          <div className="input-group">
+            <Search size={16} />
+            <input className="input" placeholder="Buscar por número, título o dirección" value={search} onChange={e => setSearch(e.target.value)} aria-label="Buscar" />
+          </div>
+          <select className="select" value={filters.status} onChange={e => setFilter('status', e.target.value)} aria-label="Estado">
+            <option value="">Todos los estados</option>
+            {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+          </select>
+          <select className="select" value={filters.priority} onChange={e => setFilter('priority', e.target.value)} aria-label="Prioridad">
+            <option value="">Toda prioridad</option>
+            {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+          </select>
+          <select className="select" value={filters.incident_type_id} onChange={e => setFilter('incident_type_id', e.target.value)} aria-label="Tipo">
+            <option value="">Todos los tipos</option>
+            {incidentTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <select className="select" value={filters.province_id} onChange={e => setFilter('province_id', e.target.value)} aria-label="Provincia">
+            <option value="">Todas las provincias</option>
+            {provinces.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <input type="date" className="input" value={filters.dateFrom} max={filters.dateTo || undefined} onChange={e => setFilter('dateFrom', e.target.value)} aria-label="Desde" />
+          <input type="date" className="input" value={filters.dateTo} min={filters.dateFrom || undefined} onChange={e => setFilter('dateTo', e.target.value)} aria-label="Hasta" />
+          {hasFilters && <Button variant="ghost" size="sm" icon={X} onClick={() => { setSearch(''); setParams({}, { replace: true }); }}>Limpiar</Button>}
+        </div>
+
+        {error && <div style={{ padding: '0 16px 16px' }}><Alert type="error">{error}</Alert></div>}
+        {!result && !error && <Loading />}
+        {result && result.data.length === 0 && (
+          <EmptyState icon={SearchX} title="No hay incidentes">{hasFilters ? 'Probá con otros filtros.' : 'Todavía no se registró ningún incidente.'}</EmptyState>
+        )}
+
+        {result && result.data.length > 0 && (
+          <>
+            <div className="table-wrap table-desktop">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Incidente</th><th>Tipo</th><th>Prioridad</th><th>Estado</th><th>Ubicación</th><th>Inicio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.data.map(inc => (
+                    <tr key={inc.uuid} className="clickable" onClick={() => navigate(`/incidents/${inc.uuid}`)}>
+                      <td className="title-cell">
+                        <Link to={`/incidents/${inc.uuid}`} onClick={e => e.stopPropagation()}><strong className="truncate">{inc.title}</strong></Link>
+                        <span className="mono">{inc.incident_number}</span>
+                      </td>
+                      <td className="nowrap"><TypeChip icon={inc.type_icon} color={inc.color_hex} name={inc.type_name} small /></td>
+                      <td><PriorityBadge priority={inc.priority} /></td>
+                      <td><StatusBadge status={inc.status} /></td>
+                      <td className="muted" style={{ maxWidth: 220 }}><div className="truncate">{[inc.partido_name, inc.province_name].filter(Boolean).join(', ') || '—'}</div></td>
+                      <td className="nowrap muted tabular">{fmtShort(inc.started_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="card-list">
+              {result.data.map(inc => (
+                <Link key={inc.uuid} to={`/incidents/${inc.uuid}`} className="card-list-item">
+                  <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                    <TypeChip icon={inc.type_icon} color={inc.color_hex} name={inc.type_name} small />
+                    <span className="muted tabular" style={{ fontSize: 12 }}>{fmtShort(inc.started_at)}</span>
+                  </div>
+                  <strong style={{ display: 'block', margin: '8px 0 6px', color: 'var(--text)' }}>{inc.title}</strong>
+                  <div className="row"><StatusBadge status={inc.status} /><PriorityBadge priority={inc.priority} /><span className="mono muted" style={{ fontSize: 12 }}>{inc.incident_number}</span></div>
+                </Link>
+              ))}
+            </div>
+
+            <Pagination page={result.page} pages={result.pages} total={result.total} noun={result.total === 1 ? 'incidente' : 'incidentes'} onPage={p => setFilter('page', String(p))} />
+          </>
+        )}
+      </Card>
     </div>
   );
 }

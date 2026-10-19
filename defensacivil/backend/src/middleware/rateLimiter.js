@@ -9,11 +9,13 @@ const generalLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes, intente más tarde' },
 });
 
+// Solo cuentan los intentos fallidos: un operador que entra bien no se bloquea
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:      10,
+  max:      config.rateLimit.authMax,
   standardHeaders: true,
   legacyHeaders:   false,
+  skipSuccessfulRequests: true,
   message: { error: 'Demasiados intentos de autenticación, intente en 15 minutos' },
 });
 

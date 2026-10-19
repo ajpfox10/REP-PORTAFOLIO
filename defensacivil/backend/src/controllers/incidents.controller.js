@@ -42,13 +42,19 @@ async function mapPoints(req, res, next) {
 
 async function addNote(req, res, next) {
   try {
+    const has = v => v !== undefined && v !== null && v !== '';
+    const old = await incidentModel.findByUuid(req.params.uuid);
+    if (!old) return res.status(404).json({ error: 'Incidente no encontrado' });
+
     const incident = await incidentModel.addNote(req.params.uuid, req.user.id, {
-      latitude:  req.body.latitude  != null ? Number(req.body.latitude)  : null,
-      longitude: req.body.longitude != null ? Number(req.body.longitude) : null,
-      notes:     req.body.notes,
-      status:    req.body.status,
+      latitude:  has(req.body.latitude)  ? Number(req.body.latitude)  : null,
+      longitude: has(req.body.longitude) ? Number(req.body.longitude) : null,
+      notes:     req.body.notes || null,
+      status:    req.body.status || null,
     });
     if (!incident) return res.status(404).json({ error: 'Incidente no encontrado' });
+    req.auditOld = { status: old.status, latitude: old.latitude, longitude: old.longitude };
+    req.auditNew = { status: incident.status, latitude: incident.latitude, longitude: incident.longitude };
     res.json(incident);
   } catch (err) {
     next(err);
@@ -67,7 +73,6 @@ async function getOne(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    req.auditOld = null;
     const incident = await incidentModel.create(req.body, req.user.id);
     req.auditNew = { uuid: incident.uuid, incident_number: incident.incident_number, status: incident.status };
     res.status(201).json(incident);
@@ -84,6 +89,7 @@ async function update(req, res, next) {
     req.auditOld = { status: old.status, priority: old.priority };
 
     const incident = await incidentModel.update(req.params.uuid, req.body, req.user.id, req.user.role);
+    if (!incident) return res.status(404).json({ error: 'Incidente no encontrado' });
     req.auditNew = { status: incident.status, priority: incident.priority };
 
     res.json(incident);
@@ -94,7 +100,7 @@ async function update(req, res, next) {
 
 async function softDelete(req, res, next) {
   try {
-    const deleted = await incidentModel.softDelete(req.params.uuid, req.user.id, req.user.role);
+    const deleted = await incidentModel.softDelete(req.params.uuid);
     if (!deleted) return res.status(404).json({ error: 'Incidente no encontrado' });
     res.json({ message: 'Incidente eliminado exitosamente' });
   } catch (err) {
@@ -152,6 +158,7 @@ async function updateStatus(req, res, next) {
     const incident = await incidentModel.updateStatus(
       req.params.uuid, req.body.status, req.user.id, req.body.notes
     );
+    if (!incident) return res.status(404).json({ error: 'Incidente no encontrado' });
     req.auditNew = { status: incident.status };
 
     res.json(incident);

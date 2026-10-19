@@ -1,73 +1,99 @@
 const geoModel = require('../models/geo.model');
 
-// Simple in-memory cache for rarely-changing geo data
+// Caché en memoria para datos que casi no cambian (provincias, tipos, etc.)
 const cache = new Map();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 60 * 60 * 1000; // 1 hora
 
-function fromCache(key) {
+async function cached(key, load) {
   const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expires) { cache.delete(key); return null; }
-  return entry.data;
-}
-
-function toCache(key, data) {
+  if (entry && Date.now() < entry.expires) return entry.data;
+  const data = await load();
   cache.set(key, { data, expires: Date.now() + CACHE_TTL });
   return data;
 }
 
-async function getProvinces(req, res, next) {
-  try {
-    const cached = fromCache('provinces');
-    const data   = cached || toCache('provinces', await geoModel.getProvinces());
-    res.json(data);
-  } catch (err) { next(err); }
+function clearCache(...prefixes) {
+  for (const key of cache.keys()) {
+    if (prefixes.some(p => key.startsWith(p))) cache.delete(key);
+  }
 }
 
-async function getPartidos(req, res, next) {
-  try {
-    const key    = `partidos:${req.params.id}`;
-    const cached = fromCache(key);
-    const data   = cached || toCache(key, await geoModel.getPartidos(req.params.id));
-    res.json(data);
-  } catch (err) { next(err); }
-}
+const handler = fn => async (req, res, next) => {
+  try { await fn(req, res); } catch (err) { next(err); }
+};
 
-async function getLocalities(req, res, next) {
-  try {
-    const key    = `localities:${req.params.id}`;
-    const cached = fromCache(key);
-    const data   = cached || toCache(key, await geoModel.getLocalities(req.params.id));
-    res.json(data);
-  } catch (err) { next(err); }
-}
+const getProvinces = handler(async (req, res) => {
+  res.json(await cached('provinces', () => geoModel.getProvinces()));
+});
 
-async function getPoliceStations(req, res, next) {
-  try {
-    const provinceId = req.query.province_id;
-    const key        = `police:${provinceId || 'all'}`;
-    const cached     = fromCache(key);
-    const data       = cached || toCache(key, await geoModel.getPoliceStations(provinceId));
-    res.json(data);
-  } catch (err) { next(err); }
-}
+const getPartidos = handler(async (req, res) => {
+  res.json(await cached(`partidos:${req.params.id}`, () => geoModel.getPartidos(req.params.id)));
+});
 
-async function getIncidentTypes(req, res, next) {
-  try {
-    const cached = fromCache('incident_types');
-    const data   = cached || toCache('incident_types', await geoModel.getIncidentTypes());
-    res.json(data);
-  } catch (err) { next(err); }
-}
+const getLocalities = handler(async (req, res) => {
+  res.json(await cached(`localities:${req.params.id}`, () => geoModel.getLocalities(req.params.id)));
+});
 
-async function getInfrastructure(req, res, next) {
-  try {
-    const { type, province_id, partido_id } = req.query;
-    const key    = `infra:${type||'all'}:${province_id||'all'}:${partido_id||'all'}`;
-    const cached = fromCache(key);
-    const data   = cached || toCache(key, await geoModel.getInfrastructure({ type, province_id, partido_id }));
-    res.json(data);
-  } catch (err) { next(err); }
-}
+const getPoliceStations = handler(async (req, res) => {
+  const provinceId = req.query.province_id;
+  res.json(await cached(`police:${provinceId || 'all'}`, () => geoModel.getPoliceStations(provinceId)));
+});
 
-module.exports = { getProvinces, getPartidos, getLocalities, getPoliceStations, getIncidentTypes, getInfrastructure };
+const getIncidentTypes = handler(async (req, res) => {
+  res.json(await cached('incident_types', () => geoModel.getIncidentTypes()));
+});
+
+const getInfrastructure = handler(async (req, res) => {
+  const { type, province_id, partido_id } = req.query;
+  const key = `infra:${type || 'all'}:${province_id || 'all'}:${partido_id || 'all'}`;
+  res.json(await cached(key, () => geoModel.getInfrastructure({ type, province_id, partido_id })));
+});
+
+// ── Altas, ediciones y bajas ───────────────────────────────────────────────
+
+const createInfrastructure = handler(async (req, res) => {
+  const id = await geoModel.createInfrastructure(req.body);
+  clearCache('infra:');
+  res.status(201).json({ id });
+});
+
+const updateInfrastructure = handler(async (req, res) => {
+  const ok = await geoModel.updateInfrastructure(req.params.id, req.body);
+  if (!ok) return res.status(404).json({ error: 'Punto de infraestructura no encontrado' });
+  clearCache('infra:');
+  res.json({ id: Number(req.params.id) });
+});
+
+const deleteInfrastructure = handler(async (req, res) => {
+  const ok = await geoModel.deleteInfrastructure(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Punto de infraestructura no encontrado' });
+  clearCache('infra:');
+  res.json({ message: 'Punto de infraestructura dado de baja' });
+});
+
+const createPoliceStation = handler(async (req, res) => {
+  const id = await geoModel.createPoliceStation(req.body);
+  clearCache('police:');
+  res.status(201).json({ id });
+});
+
+const updatePoliceStation = handler(async (req, res) => {
+  const ok = await geoModel.updatePoliceStation(req.params.id, req.body);
+  if (!ok) return res.status(404).json({ error: 'Comisaría no encontrada' });
+  clearCache('police:');
+  res.json({ id: Number(req.params.id) });
+});
+
+const deletePoliceStation = handler(async (req, res) => {
+  const ok = await geoModel.deletePoliceStation(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Comisaría no encontrada' });
+  clearCache('police:');
+  res.json({ message: 'Comisaría dada de baja' });
+});
+
+module.exports = {
+  getProvinces, getPartidos, getLocalities, getPoliceStations, getIncidentTypes, getInfrastructure,
+  createInfrastructure, updateInfrastructure, deleteInfrastructure,
+  createPoliceStation, updatePoliceStation, deletePoliceStation,
+  clearCache,
+};

@@ -6,8 +6,8 @@ async function findAll(filters = {}, pagination = {}) {
 
   if (filters.user_id) { conditions.push('al.user_id = ?');    params.push(filters.user_id); }
   if (filters.action)  { conditions.push('al.action = ?');     params.push(filters.action); }
-  if (filters.dateFrom){ conditions.push('al.created_at >= ?');params.push(filters.dateFrom); }
-  if (filters.dateTo)  { conditions.push('al.created_at <= ?');params.push(filters.dateTo + ' 23:59:59'); }
+  if (filters.dateFrom){ conditions.push('al.created_at >= ?');params.push(filters.dateFrom.slice(0, 10)); }
+  if (filters.dateTo)  { conditions.push('al.created_at < DATE_ADD(?, INTERVAL 1 DAY)'); params.push(filters.dateTo.slice(0, 10)); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 

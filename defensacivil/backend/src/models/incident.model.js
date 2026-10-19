@@ -1,20 +1,63 @@
 const { v4: uuidv4 } = require('uuid');
-const { query, queryOne, execute } = require('../config/database');
+const { query, queryOne, execute, transaction } = require('../config/database');
 
-async function generateIncidentNumber() {
-  const year = new Date().getFullYear();
-  // INSERT ... ON DUPLICATE KEY UPDATE es atómico: incrementa y retorna
-  // el nuevo valor sin race condition aunque haya requests simultáneas.
+const CLOSED_STATUSES = ['CERRADO', 'CANCELADO'];
+
+const SELECT_INCIDENT = `
+  SELECT i.*, it.name AS type_name, it.icon AS type_icon, it.color_hex,
+         ist.name AS subtype_name,
+         p.name AS province_name, pa.name AS partido_name, l.name AS locality_name,
+         u.username AS reporter_username, u.full_name AS reporter_full_name
+  FROM incidents i
+  JOIN incident_types it ON it.id = i.incident_type_id
+  LEFT JOIN incident_subtypes ist ON ist.id = i.incident_subtype_id
+  LEFT JOIN provinces p   ON p.id = i.province_id
+  LEFT JOIN partidos pa   ON pa.id = i.partido_id
+  LEFT JOIN localities l  ON l.id = i.locality_id
+  JOIN users u            ON u.id = i.reported_by_user_id`;
+
+// Año en hora argentina (UTC-3), para que un incidente del 31/12 a las 22 h
+// no se numere con el año siguiente.
+function currentYear() {
+  return new Date(Date.now() - 3 * 3600 * 1000).getUTCFullYear();
+}
+
+// Numeración correlativa por año (DC-2026-000123). LAST_INSERT_ID(expr) deja el
+// valor asignado en la conexión, así dos altas simultáneas nunca reciben el mismo.
+async function nextIncidentNumber(conn) {
+  const year = currentYear();
   await execute(
-    `INSERT INTO incident_number_sequences (year, last_seq) VALUES (?, 1)
-     ON DUPLICATE KEY UPDATE last_seq = last_seq + 1`,
-    [year]
+    `INSERT INTO incident_number_sequences (year, last_seq) VALUES (?, LAST_INSERT_ID(1))
+     ON DUPLICATE KEY UPDATE last_seq = LAST_INSERT_ID(last_seq + 1)`,
+    [year], conn
   );
-  const seqRow = await queryOne(
-    'SELECT last_seq AS seq FROM incident_number_sequences WHERE year = ?',
-    [year]
+  const row = await queryOne('SELECT LAST_INSERT_ID() AS seq', [], conn);
+  return `DC-${year}-${String(row.seq).padStart(6, '0')}`;
+}
+
+// Escapa los comodines de LIKE: buscar "100%" no debe traer todo
+function likePattern(text) {
+  return `%${String(text).replace(/[\\%_]/g, '\\$&')}%`;
+}
+
+// Fechas de cierre que se completan solas al cambiar de estado
+function statusTimestamps(newStatus, incident) {
+  const parts = [];
+  if (newStatus === 'CONTROLADO' && !incident.controlled_at) parts.push('controlled_at = NOW()');
+  if (CLOSED_STATUSES.includes(newStatus) && !incident.closed_at) parts.push('closed_at = NOW()');
+  return parts;
+}
+
+async function addHistory(conn, incident, newStatus, userId, notes) {
+  await execute(
+    `INSERT INTO incident_status_history (incident_id, previous_status, new_status, changed_by_user_id, notes)
+     VALUES (?, ?, ?, ?, ?)`,
+    [incident.id, incident.status, newStatus, userId, notes || null], conn
   );
-  return `DC-${year}-${String(seqRow.seq).padStart(6, '0')}`;
+}
+
+async function lockIncident(conn, uuid) {
+  return queryOne('SELECT * FROM incidents WHERE uuid = ? AND is_deleted = 0 FOR UPDATE', [uuid], conn);
 }
 
 async function findAll(filters = {}, pagination = {}) {
@@ -28,39 +71,29 @@ async function findAll(filters = {}, pagination = {}) {
   if (filters.partido_id)       { conditions.push('i.partido_id = ?');         params.push(filters.partido_id); }
   if (filters.locality_id)      { conditions.push('i.locality_id = ?');        params.push(filters.locality_id); }
   if (filters.reported_by_user_id) { conditions.push('i.reported_by_user_id = ?'); params.push(filters.reported_by_user_id); }
-  if (filters.dateFrom)         { conditions.push('i.started_at >= ?');        params.push(filters.dateFrom); }
-  if (filters.dateTo)           { conditions.push('i.started_at <= ?');        params.push(filters.dateTo + ' 23:59:59'); }
+  if (filters.dateFrom)         { conditions.push('i.started_at >= ?');        params.push(filters.dateFrom.slice(0, 10)); }
+  if (filters.dateTo)           { conditions.push('i.started_at < DATE_ADD(?, INTERVAL 1 DAY)'); params.push(filters.dateTo.slice(0, 10)); }
   if (filters.search) {
-    conditions.push('(i.title LIKE ? OR i.description LIKE ? OR i.incident_number LIKE ?)');
-    const like = `%${filters.search}%`;
-    params.push(like, like, like);
+    conditions.push('(i.title LIKE ? OR i.description LIKE ? OR i.incident_number LIKE ? OR i.address LIKE ?)');
+    const like = likePattern(filters.search);
+    params.push(like, like, like, like);
   }
 
   const where = `WHERE ${conditions.join(' AND ')}`;
 
-  const countRow = await queryOne(
-    `SELECT COUNT(*) AS total FROM incidents i ${where}`, params
-  );
+  const countRow = await queryOne(`SELECT COUNT(*) AS total FROM incidents i ${where}`, params);
   const total = countRow.total;
 
-  const page  = Math.max(1, parseInt(pagination.page) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(pagination.limit) || 20));
+  const page   = Math.max(1, parseInt(pagination.page, 10) || 1);
+  const limit  = Math.min(100, Math.max(1, parseInt(pagination.limit, 10) || 20));
   const offset = (page - 1) * limit;
 
+  // limit y offset son enteros validados: se interpolan porque MySQL no
+  // acepta parámetros preparados en LIMIT con execute()
   const rows = await query(
-    `SELECT i.*, it.name AS type_name, it.icon AS type_icon, it.color_hex,
-            ist.name AS subtype_name,
-            p.name AS province_name, pa.name AS partido_name, l.name AS locality_name,
-            u.username AS reporter_username, u.full_name AS reporter_full_name
-     FROM incidents i
-     JOIN incident_types it ON it.id = i.incident_type_id
-     LEFT JOIN incident_subtypes ist ON ist.id = i.incident_subtype_id
-     LEFT JOIN provinces p   ON p.id = i.province_id
-     LEFT JOIN partidos pa   ON pa.id = i.partido_id
-     LEFT JOIN localities l  ON l.id = i.locality_id
-     JOIN users u            ON u.id = i.reported_by_user_id
+    `${SELECT_INCIDENT}
      ${where}
-     ORDER BY i.started_at DESC
+     ORDER BY i.started_at DESC, i.id DESC
      LIMIT ${limit} OFFSET ${offset}`,
     params
   );
@@ -69,25 +102,11 @@ async function findAll(filters = {}, pagination = {}) {
 }
 
 async function findByUuid(uuid) {
-  const incident = await queryOne(
-    `SELECT i.*, it.name AS type_name, it.icon AS type_icon, it.color_hex,
-            ist.name AS subtype_name,
-            p.name AS province_name, pa.name AS partido_name, l.name AS locality_name,
-            u.username AS reporter_username, u.full_name AS reporter_full_name
-     FROM incidents i
-     JOIN incident_types it ON it.id = i.incident_type_id
-     LEFT JOIN incident_subtypes ist ON ist.id = i.incident_subtype_id
-     LEFT JOIN provinces p   ON p.id = i.province_id
-     LEFT JOIN partidos pa   ON pa.id = i.partido_id
-     LEFT JOIN localities l  ON l.id = i.locality_id
-     JOIN users u            ON u.id = i.reported_by_user_id
-     WHERE i.uuid = ? AND i.is_deleted = 0`,
-    [uuid]
-  );
+  const incident = await queryOne(`${SELECT_INCIDENT} WHERE i.uuid = ? AND i.is_deleted = 0`, [uuid]);
   if (!incident) return null;
 
   incident.units = await query(
-    'SELECT * FROM incident_units WHERE incident_id = ? ORDER BY arrived_at ASC', [incident.id]
+    'SELECT * FROM incident_units WHERE incident_id = ? ORDER BY arrived_at ASC, id ASC', [incident.id]
   );
   incident.resources = await query(
     'SELECT * FROM incident_resources WHERE incident_id = ? ORDER BY id ASC', [incident.id]
@@ -107,9 +126,10 @@ async function findMapPoints(filters = {}) {
   if (filters.locality_id)      { conditions.push('i.locality_id = ?');        params.push(filters.locality_id); }
 
   return query(
-    `SELECT i.uuid, i.incident_number, i.title, i.latitude, i.longitude,
+    `SELECT i.uuid, i.incident_number, i.title, i.address, i.latitude, i.longitude,
             i.status, i.priority, i.started_at, i.incident_type_id,
-            it.name AS type_name, it.icon AS type_icon, it.color_hex
+            i.affected_persons_count, i.evacuated_count,
+            it.code AS type_code, it.name AS type_name, it.icon AS type_icon, it.color_hex
      FROM incidents i
      JOIN incident_types it ON it.id = i.incident_type_id
      WHERE ${conditions.join(' AND ')}
@@ -118,129 +138,84 @@ async function findMapPoints(filters = {}) {
   );
 }
 
-async function addNote(uuid, userId, { latitude, longitude, notes, status } = {}) {
-  const incident = await queryOne('SELECT * FROM incidents WHERE uuid = ? AND is_deleted = 0', [uuid]);
-  if (!incident) return null;
+async function create(data, userId) {
+  const uuid = uuidv4();
 
-  const newStatus   = status || incident.status;
-  const updateParts = [];
-  const updateVals  = [];
-
-  if (latitude  != null) { updateParts.push('latitude = ?');  updateVals.push(latitude); }
-  if (longitude != null) { updateParts.push('longitude = ?'); updateVals.push(longitude); }
-
-  if (status && status !== incident.status) {
-    updateParts.push('status = ?');
-    updateVals.push(status);
-    if (status === 'CONTROLADO' && !incident.controlled_at) updateParts.push('controlled_at = NOW()');
-    if ((status === 'CERRADO' || status === 'CANCELADO') && !incident.closed_at) updateParts.push('closed_at = NOW()');
-  }
-
-  if (updateParts.length) {
-    updateVals.push(uuid);
-    await query(`UPDATE incidents SET ${updateParts.join(', ')} WHERE uuid = ?`, updateVals);
-  }
-
-  if (notes || (status && status !== incident.status)) {
-    await query(
-      'INSERT INTO incident_status_history (incident_id, previous_status, new_status, changed_by_user_id, notes) VALUES (?, ?, ?, ?, ?)',
-      [incident.id, incident.status, newStatus, userId, notes || null]
+  await transaction(async conn => {
+    const incidentNumber = await nextIncidentNumber(conn);
+    const result = await execute(
+      `INSERT INTO incidents
+         (uuid, incident_number, incident_type_id, incident_subtype_id, title, description,
+          status, priority, province_id, partido_id, locality_id, address,
+          latitude, longitude, affected_persons_count, injured_count, deceased_count,
+          evacuated_count, reported_by_user_id, assigned_officer, notes)
+       VALUES (?, ?, ?, ?, ?, ?, 'RECIBIDO', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuid, incidentNumber,
+        data.incident_type_id, data.incident_subtype_id || null,
+        data.title, data.description,
+        data.priority || 'MEDIA',
+        data.province_id || null, data.partido_id || null, data.locality_id || null,
+        data.address || null,
+        data.latitude ?? null, data.longitude ?? null,
+        data.affected_persons_count || 0, data.injured_count || 0,
+        data.deceased_count || 0, data.evacuated_count || 0,
+        userId,
+        data.assigned_officer || null, data.notes || null,
+      ],
+      conn
     );
-  }
+    await addHistory(conn, { id: result.insertId, status: null }, 'RECIBIDO', userId, 'Incidente creado');
+  });
 
   return findByUuid(uuid);
 }
 
-async function create(data, userId) {
-  const uuid            = uuidv4();
-  const incident_number = await generateIncidentNumber();
-
-  await query(
-    `INSERT INTO incidents
-       (uuid, incident_number, incident_type_id, incident_subtype_id, title, description,
-        status, priority, province_id, partido_id, locality_id, address,
-        latitude, longitude, affected_persons_count, injured_count, deceased_count,
-        evacuated_count, reported_by_user_id, assigned_officer, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      uuid, incident_number,
-      data.incident_type_id, data.incident_subtype_id || null,
-      data.title, data.description,
-      data.status || 'RECIBIDO', data.priority || 'MEDIA',
-      data.province_id || null, data.partido_id || null, data.locality_id || null,
-      data.address || null,
-      data.latitude || null, data.longitude || null,
-      data.affected_persons_count || 0, data.injured_count || 0,
-      data.deceased_count || 0, data.evacuated_count || 0,
-      userId,
-      data.assigned_officer || null, data.notes || null,
-    ]
-  );
-
-  const incident = await findByUuid(uuid);
-
-  // Estado inicial en historial
-  await query(
-    'INSERT INTO incident_status_history (incident_id, new_status, changed_by_user_id, notes) VALUES (?, ?, ?, ?)',
-    [incident.id, incident.status, userId, 'Incidente creado']
-  );
-
-  return incident;
-}
+const UPDATABLE = [
+  'incident_type_id', 'incident_subtype_id', 'title', 'description', 'status', 'priority',
+  'province_id', 'partido_id', 'locality_id', 'address', 'latitude', 'longitude',
+  'affected_persons_count', 'injured_count', 'deceased_count', 'evacuated_count',
+  'assigned_officer', 'notes',
+];
 
 async function update(uuid, data, userId, userRole) {
-  const incident = await queryOne('SELECT * FROM incidents WHERE uuid = ? AND is_deleted = 0', [uuid]);
-  if (!incident) return null;
+  const found = await transaction(async conn => {
+    const incident = await lockIncident(conn, uuid);
+    if (!incident) return false;
 
-  if (userRole === 'medium' && incident.reported_by_user_id !== userId) {
-    const err = new Error('Solo puede editar sus propios incidentes');
-    err.status = 403;
-    throw err;
-  }
-
-  const allowed = [
-    'incident_type_id', 'incident_subtype_id', 'title', 'description', 'status', 'priority',
-    'province_id', 'partido_id', 'locality_id', 'address', 'latitude', 'longitude',
-    'affected_persons_count', 'injured_count', 'deceased_count', 'evacuated_count',
-    'assigned_officer', 'notes', 'controlled_at', 'closed_at',
-  ];
-
-  const updates = [];
-  const values  = [];
-
-  for (const key of allowed) {
-    if (data[key] !== undefined) {
-      updates.push(`${key} = ?`);
-      values.push(data[key] === '' ? null : data[key]);
+    if (userRole === 'medium' && incident.reported_by_user_id !== userId) {
+      const err = new Error('Solo puede editar sus propios incidentes');
+      err.status = 403;
+      throw err;
     }
-  }
 
-  if (!updates.length) return findByUuid(uuid);
+    const updates = [];
+    const values  = [];
+    for (const key of UPDATABLE) {
+      if (data[key] !== undefined) {
+        updates.push(`${key} = ?`);
+        values.push(data[key] === '' ? null : data[key]);
+      }
+    }
+    if (!updates.length) return true;
 
-  // Auto-set timestamps for status changes
-  if (data.status === 'CONTROLADO' && !incident.controlled_at) {
-    updates.push('controlled_at = NOW()');
-  }
-  if ((data.status === 'CERRADO' || data.status === 'CANCELADO') && !incident.closed_at) {
-    updates.push('closed_at = NOW()');
-  }
+    const statusChanged = data.status && data.status !== incident.status;
+    if (statusChanged) updates.push(...statusTimestamps(data.status, incident));
 
-  values.push(uuid);
-  await query(`UPDATE incidents SET ${updates.join(', ')} WHERE uuid = ?`, values);
+    values.push(incident.id);
+    await execute(`UPDATE incidents SET ${updates.join(', ')} WHERE id = ?`, values, conn);
 
-  return findByUuid(uuid);
+    // Todo cambio de estado queda en el historial, venga de donde venga
+    if (statusChanged) await addHistory(conn, incident, data.status, userId, 'Cambio de estado al editar');
+    return true;
+  });
+
+  return found ? findByUuid(uuid) : null;
 }
 
-async function softDelete(uuid, userId, userRole) {
-  const incident = await queryOne('SELECT * FROM incidents WHERE uuid = ? AND is_deleted = 0', [uuid]);
-  if (!incident) return false;
-  if (userRole !== 'admin') {
-    const err = new Error('Solo administradores pueden eliminar incidentes');
-    err.status = 403;
-    throw err;
-  }
-  await query('UPDATE incidents SET is_deleted = 1 WHERE uuid = ?', [uuid]);
-  return true;
+async function softDelete(uuid) {
+  const result = await execute('UPDATE incidents SET is_deleted = 1 WHERE uuid = ? AND is_deleted = 0', [uuid]);
+  return result.affectedRows > 0;
 }
 
 async function addUnit(incidentUuid, unitData) {
@@ -252,7 +227,7 @@ async function addUnit(incidentUuid, unitData) {
     [
       incident.id, unitData.unit_name, unitData.unit_type,
       unitData.unit_number || null, unitData.personnel_count || 0,
-      unitData.arrived_at || null, unitData.notes || null,
+      unitData.arrived_at ? new Date(unitData.arrived_at) : null, unitData.notes || null,
     ]
   );
   return queryOne('SELECT * FROM incident_units WHERE id = ?', [result.insertId]);
@@ -287,57 +262,109 @@ async function removeResource(incidentUuid, resourceId) {
 }
 
 async function updateStatus(uuid, newStatus, userId, notes) {
-  const incident = await queryOne('SELECT * FROM incidents WHERE uuid = ? AND is_deleted = 0', [uuid]);
-  if (!incident) return null;
+  const found = await transaction(async conn => {
+    const incident = await lockIncident(conn, uuid);
+    if (!incident) return false;
 
-  const updates = ['status = ?'];
-  const vals    = [newStatus];
+    const updates = ['status = ?', ...statusTimestamps(newStatus, incident)];
+    await execute(`UPDATE incidents SET ${updates.join(', ')} WHERE id = ?`, [newStatus, incident.id], conn);
+    await addHistory(conn, incident, newStatus, userId, notes);
+    return true;
+  });
+  return found ? findByUuid(uuid) : null;
+}
 
-  if (newStatus === 'CONTROLADO' && !incident.controlled_at) { updates.push('controlled_at = NOW()'); }
-  if ((newStatus === 'CERRADO' || newStatus === 'CANCELADO') && !incident.closed_at) { updates.push('closed_at = NOW()'); }
+// Nota de campo: el chofer informa novedades, cambia el estado o corrige la ubicación
+async function addNote(uuid, userId, { latitude, longitude, notes, status } = {}) {
+  const found = await transaction(async conn => {
+    const incident = await lockIncident(conn, uuid);
+    if (!incident) return false;
 
-  vals.push(uuid);
-  await query(`UPDATE incidents SET ${updates.join(', ')} WHERE uuid = ?`, vals);
+    const statusChanged = status && status !== incident.status;
+    const updates = [];
+    const values  = [];
 
-  await query(
-    'INSERT INTO incident_status_history (incident_id, previous_status, new_status, changed_by_user_id, notes) VALUES (?, ?, ?, ?, ?)',
-    [incident.id, incident.status, newStatus, userId, notes || null]
-  );
+    if (latitude != null && longitude != null) {
+      updates.push('latitude = ?', 'longitude = ?');
+      values.push(latitude, longitude);
+    }
+    if (statusChanged) {
+      updates.push('status = ?', ...statusTimestamps(status, incident));
+      values.push(status);
+    }
+    if (updates.length) {
+      values.push(incident.id);
+      await execute(`UPDATE incidents SET ${updates.join(', ')} WHERE id = ?`, values, conn);
+    }
 
-  return findByUuid(uuid);
+    if (notes || statusChanged) {
+      await addHistory(conn, incident, statusChanged ? status : incident.status, userId, notes);
+    }
+    return true;
+  });
+  return found ? findByUuid(uuid) : null;
 }
 
 async function getStatusHistory(uuid) {
-  const incident = await queryOne('SELECT id FROM incidents WHERE uuid = ?', [uuid]);
+  const incident = await queryOne('SELECT id FROM incidents WHERE uuid = ? AND is_deleted = 0', [uuid]);
   if (!incident) return null;
   return query(
     `SELECT sh.*, u.username, u.full_name
      FROM incident_status_history sh
-     JOIN users u ON u.id = sh.changed_by_user_id
+     LEFT JOIN users u ON u.id = sh.changed_by_user_id
      WHERE sh.incident_id = ?
-     ORDER BY sh.changed_at ASC`,
+     ORDER BY sh.changed_at ASC, sh.id ASC`,
     [incident.id]
   );
 }
 
+// Completa con cero los días sin incidentes para que la serie sea continua
+function fillDays(rows, days) {
+  const counts = new Map(rows.map(r => [r.day, r.count]));
+  const todayAr = new Date(Date.now() - 3 * 3600 * 1000);
+  const result = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(todayAr);
+    d.setUTCDate(d.getUTCDate() - i);
+    const day = d.toISOString().slice(0, 10);
+    result.push({ day, count: counts.get(day) || 0 });
+  }
+  return result;
+}
+
 async function getDashboardStats() {
-  const today = new Date().toISOString().split('T')[0];
+  const open = `status NOT IN ('CERRADO','CANCELADO')`;
   const [
-    todayRows, openRows, criticalRows, monthRows, byTypeRows
+    todayRow, openRow, criticalRow, monthRow, peopleRow, byType, byStatus, byDay,
   ] = await Promise.all([
-    query(`SELECT COUNT(*) AS count FROM incidents WHERE DATE(started_at) = ? AND is_deleted = 0`, [today]),
-    query(`SELECT COUNT(*) AS count FROM incidents WHERE status NOT IN ('CERRADO','CANCELADO') AND is_deleted = 0`),
-    query(`SELECT COUNT(*) AS count FROM incidents WHERE priority = 'CRITICA' AND status NOT IN ('CERRADO','CANCELADO') AND is_deleted = 0`),
-    query(`SELECT COUNT(*) AS count FROM incidents WHERE YEAR(started_at) = YEAR(NOW()) AND MONTH(started_at) = MONTH(NOW()) AND is_deleted = 0`),
-    query(`SELECT it.name, it.color_hex, it.icon, COUNT(*) AS count FROM incidents i JOIN incident_types it ON it.id = i.incident_type_id WHERE i.is_deleted = 0 GROUP BY it.id ORDER BY count DESC`),
+    queryOne('SELECT COUNT(*) AS count FROM incidents WHERE is_deleted = 0 AND started_at >= CURDATE()'),
+    queryOne(`SELECT COUNT(*) AS count FROM incidents WHERE is_deleted = 0 AND ${open}`),
+    queryOne(`SELECT COUNT(*) AS count FROM incidents WHERE is_deleted = 0 AND priority = 'CRITICA' AND ${open}`),
+    queryOne(`SELECT COUNT(*) AS count FROM incidents WHERE is_deleted = 0 AND started_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`),
+    queryOne(`SELECT COALESCE(SUM(affected_persons_count), 0) AS affected, COALESCE(SUM(evacuated_count), 0) AS evacuated
+              FROM incidents WHERE is_deleted = 0 AND ${open}`),
+    query(`SELECT it.id, it.code, it.name, it.color_hex, it.icon, COUNT(*) AS count
+           FROM incidents i JOIN incident_types it ON it.id = i.incident_type_id
+           WHERE i.is_deleted = 0
+           GROUP BY it.id, it.code, it.name, it.color_hex, it.icon
+           ORDER BY count DESC, it.name`),
+    query(`SELECT status, COUNT(*) AS count FROM incidents WHERE is_deleted = 0 GROUP BY status`),
+    query(`SELECT DATE_FORMAT(started_at, '%Y-%m-%d') AS day, COUNT(*) AS count
+           FROM incidents
+           WHERE is_deleted = 0 AND started_at >= CURDATE() - INTERVAL 13 DAY
+           GROUP BY day ORDER BY day`),
   ]);
 
   return {
-    today:    todayRows[0].count,
-    open:     openRows[0].count,
-    critical: criticalRows[0].count,
-    month:    monthRows[0].count,
-    byType:   byTypeRows,
+    today:     todayRow.count,
+    open:      openRow.count,
+    critical:  criticalRow.count,
+    month:     monthRow.count,
+    affected:  Number(peopleRow.affected),
+    evacuated: Number(peopleRow.evacuated),
+    byType,
+    byStatus,
+    byDay:     fillDays(byDay, 14),
   };
 }
 
@@ -345,4 +372,5 @@ module.exports = {
   findAll, findByUuid, findMapPoints, create, update, softDelete,
   addUnit, removeUnit, addResource, removeResource,
   updateStatus, getStatusHistory, getDashboardStats, addNote,
+  likePattern,
 };

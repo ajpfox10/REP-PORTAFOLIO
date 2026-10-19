@@ -1,116 +1,128 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Siren, Activity, AlertTriangle, CalendarDays, Users, Home, Plus, ArrowRight } from 'lucide-react';
 import { incidentsApi } from '../api/incidents.api';
+import useAuthStore from '../store/authStore';
 import { StatusBadge, PriorityBadge } from '../components/common/Badge';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { PageHeader, Card, EmptyState, Loading, Alert } from '../components/common/ui';
+import Button from '../components/common/Button';
+import DailyBars from '../components/charts/DailyBars';
+import { TypeChip } from '../lib/icons';
+import { STATUSES, STATUS_LABELS, ACTIVE_STATUSES } from '../lib/constants';
+import { fmtAgo, fmtNumber, apiError } from '../lib/format';
 
-function StatCard({ label, value, icon, color }) {
+function Stat({ label, value, icon: Icon, foot, tone }) {
   return (
-    <div style={{
-      background:'#fff', borderRadius:'var(--radius)', padding:'1.25rem',
-      boxShadow:'var(--shadow)', borderLeft:`4px solid ${color}`,
-      display:'flex', alignItems:'center', gap:'1rem',
-    }}>
-      <span style={{ fontSize:'2rem' }}>{icon}</span>
-      <div>
-        <div style={{ fontSize:'2rem', fontWeight:700, color, lineHeight:1 }}>{value}</div>
-        <div style={{ fontSize:'0.8rem', color:'#64748b', marginTop:'0.25rem' }}>{label}</div>
-      </div>
+    <div className={`card stat${tone ? ` ${tone}` : ''}`}>
+      <div className="stat-top">{label}<span className="stat-icon"><Icon size={17} /></span></div>
+      <div className="stat-value">{fmtNumber(value)}</div>
+      {foot && <div className="stat-foot">{foot}</div>}
     </div>
   );
 }
 
 export default function Dashboard() {
-  const [stats, setStats]       = useState(null);
-  const [recent, setRecent]     = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
+  const canCreate = useAuthStore(s => s.hasRole('admin', 'medium', 'telefonista'));
+  const [stats, setStats] = useState(null);
+  const [active, setActive] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    Promise.all([
-      incidentsApi.getDashboard(),
-      incidentsApi.getAll({ limit: 10, page: 1 }),
-    ]).then(([s, r]) => {
-      setStats(s.data);
-      setRecent(r.data.data);
-    }).catch(err => {
-      setError(err.response?.data?.error || 'Error al cargar el dashboard');
-    }).finally(() => setLoading(false));
+    Promise.all([incidentsApi.getDashboard(), incidentsApi.getMapPoints({})])
+      .then(([s, points]) => {
+        setStats(s.data);
+        setActive(points.data.filter(p => ACTIVE_STATUSES.includes(p.status)));
+      })
+      .catch(err => setError(apiError(err, 'No se pudo cargar el tablero')));
   }, []);
 
-  if (loading) return <p style={{ color:'#64748b' }}>Cargando...</p>;
-  if (error)   return <p style={{ color:'#dc2626', padding:'1rem' }}>⚠️ {error}</p>;
+  if (error) return <div className="page"><Alert type="error">{error}</Alert></div>;
+  if (!stats) return <div className="page"><Loading /></div>;
+
+  const statusCounts = Object.fromEntries(stats.byStatus.map(s => [s.status, s.count]));
+  const totalStatus = stats.byStatus.reduce((a, s) => a + s.count, 0);
+  const maxType = Math.max(1, ...stats.byType.map(t => t.count));
+  const last14 = stats.byDay.reduce((a, d) => a + d.count, 0);
+  const priorityOrder = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAJA: 3 };
+  const urgent = [...active].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority] || new Date(b.started_at) - new Date(a.started_at)).slice(0, 7);
 
   return (
-    <div>
-      <h1 style={{ fontSize:'1.5rem', fontWeight:700, marginBottom:'1.5rem' }}>Dashboard</h1>
+    <div className="page">
+      <PageHeader
+        title="Tablero"
+        subtitle="Situación general de los incidentes"
+        actions={canCreate && <Button icon={Plus} to="/incidents/new">Nuevo incidente</Button>}
+      />
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'1rem', marginBottom:'2rem' }}>
-        <StatCard label="Incidentes hoy"     value={stats?.today}    icon="🚨" color="#dc2626" />
-        <StatCard label="Abiertos"           value={stats?.open}     icon="⚠️" color="#d97706" />
-        <StatCard label="Críticos activos"   value={stats?.critical} icon="🔴" color="#7c3aed" />
-        <StatCard label="Este mes"           value={stats?.month}    icon="📅" color="#1d4ed8" />
+      <div className="grid grid-stats" style={{ marginBottom: 16 }}>
+        <Stat label="Incidentes hoy" value={stats.today} icon={Siren} foot={`${last14} en los últimos 14 días`} />
+        <Stat label="Activos" value={stats.open} icon={Activity} foot="Sin cerrar ni cancelar" />
+        <Stat label="Críticos activos" value={stats.critical} icon={AlertTriangle} tone={stats.critical ? 'alert-critical' : ''} foot="Prioridad crítica abierta" />
+        <Stat label="Este mes" value={stats.month} icon={CalendarDays} />
+        <Stat label="Personas afectadas" value={stats.affected} icon={Users} foot="En incidentes activos" />
+        <Stat label="Evacuados" value={stats.evacuated} icon={Home} foot="En incidentes activos" />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'1.5rem' }}>
-        {/* Recent incidents */}
-        <div style={{ background:'#fff', borderRadius:'var(--radius)', boxShadow:'var(--shadow)', overflow:'hidden' }}>
-          <div style={{ padding:'1rem 1.25rem', borderBottom:'1px solid var(--color-border)', fontWeight:600 }}>
-            Últimos Incidentes
-          </div>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.875rem' }}>
-            <thead>
-              <tr style={{ background:'#f8fafc' }}>
-                {['Número', 'Tipo', 'Estado', 'Prioridad', 'Fecha'].map(h => (
-                  <th key={h} style={{ padding:'0.625rem 0.875rem', textAlign:'left', color:'#64748b', fontWeight:500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map(inc => (
-                <tr key={inc.uuid} style={{ borderTop:'1px solid var(--color-border)' }}>
-                  <td style={{ padding:'0.625rem 0.875rem' }}>
-                    <Link to={`/incidents/${inc.uuid}`} style={{ color:'#1d4ed8', fontWeight:500 }}>
-                      {inc.incident_number}
-                    </Link>
-                  </td>
-                  <td style={{ padding:'0.625rem 0.875rem' }}>
-                    <span style={{ display:'flex', alignItems:'center', gap:'0.375rem' }}>
-                      {inc.type_icon && <span>{inc.type_icon}</span>}
-                      {inc.type_name}
-                    </span>
-                  </td>
-                  <td style={{ padding:'0.625rem 0.875rem' }}><StatusBadge status={inc.status} /></td>
-                  <td style={{ padding:'0.625rem 0.875rem' }}><PriorityBadge priority={inc.priority} /></td>
-                  <td style={{ padding:'0.625rem 0.875rem', color:'#64748b' }}>
-                    {format(new Date(inc.started_at), 'dd/MM HH:mm', { locale: es })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ padding:'0.75rem 1.25rem', borderTop:'1px solid var(--color-border)' }}>
-            <Link to="/incidents" style={{ color:'#1d4ed8', fontSize:'0.875rem' }}>Ver todos →</Link>
-          </div>
+      <div className="grid grid-dash">
+        <div className="stack">
+          <Card title="Incidentes por día" hint="Últimos 14 días">
+            <DailyBars data={stats.byDay} />
+          </Card>
+
+          <Card
+            title="Activos que requieren atención"
+            hint="Ordenados por prioridad"
+            bodyClass={null}
+            actions={<Link to="/incidents" className="row" style={{ fontSize: 13, gap: 4 }}>Ver todos <ArrowRight size={14} /></Link>}
+          >
+            {urgent.length === 0 ? (
+              <EmptyState title="Sin incidentes activos">No hay emergencias abiertas en este momento.</EmptyState>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {urgent.map(p => (
+                      <tr key={p.uuid}>
+                        <td style={{ width: 40 }}><TypeChip icon={p.type_icon} color={p.color_hex} small /></td>
+                        <td className="title-cell">
+                          <Link to={`/incidents/${p.uuid}`}><strong>{p.title}</strong></Link>
+                          <span>{p.incident_number} · {p.type_name}</span>
+                        </td>
+                        <td className="nowrap"><PriorityBadge priority={p.priority} /></td>
+                        <td className="nowrap"><StatusBadge status={p.status} /></td>
+                        <td className="nowrap muted" style={{ fontSize: 12.5 }}>{fmtAgo(p.started_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
         </div>
 
-        {/* By type */}
-        <div style={{ background:'#fff', borderRadius:'var(--radius)', boxShadow:'var(--shadow)' }}>
-          <div style={{ padding:'1rem 1.25rem', borderBottom:'1px solid var(--color-border)', fontWeight:600 }}>
-            Por Tipo
-          </div>
-          <div style={{ padding:'1rem' }}>
-            {stats?.byType?.map(t => (
-              <div key={t.name} style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
-                <div style={{
-                  width:12, height:12, borderRadius:'50%', background: t.color_hex, flexShrink:0,
-                }} />
-                <span style={{ flex:1, fontSize:'0.8125rem' }}>{t.name}</span>
-                <span style={{ fontWeight:600, color:'#1e293b' }}>{t.count}</span>
+        <div className="stack">
+          <Card title="Por estado" hint={`${totalStatus} incidentes registrados`}>
+            <div className="status-strip" role="img" aria-label="Distribución por estado">
+              {STATUSES.filter(s => statusCounts[s]).map(s => (
+                <span key={s} className={`st-${s}`} style={{ flex: statusCounts[s] }} title={`${STATUS_LABELS[s]}: ${statusCounts[s]}`} />
+              ))}
+            </div>
+            <div className="legend">
+              {STATUSES.map(s => (
+                <span key={s} className={`st-${s}`}><i />{STATUS_LABELS[s]} <strong className="tabular">{statusCounts[s] || 0}</strong></span>
+              ))}
+            </div>
+          </Card>
+
+          <Card title="Por tipo" hint="Todos los incidentes">
+            {stats.byType.length === 0 ? <EmptyState title="Sin datos" /> : stats.byType.map(t => (
+              <div className="hbar" key={t.id}>
+                <span className="hbar-label"><TypeChip icon={t.icon} color={t.color_hex} small /><span className="truncate">{t.name}</span></span>
+                <span className="hbar-value">{t.count}</span>
+                <div className="hbar-track"><div className="hbar-fill" style={{ width: `${(t.count / maxType) * 100}%` }} /></div>
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       </div>
     </div>
