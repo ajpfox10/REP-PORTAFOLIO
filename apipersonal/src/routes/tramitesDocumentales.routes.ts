@@ -887,9 +887,11 @@ async function registerAgentExpediente(
   const caratula = `Tramite documental ${opts.tramite}`;
   const [result] = await sequelize.query(
     `INSERT INTO expedientes
-       (dni, numero, caratula, fecha, estado, created_by, created_at)
+       (dni, numero, anio, caratula, fecha, estado, created_by, created_at)
      VALUES
-       (:dni, :numero, :caratula, :fecha, :estado, :createdBy, :createdAt)`,
+       (:dni, :numero,
+        COALESCE(CAST(REGEXP_SUBSTR(:numero, '(?<![0-9])(19|20)[0-9]{2}(?![0-9])') AS UNSIGNED), YEAR(:fecha)),
+        :caratula, :fecha, :estado, :createdBy, :createdAt)`,
     {
       replacements: {
         dni: opts.dni,

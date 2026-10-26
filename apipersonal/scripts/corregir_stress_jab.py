@@ -22,6 +22,7 @@ Uso:
   python corregir_stress_jab.py                    # toda la cola pendiente
 """
 import argparse
+import os
 import sys
 import time
 
@@ -172,6 +173,58 @@ def _wm_down(n):
         time.sleep(0.09)
 
 
+def _wm_up(n):
+    """Sube n registros con la flecha ↑ (tecla extendida, igual que _wm_down)."""
+    import win32api, win32con
+    hwnd = R._hwnd_siape()
+    if not hwnd:
+        return
+    scan = 0x48
+    lp_down = (scan << 16) | 1 | (1 << 24)
+    lp_up = (scan << 16) | 1 | (1 << 24) | (1 << 30) | (1 << 31)
+    for _ in range(n):
+        win32api.PostMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_UP, lp_down)
+        time.sleep(0.04)
+        win32api.PostMessage(hwnd, win32con.WM_KEYUP, win32con.VK_UP, lp_up)
+        time.sleep(0.09)
+
+
+FILAS_VISIBLES = 15   # la grilla de TA muestra 15 registros
+
+
+def quitar_acentos(t):
+    import unicodedata
+    return ''.join(c for c in unicodedata.normalize('NFD', t or '') if unicodedata.category(c) != 'Mn')
+
+
+def _ir_al_final(frame, filas):
+    """Persona con mas de 15 registros: clic de ancla en Año de la fila 1 y ↓ hasta
+    pasar el ultimo (sale 'Ultimo Dato', se cierra). La grilla queda desplazada con el
+    ULTIMO registro como actual (abajo de todo). Devuelve la grilla releida."""
+    R._frente_liviano()
+    if filas and filas[0].get("el_anio"):
+        R._click(filas[0]["el_anio"], simulate=True)
+        time.sleep(PAUSA_CORTA)
+    # Boton |> (ultimo registro) de la barra: va al ultimo SIN abrir un registro nuevo.
+    # Con flechas, al pasarse de 'Ultimo Dato' Forms abria uno en blanco y el guardado
+    # fallaba ('No puede escribir'). En la barra (orden x) es el 2do despues de 'Down'
+    # (los JAB lo llaman ' Save ', mal rotulado). Probado en captura 21/10 con KADO.
+    btns = []
+    for el, d, info in F._jab_walk(max_depth=12, max_segundos=20):
+        if (info.get("role") or "") == "push button":
+            bb = info.get("bounds") or {}
+            if (bb.get("y") or 999) < 80:
+                btns.append((bb.get("x") or 0, (info.get("name") or "").strip(), el))
+    btns.sort(key=lambda t: t[0])
+    i_down = next((i for i, t in enumerate(btns) if t[1] == "Down"), None)
+    if i_down is None or i_down + 2 >= len(btns):
+        raise RuntimeError("no encuentro el boton 'ultimo registro' en la barra")
+    R._click(btns[i_down + 2][2])
+    time.sleep(1.5)
+    R.cerrar_modales(max_vueltas=2)
+    return _leer_grilla(R._find_frame(R.FRAME_TA, timeout=8) or frame)
+
+
 def _corregir_una_fila(apellido, anio, quiere_fn, valor):
     """Abre TA, consulta la persona, ubica la fila objetivo, NAVEGA hasta ella
     bajando registros desde la PRIMERA fila (clic confiable en la fila de arriba +
@@ -187,24 +240,44 @@ def _corregir_una_fila(apellido, anio, quiere_fn, valor):
     if not filas:
         return "saltado", "grilla vacia tras consultar"
     idx = next((i for i, f in enumerate(filas) if quiere_fn(f)), None)
-    if idx is None:
-        return "saltado", "no encuentro la fila objetivo en la grilla"
-    R._frente_liviano()
-    # 1) foco en la grilla: clic en la PRIMERA fila (arriba -> clic confiable, con la
-    #    sesión RDP CONECTADA). NO se tocan filas profundas: eso selecciona la fila
-    #    entera y devuelve el cursor a la fila 1.
-    if filas[0].get("el_anio"):
-        R._click(filas[0]["el_anio"], simulate=True)
+    if idx is None and len(filas) >= FILAS_VISIBLES:
+        # mas registros que los visibles: voy al final (grilla desplazada, el actual es
+        # el ultimo = la ultima fila visible) y SUBO hasta el objetivo
+        filas = _ir_al_final(frame, filas)
+        idx = next((i for i, f in enumerate(filas) if quiere_fn(f)), None)
+        if idx is None:
+            return "saltado", "no encuentro la fila objetivo ni yendo al final de la grilla"
+        log(f"   grilla en el ultimo registro: objetivo en fila visible {idx}/{len(filas) - 1}")
+        # mismo metodo que anda en la vista normal, pero sobre la vista DESPLAZADA:
+        # clic de ancla en Año de la PRIMERA fila visible + ↓ idx (nunca pasa del final)
+        R._frente_liviano()
+        if filas[0].get("el_anio"):
+            R._click(filas[0]["el_anio"], simulate=True)
+            time.sleep(PAUSA_CORTA)
+        _wm_down(idx)
         time.sleep(PAUSA_CORTA)
-    # 2) BAJO idx registros con ↓ -> el objetivo es el REGISTRO ACTUAL (esto anda)
-    _wm_down(idx)
-    time.sleep(PAUSA_CORTA)
+        time.sleep(PAUSA_CORTA)
+    elif idx is None:
+        return "saltado", "no encuentro la fila objetivo en la grilla"
+    else:
+        R._frente_liviano()
+        # 1) foco en la grilla: clic en la PRIMERA fila (arriba -> clic confiable, con la
+        #    sesión RDP CONECTADA). NO se tocan filas profundas: eso selecciona la fila
+        #    entera y devuelve el cursor a la fila 1.
+        if filas[0].get("el_anio"):
+            R._click(filas[0]["el_anio"], simulate=True)
+            time.sleep(PAUSA_CORTA)
+        # 2) BAJO idx registros con ↓ -> el objetivo es el REGISTRO ACTUAL (esto anda)
+        _wm_down(idx)
+        time.sleep(PAUSA_CORTA)
     # 3) "paso a Días" SOLO por teclado. El nº de TABs DEPENDE del Legajo: si tiene
     #    número es read-only (NO es tab-stop) -> Días a 4 TABs; si está vacío es
     #    editable (tab-stop) -> Días a 5 TABs. (Dato del usuario: "te pasás cuando el
     #    legajo tiene número".) Sin clics profundos.
-    leg_target = str(filas[idx].get("legajo", "")).strip()
-    ntabs = 4 if leg_target else 5
+    # 21/10 (visto en captura): el clic de ancla es en la celda AÑO y la ↓ conserva la
+    # columna -> el cursor YA está en Año de la fila objetivo: 1 TAB = C.Días. Con 4 TABs
+    # se pasaba de la fila ("Último Dato") y no escribía en ningún lado.
+    ntabs = int(os.environ.get("CORRECTOR_TABS", "1"))
     for _ in range(ntabs):
         R._wm_tab()
     # 4) reemplazo el valor: borro con Home+Delete (hacia adelante, sin cascada) y tipeo
@@ -257,6 +330,12 @@ def corregir_uno(dni, anio, apellido, licencia, dias_actual, dias_correcto):
             return None
 
     cand = [f for f in filas if es_target(f)]
+    if len(filas) >= FILAS_VISIBLES:
+        # puede haber mas registros fuera de la vista. La grilla viene ordenada por año
+        # (las del año a corregir quedan al final): cuento las del FINAL de la grilla.
+        fin = _ir_al_final(frame, filas)
+        cand = [f for f in fin if es_target(f)]
+        log(f"   grilla larga: {len(cand)} fila(s) {anio} AC al final de la grilla")
     R._recuperar()                              # cierro este TA de LECTURA (no toqué nada)
 
     if not cand:
@@ -278,6 +357,13 @@ def corregir_uno(dni, anio, apellido, licencia, dias_actual, dias_correcto):
     nonzero = [f for f in cand if (diaint(f) or 0) != 0]
     if not nonzero:
         return "corregido", f"ya ok (duplicada, {len(cand)} filas en 0)"
+    # 21/10: 0 = ya se la tomó. Solo se pone en 0 si hay UNA fila con días y al menos
+    # una en 0 (la que se tomó); cualquier otra combinación se revisa a mano.
+    if len(nonzero) != 1 or len(cand) - len(nonzero) < 1:
+        return "saltado", (f"filas 2025 = {[diaint(f) for f in cand]}: no es 1 con días + 0 -> "
+                           "no toco, revisar")
+    if diaint(nonzero[0]) != dias_actual:
+        return "saltado", f"la fila con días tiene {diaint(nonzero[0])} (esperaba {dias_actual}) -> no toco"
     hechos = 0
     for _ in nonzero:
         est, mot = _corregir_una_fila(

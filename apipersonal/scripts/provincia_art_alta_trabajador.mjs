@@ -231,7 +231,7 @@ async function loadQueueItem(conn, queueId, dniArg) {
        loc.provincia_nombre AS provincia_nombre,
        loc.provincia_id AS provincia_id,
        sec.nombre AS sector_nombre,
-       srv.nombre AS servicio_nombre
+       COALESCE(srv.nombre, srv2.nombre) AS servicio_nombre
      FROM art_alta_queue q
      JOIN agentes a ON a.id = q.agente_id
      JOIN personal p ON p.dni = a.dni AND p.deleted_at IS NULL
@@ -263,6 +263,12 @@ async function loadQueueItem(conn, queueId, dniArg) {
      ) asec ON asec.dni = a.dni
      LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
      LEFT JOIN sectores sec ON sec.id = asec.sector_id AND sec.deleted_at IS NULL
+     -- sin servicio vigente: el último cargado (aunque esté cerrado) sirve de sector
+     LEFT JOIN (
+       SELECT dni, MAX(id) AS id FROM agentes_servicios WHERE deleted_at IS NULL GROUP BY dni
+     ) ags2u ON ags2u.dni = a.dni
+     LEFT JOIN agentes_servicios ags2 ON ags2.id = ags2u.id
+     LEFT JOIN servicios srv2 ON srv2.id = ags2.servicio_id AND srv2.deleted_at IS NULL
      WHERE ${where}
      LIMIT 1`,
     [value]
@@ -298,7 +304,7 @@ async function loadQueueItem(conn, queueId, dniArg) {
        loc.provincia_nombre AS provincia_nombre,
        loc.provincia_id AS provincia_id,
          sec.nombre AS sector_nombre,
-         srv.nombre AS servicio_nombre
+         COALESCE(srv.nombre, srv2.nombre) AS servicio_nombre
        FROM agentes a
        JOIN personal p ON p.dni = a.dni AND p.deleted_at IS NULL
        LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
@@ -329,6 +335,12 @@ async function loadQueueItem(conn, queueId, dniArg) {
        ) asec ON asec.dni = a.dni
        LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
        LEFT JOIN sectores sec ON sec.id = asec.sector_id AND sec.deleted_at IS NULL
+       -- sin servicio vigente: el último cargado (aunque esté cerrado) sirve de sector
+       LEFT JOIN (
+         SELECT dni, MAX(id) AS id FROM agentes_servicios WHERE deleted_at IS NULL GROUP BY dni
+       ) ags2u ON ags2u.dni = a.dni
+       LEFT JOIN agentes_servicios ags2 ON ags2.id = ags2u.id
+       LEFT JOIN servicios srv2 ON srv2.id = ags2.servicio_id AND srv2.deleted_at IS NULL
        WHERE a.dni = ?
          AND a.deleted_at IS NULL
        ORDER BY a.id DESC
@@ -378,7 +390,7 @@ async function loadBecariosArtPendientes(conn, limit = null, opts = {}) {
        loc.provincia_nombre AS provincia_nombre,
        loc.provincia_id AS provincia_id,
        sec.nombre AS sector_nombre,
-       srv.nombre AS servicio_nombre
+       COALESCE(srv.nombre, srv2.nombre) AS servicio_nombre
      FROM personal p
      JOIN agentes a ON a.dni = p.dni AND a.deleted_at IS NULL
      JOIN ley l ON l.id = a.ley_id
@@ -409,6 +421,12 @@ async function loadBecariosArtPendientes(conn, limit = null, opts = {}) {
      ) asec ON asec.dni = p.dni
      LEFT JOIN servicios srv ON srv.id = ags.servicio_id AND srv.deleted_at IS NULL
      LEFT JOIN sectores sec ON sec.id = asec.sector_id AND sec.deleted_at IS NULL
+     -- sin servicio vigente: el último cargado (aunque esté cerrado) sirve de sector
+     LEFT JOIN (
+       SELECT dni, MAX(id) AS id FROM agentes_servicios WHERE deleted_at IS NULL GROUP BY dni
+     ) ags2u ON ags2u.dni = a.dni
+     LEFT JOIN agentes_servicios ags2 ON ags2.id = ags2u.id
+     LEFT JOIN servicios srv2 ON srv2.id = ags2.servicio_id AND srv2.deleted_at IS NULL
      WHERE a.estado_empleo = 'ACTIVO'
        AND p.deleted_at IS NULL
        AND a.ley_id IN (6,7,8,9,10,11,12,13)
@@ -633,12 +651,18 @@ async function typeInto(page, locator, value) {
   await locator.type(String(value), { delay: Number(process.env.ART_TYPE_DELAY_MS || 35) });
 }
 
+// Localidades que ART lista con otro nombre (se prueban en orden, por texto exacto).
+const LOCALIDAD_ALIAS = {
+  'VILLA EDUARDO MADERO': ['VILLA MADERO', 'CIUDAD MADERO', 'MADERO'],
+};
+
 async function selectById(page, id, value) {
   if (!value) return;
+  const alias = id === 'cbLocalidad' ? (LOCALIDAD_ALIAS[String(value).trim().toUpperCase()] || []) : [];
   const select = page.locator(`#${id}`);
   await select.selectOption({ label: String(value) }, { timeout: 2500 }).catch(async () => {
     await select.selectOption(String(value), { timeout: 2500 }).catch(async () => {
-      const selected = await page.evaluate(({ id, value }) => {
+      const selected = await page.evaluate(({ id, value, alias }) => {
         const el = document.getElementById(id);
         if (!el) return false;
         const wanted = String(value).trim().toUpperCase();
@@ -648,6 +672,8 @@ async function selectById(page, id, value) {
           return text === wanted || val === wanted || text.includes(wanted);
         });
         let found = opt;
+        const prueba0 = (w) => Array.from(el.options || []).find((o) => String(o.textContent || '').trim().toUpperCase() === w);
+        for (const a of alias) { if (!found) found = prueba0(a); }
         // Localidad con sufijo que ART no tiene ("LANUS OESTE" -> "LANUS"): se prueba acortando palabras.
         if (!found && id === 'cbLocalidad') {
           const words = wanted.split(/\s+/);
@@ -663,7 +689,7 @@ async function selectById(page, id, value) {
         el.value = opt2.value;
         el.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
-      }, { id, value });
+      }, { id, value, alias });
       if (!selected) throw new Error(`No se pudo seleccionar ${value} en #${id}`);
     });
   });
@@ -935,7 +961,7 @@ async function clickNoSeMiCP(page) {
 const CP_POR_LOCALIDAD = {
   'LA TABLADA': '1766', 'LOMAS DEL MIRADOR': '1752', 'VILLA LUZURIAGA': '1753', 'SAN JUSTO': '1754',
   'RAFAEL CASTILLO': '1755', 'GREGORIO DE LAFERRERE': '1757', 'LAFERRERE': '1757', 'GONZALEZ CATAN': '1759',
-  'PONTEVEDRA': '1761', 'VIRREY DEL PINO': '1763', 'ISIDRO CASANOVA': '1765', 'CIUDAD MADERO': '1768',
+  'PONTEVEDRA': '1761', 'VIRREY DEL PINO': '1763', 'ISIDRO CASANOVA': '1765', 'CIUDAD MADERO': '1768', 'VILLA MADERO': '1768', 'VILLA EDUARDO MADERO': '1768',
   'TAPIALES': '1770', 'VILLA CELINA': '1772', 'INGENIERO BUDGE': '1773', 'ALDO BONZI': '1774', 'CIUDAD EVITA': '1778',
   'RAMOS MEJIA': '1704', 'HAEDO': '1706', 'MORON': '1708', 'CASTELAR': '1712', 'ITUZAINGO': '1714', 'MERLO': '1722',
   'MARCOS PAZ': '1727', 'MORENO': '1744', 'EZEIZA': '1804', 'CAÑUELAS': '1814', 'LANUS': '1824', 'LANUS OESTE': '1824',

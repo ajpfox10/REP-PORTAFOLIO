@@ -8,6 +8,7 @@ import { generateCvJpg } from "../services/cvImage";
 import { env } from "../config/env";
 import { finResidencia } from "../services/certificadoLaboral";
 import { armarCertificadoLaboral, renderCertificadoLaboralHtml, renderCertificadoLaboralDocx } from "../services/certificadoLaboralDoc";
+import { datosDiferencial2pct, armarCertificadoDiferencial, renderCertificadoDiferencialHtml, renderCertificadoDiferencialDocx } from "../services/certificadoDiferencialDoc";
 
 let ExcelJS: any;
 try { ExcelJS = require("exceljs"); } catch { ExcelJS = null; }
@@ -879,6 +880,47 @@ export function buildCertificadosRouter(sequelize: Sequelize) {
     };
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="certificado_trabajo_${dni}.docx"`);
+    res.setHeader("Content-Length", String(out.length));
+    return res.status(200).send(out);
+  });
+
+  // ─── Certificado Diferencial 2% (14 % hasta el 30/06/2015) ────────────────
+
+  // GET /api/v1/certificados/diferencial-2pct/datos?dni=X
+  router.get("/diferencial-2pct/datos", async (req: Request, res: Response) => {
+    const dni = Number(req.query?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido" });
+    const d = await datosDiferencial2pct(sequelize, dni);
+    if (!d) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    return res.json({ ok: true, data: d });
+  });
+
+  // POST /api/v1/certificados/diferencial-2pct/preview { dni, desde, hasta, licencias, jefaturas, ... }
+  router.post("/diferencial-2pct/preview", async (req: Request, res: Response) => {
+    const dni = Number(req.body?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).send("<p>dni requerido</p>");
+    const c = await armarCertificadoDiferencial(sequelize, { ...req.body, dni });
+    if (!c) return res.status(404).send("<p>Persona no encontrada</p>");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(renderCertificadoDiferencialHtml(c));
+  });
+
+  // POST /api/v1/certificados/diferencial-2pct { dni, desde, hasta, licencias, jefaturas, ... }
+  router.post("/diferencial-2pct", async (req: Request, res: Response) => {
+    const dni = Number(req.body?.dni);
+    if (!dni || Number.isNaN(dni)) return res.status(400).json({ ok: false, error: "dni requerido (number)" });
+    const c = await armarCertificadoDiferencial(sequelize, { ...req.body, dni });
+    if (!c) return res.status(404).json({ ok: false, error: "Persona no encontrada" });
+    const out = await renderCertificadoDiferencialDocx(c);
+    (res.locals as any).audit = {
+      action: "certificado_diferencial_2pct_generate",
+      table_name: "personaldetalle",
+      record_pk: dni,
+      request_json: req.body,
+      response_json: { status: 200, bytes: out.length },
+    };
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="certificado_diferencial_2pct_${dni}.docx"`);
     res.setHeader("Content-Length", String(out.length));
     return res.status(200).send(out);
   });

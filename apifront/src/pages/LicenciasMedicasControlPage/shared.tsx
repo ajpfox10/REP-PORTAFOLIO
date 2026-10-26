@@ -128,7 +128,7 @@ export function txtWhatsapp(w: AvisoWhatsapp | null) {
 export function BadgeWhatsapp({ w }: { w: AvisoWhatsapp | null }) {
   if (!w) return null;
   const titulo = [
-    w.avisado ? 'Avisado por WhatsApp' : `Intento de WhatsApp: ${TXT_ESTADO_WSP[w.estado] ?? w.estado}`,
+    w.avisado ? (w.modo === 'MANUAL' ? 'Avisado por WhatsApp (enviado a mano)' : 'Avisado por WhatsApp (automático)') : `Intento de WhatsApp: ${TXT_ESTADO_WSP[w.estado] ?? w.estado}`,
     w.fecha ? new Date(w.fecha).toLocaleString('es-AR') : '',
     w.enviado_por ? `por ${w.enviado_por}` : '',
     w.destino ? `a ${w.destino}` : '',

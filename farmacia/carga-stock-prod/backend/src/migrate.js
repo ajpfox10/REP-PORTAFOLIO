@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { pool, query } = require('./db');
 const config = require('./config');
+const { ensureOrdenesCompraTables } = require('./ordenesCompraDb');
 
 async function migrate() {
   await query(`
@@ -287,6 +288,8 @@ async function migrate() {
       INDEX idx_stock_sugeridos_codigo (codigo_articulo)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  await ensureOrdenesCompraTables();
 
   const hash = await bcrypt.hash(config.adminPassword, 12);
   await query(

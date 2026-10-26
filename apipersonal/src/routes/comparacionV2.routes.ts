@@ -23,6 +23,8 @@ import { Sequelize, QueryTypes } from 'sequelize';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { ejecutarAhora, resolverScriptsDir } from '../services/robotsTareasWindows';
 import { logger } from '../logging/logger';
+import { env } from '../config/env';
+import { controlLicenciasMedicas } from '../services/licenciasMedicasControl';
 
 const PERM = 'crud:*:*';
 const DEPENDENCIAS = ['HOSPITAL', 'UPA 4', 'UPA 18'] as const;
@@ -163,7 +165,8 @@ export function buildComparacionV2Router(sequelize: Sequelize) {
         { type: QueryTypes.SELECT, replacements: { ids, dep } });
       if (!filas.length) return res.json({ ok: true, msg: 'No hay filas con error para reintentar' });
       await sequelize.query(
-        `UPDATE novedades_carga_intranet SET estado = 'PENDIENTE' WHERE id IN (:ids)`,
+        // deps_descartadas vacía: si era NO_EN_PLANTEL se vuelve a probar en las tres dependencias
+        `UPDATE novedades_carga_intranet SET estado = 'PENDIENTE', deps_descartadas = '' WHERE id IN (:ids)`,
         { replacements: { ids: filas.map(f => f.id) } });
 
       const [ultima] = await sequelize.query<any>(
@@ -184,6 +187,24 @@ export function buildComparacionV2Router(sequelize: Sequelize) {
       });
     } catch (err: any) {
       logger.error({ msg: 'comparacion-v2/reintentar', err });
+      return res.status(500).json({ ok: false, error: String(err?.message ?? err) });
+    }
+  });
+
+  // Licencias médicas del SIAPE vs cómo se cargaron en el Ministerio (solo lectura).
+  // ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD (por defecto, el año en curso)
+  router.get('/licencias-medicas', requirePermission(PERM), async (req: Request, res: Response) => {
+    try {
+      const anio = new Date().getFullYear();
+      const iso = (v: any, def: string) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : def);
+      const desde = iso(req.query.desde, `${anio}-01-01`);
+      const hasta = iso(req.query.hasta, `${anio}-12-31`);
+      const dir = (env as any).EXCEL_ASISTENCIA_DIR;
+      if (!dir) throw new Error('Falta EXCEL_ASISTENCIA_DIR en .env');
+      const r = await controlLicenciasMedicas(sequelize, dir, desde, hasta);
+      return res.json({ ok: true, ...r });
+    } catch (err: any) {
+      logger.error({ msg: 'comparacion-v2/licencias-medicas', err: err?.message });
       return res.status(500).json({ ok: false, error: String(err?.message ?? err) });
     }
   });

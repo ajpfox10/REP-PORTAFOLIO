@@ -15,6 +15,9 @@ const { parseStockReport } = require('./stockReportParser');
 const { MONTHS, parseConsumoReport } = require('./consumoReportParser');
 const { parseEtiquetasReport } = require('./etiquetasReportParser');
 const { parseTrimestreReport } = require('./trimestreReportParser');
+const { leerPdfsCarpeta, ordenNombres, leerCargaManual, construirExcel } = require('./ordenesCompraExcel');
+const ordenesCompra = require('./ordenesCompraDb');
+const ordenesCompraDrive = require('./ordenesCompraDrive');
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
@@ -1554,6 +1557,262 @@ app.post('/api/script/ejecutar', requireAuth, requireAdmin, async (req, res) => 
   res.status(202).json({ ok: true, runId, importacionId, pendientes: pending.total });
 });
 
+// --- Ordenes de Compra: PDF (subidos o de una carpeta) -> base -> Excel de control ---
+const uploadPdfOc = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 200 },
+  fileFilter(_req, file, cb) {
+    cb(null, /\.pdf$/i.test(file.originalname));
+  }
+});
+
+function httpError(status, message) {
+  return Object.assign(new Error(message), { status });
+}
+
+function carpetaValida(value, { crear = false } = {}) {
+  const dir = String(value || '').trim();
+  if (!dir || !path.isAbsolute(dir)) throw httpError(400, 'Indicá una carpeta completa (por ejemplo D:\\FARMACIA\\ORDENES COMPRA)');
+  const full = path.resolve(dir);
+  if (!fs.existsSync(full)) {
+    if (!crear) throw httpError(400, `No existe la carpeta ${full}`);
+    fs.mkdirSync(full, { recursive: true });
+  }
+  if (!fs.statSync(full).isDirectory()) throw httpError(400, `${full} no es una carpeta`);
+  return full;
+}
+
+function nombreExcelOc(nombre) {
+  const base = String(nombre || '').trim().replace(/\.xlsx$/i, '').replace(/[<>:"/\\|?*]/g, '').trim();
+  return `${base || 'CONTROL_ORDENES_DE_COMPRA'}.xlsx`;
+}
+
+function responderErrorOc(res, next, error) {
+  if (error.status) return res.status(error.status).json({ error: error.message });
+  if (error.code === 'EBUSY' || error.code === 'EPERM' || error.code === 'EACCES') {
+    return res.status(409).json({ error: 'No se pudo usar el archivo o la carpeta: está abierto en otro programa o no hay permiso. Cerralo y volvé a intentar.' });
+  }
+  return next(error);
+}
+
+function resumenImportacion(resultados) {
+  const cuenta = (estado) => resultados.filter((r) => r.estado === estado).length;
+  return { nuevos: cuenta('nuevo'), yaCargados: cuenta('ya_cargado'), duplicados: cuenta('duplicado'), errores: cuenta('error') };
+}
+
+app.get('/api/ordenes-compra/config', requireAuth, requireAdmin, (_req, res) => {
+  res.json({ carpetaPdf: config.ordenesCompraDir, carpetaExcel: config.ordenesCompraDir, nombre: 'CONTROL_ORDENES_DE_COMPRA' });
+});
+
+// Navegador de carpetas del servidor
+app.get('/api/ordenes-compra/carpetas', requireAuth, requireAdmin, (req, res, next) => {
+  try {
+    const ruta = String(req.query.ruta || '').trim();
+    if (!ruta) {
+      const unidades = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => fs.existsSync(d));
+      return res.json({ ruta: '', padre: null, carpetas: unidades.map((d) => ({ nombre: d, ruta: d })), pdfs: 0 });
+    }
+    const full = carpetaValida(ruta);
+    const entries = fs.readdirSync(full, { withFileTypes: true });
+    const carpetas = entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith('$') && !e.name.startsWith('.'))
+      .map((e) => ({ nombre: e.name, ruta: path.join(full, e.name) }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const padre = path.dirname(full);
+    res.json({ ruta: full, padre: padre === full ? '' : padre, carpetas, pdfs: entries.filter((e) => e.isFile() && /\.pdf$/i.test(e.name)).length });
+  } catch (error) {
+    responderErrorOc(res, next, error);
+  }
+});
+
+app.get('/api/ordenes-compra', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ data: await ordenesCompra.listarOrdenes() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PDF subidos desde la PC del usuario
+app.post('/api/ordenes-compra/subir', requireAuth, requireAdmin, uploadPdfOc.array('archivos', 200), async (req, res, next) => {
+  try {
+    const archivos = (req.files || [])
+      // multer entrega el nombre en latin1
+      .map((f) => ({ name: Buffer.from(f.originalname, 'latin1').toString('utf8'), buffer: f.buffer }))
+      .sort((a, b) => ordenNombres(a.name, b.name));
+    if (!archivos.length) throw httpError(400, 'Elegí uno o más archivos PDF');
+    const resultados = await ordenesCompra.importarArchivos(archivos, req.user.sub);
+    if (resultados.some((r) => r.estado === 'nuevo')) ordenesCompraDrive.sincronizarEnSegundoPlano();
+    const resumen = resumenImportacion(resultados);
+    await audit(req.user.sub, 'subir_pdf_oc', 'oc_ordenes', null, { archivos: archivos.length, ...resumen });
+    res.status(201).json({ resultados, ...resumen });
+  } catch (error) {
+    responderErrorOc(res, next, error);
+  }
+});
+
+// PDF de una carpeta del servidor
+app.post('/api/ordenes-compra/importar-carpeta', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const carpetaPdf = carpetaValida(req.body.carpetaPdf);
+    const archivos = leerPdfsCarpeta(carpetaPdf);
+    if (!archivos.length) throw httpError(400, `No hay archivos PDF en ${carpetaPdf}`);
+    const resultados = await ordenesCompra.importarArchivos(archivos, req.user.sub);
+    if (resultados.some((r) => r.estado === 'nuevo')) ordenesCompraDrive.sincronizarEnSegundoPlano();
+    const resumen = resumenImportacion(resultados);
+    await audit(req.user.sub, 'importar_carpeta_oc', 'oc_ordenes', null, { carpetaPdf, archivos: archivos.length, ...resumen });
+    res.status(201).json({ carpetaPdf, resultados, ...resumen });
+  } catch (error) {
+    responderErrorOc(res, next, error);
+  }
+});
+
+app.patch('/api/ordenes-compra/renglones/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { entregada, completo, nroIngreso, observacion } = req.body || {};
+    const renglon = await ordenesCompra.actualizarRenglon(id, { entregada, completo, nroIngreso, observacion }, req.user.sub);
+    ordenesCompraDrive.sincronizarEnSegundoPlano();
+    res.json({ data: renglon });
+  } catch (error) {
+    responderErrorOc(res, next, error);
+  }
+});
+
+app.delete('/api/ordenes-compra/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const numero = await ordenesCompra.eliminarOrden(Number(req.params.id));
+    ordenesCompraDrive.sincronizarEnSegundoPlano();
+    await audit(req.user.sub, 'eliminar_oc', 'oc_ordenes', req.params.id, { numero });
+    res.json({ ok: true, numero });
+  } catch (error) {
+    responderErrorOc(res, next, error);
+  }
+});
+
+// Planilla en Google Drive (solo admin)
+app.get('/api/ordenes-compra/drive', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await ordenesCompraDrive.estadoDrive());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/ordenes-compra/drive/archivos', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ data: await ordenesCompraDrive.listarArchivos() });
+  } catch (error) {
+    responderErrorDrive(res, next, error);
+  }
+});
+
+app.post('/api/ordenes-compra/drive/inspeccionar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await ordenesCompraDrive.inspeccionarArchivo(req.body.archivo));
+  } catch (error) {
+    responderErrorDrive(res, next, error);
+  }
+});
+
+app.post('/api/ordenes-compra/drive/probar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await ordenesCompraDrive.probarDestino(req.body || {}));
+  } catch (error) {
+    responderErrorDrive(res, next, error);
+  }
+});
+
+app.put('/api/ordenes-compra/drive/destino', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const destino = await ordenesCompraDrive.guardarDestino(req.body || {}, req.user.sub);
+    await audit(req.user.sub, 'oc_drive_destino', 'oc_drive_config', 1, { fileId: destino.fileId, archivo: destino.fileNombre, modo: destino.modo, pestana: destino.pestanaFija || destino.prefijo });
+    ordenesCompraDrive.sincronizarEnSegundoPlano();
+    res.json(await ordenesCompraDrive.estadoDrive());
+  } catch (error) {
+    responderErrorDrive(res, next, error);
+  }
+});
+
+app.post('/api/ordenes-compra/drive/pausa', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const activo = Boolean(req.body?.activo);
+    await ordenesCompraDrive.pausar(activo, req.user.sub);
+    await audit(req.user.sub, activo ? 'oc_drive_reanudar' : 'oc_drive_pausar', 'oc_drive_config', 1, {});
+    if (activo) ordenesCompraDrive.sincronizarEnSegundoPlano();
+    res.json(await ordenesCompraDrive.estadoDrive());
+  } catch (error) {
+    responderErrorDrive(res, next, error);
+  }
+});
+
+app.post('/api/ordenes-compra/drive/sincronizar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const resumen = await ordenesCompraDrive.sincronizar({ manual: true, usuarioId: req.user.sub });
+    if (resumen.omitida) throw httpError(400, resumen.motivo);
+    res.json({ resumen, ...(await ordenesCompraDrive.estadoDrive()) });
+  } catch (error) {
+    responderErrorDrive(res, next, error);
+  }
+});
+
+app.post('/api/ordenes-compra/drive/restaurar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await ordenesCompraDrive.restaurarBackup(req.user.sub);
+    await audit(req.user.sub, 'oc_drive_restaurar', 'oc_drive_config', 1, {});
+    res.json(await ordenesCompraDrive.estadoDrive());
+  } catch (error) {
+    responderErrorDrive(res, next, error);
+  }
+});
+
+// errores de Google: mensaje claro en vez de 500
+function responderErrorDrive(res, next, error) {
+  // los errores de Google tambien traen .status: esos se traducen abajo
+  if (error.status && !error.response) return res.status(error.status).json({ error: error.message });
+  const msg = error?.response?.data?.error?.message || error.message || '';
+  const code = error?.response?.status;
+  if (/has not been used|is disabled|accessNotConfigured/i.test(msg)) {
+    const api = /drive/i.test(msg) ? 'Google Drive API' : 'Google Sheets API';
+    return res.status(502).json({ error: `Falta habilitar ${api} en el proyecto de Google Cloud (APIs y servicios → Biblioteca).` });
+  }
+  if (code === 404) return res.status(404).json({ error: 'No se encontró el archivo: revisá el link y que esté compartido con el robot.' });
+  if (code === 403) return res.status(403).json({ error: 'Google rechazó el acceso: compartí el archivo con el mail del robot como Editor.' });
+  if (code) return res.status(502).json({ error: `Google respondió: ${msg}` });
+  return responderErrorOc(res, next, error);
+}
+
+// Excel desde la base: destino "pc" (descarga a la PC del usuario) o "servidor" (carpeta del servidor)
+app.post('/api/ordenes-compra/excel', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const destino = req.body.destino === 'servidor' ? 'servidor' : 'pc';
+    const nombre = nombreExcelOc(req.body.nombre);
+    let archivo = null;
+    let importadosDelExcel = 0;
+    if (destino === 'servidor') {
+      archivo = path.join(carpetaValida(req.body.carpetaExcel, { crear: true }), nombre);
+      // si alguien cargo datos a mano en ese Excel, se pasan a la base antes de regenerarlo
+      importadosDelExcel = await ordenesCompra.importarCargaManual(await leerCargaManual(archivo), req.user.sub);
+      if (importadosDelExcel) ordenesCompraDrive.sincronizarEnSegundoPlano();
+    }
+    const ordenes = await ordenesCompra.listarOrdenes();
+    if (!ordenes.length) throw httpError(400, 'Todavía no hay órdenes de compra cargadas');
+    const wb = construirExcel(ordenes, await ordenesCompra.listarDuplicados());
+    const renglones = ordenes.reduce((acc, o) => acc + o.renglones.length, 0);
+    await audit(req.user.sub, 'excel_oc', 'oc_ordenes', null, { destino, archivo: archivo || nombre, ordenes: ordenes.length, renglones });
+    if (destino === 'pc') {
+      const buffer = await wb.xlsx.writeBuffer();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${nombre.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(nombre)}`);
+      return res.send(Buffer.from(buffer));
+    }
+    await wb.xlsx.writeFile(archivo);
+    res.status(201).json({ archivo, ordenes: ordenes.length, renglones, importadosDelExcel });
+  } catch (error) {
+    responderErrorOc(res, next, error);
+  }
+});
+
 app.use((error, _req, res, _next) => {
   console.error(error);
   res.status(500).json({ error: error.message || 'Error interno' });
@@ -1663,6 +1922,9 @@ app.listen(config.port, () => {
   console.log(`${config.appName} backend ${config.envName} escuchando en ${config.port}`);
   iniciarSondeoTrimestre();
   iniciarSondeoCritico();
+  ordenesCompra.ensureOrdenesCompraTables()
+    .then(() => ordenesCompraDrive.iniciarSincronizacionDrive())
+    .catch((err) => console.error('[ordenes-compra] no se pudieron crear las tablas:', err.message));
 });
 
 process.on('SIGINT', async () => {

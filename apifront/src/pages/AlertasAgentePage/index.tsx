@@ -20,6 +20,8 @@ interface Alerta {
   created_at:        string;
   visto_count:       number;
   cerrado_count:     number;
+  desactivado_at?:         string | null;
+  desactivado_por_nombre?: string | null;
 }
 
 interface EstadoUsuario {
@@ -510,6 +512,11 @@ export function AlertasAgentePage() {
                   <div style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     <span>Creado: {fmt(a.created_at)}</span>
                     {a.creado_por_nombre && <span>Por: {a.creado_por_nombre}</span>}
+                    {a.desactivado_at && (
+                      <span style={{ color: '#fca5a5' }}>
+                        Desactivada: {fmt(a.desactivado_at)}{a.desactivado_por_nombre ? ` por ${a.desactivado_por_nombre}` : ''}
+                      </span>
+                    )}
                     <span
                       onClick={() => verEstados(a.id)}
                       style={{ color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline' }}

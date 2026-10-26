@@ -20,7 +20,12 @@ interface TurnoFaceta { value: string; label: string; }
 interface Facetas { servicios: string[]; ubicaciones: string[]; turnos: TurnoFaceta[]; }
 interface DiaSS { fecha: string; turno: string; turnoLabel: string; }
 interface HorarioDiaResumen { dia: string; entrada: string; salida: string; horas: number; turno: string; }
-interface HorarioResumen { tipo: string; resumen: string; porDia: HorarioDiaResumen[]; esFranquero: boolean; diasSemana: number; horasSemana: number; }
+interface HorarioResumen { tipo: string; resumen: string; porDia: HorarioDiaResumen[]; esFranquero: boolean; diasSemana: number; horasSemana: number; alterna?: { semanaA: string; semanaB: string; semanaHasta: string } | null; }
+interface DiaFuera { fecha: string; turno: string; turnoLabel: string; horario: string; entrada: string | null; salida: string | null; estado: string; motivos: string[]; }
+
+const FUERA_LABEL: Record<string, string> = {
+  FUERA_HORARIO: "Fuera de horario", REVISAR_HORARIO: "Ficha otro horario", MAL_FICHADO: "Reloj equivocado", FUERA_SEMANA: "Fuera de su semana",
+};
 
 const TIPO_COLOR: Record<string, { bg: string; fg: string }> = {
   Guardia: { bg: "#fde2c8", fg: "#8a4b00" },
@@ -32,6 +37,7 @@ interface Coincidencia { estado: "coincide" | "parcial" | "no" | "sin_datos"; di
 interface AgentePreview {
   dni: string; nombre: string; servicio: string; ley: string; ubicacion: string;
   email: string | null; emailValido: boolean; dias: DiaSS[]; totalDias: number; mensaje: string;
+  fueraHorario?: DiaFuera[];
   horario?: HorarioResumen; coincidencia?: Coincidencia;
 }
 
@@ -79,6 +85,8 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
   const [facetas, setFacetas] = useState<Facetas>({ servicios: [], ubicaciones: [], turnos: [] });
   const [allAgentes, setAllAgentes] = useState<AgentePreview[]>([]);
   const [dbError, setDbError] = useState<string | null>(null);
+  // "sinSalida" = lo que se notifica por mail · "fuera" = fichó fuera de horario (solo se informa)
+  const [vista, setVista] = useState<"sinSalida" | "fuera">("sinSalida");
 
   const [servSel, setServSel] = useState<Set<string>>(new Set());
   const [turnoSel, setTurnoSel] = useState<Set<string>>(new Set());
@@ -122,21 +130,23 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
 
   // ── filtrado EN VIVO (cliente) ──
   const filtrados = useMemo(() => {
+    const porTurno = <T extends { turno: string }>(xs: T[]) => turnoSel.size ? xs.filter(d => turnoSel.has(d.turno)) : xs;
     return allAgentes.filter(a => {
       if (excluirResidentes && /RESIDENTE/i.test(a.ley)) return false;
       if (servSel.size && !servSel.has(a.servicio)) return false;
       if (ubicSel.size && !ubicSel.has(a.ubicacion)) return false;
-      const dias = turnoSel.size ? a.dias.filter(d => turnoSel.has(d.turno)) : a.dias;
-      if (dias.length < minDias) return false;
-      return true;
-    }).map(a => turnoSel.size ? { ...a, dias: a.dias.filter(d => turnoSel.has(d.turno)), totalDias: a.dias.filter(d => turnoSel.has(d.turno)).length } : a)
-      .sort((x, y) => y.totalDias - x.totalDias || x.nombre.localeCompare(y.nombre));
-  }, [allAgentes, servSel, turnoSel, ubicSel, excluirResidentes, minDias]);
+      if (vista === "fuera") return porTurno(a.fueraHorario ?? []).length >= minDias;
+      return porTurno(a.dias).length >= minDias;
+    }).map(a => {
+      const dias = porTurno(a.dias), fuera = porTurno(a.fueraHorario ?? []);
+      return { ...a, dias, fueraHorario: fuera, totalDias: vista === "fuera" ? fuera.length : dias.length };
+    }).sort((x, y) => y.totalDias - x.totalDias || x.nombre.localeCompare(y.nombre));
+  }, [allAgentes, servSel, turnoSel, ubicSel, excluirResidentes, minDias, vista]);
 
   // al cambiar el filtro, seleccionar por defecto todos los que tienen mail válido
   useEffect(() => {
-    setDniSel(new Set(filtrados.filter(a => a.emailValido).map(a => a.dni)));
-  }, [filtrados]);
+    setDniSel(vista === "sinSalida" ? new Set(filtrados.filter(a => a.emailValido).map(a => a.dni)) : new Set());
+  }, [filtrados, vista]);
 
   const conMail = filtrados.filter(a => a.emailValido).length;
   const seleccionados = filtrados.filter(a => a.emailValido && dniSel.has(a.dni));
@@ -194,6 +204,17 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
           Solo se notifica a agentes con <strong>salida realmente no fichada</strong>. Doble-click en un agente para ver su fichaje del mes.
         </div>
 
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          {([["sinSalida", "⛔ Sin salida (se notifica)"], ["fuera", "⏰ Fuera de horario (solo informa)"]] as const).map(([v, label]) => (
+            <button key={v} onClick={() => setVista(v)}
+              style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
+                border: `1px solid ${vista === v ? "#2E5FA3" : "#c8c8c8"}`, background: vista === v ? "#2E5FA3" : "#fff", color: vista === v ? "#fff" : "#333" }}>
+              {label} ({allAgentes.filter(a => (v === "fuera" ? (a.fueraHorario ?? []).length : a.dias.length) > 0).length})
+            </button>
+          ))}
+          {vista === "fuera" && <span style={{ fontSize: 12, color: "#666", alignSelf: "center" }}>Tolerancia 30 min en entrada y salida. No se envían mails desde esta vista.</span>}
+        </div>
+
         {dbError && <div style={{ ...box, background: "#fff3cd", border: "1px solid #ffe08a", marginBottom: 10 }}>⚠️ {dbError}</div>}
 
         {/* Filtros */}
@@ -228,7 +249,7 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
               <input type="checkbox" checked={excluirResidentes} onChange={e => setExcluirResidentes(e.target.checked)} /> Excluir residentes
             </label>
             <label style={{ display: "block", fontSize: 12, marginBottom: 8 }}>
-              Mínimo de días sin salida:{" "}
+              Mínimo de días {vista === "fuera" ? "fuera de horario" : "sin salida"}:{" "}
               <input type="number" min={1} value={minDias} onChange={e => setMinDias(Math.max(1, Number(e.target.value) || 1))} style={{ width: 56 }} />
             </label>
             <button onClick={cargarPreview} disabled={loading} style={{ width: "100%", padding: "8px", borderRadius: 6, border: "1px solid #2E5FA3", background: "#2E5FA3", color: "#fff", cursor: "pointer" }}>
@@ -250,9 +271,9 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: "#222" }}>
             <thead style={{ position: "sticky", top: 0, background: "#eaeaea" }}>
               <tr>
-                <th style={{ padding: 6 }}><input type="checkbox"
+                {vista === "sinSalida" && <th style={{ padding: 6 }}><input type="checkbox"
                   checked={seleccionados.length > 0 && seleccionados.length === conMail}
-                  onChange={e => setDniSel(e.target.checked ? new Set(filtrados.filter(a => a.emailValido).map(a => a.dni)) : new Set())} /></th>
+                  onChange={e => setDniSel(e.target.checked ? new Set(filtrados.filter(a => a.emailValido).map(a => a.dni)) : new Set())} /></th>}
                 <th style={{ textAlign: "left", padding: 6 }}>Agente</th>
                 <th style={{ textAlign: "left", padding: 6 }}>Servicio</th>
                 <th style={{ textAlign: "left", padding: 6 }}>Ubic.</th>
@@ -263,29 +284,30 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
             <tbody>
               {filtrados.map(a => (
                 <tr key={a.dni} onDoubleClick={() => abrirDetalle(a)} title="Doble-click: ver fichaje del mes"
-                  style={{ borderTop: "1px solid #eee", opacity: a.emailValido ? 1 : 0.55, cursor: "pointer" }}>
-                  <td style={{ textAlign: "center", padding: 6 }}>
+                  style={{ borderTop: "1px solid #eee", opacity: vista === "fuera" || a.emailValido ? 1 : 0.55, cursor: "pointer" }}>
+                  {vista === "sinSalida" && <td style={{ textAlign: "center", padding: 6 }}>
                     <input type="checkbox" disabled={!a.emailValido} checked={dniSel.has(a.dni)}
                       onClick={e => e.stopPropagation()}
                       onChange={() => { const n = new Set(dniSel); n.has(a.dni) ? n.delete(a.dni) : n.add(a.dni); setDniSel(n); }} />
-                  </td>
+                  </td>}
                   <td style={{ padding: 6 }}>
                     {a.coincidencia && <span title={`Horario ${COINC[a.coincidencia.estado].label} — Declara: ${a.coincidencia.declara} · Ficha: ${a.coincidencia.ficha}`}>{COINC[a.coincidencia.estado].dot} </span>}
                     {a.nombre} <span style={{ color: "#999" }}>({a.dni})</span>
                   </td>
                   <td style={{ padding: 6 }}>{a.servicio}</td>
                   <td style={{ padding: 6 }}>{a.ubicacion}</td>
-                  <td style={{ textAlign: "center", padding: 6 }} title={a.dias.map(d => d.fecha).join(", ")}>{a.totalDias}</td>
+                  <td style={{ textAlign: "center", padding: 6 }}
+                    title={vista === "fuera" ? (a.fueraHorario ?? []).map(d => `${d.fecha}: ${d.motivos.join("; ")}`).join("\n") : a.dias.map(d => d.fecha).join(", ")}>{a.totalDias}</td>
                   <td style={{ padding: 6 }}>{a.email || "—"} {a.email && !a.emailValido && <span style={{ color: "#b02a37" }}>(inválido)</span>}</td>
                 </tr>
               ))}
-              {filtrados.length === 0 && !loading && <tr><td colSpan={6} style={{ padding: 14, textAlign: "center", color: "#999" }}>Sin resultados para el filtro</td></tr>}
+              {filtrados.length === 0 && !loading && <tr><td colSpan={vista === "sinSalida" ? 6 : 5} style={{ padding: 14, textAlign: "center", color: "#999" }}>Sin resultados para el filtro</td></tr>}
             </tbody>
           </table>
         </div>
 
-        {/* Envío */}
-        <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12 }}>
+        {/* Envío (solo sin salida) */}
+        {vista === "sinSalida" && <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12 }}>
           <label style={{ fontSize: 13 }}>
             <input type="checkbox" checked={confirmar} onChange={e => setConfirmar(e.target.checked)} />{" "}
             Confirmo enviar {seleccionados.length} mail(s) a los agentes seleccionados.
@@ -295,7 +317,7 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
               background: sending || !confirmar ? "#9bb" : "#1a7f37", color: "#fff", cursor: "pointer", fontWeight: 600 }}>
             {sending ? "Enviando…" : `Enviar ${seleccionados.length} mail(s)`}
           </button>
-        </div>
+        </div>}
 
         {/* Resultado */}
         {resultado && (
@@ -322,7 +344,10 @@ export function NotificacionesMailModal({ open, onClose, periodo, desde, hasta }
 function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview; loading: boolean; rows: FichajeRaw[]; fuente?: any }; onClose: () => void }) {
   const { agente, loading, rows, fuente } = detalle;
   const toast = useToast();
+  // los días sin salida vienen del evaluador (que sabe qué turnos salen al día siguiente):
+  // agrupar las marcas por fecha no alcanza para la guardia, que entra un día y sale el otro
   const sinSalidaSet = useMemo(() => new Set(agente.dias.map(d => d.fecha)), [agente]);
+  const fueraPorFecha = useMemo(() => new Map((agente.fueraHorario ?? []).map(d => [d.fecha, d])), [agente]);
   const DOW = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
   const diaSemana = (fecha: string) => DOW[new Date(fecha + "T00:00:00").getDay()];
   const fmtFecha = (fecha: string) => `${diaSemana(fecha)} ${fecha.split("-").reverse().join("/")}`;
@@ -343,7 +368,7 @@ function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview
   const resumenDias = useMemo(() => {
     let conSalida = 0, sinSalida = 0;
     for (const d of dias) {
-      const ss = sinSalidaSet.has(d.fecha) || (!!d.entrada && !d.salida);
+      const ss = sinSalidaSet.has(d.fecha);
       if (ss) sinSalida++; else if (d.entrada || d.salida) conSalida++;
     }
     return { total: dias.length, conSalida, sinSalida };
@@ -351,7 +376,7 @@ function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview
 
   // lista de días sin salida (para el mensaje de WhatsApp)
   const diasSinSalidaLista = useMemo(
-    () => dias.filter(d => sinSalidaSet.has(d.fecha) || (!!d.entrada && !d.salida)).map(d => fmtFecha(d.fecha)),
+    () => dias.filter(d => sinSalidaSet.has(d.fecha)).map(d => fmtFecha(d.fecha)),
     [dias, sinSalidaSet], // eslint-disable-line
   );
   const copiarMensaje = () => {
@@ -363,7 +388,7 @@ function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1100, display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", padding: 24 }}
       onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", color: "#222", borderRadius: 10, width: "min(560px, 94vw)", padding: 16, boxShadow: "0 10px 40px rgba(0,0,0,.35)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", color: "#222", borderRadius: 10, width: "min(760px, 94vw)", padding: 16, boxShadow: "0 10px 40px rgba(0,0,0,.35)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h3 style={{ margin: 0, fontSize: 15 }}>{agente.nombre} <span style={{ color: "#999" }}>({agente.dni})</span></h3>
           <button onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 20, cursor: "pointer" }}>✕</button>
@@ -398,7 +423,8 @@ function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview
           </div>
         )}
         <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>
-          Fichaje del período — <span style={{ background: "#fff3a3", padding: "1px 6px", borderRadius: 3 }}>amarillo</span> = no fichó la salida.
+          Fichaje del período — <span style={{ background: "#fff3a3", padding: "1px 6px", borderRadius: 3 }}>amarillo</span> = no fichó la salida ·{" "}
+          <span style={{ background: "#ffe0c2", padding: "1px 6px", borderRadius: 3 }}>naranja</span> = fuera de horario (tolerancia 30 min).
           {" "}Fuente: fichaje sincronizado (todos los relojes){fuente ? "" : ""}.
         </div>
         {!loading && (
@@ -406,6 +432,7 @@ function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview
             <span>Días con fichaje: <strong>{resumenDias.total}</strong></span>
             <span style={{ color: "#1a7f37" }}>Con salida: <strong>{resumenDias.conSalida}</strong></span>
             <span style={{ color: "#b02a37" }}>Sin salida: <strong>{resumenDias.sinSalida}</strong></span>
+            <span style={{ color: "#b45309" }}>Fuera de horario: <strong>{fueraPorFecha.size}</strong></span>
             <button onClick={copiarMensaje} disabled={diasSinSalidaLista.length === 0}
               title="Copia el mensaje para enviar por WhatsApp con la lista de días sin salida"
               style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 6, border: "none", cursor: diasSinSalidaLista.length ? "pointer" : "default", background: diasSinSalidaLista.length ? "#25D366" : "#bbb", color: "#fff", fontWeight: 600 }}>
@@ -417,14 +444,15 @@ function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview
           <div style={{ maxHeight: 420, overflow: "auto", border: "1px solid #e0e0e0", borderRadius: 6 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead style={{ position: "sticky", top: 0, background: "#eee" }}>
-                <tr><th style={{ textAlign: "left", padding: 6 }}>Día / Fecha</th><th style={{ padding: 6 }}>Entrada</th><th style={{ padding: 6 }}>Salida</th></tr>
+                <tr><th style={{ textAlign: "left", padding: 6 }}>Día / Fecha</th><th style={{ padding: 6 }}>Entrada</th><th style={{ padding: 6 }}>Salida</th><th style={{ textAlign: "left", padding: 6 }}>Observación</th></tr>
               </thead>
               <tbody>
                 {dias.map(d => {
-                  const sinSalida = sinSalidaSet.has(d.fecha) || (!!d.entrada && !d.salida);
+                  const sinSalida = sinSalidaSet.has(d.fecha);
+                  const fuera = fueraPorFecha.get(d.fecha);
                   const finde = [0, 6].includes(new Date(d.fecha + "T00:00:00").getDay());
                   return (
-                    <tr key={d.fecha} style={{ borderTop: "1px solid #eee", background: sinSalida ? "#fff3a3" : "transparent" }}>
+                    <tr key={d.fecha} style={{ borderTop: "1px solid #eee", background: sinSalida ? "#fff3a3" : fuera ? "#ffe0c2" : "transparent" }}>
                       <td style={{ padding: 6 }}>
                         <span style={{ display: "inline-block", width: 34, fontWeight: 600, color: finde ? "#1e40af" : "#444" }}>{diaSemana(d.fecha)}</span>
                         {d.fecha.split("-").reverse().join("/")}
@@ -435,10 +463,13 @@ function DetalleFichaje({ detalle, onClose }: { detalle: { agente: AgentePreview
                           ? <span onClick={copiarMensaje} title="Copiar mensaje de WhatsApp con todos los días sin salida" style={{ cursor: "pointer", textDecoration: "underline dotted" }}>SIN SALIDA</span>
                           : (d.salida || "—")}
                       </td>
+                      <td style={{ padding: 6, fontSize: 12, color: "#7a3e00" }}>
+                        {fuera && <><strong>{FUERA_LABEL[fuera.estado] || fuera.estado}</strong> ({fuera.horario}): {fuera.motivos.join("; ")}</>}
+                      </td>
                     </tr>
                   );
                 })}
-                {dias.length === 0 && <tr><td colSpan={3} style={{ padding: 14, textAlign: "center", color: "#999" }}>Sin fichajes en el período</td></tr>}
+                {dias.length === 0 && <tr><td colSpan={4} style={{ padding: 14, textAlign: "center", color: "#999" }}>Sin fichajes en el período</td></tr>}
               </tbody>
             </table>
           </div>

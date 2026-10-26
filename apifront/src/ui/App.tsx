@@ -11,6 +11,7 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { TableViewPage } from '../pages/TableViewPage';
 import { GestionPage } from '../pages/Gesytionpage';
+import { MensajesRelojPage } from '../pages/MensajesRelojPage';
 import { AdminPage } from '../pages/AdminPage';
 import { CargaAgentePage } from '../pages/CargaAgentePage';
 import { ConsultasPage } from '../pages/ConsultasPage';
@@ -25,8 +26,14 @@ import { ComparadorSiapePage } from '../pages/ComparadorSiapePage';
 import { Art26MinisterioPage } from '../pages/Art26MinisterioPage';
 import { LicenciasConsultorioPage } from '../pages/LicenciasConsultorioPage';
 import { HorariosExtendidosPage } from '../pages/HorariosExtendidosPage';
+import { PresentismoSectorPage } from '../pages/PresentismoSectorPage';
+import { EnfermeriaDistribucionPage } from '../pages/EnfermeriaDistribucionPage';
 import { JubilablesEstadisticaPage } from '../pages/JubilablesEstadisticaPage';
+import { NormativaPage } from '../pages/NormativaPage';
+import { LicenciasPlusPage } from '../pages/LicenciasPlusPage';
+import { FeriadosPage } from '../pages/FeriadosPage';
 import { ComisionesPage } from '../pages/ComisionesPage';
+import { VacacionesAdelantadasPage } from '../pages/VacacionesAdelantadasPage';
 import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
@@ -175,6 +182,16 @@ export function App() {
                 <Private>
                   <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
                     <GestionPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/mensajes-reloj"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:agentexdni1:read', 'crud:*:*']}>
+                    <MensajesRelojPage />
                   </Guard>
                 </Private>
               }
@@ -427,11 +444,51 @@ export function App() {
               }
             />
             <Route
+              path="/app/normativa"
+              element={
+                <Private>
+                  <Guard anyOf={['app:normativa:access', 'crud:*:*']}>
+                    <NormativaPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/feriados"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:*:*']}>
+                    <FeriadosPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/licencias-plus"
+              element={
+                <Private>
+                  <Guard anyOf={['app:normativa:access', 'crud:*:*']}>
+                    <LicenciasPlusPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/comisiones"
               element={
                 <Private>
                   <Guard anyOf={['crud:*:*', 'personal:write', 'crud:personal:update']}>
                     <ComisionesPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/vacaciones-adelantadas"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:*:*', 'personal:write', 'crud:personal:update']}>
+                    <VacacionesAdelantadasPage />
                   </Guard>
                 </Private>
               }
@@ -618,6 +675,26 @@ export function App() {
                 }
                />
              
+   <Route
+  path="/app/enfermeria-distribucion"
+  element={
+    <Private>
+      <Guard anyOf={['app:jefe_servicio:access', 'crud:*:*']}>
+        <EnfermeriaDistribucionPage />
+      </Guard>
+    </Private>
+  }
+/>
+   <Route
+  path="/app/presentismo-sector"
+  element={
+    <Private>
+      <Guard anyOf={['app:jefe_servicio:access', 'crud:*:*']}>
+        <PresentismoSectorPage />
+      </Guard>
+    </Private>
+  }
+/>
    <Route
   path="/app/mi-sector"
   element={

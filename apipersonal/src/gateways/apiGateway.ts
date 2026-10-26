@@ -47,6 +47,7 @@ import { buildAusentismoRouter } from '../routes/ausentismo.routes';
 import { buildScannerRouter } from '../routes/scanner.routes';
 import { buildFicheroRouter } from '../routes/fichero.routes';
 import { buildFicheroBiometriaLabRouter } from '../routes/ficheroBiometriaLab.routes';
+import { buildFicheroSdkAgenteRouter } from '../routes/ficheroSdkAgente.routes';
 import { buildIclockAdmsRouter } from '../routes/iclockAdms.routes';
 import { buildExamenIngresoRouter } from '../routes/examenIngreso.routes';
 import { buildAccidentesPunzoRouter } from '../routes/accidentesPunzo.routes';
@@ -57,6 +58,8 @@ import { buildBajasRouter } from '../routes/bajas.routes';
 import { buildJubilacionRouter } from '../routes/jubilacion.routes';
 import { buildHerramientasRouter } from '../routes/herramientas.routes';
 import { buildComisionesRouter } from '../routes/comisiones.routes';
+import { buildVacacionesAdelantadasRouter } from '../routes/vacacionesAdelantadas.routes';
+import { buildMensajesRelojRouter } from '../routes/mensajesReloj.routes';
 import { buildWhatsappRouter } from '../routes/whatsapp.routes';
 import { buildUsuariosRouter } from '../routes/usuarios.routes';
 import { buildStressRouter }   from '../routes/stress.routes';
@@ -67,6 +70,10 @@ import { buildComparacionV2Router } from '../routes/comparacionV2.routes';
 import { buildArticulo26IntranetRouter } from '../routes/articulo26Intranet.routes';
 import { buildLicenciasConsultorioRouter } from '../routes/licenciasConsultorio.routes';
 import { buildHorariosExtendidosRouter } from '../routes/horariosExtendidos.routes';
+import { buildPlusLicenciasRouter } from '../routes/plusLicencias.routes';
+import { buildUltimasLicenciasRouter } from '../routes/ultimasLicencias.routes';
+import { buildPresentismoSectorRouter } from '../routes/presentismoSector.routes';
+import { buildFichajesAgentesRouter, buildFichajesRecienteRouter } from '../routes/fichajesAgentes.routes';
 import { buildLicenciasMedicasControlRouter } from '../routes/licenciasMedicasControl.routes';
 import { buildIntranetRouter } from '../domains/personalv5/routes/intranet.routes';
 import { buildResidentesRouter } from '../routes/residentes.routes';
@@ -80,6 +87,7 @@ import { buildAlertasAgenteRouter } from '../routes/alertasAgente.routes';
 import { buildCumpleanosAlertasRouter } from '../routes/cumpleanosAlertas.routes';
 import { buildReclamosHaberesRouter } from '../routes/reclamosHaberes.routes';
 import { buildScriptRunsRouter } from '../routes/scriptRuns.routes';
+import { buildFeriadosRouter } from '../routes/feriados.routes';
 import { buildBecariosArtRouter }   from '../routes/becariosArt.routes';
 import { buildDashboardAlertsRouter } from '../routes/dashboardAlerts.routes';
 import { buildUserScanMusicRouter } from '../routes/userScanMusic.routes';
@@ -154,6 +162,8 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
 
   // ADMS/ZKTeco push protocol. Public by design: biometric devices do not send JWT.
   app.use('/iclock', buildIclockAdmsRouter());
+  // Anuncio de agentes SDK de relojes (otra PC). Sin JWT: valida su propia clave compartida.
+  app.use(`${apiPrefix}/fichero-sdk-agente`, buildFicheroSdkAgenteRouter());
   // ── Swagger / OpenAPI Docs ────────────────────────────────────────────────
   if (env.DOCS_ENABLE) {
     const docsPath = env.DOCS_PATH || '/docs';
@@ -183,6 +193,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/legajo`,       ...protect, buildLegajoRouter(sequelize));
   app.use(`${apiPrefix}/guarderia-ddjj`, ...protect, buildGuarderiaDdjjRouter(sequelize));
   app.use(`${apiPrefix}/samo-ministerio`, ...protect, buildSamoMinisterioRouter(sequelize));
+  app.use(`${apiPrefix}/ultimas-licencias`, ...protect, buildUltimasLicenciasRouter(sequelize));
   app.use(`${apiPrefix}/eventos`,   ...protect, buildEventosRouter(sequelize));
   app.use(`${apiPrefix}/api-keys`,  ...protect, buildApiKeysRouter(sequelize));
   app.use(`${apiPrefix}/usuarios`,  ...protect, buildUsuariosRouter(sequelize));
@@ -201,6 +212,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/jubilacion`,       ...protect, buildJubilacionRouter(sequelize));
   app.use(`${apiPrefix}/herramientas`,     ...protect, buildHerramientasRouter(sequelize));
   app.use(`${apiPrefix}/comisiones`,       ...protect, buildComisionesRouter(sequelize));
+  app.use(`${apiPrefix}/vacaciones-adelantadas`, ...protect, buildVacacionesAdelantadasRouter(sequelize));
   app.use(`${apiPrefix}/whatsapp`,         ...protect, buildWhatsappRouter(sequelize));
   app.use(`${apiPrefix}/stress`,           ...protect, buildStressRouter(sequelize));
   app.use(`${apiPrefix}/antiguedad`,       ...protect, buildAntiguedadRouter(sequelize));
@@ -211,6 +223,13 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/articulo-26-intranet`, ...protect, buildArticulo26IntranetRouter(sequelize));
   app.use(`${apiPrefix}/licencias-consultorio`, ...protect, requireAny(['app:licencias-consultorio:access', 'crud:*:*']), buildLicenciasConsultorioRouter(sequelize));
   app.use(`${apiPrefix}/horarios-extendidos`, ...protect, requireAny(['app:horarios-extendidos:access', 'crud:*:*']), buildHorariosExtendidosRouter());
+  app.use(`${apiPrefix}/plus-licencias`,    ...protect, requireAny(['app:normativa:access', 'crud:*:*']), buildPlusLicenciasRouter(sequelize));
+  // /reciente va antes del montaje restringido: lo usa la ficha de Gestión (cualquier usuario logueado)
+  app.use(`${apiPrefix}/fichajes-agentes/reciente`, ...protect, buildFichajesRecienteRouter(sequelize));
+  // Mensajes al reloj desde Gestión: mismos permisos que la pantalla (usuarios de Gestión + admin).
+  app.use(`${apiPrefix}/mensajes-reloj`, ...protect, requireAny(['crud:agentexdni1:read', 'crud:*:*']), buildMensajesRelojRouter(sequelize));
+  app.use(`${apiPrefix}/fichajes-agentes`, ...protect, requireAny(['crud:*:*']), buildFichajesAgentesRouter(sequelize));
+  app.use(`${apiPrefix}/presentismo-sector`, ...protect, requireAny(['app:jefe_servicio:access', 'crud:*:*']), buildPresentismoSectorRouter(sequelize));
   app.use(`${apiPrefix}/intranet`,          ...protect, buildIntranetRouter(sequelize));
   app.use(`${apiPrefix}/residentes`,         ...protect, buildResidentesRouter(sequelize));
   app.use(`${apiPrefix}/rotacion-siape`,     ...protect, buildRotacionSiapeRouter(sequelize));
@@ -219,6 +238,7 @@ export async function mountApiGateway(app: Express, opts: GatewayOptions): Promi
   app.use(`${apiPrefix}/nombramiento`,       ...protect, buildNombramientoRouter(sequelize));
   app.use(`${apiPrefix}/tramites-documentales`, ...protect, buildTramitesDocumentalesRouter(sequelize));
   app.use(`${apiPrefix}/script-runs`,        ...protect, buildScriptRunsRouter(sequelize));
+  app.use(`${apiPrefix}/feriados`,           ...protect, buildFeriadosRouter(sequelize));
 
   // ── Scanner API integration (recibe webhooks del scanner independiente) ───
   // Auth: acepta JWT del usuario (operador desde UI) o X-Api-Key (scanner microservicio)

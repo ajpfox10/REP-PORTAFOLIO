@@ -5,6 +5,7 @@ import { z }                          from 'zod';
 import { requirePermission }          from '../middlewares/rbacCrud';
 import { logger }                     from '../logging/logger';
 import { trackAction }                from '../logging/track';
+import { sincronizarAlertasCarga }    from '../services/alertasCargaRobots';
 
 const createSchema = z.object({
   dni:     z.number().int().positive(),
@@ -13,8 +14,53 @@ const createSchema = z.object({
   urgente: z.boolean().default(false),
 });
 
+// Las alertas del trámite jubilatorio (las genera jubilacion.routes.ts con títulos
+// 'Jubilación · ...') y las de errores de datos de los robots ('Error de carga · ...',
+// services/alertasCargaRobots.ts) bloquean la app hasta que alguien las desactive.
+const FILTRO_BLOQUEANTE = `(a.titulo LIKE 'Jubilación ·%' OR a.titulo LIKE 'Error de carga ·%')`;
+
+// Mig 078: quién y cuándo desactivó. Se agregan si faltan (MySQL 8 no tiene
+// ADD COLUMN IF NOT EXISTS), así prod queda bien aunque no se corra la .sql.
+const columnasReady = new WeakSet<Sequelize>();
+async function ensureColumnasDesactivado(sequelize: Sequelize) {
+  if (columnasReady.has(sequelize)) return;
+  const [cols] = await sequelize.query(`SHOW COLUMNS FROM alertas_agente LIKE 'desactivado%'`);
+  const nombres = new Set((cols as any[]).map(c => c.Field));
+  if (!nombres.has('desactivado_por')) {
+    await sequelize.query(`ALTER TABLE alertas_agente ADD COLUMN desactivado_por INT NULL AFTER deleted_at`);
+  }
+  if (!nombres.has('desactivado_at')) {
+    await sequelize.query(`ALTER TABLE alertas_agente ADD COLUMN desactivado_at DATETIME NULL AFTER desactivado_por`);
+  }
+  columnasReady.add(sequelize);
+}
+
 export function buildAlertasAgenteRouter(sequelize: Sequelize) {
   const router = Router();
+
+  // GET /alertas-agente/bloqueantes — alertas de jubilación y de errores de carga activas (modal que bloquea la app)
+  router.get(
+    '/bloqueantes',
+    requirePermission('api:access'),
+    async (_req: Request, res: Response) => {
+      try {
+        await sincronizarAlertasCarga(sequelize);
+        const [rows] = await sequelize.query(
+          `SELECT
+             a.id, a.dni, a.titulo, a.mensaje, a.urgente, a.created_at,
+             CONCAT(per.apellido, ', ', per.nombre) AS agente_nombre
+           FROM alertas_agente a
+           LEFT JOIN personal per ON per.dni = a.dni AND per.deleted_at IS NULL
+           WHERE a.activa = 1 AND a.deleted_at IS NULL AND ${FILTRO_BLOQUEANTE}
+           ORDER BY a.urgente DESC, a.created_at DESC`
+        );
+        return res.json({ ok: true, data: rows });
+      } catch (err: any) {
+        logger.error({ msg: 'Error listando alertas bloqueantes', err });
+        return res.status(500).json({ ok: false, error: 'Error al obtener alertas' });
+      }
+    }
+  );
 
   // GET /alertas-agente/agente/:dni — alertas activas de un agente (para banner)
   router.get(
@@ -60,11 +106,14 @@ export function buildAlertasAgenteRouter(sequelize: Sequelize) {
       try {
         const dni    = req.query.dni ? Number(req.query.dni) : null;
         const soloActivas = req.query.activas !== 'false';
+        await ensureColumnasDesactivado(sequelize);
 
         const [rows] = await sequelize.query(
           `SELECT
              a.id, a.dni, a.titulo, a.mensaje, a.urgente, a.activa,
              a.creado_por, a.created_at, a.updated_at,
+             a.desactivado_at,
+             COALESCE(NULLIF(dus.nombre, ''), dus.email) AS desactivado_por_nombre,
              CONCAT(per.apellido, ', ', per.nombre) AS agente_nombre,
              COALESCE(NULLIF(usr.nombre, ''), usr.email) AS creado_por_nombre,
              (SELECT COUNT(*) FROM alertas_agente_usuarios u2
@@ -74,8 +123,8 @@ export function buildAlertasAgenteRouter(sequelize: Sequelize) {
            FROM alertas_agente a
            LEFT JOIN personal per ON per.dni = a.dni AND per.deleted_at IS NULL
            LEFT JOIN usuarios  usr ON usr.id = a.creado_por
-           WHERE a.deleted_at IS NULL
-             ${soloActivas ? 'AND a.activa = 1' : ''}
+           LEFT JOIN usuarios  dus ON dus.id = a.desactivado_por
+           WHERE ${soloActivas ? 'a.deleted_at IS NULL AND a.activa = 1' : '1 = 1'}
              ${dni ? 'AND a.dni = :dni' : ''}
            ORDER BY a.urgente DESC, a.created_at DESC
            LIMIT 500`,
@@ -219,7 +268,7 @@ export function buildAlertasAgenteRouter(sequelize: Sequelize) {
     }
   );
 
-  // DELETE /alertas-agente/:id — desactivar alerta (admin/creador)
+  // DELETE /alertas-agente/:id — desactivar alerta (admin/creador); guarda quién lo hizo
   router.delete(
     '/:id',
     requirePermission('api:access'),
@@ -229,10 +278,18 @@ export function buildAlertasAgenteRouter(sequelize: Sequelize) {
         const userId = (req as any).auth?.principalId ?? null;
         if (isNaN(id)) return res.status(400).json({ ok: false, error: 'ID inválido' });
 
+        // Sólo un usuario logueado queda como responsable (nunca una api_key)
+        const t = (req as any).auth?.principalType;
+        const desactivadoPor = (t === 'user' || t === 'dev') ? userId : null;
+        await ensureColumnasDesactivado(sequelize);
+
         const now = new Date();
         await sequelize.query(
-          `UPDATE alertas_agente SET deleted_at = :now, activa = 0, updated_at = :now WHERE id = :id`,
-          { replacements: { id, now } }
+          `UPDATE alertas_agente
+              SET deleted_at = :now, activa = 0, updated_at = :now,
+                  desactivado_por = :desactivadoPor, desactivado_at = :now
+            WHERE id = :id AND deleted_at IS NULL`,
+          { replacements: { id, now, desactivadoPor } }
         );
 
         trackAction('alerta_agente_eliminar', { actor: userId, alerta_id: id });

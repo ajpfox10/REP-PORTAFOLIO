@@ -36,6 +36,13 @@ module.exports = {
   criticoSourceDir: process.env.CRITICO_SOURCE_DIR || 'D:\\FARMACIA\\CRITICO',
   stockSourceDir: process.env.STOCK_SOURCE_DIR || 'D:\\FARMACIA\\STOCK',
   etiquetasSourceDir: process.env.ETIQUETAS_SOURCE_DIR || 'D:\\FARMACIA\\ETIQUETAS',
+  ordenesCompraDir: process.env.ORDENES_COMPRA_DIR || 'D:\\FARMACIA\\ORDENES COMPRA',
+  ordenesCompraDrive: {
+    // Clave de la cuenta de servicio de Google. El archivo y la pestaña se eligen desde la pagina.
+    keyFile: process.env.OC_GOOGLE_KEY_FILE || '',
+    backupDir: process.env.OC_BACKUP_DIR || path.join(process.env.ORDENES_COMPRA_DIR || 'D:\\FARMACIA\\ORDENES COMPRA', 'backup'),
+    intervalMs: Math.max(30000, Number(process.env.OC_GOOGLE_SYNC_INTERVAL_MS || 60000))
+  },
   trimestreSourceDir: process.env.TRIMESTRE_SOURCE_DIR || process.env.SEMESTRE_SOURCE_DIR || 'D:\\FARMACIA\\TRIMESTRE',
   trimestreWatch: {
     // Sondeo automatico de la carpeta de trimestre. Se puede apagar con TRIMESTRE_WATCH=off.

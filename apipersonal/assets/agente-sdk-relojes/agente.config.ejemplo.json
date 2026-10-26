@@ -1,0 +1,10 @@
+﻿{
+    "servidor":  "http://10.115.31.28:3001",
+    "clave":  "CAMBIAR",
+    "puertoInicial":  8099,
+    "servidoresPermitidos":  [
+                                 "10.115.31.28",
+                                 "192.168.0.21"
+                             ],
+    "sdkDir":  "sdk"
+}

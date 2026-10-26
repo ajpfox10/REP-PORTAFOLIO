@@ -96,6 +96,14 @@ const calculoSchema = z.object({
   servicios_externos:      z.array(servicioExternoSchema).max(20).default([]),
   resoluciones_manuales:   z.record(z.string()).optional().default({}),
   observaciones:           z.string().max(2000).optional().nullable(),
+  // Tramos de la carrera elegidos para el cómputo IPS. Ausente = cálculo clásico
+  // (ingreso → nombramiento = beca, nombramiento → hoy = nombrado).
+  tramos_ips:              z.array(z.object({
+    desde: dateStr,
+    hasta: dateStr.nullable(),
+    tipo:  z.enum(['NOMBRADO', 'BECA', 'RESIDENCIA', 'CONCURRENCIA']),
+    ley:   z.string().max(200).nullable().optional(),
+  })).max(40).optional().nullable(),
 });
 
 // ── Helpers de fecha (sin timezone) ──────────────────────────────────────────
@@ -208,7 +216,30 @@ function unirMismaCaja<T extends { desde: Date; hasta: Date; es_insalubre: boole
   return out;
 }
 
-type ReconocimientoInsalubre = { fecha_desde: string; fecha_hasta: string; acto?: string };
+// Une rangos (medio abiertos) pisados o contiguos.
+function unirRangos(items: Array<{ desde: Date; hasta: Date }>): Array<{ desde: Date; hasta: Date }> {
+  return unirMismaCaja(items.map(r => ({ ...r, es_insalubre: false }))).map(({ desde, hasta }) => ({ desde, hasta }));
+}
+
+// Lo de `a` que no cae en ningún rango de `b` (ambas listas medio abiertas).
+function restarRangos(
+  a: Array<{ desde: Date; hasta: Date }>,
+  b: Array<{ desde: Date; hasta: Date }>,
+): Array<{ desde: Date; hasta: Date }> {
+  return segmentar([
+    ...a.map(r => ({ ...r, de: 'a' as const })),
+    ...b.map(r => ({ ...r, de: 'b' as const })),
+  ])
+    .filter(s => s.cubren.some(c => c.de === 'a') && !s.cubren.some(c => c.de === 'b'))
+    .reduce<Array<{ desde: Date; hasta: Date }>>((out, s) => {
+      const last = out[out.length - 1];
+      if (last && last.hasta.getTime() === s.desde.getTime()) last.hasta = s.hasta;
+      else out.push({ desde: s.desde, hasta: s.hasta });
+      return out;
+    }, []);
+}
+
+type ReconocimientoInsalubre ={ fecha_desde: string; fecha_hasta: string; acto?: string };
 
 // Reconocimientos cargados (fechas inclusivas) → tramos medio abiertos.
 function rangosReconocidos(
@@ -370,7 +401,16 @@ interface CalculoInput {
   servicios_anses:         Array<{ fecha_desde: string; fecha_hasta: string; es_insalubre: boolean }>;
   servicios_externos:      Array<{ organismo: string; fecha_desde: string; fecha_hasta: string; es_insalubre: boolean; caja?: 'IPS' | 'EXTERNA' }>;
   resoluciones_manuales:   Record<string, string>;
+  // Tramos de la carrera que el operador eligió para el cómputo IPS (ver tramosDelAgente).
+  tramos_ips?:             TramoIps[] | null;
 }
+
+type TramoIps = {
+  desde: string;
+  hasta: string | null;   // null = vigente
+  tipo:  'NOMBRADO' | 'BECA' | 'RESIDENCIA' | 'CONCURRENCIA';
+  ley?:  string | null;
+};
 
 function calcular(input: CalculoInput) {
   // Todo el cálculo se para en esta fecha: la edad, el cierre del tramo de
@@ -385,16 +425,6 @@ function calcular(input: CalculoInput) {
   const edad     = fechaNac ? diffFechas(fechaNac, hoy) : null;
   const edadDias = edad ? toDias(edad) : 0;
 
-  // ── Beca y sin aportes ───────────────────────────────────────────────────────
-  const tieneBeca = !!(fechaIngreso && fechaNom && fechaIngreso < fechaNom);
-  const requierePreguntaAportes =
-    input.situacion_revista === 'RESIDENTE' ||
-    input.situacion_revista === 'CONCURRENTE' ||
-    input.situacion_revista === 'ARTICULO_48';
-  const sinAportes =
-    (requierePreguntaAportes && !input.ips_aporto) ||
-    (input.situacion_revista === 'BECADO' && !input.beca_aporto && !fechaNom);
-
   const esInsalubreEfectivo = input.es_insalubre_ips || input.diferencial_2pct_pagado;
 
   // ── Rangos IPS ───────────────────────────────────────────────────────────────
@@ -404,34 +434,64 @@ function calcular(input: CalculoInput) {
   const recortar = (r: Rango): Rango | null =>
     r.desde >= hoyFin ? null : { desde: r.desde, hasta: r.hasta > hoyFin ? hoyFin : r.hasta };
 
-  const ipsBecaRange: Rango | null =
-    (tieneBeca && input.beca_aporto)
-      ? recortar({ desde: fechaIngreso!, hasta: fechaNom! })
-      : null;
+  // ── Beca y nombrado ──────────────────────────────────────────────────────────
+  // Con `tramos_ips` el operador eligió en pantalla qué tramos de la carrera computan
+  // (beca, residencia, nombrado, cada uno con sus fechas): los huecos entre tramos no
+  // suman y un tramo dado de baja termina en su egreso. Sin `tramos_ips` (cálculos
+  // viejos, proyección del padrón) se arma como siempre: ingreso → nombramiento = beca,
+  // nombramiento → hoy = nombrado.
+  let tieneBeca: boolean;
+  let becaAporto: boolean;
+  let sinAportes: boolean;
+  let ipsBecaRanges: Rango[];
+  let ipsNombRanges: Rango[];
 
-  const fechaInicioNombrado = fechaNom ?? fechaIngreso;
-  const ipsNombRange: Rango | null =
-    (!sinAportes && fechaInicioNombrado && fechaInicioNombrado <= hoy)
-      ? { desde: fechaInicioNombrado, hasta: hoyFin }
-      : null;
+  if (input.tramos_ips) {
+    const aRango = (t: TramoIps): Rango | null => {
+      const desde = parseDate(t.desde);
+      const hasta = t.hasta ? parseDate(t.hasta) : null;
+      if (!desde || (hasta && hasta < desde)) return null;
+      return recortar({ desde, hasta: hasta ? finExclusivo(hasta) : hoyFin });
+    };
+    const rangos = (tipos: TramoIps['tipo'][]) =>
+      unirRangos(input.tramos_ips!.filter(t => tipos.includes(t.tipo)).map(aRango).filter(Boolean) as Rango[]);
+    ipsNombRanges = rangos(['NOMBRADO']);
+    // Si una beca y un nombramiento se pisan, ese tiempo es de nombrado.
+    ipsBecaRanges = restarRangos(rangos(['BECA', 'RESIDENCIA', 'CONCURRENCIA']), ipsNombRanges);
+    tieneBeca  = ipsBecaRanges.length > 0;
+    becaAporto = tieneBeca;   // tildar un tramo de beca = computa (aportó o se reconoce)
+    sinAportes = false;
+  } else {
+    tieneBeca = !!(fechaIngreso && fechaNom && fechaIngreso < fechaNom);
+    becaAporto = input.beca_aporto;
+    const requierePreguntaAportes =
+      input.situacion_revista === 'RESIDENTE' ||
+      input.situacion_revista === 'CONCURRENTE' ||
+      input.situacion_revista === 'ARTICULO_48';
+    sinAportes =
+      (requierePreguntaAportes && !input.ips_aporto) ||
+      (input.situacion_revista === 'BECADO' && !input.beca_aporto && !fechaNom);
+
+    const ipsBecaRange: Rango | null =
+      (tieneBeca && input.beca_aporto)
+        ? recortar({ desde: fechaIngreso!, hasta: fechaNom! })
+        : null;
+    const fechaInicioNombrado = fechaNom ?? fechaIngreso;
+    const ipsNombRange: Rango | null =
+      (!sinAportes && fechaInicioNombrado && fechaInicioNombrado <= hoy)
+        ? { desde: fechaInicioNombrado, hasta: hoyFin }
+        : null;
+    ipsBecaRanges = ipsBecaRange ? [ipsBecaRange] : [];
+    ipsNombRanges = ipsNombRange ? [ipsNombRange] : [];
+  }
 
   // Sub-rangos nombrado respecto de FECHA_CORTE
-  let ipsNombAntes15Range: Rango | null = null;
-  let ipsNombDesde15Range: Rango | null = null;
-  if (ipsNombRange) {
-    if (ipsNombRange.desde < FECHA_CORTE) {
-      ipsNombAntes15Range = {
-        desde: ipsNombRange.desde,
-        hasta: ipsNombRange.hasta < FECHA_CORTE ? ipsNombRange.hasta : FECHA_CORTE,
-      };
-    }
-    if (ipsNombRange.hasta > FECHA_CORTE) {
-      ipsNombDesde15Range = {
-        desde: ipsNombRange.desde > FECHA_CORTE ? ipsNombRange.desde : FECHA_CORTE,
-        hasta: ipsNombRange.hasta,
-      };
-    }
-  }
+  const ipsNombAntes15Ranges: Rango[] = ipsNombRanges
+    .filter(r => r.desde < FECHA_CORTE)
+    .map(r => ({ desde: r.desde, hasta: r.hasta < FECHA_CORTE ? r.hasta : FECHA_CORTE }));
+  const ipsNombDesde15Ranges: Rango[] = ipsNombRanges
+    .filter(r => r.hasta > FECHA_CORTE)
+    .map(r => ({ desde: r.desde > FECHA_CORTE ? r.desde : FECHA_CORTE, hasta: r.hasta }));
 
   // ── Servicios IPS-extra (municipio / ministerio provincial → misma caja IPS) ──
   // Aportan a IPS: son la misma caja, así que se unen con beca/nombrado en vez
@@ -457,14 +517,12 @@ function calcular(input: CalculoInput) {
     label: string;
   };
   const ipsFuentes: IpsFuente[] = [];
-  if (ipsBecaRange)        ipsFuentes.push({ ...ipsBecaRange,        es_insalubre: true,                 tipo: 'beca',    label: 'Beca' });
+  for (const r of ipsBecaRanges) ipsFuentes.push({ ...r, es_insalubre: true, tipo: 'beca', label: 'Beca' });
   // Antes de Jun/2015 el tramo se parte por los actos que reconocen
   // insalubridad: lo reconocido va insalubre (16%) y el resto sigue el flag
   // general (común salvo ocupación insalubre o 2% pagado).
   const recosInsalubre = rangosReconocidos(input.reconocimientos_insalubre);
-  const antes15Pedazos = ipsNombAntes15Range
-    ? partirPorReconocimientos(ipsNombAntes15Range, recosInsalubre)
-    : [];
+  const antes15Pedazos = ipsNombAntes15Ranges.flatMap(r => partirPorReconocimientos(r, recosInsalubre));
   for (const p of antes15Pedazos) {
     ipsFuentes.push({
       desde: p.desde, hasta: p.hasta,
@@ -473,7 +531,7 @@ function calcular(input: CalculoInput) {
       label: p.acto !== null ? `Reconocido insalubre${p.acto ? ` (${p.acto})` : ''}` : 'Nombrado antes 2015',
     });
   }
-  if (ipsNombDesde15Range) ipsFuentes.push({ ...ipsNombDesde15Range, es_insalubre: true,                 tipo: 'desde15', label: 'Nombrado desde 2015' });
+  for (const r of ipsNombDesde15Ranges) ipsFuentes.push({ ...r, es_insalubre: true, tipo: 'desde15', label: 'Nombrado desde 2015' });
   for (const ex of ipsExtrasRaw) {
     ipsFuentes.push({ desde: ex.desde, hasta: ex.hasta, es_insalubre: ex.es_insalubre, tipo: 'extra', label: ex.label });
   }
@@ -778,23 +836,24 @@ function calcular(input: CalculoInput) {
   }
 
   // ── Períodos IPS para display ─────────────────────────────────────────────────
-  const servBeca       = ipsBecaRange        ? diffFechas(ipsBecaRange.desde,        ipsBecaRange.hasta)        : { anios:0,meses:0,dias:0 };
-  const servNomb       = ipsNombRange        ? diffFechas(ipsNombRange.desde,        ipsNombRange.hasta)        : { anios:0,meses:0,dias:0 };
-  const servNombAntes15 = ipsNombAntes15Range ? diffFechas(ipsNombAntes15Range.desde, ipsNombAntes15Range.hasta) : { anios:0,meses:0,dias:0 };
+  const sumaRangos = (rs: Rango[]) => sumPeriodos(rs.map(r => diffFechas(r.desde, r.hasta)));
+  const servBeca        = sumaRangos(ipsBecaRanges);
+  const servNomb        = sumaRangos(ipsNombRanges);
+  const servNombAntes15 = sumaRangos(ipsNombAntes15Ranges);
   const servAntes15Comun      = sumPeriodos(antes15Comunes.map(p => diffFechas(p.desde, p.hasta)));
   const servAntes15Reconocido = sumPeriodos(antes15Reconocidos.map(p => diffFechas(p.desde, p.hasta)));
   // Cada acto con lo que efectivamente aplicó dentro de "antes de Jun/2015"
   // (cero = cargado fuera de ese período, el operador lo tiene que revisar).
   const reconocimientosAplicados = recosInsalubre.map(r => {
-    const i = ipsNombAntes15Range ? intersectRange(ipsNombAntes15Range, r) : null;
+    const enAntes15 = ipsNombAntes15Ranges.map(a => intersectRange(a, r)).filter(Boolean) as Rango[];
     return {
       desde:   fmtISO(r.desde),
       hasta:   fmtISO(addDias(r.hasta, -1)),
       acto:    r.acto,
-      periodo: i ? diffFechas(i.desde, i.hasta) : { anios: 0, meses: 0, dias: 0 },
+      periodo: sumaRangos(enAntes15),
     };
   });
-  const servNombDesde15 = ipsNombDesde15Range ? diffFechas(ipsNombDesde15Range.desde, ipsNombDesde15Range.hasta) : { anios:0,meses:0,dias:0 };
+  const servNombDesde15 = sumaRangos(ipsNombDesde15Ranges);
   const servIPSTotal    = sumPeriodos([servBeca, servNomb, fromDias(ipsExtraBrutoDias)]);
   const servIPSAjustado = fromDias(ipsSurvTotal);
 
@@ -885,7 +944,10 @@ function calcular(input: CalculoInput) {
 
   return {
     tiene_beca:                   tieneBeca,
-    beca_aporto:                  input.beca_aporto,
+    beca_aporto:                  becaAporto,
+    // Selección de tramos con la que se calculó: se guarda con el resultado para
+    // reponerla al cargar el cálculo.
+    tramos_ips:                   input.tramos_ips ?? null,
     ips_aporto:                   input.ips_aporto,
     sin_aportes:                  sinAportes,
     caja_jubilatoria:             cajaJubilatoria,
@@ -949,7 +1011,99 @@ const SQL_AGENTE = `
   LEFT JOIN ley l       ON l.id  = a.ley_id
   LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id AND o.deleted_at IS NULL
   WHERE p.dni = :dni AND p.deleted_at IS NULL
+  -- Un DNI puede tener varios tramos (beca/residencia en BAJA + el ACTIVO): sin orden
+  -- MySQL devolvía cualquiera. Se toma el activo o, si no hay, el más reciente.
+  ORDER BY (a.estado_empleo = 'ACTIVO') DESC, a.fecha_ingreso DESC, a.id DESC
   LIMIT 1`;
+
+// ── Tramos de la carrera del agente ───────────────────────────────────────────
+// Cada fila de `agentes` del DNI es un tramo (beca, residencia, nombramientos). La
+// pantalla los lista con un tilde para que el operador elija cuáles computan para
+// el IPS. Si un tramo trae nombramiento posterior a su ingreso, lo previo al
+// nombramiento se ofrece aparte como beca (salvo que otro tramo ya lo cubra).
+type TramoCarrera = {
+  clave:      string;
+  agente_id:  number;
+  ley:        string | null;
+  planta:     string | null;
+  ocupacion:  string | null;
+  estado:     string | null;
+  desde:      string;
+  hasta:      string | null;   // null = vigente
+  tipo:       TramoIps['tipo'];
+  computa:    boolean;         // tilde sugerido
+  nota:       string | null;
+};
+
+const fechaValida = (v: any): string | null => {
+  if (!v) return null;
+  const iso = v instanceof Date ? fechaISO(v) : String(v).slice(0, 10);
+  // Hay fechas de relleno ("1111-11-01") en nombramientos: se toman como vacías.
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) && Number(iso.slice(0, 4)) >= 1930 ? iso : null;
+};
+
+function tipoPorLey(ley: string | null): TramoIps['tipo'] {
+  if (/beca/i.test(ley || '')) return 'BECA';
+  if (/residen/i.test(ley || '')) return 'RESIDENCIA';
+  if (/concurren/i.test(ley || '')) return 'CONCURRENCIA';
+  return 'NOMBRADO';
+}
+
+async function tramosDelAgente(sequelize: Sequelize, dni: number): Promise<TramoCarrera[]> {
+  const rows = await sequelize.query<any>(
+    `SELECT a.id, a.estado_empleo, l.nombre AS ley, pl.nombre AS planta, o.nombre AS ocupacion,
+            DATE_FORMAT(a.fecha_ingreso, '%Y-%m-%d')         AS ingreso,
+            DATE_FORMAT(a.fecha_de_nombramiento, '%Y-%m-%d') AS nombramiento,
+            DATE_FORMAT(a.fecha_egreso, '%Y-%m-%d')          AS egreso
+       FROM agentes a
+       LEFT JOIN ley l          ON l.id  = a.ley_id
+       LEFT JOIN plantas pl     ON pl.id = a.planta_id
+       LEFT JOIN ocupaciones o  ON o.id  = a.ocupacion_id
+      WHERE a.dni = :dni AND a.deleted_at IS NULL
+      ORDER BY a.fecha_ingreso, a.id`,
+    { replacements: { dni }, type: QueryTypes.SELECT },
+  );
+  return armarTramos(rows);
+}
+
+/**
+ * Filas de `agentes` de un DNI (id, estado_empleo, ley, planta, ocupacion, ingreso,
+ * nombramiento, egreso) → tramos de la carrera. Lo usan la calculadora y la proyección.
+ */
+function armarTramos(rows: any[]): TramoCarrera[] {
+  const out: TramoCarrera[] = [];
+  for (const r of rows) {
+    const ingreso = fechaValida(r.ingreso);
+    if (!ingreso) continue;
+    const egreso = fechaValida(r.egreso);
+    const nom    = fechaValida(r.nombramiento);
+    const base = { agente_id: r.id, ley: r.ley ?? null, planta: r.planta ?? null, ocupacion: r.ocupacion ?? null, estado: r.estado_empleo ?? null };
+    const tipo = tipoPorLey(r.ley);
+
+    // Nombramiento posterior al ingreso dentro del mismo tramo: lo previo fue beca.
+    if (tipo === 'NOMBRADO' && nom && nom > ingreso && (!egreso || nom <= egreso)) {
+      const finBeca = fmtISOLocal(addDias(parseDate(nom)!, -1));
+      out.push({ ...base, clave: `${r.id}-beca`, desde: ingreso, hasta: finBeca, tipo: 'BECA', computa: false,
+        nota: 'Antes del nombramiento (ingreso → nombramiento)' });
+      out.push({ ...base, clave: String(r.id), desde: nom, hasta: egreso, tipo, computa: true, nota: null });
+    } else {
+      out.push({ ...base, clave: String(r.id), desde: ingreso, hasta: egreso, tipo, computa: tipo === 'NOMBRADO',
+        nota: tipo === 'NOMBRADO' ? null : 'Sin aportes salvo que los haya pagado: tildalo si computa' });
+    }
+  }
+
+  // Un "antes del nombramiento" que otro tramo ya cubre entero es el mismo período
+  // cargado dos veces (la carrera se modeló con un tramo propio): se deja el tramo.
+  const cubre = (a: TramoCarrera, b: TramoCarrera) =>
+    a !== b && a.desde <= b.desde && (a.hasta === null || (b.hasta !== null && a.hasta >= b.hasta));
+  return out
+    .filter(t => !(t.clave.endsWith('-beca') && out.some(o => !o.clave.endsWith('-beca') && o.agente_id !== t.agente_id && cubre(o, t))))
+    .sort((a, b) => a.desde.localeCompare(b.desde));
+}
+
+function fmtISOLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 // ── Agenda de citas: creación idempotente de la tabla en runtime ──────────────
 // (mismo patrón que app_runtime_config: la tabla se crea sola al primer request,
@@ -1101,8 +1255,10 @@ async function registrarExpedienteAgente(
   ) as any[];
   if (existe.length) return;
   await sequelize.query(
-    `INSERT INTO expedientes (dni, numero, caratula, fecha, estado, created_by, created_at)
-     VALUES (:dni, :numero, :caratula, CURDATE(), 'En trámite', :userId, NOW())`,
+    `INSERT INTO expedientes (dni, numero, anio, caratula, fecha, estado, created_by, created_at)
+     VALUES (:dni, :numero,
+             COALESCE(CAST(REGEXP_SUBSTR(:numero, '(?<![0-9])(19|20)[0-9]{2}(?![0-9])') AS UNSIGNED), YEAR(CURDATE())),
+             :caratula, CURDATE(), 'En trámite', :userId, NOW())`,
     {
       replacements: { dni: opts.dni, numero, caratula: opts.caratula, userId: opts.userId },
       type: QueryTypes.INSERT,
@@ -1468,7 +1624,16 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         const rows = await sequelize.query(SQL_AGENTE, { replacements: { dni }, type: QueryTypes.SELECT });
         if (!(rows as any[]).length)
           return res.status(404).json({ ok: false, error: `Agente DNI ${dni} no encontrado` });
-        return res.json({ ok: true, data: (rows as any[])[0] });
+        const tramos = await tramosDelAgente(sequelize, dni);
+        return res.json({
+          ok: true,
+          data: {
+            ...(rows as any[])[0],
+            tramos,
+            // Ingreso real a la carrera: el del primer tramo (beca/residencia incluidas).
+            fecha_ingreso_carrera: tramos[0]?.desde ?? null,
+          },
+        });
       } catch (err: any) {
         logger.error({ msg: '[jubilacion] agente-datos error', err: err?.message });
         return res.status(500).json({ ok: false, error: err?.message });
@@ -1532,6 +1697,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           servicios_anses:         body.servicios_anses,
           servicios_externos:      body.servicios_externos,
           resoluciones_manuales:   body.resoluciones_manuales ?? {},
+          tramos_ips:              body.tramos_ips ?? null,
         });
         return res.json({ ok: true, agente: ag, resultado });
       } catch (err: any) {
@@ -1625,6 +1791,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           servicios_anses:         body.servicios_anses,
           servicios_externos:      body.servicios_externos,
           resoluciones_manuales:   body.resoluciones_manuales ?? {},
+          tramos_ips:              body.tramos_ips ?? null,
         });
 
         const [insertResult] = await sequelize.query(
@@ -1714,6 +1881,7 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
           servicios_anses:         body.servicios_anses,
           servicios_externos:      body.servicios_externos,
           resoluciones_manuales:   body.resoluciones_manuales ?? {},
+          tramos_ips:              body.tramos_ips ?? null,
         });
 
         await sequelize.query(
@@ -2045,10 +2213,12 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
     const dnis = agentes.map((ag) => Number(ag.dni));
     const tramos = dnis.length ? await sequelize.query(
       `SELECT a.id, a.dni, a.fecha_ingreso, a.fecha_de_nombramiento, a.fecha_egreso,
-              COALESCE(o.es_insalubre, 0) AS es_insalubre, l.nombre AS ley_nombre
+              COALESCE(o.es_insalubre, 0) AS es_insalubre, l.nombre AS ley_nombre,
+              a.estado_empleo, o.nombre AS ocupacion, pl.nombre AS planta
        FROM agentes a
        LEFT JOIN ocupaciones o ON o.id = a.ocupacion_id AND o.deleted_at IS NULL
        LEFT JOIN ley l ON l.id = a.ley_id
+       LEFT JOIN plantas pl ON pl.id = a.planta_id
        WHERE a.deleted_at IS NULL AND a.dni IN (:dnis)
        ORDER BY a.dni, a.fecha_ingreso`,
       { replacements: { dnis }, type: QueryTypes.SELECT }) as any[] : [];
@@ -2143,7 +2313,17 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
       // cálculo guardado, si el operador la corrigió). Si la ocupación ya es
       // insalubre el 2% no aplica — ese tiempo computa insalubre igual — así
       // que el flag queda sin efecto y no infla la proyección.
+      // La proyección cuenta la carrera entera: todos los tramos (nombramientos,
+      // becas, residencias), tildados o no en la calculadora. Los tildes son sólo
+      // para el cálculo individual del agente.
+      const tramosCarrera: TramoIps[] = armarTramos((tramosPorDni.get(dni) ?? []).map((t) => ({
+        id: t.id, estado_empleo: t.estado_empleo, ley: t.ley_nombre, planta: t.planta, ocupacion: t.ocupacion,
+        ingreso: t.fecha_ingreso, nombramiento: t.fecha_de_nombramiento, egreso: t.fecha_egreso,
+      }))).map((t) => ({ desde: t.desde, hasta: t.hasta, tipo: t.tipo, ley: t.ley }));
+      const conTramos = tramosCarrera.length > 0;
+
       const armarInput = (fecha: Date, conPago = false) => ({
+        tramos_ips:              conTramos ? tramosCarrera : null,
         fecha_nacimiento:        fNacimiento,
         fecha_ingreso_ips:       fIngreso,
         fecha_nombramiento_ips:  fNombramiento,
@@ -2157,7 +2337,8 @@ export function buildJubilacionRouter(sequelize: Sequelize): Router {
         servicios_anses:         serviciosAnses,
         servicios_externos:      [
           ...(calc ? parseJSON<any[]>(calc.servicios_externos, []) : []),
-          ...tramosAnteriores(conPago),
+          // Con tramos, la carrera entera ya va en `tramos_ips`.
+          ...(conTramos ? [] : tramosAnteriores(conPago)),
         ],
         resoluciones_manuales:   calc ? parseJSON<Record<string, string>>(calc.resoluciones_manuales, {}) : {},
       });

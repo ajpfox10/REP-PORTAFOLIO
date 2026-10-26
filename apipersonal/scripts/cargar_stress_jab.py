@@ -507,6 +507,26 @@ def traer(cn, solo_dni=None, limit=None):
         c.execute(sql, p); return c.fetchall()
 
 
+def ya_tiene_complementaria(cn, dni, anio):
+    """Ultima traba antes de cargar: si ya figura en el ledger o el Tiempo Acumulado
+    (Exportacion de SIAPE) ya trae una ANUAL COMPLEMENTARIA de ese año, NO se carga
+    (SIAPE no rechaza duplicados). Devuelve el motivo o None."""
+    with cn.cursor() as c:
+        c.execute("SELECT 1 FROM stress_cargados WHERE dni=%s AND anio=%s", (dni, anio))
+        if c.fetchone():
+            return "ya en ledger"
+        c.execute("SELECT 1 FROM tiempo_acumulado WHERE dni=%s AND anio=%s "
+                  "AND UPPER(licencia) LIKE 'ANUAL COMPLEMENTARIA%%' LIMIT 1", (dni, anio))
+        if c.fetchone():
+            return "ya tiene ANUAL COMPLEMENTARIA en SIAPE (Tiempo Acumulado)"
+        # se toma una por año calendario; la del año 'anio' se toma en anio+1
+        c.execute("SELECT 1 FROM historial WHERE dni=%s AND UPPER(novedad) LIKE 'ANUAL COMPLEMENTARIA%%' "
+                  "AND YEAR(fecha_desde)=%s LIMIT 1", (dni, int(anio) + 1))
+        if c.fetchone():
+            return f"ya tiene ANUAL COMPLEMENTARIA en {int(anio) + 1} (historial)"
+    return None
+
+
 def marcar(cn, dni, anio, estado, motivo=None, dias=None, licencia=None):
     MN.registrar_item("siape_carga_stress", dni, None, licencia or "ANUAL COMPLEMENTARIA",
                       f"año {anio}", f"{dias} días" if dias is not None else None, estado, motivo)
@@ -1065,6 +1085,15 @@ def main():
     log(f"modo: {'+ verde (--plus)' if USAR_PLUS else 'cerrar/reabrir'}")
     for r in pend:
         log(f"-- {r['dni']} {r['apellido']} -----")
+        tiene = ya_tiene_complementaria(cn, r["dni"], r["anio"])
+        if tiene:
+            log(f"   NO cargo: {tiene}")
+            with cn.cursor() as c:
+                c.execute("UPDATE cola_carga_stress SET estado='omitido', motivo=%s "
+                          "WHERE dni=%s AND anio=%s AND estado<>'cargado'",
+                          (tiene, r["dni"], r["anio"]))
+            cn.commit()
+            continue
         try:
             if args.solo_abrir:
                 frame = abrir_ta()

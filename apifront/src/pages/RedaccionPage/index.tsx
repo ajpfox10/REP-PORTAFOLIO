@@ -17,6 +17,7 @@ import { apiFetch, apiFetchBlob, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { useToast }                     from '../../ui/toast';
 import { AlertaBannerAgenteConMensaje } from '../../components/AlertaBannerAgente';
+import { Diferencial2pctPanel } from './Diferencial2pctPanel';
 
 const JUB_WIN_START = parseInt((import.meta as any).env?.VITE_JUB_WINDOW_DAY_START ?? '1');
 const JUB_WIN_END   = parseInt((import.meta as any).env?.VITE_JUB_WINDOW_DAY_END   ?? '10');
@@ -94,6 +95,8 @@ const DOCS = [
     frase: 'Solicitud de designacion de agente becario con cargo, ley y regimen horario seleccionable.' },
   { id: 18, label: 'Nota Elevacion Becario',       implementado: true,
     frase: 'Elevacion administrativa de la solicitud de designacion del agente becario.' },
+  { id: 19, label: 'Diferencial 2%',              implementado: true,
+    frase: 'Certifica el descuento del 14 % desde el nombramiento hasta el 30/06/2015, con licencias sin goce y jefaturas del periodo.' },
 ];
 
 function DocModal({ agente, doc, onClose }: {
@@ -580,6 +583,8 @@ function DocModal({ agente, doc, onClose }: {
   };
 
   const renderPreview = () => {
+    if (doc.id === 19) return <Diferencial2pctPanel agente={agente} />;
+
     if (doc.id === 1) {
       if (loadingDatos || loadingPreview) return <p style={{ color: '#888', textAlign: 'center', padding: 24 }}>Cargando documento...</p>;
       if (!certLaboralDatos) return <p style={{ color: '#c00', textAlign: 'center', padding: 24 }}>No se encontraron datos del agente.</p>;
@@ -1108,7 +1113,7 @@ function DocModal({ agente, doc, onClose }: {
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 16, padding: 24, maxWidth: [11, 13, 14, 16, 17, 18].includes(doc.id) ? 1100 : 860, width: '100%',
+        borderRadius: 16, padding: 24, maxWidth: [11, 13, 14, 16, 17, 18, 19].includes(doc.id) ? 1100 : 860, width: '100%',
         maxHeight: '95vh', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -1120,10 +1125,10 @@ function DocModal({ agente, doc, onClose }: {
         </div>
 
         <div style={{
-          borderRadius: 8, overflow: [11, 13, 14, 16, 17, 18].includes(doc.id) ? 'hidden' : 'auto', flex: 1,
+          borderRadius: 8, overflow: [11, 13, 14, 16, 17, 18, 19].includes(doc.id) ? 'hidden' : 'auto', flex: 1,
           boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
-          background: doc.implementado ? ([7, 11, 13, 14, 15, 16, 17, 18].includes(doc.id) ? '#f9fafb' : '#fff') : '#fffbeb',
-          border: doc.implementado ? ([7, 11, 13, 14, 15, 16, 17, 18].includes(doc.id) ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
+          background: doc.implementado ? ([7, 11, 13, 14, 15, 16, 17, 18, 19].includes(doc.id) ? '#f9fafb' : '#fff') : '#fffbeb',
+          border: doc.implementado ? ([7, 11, 13, 14, 15, 16, 17, 18, 19].includes(doc.id) ? '1px solid #e5e7eb' : 'none') : '1px solid #fcd34d',
         }}>
           {renderPreview()}
         </div>

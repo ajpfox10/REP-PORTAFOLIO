@@ -272,8 +272,8 @@ export function LicenciasMedicasControlPage() {
       {whatsapp ? (
         <div className="card" style={{ marginTop: 12, padding: 0, overflowX: 'auto' }}>
           {focoWsp
-            ? <WhatsappTab foco licencias={(data?.data ?? []).filter(l => keyDe(l) === focoWsp)} onQuitarFoco={() => setFocoWsp(null)} />
-            : <WhatsappTab licencias={filtrados} />}
+            ? <WhatsappTab foco licencias={(data?.data ?? []).filter(l => keyDe(l) === focoWsp)} onQuitarFoco={() => setFocoWsp(null)} onEnviado={() => void cargar(false, true)} />
+            : <WhatsappTab licencias={filtrados} onEnviado={() => void cargar(false, true)} />}
         </div>
       ) : (
       <div className="card" style={{ marginTop: 12, padding: 0, overflowX: 'auto' }}>

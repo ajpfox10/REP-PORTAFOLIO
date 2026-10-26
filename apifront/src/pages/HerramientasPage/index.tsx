@@ -41,6 +41,8 @@ interface LineaPdfANSES {
   fecha_desde:     string | null;
   fecha_hasta:     string | null;
   sugerida:        boolean;
+  tiempo_documento?: Periodo | null;   // columnas A/M/D de la resolución
+  causa_sin_computo?: string | null;   // monotributo sin aportes, Ley 25.321, Ap. "no"...
   motivos:         string[];
   crudo:           string;
 }
@@ -144,7 +146,31 @@ interface AgenteInfo {
   ocupacion_nombre:      string | null;
   ocupacion_es_insalubre: boolean;
   situacion_sugerida:    string;
+  // Carrera del agente: un tramo por fila de `agentes` (beca, residencia, nombramientos).
+  tramos?:               TramoCarrera[];
+  fecha_ingreso_carrera?: string | null;
 }
+
+type TipoTramo = 'NOMBRADO' | 'BECA' | 'RESIDENCIA' | 'CONCURRENCIA';
+
+interface TramoCarrera {
+  clave:     string;
+  agente_id: number;
+  ley:       string | null;
+  planta:    string | null;
+  ocupacion: string | null;
+  estado:    string | null;
+  desde:     string;
+  hasta:     string | null;   // null = vigente
+  tipo:      TipoTramo;
+  computa:   boolean;         // tilde sugerido por el backend
+  nota:      string | null;
+}
+
+const ETIQUETA_TRAMO: Record<TipoTramo, string> = {
+  NOMBRADO: 'Nombrado', BECA: 'Beca', RESIDENCIA: 'Residencia', CONCURRENCIA: 'Concurrencia',
+};
+const claveTramoIps = (t: { desde: string; hasta: string | null; tipo: string }) => `${t.tipo}|${t.desde}|${t.hasta ?? ''}`;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const P0 = { anios: 0, meses: 0, dias: 0 };
@@ -185,6 +211,23 @@ const toISODate = (d: Date): string => {
 };
 
 const TODAY_ISO = toISODate(new Date());
+
+// Tiempo entre Desde y Hasta como lo computa ANSES: ambas fechas inclusive, meses de 30 días.
+// Se usa en la revisión del PDF para validar las fechas escaneadas contra las columnas A/M/D.
+const tiempoANSES = (desde: string | null, hasta: string | null): Periodo | null => {
+  if (!desde || !hasta || desde > hasta) return null;
+  const [y1, m1, d1] = desde.split('-').map(Number);
+  const [y2, m2, d2] = hasta.split('-').map(Number);
+  const fin = new Date(Date.UTC(y2, m2 - 1, d2 + 1));
+  let dias = fin.getUTCDate() - d1;
+  let meses = fin.getUTCMonth() + 1 - m1;
+  let anios = fin.getUTCFullYear() - y1;
+  if (dias < 0) { meses -= 1; dias += 30; }
+  if (meses < 0) { anios -= 1; meses += 12; }
+  return { anios, meses, dias };
+};
+const dias360 = (p: Periodo) => p.anios * 360 + p.meses * 30 + p.dias;
+const fmtAMD = (p: Periodo | null) => (p ? `${p.anios}a ${p.meses}m ${p.dias}d` : '—');
 
 // Las bajas del cronograma caen a fin de trimestre. Devuelve las próximas
 // cuatro a partir de la fecha dada, para ofrecerlas como atajo.
@@ -627,6 +670,9 @@ export function HerramientasPage() {
 
   const [situacion,          setSituacion]          = useState<string>('NORMAL');
   const [becaAporto,         setBecaAporto]         = useState(false);
+  // Tramos de la carrera que computan para el IPS (clave del tramo → tildado).
+  // Las becas/residencias se tildan período por período si se pagaron los aportes.
+  const [tramosSel,          setTramosSel]          = useState<Record<string, boolean>>({});
   const [ipsAporto,          setIpsAporto]          = useState(true);
   // Común hasta Jun/2015 · insalubre toda la carrera · mixto por actos de reconocimiento.
   const [modoInsalubre,      setModoInsalubre]      = useState<ModoInsalubre>('COMUN');
@@ -775,6 +821,7 @@ export function HerramientasPage() {
       if (!d) { toast.error('No se encontraron datos del agente'); return; }
 
       setAgente(d);
+      setTramosSel(Object.fromEntries(((d.tramos ?? []) as TramoCarrera[]).map(t => [t.clave, t.computa])));
       setSituacion(d.situacion_sugerida ?? 'NORMAL');
       setModoInsalubre(d.ocupacion_es_insalubre ? 'INSALUBRE' : 'COMUN');
       setReconocimientos([]);
@@ -919,6 +966,11 @@ export function HerramientasPage() {
     servicios_anses:         serviciosAnses.filter(s => s.fecha_desde && s.fecha_hasta),
     servicios_externos:      serviciosExternos.filter(s => s.organismo.trim() && s.fecha_desde && s.fecha_hasta),
     resoluciones_manuales:   resoluciones,
+    // Con la carrera a la vista, el IPS se arma con los tramos tildados; sin tramos
+    // (agente sin filas en `agentes`) queda el cálculo clásico ingreso/nombramiento.
+    tramos_ips: agente!.tramos?.length
+      ? agente!.tramos.filter(t => tramosSel[t.clave]).map(t => ({ desde: t.desde, hasta: t.hasta, tipo: t.tipo, ley: t.ley }))
+      : null,
   });
 
   // ── Calcular ──────────────────────────────────────────────────────────────
@@ -950,6 +1002,15 @@ export function HerramientasPage() {
     calcular();
   }, [fechaCalculo]);
 
+  // Tildar o destildar un tramo recalcula solo (si ya hay un resultado en pantalla).
+  // Al precargar un cálculo guardado la selección cambia sola: eso no recalcula.
+  const saltearRecalcTramos = useRef(false);
+  useEffect(() => {
+    if (saltearRecalcTramos.current) { saltearRecalcTramos.current = false; return; }
+    if (!resultado || !agente?.tramos?.length) return;
+    calcular();
+  }, [tramosSel]);
+
   const resolverEmpate = (key: string, ganadorId: string) => {
     const nuevas = { ...resolucionesManuales, [key]: ganadorId };
     setResolucionesManuales(nuevas);
@@ -966,6 +1027,18 @@ export function HerramientasPage() {
     };
     setSituacion(h.situacion_revista ?? 'NORMAL');
     setBecaAporto(!!h.beca_aporto);
+    // Selección de tramos guardada con el resultado. Los cálculos anteriores a los
+    // tramos no la tienen: nombrados tildados y las becas según "aportó".
+    {
+      const resH = parse(h.resultado, null);
+      const guardados: any[] | null = Array.isArray(resH?.tramos_ips) ? resH.tramos_ips : null;
+      const claves = new Set((guardados ?? []).map(claveTramoIps));
+      saltearRecalcTramos.current = true;
+      setTramosSel(Object.fromEntries((agente?.tramos ?? []).map(t => [
+        t.clave,
+        guardados ? claves.has(claveTramoIps(t)) : (t.tipo === 'NOMBRADO' || !!h.beca_aporto),
+      ])));
+    }
     setIpsAporto(h.ips_aporto == null ? true : !!h.ips_aporto);
     const recosH: ReconocimientoInsalubre[] = parse(h.reconocimientos_insalubre, []);
     setReconocimientos(recosH);
@@ -983,7 +1056,7 @@ export function HerramientasPage() {
     setOfertaCarga(null);
     setVerHistorial(false);
     setRevision(null);
-  }, [fechaCalculo]);
+  }, [fechaCalculo, agente]);
 
   // Recalcular con los datos de hoy: deja de ser el guardado y pasa a ser un
   // cálculo nuevo, que recién queda registrado si se aprieta Guardar.
@@ -2110,6 +2183,69 @@ export function HerramientasPage() {
             {/* ─ 2. Situación IPS ─ */}
             <div style={S.card}>
               <div style={S.h3}>2. Situación en el IPS</div>
+
+              {/* Carrera del agente: cada tramo con su tilde. Computa para el IPS sólo lo
+                  tildado; las becas/residencias se tildan período por período si se pagaron. */}
+              {!!agente.tramos?.length && (
+                <div style={{ marginBottom: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <div style={{ fontSize: '0.75rem', color: '#93c5fd', fontWeight: 700 }}>CARRERA DEL AGENTE · TRAMOS QUE COMPUTAN PARA EL IPS</div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                      Ingreso a la carrera: <strong style={{ color: '#e2e8f0' }}>{fmtFecha(agente.fecha_ingreso_carrera ?? agente.fecha_ingreso)}</strong>
+                    </div>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.79rem', minWidth: 640 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          {['Computa', 'Tipo', 'Ley / planta', 'Desde', 'Hasta', 'Tiempo', 'Estado'].map(h => (
+                            <th key={h} style={{ textAlign: 'left', padding: '4px 6px', color: '#64748b', fontWeight: 700, fontSize: '0.66rem', textTransform: 'uppercase' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {agente.tramos.map(t => {
+                          const on = !!tramosSel[t.clave];
+                          const esBeca = t.tipo !== 'NOMBRADO';
+                          const tiempo = tiempoANSES(t.desde, t.hasta ?? (fechaCalculo || TODAY_ISO));
+                          return (
+                            <tr key={t.clave} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', opacity: on ? 1 : 0.6 }}>
+                              <td style={{ padding: '5px 6px' }}>
+                                <label style={{ ...S.chkRow, gap: 6 }} title={esBeca ? 'Tildar si se pagaron los aportes de este período' : undefined}>
+                                  <input type="checkbox" checked={on} style={S.chk}
+                                    onChange={e => setTramosSel(p => ({ ...p, [t.clave]: e.target.checked }))} />
+                                  {esBeca && <span style={{ fontSize: '0.72rem', color: on ? '#86efac' : '#94a3b8' }}>{on ? 'pagó' : 'sin pagar'}</span>}
+                                </label>
+                              </td>
+                              <td style={{ padding: '5px 6px' }}>
+                                <span style={esBeca ? S.tagOrange : S.tagGreen}>{ETIQUETA_TRAMO[t.tipo]}</span>
+                              </td>
+                              <td style={{ padding: '5px 6px', color: '#cbd5e1' }}>
+                                {t.ley ?? '—'}{t.planta ? <span style={{ color: '#64748b' }}> · {t.planta}</span> : null}
+                                {t.nota && <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{t.nota}</div>}
+                              </td>
+                              <td style={{ padding: '5px 6px' }}>{fmtFecha(t.desde)}</td>
+                              <td style={{ padding: '5px 6px' }}>{t.hasta ? fmtFecha(t.hasta) : <span style={{ color: '#86efac' }}>vigente</span>}</td>
+                              <td style={{ padding: '5px 6px', fontVariantNumeric: 'tabular-nums' }}>{fmtAMD(tiempo)}</td>
+                              <td style={{ padding: '5px 6px', color: '#94a3b8' }}>{t.estado ?? '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {resultado && (
+                    <div style={{ marginTop: 8, fontSize: '0.78rem', color: '#cbd5e1' }}>
+                      Computa para el IPS: <strong style={{ color: '#86efac' }}>{fmtAMD(resultado.servicio_nombrado)}</strong> nombrado
+                      {' · '}<strong style={{ color: '#fdba74' }}>{fmtAMD(resultado.servicio_beca)}</strong> beca/residencia pagada
+                      {calculando && <span style={{ color: '#64748b' }}> · recalculando…</span>}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 6, fontSize: '0.72rem', color: '#64748b' }}>
+                    Los huecos entre tramos no suman. Si una beca y un nombramiento se pisan, ese tiempo cuenta una sola vez como nombrado.
+                  </div>
+                </div>
+              )}
               <div style={{ ...S.grid2, alignItems: 'start', gap: 20 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div>
@@ -2123,7 +2259,7 @@ export function HerramientasPage() {
                     </select>
                   </div>
 
-                  {tieneBeca && (
+                  {tieneBeca && !agente.tramos?.length && (
                     <div style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 8, padding: '10px 14px' }}>
                       <div style={{ fontSize: '0.75rem', color: '#fdba74', fontWeight: 700, marginBottom: 8 }}>
                         PERÍODO DE BECA ({fmtFecha(agente.fecha_ingreso)} → {fmtFecha(agente.fecha_de_nombramiento)})
@@ -2138,7 +2274,7 @@ export function HerramientasPage() {
                     </div>
                   )}
 
-                  {(['RESIDENTE', 'CONCURRENTE', 'ARTICULO_48'].includes(situacion)) && (
+                  {(['RESIDENTE', 'CONCURRENTE', 'ARTICULO_48'].includes(situacion)) && !agente.tramos?.length && (
                     <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, padding: '10px 14px' }}>
                       <div style={{ fontSize: '0.75rem', color: '#93c5fd', fontWeight: 700, marginBottom: 8 }}>
                         APORTES IPS EN ESTA SITUACIÓN
@@ -2376,17 +2512,47 @@ export function HerramientasPage() {
                   ))}
 
                   <div style={{ marginTop: 10 }}>
-                    {revision.lineas.map((l, i) => (
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '28px 1fr 150px 150px 95px 95px', gap: 8,
+                      padding: '0 6px 4px', fontSize: '0.66rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase',
+                    }}>
+                      <span />
+                      <span>Empleador</span>
+                      <span>Desde</span>
+                      <span>Hasta</span>
+                      <span title="Años, meses y días que figuran en el documento escaneado">Documento</span>
+                      <span title="Calculado automáticamente entre Desde y Hasta (ambas inclusive)">Calculado</span>
+                    </div>
+                    {revision.lineas.map((l, i) => {
+                      // Validación del escaneo: el tiempo que salió de las fechas tiene que dar
+                      // el que el propio documento computó. Coincide → fila verde.
+                      const calc = tiempoANSES(l.fecha_desde, l.fecha_hasta);
+                      const doc  = l.tiempo_documento ?? null;
+                      // Computa 0 (monotributo sin aportes, Ley 25.321, Ap. "no"...): ese 0 es lo que
+                      // dice el documento, no un error del escaneo. No se pisa con la diferencia de
+                      // fechas: la fila queda validada en 0 y se muestra la causa.
+                      const causaCero = l.causa_sin_computo ?? (doc && dias360(doc) === 0 ? 'tiempo 0 en el documento' : null);
+                      const sinComputo = !!causaCero;
+                      const coincide  = !!doc && !!calc && !sinComputo && Math.abs(dias360(doc) - dias360(calc)) <= 2;
+                      const noCoincide = !!doc && !!calc && !sinComputo && !coincide;
+                      return (
                       <div key={i} style={{
-                        display: 'grid', gridTemplateColumns: '28px 1fr 150px 150px', gap: 8, alignItems: 'center',
-                        padding: '6px 0', borderTop: i ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                        display: 'grid', gridTemplateColumns: '28px 1fr 150px 150px 95px 95px', gap: 8, alignItems: 'center',
+                        padding: '6px', borderTop: i ? '1px solid rgba(255,255,255,0.06)' : 'none', borderRadius: 6,
+                        background: coincide ? 'rgba(34,197,94,0.16)' : noCoincide ? 'rgba(239,68,68,0.14)'
+                          : sinComputo ? 'rgba(96,165,250,0.10)' : 'transparent',
                       }}>
                         <input type="checkbox" checked={l.usar} style={S.chk}
                           onChange={e => updateRevision(i, 'usar', e.target.checked)} />
                         <div>
                           <div style={{ fontSize: '0.82rem', color: '#e2e8f0' }}>
                             {l.empresa ?? '(sin empresa)'}{' '}
-                            {l.tipo === 'AUTONOMO' && <span style={{ ...S.tagPurple, fontSize: '0.68rem' }}>autónomo</span>}
+                            {l.tipo === 'AUTONOMO' && <span style={{ ...S.tagPurple, fontSize: '0.68rem' }}>autónomo</span>}{' '}
+                            {sinComputo && (
+                              <span style={{ ...S.tagGray, fontSize: '0.68rem', background: 'rgba(96,165,250,0.18)', color: '#bfdbfe' }}>
+                                computa 0 · {causaCero}
+                              </span>
+                            )}
                           </div>
                           {!!l.motivos.length && (
                             <div style={{ fontSize: '0.72rem', color: '#fdba74' }}>{l.motivos.join(' · ')}</div>
@@ -2396,8 +2562,26 @@ export function HerramientasPage() {
                           onChange={e => updateRevision(i, 'fecha_desde', e.target.value)} max={TODAY_ISO} />
                         <input type="date" style={{ ...S.input, fontSize: '0.8rem' }} value={l.fecha_hasta ?? ''}
                           onChange={e => updateRevision(i, 'fecha_hasta', e.target.value)} max={TODAY_ISO} />
+                        <div style={{ fontSize: '0.8rem', color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}
+                          title={sinComputo ? `El documento no le computa tiempo: ${causaCero}` : undefined}>
+                          {fmtAMD(doc)}
+                        </div>
+                        {sinComputo ? (
+                          <div style={{ fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: '#93c5fd' }}
+                            title={`Entre las fechas hay ${fmtAMD(calc)}, pero no computa: ${causaCero}`}>
+                            ✓ 0a 0m 0d
+                          </div>
+                        ) : (
+                          <div style={{
+                            fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums', fontWeight: coincide || noCoincide ? 700 : 400,
+                            color: coincide ? '#86efac' : noCoincide ? '#fca5a5' : '#cbd5e1',
+                          }}>
+                            {coincide ? '✓ ' : noCoincide ? '✗ ' : ''}{fmtAMD(calc)}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Cada resolución arma la tabla distinto: si el parser no reconoció algún
@@ -3451,8 +3635,8 @@ export function HerramientasPage() {
               color: pyConPago ? '#d8b4fe' : '#cbd5e1', lineHeight: 1.5,
             }}>
               {pyConPago
-                ? <>💰 <b>Escenario con pago:</b> se supone que cada agente paga la beca/residencia (el tiempo entre ingreso y nombramiento computa) y el 2% (lo anterior a Jun/2015 pasa a insalubre).</>
-                : <>📋 <b>Escenario sin pago:</b> la beca/residencia (ingreso → nombramiento) <b>no computa</b> salvo que un cálculo guardado la marque como pagada, y lo anterior a Jun/2015 es común salvo que la ocupación sea insalubre. Desde Jun/2015 todo computa insalubre.</>}
+                ? <>💰 <b>Escenario con pago:</b> se cuentan todos los tramos de la carrera (becas y residencias incluidas) y se supone pagado el 2% (lo anterior a Jun/2015 pasa a insalubre).</>
+                : <>📋 <b>Escenario sin pago:</b> se cuentan todos los tramos de la carrera (becas y residencias incluidas, tildadas o no en la calculadora); lo anterior a Jun/2015 es común salvo que la ocupación sea insalubre. Desde Jun/2015 todo computa insalubre.</>}
               {' '}Hacé click en un servicio para ver agente por agente cómo se calculó.
             </div>
 

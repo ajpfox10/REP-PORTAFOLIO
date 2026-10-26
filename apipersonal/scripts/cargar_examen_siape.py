@@ -308,6 +308,54 @@ def _escribir_con_foco(frame, clave, valor, tabs_max=3):
     raise RuntimeError(f"No pude llevar el foco a '{clave}' (no escribo a ciegas).")
 
 
+def _leer_desde_con_espera(frame, intentos=3, pausa=2.0):
+    """Relee Desde unas veces: el campo de fecha (mascara __/__/____) a veces
+    tarda en exponer el valor por JAB."""
+    leido = ""
+    for _ in range(intentos):
+        time.sleep(pausa)
+        leido = (leer_edicion(frame).get("desde") or "").strip()
+        if leido:
+            break
+    return leido
+
+
+def _escribir_fecha_desde(frame, f_txt):
+    """Escribe la fecha en Desde y la verifica. 17/10/2026: con la fecha tipeada
+    con barras se leyo '' de vuelta (RUIZ 19/09). Secuencia:
+      1. con barras + relectura con espera
+      2. sin barras (la mascara pone las barras) + relectura
+      3. TAB para que SIAPE confirme el campo y se lee desde afuera
+    Devuelve True solo si Desde termina con la fecha exacta."""
+    leido = _escribir_con_foco(frame, "desde", f_txt, tabs_max=7)
+    if leido == f_txt:
+        return True
+    if not leido:
+        leido = _leer_desde_con_espera(frame)
+        if leido == f_txt:
+            log(f"   desde: lo vi en la relectura ('{leido}')")
+            return True
+    # 2. sin barras (solo si el foco sigue en Desde: nunca escribir a ciegas)
+    if leer_edicion(frame).get("foco") == "desde":
+        solo_digitos = f_txt.replace("/", "")
+        R._frente_liviano()
+        R._wm_type(solo_digitos)
+        leido = _leer_desde_con_espera(frame, intentos=2, pausa=1.5)
+        log(f"   desde <- {solo_digitos} (sin barras): leo '{leido}'")
+        if leido == f_txt:
+            return True
+    # 3. confirmar con TAB y leer desde afuera (el siguiente paso vuelve a
+    #    exigir el foco en Dias antes de escribir)
+    if leer_edicion(frame).get("foco") == "desde":
+        R._frente_liviano()
+        R._wm_tab()
+        leido = _leer_desde_con_espera(frame, intentos=2, pausa=1.5)
+        log(f"   desde tras TAB: leo '{leido}'")
+        if leido == f_txt:
+            return True
+    return False
+
+
 def _escribir(el_info, valor):
     """Foco por click en el campo + WM_CHAR (autolimpia) + lectura de vuelta."""
     el, _i = el_info
@@ -412,7 +460,7 @@ def _completar_y_guardar(frame, r, fecha, f_txt, dry_run):
     # de escribir; _escribir_con_foco tabula solo si el foco no esta en el destino.
     if _escribir_con_foco(frame, "anio", fecha.year, tabs_max=7) != str(fecha.year):
         raise RuntimeError("El Año no quedo bien.")
-    if _escribir_con_foco(frame, "desde", f_txt, tabs_max=7) != f_txt:
+    if not _escribir_fecha_desde(frame, f_txt):
         raise RuntimeError("Desde no quedo bien.")
     if _escribir_con_foco(frame, "dias", 1, tabs_max=7) != "1":
         raise RuntimeError("Días no quedo en 1.")

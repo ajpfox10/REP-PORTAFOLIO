@@ -1,7 +1,7 @@
 // wa.js — corre dentro de WhatsApp Web. Hace lo que haría una persona:
 //   POR_NOMBRE: escribe en el buscador, se queda con el ÚNICO contacto cuyo nombre tiene todas
 //               las palabras pedidas (apellido + nombre), abre el chat, pega el mensaje y envía.
-//               Si no aparece o aparecen varios → NO_ENCONTRADO (el background prueba por teléfono).
+//               Si no aparece, aparecen varios o algo falla → el background prueba por teléfono.
 //   POR_LINK:   la pestaña ya se abrió en /send?phone=…; espera el chat (o el aviso de número
 //               inválido), pega el mensaje y envía.
 // Los selectores de WhatsApp cambian seguido: si algo deja de andar, se ajusta acá.
@@ -70,8 +70,8 @@
     return out;
   }
 
-  async function pegarYEnviar(texto) {
-    const caja = await esperar(composer, 15000);
+  async function pegarYEnviar(texto, msCaja = 15000) {
+    const caja = await esperar(composer, msCaja);
     if (!caja) return { ok: false, estado: 'ERROR', detalle: 'No apareció la caja de mensaje' };
     caja.focus();
     document.execCommand('selectAll', false);
@@ -100,14 +100,14 @@
   }
 
   async function porNombre({ buscar, palabras, texto }) {
-    const caja = await esperar(buscador, 10000);
+    const caja = await esperar(buscador, 5000);
     if (!caja) return { ok: false, estado: 'ERROR', detalle: 'No encontré el buscador de WhatsApp' };
     const pide = (palabras || []).map(norm).filter(Boolean);
     try {
       escribirBusqueda(caja, buscar);
       // Espera a que la lista se estabilice (WhatsApp filtra a medida que escribe)
       let antes = '';
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 8; i++) {
         await sleep(500);
         const ahora = resultados().map((r) => r.titulo).join('|');
         if (i >= 2 && ahora === antes) break;
@@ -127,9 +127,9 @@
       const abierto = await esperar(() => {
         const h = document.querySelector('#main header');
         return h && norm(h.textContent).includes(norm(titulo));
-      }, 8000);
+      }, 6000);
       if (!abierto) return { ok: false, estado: 'ERROR', detalle: `No se abrió el chat de ${titulo}` };
-      const r = await pegarYEnviar(texto);
+      const r = await pegarYEnviar(texto, 6000);
       return { ...r, destino: titulo };
     } finally {
       const c = buscador();

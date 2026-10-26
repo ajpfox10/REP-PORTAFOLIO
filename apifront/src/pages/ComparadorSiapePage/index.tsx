@@ -12,6 +12,7 @@ import { exportToExcel } from '../../utils/export';
 import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
 import { CargaSiapeContent } from '../CargaSiapePage';
+import { LicenciasMedicasTab } from './LicenciasMedicasTab';
 
 interface CompRow {
   legajo: string;
@@ -94,10 +95,12 @@ const BADGE_RES: Record<string, { label: string; color: string }> = {
   'DESCARTADA': { label: '— Descartada', color: '#64748b' },
   'PERIODO_CERRADO': { label: '🔒 Período cerrado', color: '#94a3b8' },
   'CAMBIO_SIAPE':    { label: '⚠ Cambió en SIAPE', color: '#e879f9' },
+  'NO_EN_PLANTEL':   { label: '🚫 No está en ningún plantel', color: '#f97316' },
+  'NO_TRABAJA_DIA':  { label: '📅 Franquero: no trabaja ese día', color: '#38bdf8' },
 };
 
 // Estados que no son error (no cuentan como error ni entran en "Reintentar")
-const NO_ERROR = ['OK', 'PENDIENTE', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE'];
+const NO_ERROR = ['OK', 'PENDIENTE', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_TRABAJA_DIA'];
 
 const BG: Record<string, string> = {
   'NO COINCIDENTE': 'rgba(239,68,68,0.05)',
@@ -370,7 +373,7 @@ export function ComparadorSiapePage() {
   const [textoRes, setTextoRes]         = useState('');
   const [comparando, setComparando]     = useState(false);
   const [verAnteriores, setVerAnteriores] = useState(false);
-  const [tab, setTab] = useState<'comparacion' | 'resultados' | 'carga_siape'>('comparacion');
+  const [tab, setTab] = useState<'comparacion' | 'resultados' | 'licencias' | 'carga_siape'>('comparacion');
   const { hasPerm } = useAuth();
   const esAdmin = hasPerm('crud:*:*');   // Carga SiAPe era solo admin
   const [filtroDetalle, setFiltroDetalle] = useState('todos');
@@ -666,7 +669,7 @@ export function ComparadorSiapePage() {
 
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        {([['comparacion', '📋 Comparación'], ['resultados', `📤 Resultados de carga${resultado.length > 0 ? ` (${resultado.length})` : ''}`], ...(esAdmin ? [['carga_siape', '🏥 Carga SiAPe']] as const : [])] as const).map(([key, label]) => (
+        {([['comparacion', '📋 Comparación'], ['resultados', `📤 Resultados de carga${resultado.length > 0 ? ` (${resultado.length})` : ''}`], ['licencias', '🩺 Licencias médicas'], ...(esAdmin ? [['carga_siape', '🏥 Carga SiAPe']] as const : [])] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: '7px 18px', fontSize: '0.8rem', fontWeight: tab === key ? 700 : 400,
@@ -815,6 +818,7 @@ export function ComparadorSiapePage() {
 
       {/* ── Tab: Resultados de carga Ministerio ── */}
       {tab === 'carga_siape' && esAdmin && <CargaSiapeContent />}
+      {tab === 'licencias' && <LicenciasMedicasTab />}
 
       {tab === 'resultados' && <div style={{ marginTop: 0 }}>
 
@@ -928,6 +932,8 @@ export function ComparadorSiapePage() {
                 <option value="DESCARTADA">Solo descartadas</option>
                 <option value="CAMBIO_SIAPE">⚠ Cambiaron en SIAPE</option>
                 <option value="PERIODO_CERRADO">🔒 Período cerrado</option>
+                <option value="NO_EN_PLANTEL">🚫 No está en ningún plantel</option>
+                <option value="NO_TRABAJA_DIA">📅 Franquero: no trabaja ese día</option>
               </select>
               <select className="input" value={filtroDetalleActivo} onChange={e => { setFiltroDetalle(e.target.value); setFiltroPisada('todos'); }}
                 style={{ fontSize: '0.78rem', flex: '1 1 200px', minWidth: 160 }}>

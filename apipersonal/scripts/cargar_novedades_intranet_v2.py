@@ -23,7 +23,7 @@ import pandas as pd
 from collections import defaultdict
 from pathlib import Path
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from playwright.sync_api import sync_playwright, Error as PWError
 
 # Mapeo por tabla `mapeo_novedades` (+ regla de CIE) y registro en script_runs
@@ -120,19 +120,64 @@ def crear_tabla_carga(cur):
           creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (id),
+          deps_descartadas VARCHAR(60) NOT NULL DEFAULT '' COMMENT 'dependencias donde la Intranet dijo "no pertenece" (CSV)',
           UNIQUE KEY uq_novedades_carga_intranet (dni, novedad_siap, desde, hasta),
           KEY idx_novedades_carga_intranet__dep (dependencia, estado)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""")
+    cur.execute("""
+        SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = 'deps_descartadas'""",
+        (TABLA_CARGA,))
+    if not (cur.fetchone() or {}).get("n"):
+        cur.execute(f"""
+            ALTER TABLE {TABLA_CARGA}
+              ADD COLUMN deps_descartadas VARCHAR(60) NOT NULL DEFAULT ''
+              COMMENT 'dependencias donde la Intranet dijo "no pertenece" (CSV)'""")
 
 
-# Novedades SIAPE que NO se cargan en la Intranet (decision del usuario 04/10/2026: la anual
-# complementaria comun da "Opcion no disponible en este plantel"). Quedan DESCARTADA en la tabla.
+# "No pertenece a su plantel": la fila se prueba en las otras dependencias (como el Art. 26). Cada run
+# toma sus filas + las que otra dependencia ya rechazo, salvo las que rechazo el mismo. Si las tres
+# la rechazan -> NO_EN_PLANTEL (no se reintenta ni dispara alerta; se repone con Reintentar).
+DEPENDENCIAS = ("HOSPITAL", "UPA 4", "UPA 18")
+SQL_FILAS_DE_LA_DEP = ("(dependencia = %s OR FIND_IN_SET(dependencia, deps_descartadas))"
+                       " AND NOT FIND_IN_SET(%s, deps_descartadas)")
+
+
+def es_no_pertenece(mensaje):
+    return "NO PERTENECE A SU PLANTEL" in _sin_acentos(mensaje)
+
+
+def anotar_no_pertenece(cur, dni, novedad_siap, desde, hasta, dependencia, label):
+    """Suma la dependencia a deps_descartadas: PENDIENTE para las otras o NO_EN_PLANTEL si ya van las 3."""
+    cur.execute(f"""
+        UPDATE {TABLA_CARGA}
+           SET deps_descartadas = IF(FIND_IN_SET(%s, deps_descartadas), deps_descartadas,
+                                     IF(deps_descartadas = '', %s, CONCAT(deps_descartadas, ',', %s))),
+               label_intranet = %s, intentos = intentos + 1
+         WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
+        (dependencia, dependencia, dependencia, label, dni, novedad_siap, desde, hasta))
+    todas = " AND ".join(["FIND_IN_SET(%s, deps_descartadas)"] * len(DEPENDENCIAS))
+    cur.execute(f"""
+        UPDATE {TABLA_CARGA}
+           SET estado = IF({todas}, 'NO_EN_PLANTEL', 'PENDIENTE'),
+               detalle = IF({todas}, 'No está en el plantel de HOSPITAL, UPA 4 ni UPA 18',
+                            CONCAT('No pertenece al plantel de ', deps_descartadas, ': se prueba en las otras dependencias'))
+         WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
+        (*DEPENDENCIAS, *DEPENDENCIAS, dni, novedad_siap, desde, hasta))
+
+
+# Novedades SIAPE que NO se cargan en la Intranet a los BECARIOS (ley "Programa ..."; decision del
+# usuario 04/10/2026: la anual complementaria da "Opcion no disponible en este plantel"). 18/10/2026:
+# solo becas; 10471, residentes y demas SI se cargan (29-COMPLEMENTARIA). Quedan DESCARTADA en la tabla.
 NOVEDADES_DESCARTADAS = ("ANUAL COMPLEMENTARIA",)
+LEY_BECAS_LIKE = "Programa%"
 
 # Estados de la tabla que los robots NO vuelven a intentar: PERIODO_CERRADO = el Ministerio ya cerro
 # el periodo ("fecha de ultimo cierre", no se puede cargar nunca); CAMBIO_SIAPE = alerta del comparador
 # (ya no figura en SIAPE; si vuelve a salir pendiente, el INSERT ... ON DUPLICATE la repone a PENDIENTE).
-ESTADOS_NO_CARGAR = "('OK', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE')"
+# NO_TRABAJA_DIA: ausente de un franquero en un dia que no esta en su horario ni es feriado
+# (lo marca cargar_ausentes_intranet_v2.filtrar_franqueros y lo revisa en cada corrida)
+ESTADOS_NO_CARGAR = "('OK', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_EN_PLANTEL', 'NO_TRABAJA_DIA')"
 
 
 def estado_resultado(r):
@@ -142,6 +187,54 @@ def estado_resultado(r):
     if estado.upper() != "OK" and es_error_cierre(detalle) and not detalle.startswith("CONFLICTO"):
         return "PERIODO_CERRADO"
     return estado[:20]
+
+
+# Estados que todavia se pueden reacomodar al armar la cola (los demas son finales).
+ESTADOS_ABIERTOS = "('PENDIENTE', 'ERROR', 'ERROR_NAV')"
+DETALLE_MES_CERRADO = "Mes cerrado en el Ministerio"
+
+# FC (franco compensatorio) NO se carga en la Intranet a los agentes ley 10471 Planta/Guardia
+# (ley_id 4 y 5; decision del usuario 18/10/2026). Quedan DESCARTADA.
+LEY_IDS_SIN_FC = (4, 5)
+
+
+def marcar_meses_cerrados(cur, corrida, dependencia):
+    """Pasa a PERIODO_CERRADO, sin intentarlas, las filas que terminan en un mes ya cerrado.
+    El cierre se aprende de los rechazos reales de la Intranet ("fecha de ultimo cierre"):
+    el dia mas nuevo rechazado de la dependencia -> se toma cerrado todo ese mes y lo anterior.
+    Las que cruzan al mes siguiente no se tocan (el robot las recorta al 1ro del mes abierto).
+    Devuelve (fin_del_mes_cerrado, filas_marcadas)."""
+    cur.execute(f"""
+        SELECT LAST_DAY(MAX(desde)) AS fin
+          FROM {TABLA_CARGA}
+         WHERE dependencia = %s AND estado = 'PERIODO_CERRADO'
+           AND (detalle IS NULL OR detalle NOT LIKE %s)""",
+        (dependencia, DETALLE_MES_CERRADO + "%"))
+    fin = (cur.fetchone() or {}).get("fin")
+    if not fin:
+        return None, 0
+    n = cur.execute(f"""
+        UPDATE {TABLA_CARGA}
+           SET estado = 'PERIODO_CERRADO',
+               detalle = CONCAT(%s, ' (cerrado hasta ', DATE_FORMAT(%s, '%%d/%%m/%%Y'), '): no se intenta')
+         WHERE corrida_id = %s AND dependencia = %s AND estado IN {ESTADOS_ABIERTOS}
+           AND hasta <= %s""",
+        (DETALLE_MES_CERRADO, fin, corrida, dependencia, fin))
+    return fin, n
+
+
+def descartar_fc_ley_10471(cur, corrida, dependencia):
+    """FC de agentes ley 10471 (Planta y Guardia) -> DESCARTADA. Devuelve filas marcadas."""
+    return cur.execute(f"""
+        UPDATE {TABLA_CARGA} q
+           SET q.estado = 'DESCARTADA',
+               q.detalle = 'Descartada: FC no se carga en la Intranet a ley 10471 (Planta/Guardia)'
+         WHERE q.corrida_id = %s AND q.dependencia = %s AND q.estado IN {ESTADOS_ABIERTOS}
+           AND q.novedad_siap LIKE 'FRANCO COMPENSATORIO%%'
+           AND EXISTS (SELECT 1 FROM agentes a
+                        WHERE a.dni = q.dni AND a.deleted_at IS NULL AND a.estado_empleo <> 'BAJA'
+                          AND a.ley_id IN ({",".join(["%s"] * len(LEY_IDS_SIN_FC))}))""",
+        (corrida, dependencia, *LEY_IDS_SIN_FC))
 
 
 def cargar_filas_db(dependencia, test_mode=False):
@@ -168,19 +261,29 @@ def cargar_filas_db(dependencia, test_mode=False):
               estado = IF({TABLA_CARGA}.estado = 'CAMBIO_SIAPE', 'PENDIENTE', {TABLA_CARGA}.estado)""",
             (corrida, dependencia))
         cur.execute(f"""
-            UPDATE {TABLA_CARGA}
-               SET estado = 'DESCARTADA', detalle = 'Descartada: esta novedad no se carga en la Intranet'
-             WHERE corrida_id = %s AND dependencia = %s AND estado <> 'OK'
-               AND novedad_siap IN ({",".join(["%s"] * len(NOVEDADES_DESCARTADAS))})""",
-            (corrida, dependencia, *NOVEDADES_DESCARTADAS))
+            UPDATE {TABLA_CARGA} q
+               SET q.estado = 'DESCARTADA', q.detalle = 'Descartada: esta novedad no se carga en la Intranet a becarios'
+             WHERE q.corrida_id = %s AND q.dependencia = %s AND q.estado IN {ESTADOS_ABIERTOS}
+               AND q.novedad_siap IN ({",".join(["%s"] * len(NOVEDADES_DESCARTADAS))})
+               AND EXISTS (SELECT 1 FROM agentes a JOIN ley l ON l.id = a.ley_id
+                            WHERE a.dni = q.dni AND a.deleted_at IS NULL AND a.estado_empleo <> 'BAJA'
+                              AND l.nombre LIKE %s)""",
+            (corrida, dependencia, *NOVEDADES_DESCARTADAS, LEY_BECAS_LIKE))
+        n_fc = descartar_fc_ley_10471(cur, corrida, dependencia)
+        if n_fc:
+            print(f"  {n_fc} FC de ley 10471 descartados (no se cargan en la Intranet)")
+        fin, n_cerr = marcar_meses_cerrados(cur, corrida, dependencia)
+        if n_cerr:
+            print(f"  {n_cerr} filas en meses cerrados (hasta {fin:%d/%m/%Y}) -> PERIODO_CERRADO sin intentar")
         cn.commit()
         cur.execute(f"""
             SELECT dependencia, dni, nombre, novedad_siap, desde, hasta, justificado, motivo_comparacion
               FROM {TABLA_CARGA}
-             WHERE corrida_id = %s AND dependencia = %s AND estado NOT IN {ESTADOS_NO_CARGAR}
-             ORDER BY nombre, desde""", (corrida, dependencia))
+             WHERE corrida_id = %s AND {SQL_FILAS_DE_LA_DEP} AND estado NOT IN {ESTADOS_NO_CARGAR}
+             ORDER BY nombre, desde""", (corrida, dependencia, dependencia))
+        # Las que rechazo otra dependencia se prueban en esta: van con la dependencia del run
         filas = [{
-            "Estado": "SOLO_SIAP", "Dependencia": r["dependencia"], "DNI": int(r["dni"]),
+            "Estado": "SOLO_SIAP", "Dependencia": dependencia, "DNI": int(r["dni"]),
             "Nombre": r["nombre"], "Nov. SIAP": r["novedad_siap"],
             "Desde SIAP": r["desde"], "Hasta SIAP": r["hasta"],
             "JUSTIFICADO": r["justificado"], "Motivo": r["motivo_comparacion"],
@@ -294,14 +397,82 @@ def ajuste_maximo_mensual(label, mensaje, desde, hasta):
     return max_dias, nuevo_hasta.strftime("%d/%m/%Y")
 
 SCRIPT_ID = None  # lo fija main() segun la dependencia (detalle en script_run_items)
+DEPENDENCIA_RUN = None  # lo fija main(): dependencia en la que esta logueado el robot
 NOV_SIAP = {}     # (dni, label, desde, hasta) -> novedad SIAPE original (clave de la tabla)
+PARTES = {}       # (dni, label, desde, hasta) de un RANGO -> [(desde, hasta), ...] filas de la tabla que junta
 _GUARDADOS = {"n": 0}
 
 def _fecha_iso(ddmmyyyy):
     return datetime.strptime(str(ddmmyyyy), "%d/%m/%Y").strftime("%Y-%m-%d")
 
+
+# ── Rangos: dias seguidos en una sola carga (19/10/2026) ─────────────────────
+# El SIAPE trae una fila por dia (FC, ausentes, causas particulares...) y se cargaban de a una.
+# Los dias SEGUIDOS del mismo agente con la misma novedad van en UNA carga desde-hasta (7 y 8 ->
+# 07 a 08; 7 y 9 -> dos cargas). Puede pasar a los meses siguientes; si el Ministerio rechaza el
+# arranque por periodo cerrado se recorta al mes abierto como siempre. Si el rango da otro error
+# se reintenta dia por dia. En la tabla sigue una fila por dia: el resultado se anota en cada una.
+# No se juntan anual/complementaria (tope de dias por mes) ni el examen automatico.
+
+def juntar_rangos(novs):
+    """Junta las novedades de UN agente cuyos dias son seguidos (mismo label y misma novedad
+    SIAPE). Cada una sale con "partes": las (desde, hasta) originales que cubre."""
+    def clave(nv):
+        return (nv.get("label") or "", nv.get("siap") or "", _parse_fecha_ddmmyyyy(nv["desde"]) or date.min)
+    out = []
+    for nv in sorted(novs, key=clave):
+        prev = out[-1] if out else None
+        d, h_prev = _parse_fecha_ddmmyyyy(nv["desde"]), prev and _parse_fecha_ddmmyyyy(prev["hasta"])
+        if (prev and d and h_prev and d == h_prev + timedelta(days=1)
+                and _parse_fecha_ddmmyyyy(nv["hasta"])
+                and prev.get("label") == nv.get("label") and prev.get("siap") == nv.get("siap")
+                and not nv.get("auto") and not prev.get("auto")
+                and not es_anual_o_complementaria(nv.get("label") or "")):
+            prev["hasta"] = nv["hasta"]
+            prev["partes"].append((nv["desde"], nv["hasta"]))
+        else:
+            out.append({**nv, "partes": [(nv["desde"], nv["hasta"])]})
+    out.sort(key=lambda x: _parse_fecha_ddmmyyyy(x["desde"]) or date.min)
+    return out
+
+
+def partes_a_anotar(r):
+    """Filas de la tabla a las que va el resultado `r`: las del rango (con su estado: si se
+    recorto por periodo cerrado, las anteriores al recorte quedan PERIODO_CERRADO) o la misma."""
+    partes = PARTES.get((int(r["DNI"]), r["Novedad"], r["Desde"], r["Hasta"])) or [(r["Desde"], r["Hasta"])]
+    estado, detalle = estado_resultado(r), str(r.get("Detalle") or "")
+    if len(partes) == 1:
+        return [(partes[0][0], partes[0][1], estado, detalle)]
+    rango = f"Cargado en rango {r['Desde']} a {r['Hasta']} ({len(partes)} filas). "
+    recorte = _parse_fecha_ddmmyyyy(r.get("RecorteDesde"))
+    out = []
+    for d, h in partes:
+        if estado == "OK" and recorte and _parse_fecha_ddmmyyyy(h) < recorte:
+            out.append((d, h, "PERIODO_CERRADO",
+                        f"Periodo cerrado en el Ministerio: el rango {r['Desde']} a {r['Hasta']} "
+                        f"se cargo desde {r['RecorteDesde']}"))
+        else:
+            out.append((d, h, estado, rango + detalle))
+    return out
+
+
+def registrar_rangos(grupos):
+    """Junta los dias seguidos de cada agente (en el lugar) y deja anotado en NOV_SIAP / PARTES
+    a que filas de la tabla va el resultado de cada carga (rango o dia suelto)."""
+    for dni_g in grupos:
+        grupos[dni_g] = juntar_rangos(grupos[dni_g])
+        for nv in grupos[dni_g]:
+            k = (int(dni_g), nv["label"], nv["desde"], nv["hasta"])
+            NOV_SIAP[k] = nv["siap"]
+            for d, h in nv["partes"]:
+                NOV_SIAP[(int(dni_g), nv["label"], d, h)] = nv["siap"]
+            if len(nv["partes"]) > 1:
+                PARTES[k] = nv["partes"]
+
+
 def guardar_log(registros):
-    """2.0: el resultado de cada novedad nueva de `registros` va a novedades_carga_intranet."""
+    """2.0: el resultado de cada novedad nueva de `registros` va a novedades_carga_intranet
+    (si es un rango, a cada fila que junta)."""
     nuevos = registros[_GUARDADOS["n"]:]
     try:
         with MN.conn() as cn, cn.cursor() as cur:
@@ -309,15 +480,20 @@ def guardar_log(registros):
                 siap = NOV_SIAP.get((int(r["DNI"]), r["Novedad"], r["Desde"], r["Hasta"]))
                 if not siap or not r.get("Desde") or not r.get("Hasta"):
                     continue
-                ok = str(r.get("Estado", "")).upper() == "OK"
-                cur.execute(f"""
-                    UPDATE {TABLA_CARGA}
-                       SET estado = %s, label_intranet = %s, detalle = %s, intentos = intentos + 1,
-                           cargado_en = IF(%s, NOW(), cargado_en)
-                     WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
-                    (estado_resultado(r), str(r.get("Novedad") or "")[:200],
-                     str(r.get("Detalle") or "")[:500] or None, ok,
-                     str(int(r["DNI"])), siap, _fecha_iso(r["Desde"]), _fecha_iso(r["Hasta"])))
+                for desde, hasta, estado, detalle in partes_a_anotar(r):
+                    ok = estado == "OK"
+                    clave = (str(int(r["DNI"])), siap, _fecha_iso(desde), _fecha_iso(hasta))
+                    if not ok and es_no_pertenece(detalle):
+                        anotar_no_pertenece(cur, *clave, DEPENDENCIA_RUN, str(r.get("Novedad") or "")[:200])
+                        continue
+                    # Si la encontro en este plantel, la fila pasa a ser de esta dependencia
+                    cur.execute(f"""
+                        UPDATE {TABLA_CARGA}
+                           SET estado = %s, label_intranet = %s, detalle = %s, intentos = intentos + 1,
+                               cargado_en = IF(%s, NOW(), cargado_en), dependencia = COALESCE(%s, dependencia)
+                         WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
+                        (estado[:20], str(r.get("Novedad") or "")[:200],
+                         detalle[:500] or None, ok, DEPENDENCIA_RUN, *clave))
             cn.commit()
         _GUARDADOS["n"] = len(registros)
     except Exception as e:
@@ -989,6 +1165,14 @@ def main():
         for f in filas:
             print(f"  {f['DNI']}  {f['Nombre']}  {f['Nov. SIAP']}  {f['Desde SIAP']} -> {f['Hasta SIAP']}"
                   f"  {('[' + f['Motivo'] + ']') if f['Motivo'] != 'EN_SIAP_SIN_MINISTERIO' else ''}")
+        grupos = agrupar_por_dni(filas, mapa, None, licencias)
+        registrar_rangos(grupos)
+        print(f"\nCargas a hacer (dias seguidos juntos): {sum(len(v) for v in grupos.values())}")
+        for dni_g, novs in grupos.items():
+            for nv in novs:
+                if len(nv["partes"]) > 1:
+                    print(f"  {dni_g}  {nv['nombre']}  {nv['label']}  {nv['desde']} -> {nv['hasta']}"
+                          f"  ({len(nv['partes'])} filas)")
         return
     if not filas:
         print("Nada pendiente.")
@@ -1013,12 +1197,13 @@ def main():
 
     stats = {}
     grupos = agrupar_por_dni(filas, mapa, justificados, licencias, stats)
-    for dni_g, novs in grupos.items():
-        for nv in novs:
-            NOV_SIAP[(int(dni_g), nv["label"], nv["desde"], nv["hasta"])] = nv["siap"]
+    n_filas = sum(len(v) for v in grupos.values())
+    registrar_rangos(grupos)
+    print(f"Rangos: {n_filas} filas -> {sum(len(v) for v in grupos.values())} cargas (dias seguidos juntos)")
 
     ya_ok, registros = set(), []   # 2.0: las OK ya quedaron afuera en cargar_filas_db
-    global SCRIPT_ID
+    global SCRIPT_ID, DEPENDENCIA_RUN
+    DEPENDENCIA_RUN = dependencia
     SCRIPT_ID = script_id
     MN.items_desde_registros(script_id, registros, inicio=len(registros))
     if ya_ok:
@@ -1089,7 +1274,10 @@ def main():
                     guardar_log(registros)
                     continue
 
-                for nov in pendientes:
+                cola = list(pendientes)
+                while cola:
+                    nov = cola.pop(0)
+                    recorte_desde = None   # si el rango se recorto por periodo cerrado: desde donde se cargo
                     if not nov["desde"] or not nov["hasta"]:
                         print(f"  SKIP {nov['label']}: fechas vacías")
                         registros.append({
@@ -1171,7 +1359,7 @@ def main():
                                         break
                                     exito2, msg2 = cargar_novedad(page, nov["label"], desde_rec, nov["hasta"])
                                     if exito2:
-                                        estado = "OK"
+                                        estado, recorte_desde = "OK", desde_rec
                                         detalle = (f"OK RECORTADO: periodo anterior cerrado en el Ministerio. "
                                                    f"Original {nov['desde']} a {nov['hasta']}; "
                                                    f"cargado {desde_rec} a {nov['hasta']}. {msg2 or ''}").strip()
@@ -1219,11 +1407,26 @@ def main():
                         err_count += 1
                         estado, detalle = "EXCEPCION", str(e)[:200]
 
+                    # Rango con error (que no sea periodo cerrado ni "no pertenece"): dia por dia,
+                    # asi un dia en conflicto no frena a los demas.
+                    if (estado != "OK" and len(nov.get("partes") or []) > 1
+                            and estado_resultado({"Estado": estado, "Detalle": detalle}) != "PERIODO_CERRADO"
+                            and not es_no_pertenece(detalle)):
+                        print(f"  El rango dio error: reintento dia por dia ({len(nov['partes'])} filas)")
+                        err_count -= 1
+                        cola[0:0] = [{**nov, "desde": d, "hasta": h, "partes": [(d, h)]} for d, h in nov["partes"]]
+                        try:
+                            ir_a_novedades(page, dni, password, dependencia, nombre=nombre)
+                        except Exception:
+                            pass
+                        continue
+
                     registros.append({
                         "Nombre": nombre, "DNI": int(dni),
                         "Novedad": nov["label"],
                         "Desde": nov["desde"], "Hasta": nov["hasta"],
-                        "Estado": estado, "Detalle": detalle
+                        "Estado": estado, "Detalle": detalle,
+                        "RecorteDesde": recorte_desde,
                     })
                     guardar_log(registros)
 

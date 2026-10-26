@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { Sdk63Tab } from './Sdk63Tab';
 
 type Device = {
   sn: string;
@@ -175,7 +176,7 @@ export function FicheroBiometriaLabPage() {
   const [destinoSn, setDestinoSn] = useState('');
   const [dni, setDni] = useState('');
   const [include, setInclude] = useState<IncludeState>(initialInclude);
-  const [tab, setTab] = useState<'transferir' | 'lectura' | 'biometria' | 'sdk' | 'mensajes' | 'comandos'>('transferir');
+  const [tab, setTab] = useState<'transferir' | 'lectura' | 'biometria' | 'sdk' | 'sdk63' | 'mensajes' | 'comandos'>('transferir');
   const [preview, setPreview] = useState<CommandPreview[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [lastIds, setLastIds] = useState<number[]>([]);
@@ -509,6 +510,7 @@ export function FicheroBiometriaLabPage() {
                 ['lectura', 'Pedir lectura'],
                 ['biometria', 'Biometria por fichero'],
                 ['sdk', 'SDK directo'],
+                ['sdk63', 'SDK 6.3 (prueba)'],
                 ['mensajes', 'Mensajes'],
                 ['comandos', 'Comandos'],
               ].map(([id, label]) => (
@@ -574,6 +576,8 @@ export function FicheroBiometriaLabPage() {
                 <BiometricsTable rows={bioRows} />
               </>
             )}
+
+            {tab === 'sdk63' && <Sdk63Tab devices={devices} />}
 
             {tab === 'sdk' && (
               <>
@@ -648,7 +652,7 @@ export function FicheroBiometriaLabPage() {
                 <Field label="Mensaje">
                   <textarea style={S.textarea} value={msgText} onChange={(e) => setMsgText(e.target.value)} maxLength={60} placeholder="Ej: Pase por RRHH al finalizar su turno" />
                 </Field>
-                <div style={S.muted}>{msgText.length}/60 caracteres</div>
+                <div style={S.muted}>{msgText.length}/60 caracteres · sin acentos ni ñ (se quitan solos) · probado en G3 Pro y G3 Plus: el personal aparece cuando el agente ficha dentro de los minutos de validez</div>
                 <div style={S.buttonRow}>
                   <button style={S.secondary} onClick={previewMessage}>Previsualizar mensaje</button>
                   <button style={S.button} onClick={sendMessage}>Encolar mensaje</button>

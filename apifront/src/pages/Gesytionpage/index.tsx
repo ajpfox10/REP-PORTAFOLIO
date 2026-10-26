@@ -20,14 +20,16 @@ import { SearchableSelect } from '../CargaAgentePage/components/SearchableSelect
 
 import { AgenteSearchForm } from './components/components/AgenteSearchForm';
 import { AgenteInfoCard } from './components/components/AgenteInfoCard';
+import { UltimasLicenciasCard, useUltimasLicencias } from './components/components/UltimasLicenciasCard';
 import { ModuleGrid } from './components/components/ModuleGrid';
 import ModuleDetailView from './components/components/ModuleDetailView';
 import { MatchesList } from './components/components/MatchesList';
 import { FotoCredencialCard } from './components/components/FotoCredencialCard';
 import { PedidoModal } from './components/modals/PedidoModal';
+import { MensajeRelojModal } from './components/modals/MensajeRelojModal';
 import { CellModal } from './components/modals/CellModal';
 import { DocViewerModal } from './components/modals/DocViewerModal';
-import { ExpedientesModal } from './components/modals/ExpedientesModal';
+import { DocumentosExpedientesModal } from './components/modals/DocumentosExpedientesModal';
 import { LicenciasMedicasModal, contarLicenciasMedicas } from './components/modals/LicenciasMedicasModal';
 import { ANIO_ACTUAL, type Resp as RespLicenciasMedicas } from '../LicenciasMedicasControlPage/shared';
 import { GestionDocumentPreview }        from './components/components/GestionDocumentPreview';
@@ -857,6 +859,7 @@ export function GestionPage() {
   const navigate = useNavigate();
   const { hasPerm } = useAuth();
   const canEdit = hasPerm('personal:write') || hasPerm('crud:*:*') || hasPerm('crud:personal:update');
+  const [mensajeRelojOpen, setMensajeRelojOpen] = useState(false);
 
   const agenteSearch = useAgenteSearch();
   const debouncedDni = useDebounce(agenteSearch.dni, 500);
@@ -865,6 +868,7 @@ export function GestionPage() {
   // colgado de un DNI viejo. Se resuelve una vez y lo reusan todas las búsquedas.
   const { dnis, relacionados } = useDnisRelacionados(agenteSearch.cleanDni);
   const dnisKey = dnis.join(',');
+  const ultimasLicencias = useUltimasLicencias(dnisKey);
 
   const { modules, loadModule, closeModule, setSelectedIndex, setTablePage, setTablePageSize, getSelectedRow } =
     useModules(agenteSearch.cleanDni, dnis);
@@ -881,8 +885,9 @@ export function GestionPage() {
   const [modalCitaciones,   setModalCitaciones]   = useState(false);
   const [citacionesActivas, setCitacionesActivas] = useState(0);
 
-  // Expedientes
-  const [modalExpedientes, setModalExpedientes] = useState(false);
+  // Documentos (tblarchivos) + Expedientes: un solo modal
+  const [modalDocumentos,  setModalDocumentos]  = useState(false);
+  const [archivosCount,    setArchivosCount]    = useState(0);
   const [expedientesCount, setExpedientesCount] = useState(0);
 
   // Licencias médicas no otorgadas (solo admin: el endpoint exige crud:*:*)
@@ -903,11 +908,15 @@ export function GestionPage() {
       .catch(() => setCitacionesActivas(0));
   }, [dnisKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset expedientes al cambiar agente (incluye DNIs anteriores por cambio de DNI)
+  // Reset documentos + expedientes al cambiar agente (incluye DNIs anteriores por cambio de DNI)
   useEffect(() => {
+    setArchivosCount(0);
     setExpedientesCount(0);
-    setModalExpedientes(false);
+    setModalDocumentos(false);
     if (!dnis.length) return;
+    fetchRowsByDnis('/tblarchivos', dnis, { limit: 200 })
+      .then(rows => setArchivosCount(rows.length))
+      .catch(() => setArchivosCount(0));
     fetchRowsByDnis('/expedientes', dnis, { limit: 200 })
       .then(rows => setExpedientesCount(rows.length))
       .catch(() => setExpedientesCount(0));
@@ -1040,7 +1049,7 @@ export function GestionPage() {
               <MatchesList matches={matches} onSelect={loadByDni} />
             )}
 
-            <AgenteInfoCard row={row} onChanged={onAgenteEdited} />
+            <AgenteInfoCard row={row} onChanged={onAgenteEdited} licencias={ultimasLicencias} />
 
             {row?.dni && (
               <button
@@ -1051,6 +1060,21 @@ export function GestionPage() {
               >
                 📷 Escanear documento — {row.apellido}, {row.nombre}
               </button>
+            )}
+
+            {row?.dni && (
+              <button className="btn" type="button" style={{ width: '100%' }} onClick={() => setMensajeRelojOpen(true)}>
+                💬 Mensaje al reloj — {row.apellido}, {row.nombre}
+              </button>
+            )}
+            {row?.dni && (
+              <MensajeRelojModal
+                open={mensajeRelojOpen}
+                dni={String(row.dni).replace(/\D/g, '')}
+                apellido={row.apellido}
+                nombre={row.nombre}
+                onClose={() => setMensajeRelojOpen(false)}
+              />
             )}
 
             {row?.dni && relacionados.length > 0 && (
@@ -1066,6 +1090,8 @@ export function GestionPage() {
 
             <AlertaBannerAgenteConMensaje dni={row?.dni} />
 
+            {row?.dni && <UltimasLicenciasCard dnisKey={dnisKey} datos={ultimasLicencias} />}
+
             {row?.dni && (
               <ModuleGrid
                 modules={modules}
@@ -1075,7 +1101,8 @@ export function GestionPage() {
                 onCloseModule={closeModule}
                 onOpenCitaciones={() => setModalCitaciones(true)}
                 citacionesActivas={citacionesActivas}
-                onOpenExpedientes={() => setModalExpedientes(true)}
+                onOpenDocumentos={() => setModalDocumentos(true)}
+                archivosCount={archivosCount}
                 expedientesCount={expedientesCount}
                 onOpenLicenciasMedicas={isAdmin ? () => setModalLicMed(true) : undefined}
                 licenciasMedicas={licMedCount}
@@ -1177,13 +1204,15 @@ export function GestionPage() {
         />
       )}
 
-      {/* ── Modal expedientes ── */}
-      {modalExpedientes && row && (
-        <ExpedientesModal
+      {/* ── Modal documentos + expedientes ── */}
+      {modalDocumentos && row && (
+        <DocumentosExpedientesModal
           row={row}
           dnis={dnis}
-          onClose={() => setModalExpedientes(false)}
-          onCountChange={n => setExpedientesCount(n)}
+          onClose={() => setModalDocumentos(false)}
+          onArchivosCountChange={setArchivosCount}
+          onExpedientesCountChange={setExpedientesCount}
+          expedientesCount={expedientesCount}
         />
       )}
 

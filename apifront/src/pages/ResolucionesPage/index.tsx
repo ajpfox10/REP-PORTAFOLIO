@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { fetchScanMusicBlobUrl } from '../GestionUsuarioPage/GestionUsuarioPage';
 import '../EscaneoPage/styles/EscaneoPage.css';
 import { ScanPagesOrganizer, scanPageId, applyScanPageOrder } from '../EscaneoPage/ScanPagesOrganizer';
+import { anioDeExpediente } from '../Gesytionpage/components/modals/ExpedientesModal';
 
 // ─── Scanner API client ───────────────────────────────────────────────────────
 function getScannerBase() {
@@ -162,6 +163,93 @@ const lbl: React.CSSProperties = { fontSize: '0.72rem', color: '#94a3b8' };
 
 type TabId = 'resoluciones' | 'expedientes' | 'archivos';
 
+// ─── Resolución → archivo escaneado ─────────────────────────────────────────
+// No hay FK entre resoluciones y tblarchivos: se busca por número exacto, por la
+// Ref "respage|motivo|numero|fecha" que deja el escáner, o por número+año
+// (ej. "11112-1839-06 2" ↔ "1839/2006").
+const normNum = (s: any) => String(s ?? '').toUpperCase().replace(/\s+/g, '');
+const esArchivoResolucion = (a: any) =>
+  /RESO/i.test(String(a.tipo || '')) || /resoluci/i.test(String(a.descripcion_archivo || '')) || /RESO/i.test(String(a.nombre || ''));
+
+// Resoluciones generales (carpeta RESOLUCIONES Y VARIOS, filas de tblarchivos con
+// dni=1): tipo=11112, numero=1839, anio=6 ↔ resolución "11112-1839-06".
+function buscarResolucionGeneral(r: any, generales: any[]): any | null {
+  const m = String(r.numero || '').match(/^\s*(\d+)\s*-+\s*(\d+)\s*-\s*(\d{2,4})/);
+  if (!m) return null;
+  const [, tipo, num, anio] = m;
+  return generales.find(a =>
+    Number(a.tipo) === Number(tipo) &&
+    Number(a.numero) === Number(num) &&
+    a.anio != null && Number(a.anio) % 100 === Number(anio) % 100
+  ) || null;
+}
+
+function buscarArchivoDeResolucion(r: any, archivos: any[], generales: any[] = []): any | null {
+  const num = normNum(r.numero);
+  if (num) {
+    const exacto = archivos.find(a => a.numero && normNum(a.numero) === num);
+    if (exacto) return exacto;
+    const porRef = archivos.find(a => String(a.descripcion_archivo || '').includes(`|${String(r.numero).trim()}|`));
+    if (porRef) return porRef;
+    const general = buscarResolucionGeneral(r, generales);
+    if (general) return general;
+    const grupos = String(r.numero).match(/\d+/g) || [];
+    const fechaRes = r.fecha ? String(r.fecha).slice(0, 10) : '';
+    const porNumero = archivos.filter(esArchivoResolucion).find(a => {
+      const m = String(a.numero || a.nombre || '').match(/(\d+)\s*\/\s*(\d{2,4})/);
+      if (!m) return false;
+      const [, n, anio] = m;
+      if (!grupos.some(g => Number(g) === Number(n))) return false;
+      const fechaArch = a.fecha ? String(a.fecha).slice(0, 10) : '';
+      return grupos.some(g => g === anio || g === anio.slice(-2)) || (!!fechaRes && fechaRes === fechaArch);
+    });
+    if (porNumero) return porNumero;
+  }
+  return null;
+}
+
+function nombreDescarga(agente: string, r: any, archivo: any, mime: string): string {
+  const original = String(archivo?.nombre_archivo_original || archivo?.ruta || '');
+  const extOrig = (original.match(/\.[a-z0-9]{2,5}$/i) || [''])[0];
+  const ext = extOrig || (mime.includes('pdf') ? '.pdf' : mime.includes('png') ? '.png' : mime.includes('jpeg') ? '.jpg' : '');
+  const base = [agente, r.motivo, r.numero].filter(Boolean).join(' - ');
+  return `${base.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim()}${ext}`;
+}
+
+// Guarda en la PC donde está el navegador (no en el servidor). Si el navegador
+// permite elegir carpeta (solo https/localhost), arranca en el Escritorio; si no,
+// descarga normal a la carpeta de descargas del navegador.
+async function guardarEnPc(blob: Blob, filename: string): Promise<'picker' | 'descarga' | 'cancelado'> {
+  const w = window as any;
+  if (window.isSecureContext && typeof w.showSaveFilePicker === 'function') {
+    try {
+      const handle = await w.showSaveFilePicker({ suggestedName: filename, startIn: 'desktop' });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return 'picker';
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return 'cancelado';
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return 'descarga';
+}
+
+type ResViewer = {
+  res: any;
+  archivo: any | null;
+  url: string | null;
+  blob: Blob | null;
+  mime: string;
+  loading: boolean;
+  error: string | null;
+};
+
 // ─── Página ───────────────────────────────────────────────────────────────────
 export function ResolucionesPage() {
   const toast  = useToast();
@@ -192,7 +280,7 @@ export function ResolucionesPage() {
 
   // ── Forms ──────────────────────────────────────────────────────────────────
   const emptyRes = { motivo: '', numero: '', observaciones: '', fecha: '' };
-  const emptyExp = { numero: '', caratula: '', fecha: '', estado: '' };
+  const emptyExp = { numero: '', anio: '', caratula: '', fecha: '', estado: '' };
   const [formRes,   setFormRes]   = useState(emptyRes);
   const [formExp,   setFormExp]   = useState(emptyExp);
   const [savingRes, setSavingRes] = useState(false);
@@ -221,6 +309,58 @@ export function ResolucionesPage() {
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) { toast.error('No se pudo abrir el archivo', e?.message); }
   }, [toast]);
+
+  // ── Visor de resolución (doble clic en la fila) ─────────────────────────────
+  const [resViewer, setResViewer] = useState<ResViewer | null>(null);
+  const [resGenerales, setResGenerales] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchAll<any>('/tblarchivos?dni=1')
+      .then(rows => setResGenerales(rows.filter(a => /RESOLUCIONES Y VARIOS/i.test(String(a.ruta || '')))))
+      .catch(() => {});
+  }, []);
+
+  const cargarArchivoEnVisor = useCallback(async (res: any, archivo: any | null) => {
+    setResViewer(prev => {
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return { res, archivo, url: null, blob: null, mime: '', loading: !!archivo, error: null };
+    });
+    if (!archivo) return;
+    try {
+      const { blob, contentType } = await apiFetchBlobWithMeta(`/documents/${archivo.id}/file`);
+      const mime = contentType || blob.type || '';
+      const url = URL.createObjectURL(blob);
+      setResViewer(prev => (prev && prev.archivo?.id === archivo.id
+        ? { ...prev, url, blob, mime, loading: false }
+        : (URL.revokeObjectURL(url), prev)));
+    } catch (e: any) {
+      setResViewer(prev => (prev && prev.archivo?.id === archivo.id
+        ? { ...prev, loading: false, error: e?.message || 'No se pudo cargar el archivo' }
+        : prev));
+    }
+  }, []);
+
+  const abrirResolucion = useCallback((r: any) => {
+    // Vínculo guardado (resoluciones.archivo_id) primero; si no hay, se busca por número.
+    const vinculado = r.archivo_id
+      ? ([...archivos, ...resGenerales].find(a => a.id === r.archivo_id) || { id: r.archivo_id })
+      : null;
+    cargarArchivoEnVisor(r, vinculado || buscarArchivoDeResolucion(r, archivos, resGenerales));
+  }, [archivos, resGenerales, cargarArchivoEnVisor]);
+
+  // Elección manual en el visor → queda guardada en la resolución.
+  const vincularArchivoManual = useCallback(async (r: any, a: any | null) => {
+    cargarArchivoEnVisor(r, a);
+    try {
+      await apiFetch(`/resoluciones/${r.id}`, { method: 'PATCH', body: JSON.stringify({ archivo_id: a?.id ?? null }) });
+      setResoluciones(prev => prev.map(x => (x.id === r.id ? { ...x, archivo_id: a?.id ?? null } : x)));
+      setResViewer(prev => (prev && prev.res.id === r.id ? { ...prev, res: { ...prev.res, archivo_id: a?.id ?? null } } : prev));
+    } catch (e: any) { toast.error('No se pudo guardar el vínculo', e?.message); }
+  }, [cargarArchivoEnVisor, toast]);
+
+  const cerrarResViewer = useCallback(() => {
+    setResViewer(prev => { if (prev?.url) URL.revokeObjectURL(prev.url); return null; });
+  }, []);
 
   const iniciarEdicionArchivo = useCallback((a: any) => {
     setEditArchivoId(a.id);
@@ -734,10 +874,13 @@ export function ResolucionesPage() {
     e.preventDefault();
     if (!agente) return;
     if (!formExp.numero) { toast.error('Requerido', 'El número de expediente es obligatorio'); return; }
+    const anioTxt = formExp.anio.trim() || anioDeExpediente(formExp.numero, formExp.fecha);
+    if (anioTxt && !/^(19|20)\d{2}$/.test(anioTxt)) { toast.error('Año inválido', 'Poné el año con 4 dígitos'); return; }
     setSavingExp(true);
     try {
       const body = {
-        dni: agente.dni, numero: formExp.numero, caratula: formExp.caratula || null,
+        dni: agente.dni, numero: formExp.numero, anio: anioTxt ? Number(anioTxt) : null,
+        caratula: formExp.caratula || null,
         fecha: formExp.fecha || null, estado: formExp.estado || null,
         created_by: session?.user?.id || null,
       };
@@ -786,7 +929,7 @@ export function ResolucionesPage() {
   };
   const startEditExp = (r: any) => {
     setEditExp(r);
-    setFormExp({ numero: r.numero || '', caratula: r.caratula || '', fecha: r.fecha ? String(r.fecha).slice(0, 10) : '', estado: r.estado || '' });
+    setFormExp({ numero: r.numero || '', anio: r.anio != null ? String(r.anio) : '', caratula: r.caratula || '', fecha: r.fecha ? String(r.fecha).slice(0, 10) : '', estado: r.estado || '' });
     setTab('expedientes');
   };
 
@@ -939,13 +1082,16 @@ export function ResolucionesPage() {
                             </thead>
                             <tbody>
                               {resoluciones.map(r => (
-                                <tr key={r.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                <tr key={r.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}
+                                  title="Doble clic para ver / descargar la resolución"
+                                  onDoubleClick={() => abrirResolucion(r)}>
                                   <td style={td}>{r.motivo || '—'}</td>
                                   <td style={{ ...td, fontFamily: 'monospace' }}>{r.numero || '—'}</td>
                                   <td style={td}>{fmt(r.fecha)}</td>
                                   <td style={{ ...td, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.observaciones || '—'}</td>
                                   <td style={td}>
-                                    <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }} onClick={() => startEditRes(r)}>✏️</button>
+                                    <button className="btn" style={{ fontSize: '0.72rem', padding: '3px 8px' }} onClick={() => startEditRes(r)}
+                                      onDoubleClick={e => e.stopPropagation()}>✏️</button>
                                   </td>
                                 </tr>
                               ))}
@@ -1390,7 +1536,7 @@ export function ResolucionesPage() {
                           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                               <tr>
-                                <th style={th}>Número</th><th style={th}>Carátula</th>
+                                <th style={th}>Número</th><th style={th}>Año</th><th style={th}>Carátula</th>
                                 <th style={th}>Fecha</th><th style={th}>Estado</th><th style={th}></th>
                               </tr>
                             </thead>
@@ -1398,6 +1544,7 @@ export function ResolucionesPage() {
                               {expedientes.map(r => (
                                 <tr key={r.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                                   <td style={{ ...td, fontFamily: 'monospace', fontWeight: 600 }}>{r.numero || '—'}</td>
+                                  <td style={td}>{r.anio ?? <span style={{ color: '#fbbf24' }} title="Sin año en el origen: cargalo con ✏️">Sin año</span>}</td>
                                   <td style={{ ...td, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.caratula || '—'}</td>
                                   <td style={td}>{fmt(r.fecha)}</td>
                                   <td style={td}>
@@ -1435,6 +1582,13 @@ export function ResolucionesPage() {
                           <label htmlFor="exp-fecha" style={lbl}>Fecha</label>
                           <input id="exp-fecha" name="expFecha" className="input" type="date" style={{ fontSize: '0.83rem' }}
                             value={formExp.fecha} onChange={e => setFormExp(f => ({ ...f, fecha: e.target.value }))} />
+                        </div>
+                        <div style={fg}>
+                          <label htmlFor="exp-anio" style={lbl}>Año</label>
+                          <input id="exp-anio" name="expAnio" className="input" type="text" inputMode="numeric" maxLength={4}
+                            style={{ fontSize: '0.83rem' }}
+                            placeholder={anioDeExpediente(formExp.numero, formExp.fecha) || 'AAAA'}
+                            value={formExp.anio} onChange={e => setFormExp(f => ({ ...f, anio: e.target.value.replace(/\D/g, '') }))} />
                         </div>
                         <div style={fg}>
                           <label htmlFor="exp-estado" style={lbl}>Estado</label>
@@ -1634,6 +1788,72 @@ export function ResolucionesPage() {
           onApply={ids => { setScanSession(prev => applyScanPageOrder(prev, ids)); setOrganizerPageId(null); }}
           onClose={() => setOrganizerPageId(null)}
         />
+      )}
+
+      {/* ── Visor de resolución (doble clic) ── */}
+      {resViewer && (
+        <div className="scan-viewer-backdrop" role="dialog" aria-modal="true" onClick={cerrarResViewer}>
+          <div className="scan-viewer-modal" onClick={e => e.stopPropagation()}
+            style={{ width: 'min(1100px, 96vw)', height: '92vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="scan-viewer-header" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <div className="scan-viewer-title">
+                  {resViewer.res.motivo || 'Resolución'} {resViewer.res.numero ? `· ${resViewer.res.numero}` : ''}
+                </div>
+                <div className="muted" style={{ fontSize: '0.75rem' }}>
+                  {nombreCompleto} · DNI {agente?.dni} · Fecha {fmt(resViewer.res.fecha)}
+                  {resViewer.res.observaciones ? ` · ${resViewer.res.observaciones}` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <select className="input" style={{ fontSize: '0.75rem', maxWidth: 260 }}
+                  value={resViewer.archivo?.id ?? ''}
+                  onChange={e => {
+                    const a = [...archivos, ...resGenerales].find(x => String(x.id) === e.target.value) || null;
+                    vincularArchivoManual(resViewer.res, a);
+                  }}>
+                  <option value="">— Sin archivo vinculado —</option>
+                  {resViewer.archivo && !archivos.some(x => x.id === resViewer.archivo.id) && (
+                    <option value={resViewer.archivo.id}>
+                      📁 {resViewer.archivo.nombre_archivo_original || resViewer.archivo.nombre || `#${resViewer.archivo.id}`} (Resoluciones y Varios)
+                    </option>
+                  )}
+                  {archivosOrdenados.map(a => (
+                    <option key={a.id} value={a.id}>{a.nombre || a.nombre_archivo_original || `#${a.id}`}</option>
+                  ))}
+                </select>
+                <button className="btn primary" type="button" disabled={!resViewer.blob}
+                  onClick={async () => {
+                    if (!resViewer.blob) return;
+                    const nombre = nombreDescarga(nombreCompleto, resViewer.res, resViewer.archivo, resViewer.mime);
+                    const r = await guardarEnPc(resViewer.blob, nombre);
+                    if (r === 'picker') toast.ok('Guardado', nombre);
+                    else if (r === 'descarga') toast.ok('Descargado', `${nombre} (carpeta de descargas del navegador)`);
+                  }}>⬇️ Descargar</button>
+                <button className="btn" type="button" disabled={!resViewer.url}
+                  onClick={() => resViewer.url && window.open(resViewer.url, '_blank', 'noopener')}>Abrir en pestaña</button>
+                <button className="btn" type="button" onClick={cerrarResViewer}>Cerrar</button>
+              </div>
+            </div>
+            <div className="scan-viewer-body" style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'center' }}>
+              {!resViewer.archivo ? (
+                <div className="muted" style={{ margin: 'auto', textAlign: 'center', fontSize: '0.85rem' }}>
+                  No se encontró el archivo escaneado de esta resolución.<br />
+                  Si está entre los archivos del agente, elegilo en el selector de arriba.
+                </div>
+              ) : resViewer.loading ? (
+                <div className="muted" style={{ margin: 'auto' }}>Cargando archivo…</div>
+              ) : resViewer.error ? (
+                <div style={{ margin: 'auto', color: '#fca5a5' }}>❌ {resViewer.error}</div>
+              ) : resViewer.mime.startsWith('image/') ? (
+                <img src={resViewer.url!} alt={resViewer.res.motivo} className="scan-viewer-image" />
+              ) : (
+                <iframe src={resViewer.url!} title={resViewer.res.motivo || 'Resolución'}
+                  style={{ width: '100%', height: '100%', border: 0, background: '#fff', borderRadius: 6 }} />
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Viewer de páginas escaneadas ── */}

@@ -8,7 +8,8 @@
 //   POST /notificaciones/enviar   → filtros + confirmar → envía mails (gated) y devuelve resultados
 //
 // SEGURIDAD: solo se envía a agentes con SIN_SALIDA REAL y email válido. Nunca a
-// REVISAR_HORARIO / MAL_FICHADO (esos son errores nuestros). Requiere confirmar=true.
+// REVISAR_HORARIO / MAL_FICHADO / FUERA_HORARIO (se informan en pantalla, no por mail).
+// Requiere confirmar=true.
 
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
@@ -111,7 +112,7 @@ export function registerSinSalidaNotifRoutes(router: Router, sequelize?: import(
       const facetas = {
         servicios: [...new Set(evalRes.agentes.map(a => a.servicio))].filter(Boolean).sort(),
         ubicaciones: [...new Set(evalRes.agentes.map(a => a.ubicacion))].filter(Boolean).sort(),
-        turnos: [...new Set(evalRes.agentes.flatMap(a => a.dias.map(d => d.turno)))].map(t => ({ value: t, label: TURNO_LABEL[t] })),
+        turnos: [...new Set(evalRes.agentes.flatMap(a => [...a.dias, ...a.fueraHorario].map(d => d.turno)))].map(t => ({ value: t, label: TURNO_LABEL[t] })),
       };
 
       // Devolvemos la lista COMPLETA (sin filtrar) — el filtrado por servicio/turno/
@@ -125,6 +126,7 @@ export function registerSinSalidaNotifRoutes(router: Router, sequelize?: import(
           email: a.email, emailValido: a.emailValido,
           dias: a.dias.map(d => ({ fecha: d.fecha, turno: d.turno, turnoLabel: TURNO_LABEL[d.turno] })),
           totalDias: a.dias.length,
+          fueraHorario: a.fueraHorario.map(d => ({ ...d, turnoLabel: TURNO_LABEL[d.turno] })),
           horario: a.horario,
           coincidencia: a.coincidencia,
           mensaje: mensajeAgente(a).texto,

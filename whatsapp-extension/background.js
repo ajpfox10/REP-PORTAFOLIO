@@ -34,8 +34,10 @@ async function enviar(p, appTab) {
 
     let porNombre = null;
     if (p.modo !== 'TELEFONO' && p.buscar) {
-      porNombre = await aTab(tab.id, { type: 'POR_NOMBRE', buscar: p.buscar, palabras: p.palabras, texto: p.texto }, 60000);
-      if (porNombre.estado !== 'NO_ENCONTRADO' || p.modo === 'NOMBRE') return { ...porNombre, modo: 'NOMBRE' };
+      porNombre = await aTab(tab.id, { type: 'POR_NOMBRE', buscar: p.buscar, palabras: p.palabras, texto: p.texto }, 45000);
+      // Cualquier falla por nombre (no agendado, varios, chat que no abre…) pasa al teléfono.
+      // Salvo que se haya cortado por tiempo: el script podría seguir y mandarlo igual → no duplicar.
+      if (porNombre.ok || porNombre.timeout || p.modo === 'NOMBRE') return { ...porNombre, modo: 'NOMBRE' };
     }
     if (!p.telefono) {
       return { ok: false, estado: 'NO_ENCONTRADO', modo: 'NOMBRE', detalle: [porNombre?.detalle, 'sin celular en la base'].filter(Boolean).join(' · ') };
@@ -105,7 +107,7 @@ async function asegurarScript(tabId) {
 function aTab(tabId, msg, ms) {
   return Promise.race([
     chrome.tabs.sendMessage(tabId, msg),
-    sleep(ms).then(() => ({ ok: false, estado: 'ERROR', detalle: 'WhatsApp tardó demasiado en responder' })),
+    sleep(ms).then(() => ({ ok: false, estado: 'ERROR', timeout: true, detalle: 'WhatsApp tardó demasiado en responder' })),
   ]);
 }
 

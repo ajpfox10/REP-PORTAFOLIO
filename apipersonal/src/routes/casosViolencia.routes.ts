@@ -147,9 +147,10 @@ async function registrarExpediente(
   );
   if (existe) return Number(existe.id);
   const [insertId] = await sequelize.query(
-    `INSERT INTO expedientes (dni, numero, caratula, fecha, estado, created_by, created_at)
-     VALUES (?, ?, ?, CURDATE(), 'En trámite', ?, NOW())`,
-    { replacements: [dni, numero, CARATULA_EXPEDIENTE, userId], type: QueryTypes.INSERT, transaction },
+    `INSERT INTO expedientes (dni, numero, anio, caratula, fecha, estado, created_by, created_at)
+     VALUES (?, ?, COALESCE(CAST(REGEXP_SUBSTR(?, '(?<![0-9])(19|20)[0-9]{2}(?![0-9])') AS UNSIGNED), YEAR(CURDATE())),
+             ?, CURDATE(), 'En trámite', ?, NOW())`,
+    { replacements: [dni, numero, numero, CARATULA_EXPEDIENTE, userId], type: QueryTypes.INSERT, transaction },
   ) as any;
   return Number(insertId);
 }

@@ -17,6 +17,7 @@ import { Sequelize, QueryTypes } from 'sequelize';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
 import { invalidate, agenteTags, personalTags } from '../infra/invalidateOnWrite';
+import { ejecutarAhora } from '../services/robotsTareasWindows';
 
 const CENTINELA_ANIO = '1111';
 
@@ -681,6 +682,10 @@ export function buildResidenciasRouter(sequelize: Sequelize) {
 
       await t.commit();
       logger.info({ msg: '[residencias] baja de residente', dni, ciclo, fechaBaja, actor: user.id });
+      // Robot de bajas en SIAPE: se dispara ya (además de la corrida diaria), sin esperar.
+      ejecutarAhora('siape_carga_bajas')
+        .then((como) => logger.info({ msg: '[residencias] robot bajas SIAPE lanzado', dni, como }))
+        .catch((e) => logger.error({ msg: '[residencias] robot bajas SIAPE error al lanzar', dni, err: e?.message }));
       return res.json({ ok: true, data: { dni, ciclo, fecha_baja: fechaBaja } });
     } catch (err: any) {
       await t.rollback();

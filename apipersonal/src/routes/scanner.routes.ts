@@ -295,6 +295,22 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
       const refNumero = isResolucionesYVariosPage ? (refParts[2] || '') : '';
       const refFecha = isResolucionesYVariosPage ? (refParts[3] || '') : '';
 
+      // Vincula la resolución recién cargada con su archivo (resoluciones.archivo_id, mig 079).
+      // Solo si todavía no tiene: en JPG multipágina queda la primera hoja.
+      const vincularResolucion = async (archivoId: number | null) => {
+        if (!isResolucionesYVariosPage || !archivoId || !refNumero) return;
+        await sequelize.query(
+          `UPDATE resoluciones
+              SET archivo_id = :archivoId, updated_by = COALESCE(:operadorId, updated_by)
+            WHERE dni = :dni AND deleted_at IS NULL AND archivo_id IS NULL
+              AND motivo = :motivo AND numero = :numero
+              AND (:fecha = '' OR fecha = :fecha)
+            ORDER BY id DESC
+            LIMIT 1`,
+          { replacements: { archivoId, operadorId, dni: dniNum, motivo: refMotivo, numero: refNumero, fecha: /^\d{4}-\d{2}-\d{2}$/.test(refFecha) ? refFecha : '' } }
+        ).catch((e: any) => logger.warn({ msg: '[scanner] no se pudo vincular resolución con archivo', archivoId, error: e?.message }));
+      };
+
       // Si es scan de la página de resoluciones pero el formulario todavía no fue guardado
       // (motivo y numero vacíos), saltar la creación del archivo. El frontend llama a
       // sync-personal después de que el usuario completa el form y guarda, momento en que
@@ -455,6 +471,8 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
           }
         ).catch((e: any) => logger.warn({ msg: '[scanner] audit document-ready update falló', error: e?.message }));
 
+        await vincularResolucion(existingId);
+
         logger.info({
           msg: '[scanner] document-ready actualizado',
           personal_dni,
@@ -542,6 +560,7 @@ export function buildScannerRouter(sequelize: Sequelize): Router {
         }
       ).catch(() => [] as any[]);
       const savedId = (savedRows as any[])[0]?.id ?? null;
+      await vincularResolucion(savedId);
 
       await sequelize.query(
         `INSERT INTO audit_log

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../../../../api/http';
 import { EspecialidadesPanel } from './EspecialidadesPanel';
+import { FichajesRecienteBlock } from './FichajesRecienteBlock';
+import { type UltimasLicencias, type UltimaLicencia, fmtFechaLic, fmtHoraArchivo } from './UltimasLicenciasCard';
 
 // ─── Rolodex keyframes (inyectados una sola vez) ──────────────────────────────
 const ROLODEX_CSS = `
@@ -36,7 +38,7 @@ function useRolodexStyle() {
   }, []);
 }
 
-interface Props { row: any; onChanged?: () => void; }
+interface Props { row: any; onChanged?: () => void; licencias?: UltimasLicencias; }
 
 function fmt(fecha?: string | null) {
   if (!fecha) return null;
@@ -209,6 +211,76 @@ function SectorCard({ s }: { s: any }) {
   );
 }
 
+// ─── Última anual / complementaria: Ministerio vs SIAPE ──────────────────────
+function LicLinea({ fuente, l }: { fuente: string; l: UltimaLicencia | null }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginTop: 3 }}>
+      <span style={{ fontSize: '0.66rem', color: '#64748b', minWidth: 62 }}>{fuente}</span>
+      {l
+        ? <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#e2e8f0' }} title={l.novedad}>
+            {fmtFechaLic(l.desde)} → {fmtFechaLic(l.hasta ?? l.desde)}
+            {l.tablaAnual && <span style={{ fontFamily: 'inherit', fontSize: '0.66rem', color: '#64748b' }}> (tabla anual)</span>}
+          </span>
+        : <span style={{ fontSize: '0.75rem', color: '#475569' }}>no figura</span>}
+    </div>
+  );
+}
+
+function LicTile({ titulo, color, fila }: {
+  titulo: string; color: string;
+  fila?: { ministerio: UltimaLicencia | null; siape: UltimaLicencia | null; coincide: boolean | null };
+}) {
+  const ok = fila?.coincide === true;
+  const distinto = !!fila && !ok;
+  return (
+    <div className="agente-mini-card" style={{
+      borderColor: distinto ? 'rgba(245,158,11,0.45)' : undefined,
+      background: distinto ? 'rgba(245,158,11,0.07)' : undefined,
+    }}>
+      <span className="agente-mini-label" style={{ color }}>
+        {titulo}
+        {ok && <span style={{ color: '#4ade80' }} title="Mismas fechas en los dos"> ✓ coincide</span>}
+        {fila && fila.coincide === false && <span style={{ color: '#fbbf24' }}> ≠ fechas distintas</span>}
+        {fila && fila.coincide === null && <span style={{ color: '#fbbf24' }}> ≠ falta en uno</span>}
+      </span>
+      {fila
+        ? <>
+            <LicLinea fuente="Ministerio" l={fila.ministerio} />
+            <LicLinea fuente="SIAPE" l={fila.siape} />
+          </>
+        : <span className="agente-mini-value">Sin registros</span>}
+    </div>
+  );
+}
+
+function LicenciasBlock({ licencias }: { licencias: UltimasLicencias }) {
+  const { resp, loading, error } = licencias;
+  // La más reciente de cada grupo (el backend ya las ordena por fecha dentro del grupo)
+  const anual = resp?.data.find(f => f.grupo === 'ANUAL');
+  const compl = resp?.data.find(f => f.grupo === 'COMPLEMENTARIA');
+  const fechaMin = resp?.archivos.ministerio.find(a => a.archivo === 'MINISTERIO.xls')?.fecha ?? null;
+  const fechaSia = resp?.archivos.siape[0]?.fecha ?? null;
+  const fechaAnual = resp?.archivos.ministerio.find(a => a.archivo === 'tabla anual')?.fecha ?? null;
+  return (
+    <div className="agente-servicio-block">
+      <span className="agente-servicio-title">Última licencia anual / complementaria</span>
+      {loading && <div style={{ fontSize: '0.78rem', color: '#64748b' }}>⏳ Leyendo archivos…</div>}
+      {error && <div style={{ fontSize: '0.78rem', color: '#f87171' }}>{error}</div>}
+      {resp && (
+        <>
+          <div className="agente-mini-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            <LicTile titulo="Anual" color="#60a5fa" fila={anual} />
+            <LicTile titulo="Complementaria" color="#a78bfa" fila={compl} />
+          </div>
+          <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: 4 }}>
+            Archivo Ministerio del {fmtHoraArchivo(fechaMin)} · Tabla anual del {fmtHoraArchivo(fechaAnual)} · SIAPE del {fmtHoraArchivo(fechaSia)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Pestañas ─────────────────────────────────────────────────────────────────
 const TABS = [
   { key: 'info',      label: 'Info' },
@@ -220,7 +292,7 @@ const TABS = [
 type TabKey = typeof TABS[number]['key'];
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function AgenteInfoCard({ row, onChanged }: Props) {
+export function AgenteInfoCard({ row, onChanged, licencias }: Props) {
   const [tab, setTab]               = useState<TabKey>('info');
   const [displayedTab, setDisplayedTab] = useState<TabKey>('info');
   const [animClass, setAnimClass]   = useState('');
@@ -328,6 +400,11 @@ export function AgenteInfoCard({ row, onChanged }: Props) {
                   <MiniCard label="Desde"    value={fmt(servicio?.fecha_desde)} />
                   <MiniCard label="Hasta"    value={servicio?.fecha_hasta ? fmt(servicio.fecha_hasta) : 'Actual'} />
                 </div>
+              </div>
+              {/* licencias y fichajes lado a lado (uno abajo del otro si no entra) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', columnGap: 20, alignItems: 'start' }}>
+                {licencias && <LicenciasBlock licencias={licencias} />}
+                {row?.dni && <FichajesRecienteBlock dni={String(row.dni).replace(/\D/g, '')} />}
               </div>
             </>
           )}

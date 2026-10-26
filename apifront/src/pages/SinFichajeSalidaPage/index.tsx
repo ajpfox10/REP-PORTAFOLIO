@@ -24,7 +24,8 @@ interface SinSalidaRow {
   horaSalidaProgramada:  string | null;
   novedadSiap:           string;
   novedadMinisterio:     string;
-  estado:                "SOSPECHOSO" | "SIN_SALIDA" | "SOLO_SALIDA" | "PRESENTE_SIN_ESTAR" | "SIN_FICHAJE" | "REQUIERE_REVISION" | "JUSTIFICADO" | "CON_SALIDA";
+  estado:                "SOSPECHOSO" | "SIN_SALIDA" | "SOLO_SALIDA" | "PRESENTE_SIN_ESTAR" | "SIN_FICHAJE" | "FUERA_HORARIO" | "REQUIERE_REVISION" | "JUSTIFICADO" | "CON_SALIDA";
+  observacion?:          string | null;   // motivos: "entró 45 min tarde; salió 1 h después", "ficha otro horario"…
   fichajeInvertido:      boolean;
   salidaFaltante:        boolean;
   recMedico:             string | null;
@@ -51,6 +52,8 @@ interface Meta {
   sinFichaje:         number;
   presentesSinEstar:  number;
   requiereRevision?:  number;
+  fueraHorario?:      number;
+  turnosEnCurso?:     number;
   justificados:       number;
   conSalida:          number;
   agentesConProblema: number;
@@ -90,6 +93,7 @@ interface RegistroAgenteRow {
   presentesSinEstar:  number;
   sinFichaje:         number;
   requiereRevision:   number;
+  fueraHorario:       number;
   justificados:       number;
   conSalida:          number;
   invertidos:         number;
@@ -137,7 +141,7 @@ interface RawFichajeRow {
 
 type Tab          = "registros" | "agentes" | "invertidos" | "fichosindeber" | "sinhorario" | "horarios" | "ausentes";
 type ModoConsulta = "fecha" | "periodo" | "rango";
-type FiltroEstado = "todos" | "SOSPECHOSO" | "SIN_SALIDA" | "SOLO_SALIDA" | "PRESENTE_SIN_ESTAR" | "SIN_FICHAJE" | "REQUIERE_REVISION" | "JUSTIFICADO" | "CON_SALIDA";
+type FiltroEstado = "todos" | "SOSPECHOSO" | "SIN_SALIDA" | "SOLO_SALIDA" | "PRESENTE_SIN_ESTAR" | "SIN_FICHAJE" | "FUERA_HORARIO" | "REQUIERE_REVISION" | "JUSTIFICADO" | "CON_SALIDA";
 
 // Registro de un agente marcado AUSENTE por no fichar la salida (tabla sin_salida_ausentes)
 interface AusenteRow {
@@ -176,7 +180,8 @@ const ESTADO_LABEL: Record<string, string> = {
   SOLO_SALIDA:        "Solo salida",
   PRESENTE_SIN_ESTAR: "Presente sin estar",
   SIN_FICHAJE:        "Sin fichaje",
-  REQUIERE_REVISION:  "Requiere revisión",
+  FUERA_HORARIO:      "Fuera de horario",
+  REQUIERE_REVISION:  "Ficha otro horario",
   JUSTIFICADO:        "Justificado",
   CON_SALIDA:         "Con salida",
 };
@@ -187,6 +192,7 @@ const ESTADO_COLOR: Record<string, React.CSSProperties> = {
   SOLO_SALIDA:        { background: "rgba(244,63,94,0.18)",   color: "#f43f5e", border: "1px solid rgba(244,63,94,0.35)" },
   PRESENTE_SIN_ESTAR: { background: "rgba(251,146,60,0.18)",  color: "#fb923c", border: "1px solid rgba(251,146,60,0.35)" },
   SIN_FICHAJE:        { background: "rgba(251,191,36,0.18)",  color: "#fbbf24", border: "1px solid rgba(251,191,36,0.35)" },
+  FUERA_HORARIO:      { background: "rgba(249,115,22,0.18)",  color: "#fb923c", border: "1px solid rgba(249,115,22,0.40)" },
   REQUIERE_REVISION:  { background: "rgba(148,163,184,0.18)", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.35)" },
   JUSTIFICADO:        { background: "rgba(99,102,241,0.18)",  color: "#818cf8", border: "1px solid rgba(99,102,241,0.35)" },
   CON_SALIDA:         { background: "rgba(34,197,94,0.18)",   color: "#22c55e", border: "1px solid rgba(34,197,94,0.35)" },
@@ -349,7 +355,8 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
                       {r.salida ?? "—"}{esInvertido && r.salida && " ↕"}
                     </td>
                     <td style={{ padding: "7px 12px" }}>
-                      <span style={{ ...badge, ...(ESTADO_COLOR[r.estado] ?? {}) }}>{ESTADO_LABEL[r.estado] ?? r.estado}</span>
+                      <span style={{ ...badge, ...(ESTADO_COLOR[r.estado] ?? {}) }} title={r.observacion ?? undefined}>{ESTADO_LABEL[r.estado] ?? r.estado}</span>
+                      {r.observacion && <div style={{ fontSize: "0.7rem", color: "#fdba74", marginTop: 2, whiteSpace: "normal", maxWidth: 260 }}>{r.observacion}</div>}
                       {esInvertido && (
                         <span style={{ ...badge, marginLeft: 4, background: "rgba(239,68,68,0.2)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)", fontSize: "0.68rem" }}>
                           Invertido
@@ -402,6 +409,7 @@ function AgentModal({ agente, rows, highlightInvertido = false, onClose, siapNov
             { label: "Solo salida",         val: agentRows.filter(r => r.estado === "SOLO_SALIDA").length,        color: "#f43f5e" },
             { label: "Presente sin estar",  val: agentRows.filter(r => r.estado === "PRESENTE_SIN_ESTAR").length, color: "#fb923c" },
             { label: "Sin fichaje",         val: agentRows.filter(r => r.estado === "SIN_FICHAJE").length,        color: "#fbbf24" },
+            { label: "Fuera de horario",    val: agentRows.filter(r => r.estado === "FUERA_HORARIO").length,      color: "#fb923c" },
             { label: "Justificado", val: agentRows.filter(r => r.estado === "JUSTIFICADO").length, color: "#818cf8" },
             { label: "Con salida",  val: agentRows.filter(r => r.estado === "CON_SALIDA").length,  color: "#22c55e" },
             { label: "Invertidos",  val: agentRows.filter(r => r.fichajeInvertido).length,         color: "#ef4444" },
@@ -794,8 +802,6 @@ export function SinFichajeSalidaContent() {
   }, []);
 
   const cargar = useCallback(async () => {
-    const horariosSelected = horariosFiles.filter(Boolean);
-    if (horariosSelected.length === 0) { toastError("Falta archivo", "Seleccioná al menos un archivo de horarios"); return; }
     if (modo === "fecha"   && !fecha)   { toastError("Falta fecha",   "Seleccioná la fecha a consultar");   return; }
     if (modo === "periodo" && !periodo) { toastError("Falta período",  "Seleccioná el período a consultar"); return; }
     if (modo === "rango"   && (!desde || !hasta)) { toastError("Falta rango", "Seleccioná desde y hasta"); return; }
@@ -803,8 +809,8 @@ export function SinFichajeSalidaContent() {
 
     setLoading(true);
     try {
+      // los horarios siempre salen de HORARIOS.xlsx (lo decide el backend)
       const body: Record<string, any> = {
-        horariosFiles: horariosSelected,
         siapFiles: siapFiles.filter(Boolean),
       };
       if (ministerioFile) body.ministerioFile = ministerioFile;
@@ -850,7 +856,7 @@ export function SinFichajeSalidaContent() {
     } finally {
       setLoading(false);
     }
-  }, [modo, fecha, periodo, desde, hasta, horariosFiles, siapFiles, ministerioFile, toastError]);
+  }, [modo, fecha, periodo, desde, hasta, siapFiles, ministerioFile, toastError]);
 
   useEffect(() => {
     if (autoLoadRef.current && !loaded && !loading) { autoLoadRef.current = false; cargar(); }
@@ -915,7 +921,7 @@ export function SinFichajeSalidaContent() {
             diaSemana:             row.diaSemana,
             horaEntradaProgramada: row.horaEntradaProgramada,
             horaSalidaProgramada:  row.horaSalidaProgramada,
-            entradaReal:           row.entrada,
+            entradaReal:           row.entrada ? row.entrada.slice(0, 5) : null,   // HH:MM (la columna es VARCHAR(5))
             upa:                   row.upa,
             servicio:              row.servicio,
             ocupacion:             row.ocupacion,
@@ -989,6 +995,7 @@ export function SinFichajeSalidaContent() {
           presentesSinEstar: 0,
           sinFichaje: 0,
           requiereRevision: 0,
+          fueraHorario: 0,
           justificados: 0,
           conSalida: 0,
           invertidos: 0,
@@ -1004,6 +1011,7 @@ export function SinFichajeSalidaContent() {
       else if (r.estado === "PRESENTE_SIN_ESTAR") a.presentesSinEstar++;
       else if (r.estado === "SIN_FICHAJE") a.sinFichaje++;
       else if (r.estado === "REQUIERE_REVISION") a.requiereRevision++;
+      else if (r.estado === "FUERA_HORARIO") a.fueraHorario++;
       else if (r.estado === "JUSTIFICADO") a.justificados++;
       else if (r.estado === "CON_SALIDA") a.conSalida++;
     });
@@ -1083,6 +1091,7 @@ export function SinFichajeSalidaContent() {
       Entrada:             r.entrada ?? "",
       Salida:              r.salida  ?? "",
       Estado:              ESTADO_LABEL[r.estado] ?? r.estado,
+      Observación:         r.observacion ?? "",
       "Nov. Ministerio":   r.novedadMinisterio || "",
       "Nov. SIAP":         r.novedadSiap || "",
       "Invertido":         r.fichajeInvertido ? "SÍ" : "",
@@ -1138,12 +1147,12 @@ export function SinFichajeSalidaContent() {
         </div>
         <div style={{ marginBottom: 10 }}>
           <div className="muted" style={{ fontSize: "0.72rem", marginBottom: 4 }}>Horarios</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{ flex: "1 1 200px" }}>
-                <select aria-label={`Archivo de horarios ${i + 1}`} style={selectStyle} value={horariosFiles[i]} onChange={e => setHorFile(i, e.target.value)}>{fileOpt("— sin archivo —")}</select>
-              </div>
-            ))}
+          <div style={{ fontSize: "0.8rem", color: "#cbd5e1" }}>
+            <strong>HORARIOS.xlsx</strong>{" "}
+            <span className="muted" style={{ fontSize: "0.72rem" }}>
+              — siempre este (horario completo del día, se baja de SIAPE a las 05:50). Guardia = entra un día y sale el otro.
+              Tolerancia 30 min (entrar antes no cuenta). La semana alternada (L-X-V / M-J) se deduce de los fichajes.
+            </span>
           </div>
         </div>
         <div style={{ marginBottom: 12 }}>
@@ -1216,7 +1225,7 @@ export function SinFichajeSalidaContent() {
             </div>
           )}
           <button className="btn primary" onClick={cargar}
-            disabled={loading || horariosFiles.filter(Boolean).length === 0} type="button" style={{ height: 36 }}>
+            disabled={loading} type="button" style={{ height: 36 }}>
             {loading ? "Cargando…" : loaded ? "↻ Recargar" : "Cargar"}
           </button>
           <button className="btn" onClick={() => setNotifOpen(true)} type="button" style={{ height: 36 }}
@@ -1248,6 +1257,12 @@ export function SinFichajeSalidaContent() {
         </div>
       )}
 
+      {!!meta?.turnosEnCurso && (
+        <div className="muted" style={{ fontSize: "0.75rem", marginBottom: 8 }}>
+          {meta.turnosEnCurso} turno(s) todavía en curso (no pasaron 6 h desde la salida programada): no se evalúan hasta que terminen.
+        </div>
+      )}
+
       {meta && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
           {[
@@ -1257,7 +1272,8 @@ export function SinFichajeSalidaContent() {
             { label: "Solo salida",         value: meta.soloSalida ?? 0,     color: "#f43f5e" },
             { label: "Presente sin estar",  value: meta.presentesSinEstar,   color: "#fb923c" },
             { label: "Sin fichaje",         value: meta.sinFichaje,          color: "#fbbf24" },
-            { label: "Requiere revisión",   value: meta.requiereRevision ?? 0, color: "#94a3b8" },
+            { label: "Fuera de horario",    value: meta.fueraHorario ?? 0,   color: "#fb923c" },
+            { label: "Ficha otro horario",  value: meta.requiereRevision ?? 0, color: "#94a3b8" },
             { label: "Justificados",        value: meta.justificados,        color: "#818cf8" },
             { label: "Con salida (OK)",     value: meta.conSalida,           color: "#22c55e" },
             { label: "Agentes c/ problema", value: meta.agentesConProblema,  color: "#f97316" },
@@ -1295,7 +1311,7 @@ export function SinFichajeSalidaContent() {
         <>
           <div className="card" style={{ marginBottom: 12, marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {(["todos", "SOSPECHOSO", "SIN_SALIDA", "SOLO_SALIDA", "PRESENTE_SIN_ESTAR", "SIN_FICHAJE", "REQUIERE_REVISION", "JUSTIFICADO", "CON_SALIDA"] as FiltroEstado[]).map(v => (
+              {(["todos", "SOSPECHOSO", "SIN_SALIDA", "SOLO_SALIDA", "PRESENTE_SIN_ESTAR", "SIN_FICHAJE", "FUERA_HORARIO", "REQUIERE_REVISION", "JUSTIFICADO", "CON_SALIDA"] as FiltroEstado[]).map(v => (
                 <button key={v} type="button"
                   className={`btn${filtroEstado === v ? " primary" : ""}`}
                   style={{ fontSize: "0.75rem", padding: "4px 10px" }}
@@ -1345,14 +1361,14 @@ export function SinFichajeSalidaContent() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                    {["Apellido y Nombre", "DNI", "Dependencia", "Servicio", "Régimen", "Filas", "Sin salida", "Solo salida", "Sin fichaje", "Revisión", "Fechas"].map(h => (
+                    {["Apellido y Nombre", "DNI", "Dependencia", "Servicio", "Régimen", "Filas", "Sin salida", "Solo salida", "Sin fichaje", "Fuera horario", "Otro horario", "Fechas"].map(h => (
                       <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {registrosPagina.length === 0 ? (
-                    <tr><td colSpan={11} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin resultados.</td></tr>
+                    <tr><td colSpan={12} style={{ padding: 24, textAlign: "center", color: "#64748b" }}>Sin resultados.</td></tr>
                   ) : registrosPagina.map((r, i) => (
                     <tr key={r.dni}
                       onDoubleClick={() => setAgentModal({ dni: r.dni, nombre: r.nombre, upa: r.upa, invertido: false })}
@@ -1402,6 +1418,11 @@ export function SinFichajeSalidaContent() {
                       <td style={{ padding: "8px 12px" }}>
                         {r.sinFichaje > 0
                           ? <span style={{ ...badge, background: "rgba(251,191,36,0.18)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.35)" }}>{r.sinFichaje}</span>
+                          : <span style={{ color: "#475569" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        {r.fueraHorario > 0
+                          ? <span style={{ ...badge, ...ESTADO_COLOR.FUERA_HORARIO }}>{r.fueraHorario}</span>
                           : <span style={{ color: "#475569" }}>—</span>}
                       </td>
                       <td style={{ padding: "8px 12px" }}>

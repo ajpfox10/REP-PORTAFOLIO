@@ -32,7 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN  # conn() + registrar_run() + .env
-from escritorio_activo import asegurar_escritorio_activo
+from escritorio_activo import asegurar_escritorio_activo, chequear_escala
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 LOGS_DIR = SCRIPTS_DIR / "logs"
@@ -44,9 +44,9 @@ SIN_VENTANA_SIAPE = {"siape_tiempo_acumulado"}
 def recurso_de(cfg):
     """Robots que no pueden correr juntos comparten recurso."""
     grupo = cfg.get("grupo")
-    if cfg.get("script") == "circuito_v2":
+    if cfg.get("script") in ("circuito_v2", "circuito_jefe"):
         # lanza otros robots que toman sus propios turnos: si compartiera uno, se trabaria solo
-        return "robots_circuito"
+        return "robots_circuito" if cfg["script"] == "circuito_v2" else "robots_circuito_jefe"
     if grupo == "Intranet MS" or str(cfg.get("script", "")).startswith("intranet_"):
         # mismo perfil de Chrome de la Intranet (aunque esten en otro grupo, p.ej. 2.0)
         return "robots_intranet"
@@ -78,6 +78,10 @@ def _ultima_fila(cur, script):
 def _resumen_salida(lineas, n=3):
     utiles = [l.strip() for l in lineas if l.strip() and not l.strip().startswith("====")]
     return " | ".join(utiles[-n:])[:480]
+
+
+class _NoArranca(Exception):
+    """El chequeo previo dijo que no hay que lanzar el robot."""
 
 
 def main():
@@ -127,10 +131,18 @@ def main():
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
     with open(log_path, "a", encoding="utf-8", errors="replace") as log:
         log.write(f"\n==== {datetime.now():%Y-%m-%d %H:%M:%S} {cfg['comando']} ====\n")
+        escala_mal = None
         if usa_siape:
             # SiAPe se maneja con mouse/teclado reales: con el RDP desconectado no anda
-            asegurar_escritorio_activo(lambda m: (print(m), log.write(m + "\n"), log.flush()))
+            _log = lambda m: (print(m), log.write(m + "\n"), log.flush())
+            asegurar_escritorio_activo(_log)
+            # ...y con la sesion a otra escala (la pone la PC del RDP) los clicks caen corridos
+            escala_mal = chequear_escala(_log)
+            if escala_mal:
+                _log(f"NO ARRANCO: {escala_mal}")
         try:
+            if escala_mal:
+                raise _NoArranca()
             p = subprocess.Popen(cfg["comando"], cwd=SCRIPTS_DIR, shell=True, env=env,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  text=True, encoding="utf-8", errors="replace")
@@ -140,6 +152,8 @@ def main():
                 lineas.append(linea)
                 lineas = lineas[-200:]
             code = p.wait()
+        except _NoArranca:
+            code = 4
         except Exception as e:
             code = -1
             lineas.append(f"No se pudo lanzar: {e}")
@@ -153,6 +167,11 @@ def main():
         cn_lock.close()
     except Exception:
         pass  # si la conexion murio, MySQL libera el lock solo
+
+    if escala_mal:
+        MN.registrar_run(script, cfg["descripcion"], "error", motivo=escala_mal,
+                         archivo=str(log_path), duracion_seg=dur)
+        return code
 
     if cfg.get("reporta_solo"):
         with MN.conn() as cn, cn.cursor() as cur:

@@ -837,6 +837,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/agentes_cargo_nomenclador:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_cargo_nomenclador
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_cargo_nomenclador"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_cargo_nomenclador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_cargo_nomenclador_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_cargo_nomenclador/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_cargo_nomenclador by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_cargo_nomenclador by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_cargo_nomenclador"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_cargo_nomenclador by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_cargo_nomenclador_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_cargo_nomenclador by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/agentes_comisiones:
     get:
       tags:
@@ -1222,6 +1354,930 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete agentes_ocup_bkp_0702 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentes_ocup_bkp_0702_orig:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_0702_orig
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_orig"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_0702_orig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_orig_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_0702_orig/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_0702_orig by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_0702_orig by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_orig"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_0702_orig by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_orig_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_0702_orig by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentes_ocup_bkp_0702_pre_becas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_0702_pre_becas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_pre_becas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_0702_pre_becas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_pre_becas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_0702_pre_becas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_0702_pre_becas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_0702_pre_becas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_pre_becas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_0702_pre_becas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_0702_pre_becas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_0702_pre_becas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentes_ocup_bkp_20261026:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_20261026
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_20261026
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_20261026/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentes_ocup_bkp_20261026b:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_20261026b
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026b"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_20261026b
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026b_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_20261026b/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026b"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026b_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentes_ocup_bkp_20261026c:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_20261026c
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026c"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_20261026c
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026c_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_20261026c/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_20261026c by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_20261026c by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026c"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_20261026c by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026c_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_20261026c by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentes_ocup_bkp_20261026d:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_20261026d
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026d"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_20261026d
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026d_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_20261026d/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_20261026d by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_20261026d by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026d"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_20261026d by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026d_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_20261026d by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/agentes_ocup_bkp_20261026e:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List agentes_ocup_bkp_20261026e
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026e"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create agentes_ocup_bkp_20261026e
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026e_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/agentes_ocup_bkp_20261026e/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get agentes_ocup_bkp_20261026e by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update agentes_ocup_bkp_20261026e by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026e"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch agentes_ocup_bkp_20261026e by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_agentes_ocup_bkp_20261026e_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete agentes_ocup_bkp_20261026e by id
       parameters:
         - name: id
           in: path
@@ -5457,6 +6513,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/cie_codigos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List cie_codigos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_cie_codigos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create cie_codigos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_cie_codigos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/cie_codigos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get cie_codigos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update cie_codigos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_cie_codigos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch cie_codigos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_cie_codigos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete cie_codigos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/citaciones:
     get:
       tags:
@@ -8310,6 +9498,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/dotacion_minima:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List dotacion_minima
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_dotacion_minima"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create dotacion_minima
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_dotacion_minima_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/dotacion_minima/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get dotacion_minima by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update dotacion_minima by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_dotacion_minima"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch dotacion_minima by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_dotacion_minima_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete dotacion_minima by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/embarazadas:
     get:
       tags:
@@ -9630,6 +10950,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/feriados_anios:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List feriados_anios
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_feriados_anios"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create feriados_anios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_feriados_anios_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/feriados_anios/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get feriados_anios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update feriados_anios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_feriados_anios"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch feriados_anios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_feriados_anios_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete feriados_anios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/francos_compensatorios:
     get:
       tags:
@@ -10422,6 +11874,270 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/historial_bk_20261026:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List historial_bk_20261026
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_historial_bk_20261026"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create historial_bk_20261026
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_bk_20261026_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/historial_bk_20261026/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get historial_bk_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update historial_bk_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_bk_20261026"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch historial_bk_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_bk_20261026_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete historial_bk_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/historial_bk_20261026b:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List historial_bk_20261026b
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_historial_bk_20261026b"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create historial_bk_20261026b
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_bk_20261026b_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/historial_bk_20261026b/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get historial_bk_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update historial_bk_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_bk_20261026b"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch historial_bk_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_historial_bk_20261026b_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete historial_bk_20261026b by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/historial_bkp_20260828:
     get:
       tags:
@@ -10675,6 +12391,270 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete historial_estructura by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/horarios_historial:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List horarios_historial
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_horarios_historial"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create horarios_historial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_horarios_historial_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/horarios_historial/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get horarios_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update horarios_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_horarios_historial"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch horarios_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_horarios_historial_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete horarios_historial by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/horarios_historial_cargas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List horarios_historial_cargas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_horarios_historial_cargas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create horarios_historial_cargas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_horarios_historial_cargas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/horarios_historial_cargas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get horarios_historial_cargas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update horarios_historial_cargas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_horarios_historial_cargas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch horarios_historial_cargas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_horarios_historial_cargas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete horarios_historial_cargas by id
       parameters:
         - name: id
           in: path
@@ -11071,6 +13051,270 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete jefaturas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/jefe_carga_intranet:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List jefe_carga_intranet
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_jefe_carga_intranet"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create jefe_carga_intranet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jefe_carga_intranet_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/jefe_carga_intranet/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get jefe_carga_intranet by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update jefe_carga_intranet by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jefe_carga_intranet"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch jefe_carga_intranet by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jefe_carga_intranet_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete jefe_carga_intranet by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/jefe_carga_siape:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List jefe_carga_siape
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_jefe_carga_siape"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create jefe_carga_siape
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jefe_carga_siape_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/jefe_carga_siape/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get jefe_carga_siape by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update jefe_carga_siape by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jefe_carga_siape"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch jefe_carga_siape by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_jefe_carga_siape_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete jefe_carga_siape by id
       parameters:
         - name: id
           in: path
@@ -14250,6 +16494,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/licencias_plus_norma:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List licencias_plus_norma
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_licencias_plus_norma"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create licencias_plus_norma
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_licencias_plus_norma_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/licencias_plus_norma/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get licencias_plus_norma by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update licencias_plus_norma by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_licencias_plus_norma"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch licencias_plus_norma by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_licencias_plus_norma_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete licencias_plus_norma by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/localidades:
     get:
       tags:
@@ -14503,6 +16879,270 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete mapeo_novedades by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/mensajes_reloj:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List mensajes_reloj
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_mensajes_reloj"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create mensajes_reloj
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_mensajes_reloj_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/mensajes_reloj/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get mensajes_reloj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update mensajes_reloj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_mensajes_reloj"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch mensajes_reloj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_mensajes_reloj_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete mensajes_reloj by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/mensajes_reloj_envios:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List mensajes_reloj_envios
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_mensajes_reloj_envios"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create mensajes_reloj_envios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_mensajes_reloj_envios_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/mensajes_reloj_envios/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get mensajes_reloj_envios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update mensajes_reloj_envios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_mensajes_reloj_envios"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch mensajes_reloj_envios by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_mensajes_reloj_envios_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete mensajes_reloj_envios by id
       parameters:
         - name: id
           in: path
@@ -15174,6 +17814,402 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/nomenclador_agrupamientos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List nomenclador_agrupamientos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_nomenclador_agrupamientos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create nomenclador_agrupamientos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_agrupamientos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/nomenclador_agrupamientos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get nomenclador_agrupamientos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update nomenclador_agrupamientos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_agrupamientos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch nomenclador_agrupamientos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_agrupamientos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete nomenclador_agrupamientos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/nomenclador_cargos:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List nomenclador_cargos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_nomenclador_cargos"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create nomenclador_cargos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_cargos_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/nomenclador_cargos/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get nomenclador_cargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update nomenclador_cargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_cargos"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch nomenclador_cargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_cargos_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete nomenclador_cargos by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/nomenclador_categorias:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List nomenclador_categorias
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_nomenclador_categorias"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create nomenclador_categorias
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_categorias_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/nomenclador_categorias/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get nomenclador_categorias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update nomenclador_categorias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_categorias"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch nomenclador_categorias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_nomenclador_categorias_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete nomenclador_categorias by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/novedades_carga_intranet:
     get:
       tags:
@@ -15427,6 +18463,270 @@ paths:
       security:
         - bearerAuth: []
       summary: Delete ocupaciones by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/ocupaciones_bkp_20261026:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List ocupaciones_bkp_20261026
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create ocupaciones_bkp_20261026
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/ocupaciones_bkp_20261026/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get ocupaciones_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update ocupaciones_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch ocupaciones_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete ocupaciones_bkp_20261026 by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+  /api/v1/ocupaciones_bkp_20261026_preborrado:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List ocupaciones_bkp_20261026_preborrado
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026_preborrado"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create ocupaciones_bkp_20261026_preborrado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026_preborrado_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/ocupaciones_bkp_20261026_preborrado/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get ocupaciones_bkp_20261026_preborrado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update ocupaciones_bkp_20261026_preborrado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026_preborrado"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch ocupaciones_bkp_20261026_preborrado by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_ocupaciones_bkp_20261026_preborrado_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete ocupaciones_bkp_20261026_preborrado by id
       parameters:
         - name: id
           in: path
@@ -21642,6 +24942,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/siape_novedades_regimen:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List siape_novedades_regimen
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_siape_novedades_regimen"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create siape_novedades_regimen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_siape_novedades_regimen_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/siape_novedades_regimen/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get siape_novedades_regimen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update siape_novedades_regimen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_siape_novedades_regimen"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch siape_novedades_regimen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_siape_novedades_regimen_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete siape_novedades_regimen by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/sin_salida_ausentes:
     get:
       tags:
@@ -24546,6 +27978,138 @@ paths:
           description: OK
         "404":
           description: Not found
+  /api/v1/vacaciones_adelantadas:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: List vacaciones_adelantadas
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Table_vacaciones_adelantadas"
+    post:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Create vacaciones_adelantadas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_vacaciones_adelantadas_Create"
+      responses:
+        "201":
+          description: Created
+  /api/v1/vacaciones_adelantadas/{id}:
+    get:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Get vacaciones_adelantadas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Update vacaciones_adelantadas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_vacaciones_adelantadas"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    patch:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Patch vacaciones_adelantadas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Table_vacaciones_adelantadas_Patch"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    delete:
+      tags:
+        - crud
+      security:
+        - bearerAuth: []
+      summary: Delete vacaciones_adelantadas by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
   /api/v1/webhook_deliveries:
     get:
       tags:
@@ -25546,6 +29110,158 @@ components:
         decreto_designacion:
           type: string
           nullable: true
+    Table_agentes_cargo_nomenclador:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_id:
+          type: number
+        agrupamiento_id:
+          type: number
+        cargo_id:
+          type: number
+        categoria_id:
+          type: number
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        origen:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        abierta:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - agente_id
+        - agrupamiento_id
+        - cargo_id
+        - categoria_id
+        - fecha_desde
+    Table_agentes_cargo_nomenclador_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agente_id:
+          type: number
+        agrupamiento_id:
+          type: number
+        cargo_id:
+          type: number
+        categoria_id:
+          type: number
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        origen:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        abierta:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - agente_id
+        - agrupamiento_id
+        - cargo_id
+        - categoria_id
+        - fecha_desde
+    Table_agentes_cargo_nomenclador_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agente_id:
+          type: number
+        agrupamiento_id:
+          type: number
+        cargo_id:
+          type: number
+        categoria_id:
+          type: number
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        origen:
+          type: string
+        observaciones:
+          type: string
+          nullable: true
+        abierta:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
     Table_agentes_comisiones:
       type: object
       additionalProperties: false
@@ -25922,6 +29638,227 @@ components:
         updated_at:
           type: string
           format: date-time
+          nullable: true
+    Table_agentes_ocup_bkp_0702_orig:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_agentes_ocup_bkp_0702_orig_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_agentes_ocup_bkp_0702_orig_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_agentes_ocup_bkp_0702_pre_becas:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_agentes_ocup_bkp_0702_pre_becas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - dni
+    Table_agentes_ocup_bkp_0702_pre_becas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_agentes_ocup_bkp_20261026:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026b:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026b_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026b_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026c:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026c_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026c_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026d:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026d_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026d_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026e:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026e_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
+          nullable: true
+    Table_agentes_ocup_bkp_20261026e_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        ocupacion_id:
+          type: number
           nullable: true
     Table_agentes_sectores:
       type: object
@@ -26479,6 +30416,16 @@ components:
           type: string
           format: date-time
           nullable: true
+        desactivado_por:
+          type: number
+          nullable: true
+        desactivado_at:
+          type: string
+          format: date-time
+          nullable: true
+        origen:
+          type: string
+          nullable: true
       required:
         - id
         - dni
@@ -26510,6 +30457,16 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+        desactivado_por:
+          type: number
+          nullable: true
+        desactivado_at:
+          type: string
+          format: date-time
+          nullable: true
+        origen:
+          type: string
           nullable: true
       required:
         - dni
@@ -26543,6 +30500,16 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+        desactivado_por:
+          type: number
+          nullable: true
+        desactivado_at:
+          type: string
+          format: date-time
+          nullable: true
+        origen:
+          type: string
           nullable: true
     Table_alertas_agente_usuarios:
       type: object
@@ -29291,6 +33258,87 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_cie_codigos:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        descripcion:
+          type: string
+        categoria:
+          type: string
+          nullable: true
+        capitulo:
+          type: string
+          nullable: true
+        capitulo_nombre:
+          type: string
+          nullable: true
+        uso:
+          type: string
+          nullable: true
+        origen:
+          type: string
+        cargado_en:
+          type: string
+          format: date-time
+      required:
+        - codigo
+        - descripcion
+    Table_cie_codigos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        descripcion:
+          type: string
+        categoria:
+          type: string
+          nullable: true
+        capitulo:
+          type: string
+          nullable: true
+        capitulo_nombre:
+          type: string
+          nullable: true
+        uso:
+          type: string
+          nullable: true
+        origen:
+          type: string
+        cargado_en:
+          type: string
+          format: date-time
+      required:
+        - codigo
+        - descripcion
+    Table_cie_codigos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        descripcion:
+          type: string
+        categoria:
+          type: string
+          nullable: true
+        capitulo:
+          type: string
+          nullable: true
+        capitulo_nombre:
+          type: string
+          nullable: true
+        uso:
+          type: string
+          nullable: true
+        origen:
+          type: string
+        cargado_en:
+          type: string
+          format: date-time
     Table_citaciones:
       type: object
       additionalProperties: false
@@ -31678,6 +35726,90 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_dotacion_minima:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        servicio_id:
+          type: number
+        sector:
+          type: string
+        turno:
+          type: string
+        tipo_dia:
+          type: string
+        minimo:
+          type: number
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - servicio_id
+        - sector
+        - turno
+        - minimo
+    Table_dotacion_minima_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        servicio_id:
+          type: number
+        sector:
+          type: string
+        turno:
+          type: string
+        tipo_dia:
+          type: string
+        minimo:
+          type: number
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - servicio_id
+        - sector
+        - turno
+        - minimo
+    Table_dotacion_minima_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        servicio_id:
+          type: number
+        sector:
+          type: string
+        turno:
+          type: string
+        tipo_dia:
+          type: string
+        minimo:
+          type: number
+        updated_by:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Table_embarazadas:
       type: object
       additionalProperties: false
@@ -32728,6 +36860,9 @@ components:
         numero:
           type: string
           nullable: true
+        anio:
+          type: number
+          nullable: true
         caratula:
           type: string
           nullable: true
@@ -32767,6 +36902,9 @@ components:
           type: number
         numero:
           type: string
+          nullable: true
+        anio:
+          type: number
           nullable: true
         caratula:
           type: string
@@ -32808,6 +36946,9 @@ components:
           type: number
         numero:
           type: string
+          nullable: true
+        anio:
+          type: number
           nullable: true
         caratula:
           type: string
@@ -33087,6 +37228,55 @@ components:
           type: string
           format: date-time
         updated_at:
+          type: string
+          format: date-time
+    Table_feriados_anios:
+      type: object
+      additionalProperties: false
+      properties:
+        anio:
+          type: number
+        confirmado_por:
+          type: number
+          nullable: true
+        confirmado_por_nombre:
+          type: string
+          nullable: true
+        confirmado_at:
+          type: string
+          format: date-time
+      required:
+        - anio
+    Table_feriados_anios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        anio:
+          type: number
+        confirmado_por:
+          type: number
+          nullable: true
+        confirmado_por_nombre:
+          type: string
+          nullable: true
+        confirmado_at:
+          type: string
+          format: date-time
+      required:
+        - anio
+    Table_feriados_anios_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        anio:
+          type: number
+        confirmado_por:
+          type: number
+          nullable: true
+        confirmado_por_nombre:
+          type: string
+          nullable: true
+        confirmado_at:
           type: string
           format: date-time
     Table_francos_compensatorios:
@@ -34117,6 +38307,360 @@ components:
         created_at:
           type: string
           format: date-time
+    Table_historial_bk_20261026:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - novedad
+    Table_historial_bk_20261026_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - novedad
+    Table_historial_bk_20261026_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    Table_historial_bk_20261026b:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - novedad
+    Table_historial_bk_20261026b_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - dni
+        - novedad
+    Table_historial_bk_20261026b_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        legajo:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        sexo:
+          type: string
+          nullable: true
+        regimen_estatutario:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        categoria_salarial:
+          type: string
+          nullable: true
+        novedad:
+          type: string
+        fecha_desde:
+          type: string
+          format: date-time
+          nullable: true
+        fecha_hasta:
+          type: string
+          format: date-time
+          nullable: true
+        justificado:
+          type: string
+          nullable: true
+        estructura_servicio:
+          type: string
+          nullable: true
+        dependencia:
+          type: string
+          nullable: true
+        archivo_origen:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     Table_historial_bkp_20260828:
       type: object
       additionalProperties: false
@@ -34439,6 +38983,272 @@ components:
         created_at:
           type: string
           format: date-time
+    Table_horarios_historial:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        dni:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        lun_e:
+          type: string
+          nullable: true
+        lun_s:
+          type: string
+          nullable: true
+        mar_e:
+          type: string
+          nullable: true
+        mar_s:
+          type: string
+          nullable: true
+        mie_e:
+          type: string
+          nullable: true
+        mie_s:
+          type: string
+          nullable: true
+        jue_e:
+          type: string
+          nullable: true
+        jue_s:
+          type: string
+          nullable: true
+        vie_e:
+          type: string
+          nullable: true
+        vie_s:
+          type: string
+          nullable: true
+        sab_e:
+          type: string
+          nullable: true
+        sab_s:
+          type: string
+          nullable: true
+        dom_e:
+          type: string
+          nullable: true
+        dom_s:
+          type: string
+          nullable: true
+        regimen:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        estructura:
+          type: string
+          nullable: true
+      required:
+        - id
+        - fecha
+        - dni
+    Table_horarios_historial_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        dni:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        lun_e:
+          type: string
+          nullable: true
+        lun_s:
+          type: string
+          nullable: true
+        mar_e:
+          type: string
+          nullable: true
+        mar_s:
+          type: string
+          nullable: true
+        mie_e:
+          type: string
+          nullable: true
+        mie_s:
+          type: string
+          nullable: true
+        jue_e:
+          type: string
+          nullable: true
+        jue_s:
+          type: string
+          nullable: true
+        vie_e:
+          type: string
+          nullable: true
+        vie_s:
+          type: string
+          nullable: true
+        sab_e:
+          type: string
+          nullable: true
+        sab_s:
+          type: string
+          nullable: true
+        dom_e:
+          type: string
+          nullable: true
+        dom_s:
+          type: string
+          nullable: true
+        regimen:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        estructura:
+          type: string
+          nullable: true
+      required:
+        - fecha
+        - dni
+    Table_horarios_historial_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        dni:
+          type: number
+        apellido_nombre:
+          type: string
+          nullable: true
+        lun_e:
+          type: string
+          nullable: true
+        lun_s:
+          type: string
+          nullable: true
+        mar_e:
+          type: string
+          nullable: true
+        mar_s:
+          type: string
+          nullable: true
+        mie_e:
+          type: string
+          nullable: true
+        mie_s:
+          type: string
+          nullable: true
+        jue_e:
+          type: string
+          nullable: true
+        jue_s:
+          type: string
+          nullable: true
+        vie_e:
+          type: string
+          nullable: true
+        vie_s:
+          type: string
+          nullable: true
+        sab_e:
+          type: string
+          nullable: true
+        sab_s:
+          type: string
+          nullable: true
+        dom_e:
+          type: string
+          nullable: true
+        dom_s:
+          type: string
+          nullable: true
+        regimen:
+          type: string
+          nullable: true
+        planta:
+          type: string
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        estructura:
+          type: string
+          nullable: true
+    Table_horarios_historial_cargas:
+      type: object
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        origen:
+          type: string
+        archivo:
+          type: string
+          nullable: true
+        filas:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+      required:
+        - fecha
+        - origen
+    Table_horarios_historial_cargas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        origen:
+          type: string
+        archivo:
+          type: string
+          nullable: true
+        filas:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+      required:
+        - fecha
+        - origen
+    Table_horarios_historial_cargas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        origen:
+          type: string
+        archivo:
+          type: string
+          nullable: true
+        filas:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
     Table_idempotency_keys:
       type: object
       additionalProperties: false
@@ -34756,6 +39566,263 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_jefe_carga_intranet:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        origen:
+          type: string
+        origen_id:
+          type: number
+        dni:
+          type: string
+        nombre:
+          type: string
+        desde:
+          type: string
+          format: date-time
+        hasta:
+          type: string
+          format: date-time
+        dependencia_sugerida:
+          type: string
+        deps_descartadas:
+          type: string
+        dependencia:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        label_intranet:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
+      required:
+        - id
+        - origen
+        - origen_id
+        - dni
+        - desde
+        - hasta
+    Table_jefe_carga_intranet_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        origen:
+          type: string
+        origen_id:
+          type: number
+        dni:
+          type: string
+        nombre:
+          type: string
+        desde:
+          type: string
+          format: date-time
+        hasta:
+          type: string
+          format: date-time
+        dependencia_sugerida:
+          type: string
+        deps_descartadas:
+          type: string
+        dependencia:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        label_intranet:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
+      required:
+        - origen
+        - origen_id
+        - dni
+        - desde
+        - hasta
+    Table_jefe_carga_intranet_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        origen:
+          type: string
+        origen_id:
+          type: number
+        dni:
+          type: string
+        nombre:
+          type: string
+        desde:
+          type: string
+          format: date-time
+        hasta:
+          type: string
+          format: date-time
+        dependencia_sugerida:
+          type: string
+        deps_descartadas:
+          type: string
+        dependencia:
+          type: string
+          nullable: true
+        estado:
+          type: string
+        label_intranet:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
+    Table_jefe_carga_siape:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        origen:
+          type: string
+        origen_id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
+      required:
+        - id
+        - origen
+        - origen_id
+        - dni
+        - fecha
+    Table_jefe_carga_siape_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        origen:
+          type: string
+        origen_id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
+      required:
+        - origen
+        - origen_id
+        - dni
+        - fecha
+    Table_jefe_carga_siape_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        origen:
+          type: string
+        origen_id:
+          type: number
+        dni:
+          type: number
+        fecha:
+          type: string
+          format: date-time
+        estado:
+          type: string
+        detalle:
+          type: string
+          nullable: true
+        intentos:
+          type: number
+        cargado_en:
+          type: string
+          format: date-time
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+        actualizado_en:
+          type: string
+          format: date-time
     Table_jefedeptos:
       type: object
       additionalProperties: false
@@ -38427,6 +43494,93 @@ components:
         created_at:
           type: string
           format: date-time
+    Table_licencias_plus_norma:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        novedad:
+          type: string
+        guardia:
+          type: string
+        planta:
+          type: string
+        norma_guardia:
+          type: string
+          nullable: true
+        norma_planta:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - codigo
+        - novedad
+    Table_licencias_plus_norma_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        novedad:
+          type: string
+        guardia:
+          type: string
+        planta:
+          type: string
+        norma_guardia:
+          type: string
+          nullable: true
+        norma_planta:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - codigo
+        - novedad
+    Table_licencias_plus_norma_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        novedad:
+          type: string
+        guardia:
+          type: string
+        planta:
+          type: string
+        norma_guardia:
+          type: string
+          nullable: true
+        norma_planta:
+          type: string
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
     Table_localidades:
       type: object
       additionalProperties: false
@@ -38617,6 +43771,182 @@ components:
           format: date-time
         carga_key:
           type: string
+          nullable: true
+    Table_mensajes_reloj:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        mensaje:
+          type: string
+        vigencia_min:
+          type: number
+        sms_uid:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - apellido
+        - nombre
+        - mensaje
+    Table_mensajes_reloj_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        mensaje:
+          type: string
+        vigencia_min:
+          type: number
+        sms_uid:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - apellido
+        - nombre
+        - mensaje
+    Table_mensajes_reloj_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        apellido:
+          type: string
+        nombre:
+          type: string
+        mensaje:
+          type: string
+        vigencia_min:
+          type: number
+        sms_uid:
+          type: number
+          nullable: true
+        estado:
+          type: string
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+    Table_mensajes_reloj_envios:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        mensaje_id:
+          type: number
+        sn:
+          type: string
+        reloj:
+          type: string
+          nullable: true
+        devcmd_sms_id:
+          type: number
+          nullable: true
+        devcmd_user_id:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - mensaje_id
+        - sn
+    Table_mensajes_reloj_envios_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        mensaje_id:
+          type: number
+        sn:
+          type: string
+        reloj:
+          type: string
+          nullable: true
+        devcmd_sms_id:
+          type: number
+          nullable: true
+        devcmd_user_id:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - mensaje_id
+        - sn
+    Table_mensajes_reloj_envios_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        mensaje_id:
+          type: number
+        sn:
+          type: string
+        reloj:
+          type: string
+          nullable: true
+        devcmd_sms_id:
+          type: number
+          nullable: true
+        devcmd_user_id:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
           nullable: true
     Table_migrations:
       type: object
@@ -38984,6 +44314,223 @@ components:
         updated_by:
           type: number
           nullable: true
+    Table_nomenclador_agrupamientos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+      required:
+        - id
+        - nombre
+    Table_nomenclador_agrupamientos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+      required:
+        - id
+        - nombre
+    Table_nomenclador_agrupamientos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+    Table_nomenclador_cargos:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agrupamiento_id:
+          type: number
+        codigo:
+          type: number
+        denominacion:
+          type: string
+        letra:
+          type: string
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
+          nullable: true
+        vigente:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - agrupamiento_id
+        - codigo
+        - denominacion
+    Table_nomenclador_cargos_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agrupamiento_id:
+          type: number
+        codigo:
+          type: number
+        denominacion:
+          type: string
+        letra:
+          type: string
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
+          nullable: true
+        vigente:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - agrupamiento_id
+        - codigo
+        - denominacion
+    Table_nomenclador_cargos_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agrupamiento_id:
+          type: number
+        codigo:
+          type: number
+        denominacion:
+          type: string
+        letra:
+          type: string
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
+          nullable: true
+        vigente:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    Table_nomenclador_categorias:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agrupamiento_id:
+          type: number
+        categoria:
+          type: number
+        grado:
+          type: string
+        clase:
+          type: string
+      required:
+        - id
+        - agrupamiento_id
+        - categoria
+        - grado
+        - clase
+    Table_nomenclador_categorias_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        agrupamiento_id:
+          type: number
+        categoria:
+          type: number
+        grado:
+          type: string
+        clase:
+          type: string
+      required:
+        - agrupamiento_id
+        - categoria
+        - grado
+        - clase
+    Table_nomenclador_categorias_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        agrupamiento_id:
+          type: number
+        categoria:
+          type: number
+        grado:
+          type: string
+        clase:
+          type: string
     Table_novedades_carga_intranet:
       type: object
       additionalProperties: false
@@ -39031,6 +44578,8 @@ components:
         actualizado_en:
           type: string
           format: date-time
+        deps_descartadas:
+          type: string
       required:
         - id
         - dependencia
@@ -39083,6 +44632,8 @@ components:
         actualizado_en:
           type: string
           format: date-time
+        deps_descartadas:
+          type: string
       required:
         - dependencia
         - dni
@@ -39136,6 +44687,8 @@ components:
         actualizado_en:
           type: string
           format: date-time
+        deps_descartadas:
+          type: string
     Table_ocupaciones:
       type: object
       additionalProperties: false
@@ -39147,11 +44700,17 @@ components:
         codigo:
           type: number
           nullable: true
+        letra:
+          type: string
+          nullable: true
         regimen_horario_id:
           type: number
           nullable: true
         es_insalubre:
           type: number
+          nullable: true
+        norma_insalubre:
+          type: string
           nullable: true
         especialidad_id:
           type: number
@@ -39159,8 +44718,14 @@ components:
         ley_id:
           type: number
           nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
         agrupamiento:
           type: string
+          nullable: true
+        agrupamiento_id:
+          type: number
           nullable: true
         grado:
           type: string
@@ -39180,6 +44745,24 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
           nullable: true
       required:
         - id
@@ -39193,11 +44776,17 @@ components:
         codigo:
           type: number
           nullable: true
+        letra:
+          type: string
+          nullable: true
         regimen_horario_id:
           type: number
           nullable: true
         es_insalubre:
           type: number
+          nullable: true
+        norma_insalubre:
+          type: string
           nullable: true
         especialidad_id:
           type: number
@@ -39205,8 +44794,14 @@ components:
         ley_id:
           type: number
           nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
         agrupamiento:
           type: string
+          nullable: true
+        agrupamiento_id:
+          type: number
           nullable: true
         grado:
           type: string
@@ -39226,6 +44821,24 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
           nullable: true
       required:
         - nombre
@@ -39240,6 +44853,81 @@ components:
         codigo:
           type: number
           nullable: true
+        letra:
+          type: string
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        es_insalubre:
+          type: number
+          nullable: true
+        norma_insalubre:
+          type: string
+          nullable: true
+        especialidad_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        agrupamiento_id:
+          type: number
+          nullable: true
+        grado:
+          type: string
+          nullable: true
+        asignacion:
+          type: string
+          nullable: true
+        activo:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
+          nullable: true
+    Table_ocupaciones_bkp_20261026:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        codigo:
+          type: number
+          nullable: true
         regimen_horario_id:
           type: number
           nullable: true
@@ -39250,6 +44938,9 @@ components:
           type: number
           nullable: true
         ley_id:
+          type: number
+          nullable: true
+        nomenclador_cargo_id:
           type: number
           nullable: true
         agrupamiento:
@@ -39273,6 +44964,326 @@ components:
           nullable: true
         updated_by:
           type: number
+          nullable: true
+      required:
+        - nombre
+    Table_ocupaciones_bkp_20261026_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        codigo:
+          type: number
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        es_insalubre:
+          type: number
+          nullable: true
+        especialidad_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        grado:
+          type: string
+          nullable: true
+        asignacion:
+          type: string
+          nullable: true
+        activo:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+      required:
+        - nombre
+    Table_ocupaciones_bkp_20261026_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        codigo:
+          type: number
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        es_insalubre:
+          type: number
+          nullable: true
+        especialidad_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        grado:
+          type: string
+          nullable: true
+        asignacion:
+          type: string
+          nullable: true
+        activo:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+    Table_ocupaciones_bkp_20261026_preborrado:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        codigo:
+          type: number
+          nullable: true
+        letra:
+          type: string
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        es_insalubre:
+          type: number
+          nullable: true
+        especialidad_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        agrupamiento_id:
+          type: number
+          nullable: true
+        grado:
+          type: string
+          nullable: true
+        asignacion:
+          type: string
+          nullable: true
+        activo:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
+          nullable: true
+      required:
+        - nombre
+    Table_ocupaciones_bkp_20261026_preborrado_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        codigo:
+          type: number
+          nullable: true
+        letra:
+          type: string
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        es_insalubre:
+          type: number
+          nullable: true
+        especialidad_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        agrupamiento_id:
+          type: number
+          nullable: true
+        grado:
+          type: string
+          nullable: true
+        asignacion:
+          type: string
+          nullable: true
+        activo:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
+          nullable: true
+      required:
+        - nombre
+    Table_ocupaciones_bkp_20261026_preborrado_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        nombre:
+          type: string
+        codigo:
+          type: number
+          nullable: true
+        letra:
+          type: string
+          nullable: true
+        regimen_horario_id:
+          type: number
+          nullable: true
+        es_insalubre:
+          type: number
+          nullable: true
+        especialidad_id:
+          type: number
+          nullable: true
+        ley_id:
+          type: number
+          nullable: true
+        nomenclador_cargo_id:
+          type: number
+          nullable: true
+        agrupamiento:
+          type: string
+          nullable: true
+        agrupamiento_id:
+          type: number
+          nullable: true
+        grado:
+          type: string
+          nullable: true
+        asignacion:
+          type: string
+          nullable: true
+        activo:
+          type: number
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        descripcion_tareas:
+          type: string
+          nullable: true
+        requisitos:
+          type: string
+          nullable: true
+        caracteristicas:
+          type: string
+          nullable: true
+        incorporado_por:
+          type: string
+          nullable: true
+        dejado_sin_efecto_por:
+          type: string
+          nullable: true
+        ambito_aplicacion:
+          type: string
           nullable: true
     Table_orden_documentos_aclaracion:
       type: object
@@ -42539,6 +48550,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        archivo_id:
+          type: number
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -42578,6 +48592,9 @@ components:
         fecha:
           type: string
           format: date-time
+          nullable: true
+        archivo_id:
+          type: number
           nullable: true
         created_at:
           type: string
@@ -42619,6 +48636,9 @@ components:
         fecha:
           type: string
           format: date-time
+          nullable: true
+        archivo_id:
+          type: number
           nullable: true
         created_at:
           type: string
@@ -44365,6 +50385,89 @@ components:
           type: number
         no_va_al_ministerio:
           type: number
+        visto_primero:
+          type: string
+          format: date-time
+        visto_ultimo:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    Table_siape_novedades_regimen:
+      type: object
+      additionalProperties: false
+      properties:
+        origen:
+          type: string
+        novedad:
+          type: string
+        regimen:
+          type: string
+        vigente:
+          type: number
+        dni:
+          type: string
+          nullable: true
+        visto_primero:
+          type: string
+          format: date-time
+        visto_ultimo:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - origen
+        - novedad
+        - regimen
+    Table_siape_novedades_regimen_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        origen:
+          type: string
+        novedad:
+          type: string
+        regimen:
+          type: string
+        vigente:
+          type: number
+        dni:
+          type: string
+          nullable: true
+        visto_primero:
+          type: string
+          format: date-time
+        visto_ultimo:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - origen
+        - novedad
+        - regimen
+    Table_siape_novedades_regimen_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        origen:
+          type: string
+        novedad:
+          type: string
+        regimen:
+          type: string
+        vigente:
+          type: number
+        dni:
+          type: string
+          nullable: true
         visto_primero:
           type: string
           format: date-time
@@ -46765,6 +52868,170 @@ components:
         deleted_at:
           type: string
           format: date-time
+          nullable: true
+    Table_vacaciones_adelantadas:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        agente_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+        dias:
+          type: number
+        anio_imputado:
+          type: number
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - id
+        - dni
+        - fecha_desde
+        - fecha_hasta
+        - dias
+        - anio_imputado
+    Table_vacaciones_adelantadas_Create:
+      type: object
+      additionalProperties: false
+      properties:
+        dni:
+          type: number
+        agente_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+        dias:
+          type: number
+        anio_imputado:
+          type: number
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_by:
+          type: number
+          nullable: true
+      required:
+        - dni
+        - fecha_desde
+        - fecha_hasta
+        - dias
+        - anio_imputado
+    Table_vacaciones_adelantadas_Patch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: number
+        dni:
+          type: number
+        agente_id:
+          type: number
+          nullable: true
+        fecha_desde:
+          type: string
+          format: date-time
+        fecha_hasta:
+          type: string
+          format: date-time
+        dias:
+          type: number
+        anio_imputado:
+          type: number
+        servicio_id:
+          type: number
+          nullable: true
+        dependencia_id:
+          type: number
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: number
+          nullable: true
+        updated_by:
+          type: number
+          nullable: true
+        deleted_by:
+          type: number
           nullable: true
     Table_webhook_deliveries:
       type: object

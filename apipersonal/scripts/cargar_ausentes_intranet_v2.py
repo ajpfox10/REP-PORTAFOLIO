@@ -11,6 +11,9 @@ Diferencias con la vieja:
   novedades 2.0), no a resultado_carga_ausentes*.xlsx. Los OK no se reintentan.
 - Registra la corrida en la pagina Robots como intranet_carga_ausentes_v2_<dep>.
 La carga en si (opcion 28 - INASISTENCIA, control de "ya cargada", superposicion) es la misma.
+- Franqueros (sabado/domingo sin la semana completa): el ausente en un dia que no esta en su horario
+  (horarios_historial) y no es feriado no se carga -> NO_TRABAJA_DIA. Los anios con feriados sin
+  confirmar en /app/feriados (feriados_anios, mig 091) no se cargan y la corrida queda en error.
 
 Uso:
   python cargar_ausentes_intranet_v2.py --dependencia HOSPITAL
@@ -24,7 +27,7 @@ import re
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -34,8 +37,11 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN
 import post_carga
-from cargar_novedades_intranet_v2 import TABLA_CARGA, crear_tabla_carga, ESTADOS_NO_CARGAR, estado_resultado
+from cargar_novedades_intranet_v2 import TABLA_CARGA, crear_tabla_carga, ESTADOS_NO_CARGAR, estado_resultado, marcar_meses_cerrados
+from cargar_novedades_intranet_v2 import SQL_FILAS_DE_LA_DEP, es_no_pertenece, anotar_no_pertenece
+from cargar_novedades_intranet_v2 import juntar_rangos
 SCRIPT_ID = None   # lo fija main(): intranet_carga_ausentes_v2_<dep>
+DEPENDENCIA_RUN = None  # lo fija main(): dependencia en la que esta logueado el robot
 NOVEDAD_SIAP = "AUSENTE SIN AVISO"
 
 USUARIO = os.environ.get("INTRANET_USER", "xxxxxxx")
@@ -130,24 +136,110 @@ def cargar_filas_db(dependencia, test_mode=False):
               justificado = VALUES(justificado), motivo_comparacion = VALUES(motivo_comparacion),
               estado = IF({TABLA_CARGA}.estado = 'CAMBIO_SIAPE', 'PENDIENTE', {TABLA_CARGA}.estado)""",
             (corrida, NOVEDAD_SIAP, dependencia))
+        fin, n_cerr = marcar_meses_cerrados(cur, corrida, dependencia)
+        if n_cerr:
+            print(f"  {n_cerr} filas en meses cerrados (hasta {fin:%d/%m/%Y}) -> PERIODO_CERRADO sin intentar")
+        n_franco, n_vuelven = filtrar_franqueros(cur, corrida, dependencia)
+        if n_franco:
+            print(f"  {n_franco} ausentes de franqueros en dias que no trabajan -> NO_TRABAJA_DIA sin intentar")
+        if n_vuelven:
+            print(f"  {n_vuelven} filas NO_TRABAJA_DIA vuelven a PENDIENTE (cambio el horario o el feriado)")
         cn.commit()
         cur.execute(f"""
             SELECT dni, nombre, novedad_siap, justificado, desde, hasta, dependencia
               FROM {TABLA_CARGA}
-             WHERE corrida_id = %s AND dependencia = %s AND novedad_siap = %s AND estado NOT IN {ESTADOS_NO_CARGAR}
-             ORDER BY nombre, desde""", (corrida, dependencia, NOVEDAD_SIAP))
+             WHERE corrida_id = %s AND {SQL_FILAS_DE_LA_DEP} AND novedad_siap = %s
+               AND estado NOT IN {ESTADOS_NO_CARGAR}
+             ORDER BY nombre, desde""", (corrida, dependencia, dependencia, NOVEDAD_SIAP))
+        # Las que rechazo otra dependencia se prueban en esta: van con la dependencia del run
         filas = [{
             "Nombre": r["nombre"] or r["dni"], "DNI": int(r["dni"]),
             "Novedad SIAPE": r["novedad_siap"], "Justificado": r["justificado"],
             "Desde": fmt_fecha(r["desde"]), "Hasta": fmt_fecha(r["hasta"]) or fmt_fecha(r["desde"]),
-            "Dependencia": r["dependencia"],
-        } for r in cur.fetchall()]
+            "Dependencia": dependencia,
+        } for r in cur.fetchall()
+          if not ({r["desde"].year, r["hasta"].year} & SIN_FERIADOS)]
     if test_mode and filas:
         filas = [f for f in filas if f["DNI"] == filas[0]["DNI"]]
     return corrida, filas
 
 
+DIAS_HORARIO = ("lun", "mar", "mie", "jue", "vie", "sab", "dom")   # date.weekday(): 0 = lunes
+SIN_FERIADOS = set()   # anios con ausentes pendientes y feriados sin confirmar en /app/feriados: no se cargan
+
+
+def filtrar_franqueros(cur, corrida, dependencia):
+    """Ausentes de franqueros (trabajan sabado y/o domingo y no la semana completa) en dias que no
+    estan en su horario y no son feriado -> NO_TRABAJA_DIA, sin intentar. Horario del dia = foto mas
+    reciente <= desde en horarios_historial (si no hay, la primera); sin horario se carga igual.
+    Se revisa en cada corrida: si cambio el horario o se cargo el feriado, vuelven a PENDIENTE.
+    Ademas anota en SIN_FERIADOS los anios con ausentes y feriados sin confirmar (feriados_anios).
+    Devuelve (marcadas, vueltas_a_pendiente)."""
+    cur.execute(f"""
+        SELECT id, dni, desde, hasta, estado FROM {TABLA_CARGA}
+         WHERE corrida_id = %s AND {SQL_FILAS_DE_LA_DEP} AND novedad_siap = %s
+           AND estado IN ('PENDIENTE', 'ERROR', 'ERROR_NAV', 'EXCEPCION', 'NO_TRABAJA_DIA')""",
+        (corrida, dependencia, dependencia, NOVEDAD_SIAP))
+    filas = cur.fetchall()
+    if not filas:
+        return 0, 0
+    cur.execute("SELECT anio FROM feriados_anios")
+    confirmados = {int(r["anio"]) for r in cur.fetchall()}
+    for r in filas:
+        SIN_FERIADOS.update(a for a in (r["desde"].year, r["hasta"].year) if a not in confirmados)
+    cur.execute("SELECT fecha FROM feriados")
+    feriados = {r["fecha"] for r in cur.fetchall()}
+
+    dnis = sorted({int(r["dni"]) for r in filas if str(r["dni"]).isdigit()})
+    fotos = defaultdict(list)   # dni -> [(fecha, dias que trabaja)] por fecha
+    if dnis:
+        cols = ", ".join(f"{d}_e" for d in DIAS_HORARIO)
+        cur.execute(f"""SELECT dni, fecha, {cols} FROM horarios_historial
+                         WHERE dni IN ({",".join(["%s"] * len(dnis))}) ORDER BY fecha""", dnis)
+        for h in cur.fetchall():
+            fotos[int(h["dni"])].append((h["fecha"], {i for i, d in enumerate(DIAS_HORARIO) if h[f"{d}_e"]}))
+
+    marcar, volver = [], []
+    for r in filas:
+        if {r["desde"].year, r["hasta"].year} & SIN_FERIADOS:
+            continue
+        lista = fotos.get(int(r["dni"])) if str(r["dni"]).isdigit() else None
+        dias = None
+        if lista:
+            dias = lista[0][1]
+            for f, d in lista:
+                if f <= r["desde"]:
+                    dias = d
+        franquero = bool(dias) and bool(dias & {5, 6}) and not {0, 1, 2, 3, 4} <= dias
+        no_trabaja = False
+        if franquero:
+            d, fuera = r["desde"], []
+            while d <= r["hasta"]:
+                fuera.append(d.weekday() not in dias and d not in feriados)
+                d += timedelta(days=1)
+            no_trabaja = all(fuera)
+        if no_trabaja and r["estado"] != "NO_TRABAJA_DIA":
+            horario = "".join("LMXJVSD"[i] for i in sorted(dias))
+            marcar.append((f"Franquero ({horario}): el {r['desde']:%d/%m/%Y}"
+                           + (f" al {r['hasta']:%d/%m/%Y}" if r["hasta"] != r["desde"] else "")
+                           + " no esta en su horario y no es feriado: no se carga", r["id"]))
+        elif not no_trabaja and r["estado"] == "NO_TRABAJA_DIA":
+            volver.append(r["id"])
+    if marcar:
+        cur.executemany(f"UPDATE {TABLA_CARGA} SET estado = 'NO_TRABAJA_DIA', detalle = %s WHERE id = %s", marcar)
+    if volver:
+        cur.executemany(f"UPDATE {TABLA_CARGA} SET estado = 'PENDIENTE', detalle = NULL WHERE id = %s",
+                        [(i,) for i in volver])
+    return len(marcar), len(volver)
+
+
+def motivo_sin_feriados():
+    anios = ", ".join(str(a) for a in sorted(SIN_FERIADOS))
+    return f"Feriados de {anios} sin confirmar en /app/feriados: esos ausentes no se cargan"
+
+
 def agrupar_por_dni(filas):
+    """Por agente, con los dias seguidos juntos en un rango (ver juntar_rangos en novedades v2)."""
     grupos = defaultdict(list)
     for f in filas:
         grupos[f["DNI"]].append({
@@ -156,9 +248,15 @@ def agrupar_por_dni(filas):
             "desde": f["Desde"],
             "hasta": f["Hasta"],
         })
+    for dni in grupos:
+        grupos[dni] = juntar_rangos(grupos[dni])
+        for nv in grupos[dni]:
+            if len(nv["partes"]) > 1:
+                PARTES[(int(dni), nv["desde"], nv["hasta"])] = nv["partes"]
     return grupos
 
 
+PARTES = {}   # (dni, desde, hasta) de un RANGO -> [(desde, hasta), ...] filas de la tabla que junta
 _GUARDADOS = {"n": 0}
 
 
@@ -168,20 +266,29 @@ def guardar_log(registros, _log_path=None):
     try:
         with MN.conn() as cn, cn.cursor() as cur:
             for r in nuevos:
-                try:
-                    desde = datetime.strptime(str(r["Desde"]), "%d/%m/%Y").strftime("%Y-%m-%d")
-                    hasta = datetime.strptime(str(r["Hasta"]), "%d/%m/%Y").strftime("%Y-%m-%d")
-                except Exception:
-                    continue
+                # un rango (dias seguidos) se anota en cada fila que junta
+                partes = PARTES.get((int(r["DNI"]), r["Desde"], r["Hasta"])) or [(r["Desde"], r["Hasta"])]
+                prefijo = (f"Cargado en rango {r['Desde']} a {r['Hasta']} ({len(partes)} filas). "
+                           if len(partes) > 1 else "")
                 ok = str(r.get("Estado", "")).upper() == "OK"
-                cur.execute(f"""
-                    UPDATE {TABLA_CARGA}
-                       SET estado = %s, label_intranet = %s, detalle = %s, intentos = intentos + 1,
-                           cargado_en = IF(%s, NOW(), cargado_en)
-                     WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
-                    (estado_resultado(r), str(r.get("Novedad") or "")[:200],
-                     str(r.get("Detalle") or "")[:500] or None, ok,
-                     str(int(r["DNI"])), NOVEDAD_SIAP, desde, hasta))
+                for d, h in partes:
+                    try:
+                        desde = datetime.strptime(str(d), "%d/%m/%Y").strftime("%Y-%m-%d")
+                        hasta = datetime.strptime(str(h), "%d/%m/%Y").strftime("%Y-%m-%d")
+                    except Exception:
+                        continue
+                    clave = (str(int(r["DNI"])), NOVEDAD_SIAP, desde, hasta)
+                    if not ok and es_no_pertenece(r.get("Detalle")):
+                        anotar_no_pertenece(cur, *clave, DEPENDENCIA_RUN, str(r.get("Novedad") or "")[:200])
+                        continue
+                    # Si la encontro en este plantel, la fila pasa a ser de esta dependencia
+                    cur.execute(f"""
+                        UPDATE {TABLA_CARGA}
+                           SET estado = %s, label_intranet = %s, detalle = %s, intentos = intentos + 1,
+                               cargado_en = IF(%s, NOW(), cargado_en), dependencia = COALESCE(%s, dependencia)
+                         WHERE dni = %s AND novedad_siap = %s AND desde = %s AND hasta = %s""",
+                        (estado_resultado(r), str(r.get("Novedad") or "")[:200],
+                         (prefijo + str(r.get("Detalle") or ""))[:500] or None, ok, DEPENDENCIA_RUN, *clave))
             cn.commit()
         _GUARDADOS["n"] = len(registros)
     except Exception as e:
@@ -757,8 +864,9 @@ def main():
     if dependencia not in MAPA_DEP_CODIGO:
         print(f"ERROR: dependencia invalida '{args.dependencia}' (HOSPITAL / UPA 4 / UPA 18)")
         return
-    global SCRIPT_ID
+    global SCRIPT_ID, DEPENDENCIA_RUN
     SCRIPT_ID = f"intranet_carga_ausentes_v2_{MN.sufijo_dep(dependencia)}"
+    DEPENDENCIA_RUN = dependencia
     script_desc = f"Carga de ausentes 2.0 en Intranet MS ({dependencia})"
     t0 = time.time()
     log_path = None
@@ -770,11 +878,25 @@ def main():
         return
     print(f"Comparador 2.0 corrida {corrida}: {len(filas)} ausente(s) pendiente(s) para {dependencia}")
     if args.solo_cola:
+        if SIN_FERIADOS:
+            print(f"ATENCION: {motivo_sin_feriados()}")
         for f in filas:
             print(f"  {f['DNI']}  {f['Nombre']}  {f['Desde']} -> {f['Hasta']}")
+        grupos = agrupar_por_dni(filas)
+        print(f"\nCargas a hacer (dias seguidos juntos): {sum(len(v) for v in grupos.values())}")
+        for dni_g, novs in grupos.items():
+            for nv in novs:
+                if len(nv["partes"]) > 1:
+                    print(f"  {dni_g}  {nv['nombre']}  {nv['desde']} -> {nv['hasta']}  ({len(nv['partes'])} filas)")
         return
+    if SIN_FERIADOS:
+        print(f"ATENCION: {motivo_sin_feriados()}")
     if not filas:
         print(f"No hay AUSENTE SIN AVISO / JUSTIFICADO=NO pendientes para {dependencia}.")
+        if SIN_FERIADOS:
+            MN.registrar_run(SCRIPT_ID, script_desc, "error", motivo=motivo_sin_feriados(),
+                             filas=0, duracion_seg=int(time.time() - t0))
+            return
         MN.registrar_run(SCRIPT_ID, script_desc, "ok", motivo=f"Sin ausentes pendientes (corrida {corrida})",
                          filas=0, duracion_seg=int(time.time() - t0))
         return
@@ -784,7 +906,7 @@ def main():
     MN.items_desde_registros(SCRIPT_ID, registros, inicio=0)
 
     print(f"Dependencia del run: {dependencia}")
-    print(f"Filas ausentes: {len(filas)}")
+    print(f"Filas ausentes: {len(filas)} -> {sum(len(v) for v in grupos.values())} cargas (dias seguidos juntos)")
     print(f"Agentes a procesar: {len(grupos)}")
     if args.label:
         print(f"Etiqueta preferida: {args.label}")
@@ -840,7 +962,9 @@ def main():
                 guardar_log(registros, log_path)
                 continue
 
-            for nov in pendientes:
+            cola = list(pendientes)
+            while cola:
+                nov = cola.pop(0)
                 if novedad_ya_cargada(page, nov["desde"], nov["hasta"]):
                     print(f"  Ya estaba cargada: {nov['desde']} - {nov['hasta']}")
                     ya_ok.add(log_clave(dni, nov["desde"], nov["hasta"]))
@@ -876,6 +1000,19 @@ def main():
                     detalle = str(e)[:200]
                     print(f"  EXCEPCION: {detalle}")
 
+                # Rango con error (que no sea "no pertenece"): dia por dia, asi un dia en conflicto
+                # (o en un mes cerrado) no frena a los demas.
+                if estado != "OK" and len(nov.get("partes") or []) > 1 and not es_no_pertenece(detalle):
+                    print(f"  El rango dio error: reintento dia por dia ({len(nov['partes'])} filas)")
+                    err_count -= 1
+                    cola[0:0] = [{**nov, "desde": d, "hasta": h, "partes": [(d, h)]} for d, h in nov["partes"]]
+                    try:
+                        if not ir_a_novedades(page, dni, password, dependencia, nombre=nombre)[0]:
+                            break
+                    except Exception:
+                        break
+                    continue
+
                 registros.append({
                     "Nombre": nombre, "DNI": int(dni), "Novedad": real_label or "AUSENTE",
                     "Desde": nov["desde"], "Hasta": nov["hasta"],
@@ -892,8 +1029,10 @@ def main():
 
         print(f"\nResultado total: {ok_count} OK, {err_count} errores.")
         print(f"Resultado anotado en la tabla {TABLA_CARGA}")
-        MN.registrar_run(SCRIPT_ID, script_desc, "ok",
-                         motivo=f"Corrida {corrida}: {ok_count} ausentes cargados OK · {err_count} con error",
+        motivo = f"Corrida {corrida}: {ok_count} ausentes cargados OK · {err_count} con error"
+        if SIN_FERIADOS:
+            motivo = f"{motivo_sin_feriados()} · {motivo}"
+        MN.registrar_run(SCRIPT_ID, script_desc, "error" if SIN_FERIADOS else "ok", motivo=motivo[:480],
                          filas=ok_count, archivo=TABLA_CARGA, duracion_seg=int(time.time() - t0))
         try:
             browser.close()

@@ -8,8 +8,13 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  CircleHelp,
+  ClipboardList,
   Download,
+  ExternalLink,
   FileSpreadsheet,
+  Folder,
+  FolderOpen,
   LayoutDashboard,
   Lock,
   LogOut,
@@ -107,7 +112,39 @@ function apiClient(token) {
       body.append('archivo', file);
       return request('/importaciones', { method: 'POST', body });
     },
-    guardarValores: (id, payload) => request(`/items/${id}/valores`, { method: 'PUT', body: JSON.stringify(payload) })
+    guardarValores: (id, payload) => request(`/items/${id}/valores`, { method: 'PUT', body: JSON.stringify(payload) }),
+    ocConfig: () => request('/ordenes-compra/config'),
+    ocCarpetas: (ruta) => request(`/ordenes-compra/carpetas?${new URLSearchParams({ ruta: ruta || '' }).toString()}`),
+    ocOrdenes: () => request('/ordenes-compra'),
+    ocDrive: () => request('/ordenes-compra/drive'),
+    ocDriveSincronizar: () => request('/ordenes-compra/drive/sincronizar', { method: 'POST', body: '{}' }),
+    ocDriveArchivos: () => request('/ordenes-compra/drive/archivos'),
+    ocDriveInspeccionar: (archivo) => request('/ordenes-compra/drive/inspeccionar', { method: 'POST', body: JSON.stringify({ archivo }) }),
+    ocDriveProbar: (destino) => request('/ordenes-compra/drive/probar', { method: 'POST', body: JSON.stringify(destino) }),
+    ocDriveGuardar: (destino) => request('/ordenes-compra/drive/destino', { method: 'PUT', body: JSON.stringify(destino) }),
+    ocDrivePausa: (activo) => request('/ordenes-compra/drive/pausa', { method: 'POST', body: JSON.stringify({ activo }) }),
+    ocDriveRestaurar: () => request('/ordenes-compra/drive/restaurar', { method: 'POST', body: '{}' }),
+    ocSubir: (files) => {
+      const body = new FormData();
+      for (const file of files) body.append('archivos', file);
+      return request('/ordenes-compra/subir', { method: 'POST', body });
+    },
+    ocImportarCarpeta: (carpetaPdf) => request('/ordenes-compra/importar-carpeta', { method: 'POST', body: JSON.stringify({ carpetaPdf }) }),
+    ocEditarRenglon: (id, payload) => request(`/ordenes-compra/renglones/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    ocEliminar: (id) => request(`/ordenes-compra/${id}`, { method: 'DELETE' }),
+    ocExcelServidor: (payload) => request('/ordenes-compra/excel', { method: 'POST', body: JSON.stringify({ ...payload, destino: 'servidor' }) }),
+    ocExcelPc: async (nombre) => {
+      const response = await fetch(`${API_BASE}/ordenes-compra/excel`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ destino: 'pc', nombre })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'No se pudo generar el Excel');
+      }
+      return response.blob();
+    }
   };
 }
 
@@ -182,6 +219,7 @@ function App() {
     || (view === 'trimestral' && isAdmin)
     || (view === 'sugeridos' && isAdmin)
     || (view === 'rotulos' && canRotulos)
+    || (view === 'ordenes' && isAdmin)
     || (view === 'usuarios' && isAdmin);
   return (
     <main className="app-shell">
@@ -203,6 +241,7 @@ function App() {
       {view === 'trimestral' && isAdmin ? <TrimestralPage token={session.token} /> : null}
       {view === 'sugeridos' && isAdmin ? <SugeridosPage token={session.token} /> : null}
       {view === 'rotulos' && canRotulos ? <RotulosPage token={session.token} /> : null}
+      {view === 'ordenes' && isAdmin ? <OrdenesCompraPage token={session.token} /> : null}
       {view === 'usuarios' && isAdmin ? <UsersPage token={session.token} currentUserId={session.user.id} /> : null}
       {!allowedView ? <AccessDenied /> : null}
     </main>
@@ -238,6 +277,13 @@ function Dashboard({ user, onOpen }) {
       body: 'Cargar lote, vencimiento, farmaco y laboratorio, e imprimir la hoja completa de rotulos.',
       roles: ['admin', 'operador'],
       icon: Tag
+    },
+    {
+      id: 'ordenes',
+      title: 'Órdenes de Compra',
+      body: 'Leer los PDF de O.C. de una carpeta (sin duplicados) y armar el Excel de control de entregas.',
+      roles: ['admin'],
+      icon: ClipboardList
     },
     {
       id: 'usuarios',
@@ -2021,6 +2067,833 @@ function RotulosPage({ token }) {
         />,
         document.body
       )}
+    </>
+  );
+}
+
+const OC_PREFS_KEY = 'oc_excel_prefs';
+
+function leerPrefsOc() {
+  try {
+    return JSON.parse(localStorage.getItem(OC_PREFS_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function formatPesos(value) {
+  return Number(value || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
+}
+
+// Navegador de carpetas del servidor
+function FolderPicker({ client, inicial, titulo, onElegir, onCerrar }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+
+  function abrir(ruta) {
+    setError('');
+    client.ocCarpetas(ruta)
+      .then(setData)
+      .catch((err) => {
+        setError(err.message);
+        if (!data) client.ocCarpetas('').then(setData).catch(() => {});
+      });
+  }
+
+  useEffect(() => { abrir(inicial); }, []);
+
+  return createPortal(
+    <div className="folder-overlay" onClick={onCerrar}>
+      <div className="folder-picker" onClick={(event) => event.stopPropagation()}>
+        <div className="section-head">
+          <h2>{titulo}</h2>
+          <button type="button" className="ghost small" onClick={onCerrar}>Cancelar</button>
+        </div>
+        <div className="folder-path">{data?.ruta || 'Unidades del servidor'}</div>
+        {error ? <div className="alert">{error}</div> : null}
+        <div className="folder-list">
+          {data && data.ruta ? (
+            <button type="button" className="folder-item" onClick={() => abrir(data.padre)}>
+              <Folder size={16} /> ..
+            </button>
+          ) : null}
+          {(data?.carpetas || []).map((c) => (
+            <button type="button" key={c.ruta} className="folder-item" onClick={() => abrir(c.ruta)}>
+              <Folder size={16} /> {c.nombre}
+            </button>
+          ))}
+          {data && !data.carpetas.length ? <div className="empty">Sin subcarpetas</div> : null}
+        </div>
+        <div className="folder-actions">
+          <span>{data?.ruta ? `${data.pdfs} PDF en esta carpeta` : ''}</span>
+          <button type="button" className="script-button" disabled={!data?.ruta} onClick={() => onElegir(data.ruta)}>
+            <Check size={18} /> Usar esta carpeta
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+const OC_ESTADOS_ARCHIVO = {
+  nuevo: { label: 'Nueva', className: 'listo' },
+  ya_cargado: { label: 'Ya estaba', className: 'cargado' },
+  duplicado: { label: 'Duplicado', className: 'iniciado' },
+  error: { label: 'Error', className: 'error' }
+};
+
+function descargarBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function resumenDrive(r) {
+  if (!r) return '';
+  const partes = [`${r.agregadas || 0} renglones agregados`];
+  if (r.vinculadas) partes.push(`${r.vinculadas} filas que ya estaban quedaron vinculadas`);
+  if (r.haciaPlanilla) partes.push(`${r.haciaPlanilla} cambios enviados al archivo`);
+  if (r.haciaBase) partes.push(`${r.haciaBase} cambios traídos del archivo`);
+  return partes.join(', ');
+}
+
+function AyudaDrive({ robot }) {
+  return (
+    <div className="oc-ayuda">
+      <h4>Antes de empezar</h4>
+      <p>
+        El sistema escribe en Drive con un "robot" de Google: <span className="code">{robot || '(sin clave configurada)'}</span>.
+        El robot no es tu cuenta: solo ve los archivos que le compartas. En Drive, abrí el archivo → <strong>Compartir</strong> →
+        pegá ese mail → <strong>Editor</strong> → destildá "Notificar" → <strong>Compartir</strong>. Se hace una sola vez por archivo.
+      </p>
+
+      <h4>Elegir el archivo (primera vez)</h4>
+      <ol>
+        <li>Tocá <strong>Compartidos</strong> y elegí el archivo de la lista (o pegá su link y tocá <strong>Ver</strong>).</li>
+        <li>
+          Elegí cómo van las pestañas: <strong>Una pestaña por año</strong> (cada O.C. va a "O.C 2026", "O.C 2027"… y si no existe se crea sola)
+          o <strong>Siempre en la misma pestaña</strong> (una que ya exista o una nueva).
+        </li>
+        <li><strong>Probar destino</strong>: muestra qué haría (cuántos renglones agrega y cuántos ya estaban) sin tocar el archivo.</li>
+        <li><strong>Guardar destino</strong>: en un minuto se hace la primera actualización.</li>
+      </ol>
+
+      <h4>Cambiar a otro archivo</h4>
+      <ol>
+        <li>Tocá <strong>Cambiar destino</strong>.</li>
+        <li>Tocá <strong>Compartidos</strong> y elegí el otro archivo. Si no aparece, primero compartilo con el robot como Editor.</li>
+        <li>Elegí las pestañas (por año o fija; si es fija podés elegir una existente o crear una nueva).</li>
+        <li><strong>Probar destino</strong> para ver qué haría y después <strong>Guardar destino</strong> (pide confirmación).</li>
+      </ol>
+      <ul>
+        <li>El archivo anterior <strong>queda como está</strong>: no se borra nada, pero deja de recibir actualizaciones.</li>
+        <li>En el archivo nuevo se buscan las O.C. que ya estén escritas y <strong>se vinculan sin duplicarse</strong>; las que falten se agregan al final, con lo cargado.</li>
+        <li>El backup arranca de cero con el archivo nuevo. El último del anterior queda en <span className="code">D:\FARMACIA\ORDENES COMPRA\backup</span>.</li>
+        <li>Podés volver al anterior cuando quieras con el mismo procedimiento (se vuelve a vincular sin duplicar).</li>
+        <li>Se trabaja con <strong>un solo archivo a la vez</strong>.</li>
+      </ul>
+
+      <h4>Cómo se mantiene actualizado</h4>
+      <ul>
+        <li>Cada O.C. nueva que se sube acá se agrega sola al final de su pestaña. Las filas que ya existen nunca se borran ni se les cambia el formato.</li>
+        <li>Entregada, Completo, N° de ingreso y Observación se pueden cargar acá o en el archivo: se sincroniza cada minuto. Si se cambia lo mismo en los dos lados, queda lo del archivo.</li>
+        <li>La columna <strong>M "ID"</strong> (oculta) la usa el sistema para reconocer cada fila: no la borres.</li>
+        <li><strong>Pausar</strong> frena la sincronización automática; <strong>Sincronizar ahora</strong> la fuerza en el momento.</li>
+      </ul>
+
+      <h4>Backup</h4>
+      <ul>
+        <li>Antes de cada cambio se guarda cómo estaba el archivo y se borra el backup anterior: siempre queda uno, el previo al último cambio.</li>
+        <li>Está en Drive (clic derecho sobre el archivo → <strong>Administrar versiones</strong>, versión marcada "Conservar para siempre") y en el servidor (<span className="code">D:\FARMACIA\ORDENES COMPRA\backup</span>).</li>
+        <li><strong>Restaurar backup</strong> vuelve el archivo a ese estado. Lo que tenía queda como backup nuevo (se puede deshacer) y la sincronización queda en pausa para que revises; después tocá <strong>Reanudar</strong>.</li>
+      </ul>
+    </div>
+  );
+}
+
+// Sección "Archivo en Google Drive": destino (archivo + pestaña por año o fija), prueba, backup e historial
+function DrivePanel({ client, onSincronizado }) {
+  const [drive, setDrive] = useState(null);
+  const [editando, setEditando] = useState(false);
+  const [link, setLink] = useState('');
+  const [archivos, setArchivos] = useState(null);
+  const [archivo, setArchivo] = useState(null);
+  const [modo, setModo] = useState('anual');
+  const [prefijo, setPrefijo] = useState('O.C ');
+  const [pestanaFija, setPestanaFija] = useState('');
+  const [pestanaNueva, setPestanaNueva] = useState('');
+  const [prueba, setPrueba] = useState(null);
+  const [ayuda, setAyuda] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  function cargar() {
+    return client.ocDrive().then((data) => { setDrive(data); return data; });
+  }
+
+  useEffect(() => {
+    cargar()
+      .then((data) => { if (!data.destino.fileId) setEditando(true); })
+      .catch((err) => setError(err.message));
+    const timer = setInterval(() => { cargar().catch(() => {}); }, 60000);
+    return () => clearInterval(timer);
+  }, [client]);
+
+  async function ejecutar(tipo, fn) {
+    setBusy(tipo);
+    setError('');
+    setMessage('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function empezarEdicion() {
+    const d = drive?.destino || {};
+    setModo(d.modo || 'anual');
+    setPrefijo(d.prefijo ?? 'O.C ');
+    setPestanaFija(d.pestanaFija || '');
+    setPestanaNueva('');
+    setPrueba(null);
+    setArchivo(null);
+    setLink(d.url || '');
+    setEditando(true);
+    if (d.fileId) ejecutar('ver', async () => setArchivo(await client.ocDriveInspeccionar(d.fileId)));
+  }
+
+  function verArchivo(valor) {
+    ejecutar('ver', async () => {
+      const data = await client.ocDriveInspeccionar(valor);
+      setArchivo(data);
+      setLink(data.url);
+      setPrueba(null);
+      if (modo === 'fija' && !data.pestanas.includes(pestanaFija)) setPestanaFija(data.pestanas[0] || '');
+    });
+  }
+
+  function buscarArchivos() {
+    ejecutar('archivos', async () => setArchivos((await client.ocDriveArchivos()).data));
+  }
+
+  const pestanaElegida = pestanaFija === '__nueva__' ? pestanaNueva.trim() : pestanaFija;
+  const destinoForm = { fileId: archivo?.id, modo, prefijo, pestanaFija: modo === 'fija' ? pestanaElegida : null };
+  const anioActual = new Date().getFullYear();
+
+  function probar() {
+    ejecutar('probar', async () => setPrueba(await client.ocDriveProbar(destinoForm)));
+  }
+
+  function guardar() {
+    const cambiaArchivo = drive?.destino?.fileId && drive.destino.fileId !== archivo?.id;
+    if (cambiaArchivo && !window.confirm(`¿Cambiar el destino a "${archivo.nombre}"? Las O.C. se van a vincular o agregar en ese archivo; el archivo anterior no se toca.`)) return;
+    ejecutar('guardar', async () => {
+      setDrive(await client.ocDriveGuardar(destinoForm));
+      setEditando(false);
+      setPrueba(null);
+      setMessage('Destino guardado. La primera sincronización arranca en unos segundos.');
+      setTimeout(() => { cargar().then(onSincronizado).catch(() => {}); }, 8000);
+    });
+  }
+
+  function sincronizarAhora() {
+    ejecutar('sync', async () => {
+      const data = await client.ocDriveSincronizar();
+      setDrive(data);
+      await onSincronizado();
+      setMessage(`Sincronizado: ${resumenDrive(data.resumen)}.`);
+    });
+  }
+
+  function pausa(activo) {
+    ejecutar('pausa', async () => setDrive(await client.ocDrivePausa(activo)));
+  }
+
+  function restaurar() {
+    const b = drive?.destino?.backup;
+    if (!window.confirm(`¿Volver el archivo a como estaba el ${new Date(b.fecha).toLocaleString('es-AR')}?\n\nLo que tiene ahora queda guardado como backup (se puede deshacer) y la sincronización queda en pausa para que revises.`)) return;
+    ejecutar('restaurar', async () => {
+      setDrive(await client.ocDriveRestaurar());
+      await onSincronizado();
+      setMessage('Archivo restaurado. La sincronización quedó en pausa: revisalo y tocá "Reanudar".');
+    });
+  }
+
+  if (!drive) {
+    return <section className="oc-form"><h3>3. Archivo en Google Drive</h3><p className="oc-help" style={{ marginTop: 0 }}>{error || 'Consultando...'}</p></section>;
+  }
+  const d = drive.destino;
+
+  return (
+    <section className="oc-form">
+      <div className="oc-titulo">
+        <h3>3. Archivo en Google Drive</h3>
+        <button type="button" className="ghost small" onClick={() => setAyuda(!ayuda)}>
+          <CircleHelp size={16} /> {ayuda ? 'Ocultar ayuda' : 'Ayuda'}
+        </button>
+      </div>
+      {ayuda ? <AyudaDrive robot={drive.robot} /> : null}
+      {!drive.claveConfigurada ? (
+        <p className="oc-help" style={{ marginTop: 0 }}>Falta la clave de Google en el servidor (OC_GOOGLE_KEY_FILE en el .env del backend; ver README).</p>
+      ) : (
+        <>
+          {d.fileId && !editando ? (
+            <>
+              <div className="oc-drive-estado">
+                <span className={`status ${!d.activo ? 'iniciado' : drive.ultimoError ? 'error' : drive.ultimaSync ? 'listo' : 'iniciado'}`}>
+                  {!d.activo ? 'En pausa' : drive.ultimoError ? 'Con error' : drive.enCurso ? 'Sincronizando...' : drive.ultimaSync ? 'Sincronizado' : 'Pendiente'}
+                </span>
+                <span><strong>{d.fileNombre}</strong> ({d.fileTipo === 'planilla' ? 'Planilla de Google' : 'Excel'}) · {d.modo === 'anual' ? `una pestaña por año: "${d.prefijo}${anioActual}"…` : `pestaña "${d.pestanaFija}"`}</span>
+                {drive.ultimaSync ? <span>· última: {new Date(drive.ultimaSync).toLocaleString('es-AR')}</span> : null}
+              </div>
+              {drive.ultimoError ? <div className="alert">{drive.ultimoError}</div> : null}
+              <div className="oc-buttons">
+                <a className="ghost oc-link" href={d.url} target="_blank" rel="noreferrer"><ExternalLink size={18} /> Abrir archivo</a>
+                <button type="button" className="ghost" onClick={sincronizarAhora} disabled={!!busy}>
+                  <RefreshCw size={18} /> {busy === 'sync' ? 'Sincronizando...' : 'Sincronizar ahora'}
+                </button>
+                <button type="button" className="ghost" onClick={() => pausa(!d.activo)} disabled={!!busy}>
+                  {d.activo ? 'Pausar' : 'Reanudar'}
+                </button>
+                <button type="button" className="ghost" onClick={empezarEdicion} disabled={!!busy}>
+                  <FolderOpen size={18} /> Cambiar destino
+                </button>
+              </div>
+              <div className="oc-backup">
+                <strong>Backup:</strong>{' '}
+                {d.backup ? (
+                  <>
+                    estado del archivo antes del último cambio ({new Date(d.backup.fecha).toLocaleString('es-AR')}).
+                    {d.fileTipo === 'excel' ? ' Versión fijada en Drive (Administrar versiones)' : ' Historial de versiones de la planilla'} + copia en el servidor: <span className="code">{d.backup.local}</span>
+                    {d.fileTipo === 'excel' ? (
+                      <button type="button" className="ghost small" onClick={restaurar} disabled={!!busy} style={{ marginLeft: 8 }}>
+                        {busy === 'restaurar' ? 'Restaurando...' : 'Restaurar backup'}
+                      </button>
+                    ) : null}
+                  </>
+                ) : 'todavía no hubo cambios en el archivo.'}
+              </div>
+            </>
+          ) : (
+            <div className="oc-destino-form">
+              <label>
+                Archivo de Drive (pegá el link)
+                <div className="oc-path">
+                  <input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." />
+                  <button type="button" className="ghost" onClick={() => verArchivo(link)} disabled={!!busy || !link.trim()}>
+                    <Search size={18} /> {busy === 'ver' ? 'Abriendo...' : 'Ver'}
+                  </button>
+                  <button type="button" className="ghost" onClick={buscarArchivos} disabled={!!busy}>
+                    <FolderOpen size={18} /> {busy === 'archivos' ? 'Buscando...' : 'Compartidos'}
+                  </button>
+                </div>
+              </label>
+              <p className="oc-help">
+                El archivo tiene que estar compartido como <strong>Editor</strong> con <span className="code">{drive.robot}</span>.
+              </p>
+              {archivos ? (
+                <div className="oc-archivos">
+                  {archivos.map((f) => (
+                    <button type="button" key={f.id} className={`folder-item${archivo?.id === f.id ? ' active' : ''}`} onClick={() => verArchivo(f.id)}>
+                      <FileSpreadsheet size={16} /> {f.nombre} <span className="oc-ext">({f.tipo === 'planilla' ? 'Planilla' : 'Excel'} · {f.duenio})</span>
+                    </button>
+                  ))}
+                  {!archivos.length ? <div className="empty">No hay archivos compartidos con el robot</div> : null}
+                </div>
+              ) : null}
+
+              {archivo ? (
+                <>
+                  <div className="notice">
+                    <strong>{archivo.nombre}</strong> · {archivo.tipo === 'planilla' ? 'Planilla de Google' : 'Excel (.xlsx)'} ·
+                    {archivo.puedeEditar ? ' el robot puede editarlo' : ' ⚠ el robot NO tiene permiso de Editor'} · pestañas: {archivo.pestanas.join(', ')}
+                  </div>
+                  <div className="oc-destino" style={{ marginTop: 12 }}>
+                    <label className="checkline">
+                      <input type="radio" name="oc-modo" checked={modo === 'anual'} onChange={() => { setModo('anual'); setPrueba(null); }} />
+                      Una pestaña por año (automático)
+                    </label>
+                    <label className="checkline">
+                      <input type="radio" name="oc-modo" checked={modo === 'fija'} onChange={() => { setModo('fija'); setPrueba(null); if (!pestanaFija) setPestanaFija(archivo.pestanas[0] || ''); }} />
+                      Siempre en la misma pestaña
+                    </label>
+                  </div>
+                  {modo === 'anual' ? (
+                    <label>
+                      Nombre de las pestañas (antes del año)
+                      <div className="oc-path">
+                        <input value={prefijo} onChange={(event) => { setPrefijo(event.target.value); setPrueba(null); }} style={{ maxWidth: 200 }} />
+                        <span className="oc-ext">→ "{prefijo}{anioActual}", "{prefijo}{anioActual + 1}"… (si no existe, se crea)</span>
+                      </div>
+                    </label>
+                  ) : (
+                    <label>
+                      Pestaña
+                      <div className="oc-path">
+                        <select value={pestanaFija} onChange={(event) => { setPestanaFija(event.target.value); setPrueba(null); }}>
+                          {archivo.pestanas.map((p) => <option key={p} value={p}>{p}</option>)}
+                          <option value="__nueva__">+ Crear pestaña nueva…</option>
+                        </select>
+                        {pestanaFija === '__nueva__' ? (
+                          <input value={pestanaNueva} onChange={(event) => { setPestanaNueva(event.target.value); setPrueba(null); }} placeholder="Nombre de la pestaña nueva" />
+                        ) : null}
+                      </div>
+                    </label>
+                  )}
+                  <div className="oc-buttons">
+                    <button type="button" className="ghost" onClick={probar} disabled={!!busy || (modo === 'fija' && !pestanaElegida)}>
+                      <Search size={18} /> {busy === 'probar' ? 'Probando...' : 'Probar destino'}
+                    </button>
+                    <button type="button" className="script-button" onClick={guardar} disabled={!!busy || !archivo.puedeEditar || (modo === 'fija' && !pestanaElegida)}>
+                      <Save size={18} /> {busy === 'guardar' ? 'Guardando...' : 'Guardar destino'}
+                    </button>
+                    {d.fileId ? <button type="button" className="ghost" onClick={() => setEditando(false)} disabled={!!busy}>Cancelar</button> : null}
+                  </div>
+                  {prueba ? (
+                    <div className="table-wrap" style={{ marginTop: 12 }}>
+                      <table className="mini">
+                        <thead>
+                          <tr><th>Pestaña</th><th style={{ textAlign: 'right' }}>Se agregan</th><th style={{ textAlign: 'right' }}>Ya estaban (se vinculan)</th><th style={{ textAlign: 'right' }}>Cambios al archivo</th><th style={{ textAlign: 'right' }}>Cambios del archivo</th></tr>
+                        </thead>
+                        <tbody>
+                          {prueba.pestanas.map((p) => (
+                            <tr key={p.pestana}>
+                              <td>{p.pestana}{p.crear ? ' (se crea)' : ''}</td>
+                              <td style={{ textAlign: 'right' }}>{p.agregadas}</td>
+                              <td style={{ textAlign: 'right' }}>{p.vinculadas}</td>
+                              <td style={{ textAlign: 'right' }}>{p.haciaPlanilla}</td>
+                              <td style={{ textAlign: 'right' }}>{p.haciaBase}</td>
+                            </tr>
+                          ))}
+                          {!prueba.pestanas.length ? <tr><td colSpan={5} className="empty">No hay O.C. cargadas</td></tr> : null}
+                        </tbody>
+                      </table>
+                      <p className="oc-help" style={{ padding: '0 10px 10px' }}>Es solo una prueba: todavía no se escribió nada en el archivo.</p>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          )}
+
+          {error ? <div className="alert">{error}</div> : null}
+          {message ? <div className="notice">{message}</div> : null}
+
+          {drive.historial.length && !editando ? (
+            <div className="table-wrap" style={{ marginTop: 12 }}>
+              <table className="mini">
+                <thead>
+                  <tr><th>Fecha</th><th>Acción</th><th>Archivo</th><th>Detalle</th><th>Por</th></tr>
+                </thead>
+                <tbody>
+                  {drive.historial.map((h) => (
+                    <tr key={h.id}>
+                      <td>{new Date(h.fecha).toLocaleString('es-AR')}</td>
+                      <td>{h.accion === 'restaurar' ? 'Restauró backup' : 'Actualizó'}</td>
+                      <td>{h.archivo}</td>
+                      <td>{h.accion === 'restaurar' ? '-' : resumenDrive(h.resumen)}</td>
+                      <td>{h.usuario}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          <p className="oc-help">
+            Las O.C. nuevas se agregan solas al archivo y lo cargado (entregada, completo, N° de ingreso, observación) se sincroniza cada minuto,
+            acá o en el archivo (si se cambia lo mismo en los dos lados, queda lo del archivo). Antes de cada cambio se guarda un backup y se borra el anterior.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function OrdenesCompraPage({ token }) {
+  const client = useMemo(() => apiClient(token), [token]);
+  const [ordenes, setOrdenes] = useState([]);
+  const [carpetaPdf, setCarpetaPdf] = useState('');
+  const [carpetaExcel, setCarpetaExcel] = useState('');
+  const [nombre, setNombre] = useState('CONTROL_ORDENES_DE_COMPRA');
+  const [destino, setDestino] = useState('pc');
+  const [picker, setPicker] = useState(null);
+  const [importacion, setImportacion] = useState(null);
+  const [expandido, setExpandido] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [busy, setBusy] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  function cargarOrdenes() {
+    return client.ocOrdenes().then((data) => setOrdenes(data.data || []));
+  }
+
+  useEffect(() => {
+    const prefs = leerPrefsOc();
+    if (prefs?.destino) setDestino(prefs.destino);
+    client.ocConfig()
+      .then((cfg) => {
+        setCarpetaPdf(prefs?.carpetaPdf || cfg.carpetaPdf);
+        setCarpetaExcel(prefs?.carpetaExcel || cfg.carpetaExcel);
+        setNombre(prefs?.nombre || cfg.nombre);
+      })
+      .catch((err) => setError(err.message));
+    cargarOrdenes().catch((err) => setError(err.message));
+    // lo que se carga en la planilla de Drive entra a la base en el sondeo: refrescar cada 60s
+    const timer = setInterval(() => {
+      if (!document.querySelector('.edit-inline')) cargarOrdenes().catch(() => {});
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [client]);
+
+  function guardarPrefs(patch = {}) {
+    try {
+      localStorage.setItem(OC_PREFS_KEY, JSON.stringify({ carpetaPdf, carpetaExcel, nombre, destino, ...patch }));
+    } catch {
+      // sin almacenamiento local: solo no se recuerdan las carpetas
+    }
+  }
+
+  async function ejecutar(tipo, fn) {
+    setBusy(tipo);
+    setError('');
+    setMessage('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function mensajeImportacion(data) {
+    const partes = [`${data.nuevos} órdenes nuevas`];
+    if (data.yaCargados) partes.push(`${data.yaCargados} ya estaban cargadas`);
+    if (data.duplicados) partes.push(`${data.duplicados} duplicadas descartadas`);
+    if (data.errores) partes.push(`${data.errores} con error`);
+    return `Listo: ${partes.join(', ')}.`;
+  }
+
+  function subirPdf(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!files.length) return;
+    ejecutar('subir', async () => {
+      const data = await client.ocSubir(files);
+      setImportacion(data);
+      await cargarOrdenes();
+      setMessage(mensajeImportacion(data));
+    });
+  }
+
+  function importarCarpeta() {
+    ejecutar('carpeta', async () => {
+      const data = await client.ocImportarCarpeta(carpetaPdf);
+      setImportacion(data);
+      guardarPrefs();
+      await cargarOrdenes();
+      setMessage(mensajeImportacion(data));
+    });
+  }
+
+  function generarExcel() {
+    ejecutar('excel', async () => {
+      guardarPrefs();
+      if (destino === 'pc') {
+        const blob = await client.ocExcelPc(nombre);
+        descargarBlob(blob, `${nombre.replace(/\.xlsx$/i, '') || 'CONTROL_ORDENES_DE_COMPRA'}.xlsx`);
+        setMessage('Excel descargado: quedó en la carpeta Descargas de esta PC.');
+      } else {
+        const data = await client.ocExcelServidor({ carpetaExcel, nombre });
+        if (data.importadosDelExcel) await cargarOrdenes();
+        const extra = data.importadosDelExcel ? ` Se pasaron a la base ${data.importadosDelExcel} renglones que estaban cargados a mano en ese Excel.` : '';
+        setMessage(`Excel guardado en ${data.archivo} (${data.ordenes} órdenes, ${data.renglones} renglones).${extra}`);
+      }
+    });
+  }
+
+  async function guardarRenglon(ordenId, renglonId, patch) {
+    setError('');
+    try {
+      const { data } = await client.ocEditarRenglon(renglonId, patch);
+      setOrdenes((prev) => prev.map((o) => {
+        if (o.id !== ordenId) return o;
+        const renglones = o.renglones.map((r) => (r.id === renglonId ? data : r));
+        return { ...o, renglones, estado: renglones.every((r) => r.completo === 'SI') ? 'COMPLETA' : 'INCOMPLETA' };
+      }));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function eliminarOrden(orden) {
+    if (!window.confirm(`¿Eliminar la O.C. ${orden.oc} de ${orden.proveedor}? Se borra también lo cargado en sus renglones.`)) return;
+    ejecutar('eliminar', async () => {
+      await client.ocEliminar(orden.id);
+      await cargarOrdenes();
+      setMessage(`O.C. ${orden.oc} eliminada. Se puede volver a subir su PDF.`);
+    });
+  }
+
+  const texto = search.trim().toLowerCase();
+  const visibles = ordenes.filter((o) => {
+    if (filtroEstado && o.estado !== filtroEstado) return false;
+    if (!texto) return true;
+    return o.oc.toLowerCase().includes(texto)
+      || o.proveedor.toLowerCase().includes(texto)
+      || o.renglones.some((r) => r.codigo.toLowerCase().includes(texto) || r.descripcion.toLowerCase().includes(texto));
+  });
+  const totalRenglones = ordenes.reduce((acc, o) => acc + o.renglones.length, 0);
+  const completas = ordenes.filter((o) => o.estado === 'COMPLETA').length;
+  const resultados = importacion?.resultados || [];
+
+  return (
+    <>
+      <section className="page-title">
+        <h2>Órdenes de Compra</h2>
+      </section>
+
+      <section className="oc-form">
+        <h3>1. Cargar PDF de O.C.</h3>
+        <div className="oc-buttons" style={{ marginTop: 0 }}>
+          <label className={`upload-button script-button${busy ? ' disabled' : ''}`}>
+            <Upload size={18} /> {busy === 'subir' ? 'Subiendo...' : 'Subir PDF desde mi PC'}
+            <input type="file" accept=".pdf,application/pdf" multiple onChange={subirPdf} disabled={!!busy} />
+          </label>
+        </div>
+        <label>
+          O tomar los PDF de una carpeta del servidor
+          <div className="oc-path">
+            <input value={carpetaPdf} onChange={(event) => setCarpetaPdf(event.target.value)} placeholder="D:\FARMACIA\ORDENES COMPRA" />
+            <button type="button" className="ghost" onClick={() => setPicker('pdf')}><FolderOpen size={18} /> Elegir</button>
+            <button type="button" className="ghost" onClick={importarCarpeta} disabled={!!busy || !carpetaPdf}>
+              <RefreshCw size={18} /> {busy === 'carpeta' ? 'Leyendo...' : 'Importar carpeta'}
+            </button>
+          </div>
+        </label>
+        <p className="oc-help">
+          Podés elegir varios PDF a la vez. Los que ya están cargados o vinieron bajados dos veces se detectan solos y no se repiten.
+        </p>
+      </section>
+
+      {error ? <div className="alert">{error}</div> : null}
+      {message ? <div className="notice">{message}</div> : null}
+
+      {resultados.length ? (
+        <section className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>PDF</th><th>Resultado</th><th>O.C.</th><th>Detalle</th></tr>
+            </thead>
+            <tbody>
+              {resultados.map((r) => {
+                const est = OC_ESTADOS_ARCHIVO[r.estado] || { label: r.estado, className: '' };
+                return (
+                  <tr key={r.name}>
+                    <td>{r.name}</td>
+                    <td><span className={`status ${est.className}`}>{est.label}</span></td>
+                    <td className="code">{r.oc || '-'}</td>
+                    <td>{r.estado === 'nuevo' ? `${r.proveedor} · ${r.renglones} renglones · ${formatPesos(r.total)}` : r.detalle}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+
+      <section className="summary-grid">
+        <Metric label="Órdenes cargadas" value={ordenes.length} />
+        <Metric label="Renglones" value={totalRenglones} />
+        <Metric label="Completas" value={completas} />
+        <Metric label="Incompletas" value={ordenes.length - completas} />
+      </section>
+
+      <section className="oc-form">
+        <h3>2. Excel de control</h3>
+        <div className="oc-destino">
+          <label className="checkline">
+            <input type="radio" name="oc-destino" checked={destino === 'pc'} onChange={() => setDestino('pc')} />
+            Descargar a mi PC (carpeta Descargas)
+          </label>
+          <label className="checkline">
+            <input type="radio" name="oc-destino" checked={destino === 'servidor'} onChange={() => setDestino('servidor')} />
+            Guardar en una carpeta del servidor
+          </label>
+        </div>
+        {destino === 'servidor' ? (
+          <label>
+            Carpeta del servidor donde guardar el Excel
+            <div className="oc-path">
+              <input value={carpetaExcel} onChange={(event) => setCarpetaExcel(event.target.value)} placeholder="D:\FARMACIA\ORDENES COMPRA" />
+              <button type="button" className="ghost" onClick={() => setPicker('excel')}><FolderOpen size={18} /> Elegir</button>
+            </div>
+          </label>
+        ) : null}
+        <label>
+          Nombre del Excel
+          <div className="oc-path">
+            <input value={nombre} onChange={(event) => setNombre(event.target.value)} />
+            <span className="oc-ext">.xlsx</span>
+          </div>
+        </label>
+        <div className="oc-buttons">
+          <button type="button" className="script-button" onClick={generarExcel} disabled={!!busy || !ordenes.length || (destino === 'servidor' && !carpetaExcel)}>
+            {destino === 'pc' ? <Download size={18} /> : <FileSpreadsheet size={18} />}
+            {busy === 'excel' ? ' Generando...' : destino === 'pc' ? ' Descargar Excel' : ' Guardar Excel en el servidor'}
+          </button>
+        </div>
+        <p className="oc-help">
+          El Excel sale de lo cargado en esta página. Si guardás en el servidor sobre un Excel que ya existe y alguien completó datos a mano ahí,
+          esos datos se pasan primero a la base (solo en renglones que acá estaban vacíos).
+        </p>
+      </section>
+
+      <DrivePanel client={client} onSincronizado={cargarOrdenes} />
+
+      <section className="filters">
+        <div className="searchbox">
+          <Search size={18} />
+          <input placeholder="Buscar O.C., proveedor, código o medicamento" value={search} onChange={(event) => setSearch(event.target.value)} />
+        </div>
+        <select value={filtroEstado} onChange={(event) => setFiltroEstado(event.target.value)}>
+          <option value="">Todas</option>
+          <option value="INCOMPLETA">Incompletas</option>
+          <option value="COMPLETA">Completas</option>
+        </select>
+        <span style={{ alignSelf: 'center', color: '#5b6b76' }}>{visibles.length} órdenes</span>
+      </section>
+
+      <section className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>N° O.C.</th>
+              <th>Proveedor</th>
+              <th>Fecha</th>
+              <th>Vence</th>
+              <th style={{ textAlign: 'right' }}>Renglones</th>
+              <th style={{ textAlign: 'right' }}>Total</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibles.map((o) => {
+              const abierto = expandido === o.id;
+              const listos = o.renglones.filter((r) => r.completo === 'SI').length;
+              return (
+                <React.Fragment key={o.id}>
+                  <tr className="clickable" onClick={() => setExpandido(abierto ? null : o.id)}>
+                    <td>{abierto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</td>
+                    <td className="code">{o.oc}</td>
+                    <td>{o.proveedor}</td>
+                    <td>{o.fecha}</td>
+                    <td>{o.vence}</td>
+                    <td style={{ textAlign: 'right' }}>{listos}/{o.renglones.length}</td>
+                    <td style={{ textAlign: 'right' }}>{formatPesos(o.subtotal)}</td>
+                    <td><span className={`status ${o.estado === 'COMPLETA' ? 'listo' : 'error'}`}>{o.estado}</span></td>
+                    <td>
+                      <button type="button" className="ghost small" title="Eliminar O.C." onClick={(event) => { event.stopPropagation(); eliminarOrden(o); }} disabled={!!busy}>
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                  {abierto ? (
+                    <tr className="detail-row">
+                      <td colSpan={9}>
+                        <table className="oc-renglones">
+                          <thead>
+                            <tr>
+                              <th>Renglón</th>
+                              <th>Código</th>
+                              <th>Descripción</th>
+                              <th style={{ textAlign: 'right' }}>Cantidad</th>
+                              <th style={{ textAlign: 'right' }}>Entregada</th>
+                              <th style={{ textAlign: 'right' }}>Falta</th>
+                              <th>Completo</th>
+                              <th>N° de ingreso</th>
+                              <th>Observación</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {o.renglones.map((r) => {
+                              const falta = r.entregada == null ? r.cantidad : r.cantidad - r.entregada;
+                              return (
+                                <tr key={r.id} className={r.completo === 'SI' ? 'oc-ok' : r.entregada != null && falta > 0 ? 'oc-parcial' : ''}>
+                                  <td>{r.renglon}</td>
+                                  <td className="code">{r.codigo}</td>
+                                  <td>{r.descripcion}</td>
+                                  <td style={{ textAlign: 'right' }}>{formatNumber(r.cantidad)}</td>
+                                  <td style={{ textAlign: 'right', minWidth: 90 }}>
+                                    <EditableCell
+                                      value={r.entregada == null ? '' : String(r.entregada)}
+                                      display={r.entregada == null ? '—' : formatNumber(r.entregada)}
+                                      onSave={(v) => guardarRenglon(o.id, r.id, { entregada: v })}
+                                    />
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>{formatNumber(falta)}</td>
+                                  <td>
+                                    <select
+                                      value={r.completo || ''}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={(event) => guardarRenglon(o.id, r.id, { completo: event.target.value })}
+                                    >
+                                      <option value="">-</option>
+                                      <option value="SI">SI</option>
+                                      <option value="NO">NO</option>
+                                    </select>
+                                  </td>
+                                  <td style={{ minWidth: 110 }}>
+                                    <EditableCell value={r.nroIngreso || ''} onSave={(v) => guardarRenglon(o.id, r.id, { nroIngreso: v })} />
+                                  </td>
+                                  <td style={{ minWidth: 160 }}>
+                                    <EditableCell value={r.observacion || ''} onSave={(v) => guardarRenglon(o.id, r.id, { observacion: v })} />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+            {!visibles.length ? (
+              <tr><td colSpan={9} className="empty">{ordenes.length ? 'Ninguna orden coincide con el filtro' : 'Todavía no hay órdenes cargadas. Subí los PDF arriba.'}</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </section>
+
+      {picker ? (
+        <FolderPicker
+          client={client}
+          inicial={picker === 'pdf' ? carpetaPdf : carpetaExcel}
+          titulo={picker === 'pdf' ? 'Carpeta de los PDF' : 'Carpeta donde guardar el Excel'}
+          onCerrar={() => setPicker(null)}
+          onElegir={(ruta) => {
+            if (picker === 'pdf') setCarpetaPdf(ruta);
+            else setCarpetaExcel(ruta);
+            setPicker(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }

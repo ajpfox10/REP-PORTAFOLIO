@@ -9,6 +9,7 @@ import { Layout } from "../../components/Layout";
 import { useToast } from "../../ui/toast";
 import { apiFetch } from "../../api/http";
 import { LicenciasPdfSection } from "./LicenciasPdfSection";
+import FichajesSection from "./FichajesSection";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 interface ArchivoInfo {
@@ -258,21 +259,35 @@ function ReglasCieEditor({
   const [busy, setBusy] = useState(false);
   const [codigos, setCodigos] = useState<{ codigo: string; diagnostico: string; cantidad: number }[]>([]);
   const [archivo, setArchivo] = useState<string | null>(null);
+  const [cargandoCie, setCargandoCie] = useState(false);
+  const [errorCie, setErrorCie] = useState<string | null>(null);
   const [filtro, setFiltro] = useState("");
+  const [filtroReglas, setFiltroReglas] = useState("");
+  // código CIE → diagnóstico, acumulado de todo lo leído de LICENCIAS_MEDICAS
+  // (así las reglas y lo tipeado muestran el nombre aunque se cambie la novedad)
+  const [nombresCie, setNombresCie] = useState<Record<string, string>>({});
 
   // CIE que aparecen en LICENCIAS_MEDICAS.xlsx para esa novedad (ayuda para elegir)
   useEffect(() => {
     const nov = siape.trim();
     if (!nov) return;
     const t = setTimeout(() => {
+      setCargandoCie(true);
+      setErrorCie(null);
       apiFetch<any>(`/asistencia/mapeo-cie/codigos?novedad=${encodeURIComponent(nov)}`)
         .then((r) => {
-          if (r?.ok) {
-            setCodigos(r.codigos ?? []);
-            setArchivo(r.archivo ?? null);
-          }
+          if (!r?.ok) throw new Error(r?.error || "Error");
+          const lista: { codigo: string; diagnostico: string; cantidad: number }[] = r.codigos ?? [];
+          setCodigos(lista);
+          setArchivo(r.archivo ?? null);
+          setNombresCie((prev) => {
+            const m = { ...prev };
+            for (const c of lista) if (c.diagnostico) m[c.codigo] = c.diagnostico;
+            return m;
+          });
         })
-        .catch(() => {});
+        .catch((e) => setErrorCie(e?.message || "Error"))
+        .finally(() => setCargandoCie(false));
     }, 400);
     return () => clearTimeout(t);
   }, [siape]);
@@ -291,6 +306,60 @@ function ReglasCieEditor({
     .split(/[,;\s]+/)
     .map((c) => c.trim().toUpperCase())
     .filter(Boolean);
+
+  // Nombres del catálogo CIE-10 completo (tabla cie_codigos) para las reglas y lo tipeado
+  const [catalogo, setCatalogo] = useState<Record<string, string>>({});
+  const pedirNombres = Array.from(new Set([...reglas.map((r) => r.codigo_cie), ...listaCie]))
+    .filter((c) => !(c in catalogo))
+    .sort()
+    .join(",");
+  useEffect(() => {
+    if (!pedirNombres) return;
+    const t = setTimeout(() => {
+      apiFetch<any>(`/asistencia/mapeo-cie/nombres?codigos=${encodeURIComponent(pedirNombres)}`)
+        .then((r) => {
+          if (!r?.ok) return;
+          setCatalogo((prev) => {
+            const m = { ...prev };
+            // los pedidos que no están en el catálogo quedan en "" para no volver a pedirlos
+            for (const c of pedirNombres.split(",")) if (!(c in m)) m[c] = "";
+            Object.assign(m, r.nombres ?? {});
+            return m;
+          });
+        })
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [pedirNombres]);
+
+  // Nombre a mostrar: catálogo CIE-10; si no está, el diagnóstico del Excel de licencias.
+  // La regla guarda "O20" también para O20.0 (normCie saca el .0): si en las licencias del SIAPE
+  // ese código trae el diagnóstico de la variante .0 (O20.0 Amenaza de aborto), se muestran los dos.
+  const nombreCie = (c: string): string | null => {
+    const base = c.endsWith(".0") ? c.slice(0, -2) : c;
+    const cat = catalogo[base] || null;
+    const cat0 = base.includes(".") ? null : catalogo[`${base}.0`] || null;
+    const excel = nombresCie[base] || null;
+    if (cat && cat0 && excel && norm(excel) === norm(cat0)) return `${cat} · ${base}.0: ${cat0}`;
+    return cat ?? excel;
+  };
+
+  // Buscador del catálogo CIE-10 completo
+  const [qCat, setQCat] = useState("");
+  const [resCat, setResCat] = useState<{ codigo: string; descripcion: string; capitulo_nombre?: string }[]>([]);
+  useEffect(() => {
+    const q = qCat.trim();
+    if (q.length < 2) {
+      setResCat([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      apiFetch<any>(`/asistencia/mapeo-cie/catalogo?q=${encodeURIComponent(q)}`)
+        .then((r) => setResCat(r?.ok ? r.codigos ?? [] : []))
+        .catch(() => setResCat([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [qCat]);
 
   const toggleCie = (c: string) => {
     const set = new Set(listaCie);
@@ -322,7 +391,10 @@ function ReglasCieEditor({
     }
   };
 
-  const baja = async (id: number) => {
+  const baja = async (r: ReglaCie) => {
+    const nombre = nombreCie(r.codigo_cie);
+    if (!window.confirm(`¿Quitar ${r.codigo_cie}${nombre ? ` (${nombre})` : ""} de ${r.novedad_ministerio}?\nVuelve a cargarse con la regla general.`)) return;
+    const id = r.id;
     try {
       const r = await apiFetch<any>(`/asistencia/mapeo-cie/${id}`, { method: "DELETE" });
       if (!r?.ok) throw new Error(r?.error || "Error");
@@ -339,6 +411,17 @@ function ReglasCieEditor({
     (c) => !f || norm(c.codigo).includes(f) || norm(c.diagnostico).includes(f)
   );
 
+  // Reglas agrupadas por "se carga como" (1RO, 1RE, …), con filtro por código o diagnóstico
+  const fr = norm(filtroReglas);
+  const gruposReglas = new Map<string, ReglaCie[]>();
+  for (const r of reglas) {
+    if (fr && !norm(r.codigo_cie).includes(fr) && !norm(nombreCie(r.codigo_cie) || "").includes(fr)) continue;
+    const k = `${r.novedad_ministerio}||${r.novedad_siape}`;
+    const arr = gruposReglas.get(k) ?? [];
+    arr.push(r);
+    gruposReglas.set(k, arr);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
@@ -347,42 +430,72 @@ function ReglasCieEditor({
         general (01). Se graba al instante.
       </div>
 
-      {/* Reglas cargadas */}
-      <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid rgba(255,255,255,.08)", borderRadius: 8 }}>
+      {/* Reglas cargadas, agrupadas por "se carga como" */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={lbl}>CÓDIGOS CARGADOS ({reglas.length}) — ✕ para quitar uno</div>
+        <input
+          aria-label="Filtrar reglas por código o diagnóstico"
+          className="input"
+          style={{ ...fs, width: 220, marginLeft: "auto", padding: "3px 8px" }}
+          placeholder="buscar código o diagnóstico…"
+          value={filtroReglas}
+          onChange={(e) => setFiltroReglas(e.target.value)}
+        />
+      </div>
+      <div style={{ maxHeight: 380, overflowY: "auto", border: "1px solid rgba(255,255,255,.08)", borderRadius: 8 }}>
         {reglas.length === 0 ? (
           <div style={{ fontSize: "0.76rem", color: "var(--muted)", padding: 8 }}>
             No hay reglas por CIE: todo ENFERMEDAD se carga con la regla general.
           </div>
+        ) : gruposReglas.size === 0 ? (
+          <div style={{ fontSize: "0.76rem", color: "var(--muted)", padding: 8 }}>Nada coincide con “{filtroReglas}”.</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: "0.78rem" }}>
-            <thead>
-              <tr style={{ color: "#94a3b8", textAlign: "left" as const }}>
-                <th style={{ padding: "6px 8px" }}>NOVEDAD SIAPE</th>
-                <th style={{ padding: "6px 8px" }}>CIE</th>
-                <th style={{ padding: "6px 8px" }}>SE CARGA COMO</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {reglas.map((r) => (
-                <tr key={r.id} style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
-                  <td style={{ padding: "5px 8px" }}>{r.novedad_siape}</td>
-                  <td style={{ padding: "5px 8px", fontWeight: 700 }}>{r.codigo_cie}</td>
-                  <td style={{ padding: "5px 8px" }}>{r.novedad_ministerio}</td>
-                  <td style={{ padding: "5px 8px", textAlign: "right" as const }}>
-                    <button
-                      className="btn"
-                      style={{ padding: "2px 8px", color: "var(--danger)", borderColor: "rgba(239,68,68,.4)" }}
-                      onClick={() => baja(r.id)}
-                      title="Dar de baja la regla"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          Array.from(gruposReglas.entries()).map(([k, filas]) => {
+            const [destino, nov] = k.split("||");
+            return (
+              <div key={k}>
+                <div
+                  style={{
+                    position: "sticky" as const,
+                    top: 0,
+                    background: "rgba(15,23,42,.97)",
+                    padding: "6px 8px",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: "#fbbf24",
+                    borderBottom: "1px solid rgba(255,255,255,.08)",
+                  }}
+                >
+                  {destino}{" "}
+                  <span style={{ color: "#94a3b8", fontWeight: 400 }}>
+                    · {filas.length} código{filas.length === 1 ? "" : "s"} · desde {nov}
+                  </span>
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: "0.78rem" }}>
+                  <tbody>
+                    {filas.map((r) => (
+                      <tr key={r.id} style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                        <td style={{ padding: "4px 8px", fontWeight: 700, width: 90 }}>{r.codigo_cie}</td>
+                        <td style={{ padding: "4px 8px", color: nombreCie(r.codigo_cie) ? "var(--text)" : "var(--muted)" }}>
+                          {nombreCie(r.codigo_cie) ?? (r.codigo_cie in catalogo ? "no está en el catálogo CIE-10" : "…")}
+                        </td>
+                        <td style={{ padding: "4px 8px", textAlign: "right" as const, width: 40 }}>
+                          <button
+                            className="btn"
+                            style={{ padding: "2px 8px", color: "var(--danger)", borderColor: "rgba(239,68,68,.4)" }}
+                            onClick={() => baja(r)}
+                            title="Quitar este código (vuelve a la regla general)"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -439,12 +552,86 @@ function ReglasCieEditor({
         </button>
       </div>
 
+      {/* Nombre de cada código tipeado */}
+      {listaCie.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "0.76rem" }}>
+          {listaCie.map((c) => {
+            const nombre = nombreCie(c);
+            const ya = conRegla.get(c);
+            return (
+              <div key={c}>
+                <b>{c}</b>{" "}
+                <span style={{ color: nombre ? "var(--text)" : "var(--muted)" }}>
+                  · {nombre ?? (c in catalogo ? "no está en el catálogo CIE-10" : "…")}
+                </span>
+                {ya && <span style={{ color: "#10b981" }}> · ya va como {ya}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Catálogo CIE-10 completo (tabla cie_codigos): buscar por código o diagnóstico */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={lbl}>CATÁLOGO CIE-10 COMPLETO — buscá por código o diagnóstico · clic para sumar/quitar</div>
+          <input
+            aria-label="Buscar en el catálogo CIE-10"
+            className="input"
+            style={{ ...fs, width: 260, marginLeft: "auto", padding: "3px 8px" }}
+            placeholder="ej. C50, mama, infarto…"
+            value={qCat}
+            onChange={(e) => setQCat(e.target.value)}
+          />
+        </div>
+        {qCat.trim().length >= 2 && (
+          <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid rgba(255,255,255,.08)", borderRadius: 8 }}>
+            {resCat.length === 0 ? (
+              <div style={{ fontSize: "0.76rem", color: "var(--muted)", padding: 8 }}>Sin resultados.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: "0.78rem" }}>
+                <tbody>
+                  {resCat.map((c) => {
+                    const cod = c.codigo.endsWith(".0") ? c.codigo.slice(0, -2) : c.codigo;
+                    const sel = listaCie.includes(cod);
+                    const ya = conRegla.get(cod);
+                    return (
+                      <tr
+                        key={c.codigo}
+                        onClick={() => toggleCie(cod)}
+                        title={c.capitulo_nombre || ""}
+                        style={{
+                          cursor: "pointer",
+                          borderTop: "1px solid rgba(255,255,255,.06)",
+                          background: sel ? "rgba(37,99,235,.25)" : ya ? "rgba(16,185,129,.12)" : undefined,
+                        }}
+                      >
+                        <td style={{ padding: "4px 8px", fontWeight: 700, width: 90 }}>{c.codigo}</td>
+                        <td style={{ padding: "4px 8px" }}>
+                          {c.descripcion}
+                          {ya && <span style={{ color: "#10b981" }}> · ya va como {ya}</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Ayuda: CIE que aparecen en el export del SIAPE */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={lbl}>
-            CIE DE “{siape || "—"}” EN {archivo ?? "LICENCIAS_MEDICAS (no encontrado)"} — clic para sumar/quitar ·
-            en verde los que ya tienen regla
+            CIE DE “{siape || "—"}” EN{" "}
+            {cargandoCie
+              ? "LICENCIAS_MEDICAS (leyendo…)"
+              : errorCie
+              ? `LICENCIAS_MEDICAS (error: ${errorCie})`
+              : archivo ?? "LICENCIAS_MEDICAS (no encontrado)"}{" "}
+            · {codigos.length} códigos — clic para sumar/quitar · en verde los que ya tienen regla
           </div>
           <input
             aria-label="Filtrar CIE o diagnóstico"
@@ -478,7 +665,7 @@ function ReglasCieEditor({
                   color: sel ? "#bfdbfe" : "var(--text)",
                 }}
               >
-                <b>{c.codigo}</b> {c.diagnostico ? `· ${c.diagnostico.slice(0, 40)}` : ""}{" "}
+                <b>{c.codigo}</b> {c.diagnostico ? `· ${c.diagnostico.length > 60 ? c.diagnostico.slice(0, 60) + "…" : c.diagnostico}` : ""}{" "}
                 <span style={{ opacity: 0.6 }}>({c.cantidad})</span>
               </span>
             );
@@ -1120,7 +1307,7 @@ export function AsistenciaPage() {
   const [tab, setTab] = useState<"TODOS" | "PENDIENTES">("TODOS");
 
   // Sección principal de la página
-  const [seccion, setSeccion] = useState<"excel" | "pdf">("excel");
+  const [seccion, setSeccion] = useState<"excel" | "pdf" | "fichajes">("excel");
 
   useEffect(() => {
     apiFetch<any>("/asistencia/config")
@@ -1539,6 +1726,7 @@ export function AsistenciaPage() {
           {([
             { key: "excel", label: "Novedades Excel (Min. vs SIAP)" },
             { key: "pdf",   label: "Licencias PDF (Anual vs Novedades)" },
+            { key: "fichajes", label: "🕐 Fichajes de agentes" },
           ] as const).map(({ key, label }) => (
             <button
               key={key}
@@ -1562,6 +1750,7 @@ export function AsistenciaPage() {
 
         {/* ── SECCIÓN PDF ── */}
         {seccion === "pdf" && <LicenciasPdfSection />}
+        {seccion === "fichajes" && <FichajesSection />}
 
         {/* ── SECCIÓN EXCEL ── */}
         {seccion === "excel" && <>

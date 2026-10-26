@@ -31,13 +31,13 @@ export interface CertificadoLaboral {
 
 const MINUSCULAS = new Set(['de', 'del', 'la', 'las', 'los', 'en', 'y', 'e', 'a', 'al', 'con', 'para', 'por']);
 
-function titulo(v: string): string {
+export function titulo(v: string): string {
   return v.toLocaleLowerCase('es-AR')
     .replace(/(^|[\s(/-])(\p{L})/gu, (_m, a, b) => a + b.toLocaleUpperCase('es-AR'))
     .replace(/(?<=\s)(\p{L}+)/gu, (w) => (MINUSCULAS.has(w.toLocaleLowerCase('es-AR')) ? w.toLocaleLowerCase('es-AR') : w));
 }
 
-function fechaLarga(d: Date): string {
+export function fechaLarga(d: Date): string {
   return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
@@ -132,7 +132,7 @@ export async function armarCertificadoLaboral(sequelize: Sequelize, dni: number)
 
 // ─── HTML ────────────────────────────────────────────────────────────────────
 
-function esc(v: string): string {
+export function esc(v: string): string {
   return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
@@ -191,15 +191,15 @@ export function renderCertificadoLaboralHtml(c: CertificadoLaboral): string {
 
 // ─── DOCX (generado desde cero) ──────────────────────────────────────────────
 
-const AZUL = '1E3A5F';
-const GRIS = '64748B';
+export const AZUL = '1E3A5F';
+export const GRIS = '64748B';
 
 function x(v: string): string {
   return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-interface RunOpts { bold?: boolean; size?: number; color?: string; caps?: boolean; spacing?: number }
-function run(text: string, o: RunOpts = {}): string {
+export interface RunOpts { bold?: boolean; size?: number; color?: string; caps?: boolean; spacing?: number }
+export function run(text: string, o: RunOpts = {}): string {
   const rpr = [
     '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>',
     o.bold ? '<w:b/>' : '',
@@ -211,8 +211,8 @@ function run(text: string, o: RunOpts = {}): string {
   return `<w:r><w:rPr>${rpr}</w:rPr><w:t xml:space="preserve">${x(text)}</w:t></w:r>`;
 }
 
-interface ParOpts { align?: 'left' | 'right' | 'center' | 'both'; after?: number; before?: number; borderBottom?: string; shade?: string }
-function par(runs: string, o: ParOpts = {}): string {
+export interface ParOpts { align?: 'left' | 'right' | 'center' | 'both'; after?: number; before?: number; borderBottom?: string; shade?: string }
+export function par(runs: string, o: ParOpts = {}): string {
   const ppr = [
     o.borderBottom ? `<w:pBdr><w:bottom w:val="single" w:sz="18" w:space="4" w:color="${o.borderBottom}"/></w:pBdr>` : '',
     o.shade ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.shade}"/>` : '',
@@ -222,20 +222,20 @@ function par(runs: string, o: ParOpts = {}): string {
   return `<w:p><w:pPr>${ppr}</w:pPr>${runs}</w:p>`;
 }
 
-function celda(contenido: string, ancho: number, fill?: string): string {
+export function celda(contenido: string, ancho: number, fill?: string): string {
   return `<w:tc><w:tcPr><w:tcW w:w="${ancho}" w:type="dxa"/>${fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>` : ''}` +
     `<w:tcMar><w:top w:w="70" w:type="dxa"/><w:bottom w:w="70" w:type="dxa"/></w:tcMar></w:tcPr>${contenido}</w:tc>`;
 }
 
-function tabla(anchos: number[], filas: string[], bordes: string): string {
+export function tabla(anchos: number[], filas: string[], bordes: string): string {
   return `<w:tbl><w:tblPr><w:tblW w:w="${anchos.reduce((a, b) => a + b, 0)}" w:type="dxa"/><w:tblLayout w:type="fixed"/>` +
     `<w:tblBorders>${bordes}</w:tblBorders>` +
     `<w:tblCellMar><w:left w:w="110" w:type="dxa"/><w:right w:w="110" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
     `<w:tblGrid>${anchos.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${filas.join('')}</w:tbl>`;
 }
 
-const SIN_BORDES = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map((b) => `<w:${b} w:val="nil"/>`).join('');
-const BORDES_HIST = '<w:top w:val="nil"/><w:left w:val="nil"/><w:right w:val="nil"/><w:insideV w:val="nil"/>' +
+export const SIN_BORDES = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map((b) => `<w:${b} w:val="nil"/>`).join('');
+export const BORDES_HIST = '<w:top w:val="nil"/><w:left w:val="nil"/><w:right w:val="nil"/><w:insideV w:val="nil"/>' +
   '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/>';
 
 export async function renderCertificadoLaboralDocx(c: CertificadoLaboral): Promise<Buffer> {
@@ -283,6 +283,11 @@ export async function renderCertificadoLaboralDocx(c: CertificadoLaboral): Promi
     `<w:p><w:pPr><w:ind w:left="5600"/><w:pBdr><w:top w:val="single" w:sz="6" w:space="4" w:color="334155"/></w:pBdr><w:jc w:val="center"/></w:pPr>${run('Firma y sello', { size: 18, color: GRIS })}</w:p>`,
   ].join('');
 
+  return empaquetarDocx(body);
+}
+
+// Arma el .docx A4 a partir del XML del <w:body> (sin el sectPr).
+export async function empaquetarDocx(body: string): Promise<Buffer> {
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1300" w:right="1440" w:bottom="1300" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
 

@@ -18,11 +18,16 @@ Uso:
 """
 import argparse
 import ctypes
+import json
 
 ctypes.windll.user32.SetProcessDPIAware()  # ANTES de pygetwindow/pyautogui: ver mapping del 2026-09-22
 
+import os
 import shutil
+import sqlite3
+import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from datetime import date
@@ -76,6 +81,7 @@ CONSULTAS = {
         "destino_dir": COMPARACION,
         "destino_nombre": "HORARIOS.xlsx",
         "periodo": "hoy",
+        "post": "horarios_historial",   # foto del dia en la tabla horarios_historial (mig 090)
     },
     "Horario Administrativo Consolidado de los Agentes": {
         "nro": 71,
@@ -116,6 +122,7 @@ CONSULTAS = {
         "destino_dir": COMPARACION / "SIAPE",
         "destino_nombre": "SIAPE.xlsx",
         "periodo": "mes_a_fin",
+        "post": "historial",
     },
     "Novedades Rechazadas": {
         "nro": 79,
@@ -148,14 +155,63 @@ CONSULTAS = {
 }
 
 
-def post_descarga(cfg, destino):
+def _iso(ddmmaaaa):
+    d, m, a = ddmmaaaa.split("/")
+    return f"{a}-{m}-{d}"
+
+
+def importar_historial(destino, desde, hasta):
+    """SIAPE.xlsx -> tabla `historial` reemplazando los meses del periodo pedido (26/10:
+    con 'agregar' quedaban justificados viejos y novedades que SIAPE ya habia borrado).
+    Los historialsiape*.xlsx anteriores se apartan a historial_importados: si quedan en
+    la carpeta el importador los vuelve a cargar y reaparecen las filas viejas."""
+    apartados = COMPARACION / "historial_importados"
+    apartados.mkdir(exist_ok=True)
+    for viejo in COMPARACION.glob("historialsiape*.xls*"):
+        os.replace(viejo, apartados / viejo.name)   # mismo dia otra vez: pisa el apartado
+    shutil.copyfile(destino, COMPARACION / f"historialsiape_novedades_{date.today():%Y%m%d}.xlsx")
+    script = Path(__file__).resolve().parent.parent / "importar_historial_siape.mjs"
+    r = subprocess.run(["node", str(script), _iso(desde), _iso(hasta)],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20 * 60)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or r.stdout).strip().splitlines()[-1] if (r.stderr or r.stdout).strip()
+                           else f"node salio con codigo {r.returncode}")
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def post_descarga(cfg, destino, args=None):
     """Paso extra despues de copiar el archivo. Devuelve (filas, detalle) para el registro."""
+    if cfg.get("post") == "historial":
+        # no rompe la exportacion: SIAPE.xlsx ya quedo copiado y lo leen el comparador y los robots
+        try:
+            desde, hasta = periodo_para(cfg, args)
+            r = importar_historial(destino, desde, hasta)
+            t = r["totales"]
+            detalle = (f"historial {desde} a {hasta}: meses {', '.join(r['meses'])} | "
+                       f"{r['borradas']} borradas, {t['insertadas']} cargadas")
+            F.log(f"Tabla historial: {detalle}")
+            for a in r.get("advertencias") or []:
+                F.log(f"   {a}")
+            return t["insertadas"], detalle
+        except Exception as e:
+            F.log(f"AVISO: no pude cargar el historial: {e}")
+            return None, f"AVISO: no pude cargar el historial: {e}"
     if cfg.get("post") == "tiempo_acumulado":
         import tiempo_acumulado_tabla as TA
         r = TA.importar_gestor(destino)
         F.log(f"Tabla tiempo_acumulado: {r['filas']} filas de SIAPE (años {r['anios']}), "
               f"{r['a_cero']} saldo(s) pasaron a 0")
         return r["filas"], f"{r['filas']} filas, {r['a_cero']} a 0"
+    if cfg.get("post") == "horarios_historial":
+        # no rompe la exportacion: HORARIOS.xlsx ya quedo copiado y lo leen otras paginas
+        try:
+            import horarios_historial as HH
+            fecha = date.today()
+            n = HH.importar(destino, fecha, "diario")
+            F.log(f"Tabla horarios_historial: {n} agentes al {fecha:%d/%m/%Y}")
+            return n, f"{n} agentes"
+        except Exception as e:
+            F.log(f"AVISO: no pude cargar horarios_historial: {e}")
     return None, None
 
 
@@ -642,6 +698,37 @@ def confirmar_dialogo_si(timeout=15):
     return None
 
 
+SIN_DATOS = "SIN_DATOS"
+CHROME_HISTORY = Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data" / "Default" / "History"
+
+
+def portal_sin_datos(desde_ts):
+    """True si, despues de `desde_ts`, Chrome abrio el link de exportacion del portal
+    y el portal lo mando a portal/login: es lo que hace cuando el reporte NO TIENE
+    DATOS (20/10/2026, Novedades Rechazadas de un dia sin rechazos). Se lee una copia
+    del History de Chrome (el original esta bloqueado)."""
+    if not CHROME_HISTORY.exists():
+        return False
+    ts_chrome = int((desde_ts + 11644473600) * 1_000_000)
+    tmp = Path(tempfile.gettempdir()) / "siape_export_history.sqlite"
+    try:
+        shutil.copyfile(CHROME_HISTORY, tmp)
+        cn = sqlite3.connect(str(tmp))
+        try:
+            n = cn.execute(
+                "SELECT COUNT(*) FROM visits v JOIN urls u ON u.id = v.url "
+                "JOIN visits vo ON vo.id = v.from_visit JOIN urls uo ON uo.id = vo.url "
+                "WHERE v.visit_time >= ? AND u.url LIKE '%portal.rrhh.gba.gob.ar/portal/login%' "
+                "AND uo.url LIKE '%portal.rrhh.gba.gob.ar/portal/generar_excel_externo%'",
+                (ts_chrome,),
+            ).fetchone()[0]
+        finally:
+            cn.close()
+    except Exception:
+        return False
+    return n > 0
+
+
 def esperar_descarga(desde_ts, timeout=300, poll=3, excluir=()):
     """Espera un archivo reporte_*.xlsx nuevo (mtime >= desde_ts) en Descargas.
     `excluir`: archivos ya tomados por consultas anteriores de la misma corrida
@@ -649,6 +736,7 @@ def esperar_descarga(desde_ts, timeout=300, poll=3, excluir=()):
     estabilice (Chrome termina de escribir)."""
     excluir = {Path(e).resolve() for e in excluir}
     limite = time.time() + timeout
+    proximo_history = time.time() + 10
     while time.time() < limite:
         for p in sorted(DESCARGAS_DIR.glob("reporte_*.xlsx"), key=lambda p: p.stat().st_mtime, reverse=True):
             if p.resolve() in excluir or p.stat().st_mtime < desde_ts:
@@ -659,6 +747,10 @@ def esperar_descarga(desde_ts, timeout=300, poll=3, excluir=()):
                 time.sleep(1.5)
             if tam > 0:
                 return p
+        if time.time() >= proximo_history:
+            proximo_history = time.time() + 10
+            if portal_sin_datos(desde_ts):
+                return SIN_DATOS
         time.sleep(poll)
     return None
 
@@ -794,6 +886,17 @@ def descargar_una(nombre, args, ya_bajados, registrar_error=True):
 
         F.log("Esperando la descarga en Chrome (puede tardar si la red esta lenta)...")
         archivo = esperar_descarga(t_click, timeout=args.timeout_descarga, excluir=ya_bajados)
+        if archivo == SIN_DATOS:
+            # El portal no genera el Excel y redirige a su login: no es falla, la
+            # consulta no tiene filas (ej. Rechazadas de un dia sin rechazos). El
+            # archivo destino anterior queda como estaba.
+            duracion = int(time.time() - t0)
+            F.log("El portal dice que el reporte no tiene datos (redirigio a portal/login): 0 filas.")
+            registrar_resultado(cfg["script_id"], cfg["descripcion"], "ok",
+                                motivo="Sin datos: el reporte solicitado no tiene datos",
+                                filas=0, duracion_seg=duracion)
+            F.log(f"OK sin datos ({duracion}s).")
+            return True
         if not archivo:
             raise RuntimeError(
                 f"No aparecio ningun reporte_*.xlsx nuevo en Descargas dentro de {args.timeout_descarga}s."
@@ -805,11 +908,11 @@ def descargar_una(nombre, args, ya_bajados, registrar_error=True):
         destino = cfg["destino_dir"] / cfg["destino_nombre"]
         shutil.copyfile(archivo, destino)
         F.log(f"Copiado a {destino}")
-        filas, _detalle = post_descarga(cfg, destino)
+        filas, detalle = post_descarga(cfg, destino, args)
 
         duracion = int(time.time() - t0)
         registrar_resultado(cfg["script_id"], cfg["descripcion"], "ok", archivo=destino, duracion_seg=duracion,
-                            filas=filas)
+                            filas=filas, motivo=detalle if cfg.get("post") == "historial" else None)
         F.log(f"OK ({duracion}s).")
         return True
 

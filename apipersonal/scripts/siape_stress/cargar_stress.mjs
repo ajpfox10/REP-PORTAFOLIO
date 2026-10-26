@@ -6,7 +6,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import mysql from 'mysql2/promise';
-import XLSX from 'xlsx';
 
 const AUTOIT = 'C:\\Program Files (x86)\\AutoIt3\\AutoIt3.exe';
 
@@ -108,38 +107,71 @@ function variante(leyId) {
   return null;                                               // otras becas / leyes: omitido (confirmar)
 }
 
+// Horas maximas de antiguedad de la ultima bajada de la Exportacion "Tiempo Acumulado"
+// (consulta 13). Mas vieja -> NO se arma la cola ni se carga (con datos viejos duplica).
+const TA_MAX_HORAS = Number.parseInt(env.STRESS_TA_MAX_HORAS ?? '', 10) || 30;
+
 async function build(dniFilter = null, force = false) {
-  const dir = env.EXCEL_ASISTENCIA_DIR;
-  const xlsPath = path.join(dir, 'Tiempo Acumulado.xls');
-  if (!fs.existsSync(xlsPath)) throw new Error('No existe ' + xlsPath);
-  const wb = XLSX.readFile(xlsPath, { cellDates: true, raw: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
-  // Por DNI: saldo de la ANUAL (solo filas ANUAL), regimenes de SIAPE de esas filas
-  // (10.430 / 10.471 / BECARIOS / RESIDENTES) y si ya tiene alguna ANUAL COMPLEMENTARIA del año.
-  const dniDias = new Map(), regSiape = new Map(), yaTieneComp = new Set();
-  for (let i = 5; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r || r[2] == null) continue;
-    const dni = parseInt(String(r[2]).replace(/\D/g, ''));
-    if (!dni) continue;
-    const tipo = String(r[4] ?? '').trim().toUpperCase();
-    if (tipo.startsWith('ANUAL COMPLEMENTARIA')) { yaTieneComp.add(dni); continue; }
-    if (!tipo.startsWith('ANUAL')) continue;
-    const d = typeof r[5] === 'number' ? r[5] : parseFloat(String(r[5] ?? '0')) || 0;
-    dniDias.set(dni, (dniDias.get(dni) ?? 0) + d);
+  const cn = await dbConn();
+  // Fuente: tabla tiempo_acumulado, que llena la Exportacion de SIAPE (consulta 13,
+  // siape_tiempo_acumulado_tabla). Discoverer quedo suspendido (21/10/2026).
+  // OJO la consulta 13 NO trae filas en 0 dias: lo que no vino en la ultima bajada
+  // (en_ultima_bajada=0, o la semilla de Discoverer) cuenta como 0.
+  const [[fr]] = await cn.query(
+    `SELECT MAX(visto_en) AS ult, TIMESTAMPDIFF(HOUR, MAX(visto_en), NOW()) AS horas
+       FROM tiempo_acumulado WHERE origen='siape'`);
+  if (fr?.horas == null || fr.horas > TA_MAX_HORAS) {
+    // las pendientes viejas tampoco se cargan: el robot lee estado='pendiente'
+    await cn.query(
+      `UPDATE cola_carga_stress SET estado='omitido', motivo='Tiempo Acumulado sin bajar: no se carga'
+        WHERE estado IN ('pendiente','error')`);
+    await cn.end();
+    throw new Error(`La Exportacion Tiempo Acumulado es vieja (ultima bajada ${fr?.ult ?? 'nunca'}, ` +
+      `${fr?.horas ?? '?'} hs > ${TA_MAX_HORAS}). No armo la cola ni cargo.`);
+  }
+  const [ta] = await cn.query(
+    `SELECT dni, anio, licencia, dias, en_ultima_bajada FROM tiempo_acumulado
+      WHERE anio <= ? AND UPPER(licencia) LIKE 'ANUAL%'`, [ANIO]);
+  // Por DNI: tiene ANUAL del año, saldo VIGENTE de ANUAL (ultima bajada, año <= ANIO:
+  // si le queda ANUAL de un año anterior tampoco corresponde), regimenes de SIAPE
+  // (10.430 / 10.471 / BECARIOS / RESIDENTES) y si ya tiene alguna ANUAL COMPLEMENTARIA
+  // del año en CUALQUIER bajada (aunque sea en 0 o ya no venga) -> no se vuelve a cargar.
+  const tieneAnual = new Set(), saldoVig = new Map(), regSiape = new Map(), yaTieneComp = new Set();
+  for (const r of ta) {
+    const dni = Number(r.dni);
+    const tipo = String(r.licencia ?? '').trim().toUpperCase();
+    if (tipo.startsWith('ANUAL COMPLEMENTARIA')) { if (r.anio === ANIO) yaTieneComp.add(dni); continue; }
+    if (r.en_ultima_bajada) saldoVig.set(dni, (saldoVig.get(dni) ?? 0) + Number(r.dias || 0));
+    if (r.anio !== ANIO) continue;
+    tieneAnual.add(dni);
     const m = tipo.match(/\(([^)]+)\)/);
     if (m) { if (!regSiape.has(dni)) regSiape.set(dni, new Set()); regSiape.get(dni).add(m[1].trim()); }
   }
-  // ya tiene la complementaria del año en SIAPE (aunque sea en 0) -> NO se vuelve a cargar (evita duplicado)
-  const atZero = [...dniDias.entries()].filter(([d, t]) => t === 0 && !yaTieneComp.has(d)).map(([d]) => d);
-  console.log(`Tiempo Acumulado: ${dniDias.size} agentes, ${atZero.length} con ANUAL en 0 sin complementaria cargada`);
-  if (!atZero.length) return;
-
-  const cn = await mysql.createConnection({
-    host: env.DB_HOST || '127.0.0.1', port: +(env.DB_PORT || 3306),
-    user: env.DB_USER || 'root', password: env.DB_PASSWORD || '', database: env.DB_NAME || 'personalv5',
-  });
+  const atZero = [...tieneAnual].filter(d => !(saldoVig.get(d) > 0) && !yaTieneComp.has(d));
+  console.log(`Tiempo Acumulado (Exportacion, bajada ${fr.ult}): ${tieneAnual.size} agentes con ANUAL ${ANIO}, ` +
+    `${atZero.length} con ANUAL en 0 sin complementaria cargada`);
+  // Lo que quedo pendiente de corridas anteriores y hoy ya no es elegible NO se carga.
+  await cn.query(
+    `UPDATE cola_carga_stress SET estado='omitido', motivo='ya no elegible (Tiempo Acumulado)'
+      WHERE anio=? AND estado IN ('pendiente','error') ${atZero.length ? 'AND dni NOT IN (?)' : ''}`,
+    atZero.length ? [ANIO, atZero] : [ANIO]);
+  if (!atZero.length) { await cn.end(); return; }
+  // Tercera traba (21/10): se toma UNA por año calendario y la del año ANIO se toma en
+  // ANIO+1. Si el historial ya tiene una ANUAL COMPLEMENTARIA con inicio en ANIO+1, la
+  // del año ya la tiene (aunque su fila no venga en el Tiempo Acumulado) -> no se carga.
+  const [tomadas] = await cn.query(
+    `SELECT DISTINCT dni FROM historial
+      WHERE dni IN (?) AND UPPER(novedad) LIKE 'ANUAL COMPLEMENTARIA%' AND YEAR(fecha_desde) = ?`,
+    [atZero, ANIO + 1]);
+  const yaTomada = new Set(tomadas.map(r => Number(r.dni)));
+  if (yaTomada.size) {
+    await cn.query(
+      `UPDATE cola_carga_stress SET estado='omitido', motivo='ya tiene ANUAL COMPLEMENTARIA en ${ANIO + 1} (historial)'
+        WHERE anio=? AND estado IN ('pendiente','error') AND dni IN (?)`, [ANIO, [...yaTomada]]);
+    for (let i = atZero.length - 1; i >= 0; i--) if (yaTomada.has(atZero[i])) atZero.splice(i, 1);
+    console.log(`Historial: ${yaTomada.size} ya tienen ANUAL COMPLEMENTARIA en ${ANIO + 1} -> no se cargan`);
+    if (!atZero.length) { await cn.end(); return; }
+  }
 
   const [hist] = await cn.query(
     `SELECT dni, apellido, nombre, novedad, fecha_hasta FROM historial

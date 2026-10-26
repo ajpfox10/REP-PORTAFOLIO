@@ -25,6 +25,7 @@ import { invalidate, personalTags, agenteTags } from '../infra/invalidateOnWrite
 import { trackAction } from '../logging/track';
 import { logger } from '../logging/logger';
 import { seedReclamoHaberes } from './reclamosHaberes.routes';
+import { ejecutarAhora } from '../services/robotsTareasWindows';
 import { listarEspecialidades, cambiarEspecialidad, corregirPeriodo, anularPeriodo } from '../services/especialidadesAgente';
 
 // ── RBAC helper ───────────────────────────────────────────────────────────────
@@ -710,6 +711,11 @@ export function buildPersonalRouter(sequelize: Sequelize) {
             dni,
             fechaBaja: reclamoHaberesBaja.fechaBaja || new Date(),
           }).catch((e) => logger.error({ msg: '[personal] seed reclamo haberes error', dni, err: e?.message }));
+          // Robot de bajas en SIAPE: se dispara ya (además de la corrida diaria). Sin await:
+          // la baja ya está confirmada y un fallo acá solo queda en el log.
+          ejecutarAhora('siape_carga_bajas')
+            .then((como) => logger.info({ msg: '[personal] robot bajas SIAPE lanzado', dni, como }))
+            .catch((e) => logger.error({ msg: '[personal] robot bajas SIAPE error al lanzar', dni, err: e?.message }));
         }
 
         // Invalidar cache

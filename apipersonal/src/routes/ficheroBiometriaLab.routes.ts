@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import path from 'path';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { cargarConfig, conectarMySQL } from './fichero.routes';
+import { claveAgentes, listarAgentes, obtenerAgente, pedirAlAgente } from '../services/sdkAgentes';
 
 type BioKind = 'usuario' | 'huellas' | 'rostros' | 'caras' | 'palmas';
 const execFileAsync = promisify(execFile);
@@ -75,8 +76,15 @@ function boolFrom(value: unknown, fallback = false): boolean {
   return ['1', 'true', 'si', 'sí', 'yes', 'on'].includes(String(value).trim().toLowerCase());
 }
 
+// El ADMS viejo (iclockSvr) pasa a gb18030 todo comando con "SMS ": sin acentos/ñ
+// para que el reloj no muestre basura.
 function cleanMessage(value: unknown): string {
-  return asString(value).replace(/\s+/g, ' ').slice(0, 60);
+  return asString(value)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
 }
 
 function commandForDevice(command: string, pushVersion: unknown): string {
@@ -436,16 +444,19 @@ function messageCommands(input: any): { commands: CommandPreview[]; smsId: numbe
   if (!content) throw new Error('mensaje es requerido');
   const personal = boolFrom(input?.personal, Boolean(dni));
   if (personal && !dni) throw new Error('dni es requerido para mensaje personal');
-  const smsId = clampInt(input?.smsId, Math.floor(Date.now() / 1000) % 900000 + 10000, 1, 999999);
-  const minutes = clampInt(input?.minutos, 1440, 0, 65535);
+  // Sintaxis aceptada por G3 Pro (ZMM720) y G3 Plus (ZMM228) vía el ADMS viejo (22/10/2026).
+  // La forma 3.x (UPDATE SMS ID= / USER SMS PIN=) devuelve -1002. El ID va de 1 a 65535:
+  // en los firmwares TFT el id de SMS es de 16 bits.
+  const smsId = clampInt(input?.smsId, Math.floor(Date.now() / 1000) % 65000 + 500, 1, 65535);
+  const minutes = clampInt(input?.minutos, 1440, 1, 65535);
   const startTime = asString(input?.inicio) || nowMysql();
   const tag = personal ? 254 : 253;
   const update = [
-    `UPDATE SMS ID=${smsId}`,
-    `Tag=${tag}`,
-    `ValidMinutes=${minutes}`,
+    `DATA UPDATE SMS MSG=${content}`,
+    `TAG=${tag}`,
+    `UID=${smsId}`,
+    `MIN=${minutes}`,
     `StartTime=${startTime}`,
-    `Content=${content}`,
   ].join('\t');
   const commands: CommandPreview[] = [
     { destino: sn, tipo: 'mensaje', comando: update, detalle: personal ? `Mensaje personal ${smsId}` : `Mensaje publico ${smsId}` },
@@ -454,7 +465,7 @@ function messageCommands(input: any): { commands: CommandPreview[]; smsId: numbe
     commands.push({
       destino: sn,
       tipo: 'mensaje',
-      comando: `USER SMS PIN=${dni}\tSMSID=${smsId}`,
+      comando: `DATA UPDATE USER_SMS PIN=${dni}\tUID=${smsId}`,
       detalle: `Asignar mensaje ${smsId} al PIN ${dni}`,
     });
   }
@@ -911,6 +922,43 @@ export function buildFicheroBiometriaLabRouter(sequelize: Sequelize): Router {
     } finally {
       await conn.end();
     }
+  });
+
+  // ── SDK 6.3 (prueba) vía agente en otra PC (agente-sdk-relojes). Solo lectura. ──
+  router.get('/sdk2/agentes', (_req: Request, res: Response) => {
+    return res.json({ ok: true, claveConfigurada: !!claveAgentes(), data: listarAgentes() });
+  });
+
+  router.post('/sdk2/accion', async (req: Request, res: Response) => {
+    const accion = asString(req.body?.accion);
+    if (!['info', 'opciones', 'teclas', 'timbres', 'conteos', 'tablas', 'funciones'].includes(accion)) {
+      return res.status(400).json({ ok: false, error: 'accion no permitida' });
+    }
+    if (!claveAgentes()) return res.status(503).json({ ok: false, error: 'FICHERO_SDK_AGENTE_CLAVE no está configurada en el servidor' });
+
+    // Agente anunciado (por id) o escrito a mano como "ip:puerto".
+    let agente = obtenerAgente(asString(req.body?.agente));
+    const manual = asString(req.body?.destino).match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$/);
+    if (!agente && manual) {
+      agente = { id: manual[0], host: '', ip: manual[1], puerto: Number(manual[2]), sdkVersion: '', agenteVersion: '', firewall: '', origen: 'manual', ultimoAviso: Date.now() };
+    }
+    if (!agente) return res.status(400).json({ ok: false, error: 'Elegí un agente o escribí ip:puerto' });
+
+    let ip = '';
+    const sn = asString(req.body?.sn);
+    if (accion !== 'funciones') {
+      if (!sn) return res.status(400).json({ ok: false, error: 'sn es requerido' });
+      const conn = await conectarMySQL(cargarConfig());
+      try {
+        const [rows] = await conn.query<RowDataPacket[]>('SELECT IPAddress FROM iclock WHERE SN = ? LIMIT 1', [sn]);
+        ip = asString(rows[0]?.IPAddress);
+      } finally {
+        await conn.end();
+      }
+      if (!ip) return res.status(404).json({ ok: false, error: `El reloj ${sn} no tiene IP registrada` });
+    }
+    const result = await pedirAlAgente(agente, '/accion', { accion, ip });
+    return res.json({ ...result, agente: { id: agente.id, ip: agente.ip, puerto: agente.puerto }, sn: sn || null });
   });
 
   router.get('/comandos', async (req: Request, res: Response) => {

@@ -4,6 +4,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { useKiosk } from '../hooks/useKiosk';
 import { RobotsFallidosBanner } from './RobotsFallidosBanner';
+import { AlertasJubilacionBloqueo } from './AlertasJubilacionBloqueo';
+import { FeriadosBloqueo } from './FeriadosBloqueo';
 
 export function Layout({ title, children, showBack, fluid }: {
   title: string;
@@ -86,6 +88,7 @@ export function Layout({ title, children, showBack, fluid }: {
     hasPerm('app:horarios-extendidos:access') && !hasPerm('crud:*:*');
 
   const canSeeJubilablesEstadistica = hasPerm('app:jubilables-estadistica:access') || hasPerm('crud:*:*');
+  const canSeeNormativa = hasPerm('app:normativa:access') || hasPerm('crud:*:*');
 
   const isGestionTurnos =
     hasPerm('app:gestion_turnos:access') && !hasPerm('crud:*:*');
@@ -264,10 +267,13 @@ export function Layout({ title, children, showBack, fluid }: {
                       {navLink('/app/guarderia', '👶 Guardería y Salario')}
                       {navLink('/app/alertas-agente', '🚨 Alertas por Agente')}
                       {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && navLink('/app/comisiones', '🧳 Comisiones')}
+                      {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && navLink('/app/vacaciones-adelantadas', '🏖️ Vacaciones adelantadas')}
                       {hasPerm('app:director_ejecutivo:access') && navLink('/app/director', '🏛️ Dirección Ejecutiva')}
                       {navLink('/app/herramientas', '⚖️ Jubilación IPS')}
                       {canSeeJubilablesEstadistica && navLink('/app/jubilables-estadistica', '📈 Jubilables (estadística)')}
+                      {canSeeNormativa && navLink('/app/normativa', '⚖️ Normativa (guardia y planta)')}
                       {isAdmin && navLink('/app/licencias-medicas-control', '🩺 Licencias médicas pend./deneg.')}
+                      {hasPerm('crud:*:*') && navLink('/app/feriados', '📅 Feriados')}
                       {navLink('/app/concursos', '🏆 Concursos Ley 10471')}
                       {navLink('/app/buscador', '🔍 Buscador')}
                       {navLink('/app/comparador', '⚖️ Comparador')}
@@ -327,6 +333,12 @@ export function Layout({ title, children, showBack, fluid }: {
 
       {/* Solo en el dashboard (/app), no en cada página */}
       {hasPerm('crud:*:*') && loc.pathname.replace(/\/$/, '') === '/app' && <RobotsFallidosBanner />}
+
+      {/* Alertas de jubilación: bloquean toda la app hasta desactivarlas (mismo permiso que la página de alertas) */}
+      {(hasPerm('crud:alertas_agente:read') || hasPerm('crud:*:*')) && <AlertasJubilacionBloqueo />}
+
+      {/* Feriados del año sin confirmar: aviso y, desde el 4.º día hábil de enero, bloqueo (solo administradores) */}
+      {hasPerm('crud:*:*') && <FeriadosBloqueo />}
 
       <div style={{ marginTop: 16 }}>{children}</div>
     </div>

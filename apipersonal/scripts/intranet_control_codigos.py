@@ -6,15 +6,17 @@ pantalla de novedades de un agente del plantel y LEE las opciones del combo
 "Novedad" (no carga nada). Con eso:
 
 1. Mantiene la tabla ministerio_codigos (mig 074): alta de codigos nuevos,
-   texto actualizado si cambio, vigente = 0 para los que desaparecieron.
+   texto actualizado si cambio. NUNCA da de baja: lo que no ve lo avisa (el combo
+   cambia segun el agente abierto; 20/10/2026 habia dado de baja 1RO/1RE/1RD/1RC).
 2. Controla que cada regla de carga de mapeo_novedades (usar_para_cargar = 1)
    apunte a un texto que exista EXACTO en el combo (si no, la carga da
    "Opcion no disponible en este plantel").
 3. Informa los codigos del combo que no tienen ninguna novedad SIAPE mapeada.
 
-Resultado en script_runs / script_run_items (pagina Robots): error si hay
-codigos nuevos, desaparecidos o reglas de carga rotas; ok si solo hay codigos
-sin mapear (van como aviso en el detalle).
+Resultado en script_runs / script_run_items (pagina Robots): error SOLO si el robot
+no pudo correr (login, no leyo el combo). Lo que encuentre del mapeo (codigos nuevos,
+desaparecidos, reglas de carga rotas, sin mapear) es ok + avisos en el detalle: el
+mapeo es secundario (pedido del usuario, 20/10/2026).
 
 Uso:
     python intranet_control_codigos.py
@@ -85,13 +87,12 @@ def sincronizar(opciones):
                 nuevos.append(nov)  # volvio a aparecer
             cur.execute(
                 "INSERT INTO ministerio_codigos (codigo, novedad, vigente, visto_ultimo) VALUES (%s,%s,1,NOW()) "
-                "ON DUPLICATE KEY UPDATE novedad = VALUES(novedad), vigente = 1, visto_ultimo = NOW()",
+                "ON DUPLICATE KEY UPDATE visto_ultimo = NOW()",  # solo marca: no pisa texto ni vigente
                 (cod, nov),
             )
         for cod, r in actuales.items():
             if cod not in opciones and r["vigente"]:
-                desaparecidos.append(r["novedad"])
-                cur.execute("UPDATE ministerio_codigos SET vigente = 0 WHERE codigo = %s", (cod,))
+                desaparecidos.append(r["novedad"])  # solo aviso: no se toca vigente
         cn.commit()
     return nuevos, renombrados, desaparecidos
 
@@ -161,24 +162,35 @@ def main():
         return 1
 
     print(f"Combo leido con DNI {dni_usado}: {len(opciones)} opciones")
+    quien = dni_usado
+    try:
+        with MN.conn() as cn, cn.cursor() as cur:
+            cur.execute("SELECT CONCAT(pe.apellido, ' ', pe.nombre) AS nombre, l.nombre AS ley, p.nombre AS planta "
+                        "FROM personal pe LEFT JOIN agentes a ON a.dni = pe.dni AND a.deleted_at IS NULL "
+                        "AND a.estado_empleo = 'ACTIVO' LEFT JOIN ley l ON l.id = a.ley_id "
+                        "LEFT JOIN plantas p ON p.id = a.planta_id WHERE pe.dni = %s LIMIT 1", (dni_usado,))
+            r = cur.fetchone()
+            if r:
+                quien = f"{r['nombre']} ({dni_usado}, {' '.join(x for x in (r['ley'], r['planta']) if x)})"
+    except Exception as e:
+        print(f"AVISO: no pude leer el agente {dni_usado}: {e}")
     nuevos, renombrados, desaparecidos = sincronizar(opciones)
     rotas, sin_mapear = controlar_mapeo(opciones)
 
     for n in nuevos:
-        MN.registrar_item(SCRIPT_ID, novedad=n, estado="error", detalle="Código NUEVO en el combo de la Intranet: falta mapearlo")
+        MN.registrar_item(SCRIPT_ID, dni=dni_usado, nombre=quien, novedad=n, estado="aviso", detalle="Código NUEVO en el combo de la Intranet: falta mapearlo")
     for viejo, nuevo in renombrados:
-        MN.registrar_item(SCRIPT_ID, novedad=nuevo, estado="error", detalle=f"Cambió el texto (antes: {viejo})")
+        MN.registrar_item(SCRIPT_ID, dni=dni_usado, nombre=quien, novedad=nuevo, estado="aviso", detalle=f"En el combo dice distinto (guardado: {viejo})")
     for d in desaparecidos:
-        MN.registrar_item(SCRIPT_ID, novedad=d, estado="error", detalle="Ya NO está en el combo de la Intranet")
+        MN.registrar_item(SCRIPT_ID, dni=dni_usado, nombre=quien, novedad=d, estado="aviso", detalle="No apareció en el combo del agente que abrí")
     for f in rotas:
         cie = f" (CIE {f['codigo_cie']})" if f["codigo_cie"] else ""
-        MN.registrar_item(SCRIPT_ID, novedad=f["novedad_ministerio"], estado="error",
+        MN.registrar_item(SCRIPT_ID, dni=dni_usado, nombre=quien, novedad=f["novedad_ministerio"], estado="aviso",
                           detalle=f"Regla de carga de '{f['novedad_siape']}'{cie} apunta a un texto que no está en el combo")
     for s in sin_mapear:
-        MN.registrar_item(SCRIPT_ID, novedad=s, estado="aviso", detalle="Sin ninguna novedad SIAPE mapeada")
+        MN.registrar_item(SCRIPT_ID, dni=dni_usado, nombre=quien, novedad=s, estado="aviso", detalle="Sin ninguna novedad SIAPE mapeada")
 
-    problemas = len(nuevos) + len(renombrados) + len(desaparecidos) + len(rotas)
-    partes = [f"{len(opciones)} códigos en el combo"]
+    partes = [f"{len(opciones)} códigos en el combo de {quien}"]
     if nuevos: partes.append(f"{len(nuevos)} nuevos")
     if renombrados: partes.append(f"{len(renombrados)} con texto cambiado")
     if desaparecidos: partes.append(f"{len(desaparecidos)} desaparecidos")
@@ -186,9 +198,9 @@ def main():
     partes.append(f"{len(sin_mapear)} sin mapear")
     motivo = " · ".join(partes)
     print(motivo)
-    MN.registrar_run(SCRIPT_ID, SCRIPT_DESC, "error" if problemas else "ok", motivo=motivo,
+    MN.registrar_run(SCRIPT_ID, SCRIPT_DESC, "ok", motivo=motivo,
                      filas=len(opciones), duracion_seg=dur)
-    return 1 if problemas else 0
+    return 0
 
 
 if __name__ == "__main__":

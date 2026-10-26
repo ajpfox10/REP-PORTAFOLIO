@@ -150,7 +150,11 @@ export function buildAusentismoRouter(sequelize: Sequelize) {
     async (req: Request, res: Response) => {
       try {
         const modo: ModoImport = String(req.query.modo || 'agregar') === 'reemplazar' ? 'reemplazar' : 'agregar';
-        const r = await importarHistorialSiape(sequelize, modo);
+        // desde/hasta (YYYY-MM-DD): el período pedido al SIAPE; con eso reemplazar pisa todos sus meses
+        const desde = String(req.query.desde || ''), hasta = String(req.query.hasta || '');
+        const fecha = /^\d{4}-\d{2}-\d{2}$/;
+        const periodo = fecha.test(desde) && fecha.test(hasta) && desde <= hasta ? { desde, hasta } : undefined;
+        const r = await importarHistorialSiape(sequelize, modo, periodo);
         return res.json(r);
       } catch (e: any) {
         logger.error({ msg: 'ausentismo/importar-historial', error: e?.message, stack: e?.stack });

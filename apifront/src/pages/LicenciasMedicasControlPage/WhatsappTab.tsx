@@ -92,14 +92,17 @@ const BTN: CSSProperties = { padding: '2px 6px', fontSize: '0.72rem', width: '10
 const BTN_ICONO: CSSProperties = { padding: '1px 5px', fontSize: '0.72rem', flex: '0 0 auto', lineHeight: 1.2 };
 
 /** foco = la página la abrió desde el botón 📲 de una licencia: `licencias` trae solo esa y se muestra
- *  aunque ya esté avisada u omitida; onQuitarFoco vuelve a la lista completa. */
-export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licencias: Licencia[]; foco?: boolean; onQuitarFoco?: () => void }) {
+ *  aunque ya esté avisada u omitida; onQuitarFoco vuelve a la lista completa (se llama sola si el envío sale bien).
+ *  onEnviado = después de cualquier envío, para que la página recargue sus datos (marcas 📲, tarjeta Avisados). */
+export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }: {
+  licencias: Licencia[]; foco?: boolean; onQuitarFoco?: () => void; onEnviado?: () => void;
+}) {
   const toast = useToast();
   const cfg0 = useMemo(leerCfg, []);
   const [plantilla, setPlantilla] = useState<string>(
     cfg0.plantilla && !PLANTILLAS_VIEJAS.includes(cfg0.plantilla) ? cfg0.plantilla : PLANTILLA_DEFAULT,
   );
-  const [modo, setModo] = useState<Modo>(cfg0.modo || 'NOMBRE_TELEFONO');
+  const [modo, setModo] = useState<Modo>(cfg0.modoV === 2 && cfg0.modo ? cfg0.modo : 'TELEFONO'); // modoV 2: por defecto teléfono (20/10/2026)
   const [pausaMin, setPausaMin] = useState<number>(cfg0.pausaMin ?? 20);
   const [pausaMax, setPausaMax] = useState<number>(cfg0.pausaMax ?? 45);
   const [prueba, setPrueba] = useState<boolean>(true); // siempre arranca en prueba
@@ -107,7 +110,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licenci
   const [ocultarAvisados, setOcultarAvisados] = useState(true);
   const [verContactos, setVerContactos] = useState(false);
   useEffect(() => {
-    try { localStorage.setItem(LS, JSON.stringify({ plantilla, modo, pausaMin, pausaMax, destinoPrueba })); } catch { /* sin storage */ }
+    try { localStorage.setItem(LS, JSON.stringify({ plantilla, modo, modoV: 2, pausaMin, pausaMax, destinoPrueba })); } catch { /* sin storage */ }
   }, [plantilla, modo, pausaMin, pausaMax, destinoPrueba]);
 
   const [ext, setExt] = useState<string | null | undefined>(undefined); // undefined = verificando
@@ -288,17 +291,19 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licenci
     return { modo, buscar: ape[0] || '', palabras: [ape[0], nom[0]].filter(Boolean) as string[], telefono: c?.celular ?? null };
   };
 
-  const registrar = async (l: Licencia, r: { modo: string; estado: string; destino?: string | null; detalle?: string | null }, mensaje: string) => {
+  const registrar = async (l: Licencia, r: { modo: string; estado: string; destino?: string | null; detalle?: string | null }, mensaje: string, esPrueba = prueba) => {
     try {
       await apiFetch('/licencias-medicas-control/whatsapp/envio', {
         method: 'POST',
         body: JSON.stringify({
           dni: l.dni, desde: l.desde, hasta: l.hasta, novedad: l.novedad,
-          destino: r.destino ?? null, modo: r.modo, prueba, estado: r.estado, detalle: r.detalle ?? null, mensaje,
+          destino: r.destino ?? null, modo: r.modo, prueba: esPrueba, estado: r.estado, detalle: r.detalle ?? null, mensaje,
         }),
       });
+      return true;
     } catch (e: any) {
       toast.error('No se pudo registrar el envío', e?.message || '');
+      return false;
     }
   };
 
@@ -337,14 +342,19 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licenci
     setEnviando(true);
     setLog([]);
     setProgreso({ i: 1, n: 1, espera: 0, actual: l.nombre });
+    let ok = false;
     try {
       const r = await enviarUno(l);
+      ok = !!r.ok;
       if (r.ok) toast.ok(`${verbo === 'Reenviar' ? 'Reenviado' : 'Enviado'}${prueba ? ' (prueba)' : ''}`, l.nombre);
       else toast.error(TXT_ESTADO[r.estado || 'ERROR'] ?? 'No salió', r.detalle || l.nombre);
     } finally {
       setEnviando(false);
       setProgreso(null);
-      void cargarContactos();
+      await cargarContactos();
+      onEnviado?.();
+      // Salió bien → vuelve a la lista completa (ahí queda oculta como avisada); si falló, sigue en foco para reintentar
+      if (ok && foco) onQuitarFoco?.();
     }
   };
 
@@ -377,7 +387,8 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licenci
     } finally {
       setEnviando(false);
       setProgreso(null);
-      void cargarContactos();
+      await cargarContactos();
+      onEnviado?.();
     }
   };
 
@@ -394,11 +405,16 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licenci
       toast.ok('Mensaje copiado', `Sin celular: buscá a "${prueba ? destinoPrueba : l.nombre}" en WhatsApp y pegá el mensaje (Ctrl+V)`);
     }
   };
+  // "✓ Enviado" = el usuario afirma que se lo mandó a mano al agente: siempre cuenta como avisado real
+  // (aunque esté el modo prueba) y con el número real del agente, no el destino de prueba.
   const marcarManual = async (l: Licencia) => {
-    const obj = objetivoDe(l);
-    await registrar(l, { modo: 'MANUAL', estado: 'ENVIADO', destino: obj.telefono ? `+${obj.telefono}` : (prueba ? destinoPrueba : l.nombre) }, mensajeDe(l));
-    toast.ok('Registrado', l.nombre);
-    void cargarContactos();
+    const tel = telefonoDe(l.dni);
+    const ok = await registrar(l, { modo: 'MANUAL', estado: 'ENVIADO', destino: tel ? `+${tel}` : l.nombre }, mensajeDe(l), false);
+    if (!ok) return;
+    toast.ok('Registrado como enviado a mano', l.nombre);
+    await cargarContactos();
+    onEnviado?.();
+    if (foco) onQuitarFoco?.();
   };
 
   const nTild = filas.filter(l => tildados.has(keyDe(l)) && !omitidoDe(l)).length;
@@ -443,9 +459,9 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licenci
           <label>
             <span className="muted" style={{ fontSize: '0.8rem' }}>Cómo lo busca</span>
             <select className="input" style={{ width: '100%' }} value={modo} onChange={e => setModo(e.target.value as Modo)} disabled={enviando}>
-              <option value="NOMBRE_TELEFONO">Por nombre y, si no lo encuentra, por teléfono</option>
+              <option value="TELEFONO">Solo por teléfono de la base (recomendado)</option>
+              <option value="NOMBRE_TELEFONO">Por nombre y, si falla, por teléfono</option>
               <option value="NOMBRE">Solo por nombre (contactos agendados)</option>
-              <option value="TELEFONO">Solo por teléfono de la base</option>
             </select>
           </label>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -629,7 +645,7 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco }: { licenci
                     <>
                       <div style={LINEA}>
                         <span className="badge" style={{ background: COLOR_ESTADO[av.ultimo.estado], fontSize: '0.68rem', padding: '1px 6px' }}>{TXT_ESTADO[av.ultimo.estado] ?? av.ultimo.estado}</span>
-                        <span className="muted" style={{ fontSize: '0.7rem', marginLeft: 6 }}>{fechaAviso}</span>
+                        <span className="muted" style={{ fontSize: '0.7rem', marginLeft: 6 }}>{av.ultimo.modo === 'MANUAL' ? '✋ a mano' : '🤖 por WhatsApp'} · {fechaAviso}</span>
                       </div>
                       {extraAviso && <div className="muted" style={{ ...LINEA, fontSize: '0.7rem' }} title={extraAviso}>{extraAviso}</div>}
                     </>

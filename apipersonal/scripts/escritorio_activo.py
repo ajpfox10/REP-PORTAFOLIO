@@ -63,6 +63,52 @@ def asegurar_escritorio_activo(log=print):
         return False
 
 
+def pantalla_sesion():
+    """(ancho, alto, escala_%) del monitor principal de ESTA sesion. La escala la
+    impone la PC que se conecta por RDP (100% o 150% segun la PC, 18/10/2026) y con
+    algo distinto de 100% los clicks de los robots de SiAPe caen corridos. Se mide
+    por monitor (per-monitor DPI aware) para leer el valor actual y no el del logon."""
+    user32 = ctypes.windll.user32
+    try:
+        user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # PER_MONITOR_AWARE_V2
+    except Exception:
+        try:
+            user32.SetProcessDPIAware()
+        except Exception:
+            pass
+    dpi = None
+    try:
+        mon = user32.MonitorFromPoint(wintypes.POINT(0, 0), 1)  # MONITOR_DEFAULTTOPRIMARY
+        dx, dy = wintypes.UINT(), wintypes.UINT()
+        if ctypes.windll.shcore.GetDpiForMonitor(mon, 0, ctypes.byref(dx), ctypes.byref(dy)) == 0:
+            dpi = dx.value
+    except Exception:
+        dpi = None
+    if not dpi:
+        hdc = user32.GetDC(None)
+        try:
+            dpi = ctypes.windll.gdi32.GetDeviceCaps(hdc, 88)  # LOGPIXELSX
+        finally:
+            user32.ReleaseDC(None, hdc)
+    return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1), round(dpi * 100 / 96)
+
+
+def chequear_escala(log=print):
+    """None si la sesion esta al 100%; si no, el motivo para cortar el robot."""
+    try:
+        ancho, alto, escala = pantalla_sesion()
+    except Exception as e:
+        log(f"AVISO: no pude medir la pantalla de la sesion: {e}")
+        return None
+    log(f"Pantalla de la sesion: {ancho}x{alto} al {escala}%.")
+    if escala == 100:
+        return None
+    return (f"La sesion del servidor esta al {escala}% ({ancho}x{alto}), no al 100%: la impone la PC "
+            f"conectada por Escritorio Remoto y con eso los clicks en SiAPe caen corridos. "
+            f"Reconectar desde una PC al 100% (o fijar IgnoreClientDesktopScaleFactor en el servidor) y relanzar.")
+
+
 if __name__ == "__main__":
     sid = _sesion_actual()
     print(f"Sesion {sid}: {ESTADOS.get(_estado_sesion(sid))}")
+    print(chequear_escala() or "Escala OK (100%).")

@@ -117,3 +117,6 @@ apifront/public/assets/
 3bugs.txt
 PENDIENTES_EXTERNOS.txt
 synctest.txt
+
+# credenciales de cuentas de servicio (Google, etc.)
+secrets/

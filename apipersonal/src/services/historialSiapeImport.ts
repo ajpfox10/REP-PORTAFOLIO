@@ -18,7 +18,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { QueryTypes, Sequelize } from 'sequelize';
+import { QueryTypes, Sequelize, Transaction } from 'sequelize';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
 
@@ -142,9 +142,30 @@ function mesesDeArchivo(fp: string): Map<string, number> {
 const COBERTURA_MINIMA = 0.5;
 const PISO_FILAS = 100;
 
+/** Meses 'YYYY-MM' entre dos fechas 'YYYY-MM-DD' (inclusive). */
+function mesesEntre(desde: string, hasta: string): string[] {
+  const out: string[] = [];
+  let [a, m] = desde.slice(0, 7).split('-').map(Number);
+  const fin = hasta.slice(0, 7);
+  for (let i = 0; i < 240; i++) {
+    const mes = `${a}-${String(m).padStart(2, '0')}`;
+    if (mes > fin) break;
+    out.push(mes);
+    if (++m > 12) { m = 1; a++; }
+  }
+  return out;
+}
+
+/**
+ * periodo: el que se le pidio al SIAPE en el export (Novedades Por Periodo). Con periodo,
+ * reemplazar borra TODOS los meses del periodo aunque traigan pocas filas (26/10: enero
+ * 2027 tenia 3 filas y quedo una ANUAL COMPLEMENTARIA que SIAPE ya no tenia) y nunca los
+ * de afuera. Sin periodo se decide por cobertura (COBERTURA_MINIMA / PISO_FILAS).
+ */
 export async function importarHistorialSiape(
   sequelize: Sequelize,
   modo: ModoImport = 'agregar',
+  periodo?: { desde: string; hasta: string },
 ): Promise<ResultadoImport> {
   const advertencias: string[] = [];
   const res: ResultadoImport = {
@@ -163,6 +184,14 @@ export async function importarHistorialSiape(
     advertencias.push(`No hay archivos historialsiape*.xlsx en ${dir}`);
     return res;
   }
+
+  // reemplazar: borrado + carga en UNA transacción (26/10: entre el DELETE y los INSERT
+  // la página de presentismo veía los meses vacíos y mandaba a todos a "Falta descargar
+  // SIAPE"). Hasta el COMMIT los demás siguen viendo lo anterior; si algo falla, ROLLBACK.
+  const rechazadas = new Map<number, { nombre: string; filas: number }>();
+  const correcciones = new Map<string, Set<string>>();
+  let tx: Transaction | null = null;
+  try {
 
   // ── modo reemplazar: borrar sólo lo que los archivos van a cubrir ──
   // Se hace ANTES de leer las claves existentes, para que el dedupe posterior
@@ -191,17 +220,32 @@ export async function importarHistorialSiape(
     // 3) borrar sólo los meses que el archivo repone de verdad
     const aBorrar: string[] = [];
     const salteados: string[] = [];
-    for (const [mes, n] of aporte) {
-      const actual = enTabla.get(mes) || 0;
-      if (n >= PISO_FILAS && n >= actual * COBERTURA_MINIMA) aBorrar.push(mes);
-      else if (actual > 0) salteados.push(`${mes} (archivo ${n} vs tabla ${actual})`);
+    if (periodo) {
+      const delPeriodo = mesesEntre(periodo.desde, periodo.hasta);
+      // un export vacio o cortado no puede vaciar el periodo
+      const filasPeriodo = delPeriodo.reduce((s, mes) => s + (aporte.get(mes) || 0), 0);
+      if (filasPeriodo < PISO_FILAS) {
+        throw new Error(`El archivo trae ${filasPeriodo} fila(s) del período ${periodo.desde} a ${periodo.hasta}: no reemplazo nada.`);
+      }
+      aBorrar.push(...delPeriodo);
+      for (const [mes, n] of aporte) {
+        const actual = enTabla.get(mes) || 0;
+        if (!delPeriodo.includes(mes) && actual > 0) salteados.push(`${mes} (archivo ${n} vs tabla ${actual})`);
+      }
+    } else {
+      for (const [mes, n] of aporte) {
+        const actual = enTabla.get(mes) || 0;
+        if (n >= PISO_FILAS && n >= actual * COBERTURA_MINIMA) aBorrar.push(mes);
+        else if (actual > 0) salteados.push(`${mes} (archivo ${n} vs tabla ${actual})`);
+      }
     }
     aBorrar.sort();
 
+    tx = await sequelize.transaction();
     for (const mes of aBorrar) {
       const [meta]: any = await sequelize.query(
         "DELETE FROM historial WHERE DATE_FORMAT(fecha_desde,'%Y-%m') = :mes",
-        { replacements: { mes } },
+        { replacements: { mes }, transaction: tx },
       );
       res.borradas += Number(meta?.affectedRows ?? 0);
     }
@@ -209,12 +253,13 @@ export async function importarHistorialSiape(
     res.rangosCubiertos = unirRangos(aBorrar.map(m => ({ desde: `${m}-01`, hasta: `${m}-31` })));
     advertencias.push(
       `Modo reemplazar: borradas ${res.borradas} fila(s) en ${aBorrar.length} mes(es). ` +
-      'Sólo se borran los meses que los archivos reponen de verdad.',
+      (periodo ? `Período del export: ${periodo.desde} a ${periodo.hasta}.` : 'Sólo se borran los meses que los archivos reponen de verdad.'),
     );
     if (salteados.length) {
       advertencias.push(
-        `No se tocaron ${salteados.length} mes(es) donde el archivo trae muy pocas filas ` +
-        `respecto de lo ya cargado: ${salteados.slice(0, 12).join(', ')}` +
+        `No se tocaron ${salteados.length} mes(es) ` +
+        (periodo ? 'fuera del período del export' : 'donde el archivo trae muy pocas filas respecto de lo ya cargado') +
+        `: ${salteados.slice(0, 12).join(', ')}` +
         `${salteados.length > 12 ? '…' : ''}. Son filas de arrastre, no el período real del export.`,
       );
     }
@@ -230,7 +275,7 @@ export async function importarHistorialSiape(
   // claves ya presentes: evita mandar a la base lo que ya está
   const oldKeys: any[] = await sequelize.query(
     "SELECT CONCAT(dni,'|',novedad,'|',IFNULL(fecha_desde,''),'|',IFNULL(fecha_hasta,'')) AS k FROM historial",
-    { type: QueryTypes.SELECT },
+    { type: QueryTypes.SELECT, transaction: tx ?? undefined },   // dentro de tx: ya sin lo borrado
   );
   const vistas = new Set<string>(oldKeys.map(r => r.k));
 
@@ -242,9 +287,6 @@ export async function importarHistorialSiape(
     if (!porNovedad.has(kk)) porNovedad.set(kk, new Set());
     porNovedad.get(kk)!.add(`${d1}→${d2}`);
   }
-
-  const rechazadas = new Map<number, { nombre: string; filas: number }>();
-  const correcciones = new Map<string, Set<string>>();
 
   for (const archivo of archivos) {
     const fp = path.join(dir, archivo);
@@ -280,7 +322,7 @@ export async function importarHistorialSiape(
               categoria_salarial, novedad, fecha_desde, fecha_hasta, justificado,
               estructura_servicio, dependencia, archivo_origen)
            VALUES ?`,
-          { replacements: [batch], type: QueryTypes.INSERT },
+          { replacements: [batch], type: QueryTypes.INSERT, transaction: tx ?? undefined },
         );
         batch = [];
       };
@@ -363,6 +405,21 @@ export async function importarHistorialSiape(
       logger.error({ msg: 'historialSiapeImport', archivo, error: e?.message });
     }
     res.archivos.push(r);
+  }
+
+  if (tx) {
+    // un archivo que no se pudo cargar no puede dejar sus meses borrados
+    const fallidos = res.archivos.filter(a => a.error);
+    if (fallidos.length) {
+      throw new Error(`No reemplazo nada: ${fallidos.map(a => `${a.archivo}: ${a.error}`).join(' | ')}`);
+    }
+    await tx.commit();
+    tx = null;
+  }
+
+  } catch (e) {
+    if (tx) await tx.rollback();
+    throw e;
   }
 
   for (const a of res.archivos) {

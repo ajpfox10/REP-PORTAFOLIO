@@ -21,7 +21,7 @@ function exists(p: string) {
   }
 }
 
-function findFotoPath(baseDir: string, dni: string): string | null {
+export function findFotoPath(baseDir: string, dni: string): string | null {
   const base = path.resolve(baseDir);
 
   // 1) carpeta con el DNI: <base>/<dni>/(foto|credencial).(jpg|jpeg|png)

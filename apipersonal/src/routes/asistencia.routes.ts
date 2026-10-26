@@ -30,6 +30,7 @@ import {
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { evaluarAgente, leerFichadas, EvalAgente, HORARIOS_ARCHIVO } from '../services/sinSalidaEval';
 
 let ExcelJS: any;
 try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
@@ -1206,6 +1207,49 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       }
       const codigos = [...agg.values()].sort((a, b) => b.cantidad - a.cantidad);
       return res.json({ ok: true, archivo: lic, codigos });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Nombres del catálogo CIE-10 (tabla cie_codigos, scripts/cargar_cie10.py).
+  // ?codigos=C50,O20 → { C50: "...", O20: "...", "O20.0": "..." }: como normCie saca
+  // el ".0" (O20.0 → O20), también se devuelve la variante X.0 si existe.
+  router.get('/mapeo-cie/nombres', requirePermission('api:access'), async (req: Request, res: Response) => {
+    try {
+      if (!sequelize) throw new Error('Sin conexion a DB');
+      const { QueryTypes } = await import('sequelize');
+      const pedidos = [...new Set(String(req.query.codigos || '').split(/[,;\s]+/).map(normCie).filter(Boolean))].slice(0, 500);
+      if (!pedidos.length) return res.json({ ok: true, nombres: {} });
+      const buscar = [...new Set(pedidos.flatMap(c => (c.includes('.') ? [c] : [c, `${c}.0`])))];
+      const rows = await sequelize.query<{ codigo: string; descripcion: string }>(
+        `SELECT codigo, descripcion FROM cie_codigos WHERE codigo IN (:buscar)`,
+        { type: QueryTypes.SELECT, replacements: { buscar } },
+      );
+      const nombres: Record<string, string> = {};
+      for (const r of rows) nombres[r.codigo] = r.descripcion;
+      return res.json({ ok: true, nombres });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+    }
+  });
+
+  // Buscador del catálogo CIE-10 completo por código o texto: ?q=mama → [{codigo, descripcion, capitulo}]
+  router.get('/mapeo-cie/catalogo', requirePermission('api:access'), async (req: Request, res: Response) => {
+    try {
+      if (!sequelize) throw new Error('Sin conexion a DB');
+      const { QueryTypes } = await import('sequelize');
+      const q = String(req.query.q || '').trim().slice(0, 80);
+      if (q.length < 2) return res.json({ ok: true, codigos: [] });
+      const rows = await sequelize.query<any>(
+        `SELECT codigo, descripcion, capitulo_nombre
+           FROM cie_codigos
+          WHERE codigo LIKE :pref OR descripcion LIKE :txt
+          ORDER BY (codigo LIKE :pref) DESC, codigo
+          LIMIT 100`,
+        { type: QueryTypes.SELECT, replacements: { pref: `${q.toUpperCase()}%`, txt: `%${q}%` } },
+      );
+      return res.json({ ok: true, codigos: rows });
     } catch (err: any) {
       return res.status(500).json({ ok: false, error: err?.message || 'Error' });
     }
@@ -2560,9 +2604,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const files = listExcelFiles(dir);
       const auto  = findAutoFiles(files);
 
-      const horariosFile = req.query.horariosFile
-        ? path.join(dir, String(req.query.horariosFile))
-        : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
+      // Siempre HORARIOS.xlsx (horario completo del día), igual que Sin fichaje salida
+      const horariosFile = fs.existsSync(path.join(dir, HORARIOS_ARCHIVO)) ? path.join(dir, HORARIOS_ARCHIVO) : null;
 
       const siapFile = req.query.siapFile
         ? path.join(dir, String(req.query.siapFile))
@@ -2690,74 +2733,6 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ 6. Fichajes biomÃ©tricos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // mapa: dni â†’ fecha â†’ { entrada, salida, invertido }
-      const fichajesMap: Record<string, Record<string, { entrada: string|null; salida: string|null; invertido: boolean }>> = {};
-      // rawMap hoisted para post-procesamiento nocturno/24hs
-      let rawMap: Record<string, Record<string, { hora: string; tipo: string }[]>> = {};
-      let dbError: string | null = null;
-      const cfgPathRS = path.resolve(process.cwd(), 'fichero_config.json');
-      if (fs.existsSync(cfgPathRS)) {
-        try {
-          const cfg = JSON.parse(fs.readFileSync(cfgPathRS, 'utf-8'));
-          const bioConn = await mysql.createConnection({
-            host: cfg.mysqlHost || '127.0.0.1', port: cfg.mysqlPort || 3306,
-            user: cfg.mysqlUser || 'root', password: cfg.mysqlPass || '',
-            database: cfg.mysqlDb || 'adms_db', connectTimeout: 10_000, dateStrings: true,
-          });
-          const placeholders = dniList.map(() => '?').join(',');
-          const dateFromRS = period.start.toISOString().slice(0, 10);
-          // +1 dÃ­a para capturar salidas de turnos nocturnos/24hs del Ãºltimo dÃ­a del perÃ­odo
-          const dateToRSext = new Date(period.end); dateToRSext.setUTCDate(dateToRSext.getUTCDate() + 1);
-          const dateToRS    = dateToRSext.toISOString().slice(0, 10);
-          const [ficRows] = await bioConn.query<RowDataPacket[]>(
-            `SELECT ui.badgenumber AS dni, ci.checktime, ci.checktype
-             FROM checkinout ci
-             INNER JOIN userinfo ui ON ci.userid = ui.userid
-             WHERE ui.badgenumber IN (${placeholders})
-               AND ci.checktime >= ? AND ci.checktime <= ?
-             ORDER BY ci.checktime ASC`,
-            [...dniList, `${dateFromRS} 00:00:00`, `${dateToRS} 23:59:59`]
-          );
-          await bioConn.end();
-
-          // Primera pasada: agrupar todos los registros por agente y fecha
-          for (const row of ficRows) {
-            const d     = normDni(row.dni);
-            const cts   = String(row.checktime);
-            const fecha = cts.slice(0, 10);
-            const hora  = cts.slice(11, 16);
-            if (!rawMap[d]) rawMap[d] = {};
-            if (!rawMap[d][fecha]) rawMap[d][fecha] = [];
-            rawMap[d][fecha].push({ hora, tipo: String(row.checktype) });
-          }
-
-          // Segunda pasada: determinar entrada/salida detectando fichaje invertido
-          for (const [d, dateMap] of Object.entries(rawMap)) {
-            fichajesMap[d] = {};
-            for (const [fecha, records] of Object.entries(dateMap)) {
-              // ya vienen ordenados ASC por checktime
-              const entradas = records.filter(r => r.tipo === '0');
-              const salidas  = records.filter(r => r.tipo !== '0');
-
-              let entrada: string | null = entradas.length ? entradas[0].hora : null;
-              let salida:  string | null = salidas.length  ? salidas[salidas.length - 1].hora : null;
-              let invertido = false;
-
-              // Si hay entrada pero no salida y existe mÃ¡s de un registro,
-              // el agente fichÃ³ ambas marcaciones como tipo 0 (error).
-              // Se usa el primer registro como entrada y el Ãºltimo como salida.
-              if (entrada && !salida && records.length > 1) {
-                salida    = records[records.length - 1].hora;
-                invertido = true;
-              }
-
-              fichajesMap[d][fecha] = { entrada, salida, invertido };
-            }
-          }
-        } catch (e: any) { dbError = e.message; }
-      } else { dbError = 'fichero_config.json no encontrado'; }
-
       // â”€â”€ 7. Helpers y dÃ­as del mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const toMins = (hhmm: string): number => {
         const [h, m] = hhmm.split(':').map(Number);
@@ -2779,81 +2754,20 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       }
       const DOW_LABELS_RS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
-      // â”€â”€ 6b. Post-procesamiento: turnos nocturnos y 24hs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // NO modifica fichajesMap. Construye fichajesNocturnoMap por encima,
-      // y trackea consumedFichajes para que los del D+1 no se reutilicen en D+1.
-      const consumedFichajes = new Set<string>();
-      const getFichajesDisp = (dni: string, fecha: string) =>
-        (rawMap[dni]?.[fecha] ?? []).filter(r => !consumedFichajes.has(`${dni}|${fecha}|${r.hora}`));
-
-      type FichNocturno = { entrada: string|null; salida: string|null; invertido: boolean; llegadaTarde: boolean; minutosRetraso: number };
-      const fichajesNocturnoMap: Record<string, Record<string, FichNocturno>> = {};
-
-      for (const ag of agentesDb) {
-        const dni3 = normDni(ag.dni);
-        const horAg = horariosMap[dni3] ?? null;
-        if (!horAg) continue;
-
-        for (const fecha of allDias) {
-          const dow    = new Date(fecha + 'T00:00:00Z').getUTCDay();
-          const dowKey = DOW_KEYS_RS[dow] as string;
-          const horDia = horAg.dias[dowKey] ?? null;
-          if (!horDia?.entrada || !horDia?.salida || !horDia.controlable) continue;
-
-          const entMins = toMins(horDia.entrada);
-          const salMins = toMins(horDia.salida);
-          if (salMins > entMins) continue; // turno normal: ya lo maneja fichajesMap
-
-          // Fecha siguiente (D+1)
-          const dtNext = new Date(fecha + 'T00:00:00Z');
-          dtNext.setUTCDate(dtNext.getUTCDate() + 1);
-          const fechaNext = dtNext.toISOString().slice(0, 10);
-
-          // Buscar entrada: primer checktype=0 en dÃ­a D disponible
-          // Si entrada == 00:00 y no hay en D, buscar en los Ãºltimos 90 min de D-1
-          let entradaHora: string | null = null;
-          const ficD = getFichajesDisp(dni3, fecha);
-          const candidatosEnt = ficD.filter(r => r.tipo === '0');
-
-          if (candidatosEnt.length === 0 && entMins <= 90) {
-            // Turno que arranca cerca de medianoche: revisar final del dÃ­a anterior
-            const dtPrev = new Date(fecha + 'T00:00:00Z');
-            dtPrev.setUTCDate(dtPrev.getUTCDate() - 1);
-            const fechaPrev = dtPrev.toISOString().slice(0, 10);
-            const ficPrev = getFichajesDisp(dni3, fechaPrev).filter(r => r.tipo === '0' && toMins(r.hora) >= 1350);
-            if (ficPrev.length > 0) {
-              entradaHora = ficPrev[0].hora;
-              consumedFichajes.add(`${dni3}|${fechaPrev}|${entradaHora}`);
-            }
-          } else if (candidatosEnt.length > 0) {
-            entradaHora = candidatosEnt[0].hora;
-            consumedFichajes.add(`${dni3}|${fecha}|${entradaHora}`);
-          }
-
-          // Buscar salida: fichaje en D+1 cerca de salMins (Â±120 min), preferir checktypeâ‰ 0
-          const TOLERANCIA_SAL = 120;
-          const ficNext = getFichajesDisp(dni3, fechaNext);
-          const candidatosSal = ficNext.filter(r => Math.abs(toMins(r.hora) - salMins) <= TOLERANCIA_SAL);
-          let salidaHora: string | null = null;
-          if (candidatosSal.length > 0) {
-            const noZero = candidatosSal.filter(r => r.tipo !== '0');
-            const elegido = noZero.length > 0 ? noZero[noZero.length - 1] : candidatosSal[candidatosSal.length - 1];
-            salidaHora = elegido.hora;
-            consumedFichajes.add(`${dni3}|${fechaNext}|${salidaHora}`);
-          }
-
-          // Llegada tarde: entrada real > entrada programada + 10 min
-          let llegadaTarde = false;
-          let minutosRetraso = 0;
-          if (entradaHora) {
-            const realMins = toMins(entradaHora);
-            // Si fichÃ³ antes de medianoche para un turno que empieza cerca de 00:00 â†’ no hay retraso
-            const diffLlegada = realMins <= 1350 ? realMins - entMins : (realMins - 1440) - entMins;
-            if (diffLlegada > 10) { llegadaTarde = true; minutosRetraso = diffLlegada; }
-          }
-
-          if (!fichajesNocturnoMap[dni3]) fichajesNocturnoMap[dni3] = {};
-          fichajesNocturnoMap[dni3][fecha] = { entrada: entradaHora, salida: salidaHora, invertido: false, llegadaTarde, minutosRetraso };
+      // ── 6. Fichajes + evaluación por turno (mismo criterio que Sin fichaje salida) ──
+      // Guardia = sale al día siguiente; cada marca es de un solo turno; tolerancia 30 min
+      // (entrar antes no es falta); semana alternada A/B deducida de los fichajes.
+      const evalRS: Record<string, EvalAgente> = {};
+      let dbError: string | null = null;
+      const fichRS = await leerFichadas(dniList, allDias[0], allDias[allDias.length - 1]);
+      if ('error' in fichRS) dbError = fichRS.error;
+      else {
+        for (const dni of dniList) {
+          const horAg = horariosMap[dni];
+          if (!horAg) continue;
+          const diasEv: Record<string, { e: string; s: string }> = {};
+          for (const [k, h] of Object.entries(horAg.dias)) if (h.controlable && h.entrada && h.salida) diasEv[k] = { e: h.entrada, s: h.salida };
+          evalRS[dni] = evaluarAgente(diasEv, fichRS.punches[dni] || [], fichRS.lector, allDias);
         }
       }
 
@@ -2861,10 +2775,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const agentes = agentesDb.map(ag => {
         const dni3 = normDni(ag.dni);
         const horAg = horariosMap[dni3] ?? null;
-        const ficAg = fichajesMap[dni3] ?? {};
 
         let hTeoricoMes = 0, hRealMes = 0, diasLab = 0, diasFeriado = 0;
-        let diasConFichaje = 0, diasSinFichaje = 0, diasConNovedad = 0, diasSinSalida = 0, diasCumplio = 0, diasInvertido = 0;
+        let diasConFichaje = 0, diasSinFichaje = 0, diasConNovedad = 0, diasSinSalida = 0, diasCumplio = 0, diasInvertido = 0, diasFueraHorario = 0;
         const semanas: Record<string, { teorico: number; real: number; laboral: number }> = {};
 
         const diasDetalle = allDias.map(fecha => {
@@ -2875,7 +2788,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           const feriadoNombre = esFeriado ? (feriadosDb.find(f => f.fecha === fecha)?.nombre ?? '') : null;
 
           const horDia = horAg?.dias[dowKey] ?? null;
-          const debiaTrabajo = !esFeriado && (horDia?.controlable ?? false);
+          const evAg = evalRS[dni3];
+          // semana alternada: el día está cargado pero esa semana no le toca
+          const debiaTrabajo = !esFeriado && (horDia?.controlable ?? false) && !evAg?.noToca.includes(fecha);
 
           // Detectar tipo de turno para elegir fuente de fichaje correcta
           const esNocturnoO24hs = !!(horDia?.entrada && horDia?.salida && toMins(horDia.salida) <= toMins(horDia.entrada));
@@ -2907,47 +2822,21 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           ];
           if (novedades.length) diasConNovedad++;
 
-          // Para turnos nocturnos/24hs usar el mapa especializado;
-          // para normales usar fichajesMap filtrando fichajes ya consumidos por el mapa nocturno.
-          let fich: { entrada: string|null; salida: string|null; invertido: boolean; llegadaTarde?: boolean; minutosRetraso?: number } | null = null;
-          if (esNocturnoO24hs) {
-            fich = fichajesNocturnoMap[dni3]?.[fecha] ?? null;
-          } else {
-            const fm = ficAg[fecha] ?? null;
-            if (fm) {
-              const entConsumed = !!(fm.entrada && consumedFichajes.has(`${dni3}|${fecha}|${fm.entrada}`));
-              const salConsumed = !!(fm.salida  && consumedFichajes.has(`${dni3}|${fecha}|${fm.salida}`));
-              if (entConsumed || salConsumed) {
-                // Reconstruir desde rawMap excluyendo consumidos
-                const recs = getFichajesDisp(dni3, fecha);
-                const ents2 = recs.filter(r => r.tipo === '0');
-                const sals2 = recs.filter(r => r.tipo !== '0');
-                const ent2  = ents2.length ? ents2[0].hora : null;
-                const sal2  = sals2.length ? sals2[sals2.length - 1].hora : null;
-                fich = { entrada: ent2, salida: sal2, invertido: false };
-              } else {
-                fich = fm;
-              }
-            }
+          // Turno evaluado (sinSalidaEval): entrada/salida ya asignadas al turno que corresponde,
+          // aunque la salida sea al día siguiente.
+          const tEv = evAg?.turnos.find(x => x.fecha === fecha) ?? null;
+          let fich: { entrada: string|null; salida: string|null; invertido: boolean; llegadaTarde: boolean; minutosRetraso: number } | null = null;
+          if (tEv && tEv.estado !== 'SIN_FICHAJE') {
+            const minTarde = tEv.entradaTs != null && tEv.entradaTs > tEv.progEntTs + 30 * 60000
+              ? Math.round((tEv.entradaTs - tEv.progEntTs) / 60000) : 0;
+            fich = {
+              entrada: tEv.entrada, salida: tEv.estado === 'SIN_SALIDA' ? null : tEv.salida,
+              invertido: tEv.estado === 'MAL_FICHADO', llegadaTarde: minTarde > 0, minutosRetraso: minTarde,
+            };
           }
 
-          // Llegada tarde para turnos normales
-          if (fich && !esNocturnoO24hs && fich.llegadaTarde === undefined && horDia?.entrada && fich.entrada) {
-            const diffLlegada = toMins(fich.entrada) - toMins(horDia.entrada);
-            if (diffLlegada > 10) {
-              fich = { ...fich, llegadaTarde: true, minutosRetraso: diffLlegada };
-            } else {
-              fich = { ...fich, llegadaTarde: false, minutosRetraso: 0 };
-            }
-          }
-
-          let horasReales = 0;
-          if (fich?.entrada && fich?.salida) {
-            const es24hs = horDia?.entrada === horDia?.salida;
-            horasReales = es24hs
-              ? toHs(toMins(fich.salida) - toMins(fich.entrada) + 1440)
-              : toHs(minsHoras(fich.entrada, fich.salida));
-          }
+          const horasReales = tEv?.entradaTs != null && tEv?.salidaTs != null && tEv.estado !== 'SIN_SALIDA'
+            ? toHs((tEv.salidaTs - tEv.entradaTs) / 60000) : 0;
           const cumplioHoras = debiaTrabajo && horasTeoricas > 0 && horasReales >= horasTeoricas * 0.9;
           if (cumplioHoras) diasCumplio++;
           if (fich) {
@@ -2956,6 +2845,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             semanas[semKey].real += horasReales;
             if (fich.entrada && !fich.salida) diasSinSalida++;
             if (fich.invertido) diasInvertido++;
+            if (tEv?.estado === 'FUERA_HORARIO') diasFueraHorario++;
           } else if (debiaTrabajo && !novedades.length) diasSinFichaje++;
 
           return {
@@ -2973,6 +2863,10 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             horasReales,
             cumplioHoras,
             novedades,
+            // criterio de control: OK | FUERA_HORARIO | MAL_FICHADO | SIN_SALIDA | REVISAR_HORARIO | SOLO_SALIDA | SIN_FICHAJE
+            estadoTurno:     tEv?.estado ?? null,
+            motivos:         tEv?.motivos ?? [],
+            enCurso:         !!evAg?.enCurso.includes(fecha),
           };
         });
 
@@ -2998,6 +2892,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             diasCumplio,
             diasConNovedad,
             diasInvertido,
+            diasFueraHorario,
           },
           resumenSemanal,
         };

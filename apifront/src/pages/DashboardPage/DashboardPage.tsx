@@ -65,7 +65,7 @@ function GroupTab({ to, children, tooltip }: {
   );
 }
 
-function AsistenciaTile() {
+function AsistenciaTile({ canSeePlus }: { canSeePlus: boolean }) {
   return (
     <div className="tile dash-group-tile" style={{ borderLeftColor: '#6366f1', borderLeftWidth: 3 }}>
       <Link className="dash-group-main" to="/app/asistencia">
@@ -103,6 +103,14 @@ function AsistenciaTile() {
         >
           SIAPE vs Novedades
         </GroupTab>
+        {canSeePlus && (
+          <GroupTab
+            to="/app/licencias-plus"
+            tooltip="Qué licencia descuenta del plus de Guardia y de Planta (Ley 10471) según la norma, y quién no cobra en el mes."
+          >
+            Licencias y Plus
+          </GroupTab>
+        )}
       </div>
     </div>
   );
@@ -213,6 +221,7 @@ export function DashboardPage() {
   const isNutricion =
     hasPerm('app:horarios-extendidos:access') && !hasPerm('crud:*:*');
   const canSeeJubilablesEstadistica = hasPerm('app:jubilables-estadistica:access') || hasPerm('crud:*:*');
+  const canSeeNormativa = hasPerm('app:normativa:access') || hasPerm('crud:*:*');
 
   const isSaludLaboral =
     canSeeSaludLaboral &&
@@ -490,6 +499,7 @@ export function DashboardPage() {
         </div>
         <div className="grid">
           <Tile to="/app/gestion" title="📋 Gestión" desc="Buscar agente por DNI o nombre. Ver todos sus datos, documentos y pedidos." disabled={!canGestion} accent="#2563eb" />
+          <Tile to="/app/mensajes-reloj" title="💬 Mensajes al reloj" desc="Elegir varios agentes y mandarles un mensaje que aparece en el reloj cuando fichan." disabled={!canGestion} accent="#14b8a6" />
           <Tile to="/app/redaccion" title="✍️ Redacción" desc="Generar certificados, IOMA y documentos para un agente." accent="#7c3aed" />
           <Tile to="/app/reportes" title="🎂 Reportes" desc="Cumpleaños, antigüedad, consultas dinámicas sobre las tablas." accent="#f97316" />
           <Tile to="/app/consultas" title="💬 Consultas" desc="Historial de consultas del sistema." accent="#10b981" />
@@ -517,9 +527,12 @@ export function DashboardPage() {
         </div>
         <div className="grid">
           <Tile to="/app/estadisticas" title="📊 Estadísticas" desc="Agentes por sector, servicio, categoría, ingresos por año, cumpleaños del mes y más." accent="#ec4899" />
-          <AsistenciaTile />
+          <AsistenciaTile canSeePlus={canSeeNormativa} />
           {canSeeJubilablesEstadistica && (
             <Tile to="/app/jubilables-estadistica" title="📈 Jubilables (estadística)" desc="Proyección de jubilables por servicio y ley, sin datos de agentes." accent="#7c3aed" />
+          )}
+          {canSeeNormativa && (
+            <Tile to="/app/normativa" title="⚖️ Normativa" desc="Plus de guardia y de planta Ley 10471: porcentajes vigentes, licencias que no descuentan, simulador y decretos en PDF." accent="#0ea5e9" />
           )}
           {(hasPerm('crud:fc_cert_reemplazos:read') || hasPerm('crud:*:*')) && (
             <Tile to="/app/fc-cert-reemplazos" title="📋 FC / Cert. / Reemplazos" desc="Seguimiento mensual de Francos Compensatorios, Certificación de Servicios y Reemplazos de Guardia." accent="#7c2d12" />
@@ -553,6 +566,9 @@ export function DashboardPage() {
           )}
           {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && (
             <Tile to="/app/comisiones" title="🧳 Comisiones" desc="Agentes en comisión: acto, destino, vencimientos y regreso al servicio. Gráficos por destino, pases por mes y vencimientos." accent="#3987e5" />
+          )}
+          {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && (
+            <Tile to="/app/vacaciones-adelantadas" title="🏖️ Vacaciones adelantadas" desc="Adelantos de vacaciones: período, días y año imputado. Búsqueda por agente, DNI, servicio y dependencia, con quién cargó, editó o borró cada uno." accent="#0ea5e9" />
           )}
           <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación IPS para Leyes 10471 y 10430. Servicio nombrado, becas, ANSES, insalubridad y prorrateo." accent="#7c3aed" />
           <Tile to="/app/concursos" title="🏆 Concursos Ley 10471" desc="Concurso de ingreso por año, ley, servicio y agente. Concurso de funciones: Ley 10471 con más de 15 años de antigüedad. Exportación a Excel." accent="#6366f1" />

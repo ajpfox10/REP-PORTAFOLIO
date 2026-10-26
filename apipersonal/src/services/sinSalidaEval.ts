@@ -3,13 +3,19 @@
 // Evaluación de "sin salida" con el criterio CORREGIDO (por reloj/día, no por las
 // horas del Excel, que están mal cargadas para parte del personal).
 //
+// Objetivo: que el agente fiche ENTRADA y SALIDA, y que lo haga EN SU HORARIO.
+//
 // Ejes:
-//  1) ¿Fichó la salida?  -> por HORA + patrón (mismo día / cruza / 24h), sin corte fijo.
-//  2) ¿Fichó bien?       -> por RELOJ (entrada/salida dedicados). Reloj equivocado o
-//                           fuera de rango => MAL_FICHADO (a evaluar), pero cuenta la salida.
-//  3) Si da "sin salida" pero el agente SÍ tiene una salida real ese día
-//     (>=2h después de la entrada, en reloj de salida/bidi) => REVISAR_HORARIO
-//     (horario mal cargado, NO es sin-salida real).
+//  1) ¿Fichó entrada y salida? -> por HORA + patrón: guardia = sale al día siguiente
+//     (salida <= entrada: 24h, nocturnas, salida 00:00). Cada marca se usa para UN solo
+//     turno (turnos pegados no comparten marcas).
+//  2) ¿Fichó en horario?       -> tolerancia de 30 min en entrada y salida. Fuera de eso
+//     => FUERA_HORARIO (entró tarde, salió antes o después; entrar antes no es falta), pero cuenta la marca.
+//     Reloj equivocado sin problema de hora => MAL_FICHADO.
+//  3) Si da "sin salida" pero tiene una marca de salida más tarde (fuera de la ventana)
+//     => REVISAR_HORARIO (ficha otro horario, NO es sin-salida real).
+//  4) Semana alternada (una semana L-X-V, la otra M-J[-S]): se deduce de los fichajes de
+//     las 8 semanas anteriores y solo se controlan los días de la semana que le toca.
 //
 // Este módulo es autocontenido a propósito (lee el Excel de horarios + la DB
 // biométrica directamente) para poder usarse tanto en el reporte como en el
@@ -28,14 +34,25 @@ try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
 const DOW_KEYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'] as const;
 
 export type Turno = 'MANIANA' | 'TARDE' | 'NOCHE' | 'GUARDIA';
-export type EstadoTurno = 'OK' | 'MAL_FICHADO' | 'SIN_SALIDA' | 'REVISAR_HORARIO' | 'SOLO_SALIDA' | 'SIN_FICHAJE';
+export type EstadoTurno = 'OK' | 'FUERA_HORARIO' | 'MAL_FICHADO' | 'SIN_SALIDA' | 'REVISAR_HORARIO' | 'SOLO_SALIDA' | 'SIN_FICHAJE';
 
 export interface DiaSinSalida { fecha: string; turno: Turno; entrada: string | null; horaEntrada: string; horaSalida: string; }
+
+// Día fichado fuera de horario (o fuera de su semana): se informa, NO se notifica por mail.
+export interface DiaFueraHorario {
+  fecha: string; turno: Turno; horario: string;          // "08:00-14:00"
+  entrada: string | null; salida: string | null;         // "07:55" / "17:40 (+1)"
+  estado: 'FUERA_HORARIO' | 'MAL_FICHADO' | 'REVISAR_HORARIO' | 'FUERA_SEMANA';
+  motivos: string[];                                     // "salió 3 h 40 min después", ...
+}
+
+export interface Alternancia { semanaA: string; semanaB: string; semanaHasta: string }
 
 export interface HorarioDiaResumen { dia: string; entrada: string; salida: string; horas: number; turno: Turno; }
 export type TipoHorario = 'Guardia' | 'Semana' | 'Franquero' | 'Rotativo';
 export interface HorarioResumen {
-  tipo: TipoHorario;               // Guardia (24h) | Semana (L-V) | Franquero (finde+fijo) | Rotativo
+  tipo: TipoHorario;               // Guardia (sale al día siguiente) | Semana (L-V) | Franquero (finde+fijo) | Rotativo
+  alterna: Alternancia | null;     // semana A/B deducida de los fichajes
   resumen: string;                 // texto legible: "LMXJV 12:00-18:00 (6h Tarde)"
   porDia: HorarioDiaResumen[];
   esFranquero: boolean;
@@ -61,6 +78,7 @@ export interface AgenteSinSalida {
   email: string | null;
   emailValido: boolean;
   dias: DiaSinSalida[];
+  fueraHorario: DiaFueraHorario[];
   horario: HorarioResumen;
   coincidencia: Coincidencia;
 }
@@ -147,7 +165,7 @@ function durHoras(e: string, s: string): number {
   return Math.round((m / 60) * 10) / 10;
 }
 
-function resumenHorario(dias: Record<string, { e: string; s: string }>): HorarioResumen {
+function resumenHorario(dias: Record<string, { e: string; s: string }>, alterna: Alternancia | null = null): HorarioResumen {
   const trabaja = ORD_DIAS.filter(k => dias[k]);
   const groups: Record<string, string[]> = {};
   for (const k of ORD_DIAS) { if (!dias[k]) continue; const key = `${dias[k].e}-${dias[k].s}`; (groups[key] = groups[key] || []).push(k); }
@@ -156,11 +174,11 @@ function resumenHorario(dias: Record<string, { e: string; s: string }>): Horario
     return `${ds.map(d => DIA_CORTO[d]).join('')} ${hr} (${h}h ${TURNO_TXT[turno]})`;
   });
   // ── Tipo de horario (reglas fijadas con el usuario) ──
-  //   Guardia   : tiene algún turno de 24h (entrada = salida), en el día que sea.
-  //   Semana    : solo lun-vie (ningún finde), sin 24h.
+  //   Guardia   : algún turno entra un día y sale el otro (salida <= entrada: 24h, noche, 00:00).
+  //   Semana    : solo lun-vie (ningún finde), sin guardia.
   //   Franquero : toca finde (S/D) y NO es semana completa (finde + día[s] fijo, típico 12h).
   //   Rotativo  : el resto (semana completa + finde, o combinación amplia).
-  const tiene24 = trabaja.some(k => dias[k].e === dias[k].s);
+  const tiene24 = trabaja.some(k => dias[k].s <= dias[k].e);
   const tocaFinde = trabaja.some(k => k === 'sabado' || k === 'domingo');
   const semanaCompleta = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].every(k => !!dias[k]);
   let tipo: TipoHorario;
@@ -171,9 +189,9 @@ function resumenHorario(dias: Record<string, { e: string; s: string }>): Horario
 
   const esFranquero = tipo === 'Franquero';
   const horasSemana = Math.round(ORD_DIAS.reduce((a, k) => dias[k] ? a + durHoras(dias[k].e, dias[k].s) : a, 0) * 10) / 10;
-  const resumen = partes.join('  ·  ');
+  const resumen = (alterna ? `Alterna semanas ${alterna.semanaA} / ${alterna.semanaB} (la última del período: ${alterna.semanaHasta})  ·  ` : '') + partes.join('  ·  ');
   return {
-    tipo, resumen,
+    tipo, resumen, alterna,
     porDia: trabaja.map(k => ({ dia: DIA_LARGO[k], entrada: dias[k].e, salida: dias[k].s, horas: durHoras(dias[k].e, dias[k].s), turno: turnoDe(dias[k].e, dias[k].s) })),
     esFranquero, diasSemana: trabaja.length, horasSemana,
   };
@@ -195,6 +213,7 @@ export interface EvalResultado {
   resumen: {
     turnos: Record<EstadoTurno, number>;
     agentesSinSalida: number;
+    agentesFueraHorario: number;
     diasSinSalida: number;
     fechas: string[];
   };
@@ -217,8 +236,7 @@ const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const emailValido = (e: string): boolean => !!e && emailRe.test(e) && !/^\d+$/.test(e);
 
 function turnoDe(e: string, s: string): Turno {
-  if (e === s) return 'GUARDIA';        // 24h
-  if (s < e) return 'NOCHE';            // cruza medianoche
+  if (s <= e) return 'GUARDIA';         // entra un día y sale el otro (24h, nocturna, salida 00:00)
   if (e < '06:00') return 'NOCHE';      // 00:00-06:00
   if (e < '12:00') return 'MANIANA';
   if (e < '18:00') return 'TARDE';
@@ -247,13 +265,292 @@ function listarFechas(opts: EvalOpts): string[] {
   return out;
 }
 
+// ── ventanas y tolerancias ───────────────────────────────────────────────────
+const H1 = 3600000, H2 = 2 * H1;
+const TOL = 30 * 60000;           // tolerancia de horario en entrada y salida (fijada con el usuario)
+const ANTES_ENT = 3 * H1;         // la entrada se busca hasta 3 h antes de la hora programada
+const DESPUES_SAL = 6 * H1;       // la salida hasta 6 h después (pasada la tolerancia => FUERA_HORARIO)
+const ALT_SEMANAS = 8;            // semanas anteriores al período para deducir la semana A/B
+
+export type Punch = { ts: number; sn: string; ct: string };
+// horario semanal (lunes..domingo → entrada/salida); puede variar por fecha (historial de horarios)
+// (cruza: sale al día siguiente aunque salida > entrada, ej. 08:00–00:00 + 00:00–12:00 = 28 h)
+export type HorarioSemana = Record<string, { e: string; s: string; cruza?: boolean }>;
+type HorarioDe = (fecha: string) => HorarioSemana | null;
+export const HORARIOS_ARCHIVO = 'HORARIOS.xlsx';
+type TurnoExp = { f: string; e: string; s: string; expEnt: number; expSal: number; informar: boolean };
+
+const dowDe = (iso: string): number => new Date(iso + 'T00:00:00Z').getUTCDay();
+const lunesDe = (iso: string): string => { const w = dowDe(iso); return addDaysIso(iso, w === 0 ? -6 : 1 - w); };
+const semIdx = (iso: string): number => Math.round(new Date(lunesDe(iso) + 'T00:00:00Z').getTime() / (7 * 86400000));
+const dur = (ms: number): string => {
+  const m = Math.round(ms / 60000), h = Math.floor(m / 60), r = m % 60;
+  return h ? `${h} h${r ? ` ${r} min` : ''}` : `${r} min`;
+};
+
+// ── semana alternada (A = L-X-V, B = M-J[-S]) deducida de los fichajes ──────────
+// Hay agentes cargados L-V (o L-S) que en realidad trabajan una semana L-X-V y la
+// siguiente M-J(-S). Se mira en qué días programados fichó la entrada cada semana;
+// si las semanas alternan de forma consistente se fija la "fase" (qué paridad de
+// semana es la A) y se usa también para semanas sin fichajes (licencia, vacaciones).
+interface Alt { A: number[]; B: number[]; fase: number }
+const esSemanaA = (alt: Alt, f: string): boolean => ((semIdx(f) % 2) + 2) % 2 === alt.fase;
+const esperaDia = (alt: Alt | null, f: string): boolean => {
+  if (!alt) return true;
+  const dow = dowDe(f), enA = alt.A.includes(dow), enB = alt.B.includes(dow);
+  if (!enA && !enB) return true;          // domingo: no entra en la alternancia
+  return esSemanaA(alt, f) ? enA : enB;
+};
+
+function detectarAlternancia(
+  hDe: HorarioDe, ps: Punch[], desde: string, hasta: string,
+  lector: Record<string, 'ENT' | 'SAL' | 'BIDI'>,
+): Alt | null {
+  const decl = Object.keys(hDe(hasta) || {}).map(k => (DOW_KEYS as readonly string[]).indexOf(k));
+  const A = [1, 3, 5].filter(d => decl.includes(d)), B = [2, 4, 6].filter(d => decl.includes(d));
+  if (A.length < 2 || B.length < 2) return null;
+  const porSemana = new Map<number, Set<number>>();
+  for (let f = desde; f <= hasta; f = addDaysIso(f, 1)) {
+    const dow = dowDe(f);
+    if (!A.includes(dow) && !B.includes(dow)) continue;
+    const td = hDe(f)?.[DOW_KEYS[dow]];
+    if (!td) continue;
+    const e = dtLocal(f, toMin(td.e));
+    if (!ps.some(p => lector[p.sn] !== 'SAL' && p.ts >= e - ANTES_ENT && p.ts <= e + ANTES_ENT)) continue;
+    const w = semIdx(f);
+    if (!porSemana.has(w)) porSemana.set(w, new Set());
+    porSemana.get(w)!.add(dow);
+  }
+  const votos = [0, 0];
+  let tipadas = 0, completas = 0;
+  for (const [w, s] of porSemana) {
+    const a = A.filter(d => s.has(d)).length, b = B.filter(d => s.has(d)).length;
+    const par = ((w % 2) + 2) % 2;
+    if (a >= 2 && b >= 2) completas++;
+    else if (a >= 2 && b === 0) { votos[par]++; tipadas++; }
+    else if (b >= 2 && a === 0) { votos[1 - par]++; tipadas++; }
+  }
+  if (tipadas < 3 || completas > Math.max(1, porSemana.size * 0.2)) return null;
+  const fase = votos[0] >= votos[1] ? 0 : 1;
+  if (votos[fase] / tipadas < 0.8) return null;
+  return { A, B, fase };
+}
+
+// ── fichadas del reloj (adms_db.checkinout, cubre todos los relojes) ───────────
+// Trae desde 8 semanas antes del período (para la semana A/B) hasta 2 días después.
+// tipo de cada reloj (ENT/SAL/BIDI): cambia solo si se agrega o reconfigura un reloj
+const LECTOR_CACHE_MS = 30 * 60_000;
+let lectorCache: { ts: number; lector: Record<string, 'ENT' | 'SAL' | 'BIDI'> } | null = null;
+
+export async function leerFichadas(
+  dnis: string[], desde: string, hasta: string,
+): Promise<{ lector: Record<string, 'ENT' | 'SAL' | 'BIDI'>; punches: Record<string, Punch[]> } | { error: string }> {
+  const cfgPath = path.resolve(process.cwd(), 'fichero_config.json');
+  if (!fs.existsSync(cfgPath)) return { error: 'fichero_config.json no encontrado' };
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+  const lector: Record<string, 'ENT' | 'SAL' | 'BIDI'> = {};
+  const punches: Record<string, Punch[]> = {};
+  if (!dnis.length) return { lector, punches };
+  try {
+    const conn = await mysql.createConnection({
+      host: cfg.mysqlHost || '127.0.0.1', port: cfg.mysqlPort || 3306,
+      user: cfg.mysqlUser || 'root', password: cfg.mysqlPass || '', database: cfg.mysqlDb || 'adms_db',
+      connectTimeout: 10_000, dateStrings: true,
+    });
+    try {
+      // clasificar relojes por checktype dominante (recorre toda la tabla, ~2 s: se cachea)
+      if (lectorCache && Date.now() - lectorCache.ts < LECTOR_CACHE_MS) Object.assign(lector, lectorCache.lector);
+      else {
+        const [snRows] = await conn.query<RowDataPacket[]>(
+          `SELECT COALESCE(SN,'') SN, checktype, COUNT(*) c FROM checkinout WHERE SN IS NOT NULL AND SN<>'' GROUP BY SN, checktype`
+        );
+        const agg: Record<string, { e: number; s: number }> = {};
+        for (const r of snRows) { const sn = String(r.SN); agg[sn] = agg[sn] || { e: 0, s: 0 }; if (String(r.checktype) === '0') agg[sn].e += Number(r.c); else agg[sn].s += Number(r.c); }
+        for (const [sn, { e, s }] of Object.entries(agg)) { const t = e + s; if (!t) continue; const rs = s / t; lector[sn] = rs >= 0.98 ? 'SAL' : rs <= 0.02 ? 'ENT' : 'BIDI'; }
+        lectorCache = { ts: Date.now(), lector: { ...lector } };
+      }
+
+      const ph = dnis.map(() => '?').join(',');
+      const [rows] = await conn.query<RowDataPacket[]>(
+        `SELECT ui.badgenumber dni, ci.checktime, ci.checktype, COALESCE(ci.SN,'') SN
+           FROM checkinout ci INNER JOIN userinfo ui ON ci.userid=ui.userid
+          WHERE ui.badgenumber IN (${ph}) AND ci.checktime>=? AND ci.checktime<?
+          ORDER BY ci.checktime ASC`,
+        [...dnis, `${addDaysIso(lunesDe(desde), -7 * ALT_SEMANAS)} 00:00:00`, `${addDaysIso(hasta, 2)} 00:00:00`]
+      );
+      for (const r of rows) {
+        const dni = normDni(r.dni);
+        const ts = new Date(String(r.checktime).replace(' ', 'T')).getTime();
+        (punches[dni] = punches[dni] || []).push({ ts, sn: String(r.SN), ct: String(r.checktype) });
+      }
+    } finally { await conn.end(); }
+  } catch (e: any) {
+    return { error: e?.message ?? 'Error al consultar DB biométrica' };
+  }
+  return { lector, punches };
+}
+
+// ── evaluación de los turnos de UN agente ──────────────────────────────────────
+// Un resultado por turno programado (y esperado, si alterna semanas) de las fechas
+// pedidas. Los turnos que todavía no terminaron (salida + 6 h) van a enCurso.
+export interface TurnoEvaluado {
+  fecha: string; horaEntrada: string; horaSalida: string; turno: Turno; estado: EstadoTurno;
+  entrada: string | null; salida: string | null;   // "07:55" / "06:02 (+1)"
+  motivos: string[];
+  // instantes (ms) para calcular horas / minutos tarde en otros reportes
+  progEntTs: number; progSalTs: number; entradaTs: number | null; salidaTs: number | null;
+}
+export interface EvalAgente {
+  alterna: Alternancia | null;
+  turnos: TurnoEvaluado[];
+  fueraSemana: DiaFueraHorario[];
+  enCurso: string[];
+  noToca: string[];        // días con horario cargado que esa semana no le tocan (semana alternada)
+  libres: Punch[];         // marcas del período que no son de ningún turno (fichó sin horario)
+}
+
+const p2 = (n: number) => String(n).padStart(2, '0');
+const hhmm = (ts: number, f: string) => {
+  const d = new Date(ts); const fd = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+  return `${p2(d.getHours())}:${p2(d.getMinutes())}${fd > f ? ' (+1)' : fd < f ? ' (-1)' : ''}`;
+};
+
+export function evaluarAgente(
+  horario: HorarioSemana | HorarioDe, punchesAgente: Punch[],
+  lector: Record<string, 'ENT' | 'SAL' | 'BIDI'>, fechas: string[], ahora: number = Date.now(),
+): EvalAgente {
+  const rangoMin = fechas[0], rangoMax = fechas[fechas.length - 1];
+  const fechasSet = new Set(fechas);
+  const hDe: HorarioDe = typeof horario === 'function' ? horario : () => horario;
+  const turnoDia = (f: string) => hDe(f)?.[DOW_KEYS[dowDe(f)]];
+  const ps = punchesAgente.slice().sort((a, b) => a.ts - b.ts);
+  const alt = detectarAlternancia(hDe, ps, addDaysIso(lunesDe(rangoMin), -7 * ALT_SEMANAS), addDaysIso(rangoMax, 1), lector);
+  const out: EvalAgente = {
+    alterna: alt ? { semanaA: diasStr(alt.A), semanaB: diasStr(alt.B), semanaHasta: diasStr(esSemanaA(alt, rangoMax) ? alt.A : alt.B) } : null,
+    turnos: [], fueraSemana: [], enCurso: [], noToca: [], libres: [],
+  };
+  const esSal = (p: Punch) => lector[p.sn] === 'SAL' || (lector[p.sn] === 'BIDI' && p.ct === '1');
+
+  // turnos esperados (un día antes y uno después del rango para que no "roben" marcas)
+  const T: TurnoExp[] = [];
+  for (let f = addDaysIso(rangoMin, -1); f <= addDaysIso(rangoMax, 1); f = addDaysIso(f, 1)) {
+    const t = turnoDia(f);
+    if (!t || !esperaDia(alt, f)) continue;
+    const expEnt = dtLocal(f, toMin(t.e));
+    const expSal = t.s <= t.e || t.cruza ? dtLocal(addDaysIso(f, 1), toMin(t.s)) : dtLocal(f, toMin(t.s));
+    T.push({ f, e: t.e, s: t.s, expEnt, expSal, informar: fechasSet.has(f) && expSal + DESPUES_SAL <= ahora });
+  }
+
+  // cada marca se asigna a UN solo turno, recorriendo en orden
+  const usada = new Set<number>();
+  const res: Array<{ t: TurnoExp; ent: number; sal: number; continuado?: boolean }> = [];
+  for (let i = 0; i < T.length; i++) {
+    const t = T[i], n = T[i + 1];
+    const mid = (t.expEnt + t.expSal) / 2;
+    const nLo = n ? n.expEnt - ANTES_ENT : Infinity;
+    const ie = ps.findIndex((p, j) => !usada.has(j) && p.ts >= t.expEnt - ANTES_ENT && p.ts <= mid);
+    // salida: última marca libre después de la mitad, hasta 6 h tarde; si el turno siguiente
+    // está pegado, en la zona compartida solo vale una marca de reloj de salida (si este turno
+    // tiene entrada, hasta la mitad del siguiente: el que sale tarde de la guardia no "entra")
+    const nTope = n ? (ie >= 0 ? Math.min(n.expEnt + ANTES_ENT, (n.expEnt + n.expSal) / 2) : n.expEnt + TOL) : Infinity;
+    let is = -1;
+    for (let j = ps.length - 1; j >= 0; j--) {
+      const p = ps[j];
+      if (usada.has(j) || j === ie || p.ts <= mid || p.ts > t.expSal + DESPUES_SAL) continue;
+      if (p.ts < nLo || (esSal(p) && p.ts <= nTope)) { is = j; break; }
+    }
+    // se fue antes de la mitad del turno: marca de salida al menos 30 min después de entrar
+    if (is < 0 && ie >= 0) {
+      for (let j = ps.length - 1; j > ie; j--) {
+        const p = ps[j];
+        if (!usada.has(j) && p.ts <= mid && p.ts >= ps[ie].ts + TOL && esSal(p)) { is = j; break; }
+      }
+    }
+    if (ie >= 0) {
+      const hasta = is >= 0 ? ps[is].ts : ps[ie].ts + TOL;   // doble toque en la entrada
+      ps.forEach((p, j) => { if (p.ts >= ps[ie].ts && p.ts <= hasta) usada.add(j); });
+    } else if (is >= 0) usada.add(is);
+    res.push({ t, ent: ie, sal: is });
+  }
+  // turnos pegados sin marcar en el medio (ej. 24h + 24h seguidas): es un turno continuado
+  for (let i = 0; i + 1 < res.length; i++) {
+    const a = res[i], b = res[i + 1];
+    if (a.ent >= 0 && a.sal < 0 && b.ent < 0 && b.sal >= 0 && Math.abs(b.t.expEnt - a.t.expSal) <= H1) { a.continuado = true; b.continuado = true; }
+  }
+
+  for (const r of res) {
+    if (!fechasSet.has(r.t.f)) continue;
+    if (!r.t.informar) { out.enCurso.push(r.t.f); continue; }
+    const { t } = r;
+    const ent = r.ent >= 0 ? ps[r.ent] : null, sal = r.sal >= 0 ? ps[r.sal] : null;
+    const turno = turnoDe(t.e, t.s), horario = `${t.e}-${t.s}`;
+    const motivos: string[] = [];
+    // entrar antes NO es falta (decisión del usuario): solo tarde / salió antes / salió después
+    if (ent && ent.ts > t.expEnt + TOL) motivos.push(`entró ${dur(ent.ts - t.expEnt)} tarde`);
+    if (sal && sal.ts < t.expSal - TOL) motivos.push(`salió ${dur(t.expSal - sal.ts)} antes`);
+    if (sal && sal.ts > t.expSal + TOL) motivos.push(`salió ${dur(sal.ts - t.expSal)} después`);
+    const push = (estado: EstadoTurno, extra: string[] = [], entrada = ent, salida = sal, mot = motivos) => out.turnos.push({
+      fecha: t.f, horaEntrada: t.e, horaSalida: t.s, turno, estado,
+      entrada: entrada ? hhmm(entrada.ts, t.f) : null, salida: salida ? hhmm(salida.ts, t.f) : null, motivos: [...mot, ...extra],
+      progEntTs: t.expEnt, progSalTs: t.expSal, entradaTs: entrada ? entrada.ts : null, salidaTs: salida ? salida.ts : null,
+    });
+
+    if (r.continuado) {
+      // la entrada es del primer turno y la salida del segundo: se controla solo la hora
+      push(motivos.length ? 'FUERA_HORARIO' : 'OK', ['turno continuado']);
+      continue;
+    }
+    if (!ent && !sal) { push('SIN_FICHAJE'); continue; }
+    if (!ent) { push('SOLO_SALIDA'); continue; }
+    if (!sal) {
+      // la "entrada" es en realidad una SALIDA de otro horario: entró horas antes (fuera de la
+      // ventana) y salió cerca de la hora de entrada programada -> ficha otro horario
+      const antes = esSal(ent) ? ps.find((p, j) => !usada.has(j) && !esSal(p) && p.ts <= ent.ts - H2 && p.ts >= ent.ts - 16 * H1) : undefined;
+      if (antes) {
+        push('REVISAR_HORARIO', [], antes, ent,
+          [`entró ${dur(Math.abs(antes.ts - t.expEnt))} ${antes.ts < t.expEnt ? 'antes' : 'tarde'} y salió ${dur(Math.abs(t.expSal - ent.ts))} ${ent.ts < t.expSal ? 'antes' : 'después'} (ficha otro horario)`]);
+        continue;
+      }
+      // ¿tiene una marca de salida más tarde, fuera de la ventana? -> ficha otro horario
+      const tarde = ps.find((p, j) => !usada.has(j) && esSal(p) && p.ts >= ent.ts + H2 && p.ts <= ent.ts + 20 * H1);
+      if (tarde) push('REVISAR_HORARIO', [tarde.ts > t.expSal ? `salió ${dur(tarde.ts - t.expSal)} después (ficha otro horario)` : 'ficha otro horario'], ent, tarde);
+      else push('SIN_SALIDA');
+      continue;
+    }
+    const reloj: string[] = [];
+    if (lector[ent.sn] === 'SAL') reloj.push('entrada en reloj de salida');
+    if (lector[sal.sn] === 'ENT') reloj.push('salida en reloj de entrada');
+    push(motivos.length ? 'FUERA_HORARIO' : reloj.length ? 'MAL_FICHADO' : 'OK', reloj);
+  }
+
+  // semana alternada: fichó un día que esa semana no le tocaba
+  if (alt) {
+    for (const f of fechas) {
+      const t = turnoDia(f);
+      if (!t || esperaDia(alt, f)) continue;
+      out.noToca.push(f);
+      const e = dtLocal(f, toMin(t.e));
+      const j = ps.findIndex((p, k) => !usada.has(k) && lector[p.sn] !== 'SAL' && p.ts >= e - ANTES_ENT && p.ts <= e + ANTES_ENT);
+      if (j < 0) continue;
+      out.fueraSemana.push({
+        fecha: f, turno: turnoDe(t.e, t.s), horario: `${t.e}-${t.s}`, entrada: hhmm(ps[j].ts, f), salida: null, estado: 'FUERA_SEMANA',
+        motivos: [`fichó fuera de su semana (esa semana le toca ${diasStr(esSemanaA(alt, f) ? alt.A : alt.B)})`],
+      });
+    }
+  }
+  const lo = dtLocal(rangoMin, 0), hi = dtLocal(addDaysIso(rangoMax, 1), 0);
+  out.libres = ps.filter((p, j) => !usada.has(j) && p.ts >= lo && p.ts < hi);
+  return out;
+}
+
+
 // ── evaluación principal ─────────────────────────────────────────────────────
 export async function evaluarSinSalida(
   opts: EvalOpts,
   sequelize: import('sequelize').Sequelize,
 ): Promise<EvalResultado> {
   const empty = (dbError: string | null): EvalResultado => ({
-    agentes: [], resumen: { turnos: { OK: 0, MAL_FICHADO: 0, SIN_SALIDA: 0, REVISAR_HORARIO: 0, SOLO_SALIDA: 0, SIN_FICHAJE: 0 }, agentesSinSalida: 0, diasSinSalida: 0, fechas: [] }, dbError,
+    agentes: [], resumen: { turnos: { OK: 0, FUERA_HORARIO: 0, MAL_FICHADO: 0, SIN_SALIDA: 0, REVISAR_HORARIO: 0, SOLO_SALIDA: 0, SIN_FICHAJE: 0 }, agentesSinSalida: 0, agentesFueraHorario: 0, diasSinSalida: 0, fechas: [] }, dbError,
   });
   if (!ExcelJS) return empty('Falta dependencia exceljs');
 
@@ -263,8 +560,10 @@ export async function evaluarSinSalida(
   const fechas = listarFechas(opts);
   if (fechas.length === 0) return empty(null);
 
-  // ── horarios (todos los .xlsx con "horario" en el nombre, merge por DNI) ──
-  const horarioFiles = fs.readdirSync(dir).filter(f => /\.xls[xm]?$/i.test(f) && f.toLowerCase().includes('horario'));
+  // ── horarios: SOLO HORARIOS.xlsx (horario completo del día, lo baja el robot a las 05:50).
+  // HORARIO_GUARDIA trae solo los días de guardia de SIAPE y HORARIO_CONSOLIDADO no trae horas:
+  // mezclarlos pisaba el horario completo con uno parcial o viejo.
+  const horarioFiles = fs.existsSync(path.join(dir, HORARIOS_ARCHIVO)) ? [HORARIOS_ARCHIVO] : [];
   const H: Record<string, Record<string, { e: string; s: string }>> = {};
   const UPA: Record<string, string> = {};
   const cols: Record<string, [number, number]> = { lunes: [5, 6], martes: [7, 8], miercoles: [9, 10], jueves: [11, 12], viernes: [13, 14], sabado: [15, 16], domingo: [17, 18] };
@@ -290,113 +589,38 @@ export async function evaluarSinSalida(
       logger.warn({ msg: 'sinSalidaEval: error leyendo horarios', file: fn, error: e?.message });
     }
   }
-  if (Object.keys(H).length === 0) return empty('No se encontraron horarios en el Excel');
+  if (Object.keys(H).length === 0) return empty(`No se encontraron horarios en ${HORARIOS_ARCHIVO}`);
 
-  // ── expandir agente×día programado ──
-  type Turnoexp = { dni: string; f: string; e: string; s: string };
-  const expanded: Turnoexp[] = [];
-  for (const f of fechas) {
-    const k = DOW_KEYS[new Date(f + 'T00:00:00Z').getUTCDay()];
-    for (const [dni, dias] of Object.entries(H)) if (dias[k]) expanded.push({ dni, f, e: dias[k].e, s: dias[k].s });
-  }
-  if (expanded.length === 0) return empty(null);
-  const allDnis = [...new Set(expanded.map(x => x.dni))];
-
-  // ── DB biométrica ──
-  const cfgPath = path.resolve(process.cwd(), 'fichero_config.json');
-  if (!fs.existsSync(cfgPath)) return empty('fichero_config.json no encontrado');
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
-
-  const rangoMin = fechas[0], rangoMax = fechas[fechas.length - 1];
-  const rangoMaxPlus1 = addDaysIso(rangoMax, 1);
-
-  const lector: Record<string, 'ENT' | 'SAL' | 'BIDI'> = {};
-  const punches: Record<string, Array<{ ts: number; sn: string }>> = {};
-  let dbError: string | null = null;
-  try {
-    const conn = await mysql.createConnection({
-      host: cfg.mysqlHost || '127.0.0.1', port: cfg.mysqlPort || 3306,
-      user: cfg.mysqlUser || 'root', password: cfg.mysqlPass || '', database: cfg.mysqlDb || 'adms_db',
-      connectTimeout: 10_000, dateStrings: true,
-    });
-    // clasificar relojes por checktype dominante
-    const [snRows] = await conn.query<RowDataPacket[]>(
-      `SELECT COALESCE(SN,'') SN, checktype, COUNT(*) c FROM checkinout WHERE SN IS NOT NULL AND SN<>'' GROUP BY SN, checktype`
-    );
-    const agg: Record<string, { e: number; s: number }> = {};
-    for (const r of snRows) { const sn = String(r.SN); agg[sn] = agg[sn] || { e: 0, s: 0 }; if (String(r.checktype) === '0') agg[sn].e += Number(r.c); else agg[sn].s += Number(r.c); }
-    for (const [sn, { e, s }] of Object.entries(agg)) { const t = e + s; if (!t) continue; const rs = s / t; lector[sn] = rs >= 0.98 ? 'SAL' : rs <= 0.02 ? 'ENT' : 'BIDI'; }
-
-    const ph = allDnis.map(() => '?').join(',');
-    const [rows] = await conn.query<RowDataPacket[]>(
-      `SELECT ui.badgenumber dni, ci.checktime, COALESCE(ci.SN,'') SN
-         FROM checkinout ci INNER JOIN userinfo ui ON ci.userid=ui.userid
-        WHERE ui.badgenumber IN (${ph}) AND ci.checktime>=? AND ci.checktime<=?
-        ORDER BY ci.checktime ASC`,
-      [...allDnis, `${rangoMin} 00:00:00`, `${rangoMaxPlus1} 14:00:00`]
-    );
-    await conn.end();
-    for (const r of rows) {
-      const dni = normDni(r.dni);
-      const ts = new Date(String(r.checktime).replace(' ', 'T')).getTime();
-      (punches[dni] = punches[dni] || []).push({ ts, sn: String(r.SN) });
-    }
-  } catch (e: any) {
-    return empty(e?.message ?? 'Error al consultar DB biométrica');
-  }
+  // ── DB biométrica (todos los agentes con horario; desde 8 semanas antes para deducir la semana A/B) ──
+  const allDnis = Object.keys(H);
+  const rangoMax = fechas[fechas.length - 1];
+  const fich = await leerFichadas(allDnis, fechas[0], rangoMax);
+  if ('error' in fich) return empty(fich.error);
+  const { lector, punches } = fich;
+  const dbError: string | null = null;
 
   // ── clasificar cada turno ──
-  const H2 = 2 * 3600000, H3 = 3 * 3600000, H1 = 3600000;
-  const turnosCont: Record<EstadoTurno, number> = { OK: 0, MAL_FICHADO: 0, SIN_SALIDA: 0, REVISAR_HORARIO: 0, SOLO_SALIDA: 0, SIN_FICHAJE: 0 };
+  const turnosCont: Record<EstadoTurno, number> = { OK: 0, FUERA_HORARIO: 0, MAL_FICHADO: 0, SIN_SALIDA: 0, REVISAR_HORARIO: 0, SOLO_SALIDA: 0, SIN_FICHAJE: 0 };
   const sinSalidaPorDni: Record<string, DiaSinSalida[]> = {};
-
-  for (const t of expanded) {
-    const cruza = t.s < t.e, g24 = t.s === t.e;
-    const expEnt = dtLocal(t.f, toMin(t.e));
-    const expSal = (cruza || g24) ? dtLocal(addDaysIso(t.f, 1), toMin(t.s)) : dtLocal(t.f, toMin(t.s));
-    const mid = (expEnt + expSal) / 2;
-    const lo = expEnt - H2, hi = expSal + H3;
-    const ps = (punches[t.dni] || []).filter(p => p.ts >= lo && p.ts <= hi);
-    const entSide = ps.filter(p => p.ts <= mid).sort((a, b) => a.ts - b.ts);
-    const salSide = ps.filter(p => p.ts > mid).sort((a, b) => a.ts - b.ts);
-    const ent = entSide[0] || null;
-    const sal = salSide.length ? salSide[salSide.length - 1] : null;
-
-    if (!ent && !sal) { turnosCont.SIN_FICHAJE++; continue; }
-    if (!ent && sal) { turnosCont.SOLO_SALIDA++; continue; }
-    if (ent && !sal) {
-      // ¿tiene salida real que el horario no agarró? -> revisar horario, NO sin-salida.
-      // Buscamos la primera marca del día y la ÚLTIMA marca en un RELOJ DE SALIDA
-      // (no cualquier marca: así no confundimos la entrada de la mañana siguiente).
-      const dLo = dtLocal(t.f, 0), dHi = dtLocal(addDaysIso(t.f, 1), 9 * 60);
-      const day = (punches[t.dni] || []).filter(p => p.ts >= dLo && p.ts <= dHi).sort((a, b) => a.ts - b.ts);
-      const first = day[0];
-      const salPunches = day.filter(p => lector[p.sn] === 'SAL' || lector[p.sn] === 'BIDI');
-      const lastSal = salPunches.length ? salPunches[salPunches.length - 1] : null;
-      const salidaReal = !!first && !!lastSal && (lastSal.ts - first.ts) >= H2;
-      if (salidaReal) { turnosCont.REVISAR_HORARIO++; }
-      else {
-        turnosCont.SIN_SALIDA++;
-        const entHora = new Date(ent.ts); const p = (n: number) => String(n).padStart(2, '0');
-        (sinSalidaPorDni[t.dni] = sinSalidaPorDni[t.dni] || []).push({
-          fecha: t.f, turno: turnoDe(t.e, t.s), entrada: `${p(entHora.getHours())}:${p(entHora.getMinutes())}`, horaEntrada: t.e, horaSalida: t.s,
-        });
+  const fueraPorDni: Record<string, DiaFueraHorario[]> = {};
+  const alternaPorDni: Record<string, Alternancia> = {};
+  const fechasSet = new Set(fechas);
+  for (const dni of allDnis) {
+    const ev = evaluarAgente(H[dni], punches[dni] || [], lector, fechas);
+    if (ev.alterna) alternaPorDni[dni] = ev.alterna;
+    const fuera: DiaFueraHorario[] = [...ev.fueraSemana];
+    for (const t of ev.turnos) {
+      turnosCont[t.estado]++;
+      if (t.estado === 'SIN_SALIDA') (sinSalidaPorDni[dni] = sinSalidaPorDni[dni] || []).push({ fecha: t.fecha, turno: t.turno, entrada: t.entrada, horaEntrada: t.horaEntrada, horaSalida: t.horaSalida });
+      else if (t.estado === 'FUERA_HORARIO' || t.estado === 'MAL_FICHADO' || t.estado === 'REVISAR_HORARIO') {
+        fuera.push({ fecha: t.fecha, turno: t.turno, horario: `${t.horaEntrada}-${t.horaSalida}`, entrada: t.entrada, salida: t.salida, estado: t.estado, motivos: t.motivos });
       }
-      continue;
     }
-    // ent && sal -> validar reloj/hora
-    if (ent && sal) {
-      let mal = false;
-      if (lector[ent.sn] === 'SAL') mal = true;
-      if (lector[sal.sn] === 'ENT') mal = true;
-      if (Math.abs(ent.ts - expEnt) > H1) mal = true;
-      if (Math.abs(sal.ts - expSal) > H1) mal = true;
-      if (mal) turnosCont.MAL_FICHADO++; else turnosCont.OK++;
-    }
+    if (fuera.length) fueraPorDni[dni] = fuera.sort((x, y) => x.fecha.localeCompare(y.fecha));
   }
 
   // ── enriquecer con personalv5 + filtros ──
-  const dnisSS = Object.keys(sinSalidaPorDni);
+  const dnisSS = [...new Set([...Object.keys(sinSalidaPorDni), ...Object.keys(fueraPorDni)])];
   const info: Record<string, any> = {};
   if (dnisSS.length) {
     const rows = await sequelize.query<any>(
@@ -419,7 +643,6 @@ export async function evaluarSinSalida(
   const ubicFilter = opts.ubicaciones && opts.ubicaciones.length ? new Set(opts.ubicaciones.map(u => u.toUpperCase().trim())) : null;
   const minDias = Math.max(1, Number(opts.minDias) || 1);
 
-  const fechasSet = new Set(fechas);
   const agentes: AgenteSinSalida[] = [];
   for (const dni of dnisSS) {
     const i = info[dni] || {};
@@ -430,9 +653,10 @@ export async function evaluarSinSalida(
     const ubicacion = UPA[dni] || 'HOSPITAL';
     if (ubicFilter && !ubicFilter.has(ubicacion.toUpperCase().trim())) continue;
 
-    let dias = sinSalidaPorDni[dni];
-    if (turnoFilter) dias = dias.filter(d => turnoFilter.has(d.turno));
-    if (dias.length < minDias) continue;
+    let dias = sinSalidaPorDni[dni] || [];
+    let fuera = fueraPorDni[dni] || [];
+    if (turnoFilter) { dias = dias.filter(d => turnoFilter.has(d.turno)); fuera = fuera.filter(d => turnoFilter.has(d.turno)); }
+    if (dias.length < minDias && fuera.length === 0) continue;
 
     const email = String(i.email || '').trim() || null;
     agentes.push({
@@ -445,7 +669,8 @@ export async function evaluarSinSalida(
       email,
       emailValido: !!email && emailValido(email),
       dias: dias.sort((a, b) => a.fecha.localeCompare(b.fecha)),
-      horario: resumenHorario(H[dni] || {}),
+      fueraHorario: fuera,
+      horario: resumenHorario(H[dni] || {}, alternaPorDni[dni] || null),
       coincidencia: analizarCoincidencia(H[dni] || {}, punches[dni] || [], fechasSet, lector),
     });
   }
@@ -455,7 +680,8 @@ export async function evaluarSinSalida(
     agentes,
     resumen: {
       turnos: turnosCont,
-      agentesSinSalida: agentes.length,
+      agentesSinSalida: agentes.filter(a => a.dias.length > 0).length,
+      agentesFueraHorario: agentes.filter(a => a.fueraHorario.length > 0).length,
       diasSinSalida: agentes.reduce((a, b) => a + b.dias.length, 0),
       fechas,
     },

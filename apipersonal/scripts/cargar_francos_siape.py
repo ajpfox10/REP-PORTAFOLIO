@@ -710,9 +710,25 @@ def _exigir_siape_al_frente(que):
     raise RuntimeError(f"SiAPe no esta al frente (alguien usando la PC?): no {que}")
 
 
+def _apagar_bloq_mayus():
+    """pyautogui.write respeta el Bloq Mayus: con la tecla activa la clave (minusculas) entra
+    en MAYUSCULAS y SiAPe responde "El Usuario no existe..." (20/10/2026)."""
+    try:
+        import ctypes
+        u = ctypes.windll.user32
+        if u.GetKeyState(0x14) & 1:
+            log("Bloq Mayus activado: lo apago antes de tipear")
+            u.keybd_event(0x14, 0x45, 1, 0)
+            u.keybd_event(0x14, 0x45, 3, 0)
+            time.sleep(0.2)
+    except Exception as e:
+        log(f"AVISO: no pude revisar el Bloq Mayus: {e}")
+
+
 def _escribir_en_campo(info, texto):
     """Click en el campo por bounds y tipeo. Oracle Forms no acepta setTextContents."""
     _exigir_siape_al_frente("tipeo")
+    _apagar_bloq_mayus()
     _jab_click_bounds(info)
     pyautogui.hotkey("ctrl", "a")
     pyautogui.press("delete")
@@ -1968,24 +1984,49 @@ def seleccionar_agente_por_dni(r):
     cerrar_modales()
 
 
+def _nombre_siape(dni, nombre):
+    """El nombre como lo tiene SiAPe (ultimo registro de `historial` para el DNI); si no
+    hay, el de la base. 26/10: SiAPe tiene 'CARABAJAL DANIEL' y la base 'CARABAJAL DANIEL
+    ALFREDO' -> el nombre completo no aparecia y con el apellido salia CARLA DENISE
+    (114 de 1394 activos con nombre distinto)."""
+    try:
+        with conn() as cn, cn.cursor() as cur:
+            cur.execute(
+                "SELECT apellido, nombre FROM historial WHERE dni = %s "
+                "ORDER BY fecha_desde DESC, id DESC LIMIT 1",
+                (dni,),
+            )
+            h = cur.fetchone()
+    except Exception as e:
+        log(f"AVISO: no pude leer el nombre de SiAPe del historial: {e}")
+        return nombre
+    siape = _norm_nombre(f"{h['apellido'] or ''} {h['nombre'] or ''}") if h else ""
+    if siape and siape != _norm_nombre(nombre):
+        log(f"   en SiAPe figura como '{siape}' (base: '{nombre}')")
+        return siape
+    return nombre
+
+
 def abrir_agente(r):
-    """Por DNI; si eso falla, por nombre en Ficheros exigiendo el nombre COMPLETO.
-    Si SiAPe no lo tiene ni por DNI ni por nombre -> AgenteNoEncontrado."""
+    """Por DNI; si eso falla, por nombre en Ficheros exigiendo el nombre COMPLETO (el que
+    tiene SiAPe segun el historial). Si SiAPe no lo tiene ni por DNI ni por nombre ->
+    AgenteNoEncontrado."""
     if SIAPE_BUSCAR_POR_DNI:
         try:
             seleccionar_agente_por_dni(r)
             return "DNI"
         except Exception as e:
             log(f"   por DNI no pude ({e}); pruebo por nombre completo en Ficheros")
+    nombre = _nombre_siape(r["dni"], r["nombre"])
     try:
-        _buscar_agente_en_ficheros_jab(r["nombre"], cuil=r["cuil"], exigir="completo")
+        _buscar_agente_en_ficheros_jab(nombre, cuil=r["cuil"], exigir="completo")
     except RuntimeError as e:
         # Ficheros no lo trae, o trae a OTRA persona con el mismo apellido: se marca y se
         # sigue. Si la fila ni siquiera tiene el apellido buscado es la grilla del agente
         # anterior que no se refresco ("Ficheros no quedo activo"): falla del robot, no se
         # marca (12/10: BOLIG quedo "no esta" por la fila vieja de CAMPOS ALDERETE).
         msg = str(e)
-        apellido = (r["nombre"] or "").split()[0].upper() if r.get("nombre") else ""
+        apellido = (nombre or "").split()[0].upper() if nombre else ""
         if "sin resultado" in msg:
             raise AgenteNoEncontrado(msg)
         if "nombre completo" in msg:
@@ -2026,8 +2067,58 @@ def _asegurar_escritorio():
         log(f"AVISO: no pude asegurar el escritorio activo: {e}")
 
 
+class SiapeCaido(RuntimeError):
+    """No hay forma de volver a entrar a SiAPe: el robot anota el error en lo que queda y termina."""
+
+
+def entrar_siape(reintentos=3, espera=90, cerrar_antes=False):
+    """Deja SiAPe en eRreH reintentando (cerrar + esperar + login). No corta la corrida:
+    devuelve None si quedo listo o el texto del ultimo error para anotarlo en la cola
+    (21/10: 'no esta al frente' / 'no pude dejar listo en 240s' mataban el robot entero)."""
+    ultimo = None
+    for i in range(1, reintentos + 1):
+        try:
+            if cerrar_antes or i > 1:
+                try:
+                    cerrar_siape()
+                except Exception as e:
+                    log(f"AVISO: no pude cerrar SiAPe: {e}")
+                _jab_reset_driver()
+                _ESCALA_JAB.update(clave=None, valor=None)
+                _asegurar_escritorio()
+            asegurar_sesion()
+            cerrar_modales()
+            ventana_siape()
+            return None
+        except Exception as e:
+            ultimo = f"{type(e).__name__}: {e}"
+            log(f"   no pude entrar a SiAPe (intento {i}/{reintentos}): {ultimo}")
+            if i < reintentos:
+                log(f"   espero {espera}s y reintento...")
+                time.sleep(espera)
+    return ultimo
+
+
+def abrir_agente_seguro(dni, cuil, nombre):
+    """abrir_agente (DNI o nombre COMPLETO) + un reintento tras reiniciar SiAPe si falla el
+    robot. AgenteNoEncontrado se propaga sin reintentar: nunca se abre a otra persona
+    (21/10: con solo el apellido el robot del jefe cargo FC a GARAY ANGEL por GARAY NATALIA)."""
+    r = {"dni": str(dni), "cuil": cuil, "nombre": nombre}
+    try:
+        return abrir_agente(r)
+    except AgenteNoEncontrado:
+        raise
+    except Exception as e:
+        log(f"   ERROR abriendo el agente: {e} -> reinicio SiAPe y reintento")
+        err = entrar_siape(cerrar_antes=True)
+        if err:
+            raise SiapeCaido(f"no pude volver a entrar a SiAPe: {err}")
+        return abrir_agente(r)
+
+
 def seleccionar_agente_ausencias(cuil, nombre):
-    _buscar_agente_en_ficheros_jab(nombre, cuil=cuil)
+    # nombre COMPLETO: con solo el apellido se abria a otra persona del mismo apellido
+    _buscar_agente_en_ficheros_jab(nombre, cuil=cuil, exigir="completo")
     if not _jab_select_tab(TAB_AUSENCIAS):
         # fallback: la coordenada calibrada sobre 1920x1080 maximizado
         _click_abs("tab_ausencias")
@@ -2339,6 +2430,16 @@ def _log_foco(cuando):
         log(f"   [foco {cuando}] (ninguno dentro de la ficha)")
 
 
+def _formulario_en_blanco(combo, combo_info):
+    """True si el registro de arriba esta vacio: sin TIPO DE AUSENCIA elegido y sin FECHA."""
+    tipo = next((n for n, sel in _opciones_tipo(combo, combo_info) if sel), None)
+    fecha = _fecha_ficha_arriba()
+    if tipo or fecha:
+        log(f"   formulario de arriba: TIPO='{tipo}' FECHA='{fecha}'")
+        return False
+    return True
+
+
 def _registro_nuevo():
     """
     El `+` verde va DESPUES de guardar (asi se opera a mano): deja el formulario
@@ -2386,6 +2487,20 @@ def cargar_dia_ausencia_agente(dia, dialogos=None):
     """
     combo, combo_info = asegurar_pestana_ausencias()
     _log_foco("antes del combo")
+
+    # 17/10: el formulario de arriba NO siempre es un registro nuevo. Al abrir la ficha muestra
+    # el registro mas reciente, y despues de un reemplazo (PRESENTE -> franco) queda parado en
+    # otro registro existente. Escribir ahi PISABA ese registro (ROMANO: el 13–15/10 PRESENTE
+    # terminaron como franco del 03 y del 10/10). Solo se carga sobre un registro EN BLANCO.
+    if not _formulario_en_blanco(combo, combo_info):
+        log("   el formulario de arriba muestra un registro existente: aprieto + (registro nuevo)")
+        _registro_nuevo()
+        cerrar_modales()
+        combo, combo_info = asegurar_pestana_ausencias()
+        if not _formulario_en_blanco(combo, combo_info):
+            volver_a_ficheros()
+            return False, (f"{dia:%d/%m/%Y}: el formulario no quedo en blanco (hay un registro existente "
+                           f"arriba); no cargo para no pisarlo")
 
     if not _elegir_tipo_ausencia_jab(combo, combo_info, TIPO_AUSENCIA):
         quedo = next((n for n, sel in _opciones_tipo(combo, combo_info) if sel), None)
@@ -2526,7 +2641,8 @@ def ir_a_fecha_grilla(dia, max_vueltas=15):
             log(f"   grilla en {dia:%d/%m/%Y}: {[(f, t) for f, t, _i in del_dia]}")
             return del_dia
         nueva, vieja = max(fechas_ok), min(fechas_ok)
-        log(f"   grilla muestra {vieja:%d/%m/%Y}..{nueva:%d/%m/%Y} ({len(fechas_ok)} filas), busco {dia:%d/%m/%Y}")
+        log(f"   grilla muestra {vieja:%d/%m/%Y}..{nueva:%d/%m/%Y} ({len(fechas_ok)} filas), busco {dia:%d/%m/%Y}: "
+            f"{[(f, t) for f, t, _i in filas]}")
         if vieja < dia < nueva:
             return []                             # la grilla pasa de largo: ese dia no hay nada
         vista = tuple(fechas_ok)
@@ -2693,7 +2809,20 @@ def reemplazar_dia(cn, r, dia, hasta=None, reabrir=None):
         time.sleep(PAUSA_MEDIA)
         cerrar_modales()
         # Control: el registro de arriba TIENE que ser el de ese dia; si no, no toco nada.
+        # 17/10 ROMANO 13/10: el clic en la ultima fila visible no movio la ficha (FECHA '').
+        # Se reintenta el clic (mas adentro de la celda) antes de rendirse.
         fecha_ficha = _fecha_ficha_arriba()
+        for intento in range(2):
+            if fecha_ficha == dia.strftime("%d/%m/%Y"):
+                break
+            log(f"   arriba quedo FECHA '{fecha_ficha}', no el {dia:%d/%m/%Y}: vuelvo a clickear la fila ({intento + 1}/2)")
+            b = celda.get("bounds") or {}
+            adentro = {"bounds": {"x": b.get("x", 0) + 4, "y": b.get("y", 0) + 2,
+                                  "width": max(b.get("width", 10) - 8, 4), "height": max(b.get("height", 10) - 4, 4)}}
+            _jab_click_bounds(adentro)
+            time.sleep(PAUSA_MEDIA + 1)
+            cerrar_modales()
+            fecha_ficha = _fecha_ficha_arriba()
         if fecha_ficha != dia.strftime("%d/%m/%Y"):
             raise RuntimeError(f"arriba quedo FECHA '{fecha_ficha}', no el {dia:%d/%m/%Y}; no cambio nada")
         combo, combo_info = asegurar_pestana_ausencias()

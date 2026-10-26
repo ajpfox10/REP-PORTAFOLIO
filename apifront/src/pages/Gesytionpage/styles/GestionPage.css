@@ -346,6 +346,7 @@
 }
 
 .gp-card-14 { padding: 14px; }
+.card.gp-modal-solido { background: #151b30; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
 .gp-card-12 { padding: 12px; }
 .gp-mt-10 { margin-top: 10px; }
 .gp-mt-6 { margin-top: 6px; }

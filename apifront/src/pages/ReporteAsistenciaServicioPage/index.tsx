@@ -26,6 +26,27 @@ interface DiaDet {
   horasReales: number;
   cumplioHoras: boolean;
   novedades: string[];
+  // criterio de control (igual que Sin fichaje salida): guardia = sale al día siguiente,
+  // tolerancia 30 min (entrar antes no es falta), semana alternada deducida de los fichajes
+  estadoTurno?: 'OK' | 'FUERA_HORARIO' | 'MAL_FICHADO' | 'SIN_SALIDA' | 'REVISAR_HORARIO' | 'SOLO_SALIDA' | 'SIN_FICHAJE' | null;
+  motivos?: string[];
+  enCurso?: boolean;
+}
+
+// Estado legible de un día (tabla y Excel)
+function estadoDia(d: DiaDet): string {
+  if (d.esFeriado) return `Feriado: ${d.feriadoNombre ?? ''}`;
+  if (!d.debiaTrabajo) return 'No laboral';
+  if (d.enCurso) return 'En curso';
+  switch (d.estadoTurno) {
+    case 'SIN_SALIDA':      return 'Sin salida';
+    case 'SOLO_SALIDA':     return 'Sin entrada';
+    case 'FUERA_HORARIO':   return 'Fuera de horario';
+    case 'REVISAR_HORARIO': return 'Ficha otro horario';
+    case 'MAL_FICHADO':     return 'Reloj equivocado';
+    case 'OK':              return 'Fichó';
+  }
+  return d.novedades.length ? 'Novedad' : 'Sin fichaje';
 }
 
 interface ResumenSemana { semana: string; teorico: number; real: number; laboral: number; }
@@ -38,6 +59,7 @@ interface AgenteReporte {
     horasTeoricas: number; horasReales: number;
     diasConFichaje: number; diasSinFichaje: number; diasSinSalida: number; diasCumplio: number; diasConNovedad: number;
     diasInvertido: number;
+    diasFueraHorario?: number;
   };
   resumenSemanal: ResumenSemana[];
 }
@@ -139,7 +161,7 @@ export function ReporteAsistenciaServicioPage() {
     try {
       const params = new URLSearchParams({ servicio_id: servicioId, periodo });
       if (siapFile)       params.set('siapFile', siapFile);
-      if (horariosFile)   params.set('horariosFile', horariosFile);
+      // los horarios del reporte salen siempre de HORARIOS.xlsx (lo decide el backend)
       if (ministerioFile) params.set('ministerioFile', ministerioFile);
       const r = await apiFetch<Reporte>(`/asistencia/reporte-servicio?${params}`);
       if (!r?.ok) throw new Error((r as any)?.error || 'Error del servidor');
@@ -165,7 +187,7 @@ export function ReporteAsistenciaServicioPage() {
     const styledCell = (v: any, style: any) => ({ v, s: style });
 
     // ── Hoja 1: Resumen ───────────────────────────────────────────────────
-    const resHdr = ['DNI','Nombre','En Horario','Días Lab.','Hs Teóricas','Hs Reales','Cumplimiento %','Con Fichaje','Sin Fichaje','Sin Salida','Cumplió Hs (≥90%)','Con Novedad'];
+    const resHdr = ['DNI','Nombre','En Horario','Días Lab.','Hs Teóricas','Hs Reales','Cumplimiento %','Con Fichaje','Sin Fichaje','Sin Salida','Fuera Horario','Cumplió Hs (≥90%)','Con Novedad'];
     const resAoa: any[][] = [resHdr.map(h => styledCell(h, { fill: FILL_HEADER, font: FONT_HEADER }))];
     for (const a of reporte.agentes) {
       const p = pct(a.resumenMensual.horasReales, a.resumenMensual.horasTeoricas);
@@ -174,7 +196,7 @@ export function ReporteAsistenciaServicioPage() {
         a.resumenMensual.diasLaborales, a.resumenMensual.horasTeoricas, a.resumenMensual.horasReales,
         p !== null ? `${p}%` : '',
         a.resumenMensual.diasConFichaje, a.resumenMensual.diasSinFichaje,
-        a.resumenMensual.diasSinSalida, a.resumenMensual.diasCumplio, a.resumenMensual.diasConNovedad,
+        a.resumenMensual.diasSinSalida, a.resumenMensual.diasFueraHorario ?? 0, a.resumenMensual.diasCumplio, a.resumenMensual.diasConNovedad,
       ]);
     }
     XLSXStyle.utils.book_append_sheet(wb, XLSXStyle.utils.aoa_to_sheet(resAoa), 'Resumen');
@@ -210,14 +232,8 @@ export function ReporteAsistenciaServicioPage() {
       diasFiltrados.forEach((d, i) => {
         const pDia = d.horasTeoricas > 0 ? Math.round((d.horasReales / d.horasTeoricas) * 100) : null;
         const novedad = d.novedades.map(n => n.replace(/^(SIAP|Min): /, '')).join(' / ');
-        const sinSalida = !!d.entrada_real && !d.salida_real;
-        const estado =
-          d.esFeriado                           ? `Feriado: ${d.feriadoNombre ?? ''}` :
-          !d.debiaTrabajo                       ? 'No laboral' :
-          !d.entrada_real && d.novedades.length ? 'Novedad' :
-          !d.entrada_real                       ? 'Sin fichaje' :
-          d.invertido                           ? 'Fichó (invertido)' :
-          sinSalida                             ? 'Sin salida' : 'Fichó';
+        const sinSalida = d.estadoTurno === 'SIN_SALIDA';
+        const estado = estadoDia(d) + (d.motivos?.length ? ` (${d.motivos.join('; ')})` : '');
 
         aoa.push([
           fmtFecha(d.fecha), d.diaSemana,
@@ -230,7 +246,7 @@ export function ReporteAsistenciaServicioPage() {
           estado, novedad,
         ]);
 
-        const sinFichaje = !d.entrada_real && d.debiaTrabajo && !d.novedades.length;
+        const sinFichaje = d.estadoTurno === 'SIN_FICHAJE' && d.debiaTrabajo && !d.novedades.length;
         const noCumplio  = d.debiaTrabajo && d.horasTeoricas > 0 && !d.cumplioHoras;
         if (d.invertido || sinSalida || sinFichaje || noCumplio) {
           styleMap.set(HEADER_ROWS + i, {
@@ -340,7 +356,7 @@ export function ReporteAsistenciaServicioPage() {
           </div>
 
           <div style={fg}>
-            <label htmlFor="ras-horarios" style={lbl}>Archivo Horarios</label>
+            <label htmlFor="ras-horarios" style={lbl} title="El reporte usa siempre HORARIOS.xlsx; este archivo es para la pestaña de cruce de horarios">Archivo Horarios (cruce)</label>
             <select id="ras-horarios" name="horariosFile" className="input" value={horariosFile} onChange={e => setHorariosFile(e.target.value)}>
               <option value="">— sin horarios —</option>
               {archivos.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
@@ -411,7 +427,8 @@ export function ReporteAsistenciaServicioPage() {
                     <th>Con Fichaje</th>
                     <th>Sin Fichaje</th>
                     <th title="Fichó entrada pero no salida">Sin Salida</th>
-                    <th title="Fichajes con entrada y salida invertidos (ambos tipo entrada)">Invertidos</th>
+                    <th title="Entró más de 30 min tarde o salió más de 30 min antes/después">Fuera Horario</th>
+                    <th title="Fichó en el reloj equivocado (entrada en reloj de salida o al revés)">Reloj equiv.</th>
                     <th title="Días que cumplió al menos el 90% de las horas teóricas">Cumplió Hs</th>
                     <th>Con Novedad</th>
                     <th>Detalle</th>
@@ -454,6 +471,9 @@ export function ReporteAsistenciaServicioPage() {
                           <td style={{ color: a.resumenMensual.diasSinSalida ? '#eab308' : undefined }}>
                             {a.resumenMensual.diasSinSalida || '—'}
                           </td>
+                          <td style={{ color: a.resumenMensual.diasFueraHorario ? '#f97316' : undefined }}>
+                            {a.resumenMensual.diasFueraHorario || '—'}
+                          </td>
                           <td style={{ color: a.resumenMensual.diasInvertido ? '#eab308' : undefined }}>
                             {a.resumenMensual.diasInvertido || '—'}
                           </td>
@@ -481,7 +501,7 @@ export function ReporteAsistenciaServicioPage() {
                         {/* ── Detalle expandido ── */}
                         {abierto && (
                           <tr>
-                            <td colSpan={11} style={{ padding: 0, background: 'rgba(0,0,0,0.15)' }}>
+                            <td colSpan={15} style={{ padding: 0, background: 'rgba(0,0,0,0.15)' }}>
                               <div style={{ padding: '12px 16px' }}>
 
                                 {/* Tabs semanas / días */}
@@ -567,14 +587,21 @@ export function ReporteAsistenciaServicioPage() {
                                         {a.dias
                                           .filter(d => d.debiaTrabajo || d.esFeriado || d.entrada_real !== null || d.salida_real !== null)
                                           .map(d => {
-                                          const sinSalida = !!d.entrada_real && !d.salida_real;
+                                          const sinSalida = d.estadoTurno === 'SIN_SALIDA';
+                                          const fuera = d.estadoTurno === 'FUERA_HORARIO' || d.estadoTurno === 'REVISAR_HORARIO';
                                           const bgRow: React.CSSProperties =
                                             d.esFeriado     ? { background: 'rgba(99,102,241,0.1)' } :
                                             !d.debiaTrabajo ? { background: 'rgba(148,163,184,0.07)', borderLeft: '3px solid #475569' } :
+                                            d.enCurso       ? {} :
                                             d.invertido     ? { background: 'rgba(234,179,8,0.1)', borderLeft: '3px solid #eab308' } :
-                                            sinSalida       ? { background: 'rgba(234,179,8,0.1)', borderLeft: '3px solid #eab308' } :
-                                            !d.entrada_real && !d.novedades.length ? { background: 'rgba(239,68,68,0.1)', borderLeft: '3px solid #ef4444' } :
+                                            sinSalida || d.estadoTurno === 'SOLO_SALIDA' ? { background: 'rgba(234,179,8,0.1)', borderLeft: '3px solid #eab308' } :
+                                            fuera           ? { background: 'rgba(249,115,22,0.1)', borderLeft: '3px solid #f97316' } :
+                                            d.estadoTurno === 'SIN_FICHAJE' && !d.novedades.length ? { background: 'rgba(239,68,68,0.1)', borderLeft: '3px solid #ef4444' } :
                                             {};
+                                          const est = estadoDia(d);
+                                          const colorEst =
+                                            est === 'Fichó' ? '#10b981' : est === 'No laboral' || est === 'En curso' ? '#94a3b8'
+                                            : est === 'Sin fichaje' ? '#ef4444' : fuera ? '#f97316' : '#eab308';
                                           return (
                                             <tr key={d.fecha} style={bgRow}>
                                               <td>{fmtFecha(d.fecha)}</td>
@@ -582,17 +609,8 @@ export function ReporteAsistenciaServicioPage() {
                                               <td style={{ fontSize: '0.72rem' }}>
                                                 {d.esFeriado
                                                   ? <span style={{ color: '#818cf8' }}>🗓 {d.feriadoNombre}</span>
-                                                  : !d.debiaTrabajo
-                                                    ? <span style={{ color: '#94a3b8' }}>No laboral</span>
-                                                    : d.invertido
-                                                      ? <span style={{ color: '#eab308' }}>⚠ Invertido</span>
-                                                      : sinSalida
-                                                        ? <span style={{ color: '#eab308' }}>⚠ Sin salida</span>
-                                                        : d.entrada_real
-                                                          ? <span style={{ color: '#10b981' }}>✓ Fichó</span>
-                                                          : d.novedades.length
-                                                            ? <span style={{ color: '#eab308' }}>📋 Novedad</span>
-                                                            : <span style={{ color: '#ef4444' }}>✗ Sin fichaje</span>}
+                                                  : <span style={{ color: colorEst }}>{est}</span>}
+                                                {!!d.motivos?.length && <div style={{ color: '#fdba74', fontSize: '0.68rem' }}>{d.motivos.join('; ')}</div>}
                                               </td>
                                               <td>{d.entrada_prog ?? '—'}</td>
                                               <td>{d.salida_prog  ?? '—'}</td>

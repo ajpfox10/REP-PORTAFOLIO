@@ -271,7 +271,25 @@ def traer_cola(cn, rotacion=None, limit_agentes=None):
     return por_agente
 
 
+TOCADAS = set()      # filas que esta corrida ya marco (para no pisarlas al anotar un corte)
+
+
+def anotar(cn, ids, detalle):
+    """Deja el motivo en filas que no se llegaron a procesar, SIN gastar intento ni
+    cambiar el estado: se vuelven a tomar en la proxima corrida."""
+    ids = [i for i in ids if i not in TOCADAS]
+    if not ids:
+        return
+    with cn.cursor() as cur:
+        cur.execute(
+            f"UPDATE {TABLA} SET detalle=%s WHERE id IN ({','.join(['%s'] * len(ids))}) "
+            f"AND estado IN ('PENDIENTE','ERROR')",
+            [str(detalle)[:500], *ids])
+    cn.commit()
+
+
 def marcar(cn, fila_id, estado, detalle=None):
+    TOCADAS.add(fila_id)
     with cn.cursor() as cur:
         cur.execute(
             f"UPDATE {TABLA} SET estado=%s, detalle=%s, intentos=intentos+1, "
@@ -318,84 +336,139 @@ def main():
     pyautogui.FAILSAFE = F.SIAPE_PYAUTOGUI_FAILSAFE
     pyautogui.PAUSE = F.PAUSA_CORTA
 
-    F.asegurar_sesion()
-    F.cerrar_modales()
-    F.ventana_siape()
-
     hubo_error = False
-    for dni, filas in cola.items():
-        nombre = filas[0]["nombre"]
-        F.log(f"-- {dni} {nombre} ({len(filas)} dia/s) ---------------------")
-        if not nombre:
-            for x in filas:
-                marcar(cn, x["id"], "ERROR", "El DNI no está en personal: no lo puedo buscar en SiAPe")
-            hubo_error = True
-            continue
-        try:
-            F.seleccionar_agente_ausencias(filas[0]["cuil"], nombre)
-        except Exception as e:
-            F.log(f"   ERROR buscando el agente: {e}")
-            for x in filas:
-                marcar(cn, x["id"], "ERROR", f"No pude abrir el agente en SiAPe: {e}")
-            MN.registrar_item(SCRIPT_ID, dni, nombre, "FC ROTACION", f"{filas[0]['fecha']:%d/%m/%Y}",
-                              f"{filas[-1]['fecha']:%d/%m/%Y}", "error", f"No pude abrir el agente: {e}")
-            hubo_error = True
-            try:
-                F.cerrar_modales()
-            except Exception:
-                pass
-            continue
+    tot = {"ok": 0, "ya": 0, "err": 0}
+    agentes_error = []
+    corte = None
+    err_s = F.entrar_siape()
+    if err_s:
+        corte = f"No pude entrar a SiAPe: {err_s}"
 
-        ok = ya = err = 0
-        errores = []
-        ficha_sucia = False
-        for x in filas[: args.max_dias] if args.max_dias else filas:
-            dia = x["fecha"]
-            if ficha_sucia:
-                # Un dia rechazado deja la ficha a medio completar (el combo despues ya
-                # no toma el tipo: "quedo en 'None'"). Se reabre el agente limpio.
-                try:
-                    F.volver_a_ficheros()
-                    F.seleccionar_agente_ausencias(filas[0]["cuil"], nombre)
-                    ficha_sucia = False
-                except Exception as e:
-                    marcar(cn, x["id"], "ERROR", f"{dia:%d/%m/%Y}: no pude reabrir el agente: {e}")
-                    errores.append(f"{dia:%d/%m/%Y}: no pude reabrir el agente: {e}")
-                    err += 1
-                    break
-            F.log(f"   cargando {dia:%d/%m/%Y}...")
+    for dni, filas in (cola.items() if not corte else []):
+        try:
+            nombre = filas[0]["nombre"]
+            F.log(f"-- {dni} {nombre} ({len(filas)} dia/s) ---------------------")
+            if not nombre:
+                for x in filas:
+                    marcar(cn, x["id"], "ERROR", "El DNI no está en personal: no lo puedo buscar en SiAPe")
+                tot["err"] += len(filas)
+                agentes_error.append(f"{dni} (sin nombre)")
+                hubo_error = True
+                continue
             try:
-                cargo, motivo = F.cargar_dia_ausencia_agente(dia)
+                F.abrir_agente_seguro(dni, filas[0]["cuil"], nombre)
+            except F.SiapeCaido:
+                raise
             except Exception as e:
-                marcar(cn, x["id"], "ERROR", f"{dia:%d/%m/%Y}: {e}")
-                errores.append(f"{dia:%d/%m/%Y}: {e}")
-                err += 1
-                F.log(f"   ERROR {dia:%d/%m/%Y}: {e} -> paso al siguiente agente")
-                break          # la pantalla quedo en estado desconocido: el agente siguiente reabre Ficheros
-            if cargo:
-                marcar(cn, x["id"], "OK")
-                ok += 1
-                F.log(f"   OK   {dia:%d/%m/%Y}")
-            elif "ya existia" in (motivo or "").lower():
-                marcar(cn, x["id"], "YA_EXISTIA", motivo)
-                ya += 1
-                ficha_sucia = True
-                F.log(f"   YA   {motivo}")
-            else:
-                marcar(cn, x["id"], "ERROR", motivo)
-                errores.append(motivo)
-                err += 1
-                ficha_sucia = True
-                F.log(f"   SKIP {motivo}")
-        hubo_error = hubo_error or err > 0
-        MN.registrar_item(SCRIPT_ID, dni, nombre, "FC ROTACION", f"{filas[0]['fecha']:%d/%m/%Y}",
-                          f"{filas[-1]['fecha']:%d/%m/%Y}",
-                          "ok" if not err and not ya else ("error" if err and not ok else "aviso"),
-                          f"{ok} cargado(s), {ya} ya existían, {err} con error"
-                          + (f": {'; '.join(errores)[:600]}" if errores else ""))
+                no_esta = isinstance(e, F.AgenteNoEncontrado)
+                F.log(f"   {'NO ESTA EN SiAPe' if no_esta else 'ERROR buscando el agente'}: {e}")
+                for x in filas:
+                    marcar(cn, x["id"], "ERROR",
+                           f"{'No está en SiAPe con ese DNI/nombre completo' if no_esta else 'No pude abrir el agente en SiAPe'}: {e}")
+                MN.registrar_item(SCRIPT_ID, dni, nombre, "FC ROTACION", f"{filas[0]['fecha']:%d/%m/%Y}",
+                                  f"{filas[-1]['fecha']:%d/%m/%Y}", "error", f"No pude abrir el agente: {e}")
+                hubo_error = True
+                tot["err"] += len(filas)
+                agentes_error.append(f"{dni} {nombre}")
+                if no_esta:
+                    try:
+                        F.cerrar_modales()
+                    except Exception as e2:
+                        F.log(f"AVISO: no pude cerrar avisos: {e2}")
+                else:
+                    err_s = F.entrar_siape(cerrar_antes=True)
+                    if err_s:
+                        raise F.SiapeCaido(f"no pude volver a entrar a SiAPe: {err_s}")
+                continue
+
+            ok = ya = err = 0
+            errores = []
+            ficha_sucia = False
+            for x in filas[: args.max_dias] if args.max_dias else filas:
+                dia = x["fecha"]
+                if ficha_sucia:
+                    # Un dia rechazado deja la ficha a medio completar (el combo despues ya
+                    # no toma el tipo: "quedo en 'None'"). Se reabre el agente limpio.
+                    try:
+                        F.volver_a_ficheros()
+                        F.abrir_agente_seguro(dni, filas[0]["cuil"], nombre)
+                        ficha_sucia = False
+                    except Exception as e:
+                        marcar(cn, x["id"], "ERROR", f"{dia:%d/%m/%Y}: no pude reabrir el agente: {e}")
+                        errores.append(f"{dia:%d/%m/%Y}: no pude reabrir el agente: {e}")
+                        err += 1
+                        break
+                F.log(f"   cargando {dia:%d/%m/%Y}...")
+                try:
+                    cargo, motivo = F.cargar_dia_ausencia_agente(dia)
+                except Exception as e:
+                    marcar(cn, x["id"], "ERROR", f"{dia:%d/%m/%Y}: {e}")
+                    errores.append(f"{dia:%d/%m/%Y}: {e}")
+                    err += 1
+                    F.log(f"   ERROR {dia:%d/%m/%Y}: {e} -> paso al siguiente agente")
+                    break          # la pantalla quedo en estado desconocido: el agente siguiente reabre Ficheros
+                if cargo:
+                    marcar(cn, x["id"], "OK")
+                    ok += 1
+                    F.log(f"   OK   {dia:%d/%m/%Y}")
+                elif "ya existia" in (motivo or "").lower():
+                    marcar(cn, x["id"], "YA_EXISTIA", motivo)
+                    ya += 1
+                    ficha_sucia = True
+                    F.log(f"   YA   {motivo}")
+                else:
+                    marcar(cn, x["id"], "ERROR", motivo)
+                    errores.append(motivo)
+                    err += 1
+                    ficha_sucia = True
+                    F.log(f"   SKIP {motivo}")
+            # dias que quedaron sin tocar porque se corto el agente: queda el motivo
+            if errores:
+                anotar(cn, [x["id"] for x in filas], f"No se llego a cargar: el agente se corto por {errores[-1]}")
+            hubo_error = hubo_error or err > 0
+            tot["ok"] += ok
+            tot["ya"] += ya
+            tot["err"] += err
+            if err:
+                agentes_error.append(f"{dni} {nombre}")
+            MN.registrar_item(SCRIPT_ID, dni, nombre, "FC ROTACION", f"{filas[0]['fecha']:%d/%m/%Y}",
+                              f"{filas[-1]['fecha']:%d/%m/%Y}",
+                              "ok" if not err and not ya else ("error" if err and not ok else "aviso"),
+                              f"{ok} cargado(s), {ya} ya existían, {err} con error"
+                              + (f": {'; '.join(errores)[:600]}" if errores else ""))
+
+        except F.SiapeCaido as e:
+            corte = f"SiAPe se cayo con {dni} {nombre} y no pude volver a entrar: {e}"
+            break
+        except Exception as e:
+            # cualquier otra falla: queda anotada en este agente y sigo con el siguiente
+            msg = f"{type(e).__name__}: {e}"
+            F.log(f"   ERROR inesperado con {dni}: {msg} -> sigo con el siguiente")
+            pend = [x["id"] for x in filas if x["id"] not in TOCADAS]
+            for i in pend:
+                marcar(cn, i, "ERROR", f"Falla del robot: {msg}")
+            tot["err"] += len(pend)
+            agentes_error.append(f"{dni} {nombre}")
+            hubo_error = True
+            err_s = F.entrar_siape(cerrar_antes=True)
+            if err_s:
+                corte = f"Despues del error con {dni} no pude volver a entrar a SiAPe: {err_s}"
+                break
+
+    sin_procesar = 0
+    if corte:
+        hubo_error = True
+        ids = [x["id"] for fs in cola.values() for x in fs if x["id"] not in TOCADAS]
+        sin_procesar = len(ids)
+        anotar(cn, ids, f"No se proceso: {corte}")
+        F.log(f"CORTE: {corte} ({sin_procesar} dia/s quedan pendientes con el motivo anotado)")
 
     cn.close()
     F.log("Listo.")
+    F.log(f"RESUMEN: {tot['ok']} cargado(s), {tot['ya']} ya existian, {tot['err']} con error"
+          + (f", {sin_procesar} sin procesar" if sin_procesar else "")
+          + (f" | agentes con error: {', '.join(dict.fromkeys(agentes_error))[:250]}" if agentes_error else "")
+          + (f" | {corte[:200]}" if corte else ""))
     return 1 if hubo_error else 0
 
 

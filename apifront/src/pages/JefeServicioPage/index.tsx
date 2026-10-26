@@ -8,6 +8,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
+import { DistribucionEnfermeria } from '../EnfermeriaDistribucionPage';
+import { DotacionCategorias } from './DotacionCategorias';
 import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
 import { apiFetch } from '../../api/http';
@@ -2455,6 +2457,18 @@ export function JefeServicioPage() {
   // Todos los agentes ACTIVOS por DNI (filtra los pases de enfermería y da nombre a los del otro servicio)
   const [activosPorDni, setActivosPorDni] = useState<Record<string, any>>({});
   const [enfermeriaModal, setEnfermeriaModal] = useState<null|{titulo:string;filas:{apellido:string;nombre:string;ocupacion:string;servicio:string;sector:string;fechaDesde:string}[]}>(null);
+  // Pestañas de la tarjeta de enfermería por dependencia: admin ve las 3; cada jefe de enfermería solo la suya
+  const ENF_TABS = [
+    { key: 'HOSPITAL', label: '🏥 Hospital', servicios: [24, 34] },
+    { key: 'UPA18',    label: '🚑 UPA 18',   servicios: [38] },
+    { key: 'UPA4',     label: '🚑 UPA 4',    servicios: [51] },
+  ];
+  const tabsEnf = isGlobal ? ENF_TABS : ENF_TABS.filter(t => servicioId !== null && t.servicios.includes(servicioId));
+  const [enfTabSel, setEnfTabSel] = useState<string>('');
+  const enfTab = tabsEnf.find(t => t.key === enfTabSel)?.key ?? tabsEnf[0]?.key ?? '';
+  // Panel derecho: pestaña Enfermería o Dotación por categoría (esta la ve el admin y todo jefe con servicio)
+  const verDotacion = isGlobal || servicioId !== null;
+  const [vistaDerecha, setVistaDerecha] = useState<'enf' | 'dot'>('enf');
 
   const cargarEnfermeria = useCallback(async () => {
     if (!esJefeEnfermeria || !otroServicioEnfermeriaId) return;
@@ -2811,6 +2825,26 @@ export function JefeServicioPage() {
             <div className="js-sector-meta">
               {loadingAg ? '🔄 Cargando…' : `${agentes.length} agentes activos`}
             </div>
+            <button
+              className="btn"
+              type="button"
+              style={{ marginTop: 8, width: '100%', fontSize: '0.8rem' }}
+              title="Presentes, ausentes por motivo y sin fichaje, día por día y por turno (se abre en otra pestaña)"
+              onClick={() => window.open('/app/presentismo-sector', '_blank', 'noopener')}
+            >
+              📊 Presentismo por turno
+            </button>
+            {(isGlobal || (servicioId !== null && [24, 34, 38, 51].includes(servicioId))) && (
+              <button
+                className="btn"
+                type="button"
+                style={{ marginTop: 6, width: '100%', fontSize: '0.8rem' }}
+                title="Cantidad de enfermeros por sector y distribución por turno/horario (se abre en otra pestaña)"
+                onClick={() => window.open('/app/enfermeria-distribucion', '_blank', 'noopener')}
+              >
+                🩺 Distribución de enfermería
+              </button>
+            )}
           </div>
 
           {/* Búsqueda */}
@@ -3059,7 +3093,23 @@ export function JefeServicioPage() {
         <div className="js-right">
 
           {/* ── Card enfermería: jefes servicio 24/34 + admin ── */}
-          {esJefeEnfermeria && (() => {
+          {/* ── Pestañas arriba del panel: Enfermería (jefes de enfermería + admin) | Dotación por categoría ── */}
+          {tabsEnf.length > 0 && verDotacion && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              {([['enf', '🏥 Enfermería'], ['dot', '👥 Dotación por categoría']] as const).map(([k, l]) => (
+                <button key={k} type="button" className="btn" onClick={() => setVistaDerecha(k)}
+                  style={{ padding: '6px 16px', fontSize: '0.85rem', opacity: vistaDerecha === k ? 1 : 0.55,
+                    border: vistaDerecha === k ? '1px solid #a5b4fc' : undefined }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── Dotación por categoría (admin: todo; jefe: su servicio) ── */}
+          {verDotacion && (tabsEnf.length === 0 || vistaDerecha === 'dot') && <DotacionCategorias />}
+
+          {tabsEnf.length > 0 && vistaDerecha === 'enf' && (() => {
             const propiosSvc = isGlobal ? 'SALA DE ENFERMERÍA' : (servicioId === 24 ? 'SALA DE ENFERMERÍA' : 'DPTO ENFERMERÍA');
             const otroSvc    = isGlobal ? 'DPTO ENFERMERÍA'    : (servicioId === 24 ? 'DPTO ENFERMERÍA'    : 'SALA DE ENFERMERÍA');
             const colA       = isGlobal ? 'SALA' : 'Míos';
@@ -3172,6 +3222,21 @@ export function JefeServicioPage() {
                   🏥 Enfermería — Vista completa
                 </div>
 
+                {/* Pestañas por dependencia */}
+                {tabsEnf.length > 1 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {tabsEnf.map(t => (
+                      <button key={t.key} type="button" className="btn" onClick={() => setEnfTabSel(t.key)}
+                        style={{ padding: '4px 14px', fontSize: '0.8rem', opacity: enfTab === t.key ? 1 : 0.55, border: enfTab === t.key ? '1px solid #a5b4fc' : undefined }}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {enfTab !== 'HOSPITAL' ? (
+                  <DistribucionEnfermeria key={enfTab} dep={enfTab} embebido />
+                ) : (<>
                 {/* Totales */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
                   {[
@@ -3249,6 +3314,10 @@ export function JefeServicioPage() {
                     )}
                   </div>
                 )}
+
+                {/* Distribución por turno / horario (HORARIOS.xlsx) */}
+                <DistribucionEnfermeria key="HOSPITAL" dep="HOSPITAL" embebido conSectores={false} />
+                </>)}
               </div>
             );
           })()}

@@ -6,7 +6,8 @@
 // Si una grilla tiene más registros que renglones, se agrega otra copia de esa hoja.
 import fs from 'fs';
 import path from 'path';
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib';
+import { Duplex, PDFDocument, degrees, PDFFont, PDFImage, PDFPage, StandardFonts, rgb,
+  pushGraphicsState, popGraphicsState, rectangle, clip, endPath } from 'pdf-lib';
 import { GRILLAS } from './legajoPdfGrillas';
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
@@ -39,6 +40,8 @@ const x = (v: any) => (v ? 'X' : '');
 const dinero = (v: any) => (v === null || v === undefined || v === '' ? ''
   : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(Number(v)));
 const unir = (...xs: any[]) => xs.map(s).filter(Boolean).join(' — ');
+// En la tapa va el nombre oficial: "UPA 18" → "Unidad de Pronta Atención N° 18"
+const reparticionOficial = (v: any) => s(v).replace(/^U\.?P\.?A\.?\s*(?:N[°º]?\s*)?(\d+)/i, 'Unidad de Pronta Atención N° $1');
 
 // ── escritura ────────────────────────────────────────────────────────────────
 type Ctx = { font: PDFFont; bold: PDFFont };
@@ -91,6 +94,26 @@ function renglon(pg: PDFPage, c: Ctx, hoja: number, fila: number, celdas: any[],
   });
 }
 
+// Foto tipo carnet en el cuadro de 4×4 cm de la hoja 2 (arriba a la derecha).
+// La mayoría de las fotos son la credencial entera del hospital (590×1004, siempre el mismo molde):
+// de ahí se toma solo un cuadrado de cabeza y hombros. Otra foto suelta se recorta al centro,
+// cuadrada y pegada arriba. Se dibuja la imagen entera agrandada y se recorta con un clip al cuadro.
+// Va 7 pt adentro del borde (716–829 × 464–577) para no tapar el marco ni la línea del título
+const CUADRO_FOTO = { x0: 722.9, y0: 470.8, x1: 822.3, y1: 570.2 };
+const RECORTE_CREDENCIAL = { x: 150, y: 398, lado: 300 };  // en píxeles de la credencial, desde arriba
+
+function dibujarFoto(pg: PDFPage, img: PDFImage) {
+  const { x0, y0, x1, y1 } = CUADRO_FOTO;
+  const lado = x1 - x0;
+  const credencial = (img.width === 590 || img.width === 591) && img.height === 1004;
+  const r = credencial ? RECORTE_CREDENCIAL
+    : { x: (img.width - Math.min(img.width, img.height)) / 2, y: 0, lado: Math.min(img.width, img.height) };
+  const k = lado / r.lado;
+  pg.pushOperators(pushGraphicsState(), rectangle(x0, y0, lado, y1 - y0), clip(), endPath());
+  pg.drawImage(img, { x: x0 - r.x * k, y: y1 + r.y * k - img.height * k, width: img.width * k, height: img.height * k });
+  pg.pushOperators(popGraphicsState());
+}
+
 // ── armado ───────────────────────────────────────────────────────────────────
 // Formato de salida: 'original' = tamaño de cada hoja de la plantilla (A4 apaisada, hoja 6 oficio);
 // 'oficio' = A4 agrandada proporcional y centrada en oficio apaisado; 'oficio-estirado' = A4 estirada
@@ -123,12 +146,42 @@ async function pasarAOficio(doc: PDFDocument, estirar: boolean): Promise<PDFDocu
   return out;
 }
 
-export async function generarLegajoPdf(d: any, hojas?: number[], formato: FormatoLegajo = 'original'): Promise<Uint8Array> {
+// Los datos personales (hoja 2) y las rectificaciones (hoja 3, "ver al dorso") van en el mismo
+// papel, frente y dorso. El PDF pide doble faz (Chrome ya trae "ambas caras" marcado en el diálogo)
+// y al resto de las hojas se les agrega un dorso en blanco para que sigan saliendo de una sola cara.
+// Apaisada → se da vuelta por el borde corto, para que el dorso no salga cabeza abajo.
+// numHoja[i] = de qué hoja de la plantilla es la página i (una grilla larga ocupa varias páginas).
+function dobleFaz(doc: PDFDocument, numHoja: number[]) {
+  const sinDorso: number[] = [];
+  for (let i = 0; i < numHoja.length; i++) {
+    if (numHoja[i] === 2 && numHoja[i + 1] === 3) {  // 2 y 3 juntas
+      // Con la hoja apaisada, la impresora da vuelta el papel de forma que el dorso queda invertido:
+      // la hoja 3 se manda girada 180° y así sale derecha (en la Kyocera salía invertida, 22/10)
+      const dorso = doc.getPage(i + 1);
+      dorso.setRotation(degrees((dorso.getRotation().angle + 180) % 360));
+      i++; continue;
+    }
+    sinDorso.push(i);
+  }
+  for (const i of sinDorso.reverse()) {
+    const pg = doc.getPage(i);
+    doc.insertPage(i + 1, [pg.getWidth(), pg.getHeight()]);
+  }
+  doc.catalog.getOrCreateViewerPreferences().setDuplex(Duplex.DuplexFlipShortEdge);
+}
+
+// foto: bytes de la foto del agente (jpg/png) o null para dejar el cuadro vacío.
+// dobleFaz: hojas 2 y 3 en el mismo papel (agrega dorsos en blanco al resto, ver dobleFaz()).
+export type OpcionesLegajo = { foto?: Buffer | null; dobleFaz?: boolean };
+
+export async function generarLegajoPdf(d: any, hojas?: number[], formato: FormatoLegajo = 'original',
+                                       op: OpcionesLegajo = {}): Promise<Uint8Array> {
   const tpl = await PDFDocument.load(plantilla());
   const doc = await PDFDocument.create();
   const c: Ctx = { font: await doc.embedFont(StandardFonts.Helvetica), bold: await doc.embedFont(StandardFonts.HelveticaBold) };
   const quiere = (n: number) => !hojas || !hojas.length || hojas.includes(n);
-  const hoja = async (n: number) => { const [p] = await doc.copyPages(tpl, [n - 1]); return doc.addPage(p); };
+  const numHoja: number[] = [];
+  const hoja = async (n: number) => { const [p] = await doc.copyPages(tpl, [n - 1]); numHoja.push(n); return doc.addPage(p); };
 
   const pd = d.datosPersonales ?? {};
   const dl = d.datosLegajo ?? {};
@@ -149,7 +202,7 @@ export async function generarLegajoPdf(d: any, hojas?: number[], formato: Format
   // Hoja 1 — Tapa
   if (quiere(1)) {
     const pg = await hoja(1);
-    campo(pg, c, dl.reparticion || pd.reparticion || pd.dependencia || ag.reparticion_nombre, 177, 741, 301.8, 12);
+    campo(pg, c, reparticionOficial(dl.reparticion || pd.reparticion || pd.dependencia || ag.reparticion_nombre), 177, 741, 301.8, 12);
     escribir(pg, c, nombre, 72, 752, 68, { size: 15, bold: true, centro: true });
   }
 
@@ -157,6 +210,11 @@ export async function generarLegajoPdf(d: any, hojas?: number[], formato: Format
   if (quiere(2)) {
     const pg = await hoja(2);
     escribir(pg, c, dl.nro_legajo || ag.legajo || pd.legajo, 162, 300, 507.8, { size: 10, bold: true });
+    if (op.foto) {
+      // PNG empieza con 0x89 'P'; lo demás se toma como JPG. Una foto rota no frena la impresión.
+      const png = op.foto[0] === 0x89 && op.foto[1] === 0x50;
+      try { dibujarFoto(pg, png ? await doc.embedPng(op.foto) : await doc.embedJpg(op.foto)); } catch { /* cuadro vacío */ }
+    }
     campo(pg, c, pd.apellido, 111, 359, 463.8);
     campo(pg, c, pd.nombre, 409, 712, 463.8);
     campo(pg, c, dl.nac_pais ?? pd.nacionalidad, 137, 263, 412.9);
@@ -220,7 +278,7 @@ export async function generarLegajoPdf(d: any, hojas?: number[], formato: Format
 
   // Hoja 4 — 2) Familia
   if (quiere(4)) await grilla(4, (d.familia ?? []).map((f: any) => [
-    f.parentesco, f.codigo, unir(f.apellido_nombres, f.dni_familiar ? `DNI ${f.dni_familiar}` : ''), f.sexo, siNo(f.vive),
+    f.parentesco, f.codigo, f.apellido_nombres, f.sexo, siNo(f.vive),
     ...dma(f.fecha_nacimiento), unir(f.es_empleado, f.es_jubilado)]), [1, 3, 4, 5, 6, 7]);
 
   // Hoja 5 — 2 bis
@@ -304,6 +362,9 @@ export async function generarLegajoPdf(d: any, hojas?: number[], formato: Format
     b.descripcion, '', fecha(b.fecha)]), [2]);
 
   const final = formato === 'original' ? doc : await pasarAOficio(doc, formato === 'oficio-estirado');
+  // Solo si se pide: con el legajo completo agrega un dorso en blanco a cada hoja que, si la impresora
+  // no imprime en ambas caras, salen como hojas en blanco (reclamo del 22/10)
+  if (op.dobleFaz && quiere(2) && quiere(3)) dobleFaz(final, numHoja);
   final.setTitle(`Legajo Personal — ${nombre} — DNI ${s(pd.dni)}`);
   return final.save();
 }

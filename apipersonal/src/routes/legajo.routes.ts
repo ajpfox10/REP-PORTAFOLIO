@@ -9,6 +9,10 @@ import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 import { registrarImportFormulario } from './legajoImportForm';
 import { generarLegajoPdf, FormatoLegajo } from '../services/legajoPdf';
+import { findFotoPath } from './agentesFoto.routes';
+import { env } from '../config/env';
+import fs from 'fs';
+import path from 'path';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -373,6 +377,21 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
     };
   }
 
+  // GET /legajo/formulario-google/script — baja el Apps Script del formulario de Google (crea el form
+  // y le pone las ayudas). Vive en scripts/google_forms: el deploy-prod.cmd copia scripts\ a prod.
+  router.get('/formulario-google/script', read, (_req: Request, res: Response) => {
+    const candidatos = [
+      path.resolve(process.cwd(), 'scripts/google_forms/legajo_formulario.gs'),
+      path.resolve(__dirname, '../../scripts/google_forms/legajo_formulario.gs'),
+      path.resolve(__dirname, '../../../scripts/google_forms/legajo_formulario.gs'),
+    ];
+    const ruta = candidatos.find(p => fs.existsSync(p));
+    if (!ruta) return res.status(404).json({ ok: false, error: 'No se encuentra scripts/google_forms/legajo_formulario.gs' });
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="legajo_formulario.gs"');
+    return res.send(fs.readFileSync(ruta, 'utf8'));
+  });
+
   // GET /legajo/:dni/pdf?hojas=1,2&formato=original|oficio|oficio-estirado — legajo impreso sobre el PDF original del Ministerio
   router.get('/:dni/pdf', read, async (req: Request, res: Response) => {
     const dni = Number(req.params.dni);
@@ -383,7 +402,10 @@ export function buildLegajoRouter(sequelize: Sequelize): Router {
       const hojas = String(req.query.hojas ?? '').split(',').map(Number).filter(n => n >= 1 && n <= 16);
       const f = String(req.query.formato ?? '');
       const formato: FormatoLegajo = f === 'oficio' || f === 'oficio-estirado' ? f : 'original';
-      const pdf = await generarLegajoPdf(data, hojas, formato);
+      // foto=0 → sin foto; dobleFaz=1 → hojas 2 y 3 en el mismo papel
+      const fotoPath = req.query.foto === '0' ? null : findFotoPath(env.PHOTOS_BASE_DIR, String(dni));
+      const foto = fotoPath && /\.(png|jpe?g)$/i.test(fotoPath) ? await fs.promises.readFile(fotoPath) : null;
+      const pdf = await generarLegajoPdf(data, hojas, formato, { foto, dobleFaz: req.query.dobleFaz === '1' });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="legajo_${dni}.pdf"`);
       return res.send(Buffer.from(pdf));

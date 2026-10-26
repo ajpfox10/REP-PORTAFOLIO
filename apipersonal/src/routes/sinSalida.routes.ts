@@ -7,7 +7,7 @@
 // Body JSON:
 //   fecha         YYYY-MM-DD  (un día exacto)
 //   periodo       YYYY-MM     (mes completo — expande todos los días laborables)
-//   horariosFiles string[]    (auto-detecta archivos con "horario" en el nombre)
+//   horariosFiles string[]    (IGNORADO: siempre se usa HORARIOS.xlsx)
 //   siapFiles     string[]    (auto-detecta archivos con "siap"    en el nombre)
 //
 // Estado por fila:
@@ -16,7 +16,11 @@
 //   PRESENTE_SIN_ESTAR  → SIAP lo marca PRESENTE pero no tiene fichaje biométrico
 //   SIN_FICHAJE         → sin ningún registro, y sin novedad administrativa que lo cubra
 //   JUSTIFICADO         → sin fichaje pero tiene novedad SIAP/MINISTERIO que cubre esa fecha
-//   REQUIERE_REVISION   → horario nocturno ambiguo sin patrón semanal inferible
+//   REQUIERE_REVISION   → ficha otro horario (la salida cae fuera de la ventana del turno)
+//   FUERA_HORARIO       → fichó entrada y salida pero entró >30 min tarde o salió >30 min antes/después
+//   SOSPECHOSO          → fichó en el reloj equivocado (entrada en reloj de salida o al revés)
+//   (la evaluación por turno es la de services/sinSalidaEval.ts: guardia = sale al día
+//    siguiente, cada marca es de un solo turno, semana alternada A/B deducida de los fichajes)
 //   CON_SALIDA          → tiene entrada y salida (todo OK)
 //
 // Notas:
@@ -33,6 +37,7 @@ import { env } from '../config/env';
 import { logger } from '../logging/logger';
 import { QueryTypes } from 'sequelize';
 import { registerSinSalidaNotifRoutes } from './sinSalidaNotif.routes';
+import { evaluarAgente, leerFichadas, EvalAgente, HORARIOS_ARCHIVO } from '../services/sinSalidaEval';
 
 let ExcelJS: any;
 try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
@@ -511,9 +516,10 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
       const rangoMax = fechas[fechas.length - 1];
 
       // ── Archivos horarios ─────────────────────────────────────────────────
-      let horariosFileNames: string[] = Array.isArray(req.body?.horariosFiles) && req.body.horariosFiles.length > 0
-        ? req.body.horariosFiles
-        : files.filter(f => f.name.toLowerCase().includes('horario')).map(f => f.name);
+      // Siempre HORARIOS.xlsx (horario completo del día). Los otros archivos con "horario" en el
+      // nombre (HORARIO_GUARDIA: solo días de guardia; HORARIO_CONSOLIDADO: sin horas) pisaban
+      // el horario completo con uno parcial o viejo. Se ignora lo que mande el front.
+      const horariosFileNames: string[] = files.some(f => f.name === HORARIOS_ARCHIVO) ? [HORARIOS_ARCHIVO] : [];
 
       // ── Archivos SIAP ─────────────────────────────────────────────────────
       let siapFileNames: string[] = Array.isArray(req.body?.siapFiles) && req.body.siapFiles.length > 0
@@ -556,7 +562,7 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
       }
 
       if (Object.keys(horariosMap).length === 0) {
-        return res.status(400).json({ ok: false, error: 'No se encontraron datos en los archivos de horarios' });
+        return res.status(400).json({ ok: false, error: `No se encontraron datos en ${HORARIOS_ARCHIVO} (${dir})` });
       }
 
       // ── 2. Leer SIAP (todos los archivos, merge por DNI) ──────────────────
@@ -662,232 +668,68 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
         return res.json({ ok: true, data: [], meta: emptyMeta });
       }
 
-      // ── 4. Consultar DB biométrica (una sola query para el rango completo) ─
-      // fichajesMap[dni][fechaISO] = { entrada, salida, eventos[] }
-      // fechaOrig = fecha real del checktime (antes de cualquier reasignación de día)
-      type FichajeInfo = { entrada: string | null; salida: string | null; eventos: Array<{ hora: string; checktype: number; fechaOrig: string; sn: string }> };
-      const fichajesMap: Record<string, Record<string, FichajeInfo>> = {};
+      // ── 4. Fichadas + evaluación por turno (criterio de sinSalidaEval) ─────
+      // Guardia = sale al día siguiente (salida <= entrada); cada marca es de UN turno;
+      // tolerancia 30 min (entrar antes no es falta); semana A/B deducida de los fichajes.
       const servicioDbMap: Record<string, string> = {};
-      const rawEntryEvents: Array<{ dni: string; fechaOrig: string; hora: string }> = [];
       let dbError: string | null = null;
-      // Resuelve el tipo efectivo del evento usando el SN del lector cuando es dedicado.
-      // Se sobrescribe dentro del bloque biométrico con la clasificación real de la DB.
-      let tipoLector = (sn: string, checktype: number): number => checktype;
-
-      const cfgPath = path.resolve(process.cwd(), 'fichero_config.json');
-      if (fs.existsSync(cfgPath)) {
-        try {
-          const cfg  = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
-          const conn = await mysql.createConnection({
-            host:           cfg.mysqlHost || '127.0.0.1',
-            port:           cfg.mysqlPort || 3306,
-            user:           cfg.mysqlUser || 'root',
-            password:       cfg.mysqlPass || '',
-            database:       cfg.mysqlDb   || 'adms_db',
-            connectTimeout: 10_000,
-            dateStrings:    true,
-          });
-
-          const allDnis = [...new Set(expanded.map(r => r.dni))];
-          // Mapa rápido DNI → esGuardia para usar al procesar registros
-          const guardiaDnis = new Set(expanded.filter(r => r.esGuardia).map(r => r.dni));
-
-          // Extender el rango hasta las 14:00 del día siguiente al rangoMax
-          // para capturar salidas de turno nocturno / guardia 24hs
-          const rangoMaxPlusOneDate = new Date(rangoMax + 'T00:00:00Z');
-          rangoMaxPlusOneDate.setUTCDate(rangoMaxPlusOneDate.getUTCDate() + 1);
-          const rangoMaxPlusOne = rangoMaxPlusOneDate.toISOString().slice(0, 10);
-
-          // Clasificar lectores por SN: '0'=dedicado entrada, '1'=dedicado salida, null=bidireccional
-          const [snRows] = await conn.query<RowDataPacket[]>(
-            `SELECT SN, checktype, COUNT(*) AS cnt FROM checkinout WHERE SN IS NOT NULL AND SN != '' GROUP BY SN, checktype`
-          );
-          const snCount: Record<string, { e: number; s: number }> = {};
-          for (const r of snRows) {
-            const sn = String(r.SN);
-            if (!snCount[sn]) snCount[sn] = { e: 0, s: 0 };
-            if (String(r.checktype) === '0') snCount[sn].e += Number(r.cnt);
-            else snCount[sn].s += Number(r.cnt);
-          }
-          // Cada SN tiene un tipo físico fijo (0=Entrada, 1=Salida).
-          // Los registros con el tipo opuesto son errores del dispositivo.
-          // El tipo del lector es el checktype dominante: el que más aparece.
-          const lectorTipo: Record<string, 0 | 1> = {};
-          for (const [sn, { e, s }] of Object.entries(snCount)) {
-            lectorTipo[sn] = s > e ? 1 : 0;
-          }
-          tipoLector = (sn: string, checktype: number): number =>
-            sn in lectorTipo ? lectorTipo[sn] : checktype;
-
-          const ph      = allDnis.map(() => '?').join(',');
-
-          // Leer servicio vigente de cada agente desde personalv5.agentes_servicios
-          try {
-            const connPv5 = await mysql.createConnection({
-              host: cfg.mysqlHost || '127.0.0.1', port: cfg.mysqlPort || 3306,
-              user: cfg.mysqlUser || 'root', password: cfg.mysqlPass || '',
-              database: 'personalv5', connectTimeout: 10_000,
-            });
-            const phPv5 = allDnis.map(() => '?').join(',');
-            const [srvRows] = await connPv5.query<RowDataPacket[]>(
-              `SELECT a.dni, s.nombre AS servicio
-                 FROM agentes_servicios a
-                 INNER JOIN servicios s ON a.servicio_id = s.id AND s.deleted_at IS NULL
-                 WHERE a.dni IN (${phPv5})
-                   AND a.deleted_at IS NULL
-                   AND (a.fecha_hasta IS NULL OR a.fecha_hasta >= CURDATE())
-                 ORDER BY a.fecha_desde DESC`,
-              allDnis,
-            );
-            await connPv5.end();
-            for (const r of srvRows) {
-              const d = normDni(String(r.dni));
-              if (!servicioDbMap[d]) servicioDbMap[d] = String(r.servicio ?? '');
-            }
-          } catch (e: any) {
-            logger.warn({ msg: 'sin-salida: no se pudo leer servicios de personalv5', error: e?.message });
-          }
-
-          const [dbRows] = await conn.query<RowDataPacket[]>(
-            `SELECT ui.badgenumber, ci.checktime, ci.checktype, COALESCE(ci.SN, '') AS SN
-               FROM checkinout ci
-               INNER JOIN userinfo ui ON ci.userid = ui.userid
-               WHERE ui.badgenumber IN (${ph})
-                 AND ci.checktime >= ? AND ci.checktime <= ?
-               ORDER BY ci.checktime ASC`,
-            [...allDnis, `${rangoMin} 00:00:00`, `${rangoMaxPlusOne} 14:00:00`],
-          );
-          await conn.end();
-
-          // Pasada 1: registrar todas las entradas (tipo=0).
-          // Para guardias: si la entrada cae después de las 20:00 en un día NO controlable
-          // pero el día siguiente SÍ es controlable, reasignarla al día siguiente
-          // (el agente fichó unos minutos antes de medianoche, pero el turno es del día siguiente).
-          for (const r of dbRows) {
-            if (String(r.checktype) !== '0') continue;
-            const dniR    = normDni(String(r.badgenumber));
-            const cts     = String(r.checktime);
-            const fechaOrig = cts.slice(0, 10);
-            let   fecha   = fechaOrig;
-            const hora    = cts.slice(11, 16);
-            rawEntryEvents.push({ dni: dniR, fechaOrig, hora });
-
-            if (guardiaDnis.has(dniR) && hora >= '20:00') {
-              const dt = new Date(fecha + 'T00:00:00Z');
-              const dowHoy = DOW_KEYS[dt.getUTCDay()];
-              dt.setUTCDate(dt.getUTCDate() + 1);
-              const fechaSig  = dt.toISOString().slice(0, 10);
-              const dowSig    = DOW_KEYS[dt.getUTCDay()];
-              const infoAgent = horariosMap[dniR];
-              if (infoAgent && !infoAgent.horario[dowHoy] && infoAgent.horario[dowSig]) {
-                fecha = fechaSig;
-              }
-            }
-
-            if (!fichajesMap[dniR]) fichajesMap[dniR] = {};
-            if (!fichajesMap[dniR][fecha]) fichajesMap[dniR][fecha] = { entrada: null, salida: null, eventos: [] };
-            fichajesMap[dniR][fecha].eventos.push({ hora, checktype: 0, fechaOrig, sn: String(r.SN || '') });
-            if (!fichajesMap[dniR][fecha].entrada || hora < fichajesMap[dniR][fecha].entrada!)
-              fichajesMap[dniR][fecha].entrada = hora;
-          }
-
-          // Pasada 2: registrar salidas (tipo=1) con reasignación condicional.
-          // Reasignar al día anterior SOLO cuando se cumplen las tres condiciones:
-          //   1. La hora de salida cae dentro del cutoff (< 06:00 normal / < 14:00 guardia)
-          //   2. NO hay entrada registrada ese mismo día calendario (si hay entrada ese día,
-          //      la salida pertenece a ese turno sin importar la hora)
-          //   3. SÍ hay entrada registrada el día anterior (confirma turno nocturno cruzado)
-          for (const r of dbRows) {
-            if (String(r.checktype) !== '1') continue;
-            const dniR    = normDni(String(r.badgenumber));
-            const cts     = String(r.checktime);
-            const fechaOrig = cts.slice(0, 10);
-            let   fecha   = fechaOrig;
-            const hora    = cts.slice(11, 16);
-
-            if (shouldAssignSalidaToPreviousDay(dniR, fechaOrig, hora, fichajesMap, horariosMap)) {
-              fecha = addDaysIso(fechaOrig, -1);
-            }
-
-            if (!fichajesMap[dniR]) fichajesMap[dniR] = {};
-            if (!fichajesMap[dniR][fecha]) fichajesMap[dniR][fecha] = { entrada: null, salida: null, eventos: [] };
-            fichajesMap[dniR][fecha].eventos.push({ hora, checktype: 1, fechaOrig, sn: String(r.SN || '') });
-            if (!fichajesMap[dniR][fecha].salida || hora > fichajesMap[dniR][fecha].salida!)
-              fichajesMap[dniR][fecha].salida = hora;
-          }
-        } catch (e: any) {
-          dbError = e?.message ?? 'Error al consultar DB biométrica';
-          logger.warn({ msg: 'sin-salida: error DB biométrica', error: dbError });
-        }
+      const allDnis = [...new Set(expanded.map(r => r.dni))];
+      const evalPorDni: Record<string, EvalAgente> = {};
+      const fich = await leerFichadas(allDnis, rangoMin, rangoMax);
+      if ('error' in fich) {
+        dbError = fich.error;
+        logger.warn({ msg: 'sin-salida: error DB biométrica', error: dbError });
       } else {
-        dbError = 'fichero_config.json no encontrado — configura la conexión en el módulo Fichero';
+        for (const dni of allDnis) {
+          const info = horariosMap[dni];
+          const dias: Record<string, { e: string; s: string }> = {};
+          for (const k of DOW_KEYS) {
+            const h = info.horas?.[k];
+            if (info.horario[k] && h?.horaEntrada && h?.horaSalida) dias[k] = { e: h.horaEntrada, s: h.horaSalida };
+          }
+          evalPorDni[dni] = evaluarAgente(dias, fich.punches[dni] || [], fich.lector, fechas);
+        }
+      }
+
+      // Servicio vigente de cada agente (personalv5.agentes_servicios)
+      try {
+        const cfgPath = path.resolve(process.cwd(), 'fichero_config.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+        const connPv5 = await mysql.createConnection({
+          host: cfg.mysqlHost || '127.0.0.1', port: cfg.mysqlPort || 3306,
+          user: cfg.mysqlUser || 'root', password: cfg.mysqlPass || '',
+          database: 'personalv5', connectTimeout: 10_000,
+        });
+        const [srvRows] = await connPv5.query<RowDataPacket[]>(
+          `SELECT a.dni, s.nombre AS servicio
+             FROM agentes_servicios a
+             INNER JOIN servicios s ON a.servicio_id = s.id AND s.deleted_at IS NULL
+             WHERE a.dni IN (${allDnis.map(() => '?').join(',')})
+               AND a.deleted_at IS NULL
+               AND (a.fecha_hasta IS NULL OR a.fecha_hasta >= CURDATE())
+             ORDER BY a.fecha_desde DESC`,
+          allDnis,
+        );
+        await connPv5.end();
+        for (const r of srvRows) {
+          const d = normDni(String(r.dni));
+          if (!servicioDbMap[d]) servicioDbMap[d] = String(r.servicio ?? '');
+        }
+      } catch (e: any) {
+        logger.warn({ msg: 'sin-salida: no se pudo leer servicios de personalv5', error: e?.message });
       }
 
       // ── 5. Construir resultado ─────────────────────────────────────────────
-      const semanasRango = Array.from(new Set(fechas.map(getWeekStartIso))).sort();
-      const nocturnosAlternados = new Set(
-        Object.entries(horariosMap)
-          .filter(([, info]) => {
-            if (info.esGuardia) return false;
-            const dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'] as const;
-            return dias.every(d =>
-              info.horario[d] &&
-              info.horas[d]?.horaEntrada === '18:00' &&
-              info.horas[d]?.horaSalida === '06:00',
-            );
-          })
-          .map(([dni]) => dni),
-      );
+      // Un turno por fila. Se descartan los días que no le tocan (semana alternada) y
+      // los turnos que todavía no terminaron (salida + 6 h).
+      const turnoDe = (dni: string, fecha: string) => evalPorDni[dni]?.turnos.find(t => t.fecha === fecha);
+      const enCurso = new Set(Object.entries(evalPorDni).flatMap(([dni, ev]) => ev.enCurso.map(f => `${dni}|${f}`)));
+      const expandedFiltrado = dbError
+        ? expanded
+        : expanded.filter(row => !!turnoDe(row.dni, row.fecha));
+      const turnosEnCurso = expanded.filter(row => enCurso.has(`${row.dni}|${row.fecha}`)).length;
 
-      const patronesSemanalesNocturnos: Record<string, Record<string, 'LMV' | 'MJ'>> = {};
-      for (const dni of nocturnosAlternados) {
-        const known: Record<string, 'LMV' | 'MJ'> = {};
-        const counts = new Map<string, { lmv: number; mj: number }>();
-
-        rawEntryEvents
-          .filter(e => e.dni === dni && e.hora >= '16:00')
-          .forEach(e => {
-            const dow = new Date(e.fechaOrig + 'T00:00:00Z').getUTCDay();
-            const week = getWeekStartIso(e.fechaOrig);
-            const acc = counts.get(week) ?? { lmv: 0, mj: 0 };
-            if (dow === 1 || dow === 3 || dow === 5) acc.lmv += 1;
-            if (dow === 2 || dow === 4) acc.mj += 1;
-            counts.set(week, acc);
-          });
-
-        for (const [week, c] of counts.entries()) {
-          if (c.lmv > c.mj && c.lmv > 0) known[week] = 'LMV';
-          else if (c.mj > c.lmv && c.mj > 0) known[week] = 'MJ';
-        }
-
-        const resolved: Record<string, 'LMV' | 'MJ'> = { ...known };
-        const knownWeeks = Object.keys(known).sort();
-        for (const anchor of knownWeeks) {
-          const anchorIdx = semanasRango.indexOf(anchor);
-          if (anchorIdx < 0) continue;
-          const anchorPat = known[anchor];
-          for (let i = 0; i < semanasRango.length; i++) {
-            const week = semanasRango[i];
-            if (resolved[week]) continue;
-            const distance = Math.abs(i - anchorIdx);
-            resolved[week] = distance % 2 === 0 ? anchorPat : (anchorPat === 'LMV' ? 'MJ' : 'LMV');
-          }
-        }
-
-        if (Object.keys(resolved).length > 0) patronesSemanalesNocturnos[dni] = resolved;
-      }
-
-      const expandedFiltrado = expanded.filter(row => {
-        if (!nocturnosAlternados.has(row.dni)) return true;
-        if (row.horaEntradaProg !== '18:00' || row.horaSalidaProg !== '06:00') return true;
-        const pattern = patronesSemanalesNocturnos[row.dni]?.[getWeekStartIso(row.fecha)];
-        if (!pattern) return true;
-        const dow = new Date(row.fecha + 'T00:00:00Z').getUTCDay();
-        if (pattern === 'LMV') return dow === 1 || dow === 3 || dow === 5;
-        return dow === 2 || dow === 4;
-      });
-
-      const ORDEN: Record<string, number> = { SOSPECHOSO: 0, SIN_SALIDA: 1, SOLO_SALIDA: 2, PRESENTE_SIN_ESTAR: 3, SIN_FICHAJE: 4, REQUIERE_REVISION: 5, JUSTIFICADO: 6, CON_SALIDA: 7 };
+      const ORDEN: Record<string, number> = { SOSPECHOSO: 0, SIN_SALIDA: 1, SOLO_SALIDA: 2, PRESENTE_SIN_ESTAR: 3, SIN_FICHAJE: 4, FUERA_HORARIO: 5, REQUIERE_REVISION: 6, JUSTIFICADO: 7, CON_SALIDA: 8 };
 
       // ── Reconocimientos médicos ───────────────────────────────────────────────
       const recMedicoMap = new Map<string, string>();
@@ -924,95 +766,48 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
       }
 
       const data = expandedFiltrado.map(row => {
-        const fich      = fichajesMap[row.dni]?.[row.fecha];
+        const t         = turnoDe(row.dni, row.fecha);
         const novSiap   = getSiapNovedad(row.dni, row.fecha);
         const novMin    = getMinisterioNovedad(row.dni, row.fecha);
-        const revisionNocturnoAmbiguo =
-          nocturnosAlternados.has(row.dni) &&
-          row.horaEntradaProg === '18:00' &&
-          row.horaSalidaProg === '06:00' &&
-          !patronesSemanalesNocturnos[row.dni]?.[getWeekStartIso(row.fecha)];
         const siapPresente = novSiap
           .split('/')
           .map(s => s.trim().toUpperCase())
           .filter(Boolean)
           .includes('PRESENTE');
 
+        // estado del turno (sinSalidaEval) → estados de esta pantalla
         let estado: string;
-        if (fich?.entrada && fich?.salida)  estado = 'CON_SALIDA';
-        else if (fich?.entrada)             estado = 'SIN_SALIDA';
-        else if (fich?.salida)              estado = 'SOLO_SALIDA';
-        else if (siapPresente)              estado = 'PRESENTE_SIN_ESTAR';
-        else if (novSiap || novMin)         estado = 'JUSTIFICADO';
-        else if (revisionNocturnoAmbiguo)   estado = 'REQUIERE_REVISION';
-        else                                estado = 'SIN_FICHAJE';
-
-        let fichajeInvertido = false;
-        let salidaFaltante   = false;
-        if (fich?.eventos?.length && row.horaEntradaProg && row.horaSalidaProg) {
-          const entProg = row.horaEntradaProg;
-          const salProg = row.horaSalidaProg;
-          const salidaEnLectorEntrada = fich.eventos.some(e =>
-            e.checktype === 1 && tipoLector(e.sn, e.checktype) === 0
-          );
-
-          if (entProg !== salProg) {
-            // Turno normal: cada evento pertenece a la mitad del turno que le queda más cerca.
-            // Si el tipo del lector no coincide con el esperado para esa mitad → invertido.
-            const cruzaDia = salProg < entProg;
-            const eventosTurno = cruzaDia ? fich.eventos : fich.eventos.filter(e => e.fechaOrig === row.fecha);
-            const cercaEntrada = (hora: string) => timeDiffMins(hora, entProg) <= timeDiffMins(hora, salProg);
-
-            const hayEntradaValida = eventosTurno.some(e => e.checktype === 0 && tipoLector(e.sn, e.checktype) === 0);
-            const haySalidaValida  = eventosTurno.some(e => e.checktype === 1);
-
-            fichajeInvertido = salidaEnLectorEntrada || eventosTurno.some(e => {
-              const tipo     = tipoLector(e.sn, e.checktype);
-              const esperado = cercaEntrada(e.hora) ? 0 : 1;
-              return tipo !== esperado;
-            });
-            salidaFaltante = hayEntradaValida && !haySalidaValida;
-          } else {
-            // Turno 24hs: entrada=salida en el Excel → entra el día del turno, sale al día siguiente.
-            // Los eventos del día del turno deben ser Entrada (0), los del día siguiente Salida (1).
-            const nextDayDt = new Date(row.fecha + 'T00:00:00Z');
-            nextDayDt.setUTCDate(nextDayDt.getUTCDate() + 1);
-            const nextDay = nextDayDt.toISOString().slice(0, 10);
-
-            const hayEntradaValidaHoy    = fich.eventos.some(e => e.fechaOrig === row.fecha && tipoLector(e.sn, e.checktype) === 0);
-            const haySalidaValidaNextDay = fich.eventos.some(e => e.fechaOrig === nextDay && e.checktype === 1);
-
-            fichajeInvertido = salidaEnLectorEntrada || fich.eventos.some(e => {
-              const tipo     = tipoLector(e.sn, e.checktype);
-              const esperado = e.fechaOrig === row.fecha ? 0 : 1;
-              return tipo !== esperado;
-            });
-            salidaFaltante = hayEntradaValidaHoy && !haySalidaValidaNextDay;
-          }
+        switch (t?.estado) {
+          case 'SIN_SALIDA':      estado = 'SIN_SALIDA'; break;
+          case 'SOLO_SALIDA':     estado = 'SOLO_SALIDA'; break;
+          case 'FUERA_HORARIO':   estado = 'FUERA_HORARIO'; break;
+          case 'MAL_FICHADO':     estado = 'SOSPECHOSO'; break;          // reloj equivocado
+          case 'REVISAR_HORARIO': estado = 'REQUIERE_REVISION'; break;   // ficha otro horario
+          case 'OK':              estado = 'CON_SALIDA'; break;
+          default:                // sin fichaje (o sin datos biométricos)
+            estado = siapPresente ? 'PRESENTE_SIN_ESTAR' : (novSiap || novMin) ? 'JUSTIFICADO' : 'SIN_FICHAJE';
         }
-        if (fich?.salida) salidaFaltante = false;
-
-        if (fichajeInvertido) estado = 'SOSPECHOSO';
 
         const recKey = `${row.dni}|${row.fecha}`;
         return {
           dni:                  row.dni,
           nombre:               row.nombre,
           upa:                  row.upa,
-          esGuardia:            row.esGuardia,
+          esGuardia:            !!row.horaEntradaProg && !!row.horaSalidaProg && row.horaSalidaProg <= row.horaEntradaProg,
           ocupacion:            row.planta,
           servicio:             servicioDbMap[row.dni] ?? '',
           fecha:                row.fecha,
           diaSemana:            row.diaSemana,
-          entrada:              fich?.entrada ?? null,
-          salida:               fich?.salida  ?? null,
+          entrada:              t?.entrada ?? null,                         // puede traer "(-1)": entró el día anterior
+          salida:               t?.salida ?? null,                          // puede traer "(+1)"
           horaEntradaProgramada: row.horaEntradaProg,
           horaSalidaProgramada:  row.horaSalidaProg,
           novedadSiap:          novSiap,
           novedadMinisterio:    novMin,
           estado,
-          fichajeInvertido,
-          salidaFaltante,
+          observacion:          t?.motivos.length ? t.motivos.join('; ') : null,
+          fichajeInvertido:     t?.estado === 'MAL_FICHADO',
+          salidaFaltante:       t?.estado === 'SIN_SALIDA',
           recMedico:            recMedicoMap.has(recKey) ? (recMedicoMap.get(recKey) || 'Sí') : null,
         };
       });
@@ -1083,6 +878,8 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
         meta: {
           total:              new Set(data.map(r => r.dni)).size,
           sospechosos:        uniq('SOSPECHOSO'),
+          fueraHorario:       uniq('FUERA_HORARIO'),
+          turnosEnCurso,
           sinSalida:          uniq('SIN_SALIDA'),
           soloSalida:         uniq('SOLO_SALIDA'),
           sinFichaje:         uniq('SIN_FICHAJE'),
@@ -1167,9 +964,8 @@ export function buildSinSalidaRouter(sequelize?: import('sequelize').Sequelize) 
       const rangoMax = fechas[fechas.length - 1];
 
       // ── 2. Leer horarios ───────────────────────────────────────────────
-      const horariosFileNames: string[] = Array.isArray(req.body?.horariosFiles) && req.body.horariosFiles.length > 0
-        ? req.body.horariosFiles
-        : files.filter(f => f.name.toLowerCase().includes('horario')).map(f => f.name);
+      // Siempre HORARIOS.xlsx, igual que el reporte principal
+      const horariosFileNames: string[] = files.some(f => f.name === HORARIOS_ARCHIVO) ? [HORARIOS_ARCHIVO] : [];
 
       const horariosMap: Record<string, { nombre: string; esGuardia: boolean; planta: string; horario: HorarioDia; horas: Record<string, HorasDia> }> = {};
       const horariosOrigen: Record<string, string> = {};

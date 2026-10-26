@@ -9,6 +9,8 @@ set DST=C:\apps\personalprod\apipersonal-prod
 set BCK=C:\apps\personalback\apipersonal-backup
 set LOG=C:\apps\logs\deploy-apipersonal.log
 set NPM="C:\Program Files\nodejs\npm.cmd"
+REM Reinicio sin huerfanos (pm2 en Windows deja procesos viejos con el puerto)
+set REINICIO=powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%\scripts\pm2-reinicio-limpio.ps1"
 
 if not exist "C:\apps\logs" mkdir "C:\apps\logs"
 
@@ -22,7 +24,9 @@ if "%1"=="rollback" (
   call pm2 stop apipersonal-prod
   if exist "%DST%" rmdir /s /q "%DST%"
   robocopy "%BCK%" "%DST%" /MIR /NFL /NDL
-  call pm2 start "%DST%\ecosystem.config.js"
+  call pm2 describe apipersonal-prod >nul 2>&1
+  if errorlevel 1 ( call pm2 start "%DST%\ecosystem.config.js" ) else ( %REINICIO% -App apipersonal-prod -Puerto 3001 )
+  if errorlevel 1 ( echo ERROR: prod no quedo escuchando el 3001. Ver pm2 logs apipersonal-prod & pause & exit /b 1 )
   echo OK: Rollback completado.
   echo [%date% %time%] ROLLBACK completado >> %LOG%
   pause & exit /b 0
@@ -104,14 +108,22 @@ call pm2 describe apipersonal-prod >nul 2>&1
 if errorlevel 1 (
   call pm2 start "%DST%\ecosystem.config.js"
 ) else (
-  call pm2 restart apipersonal-prod --update-env
+  %REINICIO% -App apipersonal-prod -Puerto 3001
+)
+if errorlevel 1 (
+  echo.
+  echo ERROR: prod no quedo escuchando el 3001. El deploy NO esta activo.
+  echo        Ver: pm2 logs apipersonal-prod   ^|   Rollback: deploy-prod.cmd rollback
+  echo [%date% %time%] Deploy FALLO al reiniciar prod >> %LOG%
+  pause & exit /b 1
 )
 
 REM 7. Reiniciar tambien el DEV para que tome el nuevo .env
 echo Reiniciando servicio DEV (para recargar .env)...
 call pm2 describe apipersonal-dev >nul 2>&1
 if not errorlevel 1 (
-  call pm2 restart apipersonal-dev --update-env
+  %REINICIO% -App apipersonal-dev -Puerto 3000
+  if errorlevel 1 echo    AVISO: dev no quedo escuchando el 3000 ^(prod esta bien^). Ver pm2 logs apipersonal-dev
 )
 
 call pm2 save >> %LOG% 2>&1

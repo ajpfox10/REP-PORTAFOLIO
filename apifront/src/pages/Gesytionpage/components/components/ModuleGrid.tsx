@@ -10,7 +10,9 @@ interface Props {
   onCloseModule: (key: ModuleKey) => void;
   onOpenCitaciones?: () => void;
   citacionesActivas?: number;
-  onOpenExpedientes?: () => void;
+  /** Abre el modal unificado Documentos (tblarchivos) + Expedientes. */
+  onOpenDocumentos?: () => void;
+  archivosCount?: number;
   expedientesCount?: number;
   /** Solo admin (la consulta exige crud:*:*); sin handler no se muestra la card. */
   onOpenLicenciasMedicas?: () => void;
@@ -25,7 +27,8 @@ export function ModuleGrid({
   onCloseModule,
   onOpenCitaciones,
   citacionesActivas = 0,
-  onOpenExpedientes,
+  onOpenDocumentos,
+  archivosCount = 0,
   expedientesCount = 0,
   onOpenLicenciasMedicas,
   licenciasMedicas = null,
@@ -74,62 +77,30 @@ export function ModuleGrid({
             <b>Pedidos</b>
             <span className="badge">/pedidos</span>
           </div>
-          <p className="muted gp-mt-6">Pedidos, estado, lugar y fecha.</p>
+          <p className="muted gp-mt-6">Pedidos, estado, lugar y fecha. Cargar, marcar o dar de baja.</p>
           <div className="row gp-row-between-center">
-            <button
-              className="btn"
-              type="button"
-              onClick={() => modules.pedidos.open
-                ? onCloseModule("pedidos")
-                : onToggleModule("pedidos")
-              }
-              disabled={modules.pedidos.loading}
-            >
-              {modules.pedidos.loading ? "Cargando…" : modules.pedidos.open ? "Cerrar" : "Ver"}
-            </button>
+            <div className="row" style={{ gap: 8 }}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => modules.pedidos.open
+                  ? onCloseModule("pedidos")
+                  : onToggleModule("pedidos")
+                }
+                disabled={modules.pedidos.loading}
+              >
+                {modules.pedidos.loading ? "Cargando…" : modules.pedidos.open ? "Cerrar" : "Ver"}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={onOpenPedidoModal}
+                disabled={modules.pedidos.loading}
+              >
+                Cargar pedido
+              </button>
+            </div>
             {modules.pedidos.open && <span className="badge">Activo</span>}
-          </div>
-        </div>
-
-        {/* DOCUMENTOS */}
-        <div className="card gp-card-12">
-          <div className="row gp-row-between-center">
-            <b>Documentos</b>
-            <span className="badge">/tblarchivos</span>
-          </div>
-          <p className="muted gp-mt-6">Documentos, resoluciones y más (por DNI).</p>
-          <div className="row gp-row-between-center">
-            <button
-              className="btn"
-              type="button"
-              onClick={() => modules.documentos.open
-                ? onCloseModule("documentos")
-                : onToggleModule("documentos")
-              }
-              disabled={modules.documentos.loading}
-            >
-              {modules.documentos.loading ? "Cargando…" : modules.documentos.open ? "Cerrar" : "Ver"}
-            </button>
-            {modules.documentos.open && <span className="badge">Activo</span>}
-          </div>
-        </div>
-
-        {/* CARGA DE PEDIDOS */}
-        <div className="card gp-card-12">
-          <div className="row gp-row-between-center">
-            <b>Carga</b>
-            <span className="badge">Pedidos</span>
-          </div>
-          <p className="muted gp-mt-6">Cargar, marcar o dar de baja pedidos (por DNI).</p>
-          <div className="row gp-row-between-center">
-            <button
-              className="btn"
-              type="button"
-              onClick={onOpenPedidoModal}
-              disabled={modules.pedidos.loading}
-            >
-              {modules.pedidos.loading ? 'Cargando…' : 'Cargar pedido'}
-            </button>
           </div>
         </div>
 
@@ -157,26 +128,26 @@ export function ModuleGrid({
           </div>
         </div>
 
-        {/* EXPEDIENTES */}
+        {/* DOCUMENTOS + EXPEDIENTES */}
         <div className="card gp-card-12">
           <div className="row gp-row-between-center">
-            <b>Expedientes</b>
-            {expedientesCount > 0
+            <b>Documentos y Expedientes</b>
+            {archivosCount + expedientesCount > 0
               ? <span className="badge" style={{ background: 'rgba(124,58,237,0.2)', color: '#c4b5fd', border: '1px solid rgba(124,58,237,0.3)' }}>
-                  {expedientesCount} cargado{expedientesCount > 1 ? 's' : ''}
+                  {archivosCount} archivo{archivosCount !== 1 ? 's' : ''} · {expedientesCount} exp.
                 </span>
-              : <span className="badge">/expedientes</span>
+              : <span className="badge">/tblarchivos · /expedientes</span>
             }
           </div>
-          <p className="muted gp-mt-6">Expedientes cargados del agente. Ver, cargar y editar.</p>
+          <p className="muted gp-mt-6">Documentos, resoluciones y expedientes del agente. Ver, cargar y editar.</p>
           <div className="row gp-row-between-center">
             <button
               className="btn"
               type="button"
-              onClick={onOpenExpedientes}
-              style={expedientesCount > 0 ? { borderColor: 'rgba(124,58,237,0.4)', color: '#c4b5fd' } : undefined}
+              onClick={onOpenDocumentos}
+              style={archivosCount + expedientesCount > 0 ? { borderColor: 'rgba(124,58,237,0.4)', color: '#c4b5fd' } : undefined}
             >
-              📁 Expedientes
+              🗂️ Documentos y Expedientes
             </button>
           </div>
         </div>

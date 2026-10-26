@@ -1301,7 +1301,8 @@ export function LegajoPage() {
   const [data, setData]       = useState<any | null>(null);
   const [activeDni, setActiveDni] = useState<number>(0);
   const [tab, setTab]         = useState<TabKey>('datos');
-  const [hojaImprimir, setHojaImprimir] = useState<number>(0);  // 0 = legajo completo
+  const [hojaImprimir, setHojaImprimir] = useState<number>(0);  // 0 = legajo completo, -1 = hojas 2 y 3 (doble faz)
+  const [conFoto, setConFoto] = useState(true);  // foto de la credencial en el cuadro de la hoja 2
   const [importando, setImportando] = useState(false);
 
   // refrescar = recarga tras guardar: no vacía la pantalla ni cambia de pestaña
@@ -1369,12 +1370,29 @@ export function LegajoPage() {
     w.document.write('<p style="font-family:sans-serif">Generando el legajo…</p>');
     try {
       const qs = new URLSearchParams({ formato });
-      if (hojaImprimir) qs.set('hojas', String(hojaImprimir));
+      if (hojaImprimir) qs.set('hojas', hojaImprimir === -1 ? '2,3' : String(hojaImprimir));
+      // Doble faz solo con la opción "Hojas 2 y 3": en el legajo completo agregaba dorsos en blanco
+      if (hojaImprimir === -1) qs.set('dobleFaz', '1');
+      if (!conFoto) qs.set('foto', '0');
       const blob = await apiFetchBlob(`/legajo/${activeDni}/pdf?${qs}`);
       w.location.href = URL.createObjectURL(blob);
     } catch (e: any) {
       w.close();
       toast.error('No se pudo generar el PDF', e?.message);
+    }
+  };
+
+  // Apps Script del formulario de Google (se pega en script.google.com)
+  const bajarScriptFormulario = async () => {
+    try {
+      const blob = await apiFetchBlob('/legajo/formulario-google/script');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'legajo_formulario.gs';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e: any) {
+      toast.error('No se pudo bajar el script', e?.message);
     }
   };
 
@@ -1414,6 +1432,10 @@ export function LegajoPage() {
           title="Importar respuestas del formulario de Google">
           📥 Importar formulario
         </button>
+        <button className="btn" onClick={bajarScriptFormulario} style={{ height: 38 }}
+          title="Bajar el script del formulario de Google (con las ayudas de cada pregunta) para pegar en script.google.com">
+          ⬇️ Script del formulario
+        </button>
         {d && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
             <div>
@@ -1421,9 +1443,15 @@ export function LegajoPage() {
               <select id="legajo-hoja" className="input" value={hojaImprimir}
                 onChange={e => setHojaImprimir(Number(e.target.value))} style={{ height: 38 }}>
                 <option value={0}>Legajo completo (16 hojas)</option>
+                <option value={-1}>Hojas 2 y 3 — Datos personales + Rectificaciones (doble faz)</option>
                 {HOJAS_LEGAJO.map(h => <option key={h.n} value={h.n}>Hoja {h.n} — {h.label}</option>)}
               </select>
             </div>
+            <label htmlFor="legajo-con-foto" style={{ display: 'flex', alignItems: 'center', gap: 4, height: 38,
+              fontSize: '0.85rem', cursor: 'pointer' }} title="Foto tipo carnet (de la credencial) en el cuadro de la hoja 2">
+              <input id="legajo-con-foto" type="checkbox" checked={conFoto} onChange={e => setConFoto(e.target.checked)} />
+              Con foto
+            </label>
             <button className="btn" onClick={() => imprimir('original')} style={{ height: 38 }}
               title="Tamaño original de cada hoja: A4 apaisada (la hoja 6 en oficio)">
               🖨️ A4 original
