@@ -1,11 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "Personal - Avisos por WhatsApp",
-  "version": "1.2.0",
-  "description": "Envía los avisos de licencias médicas desde la app de Personal usando el WhatsApp Web ya abierto.",
-  "permissions": ["tabs", "scripting"],
-  "host_permissions": ["https://web.whatsapp.com/*"],
-  "background": { "service_worker": "background.js" },
+  "name": "Personal - Asistente (WhatsApp y CUIL ANSES)",
+  "version": "1.5.0",
+  "description": "Desde la app de Personal: avisos por WhatsApp Web y descarga de la constancia de CUIL de ANSES.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://servicioswww.anses.gob.ar/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [
@@ -14,12 +23,27 @@
         "http://localhost/*",
         "http://127.0.0.1/*"
       ],
-      "js": ["bridge.js"],
+      "js": [
+        "bridge.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "js": ["wa.js"],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "wa.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://servicioswww.anses.gob.ar/C2-ConstaCUIL*"
+      ],
+      "js": [
+        "anses.js"
+      ],
       "run_at": "document_idle"
     }
   ]

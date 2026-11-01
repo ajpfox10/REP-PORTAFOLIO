@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { CuilAnsesPanel } from './CuilAnsesPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Flujo nuevo (2026-08): consulta de interinos 10430 por rango de años -> cuadro
@@ -34,6 +35,17 @@ type TandaAgente = {
   plantaNombre?: string | null;
   estadoEmpleo?: string | null;
   dependenciaNombre?: string | null;
+  origen?: 'anio' | 'manual' | null;
+  anio?: number | null;
+};
+
+type BuscarAgenteRow = {
+  dni: number;
+  apellidoNombre: string;
+  fechaIngreso: string | null;
+  leyNombre?: string | null;
+  plantaNombre?: string | null;
+  estadoEmpleo?: string | null;
 };
 
 type DocuNode = {
@@ -50,6 +62,20 @@ const CARD_BG = 'rgba(255,255,255,0.03)';
 const BORDER = '1px solid rgba(255,255,255,0.1)';
 const IMG_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
 const currentYear = new Date().getFullYear();
+
+const PAGE_SIZE = 20;
+
+// Grupo de la lista de la tanda: por año de ingreso (consulta) o agregados a mano.
+function grupoDe(a: TandaAgente): string {
+  if (a.origen === 'manual') return 'manual';
+  const anio = a.anio || (a.fechaIngreso ? Number(a.fechaIngreso.slice(0, 4)) : null);
+  return anio ? String(anio) : 'sin-anio';
+}
+function grupoLabel(g: string): string {
+  if (g === 'manual') return 'Agregados a mano';
+  if (g === 'sin-anio') return 'Sin año';
+  return g;
+}
 
 const ESTADOS = ['pendiente', 'hecho', 'aprobado'] as const;
 const ESTADO_COLOR: Record<string, string> = {
@@ -182,6 +208,19 @@ export function TramitesTab() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loadingConsulta, setLoadingConsulta] = useState(false);
   const [tandaNombre, setTandaNombre] = useState('');
+  const [consultaPage, setConsultaPage] = useState(0);
+
+  // Agregar de a uno (buscador por DNI o apellido)
+  const [busq, setBusq] = useState('');
+  const [busqRows, setBusqRows] = useState<BuscarAgenteRow[]>([]);
+  const [buscando, setBuscando] = useState(false);
+
+  // Filtros + página de la lista de la tanda
+  const [grupo, setGrupo] = useState('todos');
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [listaPage, setListaPage] = useState(0);
+  const [verCuil, setVerCuil] = useState(false);
 
   // Tandas
   const [tandaRows, setTandaRows] = useState<TandaAgente[]>([]);
@@ -256,6 +295,7 @@ export function TramitesTab() {
       );
       const rows = res.data.rows || [];
       setConsultaRows(rows);
+      setConsultaPage(0);
       setSelected(new Set());
       toast.ok('Consulta lista', `${rows.length} interino(s) 10430 activos`);
     } catch (e: any) {
@@ -312,7 +352,17 @@ export function TramitesTab() {
     try {
       const res = await apiFetch<{ ok: boolean; data: { agregados: number } }>('/tramites-documentales/tandas', {
         method: 'POST',
-        body: JSON.stringify({ tanda: nombre, dnis: Array.from(selected) }),
+        body: JSON.stringify({
+          tanda: nombre,
+          origen: 'anio',
+          items: consultaRows
+            .filter((r) => selected.has(r.dni))
+            .map((r) => ({
+              dni: r.dni,
+              anio: r.fechaIngresoExcel ? Number(r.fechaIngresoExcel.slice(0, 4))
+                : anioDesde === anioHasta ? Number(anioDesde) : null,
+            })),
+        }),
       });
       toast.ok('Agregados a la tanda', `${res.data.agregados} agente(s) en "${nombre}"`);
       setSelected(new Set());
@@ -321,6 +371,51 @@ export function TramitesTab() {
       toast.error('No se pudo guardar la tanda', e?.message || 'Error');
     } finally {
       setSavingTanda(false);
+    }
+  }
+
+  // Buscador con espera corta (no consulta en cada tecla).
+  useEffect(() => {
+    const q = busq.trim();
+    if (q.length < 2) { setBusqRows([]); return; }
+    const t = window.setTimeout(async () => {
+      setBuscando(true);
+      try {
+        const res = await apiFetch<{ ok: boolean; data: { rows: BuscarAgenteRow[] } }>(
+          `/tramites-documentales/buscar-agente?q=${encodeURIComponent(q)}`
+        );
+        setBusqRows(res.data.rows || []);
+      } catch (e: any) {
+        toast.error('No se pudo buscar', e?.message || 'Error');
+      } finally {
+        setBuscando(false);
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busq]);
+
+  async function agregarManual(row: BuscarAgenteRow) {
+    let nombre = selectedTanda;
+    if (!nombre) {
+      nombre = (window.prompt('No hay tanda elegida. Nombre de la tanda nueva:') || '').trim();
+      if (!nombre) return;
+    }
+    if ((agentesPorTanda.get(nombre) || []).some((r) => r.dni === row.dni)) {
+      toast.warning('Ya está', `${row.apellidoNombre} ya está en "${nombre}"`);
+      return;
+    }
+    try {
+      await apiFetch('/tramites-documentales/tandas', {
+        method: 'POST',
+        body: JSON.stringify({ tanda: nombre, origen: 'manual', items: [{ dni: row.dni }] }),
+      });
+      toast.ok('Agregado', `${row.apellidoNombre} en "${nombre}"`);
+      setBusq('');
+      setBusqRows([]);
+      await refreshTandas(nombre);
+    } catch (e: any) {
+      toast.error('No se pudo agregar', e?.message || 'Error');
     }
   }
 
@@ -552,6 +647,32 @@ export function TramitesTab() {
 
   const allSelected = consultaRows.length > 0 && selected.size === consultaRows.length;
   const agentesTandaActual = agentesPorTanda.get(selectedTanda) || [];
+  // Grupos (años + "a mano") de la tanda elegida, con su cantidad.
+  const gruposTanda = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of agentesTandaActual) map.set(grupoDe(a), (map.get(grupoDe(a)) || 0) + 1);
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      const rank = (g: string) => (g === 'manual' ? 2 : g === 'sin-anio' ? 1 : 0);
+      return rank(a) - rank(b) || a.localeCompare(b);
+    });
+  }, [agentesTandaActual]);
+  const agentesFiltrados = useMemo(() => {
+    const txt = filtroTexto.trim().toUpperCase();
+    return agentesTandaActual.filter((a) => (
+      (grupo === 'todos' || grupoDe(a) === grupo)
+      && (!filtroEstado || a.estado === filtroEstado)
+      && (!txt || (a.apellidoNombre || '').toUpperCase().includes(txt) || String(a.dni).includes(txt))
+    ));
+  }, [agentesTandaActual, grupo, filtroTexto, filtroEstado]);
+  const listaPages = Math.max(1, Math.ceil(agentesFiltrados.length / PAGE_SIZE));
+  const listaPageSafe = Math.min(listaPage, listaPages - 1);
+  const agentesPagina = agentesFiltrados.slice(listaPageSafe * PAGE_SIZE, (listaPageSafe + 1) * PAGE_SIZE);
+  const consultaPages = Math.max(1, Math.ceil(consultaRows.length / PAGE_SIZE));
+  const consultaPagina = consultaRows.slice(consultaPage * PAGE_SIZE, (consultaPage + 1) * PAGE_SIZE);
+
+  // Al cambiar de tanda o de filtro se vuelve a la primera página.
+  useEffect(() => { setListaPage(0); }, [selectedTanda, grupo, filtroTexto, filtroEstado]);
+  useEffect(() => { setGrupo('todos'); }, [selectedTanda]);
   // Contenido plano de la carpeta seleccionada (para el panel de abajo a la izquierda).
   const folderContentsSorted = useMemo(
     () => [...(findFolderChildren(docuTree, selectedFolder) || [])].sort((a, b) => (
@@ -594,7 +715,7 @@ export function TramitesTab() {
 
         {consultaRows.length ? (
           <>
-            <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 12, border: BORDER, borderRadius: 8 }}>
+            <div style={{ marginTop: 12, border: BORDER, borderRadius: 8 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
                   <tr style={{ position: 'sticky', top: 0, background: '#1e1b2e', zIndex: 1 }}>
@@ -609,7 +730,7 @@ export function TramitesTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {consultaRows.map((row) => (
+                  {consultaPagina.map((row) => (
                     <tr key={row.dni} style={{ borderTop: BORDER, background: selected.has(row.dni) ? 'rgba(124,58,237,0.12)' : 'transparent' }}>
                       <td style={tdStyle}>
                         <input type="checkbox" checked={selected.has(row.dni)} onChange={() => toggleSelect(row.dni)} />
@@ -625,6 +746,8 @@ export function TramitesTab() {
               </table>
             </div>
 
+            <Paginador page={consultaPage} pages={consultaPages} total={consultaRows.length} onPage={setConsultaPage} />
+
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
               <div>
                 <div style={labelStyle}>Nombre de tanda</div>
@@ -638,6 +761,11 @@ export function TramitesTab() {
           </>
         ) : null}
       </section>
+
+      {verCuil && selectedTanda ? (
+        <CuilAnsesPanel tanda={selectedTanda} onCerrar={() => setVerCuil(false)}
+          onGuardado={(dni) => { if (agente?.dni === dni) void loadDocu(dni); }} />
+      ) : null}
 
       {/* ── Tandas + detalle del agente ───────────────────────────────────── */}
       <section style={{ background: CARD_BG, border: BORDER, borderRadius: 12, padding: 16, display: 'flex', gap: 16, minHeight: 460 }}>
@@ -661,6 +789,36 @@ export function TramitesTab() {
             <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Todavía no hay tandas. Consultá arriba y agregá agentes.</div>
           )}
 
+          {/* Agregar de a uno */}
+          <div style={{ position: 'relative' }}>
+            <div style={labelStyle}>Agregar agente{selectedTanda ? ` a "${selectedTanda}"` : ''}</div>
+            <input value={busq} onChange={(e) => setBusq(e.target.value)}
+              placeholder="DNI o apellido y nombre" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+            {busq.trim().length >= 2 ? (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, marginTop: 4,
+                background: '#1e1b2e', border: BORDER, borderRadius: 8, maxHeight: 280, overflow: 'auto',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              }}>
+                {buscando && !busqRows.length ? (
+                  <div style={{ color: '#94a3b8', fontSize: '0.78rem', padding: 10 }}>Buscando…</div>
+                ) : !busqRows.length ? (
+                  <div style={{ color: '#94a3b8', fontSize: '0.78rem', padding: 10 }}>Sin resultados.</div>
+                ) : busqRows.map((r) => (
+                  <div key={r.dni} onClick={() => void agregarManual(r)}
+                    style={{ padding: '7px 10px', borderBottom: BORDER, cursor: 'pointer' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(124,58,237,0.18)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                    <div style={{ color: '#e2e8f0', fontSize: '0.8rem', fontWeight: 600 }}>+ {r.apellidoNombre}</div>
+                    <div style={{ color: '#64748b', fontSize: '0.7rem' }}>
+                      DNI {r.dni} · {r.leyNombre || 'sin ley'} · {r.plantaNombre || 'sin planta'} · {r.estadoEmpleo || '-'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           {selectedTanda ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button type="button" onClick={() => void crearSubcarpetas()} disabled={creandoSub || ordenando}
@@ -673,11 +831,43 @@ export function TramitesTab() {
                 style={{ ...primaryBtn, background: ordenando ? 'rgba(255,255,255,0.08)' : '#0f766e', cursor: ordenando || creandoSub ? 'default' : 'pointer', fontSize: '0.78rem', padding: '8px 12px' }}>
                 {ordenando && ordenProg ? `Ordenando ${ordenProg.done}/${ordenProg.total}…` : `🗂️ Ordenar archivos de "${selectedTanda}"`}
               </button>
+              <button type="button" onClick={() => setVerCuil(true)} disabled={verCuil}
+                title="Baja la constancia de CUIL de ANSES con la extensión de Chrome y la guarda en DOCU\<dni>\CUIL"
+                style={{ ...primaryBtn, background: verCuil ? 'rgba(255,255,255,0.08)' : '#0e7490', cursor: verCuil ? 'default' : 'pointer', fontSize: '0.78rem', padding: '8px 12px' }}>
+                {`🪪 Bajar CUIL de ANSES ("${selectedTanda}")`}
+              </button>
             </div>
           ) : null}
 
-          <div style={{ flex: 1, overflow: 'auto', border: BORDER, borderRadius: 8 }}>
-            {agentesTandaActual.map((a) => {
+          {selectedTanda && agentesTandaActual.length ? (
+            <>
+              {/* Separar por año (consulta) o agregados a mano */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {[['todos', agentesTandaActual.length] as [string, number], ...gruposTanda].map(([g, n]) => (
+                  <button key={g} type="button" onClick={() => setGrupo(g)}
+                    style={{
+                      ...chipBtn, fontSize: '0.72rem', padding: '3px 9px',
+                      background: grupo === g ? (g === 'manual' ? '#0f766e' : ACCENT) : 'rgba(255,255,255,0.05)',
+                      color: grupo === g ? '#fff' : '#cbd5e1',
+                    }}>
+                    {g === 'todos' ? 'Todos' : grupoLabel(g)} <span style={{ opacity: 0.7 }}>({n})</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)}
+                  placeholder="Filtrar nombre o DNI" style={{ ...inputStyle, flex: 1, minWidth: 0, padding: '6px 8px', fontSize: '0.78rem' }} />
+                <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}
+                  style={{ ...inputStyle, width: 110, padding: '6px 6px', fontSize: '0.78rem' }}>
+                  <option value="" style={{ color: '#111' }}>Todos</option>
+                  {ESTADOS.map((es) => <option key={es} value={es} style={{ color: '#111' }}>{es}</option>)}
+                </select>
+              </div>
+            </>
+          ) : null}
+
+          <div style={{ border: BORDER, borderRadius: 8 }}>
+            {agentesPagina.map((a) => {
               const err = subErroresTanda === selectedTanda ? subErrores.get(a.dni) : undefined;
               return (
               <div key={a.id}
@@ -710,8 +900,13 @@ export function TramitesTab() {
             })}
             {selectedTanda && !agentesTandaActual.length ? (
               <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>Tanda vacía.</div>
+            ) : selectedTanda && !agentesFiltrados.length ? (
+              <div style={{ color: '#64748b', fontSize: '0.8rem', padding: 10 }}>Nadie con ese filtro.</div>
             ) : null}
           </div>
+          {agentesFiltrados.length > PAGE_SIZE ? (
+            <Paginador page={listaPageSafe} pages={listaPages} total={agentesFiltrados.length} onPage={setListaPage} />
+          ) : null}
         </div>
 
         {/* Columna derecha: ficha + carpeta DOCU + visor */}
@@ -885,3 +1080,21 @@ const miniBtn: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', bor
 const xBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem', padding: 4 };
 const thStyle: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', color: '#94a3b8', fontWeight: 600, fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: 0.3 };
 const tdStyle: React.CSSProperties = { padding: '6px 10px', color: '#cbd5e1' };
+
+// Paginador chico: ‹ Anterior · 21–40 de 95 · Siguiente ›
+function Paginador({ page, pages, total, onPage }: { page: number; pages: number; total: number; onPage: (p: number) => void }) {
+  if (pages <= 1) return null;
+  const desde = page * PAGE_SIZE + 1;
+  const hasta = Math.min(total, (page + 1) * PAGE_SIZE);
+  const btn = (disabled: boolean): React.CSSProperties => ({
+    background: 'rgba(255,255,255,0.05)', border: BORDER, borderRadius: 6, padding: '4px 10px',
+    color: disabled ? '#475569' : '#cbd5e1', fontSize: '0.75rem', cursor: disabled ? 'default' : 'pointer',
+  });
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
+      <button type="button" disabled={page <= 0} onClick={() => onPage(page - 1)} style={btn(page <= 0)}>‹ Anterior</button>
+      <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{desde}–{hasta} de {total}</span>
+      <button type="button" disabled={page >= pages - 1} onClick={() => onPage(page + 1)} style={btn(page >= pages - 1)}>Siguiente ›</button>
+    </div>
+  );
+}

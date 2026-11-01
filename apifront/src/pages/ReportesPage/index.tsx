@@ -4,6 +4,7 @@ import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { exportToExcel, exportToPdf, printTable } from '../../utils/export';
+import { WhatsappAutomatico } from './WhatsappAutomatico';
 
 type TabKey = 'cumpleanos' | 'antiguedad' | 'estadisticas_consultas' | 'whatsapp' | 'consultas_dinamicas';
 
@@ -1082,6 +1083,9 @@ function WhatsappTab() {
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+
+      {/* Conteo automático (extensión de Chrome sobre WhatsApp Web) */}
+      <WhatsappAutomatico />
 
       {/* Formulario nuevo */}
       <div className="card">

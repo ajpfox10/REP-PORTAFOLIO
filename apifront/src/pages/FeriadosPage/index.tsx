@@ -16,9 +16,16 @@ const TIPOS: { v: Tipo; label: string }[] = [
   { v: 'provincial', label: 'Provincial' },
   { v: 'no_laborable', label: 'No laborable' },
 ];
+// Quién trabaja el día (mig 098): Presentismo por turno arma los teóricos con esto
+type LoTrabaja = 'franqueros' | 'semana';
+const LO_TRABAJA: { v: LoTrabaja; label: string }[] = [
+  { v: 'franqueros', label: 'Franqueros' },
+  { v: 'semana', label: 'Como día hábil' },
+];
+const loTrabajaDe = (tipo: Tipo): LoTrabaja => (tipo === 'no_laborable' ? 'semana' : 'franqueros');
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-interface Feriado { id: number; fecha: string; nombre: string; tipo: Tipo }
+interface Feriado { id: number; fecha: string; nombre: string; tipo: Tipo; lo_trabaja: LoTrabaja }
 interface Anio { anio: number; cantidad: number; confirmado: number }
 interface Confirmacion { anio: number; confirmado_por_nombre: string | null; confirmado_at: string }
 
@@ -36,7 +43,7 @@ export function FeriadosPage() {
   const [anios, setAnios] = useState<Anio[]>([]);
   const [conf, setConf] = useState<Confirmacion | null>(null);
   const [corte, setCorte] = useState('');
-  const [nuevo, setNuevo] = useState<{ fecha: string; nombre: string; tipo: Tipo }>({ fecha: '', nombre: '', tipo: 'nacional' });
+  const [nuevo, setNuevo] = useState<{ fecha: string; nombre: string; tipo: Tipo; lo_trabaja: LoTrabaja }>({ fecha: '', nombre: '', tipo: 'nacional', lo_trabaja: 'franqueros' });
   const [editando, setEditando] = useState<Feriado | null>(null);
 
   const cargar = async (a = anio) => {
@@ -61,7 +68,7 @@ export function FeriadosPage() {
     try {
       await apiFetch('/feriados', { method: 'POST', body: JSON.stringify(nuevo) });
       toast.ok('Feriado agregado');
-      setNuevo({ fecha: '', nombre: '', tipo: 'nacional' });
+      setNuevo({ fecha: '', nombre: '', tipo: 'nacional', lo_trabaja: 'franqueros' });
       await cargar();
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo agregar');
@@ -163,7 +170,7 @@ export function FeriadosPage() {
 
         <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
           <thead>
-            <tr><th style={th}>Fecha</th><th style={th}>Día</th><th style={th}>Nombre</th><th style={th}>Tipo</th><th style={th} /></tr>
+            <tr><th style={th}>Fecha</th><th style={th}>Día</th><th style={th}>Nombre</th><th style={th}>Tipo</th><th style={th}>Lo trabaja</th><th style={th} /></tr>
           </thead>
           <tbody>
             {feriados.map(f => editando?.id === f.id ? (
@@ -174,6 +181,11 @@ export function FeriadosPage() {
                 <td style={td}>
                   <select value={editando.tipo} onChange={(e) => setEditando({ ...editando, tipo: e.target.value as Tipo })} style={sel}>
                     {TIPOS.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+                  </select>
+                </td>
+                <td style={td}>
+                  <select value={editando.lo_trabaja} onChange={(e) => setEditando({ ...editando, lo_trabaja: e.target.value as LoTrabaja })} style={sel}>
+                    {LO_TRABAJA.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
                   </select>
                 </td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>
@@ -187,6 +199,7 @@ export function FeriadosPage() {
                 <td style={td}>{diaSemana(f.fecha)}</td>
                 <td style={td}>{f.nombre}</td>
                 <td style={td}>{TIPOS.find(t => t.v === f.tipo)?.label ?? f.tipo}</td>
+                <td style={td}>{LO_TRABAJA.find(t => t.v === f.lo_trabaja)?.label ?? f.lo_trabaja}</td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>
                   <button type="button" className="btn" onClick={() => setEditando(f)}>Editar</button>{' '}
                   <button type="button" className="btn danger" onClick={() => borrar(f)}>Borrar</button>
@@ -194,15 +207,20 @@ export function FeriadosPage() {
               </tr>
             ))}
             {!feriados.length && (
-              <tr><td style={td} colSpan={5} className="muted">No hay feriados cargados para {anio}.</td></tr>
+              <tr><td style={td} colSpan={6} className="muted">No hay feriados cargados para {anio}.</td></tr>
             )}
             <tr>
               <td style={td}><input type="date" value={nuevo.fecha} min={`${anio}-01-01`} max={`${anio}-12-31`} onChange={(e) => setNuevo({ ...nuevo, fecha: e.target.value })} style={sel} /></td>
               <td style={td}>{nuevo.fecha ? diaSemana(nuevo.fecha) : ''}</td>
               <td style={td}><input placeholder="Nombre del feriado" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} style={{ ...sel, width: '100%' }} /></td>
               <td style={td}>
-                <select value={nuevo.tipo} onChange={(e) => setNuevo({ ...nuevo, tipo: e.target.value as Tipo })} style={sel}>
+                <select value={nuevo.tipo} onChange={(e) => { const tipo = e.target.value as Tipo; setNuevo({ ...nuevo, tipo, lo_trabaja: loTrabajaDe(tipo) }); }} style={sel}>
                   {TIPOS.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+                </select>
+              </td>
+              <td style={td}>
+                <select value={nuevo.lo_trabaja} onChange={(e) => setNuevo({ ...nuevo, lo_trabaja: e.target.value as LoTrabaja })} style={sel}>
+                  {LO_TRABAJA.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
                 </select>
               </td>
               <td style={td}><button type="button" className="btn" onClick={guardarNuevo}>+ Agregar</button></td>

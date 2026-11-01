@@ -49,6 +49,28 @@ module.exports = {
     enabled: String(process.env.TRIMESTRE_WATCH || 'on').toLowerCase() !== 'off',
     intervalMs: Math.max(10000, Number(process.env.TRIMESTRE_WATCH_INTERVAL_MS || 60000))
   },
+  // Planilla de Drive con el historial de O.C. (solo lectura); si no se indica, se usa el destino de Drive de O.C.
+  ocHistorialFileId: process.env.OC_HISTORIAL_FILE_ID || '',
+  vencidos: {
+    // Robot de descarga de Articulos Vencidos y Proximos a Vencer (Farmacia MS): carpeta de los Excel
+    dir: process.env.VENCIDOS_DIR || 'D:\\FARMACIA\\VENCIDOS'
+  },
+  consumoMs: {
+    // Robot de descarga de Consumo Comparativo mensual (Farmacia MS): carpeta de los Excel
+    dir: process.env.CONSUMO_MS_DIR || 'D:\\FARMACIA\\CONSUMO MENSUAL'
+  },
+  stockActual: {
+    // Robot de descarga de Consulta de Stock (Farmacia MS): carpeta de los Excel y sectores a bajar
+    dir: process.env.STOCK_ACTUAL_DIR || 'D:\\FARMACIA\\STOCK ACTUAL',
+    sectores: (process.env.STOCK_ACTUAL_SECTORES || 'FARMACIA UNIFICADA,PSICOFARMACOS Y ESTUPEFACIENTES')
+      .split(',').map((s) => s.trim()).filter(Boolean)
+  },
+  requerimientoSourceDir: process.env.REQUERIMIENTO_SOURCE_DIR || 'D:\\FARMACIA\\REQUERIMIENTO',
+  requerimientoWatch: {
+    // Sondeo automatico de la carpeta de requerimientos (PDF). Se puede apagar con REQUERIMIENTO_WATCH=off.
+    enabled: String(process.env.REQUERIMIENTO_WATCH || 'on').toLowerCase() !== 'off',
+    intervalMs: Math.max(10000, Number(process.env.REQUERIMIENTO_WATCH_INTERVAL_MS || 60000))
+  },
   criticoWatch: {
     // Sondeo automatico de la carpeta de stock critico. Se puede apagar con CRITICO_WATCH=off.
     enabled: String(process.env.CRITICO_WATCH || 'on').toLowerCase() !== 'off',

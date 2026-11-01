@@ -2,6 +2,13 @@ const bcrypt = require('bcryptjs');
 const { pool, query } = require('./db');
 const config = require('./config');
 const { ensureOrdenesCompraTables } = require('./ordenesCompraDb');
+const { ensureRequerimientoTables } = require('./requerimientosDb');
+const { ensureStockActualTables } = require('./stockActualDb');
+const { ensureOcHistorialTables } = require('./ocHistorialDb');
+const { ensureMinisterioTables } = require('./ministerioDb');
+const { ensureConsumoMsTables } = require('./consumoMsDb');
+const { ensureVencidosTables } = require('./vencidosDb');
+const { ensureBajasTables } = require('./bajasDb');
 
 async function migrate() {
   await query(`
@@ -290,6 +297,13 @@ async function migrate() {
   `);
 
   await ensureOrdenesCompraTables();
+  await ensureRequerimientoTables();
+  await ensureStockActualTables();
+  await ensureOcHistorialTables();
+  await ensureMinisterioTables();
+  await ensureConsumoMsTables();
+  await ensureVencidosTables();
+  await ensureBajasTables();
 
   const hash = await bcrypt.hash(config.adminPassword, 12);
   await query(

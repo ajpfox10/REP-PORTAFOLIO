@@ -643,3 +643,8 @@ a.oc-link { display: inline-flex; align-items: center; gap: 8px; border-radius: 
 .oc-ayuda h4:first-child { margin-top: 0; }
 .oc-ayuda p, .oc-ayuda ol, .oc-ayuda ul { margin: 4px 0; }
 .oc-ayuda li { margin: 2px 0; }
+
+/* Analisis de Requerimiento Anual: letra mas grande que el resto de los modulos */
+.req-page table.compact th, .req-page table.compact td { padding: 7px 10px; font-size: 15px; line-height: 1.35; }
+.req-page .filters, .req-page .filters input, .req-page .filters select { font-size: 15px; }
+.req-page .status { font-size: 13px; }

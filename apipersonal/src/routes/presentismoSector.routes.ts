@@ -28,6 +28,7 @@
 //   trabaje noches rotativas (ej. una semana sí y otra no). Se detecta por agente con las últimas 8 semanas
 //   (fichadas + PRESENTE / FRANCO COMPENSATORIO del historial SIAPE) en un ciclo de 14 días: los días del ciclo en
 //   que casi nunca trabaja (≤ 25%) no se cuentan como teóricos ("ROT" en lo que pasó, "rotacion" en la predicción).
+//   En lo que pasó, solo para el turno Noche (27/10: los demás turnos son fijos).
 //
 // El servicio sale del usuario logueado (usuarios.servicio_id); Sala (24) y Dpto. Enfermería (34) se ven juntos,
 // igual que la tarjeta de enfermería de Mi Sector. Admin (crud:*:*) puede elegir cualquier servicio.
@@ -397,7 +398,7 @@ async function leerSiapePresentes(sequelize: Sequelize, dnis: string[], desde: s
 
 async function leerFeriados(sequelize: Sequelize, desde: string, hasta: string) {
   return sequelize.query<any>(
-    `SELECT DATE_FORMAT(fecha,'%Y-%m-%d') AS fecha, nombre FROM feriados WHERE fecha BETWEEN ? AND ?`,
+    `SELECT DATE_FORMAT(fecha,'%Y-%m-%d') AS fecha, nombre, lo_trabaja FROM feriados WHERE fecha BETWEEN ? AND ?`,
     { replacements: [desde, hasta], type: QueryTypes.SELECT },
   );
 }
@@ -667,23 +668,31 @@ export function buildPresentismoSectorRouter(sequelize: Sequelize) {
       const { vigente, ministerioAl } = await leerNovedades(sequelize, dnis, desde, hasta);
       const { map: fichadas, error: errFich } = await leerFichadas(dnis, desde, hasta);
       const feriados = await leerFeriados(sequelize, desde, hasta);
-      const esFeriado = new Set(feriados.map((x: any) => x.fecha));
+      // Solo los feriados que cubren los franqueros (feriados.lo_trabaja, mig 098); 'semana' = día hábil común
+      const esFeriado = new Set(feriados.filter((x: any) => x.lo_trabaja !== 'semana').map((x: any) => x.fecha));
       const siape = await leerSiapePresentes(sequelize, dnis, desde, hasta);
 
-      // Un registro por agente × día con turno teórico
+      // Un registro por agente × día con turno teórico.
+      // Feriado (de los que lo_trabaja = 'franqueros'): lo cubren los franqueros (toca sábado/domingo y no tiene L-V completo) con su horario de domingo
+      // (o de sábado); el resto no es teórico ese día.
       const registros: any[] = [];
       for (const f of dias) {
         const dow = DOW_KEYS[dowDe(f)];
+        const feriado = esFeriado.has(f);
         for (const dni of dnis) {
-          const deHorario = horarios.get(dni)?.[dow];
-          const t = deHorario ?? rot.extra(dni, f);
+          const h = horarios.get(dni);
+          const franquero = !!h && !!(h.sabado || h.domingo) && !DIAS.slice(0, 5).every(d => h[d]);
+          const deHorario = feriado ? (franquero ? h!.domingo ?? h!.sabado : undefined) : h?.[dow];
+          const t = deHorario ?? (feriado ? null : rot.extra(dni, f));
           if (!t) continue;
           const nv = vigente(dni, f);
           const fich = fichadas.turno(dni, f, t);
+          // 27/10: solo rota la Noche; Mañana/Tarde/Vespertino/24 h son fijos y su franco es una ausencia más
+          const rota = turnoDe(t.entrada, t.horas) === 'Noche';
           for (const turno of turnosDe(t)) registros.push({
-            fecha: f, dni, turno, horario: `${t.entrada}–${t.salida}${deHorario ? '' : ' (por fichadas)'}`,
-            estado: (!fich && !rot.leToca(dni, f)) ? 'ROT'
-              : nv?.cat ?? (fich ? 'FICHO' : esFeriado.has(f) ? 'FER'
+            fecha: f, dni, turno, horario: `${t.entrada}–${t.salida}${feriado ? ' (franquero)' : deHorario ? '' : ' (por fichadas)'}`,
+            estado: (!fich && !feriado && rota && !rot.leToca(dni, f)) ? 'ROT'
+              : nv?.cat ?? (fich ? 'FICHO'
                 : siape.presente.has(`${dni}|${f}`) ? 'PSF'                          // SIAPE lo da presente y no fichó
                 : (!siape.cubreHasta || f > siape.cubreHasta) ? 'NOSIAPE'           // la descarga de SIAPE no llega a ese día
                 : 'SIN'),

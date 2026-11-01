@@ -1,7 +1,7 @@
 // src/routes/feriados.routes.ts
 // GET    /api/v1/feriados/estado                  → ¿el año en curso está confirmado? corte (4.º día hábil de enero), bloqueo y aviso
 // GET    /api/v1/feriados?anio=AAAA                → feriados del año + si está confirmado + años cargados
-// POST   /api/v1/feriados                          → alta {fecha, nombre, tipo}            (crud:*:*)
+// POST   /api/v1/feriados                          → alta {fecha, nombre, tipo, lo_trabaja} (crud:*:*)
 // PUT    /api/v1/feriados/:id                      → editar                                (crud:*:*)
 // DELETE /api/v1/feriados/:id                      → borrar                                (crud:*:*)
 // POST   /api/v1/feriados/anio/:anio/fijos         → agrega los de fecha fija que falten   (crud:*:*)
@@ -18,6 +18,8 @@ import { requireAny, requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 
 const TIPOS = ['nacional', 'provincial', 'puente', 'trasladable', 'no_laborable'];
+// Quién trabaja el día (mig 098): lo usa Presentismo por turno para armar los teóricos
+const LO_TRABAJA = ['franqueros', 'semana'];
 
 // Los de fecha fija (los trasladables, Carnaval, Semana Santa y puentes se cargan a mano cada año)
 const FIJOS: [string, string][] = [
@@ -41,6 +43,7 @@ async function ensureTablas(sequelize: Sequelize) {
       fecha DATE NOT NULL,
       nombre VARCHAR(200) NOT NULL,
       tipo ENUM('nacional','provincial','puente','trasladable','no_laborable') NOT NULL DEFAULT 'nacional',
+      lo_trabaja ENUM('franqueros','semana') NOT NULL DEFAULT 'franqueros',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
@@ -141,7 +144,7 @@ export function buildFeriadosRouter(sequelize: Sequelize) {
     try {
       const anio = Number(req.query.anio) || new Date().getFullYear();
       const data = await sequelize.query<any>(
-        `SELECT id, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, nombre, tipo
+        `SELECT id, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, nombre, tipo, lo_trabaja
            FROM feriados WHERE YEAR(fecha) = ? ORDER BY fecha`,
         { replacements: [anio], type: QueryTypes.SELECT },
       );
@@ -168,15 +171,18 @@ export function buildFeriadosRouter(sequelize: Sequelize) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || isNaN(Date.parse(fecha))) return { error: 'Fecha inválida' };
     if (!nombre) return { error: 'Falta el nombre' };
     if (!TIPOS.includes(tipo)) return { error: 'Tipo inválido' };
-    return { fecha, nombre: nombre.slice(0, 200), tipo };
+    // sin dato: el no laborable se trabaja como día hábil, el resto lo cubren los franqueros
+    const loTrabaja = String(b?.lo_trabaja ?? (tipo === 'no_laborable' ? 'semana' : 'franqueros'));
+    if (!LO_TRABAJA.includes(loTrabaja)) return { error: 'Valor inválido en "Lo trabaja"' };
+    return { fecha, nombre: nombre.slice(0, 200), tipo, loTrabaja };
   };
 
   router.post('/', soloAdmin, async (req: Request, res: Response) => {
     const v: any = validar(req.body);
     if (v.error) return res.status(400).json({ ok: false, error: v.error });
     try {
-      await sequelize.query(`INSERT INTO feriados (fecha, nombre, tipo) VALUES (?, ?, ?)`,
-        { replacements: [v.fecha, v.nombre, v.tipo] });
+      await sequelize.query(`INSERT INTO feriados (fecha, nombre, tipo, lo_trabaja) VALUES (?, ?, ?, ?)`,
+        { replacements: [v.fecha, v.nombre, v.tipo, v.loTrabaja] });
       res.json({ ok: true });
     } catch (e: any) {
       const dup = esDuplicado(e);
@@ -188,8 +194,8 @@ export function buildFeriadosRouter(sequelize: Sequelize) {
     const v: any = validar(req.body);
     if (v.error) return res.status(400).json({ ok: false, error: v.error });
     try {
-      await sequelize.query(`UPDATE feriados SET fecha = ?, nombre = ?, tipo = ? WHERE id = ?`,
-        { replacements: [v.fecha, v.nombre, v.tipo, Number(req.params.id)] });
+      await sequelize.query(`UPDATE feriados SET fecha = ?, nombre = ?, tipo = ?, lo_trabaja = ? WHERE id = ?`,
+        { replacements: [v.fecha, v.nombre, v.tipo, v.loTrabaja, Number(req.params.id)] });
       res.json({ ok: true });
     } catch (e: any) {
       const dup = esDuplicado(e);

@@ -1,18 +1,41 @@
-EXTENSIÓN "Personal - Avisos por WhatsApp"
+EXTENSIÓN "Personal - Asistente (WhatsApp y CUIL ANSES)"  (antes "Personal - Avisos por WhatsApp")
 =========================================
 
-Se instala UNA vez en cada PC (Chrome) que vaya a mandar los avisos automáticos.
+Se instala UNA vez en cada PC (Chrome) que vaya a mandar los avisos o contar los mensajes recibidos.
 
-1. Descomprimir la carpeta en un lugar fijo (ej: C:\whatsapp-extension). No borrarla después.
-2. En Chrome ir a  chrome://extensions
-3. Activar "Modo de desarrollador" (arriba a la derecha).
-4. "Cargar descomprimida" → elegir la carpeta.
-5. Recargar la página de la app (Licencias médicas no otorgadas → pestaña WhatsApp).
-   Tiene que decir "Extensión instalada".
+1. Bajarla desde la app: Reportes → pestaña WhatsApp → "Descargar extensión"
+   (ahí está la guía paso a paso). En Descargas: clic derecho → Extraer todo. No borrar la carpeta después.
+2. En Chrome ir a  chrome://extensions   (en Edge:  edge://extensions)
+3. Activar "Modo de desarrollador" (Chrome: arriba a la derecha · Edge: costado izquierdo).
+4. "Cargar descomprimida" (Edge: "Cargar desempaquetada") → elegir la carpeta.
+   La app, WhatsApp Web y la extensión tienen que estar en el MISMO navegador.
+5. Doble clic en instalar-actualizador.cmd (una sola vez): desde ahí se actualiza sola.
+6. Recargar la página de la app. Tiene que decir "Extensión instalada".
+
+Actualización automática (desde v1.4.0):
+- instalar-actualizador.cmd crea una tarea de Windows del usuario (cada 2 horas) y un acceso en
+  Inicio (al prender la PC). Ambos corren actualizar.ps1 sin ventanas (actualizar-oculto.vbs).
+- actualizar.ps1 consulta version.json en los servidores de servidores.txt; si hay una versión
+  nueva baja el zip y pisa los archivos de esta carpeta. Deja registro en actualizador.log.
+- La extensión revisa cada 5 minutos si cambió su manifest.json y se recarga sola
+  (nunca en medio de un envío). Después hay que recargar la página de la app.
+- Para sacarlo: instalar-actualizador.cmd quitar
 
 Uso:
 - Tener WhatsApp Web abierto y vinculado en ese mismo Chrome (en cualquier pestaña).
 - Mientras envía, la extensión trae WhatsApp al frente y vuelve a la app después de cada mensaje:
   no usar la PC durante la tanda.
 
-Si se actualiza la extensión: chrome://extensions → botón de recargar (flecha circular) y recargar la app.
+Recibidos (v1.3.0): Reportes → WhatsApp → "📥 Recibidos por WhatsApp" cuenta los mensajes que llegaron
+(sin abrir chats ni marcar como leídos, sin guardar el texto) y los cruza con los agentes.
+
+Para publicar una versión nueva (después de cambiar la extensión y subir "version" en manifest.json):
+  powershell -ExecutionPolicy Bypass -File C:\apps\personaldev\whatsapp-extension\empaquetar.ps1
+  y deploy del front. Las PCs con el actualizador la toman solas en menos de 2 horas.
+
+CUIL de ANSES (desde v1.5.0):
+  Trámites documentales → Trámites → elegir tanda → "Bajar CUIL de ANSES". La extensión abre la página
+  de Constancia de CUIL de ANSES en una pestaña de fondo, completa los datos de cada agente (los de la
+  base), toca CONSULTAR y baja el PDF; la app lo guarda en DOCU\<dni>\CUIL\Constancia CUIL ANSES.pdf.
+  Deja 5 s entre agentes. Si ANSES responde con su protección anti-robots, se frena todo (no se reintenta).
+  Archivo: anses.js.

@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { apiFetch } from '../../api/http';
 import { Prediccion } from './Prediccion';
-import { exportarPresentismo } from './exportarExcel';
+import { exportarPresentismo, exportarTotales } from './exportarExcel';
 
 interface Registro {
   fecha: string;
@@ -73,7 +73,10 @@ const thSt: React.CSSProperties = { padding: '5px 5px', textAlign: 'right', font
 const tdSt: React.CSSProperties = { padding: '4px 5px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.06)' };
 // Los bloques por día salen del ancho del contenedor de la página y usan el de la ventana (solo la tabla se ensancha)
 const chipSt = (activo: boolean): React.CSSProperties => ({ padding: '3px 10px', fontSize: '0.75rem', opacity: activo ? 1 : 0.55, border: activo ? '1px solid #86efac' : undefined });
-const anchoVentana: React.CSSProperties = { width: 'min(calc(100vw - 32px), 1500px)', position: 'relative', left: '50%', transform: 'translateX(-50%)' };
+// % sobre los teóricos del turno, al lado de cada número
+const Pct = ({ n, teo }: { n: number; teo: number }) =>
+  n && teo ? <span style={{ fontSize: '0.68rem', fontWeight: 400, opacity: 0.6, marginLeft: 4 }}>{Math.round((n / teo) * 100)}%</span> : null;
+const anchoVentana: React.CSSProperties ={ width: 'min(calc(100vw - 32px), 1500px)', position: 'relative', left: '50%', transform: 'translateX(-50%)' };
 
 export function PresentismoSectorPage() {
   const [hasta, setHasta] = useState(sumarDias(isoHoy(), -1));
@@ -99,6 +102,7 @@ export function PresentismoSectorPage() {
       const res = await apiFetch<Resp>(`/presentismo-sector?${qs.toString()}`);
       if (!res?.ok) throw new Error(res?.error || 'Error cargando el presentismo');
       setData(res);
+      setDiasSoloTot(new Set(res.dias));   // arranca colapsado: solo filas Total por turno
       setAbierta(null);
     } catch (e: any) {
       setError(e?.message || 'Error cargando el presentismo');
@@ -199,11 +203,11 @@ export function PresentismoSectorPage() {
   });
 
   // Excel con una pestaña por día (con los filtros de sector y turno aplicados)
-  const exportar = (dias: string[], sufijo: string) => {
+  const exportar = (dias: string[], sufijo: string, soloTotales = false) => {
     if (!data) return;
     const set = new Set(dias);
     const servicio = data.servicio?.nombre ?? 'Servicio';
-    exportarPresentismo({
+    (soloTotales ? exportarTotales : exportarPresentismo)({
       dias,
       registros: registros.filter(r => set.has(r.fecha)),
       rotados: delSector.filter(r => r.estado === 'ROT' && set.has(r.fecha)),
@@ -211,7 +215,7 @@ export function PresentismoSectorPage() {
       sectorDe: dni => agentesPorDni.get(dni)?.sector ?? '(SIN SECTOR)',
       nombreDe: dni => agentesPorDni.get(dni)?.nombre ?? dni,
       nombreSector, fmtDia, servicio, feriados: data.feriados ?? [],
-      archivo: `presentismo_${servicio.replace(/[^\wÁÉÍÓÚÑáéíóúñ]+/g, '_')}_${sufijo}.xlsx`,
+      archivo: `presentismo_${soloTotales ? 'totales_' : ''}${servicio.replace(/[^\wÁÉÍÓÚÑáéíóúñ]+/g, '_')}_${sufijo}.xlsx`,
     });
   };
   // Lunes a domingo de la semana del día (solo los días consultados)
@@ -253,6 +257,12 @@ export function PresentismoSectorPage() {
               <button className="btn" type="button" title="Una pestaña por día + Resumen"
                 onClick={() => exportar(data.dias, `${data.desde}_a_${data.hasta}`)}>
                 ⬇ Excel del período
+              </button>
+            )}
+            {vista === 'pasado' && data && !loading && (
+              <button className="btn" type="button" title="Una sola pestaña con los totales por turno de cada día"
+                onClick={() => exportar(data.dias, `${data.desde}_a_${data.hasta}`, true)}>
+                ⬇ Excel de totales
               </button>
             )}
           </div>
@@ -422,9 +432,9 @@ export function PresentismoSectorPage() {
                 </div>
                 {!cerrado && (
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                       <thead><tr>
-                        <th style={{ ...thSt, textAlign: 'left' }}>Sector</th>
+                        <th style={{ ...thSt, textAlign: 'left', minWidth: 120 }}>Sector</th>
                         <th style={{ ...thSt, textAlign: 'left' }}>Turno</th>
                         <th style={thSt}>Teóricos</th>
                         {colsDia.map(c => <th key={c.k} style={{ ...thSt, maxWidth: 74 }} title={c.label}>{c.label}</th>)}
@@ -446,7 +456,7 @@ export function PresentismoSectorPage() {
                                   <td style={{ ...tdSt, fontWeight: 600 }}>{rs.length}</td>
                                   {colsDia.map(c => {
                                     const n = cuenta(rs, c.k);
-                                    return <td key={c.k} style={{ ...tdSt, color: n ? c.color : 'rgba(255,255,255,0.2)', fontWeight: n && c.k === 'SIN' ? 700 : undefined }}>{n || '·'}</td>;
+                                    return <td key={c.k} style={{ ...tdSt, color: n ? c.color : 'rgba(255,255,255,0.2)', fontWeight: n && c.k === 'SIN' ? 700 : undefined }}>{n || '·'}<Pct n={n} teo={rs.length} /></td>;
                                   })}
                                 </tr>
                                 {open && (
@@ -466,7 +476,7 @@ export function PresentismoSectorPage() {
                               <td style={{ ...tdSt, textAlign: 'left', fontWeight: 700 }}>Total</td>
                               <td style={{ ...tdSt, textAlign: 'left', fontWeight: 700 }}>{t}</td>
                               <td style={{ ...tdSt, fontWeight: 700 }}>{rs.length}</td>
-                              {colsDia.map(c => <td key={c.k} style={{ ...tdSt, fontWeight: 700 }}>{cuenta(rs, c.k) || '·'}</td>)}
+                              {colsDia.map(c => <td key={c.k} style={{ ...tdSt, fontWeight: 700 }}>{cuenta(rs, c.k) || '·'}<Pct n={cuenta(rs, c.k)} teo={rs.length} /></td>)}
                             </tr>
                           );
                         })}

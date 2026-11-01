@@ -1639,7 +1639,7 @@ async function listTandaAgentes(sequelize: Sequelize, tanda?: string | null) {
   return sequelize.query(
     `
       SELECT
-        t.id, t.tanda, t.dni, t.estado, t.creado_at AS creadoAt,
+        t.id, t.tanda, t.dni, t.estado, t.creado_at AS creadoAt, t.origen, t.anio,
         TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS apellidoNombre,
         DATE_FORMAT(a.fecha_ingreso, '%Y-%m-%d') AS fechaIngreso,
         oc.nombre AS ocupacionNombre,
@@ -1745,11 +1745,27 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
           dni        INT          NOT NULL,
           estado     VARCHAR(30)  NOT NULL DEFAULT 'pendiente',
           creado_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          origen     VARCHAR(10)  NOT NULL DEFAULT 'anio',
+          anio       SMALLINT     NULL,
           UNIQUE KEY uq_tanda_dni (tanda, dni),
           KEY idx_tti_dni (dni),
           CONSTRAINT fk_tti_personal_dni FOREIGN KEY (dni) REFERENCES personal (dni)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      // origen: 'anio' (vino de la consulta por año, `anio` = año de ingreso) o 'manual'
+      // (agregado de a uno con el buscador). Para tablas creadas antes de estas columnas.
+      const cols = await sequelize.query<{ c: string }>(
+        `SELECT column_name AS c FROM information_schema.columns
+          WHERE table_schema = DATABASE() AND table_name = 'tramites_tanda_interinos'`,
+        { type: QueryTypes.SELECT }
+      );
+      const have = new Set(cols.map((r) => String(r.c).toLowerCase()));
+      if (!have.has('origen')) {
+        await sequelize.query(`ALTER TABLE tramites_tanda_interinos ADD COLUMN origen VARCHAR(10) NOT NULL DEFAULT 'anio'`);
+      }
+      if (!have.has('anio')) {
+        await sequelize.query(`ALTER TABLE tramites_tanda_interinos ADD COLUMN anio SMALLINT NULL`);
+      }
     } catch (e: any) {
       logger.error({ msg: 'tramites_tanda_interinos: error creando tabla', error: e?.message });
     }
@@ -2520,23 +2536,29 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
-  // Agregar DNIs a una tanda (INSERT IGNORE → no duplica por UNIQUE(tanda,dni)).
+  // Agregar agentes a una tanda (INSERT IGNORE → no duplica por UNIQUE(tanda,dni)).
+  // Body: { tanda, origen: 'anio'|'manual', items: [{ dni, anio }] } (o `dnis` como antes).
   router.post('/tandas', async (req: Request, res: Response) => {
     try {
       const tanda = queryString(req.body?.tanda);
       if (!tanda) return res.status(400).json({ ok: false, error: 'Falta el nombre de la tanda' });
-      const dnis = Array.isArray(req.body?.dnis)
-        ? Array.from(new Set(
-            (req.body.dnis as unknown[]).map((d) => parseDni(d as any)).filter((d): d is number => !!d)
-          ))
-        : [];
-      if (!dnis.length) return res.status(400).json({ ok: false, error: 'No hay DNIs válidos para agregar' });
+      const origen = req.body?.origen === 'manual' ? 'manual' : 'anio';
+      const raw: unknown[] = Array.isArray(req.body?.items)
+        ? req.body.items
+        : Array.isArray(req.body?.dnis) ? (req.body.dnis as unknown[]).map((dni) => ({ dni })) : [];
+      const porDni = new Map<number, number | null>();
+      for (const it of raw as any[]) {
+        const dni = parseDni(it?.dni);
+        if (dni && !porDni.has(dni)) porDni.set(dni, parseYear(it?.anio));
+      }
+      if (!porDni.size) return res.status(400).json({ ok: false, error: 'No hay DNIs válidos para agregar' });
+      const items = Array.from(porDni.entries());
       await sequelize.query(
-        `INSERT IGNORE INTO tramites_tanda_interinos (tanda, dni) VALUES ${dnis.map(() => '(?, ?)').join(', ')}`,
-        { replacements: dnis.flatMap((dni) => [tanda, dni]), type: QueryTypes.INSERT }
+        `INSERT IGNORE INTO tramites_tanda_interinos (tanda, dni, origen, anio) VALUES ${items.map(() => '(?, ?, ?, ?)').join(', ')}`,
+        { replacements: items.flatMap(([dni, anio]) => [tanda, dni, origen, anio]), type: QueryTypes.INSERT }
       );
       const rows = await listTandaAgentes(sequelize, tanda);
-      return res.json({ ok: true, data: { tanda, rows, agregados: dnis.length } });
+      return res.json({ ok: true, data: { tanda, rows, agregados: items.length } });
     } catch (err: any) {
       logger.error({ msg: '[tramites] tandas POST error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al guardar la tanda' });
@@ -2564,6 +2586,55 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[tramites] tandas DELETE error', error: err?.message });
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al borrar de la tanda' });
+    }
+  });
+
+  // Buscador para agregar agentes de a uno: por DNI (prefijo) o por apellido/nombre
+  // (todas las palabras). Devuelve el tramo vigente (ACTIVO primero) para mostrar ley/planta.
+  router.get('/buscar-agente', async (req: Request, res: Response) => {
+    try {
+      const q = String(queryString(req.query.q) || '').trim();
+      if (q.length < 2) return res.json({ ok: true, data: { rows: [] } });
+      const replacements: Record<string, string> = {};
+      let where: string;
+      if (/^\d+$/.test(q)) {
+        where = 'CAST(p.dni AS CHAR) LIKE :dniLike';
+        replacements.dniLike = `${q}%`;
+      } else {
+        const words = q.split(/\s+/).filter(Boolean).slice(0, 6);
+        where = words.map((w, i) => {
+          replacements[`w${i}`] = `%${w}%`;
+          return `CONCAT(COALESCE(p.apellido, ''), ' ', COALESCE(p.nombre, '')) LIKE :w${i}`;
+        }).join(' AND ');
+      }
+      const rows = await sequelize.query(
+        `
+          SELECT
+            p.dni,
+            TRIM(CONCAT(COALESCE(p.apellido, ''), ', ', COALESCE(p.nombre, ''))) AS apellidoNombre,
+            DATE_FORMAT(a.fecha_ingreso, '%Y-%m-%d') AS fechaIngreso,
+            l.nombre  AS leyNombre,
+            pl.nombre AS plantaNombre,
+            a.estado_empleo AS estadoEmpleo
+          FROM personal p
+          LEFT JOIN agentes a ON a.id = (
+            SELECT a2.id FROM agentes a2
+            WHERE a2.dni = p.dni AND a2.deleted_at IS NULL
+            ORDER BY (a2.estado_empleo = 'ACTIVO') DESC, a2.fecha_ingreso DESC, a2.id DESC
+            LIMIT 1
+          )
+          LEFT JOIN ley l ON l.id = a.ley_id AND l.deleted_at IS NULL
+          LEFT JOIN plantas pl ON pl.id = a.planta_id AND pl.deleted_at IS NULL
+          WHERE p.deleted_at IS NULL AND ${where}
+          ORDER BY (a.estado_empleo = 'ACTIVO') DESC, apellidoNombre ASC
+          LIMIT 20
+        `,
+        { replacements, type: QueryTypes.SELECT }
+      );
+      return res.json({ ok: true, data: { rows } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] buscar-agente error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al buscar agente' });
     }
   });
 
@@ -2690,6 +2761,52 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
       return res.json({ ok: true, data: { saved, total: saved.length } });
     } catch (err: any) {
       return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al subir archivos' });
+    }
+  });
+
+  // Agentes de la tanda para bajar la constancia de CUIL de ANSES (lo hace la extensión de Chrome
+  // desde la PC del usuario: ANSES bloquea las consultas automáticas del servidor). Devuelve los
+  // datos que pide el formulario de ANSES y si ya hay algo en la subcarpeta CUIL de DOCU.
+  router.get('/tandas/cuil-pendientes', async (req: Request, res: Response) => {
+    try {
+      const tanda = queryString(req.query.tanda);
+      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const rows = await sequelize.query<any>(
+        `
+          SELECT t.dni, p.apellido, p.nombre, p.cuil,
+                 DATE_FORMAT(p.fecha_nacimiento, '%Y-%m-%d') AS fechaNacimiento,
+                 UPPER(s.nombre) AS sexo
+          FROM tramites_tanda_interinos t
+          JOIN personal p ON p.dni = t.dni AND p.deleted_at IS NULL
+          LEFT JOIN sexos s ON s.id = p.sexo_id
+          WHERE t.tanda = :tanda
+          ORDER BY p.apellido, p.nombre
+        `,
+        { replacements: { tanda }, type: QueryTypes.SELECT }
+      );
+      const out = rows.map((r) => {
+        let archivos: string[] = [];
+        try {
+          const dir = resolveInsideDocu(Number(r.dni), 'CUIL');
+          if (fs.existsSync(dir)) archivos = fs.readdirSync(dir).filter((f) => !/^thumbs\.db$/i.test(f) && !f.startsWith('~$'));
+        } catch { /* sin carpeta DOCU */ }
+        const faltan = ['apellido', 'nombre', 'fechaNacimiento', 'sexo'].filter((k) => !r[k]);
+        return {
+          dni: Number(r.dni),
+          apellido: String(r.apellido || '').trim(),
+          nombre: String(r.nombre || '').trim(),
+          cuil: r.cuil ? String(r.cuil).replace(/\D/g, '') : null,
+          fechaNacimiento: r.fechaNacimiento || null,
+          sexo: r.sexo === 'FEMENINO' ? 'F' : r.sexo === 'MASCULINO' ? 'M' : null,
+          tieneCuil: archivos.length > 0,
+          archivos,
+          faltanDatos: faltan,
+        };
+      });
+      return res.json({ ok: true, data: { tanda, rows: out } });
+    } catch (err: any) {
+      logger.error({ msg: '[tramites] cuil-pendientes error', error: err?.message });
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al listar' });
     }
   });
 

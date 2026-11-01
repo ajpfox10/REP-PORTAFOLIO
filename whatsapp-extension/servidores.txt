@@ -1,0 +1,4 @@
+# Servidores de la app de Personal (produccion) donde el actualizador busca la version nueva.
+# Uno por linea; se usa el primero que responda. Las lineas con # se ignoran.
+http://192.168.0.21:5173
+http://10.115.31.28:5173

@@ -177,7 +177,7 @@ LEY_BECAS_LIKE = "Programa%"
 # (ya no figura en SIAPE; si vuelve a salir pendiente, el INSERT ... ON DUPLICATE la repone a PENDIENTE).
 # NO_TRABAJA_DIA: ausente de un franquero en un dia que no esta en su horario ni es feriado
 # (lo marca cargar_ausentes_intranet_v2.filtrar_franqueros y lo revisa en cada corrida)
-ESTADOS_NO_CARGAR = "('OK', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_EN_PLANTEL', 'NO_TRABAJA_DIA')"
+ESTADOS_NO_CARGAR = "('OK', 'ELIMINADA', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_EN_PLANTEL', 'NO_TRABAJA_DIA')"
 
 
 def estado_resultado(r):
@@ -1000,6 +1000,50 @@ def ir_a_novedades(page, dni, password, dependencia="HOSPITAL", nombre=None):
 
     return False, "No se pudo navegar tras re-login"
 
+# SIAPE no informa las horas de la boleta de salida (desde = hasta, sin columna de horas):
+# se cargan 2 hs fijas (pedido del 30/10/2026). El form pide "Cantidad de minutos por día
+# (0 para día completo)" -> cantidadMinutosPorDia = 120
+HORAS_BOLETA = 2
+
+
+def completar_horas(page, horas):
+    """Busca en el form el campo de cantidad (minutos o horas, por name/id/label) y lo completa.
+    Retorna (ok, mensaje)."""
+    info = page.evaluate("""() => {
+        const usable = Array.from(document.querySelectorAll('input, select')).filter(i =>
+            !['hidden','submit','button','checkbox','radio'].includes((i.type || '').toLowerCase()));
+        const etiqueta = i => {
+            const lb = (i.id && document.querySelector(`label[for="${i.id}"]`)) || i.closest('label');
+            return lb ? (lb.textContent || '') : '';
+        };
+        const clave = i => ((i.name || '') + ' ' + (i.id || '') + ' ' + (i.placeholder || '') + ' ' + etiqueta(i)).toLowerCase();
+        const el = usable.find(i => clave(i).includes('minuto')) || usable.find(i => clave(i).includes('hora'));
+        if (!el) return { campos: usable.map(i => (i.name || i.id) + ' [' + etiqueta(i).trim() + ']') };
+        document.querySelectorAll('[data-pw-horas]').forEach(e => e.removeAttribute('data-pw-horas'));
+        el.setAttribute('data-pw-horas', '1');
+        return { tag: el.tagName.toLowerCase(), name: el.name || '', id: el.id || '', label: etiqueta(el).trim(),
+                 opciones: el.tagName === 'SELECT' ? Array.from(el.options).map(o => ({ v: o.value, t: o.text.trim() })) : null };
+    }""")
+    if not info.get("tag"):
+        return False, f"No se encontró el campo de horas en el form. Campos: {', '.join(info.get('campos', []))}"[:450]
+    if not getattr(completar_horas, "_impreso", False):
+        print(f"  Campo horas identificado: {info}")
+        completar_horas._impreso = True
+    campo = page.locator("[data-pw-horas='1']")
+    en_minutos = "minuto" in f"{info['name']} {info['id']} {info['label']}".lower()
+    horas = str(horas * 60 if en_minutos else horas)
+    if info["tag"] == "select":
+        op = next((o for o in info["opciones"] if o["v"].strip() == horas or o["t"].split()[0:1] == [horas]), None)
+        if op is None:
+            return False, f"El combo de horas no tiene la opción {horas}: {[o['t'] for o in info['opciones']]}"[:450]
+        campo.select_option(value=op["v"])
+    else:
+        campo.click()
+        campo.fill(horas)
+    page.wait_for_timeout(300)
+    return True, None
+
+
 def cargar_novedad(page, label, desde, hasta):
     """Selecciona novedad, fecha y guarda. Retorna (exito, mensaje)."""
     try:
@@ -1060,13 +1104,24 @@ def cargar_novedad(page, label, desde, hasta):
             return False, msg_pag or "No apareció el formulario de fechas — no se cargó"
 
         campo_desde = page.locator(SEL_DESDE)
-        campo_hasta = page.locator(SEL_HASTA)
         campo_desde.click()
         campo_desde.press_sequentially(desde, delay=80)
         page.wait_for_timeout(300)
-        campo_hasta.click()
-        campo_hasta.press_sequentially(hasta, delay=80)
-        page.wait_for_timeout(300)
+        if page.locator(SEL_HASTA).count():
+            campo_hasta = page.locator(SEL_HASTA)
+            campo_hasta.click()
+            campo_hasta.press_sequentially(hasta, delay=80)
+            page.wait_for_timeout(300)
+        else:
+            # Boleta de salida (43): el form no tiene "hasta", pide la cantidad de horas
+            ok_h, msg_h = completar_horas(page, HORAS_BOLETA)
+            if not ok_h:
+                try:
+                    page.go_back()
+                    page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    pass
+                return False, msg_h
         page.get_by_role("button", name="Guardar").click()
         page.wait_for_load_state("networkidle", timeout=15000)
     except Exception as e:
@@ -1084,6 +1139,9 @@ def cargar_novedad(page, label, desde, hasta):
         msg = page.locator(".alert, .error, .alert-danger, [class*='error'], [class*='alert']").first.inner_text(timeout=2000)
         msg = msg.strip().replace("\n", " ")[:200]
     except Exception:
+        # La boleta (43) se guarda sin cartel verde y vuelve al /list: confirmar por el historial
+        if ya_cargada_igual(page, label, desde, hasta):
+            return True, "Guardado (verificado en el historial del agente, la Intranet no mostró cartel)"
         msg = "sin confirmación (sin mensaje de error capturado)"
 
     # Volver a /list para el próximo intento dentro del mismo agente
@@ -1134,6 +1192,7 @@ def resumen_run(ok, err, stats):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", action="store_true")
+    parser.add_argument("--dni", help="solo las filas de ese DNI (para probar)")
     parser.add_argument("--pass", dest="password")
     parser.add_argument("--dependencia", dest="dependencia", default="HOSPITAL",
                         help="HOSPITAL / UPA 4 / UPA 18")
@@ -1155,6 +1214,8 @@ def main():
     script_id = f"intranet_carga_novedades_v2_{MN.sufijo_dep(dependencia)}"
     script_desc = f"Carga de novedades 2.0 en Intranet MS ({dependencia})"
     corrida, filas = cargar_filas_db(dependencia, test_mode=args.test)
+    if args.dni:
+        filas = [f for f in filas if f["DNI"] == int(args.dni)]
     if corrida is None:
         print("No hay corridas del Comparador 2.0 todavia.")
         MN.registrar_run(script_id, script_desc, "error", motivo="No hay corridas del Comparador 2.0",

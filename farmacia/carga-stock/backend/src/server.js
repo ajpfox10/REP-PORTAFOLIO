@@ -18,6 +18,13 @@ const { parseTrimestreReport } = require('./trimestreReportParser');
 const { leerPdfsCarpeta, ordenNombres, leerCargaManual, construirExcel } = require('./ordenesCompraExcel');
 const ordenesCompra = require('./ordenesCompraDb');
 const ordenesCompraDrive = require('./ordenesCompraDrive');
+const requerimientos = require('./requerimientosDb');
+const stockActual = require('./stockActualDb');
+const ocHistorial = require('./ocHistorialDb');
+const ministerio = require('./ministerioDb');
+const consumoMs = require('./consumoMsDb');
+const vencidos = require('./vencidosDb');
+const bajas = require('./bajasDb');
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
@@ -303,6 +310,348 @@ app.get('/api/rotulos/impresiones', requireAuth, requireRotulos, async (_req, re
   }
 });
 
+// --- Stock actual: robot que baja Consulta de Stock de Farmacia MS (Excel por sector) ---
+app.get('/api/stock-actual', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const [descargas, actual, enCurso, dir] = await Promise.all([
+      stockActual.listarDescargas(),
+      stockActual.itemsStockActual(Number(req.query.descargaId || 0)),
+      stockActual.descargaEnCurso(),
+      stockActual.carpetaDescarga()
+    ]);
+    res.json({ dir, sectores: config.stockActual.sectores, enCurso, descargas, ...actual });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Carpeta donde el robot guarda los Excel (se crea si no existe)
+app.put('/api/stock-actual/carpeta', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const ruta = carpetaValida(req.body.ruta, { crear: true });
+    await stockActual.cambiarCarpeta(ruta, req.user.sub);
+    await audit(req.user.sub, 'cambiar_carpeta_stock_actual', 'stock_actual_config', 1, { carpeta: ruta });
+    res.json({ dir: ruta });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.post('/api/stock-actual/descargar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const enCurso = await stockActual.descargaEnCurso();
+    if (enCurso) return res.status(409).json({ error: `Ya hay una descarga en curso (#${enCurso.id})` });
+    if (!config.farmacia.user || !config.farmacia.password) {
+      return res.status(400).json({ error: 'Faltan FARMACIA_WEB_USER/FARMACIA_WEB_PASSWORD en el .env' });
+    }
+    const descargaId = await stockActual.crearDescarga(config.stockActual.sectores, req.user.sub);
+    const logDir = path.resolve(__dirname, '../../logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const out = fs.openSync(path.join(logDir, `stock-descarga-${descargaId}.log`), 'a');
+    const err = fs.openSync(path.join(logDir, `stock-descarga-${descargaId}.err.log`), 'a');
+    const child = spawn(process.execPath, [path.resolve(__dirname, '../scripts/descargar-stock-web.js')], {
+      cwd: path.resolve(__dirname, '..'),
+      env: { ...process.env, NODE_ENV: config.envName, STOCK_DESCARGA_ID: String(descargaId) },
+      detached: true,
+      stdio: ['ignore', out, err],
+      windowsHide: true
+    });
+    child.unref();
+    await audit(req.user.sub, 'descargar_stock_actual', 'stock_actual_descargas', descargaId, { sectores: config.stockActual.sectores });
+    res.status(202).json({ ok: true, descargaId });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Historial de O.C. de la planilla de Drive (solo lectura), para cruzar con los requerimientos por semestre ---
+app.get('/api/oc-historial', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await ocHistorial.historial());
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Ata a mano un renglon de O.C. con codigo no valido a un codigo de producto (vacio = quitar)
+app.put('/api/oc-historial/vinculo', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const r = await ocHistorial.guardarVinculo(req.body.codigo, req.body.descripcion, req.body.destino, req.user.sub);
+    await audit(req.user.sub, 'vincular_oc_historial', 'oc_historial_vinculos', null, { codigo: req.body.codigo, destino: req.body.destino || null });
+    res.json(r);
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.post('/api/oc-historial/importar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const r = await ocHistorial.importarDesdeDrive(req.user.sub);
+    await audit(req.user.sub, 'importar_oc_historial', 'oc_historial', null, r);
+    res.json(r);
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+// --- Bajas de Farmacia MS (descartes y vencidos dados de baja) y vinculos pedido -> codigo del consumo ---
+app.get('/api/bajas-ms', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    const [data, vinculos, historico] = await Promise.all([bajas.listarBajas(), bajas.listarVinculosConsumo(), bajas.listarHistoricoTrimestre()]);
+    res.json({ data, vinculos, historico });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/consumo-vinculos', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const r = await bajas.guardarVinculoConsumo(req.body.codigo, req.body.destino, req.user.sub);
+    await audit(req.user.sub, 'vincular_consumo', 'consumo_vinculos', req.body.codigo, { destino: req.body.destino || null });
+    res.json(r);
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+// --- Vencimientos: robot que baja Articulos Vencidos y Proximos a Vencer de Farmacia MS (Excel por sector) ---
+app.get('/api/vencidos', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const [descargas, actual, enCurso, dir] = await Promise.all([
+      vencidos.listarDescargas(),
+      vencidos.itemsVencidos(Number(req.query.descargaId || 0)),
+      vencidos.descargaEnCurso(),
+      vencidos.carpetaVencidos()
+    ]);
+    res.json({ dir, sectores: config.stockActual.sectores, enCurso, descargas, ...actual });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/vencidos/carpeta', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const ruta = carpetaValida(req.body.ruta, { crear: true });
+    await vencidos.cambiarCarpeta(ruta, req.user.sub);
+    await audit(req.user.sub, 'cambiar_carpeta_vencidos', 'venc_config', 1, { carpeta: ruta });
+    res.json({ dir: ruta });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.post('/api/vencidos/descargar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const meses = Math.max(1, Math.min(60, Number(req.body.meses || 6)));
+    const enCurso = await vencidos.descargaEnCurso();
+    if (enCurso) return res.status(409).json({ error: `Ya hay una descarga de vencidos en curso (#${enCurso.id})` });
+    if (!config.farmacia.user || !config.farmacia.password) {
+      return res.status(400).json({ error: 'Faltan FARMACIA_WEB_USER/FARMACIA_WEB_PASSWORD en el .env' });
+    }
+    const hoy = new Date();
+    const hasta = new Date(hoy.getFullYear(), hoy.getMonth() + meses, hoy.getDate());
+    const hastaIso = `${hasta.getFullYear()}-${String(hasta.getMonth() + 1).padStart(2, '0')}-${String(hasta.getDate()).padStart(2, '0')}`;
+    const descargaId = await vencidos.crearDescarga(config.stockActual.sectores, hastaIso, req.user.sub);
+    const logDir = path.resolve(__dirname, '../../logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const out = fs.openSync(path.join(logDir, `vencidos-descarga-${descargaId}.log`), 'a');
+    const err = fs.openSync(path.join(logDir, `vencidos-descarga-${descargaId}.err.log`), 'a');
+    const child = spawn(process.execPath, [path.resolve(__dirname, '../scripts/descargar-vencidos-web.js')], {
+      cwd: path.resolve(__dirname, '..'),
+      env: { ...process.env, NODE_ENV: config.envName, VENC_DESCARGA_ID: String(descargaId), VENC_MESES: String(meses) },
+      detached: true,
+      stdio: ['ignore', out, err],
+      windowsHide: true
+    });
+    child.unref();
+    await audit(req.user.sub, 'descargar_vencidos', 'venc_descargas', descargaId, { meses });
+    res.status(202).json({ ok: true, descargaId, hasta: hastaIso });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Consumo mensual: robot que baja Consumo Comparativo mensual de Farmacia MS (Excel anual por sector) ---
+app.get('/api/consumo-ms', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    const [descargas, vigente, enCurso, dir] = await Promise.all([
+      consumoMs.listarDescargas(), consumoMs.consumoVigente(), consumoMs.descargaEnCurso(), consumoMs.carpetaConsumo()
+    ]);
+    res.json({ dir, sectores: config.stockActual.sectores, enCurso, descargas, ...vigente });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/consumo-ms/carpeta', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const ruta = carpetaValida(req.body.ruta, { crear: true });
+    await consumoMs.cambiarCarpeta(ruta, req.user.sub);
+    await audit(req.user.sub, 'cambiar_carpeta_consumo_ms', 'consumo_ms_config', 1, { carpeta: ruta });
+    res.json({ dir: ruta });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.post('/api/consumo-ms/descargar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anioActual = new Date().getFullYear();
+    const anios = Array.from(new Set((Array.isArray(req.body.anios) ? req.body.anios : [anioActual])
+      .map(Number).filter((a) => a >= 2015 && a <= anioActual + 1))).sort();
+    if (!anios.length) return res.status(400).json({ error: 'Elegí al menos un año' });
+    const enCurso = await consumoMs.descargaEnCurso();
+    if (enCurso) return res.status(409).json({ error: `Ya hay una descarga de consumo en curso (#${enCurso.id})` });
+    if (!config.farmacia.user || !config.farmacia.password) {
+      return res.status(400).json({ error: 'Faltan FARMACIA_WEB_USER/FARMACIA_WEB_PASSWORD en el .env' });
+    }
+    const descargaId = await consumoMs.crearDescarga(anios, config.stockActual.sectores, req.user.sub);
+    const logDir = path.resolve(__dirname, '../../logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const out = fs.openSync(path.join(logDir, `consumo-descarga-${descargaId}.log`), 'a');
+    const err = fs.openSync(path.join(logDir, `consumo-descarga-${descargaId}.err.log`), 'a');
+    const child = spawn(process.execPath, [path.resolve(__dirname, '../scripts/descargar-consumo-web.js')], {
+      cwd: path.resolve(__dirname, '..'),
+      env: { ...process.env, NODE_ENV: config.envName, CONSUMO_DESCARGA_ID: String(descargaId), CONSUMO_ANIOS: anios.join(',') },
+      detached: true,
+      stdio: ['ignore', out, err],
+      windowsHide: true
+    });
+    child.unref();
+    await audit(req.user.sub, 'descargar_consumo_ms', 'consumo_ms_descargas', descargaId, { anios });
+    res.status(202).json({ ok: true, descargaId, anios });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Rearma los trimestres del Analisis Trimestral con el consumo mensual ya bajado de Farmacia MS
+app.post('/api/trimestre/desde-consumo', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const r = await consumoMs.generarTrimestresDesdeConsumo();
+    await audit(req.user.sub, 'trimestre_desde_consumo', 'trimestre_importaciones', null, { trimestres: r });
+    res.json({ data: r });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Comunicacion de compra del Ministerio (PDF: CODIGO / MEDICAMENTO / HABILITADO COMPRA) ---
+const uploadPdfMinisterio = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+  fileFilter(_req, file, cb) {
+    cb(null, /\.pdf$/i.test(file.originalname));
+  }
+});
+
+app.get('/api/ministerio/comunicaciones', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ data: await ministerio.listarComunicaciones() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/ministerio/comunicaciones/:id/items', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.json({ data: await ministerio.itemsComunicacion(Number(req.params.id)) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/ministerio/comunicaciones', requireAuth, requireAdmin, uploadPdfMinisterio.single('archivo'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Elegí el PDF de la comunicación de compra' });
+    // multer entrega el nombre en latin1
+    const nombre = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+    const r = await ministerio.importarComunicacion(req.file.buffer, nombre, req.user.sub);
+    await audit(req.user.sub, 'importar_comunicacion_ministerio', 'ministerio_comunicaciones', r.id, { archivo: nombre, ...r });
+    res.status(r.duplicado ? 200 : 201).json(r);
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.delete('/api/ministerio/comunicaciones/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const borrados = await ministerio.eliminarComunicacion(Number(req.params.id));
+    if (!borrados) return res.status(404).json({ error: 'Comunicación no encontrada' });
+    await audit(req.user.sub, 'eliminar_comunicacion_ministerio', 'ministerio_comunicaciones', req.params.id, {});
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Analisis de Requerimiento Anual (PDF de D:\FARMACIA\REQUERIMIENTO) ---
+app.get('/api/requerimientos/source', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ dir: requerimientos.carpetaRequerimientos(), watch: requerimientos.estadoSondeo(), data: await requerimientos.estadoCarpeta() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Cambia la carpeta de donde se leen los PDF y la lee en el momento.
+app.put('/api/requerimientos/carpeta', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const ruta = carpetaValida(req.body.ruta);
+    const resumen = await requerimientos.cambiarCarpeta(ruta, req.user.sub);
+    res.json({ dir: ruta, ...resumen });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+// Lee la carpeta en el momento (sin esperar al sondeo) e importa los PDF nuevos.
+app.post('/api/requerimientos/sincronizar', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await requerimientos.sondearRequerimientos());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/requerimientos/importar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const fileName = String(req.body.fileName || '').trim();
+    const { impId, parsed } = await requerimientos.procesarArchivoRequerimiento(fileName, req.user.sub);
+    res.status(201).json({ id: impId, numero: parsed.numero, anio: parsed.anioNumero, items: parsed.items.length });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.get('/api/requerimientos/analisis', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    const [importaciones, items] = await Promise.all([requerimientos.listarImportaciones(), requerimientos.listarItems()]);
+    res.json({ importaciones, items });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/requerimientos/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const borrados = await requerimientos.eliminarImportacion(Number(req.params.id), req.user.sub);
+    if (!borrados) return res.status(404).json({ error: 'Requerimiento no encontrado' });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Estado del sondeo automatico (se actualiza en sondearTrimestre()).
 let trimestreUltimoSondeo = null;
 let trimestreUltimoResumen = { archivos: 0, nuevos: 0 };
@@ -324,6 +673,8 @@ app.get('/api/trimestre/source', requireAuth, requireAdmin, async (_req, res, ne
     if (!fs.existsSync(dir)) return res.json({ dir, watch, data: [] });
     const hashes = await query('SELECT archivo_hash, id FROM trimestre_importaciones');
     const hashMap = new Map(hashes.map((row) => [row.archivo_hash, row.id]));
+    const reemplazados = new Map((await query('SELECT archivo_hash, anio, trimestre FROM trimestre_reemplazados'))
+      .map((r) => [r.archivo_hash, `T${r.trimestre} ${r.anio}`]));
     const files = fs.readdirSync(dir, { withFileTypes: true })
       .filter((entry) => entry.isFile() && /\.(xls|xlsx)$/i.test(entry.name))
       .map((entry) => {
@@ -335,7 +686,9 @@ app.get('/api/trimestre/source', requireAuth, requireAdmin, async (_req, res, ne
           bytes: stat.size,
           modifiedAt: stat.mtime,
           leido: hashMap.has(hash),
-          importacionId: hashMap.get(hash) || null
+          importacionId: hashMap.get(hash) || null,
+          // Su trimestre ya se arma con el consumo bajado de Farmacia MS
+          reemplazadoPor: !hashMap.has(hash) && reemplazados.has(hash) ? reemplazados.get(hash) : null
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -648,6 +1001,7 @@ app.post('/api/sugeridos/generar', requireAuth, requireAdmin, async (req, res, n
       FROM trimestre_items si
       JOIN trimestre_importaciones i ON i.id = si.trimestre_importacion_id
       WHERE si.codigo_articulo IN (${ph})
+        AND (i.sector IS NULL OR i.sector NOT LIKE 'PSICO%')
     `, gp);
 
     // Agrupa por codigo.
@@ -1625,6 +1979,15 @@ app.get('/api/ordenes-compra/carpetas', requireAuth, requireAdmin, (req, res, ne
   }
 });
 
+// Cruce de los renglones de O.C. con el ultimo stock descargado de Farmacia MS
+app.get('/api/ordenes-compra/cruce-stock', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await stockActual.cruceOrdenesCompra());
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/ordenes-compra', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     res.json({ data: await ordenesCompra.listarOrdenes() });
@@ -1828,7 +2191,7 @@ async function sondearTrimestre() {
   try {
     const dir = config.trimestreSourceDir;
     if (!fs.existsSync(dir)) return;
-    const rows = await query('SELECT archivo_hash FROM trimestre_importaciones');
+    const rows = await query('SELECT archivo_hash FROM trimestre_importaciones UNION SELECT archivo_hash FROM trimestre_reemplazados');
     const conocidos = new Set(rows.map((r) => r.archivo_hash));
     const archivos = fs.readdirSync(dir).filter((f) => /\.(xls|xlsx)$/i.test(f));
     let nuevos = 0;
@@ -1922,6 +2285,22 @@ app.listen(config.port, () => {
   console.log(`${config.appName} backend ${config.envName} escuchando en ${config.port}`);
   iniciarSondeoTrimestre();
   iniciarSondeoCritico();
+  bajas.ensureBajasTables()
+    .catch((err) => console.error('[bajas] no se pudieron crear las tablas:', err.message));
+  vencidos.ensureVencidosTables()
+    .catch((err) => console.error('[vencidos] no se pudieron crear las tablas:', err.message));
+  consumoMs.ensureConsumoMsTables()
+    .catch((err) => console.error('[consumo-ms] no se pudieron crear las tablas:', err.message));
+  ministerio.ensureMinisterioTables()
+    .catch((err) => console.error('[ministerio] no se pudieron crear las tablas:', err.message));
+  ocHistorial.ensureOcHistorialTables()
+    .then(() => ocHistorial.iniciarImportacionHistorial())
+    .catch((err) => console.error('[oc-historial] no se pudieron crear las tablas:', err.message));
+  stockActual.ensureStockActualTables()
+    .catch((err) => console.error('[stock-actual] no se pudieron crear las tablas:', err.message));
+  requerimientos.ensureRequerimientoTables()
+    .then(() => requerimientos.iniciarSondeoRequerimientos())
+    .catch((err) => console.error('[requerimientos] no se pudieron crear las tablas:', err.message));
   ordenesCompra.ensureOrdenesCompraTables()
     .then(() => ordenesCompraDrive.iniciarSincronizacionDrive())
     .catch((err) => console.error('[ordenes-compra] no se pudieron crear las tablas:', err.message));

@@ -12,6 +12,7 @@ import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { COLOR_RES, Licencia, fmtFecha, keyDe } from './shared';
 import { ContactosWhatsapp } from './ContactosWhatsapp';
+import { NAV } from './ExtensionDescarga';
 
 interface Contacto {
   dni: string; apellido: string; nombre: string; telefono: string; celular: string | null; dudoso: boolean;
@@ -23,7 +24,7 @@ interface Envio {
 }
 interface Omitido { dni: string; desde: string; hasta: string; novedad: string; motivo: string | null; created_at: string | null; omitido_por: string | null }
 type Modo = 'NOMBRE_TELEFONO' | 'NOMBRE' | 'TELEFONO';
-interface ResultadoExt { ok: boolean; estado: string; modo?: 'NOMBRE' | 'TELEFONO'; destino?: string; detalle?: string | null; version?: string; contactos?: any[] }
+export interface ResultadoExt { ok: boolean; estado: string; modo?: 'NOMBRE' | 'TELEFONO'; destino?: string; detalle?: string | null; version?: string; contactos?: any[] }
 
 const PLANTILLA_DEFAULT = [
   'Buenos días {NOMBRE}, le escribimos de la Oficina de Personal del Hospital. Notamos que cuenta con una licencia *{RESOLUCION}* {RANGO}.',
@@ -66,7 +67,7 @@ function celularPrueba(s: string) {
 
 // ── Comunicación con la extensión (via bridge.js por window.postMessage) ──
 let seq = 0;
-function aExtension(type: string, payload?: any, ms = 5000): Promise<ResultadoExt> {
+export function aExtension(type: string, payload?: any, ms = 5000): Promise<ResultadoExt> {
   const id = `${Date.now()}-${++seq}`;
   return new Promise(resolve => {
     const fin = setTimeout(() => { window.removeEventListener('message', oir); resolve({ ok: false, estado: 'ERROR', detalle: 'La extensión no respondió' }); }, ms);
@@ -430,10 +431,10 @@ export function WhatsappTab({ licencias, foco = false, onQuitarFoco, onEnviado }
         border: `1px solid ${ext ? 'rgba(34,197,94,0.35)' : 'rgba(234,179,8,0.35)'}`,
       }}>
         {ext === undefined ? 'Verificando la extensión…'
-          : ext ? <>✅ <b>Extensión instalada</b> (v{ext}). Envío automático disponible: tené WhatsApp Web abierto y vinculado en este Chrome y no uses la PC durante la tanda.{' '}
+          : ext ? <>✅ <b>Extensión instalada</b> (v{ext}). Envío automático disponible: tené WhatsApp Web abierto y vinculado en este {NAV.nombre} y no uses la PC durante la tanda.{' '}
               {!verContactos && <button type="button" className="btn" style={{ padding: '1px 8px', fontSize: '0.75rem' }} onClick={() => setVerContactos(true)}>📇 Contactos de WhatsApp</button>}</>
-          : <>⚠️ <b>Extensión no instalada</b> en este Chrome: solo funciona el envío <b>manual</b> (botón “Abrir”). Para el automático, instalá la extensión
-              (<code>C:\apps\personaldev\whatsapp-extension</code>, ver LEEME.txt) y <button type="button" className="btn" style={{ padding: '1px 8px', fontSize: '0.75rem' }} onClick={detectar}>Volver a verificar</button></>}
+          : <>⚠️ <b>Extensión no instalada</b> en este {NAV.nombre}: solo funciona el envío <b>manual</b> (botón “Abrir”). Para el automático, instalá la extensión
+              desde <b>Reportes → WhatsApp</b> (ahí está la descarga y la guía) y después <button type="button" className="btn" style={{ padding: '1px 8px', fontSize: '0.75rem' }} onClick={detectar}>Volver a verificar</button></>}
       </div>
 
       {verContactos && ext && <ContactosWhatsapp pedirExtension={aExtension} onCerrar={() => setVerContactos(false)} />}

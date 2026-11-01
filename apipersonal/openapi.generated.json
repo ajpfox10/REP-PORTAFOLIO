@@ -48570,6 +48570,231 @@
           }
         }
       }
+    },
+    "/api/v1/whatsapp_recibidos": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List whatsapp_recibidos",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Table_whatsapp_recibidos"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create whatsapp_recibidos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_whatsapp_recibidos_Create"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/whatsapp_recibidos/{id}": {
+      "get": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get whatsapp_recibidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update whatsapp_recibidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_whatsapp_recibidos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Patch whatsapp_recibidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Table_whatsapp_recibidos_Patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crud"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete whatsapp_recibidos by id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -60375,6 +60600,9 @@
           "tipo": {
             "type": "string"
           },
+          "lo_trabaja": {
+            "type": "string"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -60402,6 +60630,9 @@
             "type": "string"
           },
           "tipo": {
+            "type": "string"
+          },
+          "lo_trabaja": {
             "type": "string"
           },
           "created_at": {
@@ -60433,6 +60664,9 @@
             "type": "string"
           },
           "tipo": {
+            "type": "string"
+          },
+          "lo_trabaja": {
             "type": "string"
           },
           "created_at": {
@@ -80906,6 +81140,13 @@
           "creado_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "origen": {
+            "type": "string"
+          },
+          "anio": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -80930,6 +81171,13 @@
           "creado_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "origen": {
+            "type": "string"
+          },
+          "anio": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -80956,6 +81204,13 @@
           "creado_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "origen": {
+            "type": "string"
+          },
+          "anio": {
+            "type": "number",
+            "nullable": true
           }
         }
       },
@@ -82370,6 +82625,107 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          }
+        }
+      },
+      "Table_whatsapp_recibidos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "msg_id": {
+            "type": "string"
+          },
+          "numero": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nombre_wa": {
+            "type": "string",
+            "nullable": true
+          },
+          "leido_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "msg_id",
+          "numero",
+          "fecha"
+        ]
+      },
+      "Table_whatsapp_recibidos_Create": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "msg_id": {
+            "type": "string"
+          },
+          "numero": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nombre_wa": {
+            "type": "string",
+            "nullable": true
+          },
+          "leido_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "msg_id",
+          "numero",
+          "fecha"
+        ]
+      },
+      "Table_whatsapp_recibidos_Patch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "msg_id": {
+            "type": "string"
+          },
+          "numero": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nombre_wa": {
+            "type": "string",
+            "nullable": true
+          },
+          "leido_por": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

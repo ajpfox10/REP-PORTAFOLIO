@@ -8,16 +8,39 @@
 const WA = 'https://web.whatsapp.com/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ── Autoactualización ────────────────────────────────────────────────────────
+// Chrome no actualiza solas las extensiones "descomprimidas". El actualizador de Windows
+// (actualizar.ps1, tarea programada) baja la versión nueva y pisa los archivos de esta carpeta;
+// acá se detecta que el manifest.json del disco cambió de versión y la extensión se recarga.
+// No se recarga en medio de un envío o lectura (ocupado > 0): se reintenta en la próxima alarma.
+let ocupado = 0;
+async function revisarVersionEnDisco() {
+  if (ocupado > 0) return;
+  try {
+    const r = await fetch(chrome.runtime.getURL('manifest.json') + '?t=' + Date.now(), { cache: 'no-store' });
+    const disco = (await r.json()).version;
+    if (disco && disco !== chrome.runtime.getManifest().version) chrome.runtime.reload();
+  } catch { /* manifest a medio copiar: se reintenta en la próxima */ }
+}
+chrome.alarms.create('hpw-version', { periodInMinutes: 5 });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'hpw-version') void revisarVersionEnDisco(); });
+chrome.runtime.onStartup.addListener(() => { void revisarVersionEnDisco(); });
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'hpw') return;
   port.onMessage.addListener(async ({ type, payload }) => {
     let r;
+    ocupado++;
     try {
       r = type === 'ENVIAR' ? await enviar(payload, port.sender?.tab)
         : type === 'CONTACTOS' ? await contactos()
+        : type === 'RECIBIDOS' ? await recibidos()
+        : type === 'CUIL_ANSES' ? await cuilAnses(payload)
         : { ok: false, estado: 'ERROR', detalle: `Acción desconocida: ${type}` };
     } catch (e) {
       r = { ok: false, estado: 'ERROR', detalle: String(e?.message || e).slice(0, 200) };
+    } finally {
+      ocupado--;
     }
     try { port.postMessage(r); } catch { /* la página se cerró */ }
   });
@@ -144,4 +167,78 @@ async function contactos() {
   const r = res && res.result;
   if (!r || !r.ok) return { ok: false, estado: 'ERROR', detalle: (r && r.detalle) || 'No se pudo leer la agenda' };
   return { ok: true, estado: 'OK', contactos: r.contactos };
+}
+
+// Mensajes RECIBIDOS en chats individuales (sin grupos ni difusiones), leídos de la memoria de
+// WhatsApp Web (WAWebCollections, mundo MAIN). Solo datos para contar: id, número, hora y nombre
+// del remitente; NO el texto. No abre chats ni manda el "visto": los no leídos quedan como estaban.
+// Solo trae lo que WhatsApp Web tiene cargado (lo reciente de cada chat).
+async function recibidos() {
+  const tabs = await chrome.tabs.query({ url: `${WA}*` });
+  if (!tabs.length) return { ok: false, estado: 'ERROR', detalle: 'No hay ninguna pestaña de WhatsApp Web abierta' };
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId: tabs[0].id },
+    world: 'MAIN',
+    func: () => {
+      try {
+        const req = window.require;
+        if (typeof req !== 'function') return { ok: false, detalle: 'WhatsApp Web no terminó de cargar (o cambió su estructura)' };
+        const col = req('WAWebCollections');
+        const arr = (c) => (c && (c.getModelsArray ? c.getModelsArray() : c._models)) || [];
+        const IGNORAR = new Set(['e2e_notification', 'notification_template', 'gp2', 'protocol', 'call_log', 'ciphertext', 'revoked', 'notification']);
+        const out = [];
+        let chats = 0, sinNumero = 0;
+        for (const ch of arr(col.Chat)) {
+          const id = ch.id || {};
+          if (ch.isGroup || ['g.us', 'broadcast', 'newsletter'].includes(id.server)) continue;
+          chats++;
+          const contacto = (col.Contact && col.Contact.get && col.Contact.get(id)) || ch.contact || {};
+          const numero = id.server === 'c.us' ? id.user : (contacto.phoneNumber && contacto.phoneNumber.user) || null;
+          const nombre = contacto.name || contacto.pushname || ch.formattedTitle || '';
+          for (const m of arr(ch.msgs)) {
+            if (!m.id || m.id.fromMe || m.isNotification || IGNORAR.has(m.type)) continue;
+            if (!numero) { sinNumero++; continue; }
+            out.push({ id: m.id._serialized || `${id._serialized}_${m.id.id}`, numero: String(numero), t: m.t, nombre });
+          }
+        }
+        return { ok: true, chats, sinNumero, mensajes: out };
+      } catch (e) {
+        return { ok: false, detalle: 'No se pudieron leer los mensajes: ' + String((e && e.message) || e).slice(0, 150) };
+      }
+    },
+  });
+  const r = res && res.result;
+  if (!r || !r.ok) return { ok: false, estado: 'ERROR', detalle: (r && r.detalle) || 'No se pudieron leer los mensajes' };
+  return { ok: true, estado: 'OK', chats: r.chats, sinNumero: r.sinNumero, mensajes: r.mensajes };
+}
+
+// ── Constancia de CUIL (ANSES) ───────────────────────────────────────────────
+// Una consulta por mensaje: la app hace el bucle y las pausas entre agentes. Se usa una sola
+// pestaña de ANSES (en segundo plano, la app sigue al frente) que se recarga en cada consulta.
+// Si ANSES responde con su protección anti-robots, se devuelve BLOQUEADO y la app frena todo.
+const ANSES = 'https://servicioswww.anses.gob.ar/C2-ConstaCUIL';
+let ansesTabId = null;
+
+async function cuilAnses(p) {
+  let tab = null;
+  if (ansesTabId != null) { try { tab = await chrome.tabs.get(ansesTabId); } catch { tab = null; } }
+  if (tab) await chrome.tabs.update(tab.id, { url: ANSES });
+  else { tab = await chrome.tabs.create({ url: ANSES, active: false }); ansesTabId = tab.id; }
+  await cargaCompleta(tab.id);
+
+  let ping = null;
+  for (let i = 0; i < 20 && !ping?.ok; i++) {
+    try { ping = await chrome.tabs.sendMessage(tab.id, { type: 'PING' }); } catch { /* cargando */ }
+    if (!ping?.ok && i === 2) {
+      try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['anses.js'] }); } catch { /* cargando */ }
+    }
+    if (!ping?.ok) await sleep(500);
+  }
+  if (!ping?.ok) return { ok: false, estado: 'ERROR', detalle: 'No se pudo conectar con la página de ANSES' };
+  if (ping.bloqueado) return { ok: false, estado: 'BLOQUEADO', detalle: 'ANSES respondió con su página de protección (bloqueo o verificación)' };
+
+  return Promise.race([
+    chrome.tabs.sendMessage(tab.id, { type: 'CONSULTAR', ...p }),
+    sleep(60000).then(() => ({ ok: false, estado: 'ERROR', detalle: 'ANSES tardó demasiado en responder' })),
+  ]);
 }
