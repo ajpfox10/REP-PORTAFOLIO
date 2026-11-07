@@ -59,10 +59,24 @@ export function CuilAnsesPanel({ tanda, onCerrar, onGuardado }: {
   const [actual, setActual] = useState<number | null>(null);
   const [res, setRes] = useState<Map<number, Resultado>>(new Map());
   const detenerRef = useRef(false);
+  const [falloExt, setFalloExt] = useState(false);
 
+  // PING escuchando TODAS las respuestas: si hay dos copias de la extensión cargadas en este
+  // navegador contestan las dos (la vieja se queda con los pedidos y da "Acción desconocida").
+  const [versiones, setVersiones] = useState<string[]>([]);
   const detectar = useCallback(async () => {
-    const r = await aExtension('PING', undefined, 1500);
-    setExt(r.ok ? (r.version || '?') : null);
+    const id = `ping-${Date.now()}`;
+    const vistas: string[] = [];
+    const oir = (ev: MessageEvent) => {
+      if (ev.source === window && ev.data?.hpw === 'ext' && ev.data.id === id && ev.data.ok) vistas.push(String(ev.data.version || '?'));
+    };
+    window.addEventListener('message', oir);
+    window.postMessage({ hpw: 'app', id, type: 'PING' }, window.location.origin);
+    await new Promise((r) => setTimeout(r, 1200));
+    window.removeEventListener('message', oir);
+    const orden = [...vistas].sort((a, b) => (a === '?' || b === '?' ? 0 : cmpVersion(b, a)));
+    setVersiones(orden);
+    setExt(orden[0] || null);
   }, []);
 
   const cargar = useCallback(async () => {
@@ -101,9 +115,11 @@ export function CuilAnsesPanel({ tanda, onCerrar, onGuardado }: {
 
   async function empezar() {
     if (!extOk) { setVerDescarga(true); return; }
+    if (versiones.length > 1) { toast.warning('Dos extensiones', 'Quitá la extensión vieja antes de bajar los CUIL.'); return; }
     detenerRef.current = false;
     setCorriendo(true);
     setRes(new Map());
+    setFalloExt(false);
     const lista = [...aBajar];
     let ok = 0;
     try {
@@ -141,6 +157,11 @@ export function CuilAnsesPanel({ tanda, onCerrar, onGuardado }: {
             toast.error('Se perdió la extensión', r.detalle || '');
             break;
           }
+          // Chrome quedó corriendo el código viejo de la extensión (manifest nuevo, fondo viejo).
+          if (/Acción desconocida/i.test(r.detalle || '')) {
+            setFalloExt(true);
+            break;
+          }
         }
         if (i < lista.length - 1 && !detenerRef.current) await new Promise((rs) => setTimeout(rs, PAUSA_MS));
       }
@@ -158,7 +179,7 @@ export function CuilAnsesPanel({ tanda, onCerrar, onGuardado }: {
   return (
     <div style={{ border: BORDER, borderRadius: 10, padding: 12, background: 'rgba(14,116,144,0.08)', display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <b style={{ color: '#e2e8f0' }}>🪪 Constancia de CUIL (ANSES) — "{tanda}"</b>
+        <b style={{ color: '#e2e8f0' }}>📄 Constancia de CUIL (ANSES) — "{tanda}"</b>
         <span style={{ flex: 1 }} />
         <button type="button" onClick={onCerrar} disabled={corriendo} style={btn(corriendo)}>Cerrar</button>
       </div>
@@ -174,6 +195,19 @@ export function CuilAnsesPanel({ tanda, onCerrar, onGuardado }: {
               <button type="button" onClick={() => setVerDescarga(true)} style={{ ...btn(false), fontWeight: 700 }}>🧩 Descargar e instalar</button>{' '}
               <button type="button" onClick={detectar} style={btn(false)}>Volver a verificar</button></>}
       </div>
+      {versiones.length > 1 ? (
+        <div style={{ fontSize: '0.82rem', color: '#fecaca', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 8, padding: '8px 10px' }}>
+          ❌ Hay <b>{versiones.length} copias</b> de la extensión cargadas en este {NAV.nombre} (v{versiones.join(', v')}).
+          Abrí <code>{NAV.url}</code>, tocá <b>Quitar</b> en la vieja (“Personal - Avisos por WhatsApp”, v{versiones[versiones.length - 1]})
+          y dejá solo “Personal - Asistente (WhatsApp y CUIL ANSES)”. Después apretá <b>F5</b> acá.
+        </div>
+      ) : null}
+      {falloExt ? (
+        <div style={{ fontSize: '0.82rem', color: '#fecaca', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 8, padding: '8px 10px' }}>
+          ❌ {NAV.nombre} está usando una versión vieja de la extensión aunque diga v{ext}. Abrí <code>{NAV.url}</code>,
+          en “Personal - Asistente (WhatsApp y CUIL ANSES)” {NAV.recargar} y después apretá <b>F5</b> acá.
+        </div>
+      ) : null}
       {verDescarga && <ExtensionDescarga instalada={ext} publicada={publicada} onCerrar={() => setVerDescarga(false)} />}
 
       {cargando ? <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Leyendo la tanda…</div> : (

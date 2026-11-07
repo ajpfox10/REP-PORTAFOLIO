@@ -1,5 +1,5 @@
 const { query, transaction } = require('./db');
-const { parseOrdenCompra, hashArchivo, claveOc } = require('./ordenesCompraExcel');
+const { parseOrdenCompra, hashArchivo, claveOc, OPCIONES_COMPLETO, COMPLETO_OK } = require('./ordenesCompraExcel');
 
 // Tablas de Ordenes de Compra. Se crean al arrancar el backend (y en migrate.js),
 // asi prod no necesita correr la migracion completa.
@@ -31,7 +31,7 @@ async function ensureOrdenesCompraTables() {
       importe_unitario DECIMAL(16,2) NULL,
       importe_total DECIMAL(16,2) NULL,
       cantidad_entregada INT NULL,
-      completo ENUM('SI','NO') NULL,
+      completo ENUM('SI','NO','CAMBIO','DESAFECTADO','A REVISAR') NULL,
       nro_ingreso VARCHAR(120) NULL,
       observacion VARCHAR(500) NULL,
       actualizado_por INT NULL,
@@ -48,6 +48,14 @@ async function ensureOrdenesCompraTables() {
   `);
   if (!syncCol.length) {
     await query('ALTER TABLE oc_renglones ADD COLUMN sync_valores JSON NULL AFTER observacion');
+  }
+  // COMPLETO paso de SI/NO a tener tambien CAMBIO, DESAFECTADO y A REVISAR
+  const [completoCol] = await query(`
+    SELECT COLUMN_TYPE AS tipo FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'oc_renglones' AND COLUMN_NAME = 'completo'
+  `);
+  if (completoCol && !OPCIONES_COMPLETO.every((o) => String(completoCol.tipo).toUpperCase().includes(`'${o}'`))) {
+    await query(`ALTER TABLE oc_renglones MODIFY completo ENUM(${OPCIONES_COMPLETO.map((o) => `'${o}'`).join(',')}) NULL`);
   }
   // Destino en Drive elegido desde la pagina (una sola fila) e historial de actualizaciones
   await query(`
@@ -81,6 +89,26 @@ async function ensureOrdenesCompraTables() {
       INDEX idx_oc_drive_historial_fecha (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  // O.C. traidas del Excel de Drive (sin PDF): su estado lo dice la col L (COMPLETA / INCOMPLETA) del Excel
+  const ordenCols = (await query(`
+    SELECT COLUMN_NAME AS col FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'oc_ordenes' AND COLUMN_NAME IN ('origen', 'estado_planilla')
+  `)).map((r) => r.col);
+  if (!ordenCols.includes('origen')) {
+    await query("ALTER TABLE oc_ordenes ADD COLUMN origen ENUM('pdf','excel') NOT NULL DEFAULT 'pdf' AFTER archivo_hash");
+    await query("UPDATE oc_ordenes SET origen = 'excel' WHERE archivo_nombre LIKE 'Excel de Drive (%'");
+  }
+  if (!ordenCols.includes('estado_planilla')) {
+    await query("ALTER TABLE oc_ordenes ADD COLUMN estado_planilla ENUM('COMPLETA','INCOMPLETA') NULL AFTER origen");
+  }
+  // Opciones de COMPLETO ya puestas en el desplegable del archivo de Drive (si cambian, se reescribe)
+  const listaCol = await query(`
+    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'oc_drive_config' AND COLUMN_NAME = 'lista_completo'
+  `);
+  if (!listaCol.length) {
+    await query('ALTER TABLE oc_drive_config ADD COLUMN lista_completo VARCHAR(200) NULL AFTER activo');
+  }
   // Cada PDF recibido (por hash), para reconocer el mismo archivo aunque venga con otro nombre
   await query(`
     CREATE TABLE IF NOT EXISTS oc_archivos (
@@ -93,6 +121,23 @@ async function ensureOrdenesCompraTables() {
       subido_por INT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT fk_oc_archivos_orden FOREIGN KEY (orden_id) REFERENCES oc_ordenes(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  // Entregas parciales de los renglones de O.C. INCOMPLETAS: cada "salieron 1000" es una fila.
+  // origen 'anterior' = lo que el renglon ya tenia cargado antes de la primera entrega (no se pierde)
+  await query(`
+    CREATE TABLE IF NOT EXISTS oc_entregas (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      renglon_id INT NOT NULL,
+      cantidad INT NOT NULL,
+      nro_ingreso VARCHAR(120) NULL,
+      observacion VARCHAR(500) NULL,
+      fecha DATE NOT NULL,
+      origen ENUM('pagina','planilla','anterior') NOT NULL DEFAULT 'pagina',
+      usuario_id INT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_oc_entregas_renglon (renglon_id),
+      CONSTRAINT fk_oc_entregas_renglon FOREIGN KEY (renglon_id) REFERENCES oc_renglones(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 }
@@ -173,10 +218,11 @@ async function importarArchivos(archivos, usuarioId) {
           usuarioId: usuarioId || null
         }
       );
+      // COMPLETO arranca en NO: nada entregado todavia (asi tambien queda en el Excel de Drive)
       for (const it of orden.renglones) {
         await conn.execute(
-          `INSERT INTO oc_renglones (orden_id, renglon, codigo, descripcion, cantidad, importe_unitario, importe_total)
-           VALUES (:ordenId, :renglon, :codigo, :descripcion, :cantidad, :unitario, :total)`,
+          `INSERT INTO oc_renglones (orden_id, renglon, codigo, descripcion, cantidad, importe_unitario, importe_total, completo)
+           VALUES (:ordenId, :renglon, :codigo, :descripcion, :cantidad, :unitario, :total, 'NO')`,
           { ordenId: ins.insertId, renglon: it.renglon, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad, unitario: it.unitario, total: it.total }
         );
       }
@@ -192,23 +238,43 @@ async function importarArchivos(archivos, usuarioId) {
   return resultados;
 }
 
+// Misma regla que la formula de la col L del Excel (formulaEstado en ordenesCompraDrive): con algun NO o
+// A REVISAR es INCOMPLETA; COMPLETA cuando todos los renglones dicen SI, CAMBIO o DESAFECTADO
 function estadoOrden(renglones) {
-  return renglones.length && renglones.every((r) => r.completo === 'SI') ? 'COMPLETA' : 'INCOMPLETA';
+  return renglones.length && renglones.every((r) => COMPLETO_OK.includes(r.completo)) ? 'COMPLETA' : 'INCOMPLETA';
+}
+
+// Estado que se ve de la O.C.: las traidas del Excel de Drive usan lo que dice su col L
+function estadoFinal({ origen, estadoPlanilla, estado }) {
+  return origen === 'excel' && estadoPlanilla ? estadoPlanilla : estado;
 }
 
 // Ordenes con sus renglones, en el formato que usan la pantalla y el Excel
 async function listarOrdenes() {
   const ordenes = await query(
-    `SELECT id, numero, proveedor, fecha_oc, vence, procedimiento, subtotal, archivo_nombre, created_at
+    `SELECT id, numero, proveedor, fecha_oc, vence, procedimiento, subtotal, archivo_nombre, origen, estado_planilla, created_at
      FROM oc_ordenes`
   );
   const renglones = await query(
     `SELECT id, orden_id, renglon, codigo, descripcion, cantidad, cantidad_entregada, completo, nro_ingreso, observacion, updated_at
      FROM oc_renglones ORDER BY orden_id, renglon`
   );
+  const entregas = await query(
+    `SELECT e.id, e.renglon_id, e.cantidad, e.nro_ingreso, e.observacion, e.fecha, e.origen, u.username
+     FROM oc_entregas e LEFT JOIN usuarios u ON u.id = e.usuario_id ORDER BY e.renglon_id, e.fecha, e.id`
+  );
+  const entregasDe = new Map();
+  for (const e of entregas) {
+    if (!entregasDe.has(e.renglon_id)) entregasDe.set(e.renglon_id, []);
+    entregasDe.get(e.renglon_id).push({
+      id: e.id, cantidad: e.cantidad, nroIngreso: e.nro_ingreso, observacion: e.observacion,
+      fecha: deFecha(e.fecha), origen: e.origen, usuario: e.username || null
+    });
+  }
   const porOrden = new Map(ordenes.map((o) => [o.id, []]));
   for (const r of renglones) {
     porOrden.get(r.orden_id)?.push({
+      entregas: entregasDe.get(r.id) || [],
       id: r.id,
       renglon: r.renglon,
       codigo: r.codigo,
@@ -223,6 +289,10 @@ async function listarOrdenes() {
   return ordenes
     .map((o) => {
       const items = porOrden.get(o.id) || [];
+      const estado = estadoOrden(items);
+      // solo las O.C. INCOMPLETAS reciben entregas; las COMPLETAS no se tocan
+      const incompleta = estadoFinal({ origen: o.origen, estadoPlanilla: o.estado_planilla, estado }) === 'INCOMPLETA';
+      for (const it of items) it.admiteEntregas = incompleta && !COMPLETO_OK.includes(it.completo);
       return {
         id: o.id,
         oc: o.numero,
@@ -233,7 +303,10 @@ async function listarOrdenes() {
         subtotal: Number(o.subtotal),
         archivo: o.archivo_nombre,
         cargadaEl: o.created_at,
-        estado: estadoOrden(items),
+        origen: o.origen,
+        estadoPlanilla: o.estado_planilla,
+        estado,
+        admiteEntregas: incompleta,
         renglones: items
       };
     })
@@ -266,7 +339,7 @@ function normalizarCampo(campo, value) {
   }
   if (campo === 'completo') {
     const v = String(value).trim().toUpperCase();
-    if (!['SI', 'NO'].includes(v)) throw Object.assign(new Error('Completo tiene que ser SI o NO'), { status: 400 });
+    if (!OPCIONES_COMPLETO.includes(v)) throw Object.assign(new Error(`Completo tiene que ser ${OPCIONES_COMPLETO.join(', ')}`), { status: 400 });
     return v;
   }
   const max = campo === 'nroIngreso' ? 120 : 500;
@@ -274,6 +347,16 @@ function normalizarCampo(campo, value) {
 }
 
 async function actualizarRenglon(id, cambios, usuarioId) {
+  // con entregas cargadas, la cantidad entregada es la suma de ellas: se cambia con + Entrega
+  if (cambios.entregada !== undefined) {
+    const [ren] = await query(
+      'SELECT r.cantidad_entregada, (SELECT COUNT(*) FROM oc_entregas e WHERE e.renglon_id = r.id) AS n FROM oc_renglones r WHERE r.id = :id',
+      { id }
+    );
+    if (ren && ren.n > 0 && normalizarCampo('entregada', cambios.entregada) !== ren.cantidad_entregada) {
+      throw Object.assign(new Error('Este renglón tiene entregas cargadas: usá "+ Entrega" o borrá la entrega equivocada'), { status: 400 });
+    }
+  }
   const sets = [];
   const params = { id, usuarioId: usuarioId || null };
   for (const [campo, columna] of Object.entries(CAMPOS_RENGLON)) {
@@ -293,6 +376,124 @@ async function actualizarRenglon(id, cambios, usuarioId) {
     id: row.id, renglon: row.renglon, codigo: row.codigo, descripcion: row.descripcion, cantidad: row.cantidad,
     entregada: row.cantidad_entregada, completo: row.completo, nroIngreso: row.nro_ingreso, observacion: row.observacion
   };
+}
+
+// --- Entregas parciales (solo renglones de O.C. INCOMPLETAS) ---
+function err(status, message) {
+  return Object.assign(new Error(message), { status });
+}
+
+function fechaEntrega(valor) {
+  const s = String(valor || '').trim();
+  if (!s) return new Date().toLocaleDateString('sv-SE'); // hoy, AAAA-MM-DD en hora local
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const f = aFecha(s);
+  if (!f) throw err(400, 'La fecha tiene que ser DD/MM/AAAA');
+  return f;
+}
+
+async function buscarRenglon(renglonId) {
+  for (const o of await listarOrdenes()) {
+    const r = o.renglones.find((x) => x.id === renglonId);
+    if (r) return { orden: o, renglon: r };
+  }
+  throw err(404, 'Renglón no encontrado');
+}
+
+// Lo que el renglon ya tenia cargado antes de la primera entrega pasa a ser la entrega "anterior"
+async function guardarCargaAnterior(conn, renglonId) {
+  const [[ren]] = await conn.execute('SELECT cantidad_entregada, nro_ingreso FROM oc_renglones WHERE id = :id FOR UPDATE', { id: renglonId });
+  const [[{ n }]] = await conn.execute('SELECT COUNT(*) AS n FROM oc_entregas WHERE renglon_id = :id', { id: renglonId });
+  if (n > 0 || (!ren.cantidad_entregada && !ren.nro_ingreso)) return;
+  await conn.execute(
+    `INSERT INTO oc_entregas (renglon_id, cantidad, nro_ingreso, observacion, fecha, origen)
+     VALUES (:id, :cantidad, :ingreso, 'Cargado antes de las entregas parciales', CURDATE(), 'anterior')`,
+    { id: renglonId, cantidad: ren.cantidad_entregada || 0, ingreso: ren.nro_ingreso || null }
+  );
+}
+
+// Entregada = suma de las entregas; N° de ingreso = todos los ingresos; FALTA 0 -> COMPLETO = SI
+async function recalcularRenglon(conn, renglonId) {
+  const [[ren]] = await conn.execute('SELECT cantidad, completo FROM oc_renglones WHERE id = :id', { id: renglonId });
+  const [ents] = await conn.execute('SELECT cantidad, nro_ingreso FROM oc_entregas WHERE renglon_id = :id ORDER BY fecha, id', { id: renglonId });
+  const total = ents.reduce((acc, e) => acc + e.cantidad, 0);
+  const ingresos = [...new Set(ents.map((e) => String(e.nro_ingreso || '').trim()).filter(Boolean))].join(' / ').slice(0, 120);
+  let { completo } = ren;
+  if (total >= ren.cantidad) completo = 'SI';
+  else if (completo === 'SI') completo = 'NO'; // se borro una entrega: vuelve a faltar
+  await conn.execute(
+    'UPDATE oc_renglones SET cantidad_entregada = :total, nro_ingreso = :ingresos, completo = :completo WHERE id = :id',
+    { id: renglonId, total: ents.length ? total : null, ingresos: ingresos || null, completo }
+  );
+}
+
+// datos: { cantidad, nroIngreso, observacion, fecha, confirmarExceso }
+async function agregarEntrega(renglonId, datos, usuarioId) {
+  const cantidad = Number(String(datos.cantidad ?? '').replace(/\./g, '').replace(',', '.'));
+  if (!Number.isInteger(cantidad) || cantidad <= 0) throw err(400, 'La cantidad que salió tiene que ser un número entero mayor a 0');
+  const { orden, renglon } = await buscarRenglon(renglonId);
+  if (!orden.admiteEntregas) throw err(400, `La O.C. ${orden.oc} está COMPLETA: no se le cargan entregas`);
+  if (!renglon.admiteEntregas) throw err(400, `El renglón ${renglon.renglon} ya está en ${renglon.completo}: no se le cargan entregas`);
+  const falta = renglon.cantidad - (renglon.entregada || 0);
+  if (cantidad > falta && !datos.confirmarExceso) {
+    throw Object.assign(err(409, `Faltan ${falta.toLocaleString('es-AR')} y estás cargando ${cantidad.toLocaleString('es-AR')}. ¿Está bien?`), { exceso: true, falta });
+  }
+  const nroIngreso = String(datos.nroIngreso ?? '').trim().slice(0, 120) || null;
+  const observacion = String(datos.observacion ?? '').trim().slice(0, 500) || null;
+  const fecha = fechaEntrega(datos.fecha);
+  await transaction(async (conn) => {
+    await guardarCargaAnterior(conn, renglonId);
+    await conn.execute(
+      `INSERT INTO oc_entregas (renglon_id, cantidad, nro_ingreso, observacion, fecha, origen, usuario_id)
+       VALUES (:id, :cantidad, :nroIngreso, :observacion, :fecha, 'pagina', :usuarioId)`,
+      { id: renglonId, cantidad, nroIngreso, observacion, fecha, usuarioId: usuarioId || null }
+    );
+    await recalcularRenglon(conn, renglonId);
+    await conn.execute('UPDATE oc_renglones SET actualizado_por = :u WHERE id = :id', { id: renglonId, u: usuarioId || null });
+  });
+  return (await buscarRenglon(renglonId)).renglon;
+}
+
+// Borra una entrega mal cargada (la carga "anterior" no se borra: es lo que ya estaba)
+async function eliminarEntrega(entregaId, usuarioId) {
+  const renglonId = await transaction(async (conn) => {
+    const [[e]] = await conn.execute('SELECT renglon_id, origen FROM oc_entregas WHERE id = :id FOR UPDATE', { id: entregaId });
+    if (!e) throw err(404, 'Entrega no encontrada');
+    if (e.origen === 'anterior') throw err(400, 'Esa es la carga que el renglón ya tenía: no se borra desde acá');
+    await conn.execute('DELETE FROM oc_entregas WHERE id = :id', { id: entregaId });
+    await recalcularRenglon(conn, e.renglon_id);
+    await conn.execute('UPDATE oc_renglones SET actualizado_por = :u WHERE id = :id', { id: e.renglon_id, u: usuarioId || null });
+    return e.renglon_id;
+  });
+  return (await buscarRenglon(renglonId)).renglon;
+}
+
+// Desde la planilla de Drive cambiaron la cantidad entregada de un renglon que admite entregas:
+// la diferencia queda como entrega (y si ya no falta nada, COMPLETO = SI)
+// antes: { entregada, nroIngreso } que tenia la base antes de copiar lo de la planilla
+async function entregaDesdePlanilla(renglonId, antes, nueva) {
+  const anterior = antes.entregada || 0;
+  const diff = (nueva || 0) - anterior;
+  if (!diff) return;
+  await transaction(async (conn) => {
+    const [[{ n }]] = await conn.execute('SELECT COUNT(*) AS n FROM oc_entregas WHERE renglon_id = :id', { id: renglonId });
+    if (!n && (anterior || antes.nroIngreso)) {
+      await conn.execute(
+        `INSERT INTO oc_entregas (renglon_id, cantidad, nro_ingreso, observacion, fecha, origen)
+         VALUES (:id, :anterior, :ingreso, 'Cargado antes de las entregas parciales', CURDATE(), 'anterior')`,
+        { id: renglonId, anterior, ingreso: antes.nroIngreso || null }
+      );
+    }
+    await conn.execute(
+      `INSERT INTO oc_entregas (renglon_id, cantidad, observacion, fecha, origen)
+       VALUES (:id, :diff, :obs, CURDATE(), 'planilla')`,
+      { id: renglonId, diff, obs: diff < 0 ? 'Corrección hecha en la planilla' : 'Cargado en la planilla' }
+    );
+    const [[ren]] = await conn.execute('SELECT cantidad, completo FROM oc_renglones WHERE id = :id', { id: renglonId });
+    if ((nueva || 0) >= ren.cantidad && !COMPLETO_OK.includes(ren.completo)) {
+      await conn.execute("UPDATE oc_renglones SET completo = 'SI' WHERE id = :id", { id: renglonId });
+    }
+  });
 }
 
 // Pasa a la base lo cargado a mano en un Excel existente, solo en renglones que en la base estan vacios
@@ -325,10 +526,14 @@ async function eliminarOrden(id) {
 
 module.exports = {
   ensureOrdenesCompraTables,
+  estadoOrden,
   importarArchivos,
   listarOrdenes,
   listarDuplicados,
   actualizarRenglon,
+  agregarEntrega,
+  eliminarEntrega,
+  entregaDesdePlanilla,
   importarCargaManual,
   eliminarOrden
 };

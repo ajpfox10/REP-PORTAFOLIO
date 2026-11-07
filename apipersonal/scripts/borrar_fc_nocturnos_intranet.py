@@ -12,8 +12,14 @@ Uso:
     python borrar_fc_nocturnos_intranet.py --dni 12345678 --dni 87654321 --confirmar  # borra
     python borrar_fc_nocturnos_intranet.py --nocturnos --confirmar                    # todos los nocturnos
     python borrar_fc_nocturnos_intranet.py --nocturnos --repasar --confirmar          # + los ya ELIMINADA
+    python borrar_fc_nocturnos_intranet.py --todos [--confirmar]
+        TODOS los FC desde DESDE_MINIMO de todos los agentes con FC en el Ministerio (ultima
+        comparacion 2.0, las 3 dependencias), INCLUIDOS los cargados a mano (03/11/2026, pedido
+        del usuario). Cada borrado: respaldo en logs/fc_borrados_todos.csv y en la cola queda
+        ELIMINADA la fila SIAPE pareada (dni+novedad+desde+hasta) para que no se recargue.
 """
 import argparse
+import csv
 import os
 import sys
 from datetime import datetime, timedelta
@@ -25,6 +31,8 @@ import mapeo_novedades as MN
 DESDE_MINIMO = "2026-10-01"   # septiembre esta cerrado en el Ministerio
 # con --repasar tambien se miran los ya marcados ELIMINADA (por si alguno no se borro de verdad)
 ESTADOS = ["OK"]
+TODOS = False   # --todos: no exige que el FC lo haya cargado el robot
+RESPALDO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "fc_borrados_todos.csv")
 
 
 def dias_cargados_por_robot(dni):
@@ -90,7 +98,11 @@ def candidatos(filas, dias_robot):
             continue
         d, h = _fecha(f["desde"]), _fecha(f["hasta"])
         dias = [d + timedelta(days=i) for i in range((h - d).days + 1)]
-        if all(x in dias_robot for x in dias):
+        if TODOS:
+            if d.isoformat() >= DESDE_MINIMO:
+                f["cola_ids"] = sorted({dias_robot[x] for x in dias if x in dias_robot})
+                out.append(f)
+        elif all(x in dias_robot for x in dias):
             f["cola_ids"] = sorted({dias_robot[x] for x in dias})
             out.append(f)
     return out
@@ -105,6 +117,62 @@ def marcar_eliminada(cola_ids, fila):
             (f"Eliminada en la Intranet (FC turno nocturno) {datetime.now():%d/%m/%Y %H:%M}: "
              f"{fila['desde']} a {fila['hasta']} [{fila['delete_href'].split('/')[-2]}]", *cola_ids))
         cn.commit()
+
+
+def ultima_corrida():
+    with MN.conn() as cn, cn.cursor() as cur:
+        cur.execute("SELECT MAX(id) AS id FROM comparacion_corridas")
+        return cur.fetchone()["id"]
+
+
+def agentes_con_fc_ministerio():
+    """{dependencia: [dni]} de todos los agentes con FC en el Ministerio desde DESDE_MINIMO
+    (ultima corrida del comparador 2.0)."""
+    with MN.conn() as cn, cn.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT dependencia, dni FROM comparacion_novedades
+             WHERE corrida_id = %s AND novedad_ministerio LIKE '%%FRANCO COMPENSATORIO%%'
+               AND desde_ministerio >= %s AND dni <> ''
+             ORDER BY dependencia, dni""", (ultima_corrida(), DESDE_MINIMO))
+        por_dep = {}
+        for r in cur.fetchall():
+            por_dep.setdefault(r["dependencia"], []).append(str(r["dni"]))
+        return por_dep
+
+
+def proteger_de_recarga(dni, dependencia, fila):
+    """--todos: la(s) fila(s) SIAPE pareadas con este FC del Ministerio quedan ELIMINADA en la cola
+    (se crean si no estaban) para que la carga de novedades no lo vuelva a subir. Respaldo en CSV."""
+    d, h = _fecha(fila["desde"]), _fecha(fila["hasta"])
+    marca = (f"Eliminada en la Intranet (borrado de todos los FC) {datetime.now():%d/%m/%Y %H:%M}: "
+             f"{fila['desde']} a {fila['hasta']} [{fila['delete_href'].split('/')[-2]}]")
+    with MN.conn() as cn, cn.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT dependencia, nombre, novedad_siap, desde_siap, hasta_siap, justificado_siap, motivo
+              FROM comparacion_novedades
+             WHERE corrida_id = %s AND dni = %s AND novedad_siap LIKE 'FRANCO COMPENSATORIO%%'
+               AND desde_siap IS NOT NULL AND desde_siap <= %s AND COALESCE(hasta_siap, desde_siap) >= %s""",
+            (ultima_corrida(), str(dni), h, d))
+        pares = cur.fetchall()
+        for r in pares:
+            cur.execute(f"""
+                INSERT INTO {C.TABLA_CARGA}
+                  (dependencia, dni, nombre, novedad_siap, desde, hasta, justificado, motivo_comparacion,
+                   corrida_id, estado, detalle)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'ELIMINADA', %s)
+                ON DUPLICATE KEY UPDATE estado = 'ELIMINADA', detalle = VALUES(detalle)""",
+                (r["dependencia"] or dependencia, str(dni), r["nombre"], r["novedad_siap"], r["desde_siap"],
+                 r["hasta_siap"] or r["desde_siap"], r["justificado_siap"], r["motivo"], ultima_corrida(), marca))
+        cn.commit()
+    nuevo = not os.path.exists(RESPALDO)
+    with open(RESPALDO, "a", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh, delimiter=";")
+        if nuevo:
+            w.writerow(["borrado_en", "dependencia", "dni", "novedad", "desde", "hasta", "id_intranet",
+                        "cargado_por_robot", "filas_siape_protegidas"])
+        w.writerow([f"{datetime.now():%d/%m/%Y %H:%M:%S}", dependencia, dni, fila["novedad"], fila["desde"],
+                    fila["hasta"], fila["delete_href"].split("/")[-2], "SI" if fila["cola_ids"] else "NO",
+                    len(pares)])
 
 
 def agentes_nocturnos_con_fc():
@@ -162,7 +230,10 @@ def borrar_del_agente(page, dni, password, dependencia, confirmar, totales):
             totales["no_eliminadas"] += 1
             print(f"    NO se elimino (sigue en el historial). Aviso: {aviso}")
         else:
-            marcar_eliminada(f["cola_ids"], f)
+            if f["cola_ids"]:
+                marcar_eliminada(f["cola_ids"], f)
+            if TODOS:
+                proteger_de_recarga(dni, dependencia, f)
             totales["eliminadas"] += 1
             print(f"    OK eliminada. Aviso: {aviso}")
 
@@ -173,13 +244,22 @@ def main():
     parser.add_argument("--nocturnos", action="store_true", help="todos los agentes de turno nocturno")
     parser.add_argument("--dependencia", default="HOSPITAL", help="con --dni")
     parser.add_argument("--confirmar", action="store_true", help="sin esto solo muestra lo que borraria")
+    parser.add_argument("--todos", action="store_true",
+                        help="TODOS los FC (tambien los cargados a mano) de los agentes con FC en el Ministerio")
+    parser.add_argument("--solo-dep", action="append", help="con --todos: solo esa(s) dependencia(s)")
     parser.add_argument("--repasar", action="store_true", help="incluir los ya marcados ELIMINADA en la cola")
     args = parser.parse_args()
     if args.repasar:
         ESTADOS.append("ELIMINADA")
     password = os.environ.get("INTRANET_PASS")
     print("MODO:", "BORRADO REAL" if args.confirmar else "SIMULACION (no borra nada)")
-    if args.nocturnos:
+    global TODOS
+    TODOS = args.todos
+    if args.todos:
+        por_dep = agentes_con_fc_ministerio()
+        if args.solo_dep:
+            por_dep = {d: v for d, v in por_dep.items() if d in args.solo_dep}
+    elif args.nocturnos:
         por_dep = agentes_nocturnos_con_fc()
     elif args.dni:
         por_dep = {args.dependencia: args.dni}

@@ -36,10 +36,13 @@ from playwright.sync_api import sync_playwright
 # detalle por agente para la pagina Robots (script_run_items)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN
+import ausente_peso
+import control_ausentes
 import post_carga
+import pedidos_carga
 from cargar_novedades_intranet_v2 import TABLA_CARGA, crear_tabla_carga, ESTADOS_NO_CARGAR, estado_resultado, marcar_meses_cerrados
 from cargar_novedades_intranet_v2 import SQL_FILAS_DE_LA_DEP, es_no_pertenece, anotar_no_pertenece
-from cargar_novedades_intranet_v2 import juntar_rangos
+from cargar_novedades_intranet_v2 import juntar_rangos, traer_rechazadas_de_otras
 SCRIPT_ID = None   # lo fija main(): intranet_carga_ausentes_v2_<dep>
 DEPENDENCIA_RUN = None  # lo fija main(): dependencia en la que esta logueado el robot
 NOVEDAD_SIAP = "AUSENTE SIN AVISO"
@@ -136,6 +139,9 @@ def cargar_filas_db(dependencia, test_mode=False):
               justificado = VALUES(justificado), motivo_comparacion = VALUES(motivo_comparacion),
               estado = IF({TABLA_CARGA}.estado = 'CAMBIO_SIAPE', 'PENDIENTE', {TABLA_CARGA}.estado)""",
             (corrida, NOVEDAD_SIAP, dependencia))
+        n_otras = traer_rechazadas_de_otras(cur, corrida, dependencia, ausentes=True)
+        if n_otras:
+            print(f"  {n_otras} ausentes rechazados por otra dependencia pasan a esta corrida para probarlos aca")
         fin, n_cerr = marcar_meses_cerrados(cur, corrida, dependencia)
         if n_cerr:
             print(f"  {n_cerr} filas en meses cerrados (hasta {fin:%d/%m/%Y}) -> PERIODO_CERRADO sin intentar")
@@ -144,20 +150,50 @@ def cargar_filas_db(dependencia, test_mode=False):
             print(f"  {n_franco} ausentes de franqueros en dias que no trabajan -> NO_TRABAJA_DIA sin intentar")
         if n_vuelven:
             print(f"  {n_vuelven} filas NO_TRABAJA_DIA vuelven a PENDIENTE (cambio el horario o el feriado)")
+        # Control cruzado (04/11/2026): fichadas, SIAPE, Ministerio, Salud Laboral, jefe, rotaciones...
+        cur.execute(f"""
+            SELECT id, dni, desde, hasta, estado FROM {TABLA_CARGA}
+             WHERE corrida_id = %s AND {SQL_FILAS_DE_LA_DEP} AND novedad_siap = %s
+               AND estado IN ('PENDIENTE', 'ERROR', 'ERROR_NAV', 'EXCEPCION', %s)""",
+            (corrida, dependencia, dependencia, NOVEDAD_SIAP, control_ausentes.ESTADO))
+        abiertas = cur.fetchall()
+        n_cub = control_ausentes.ya_cubiertos_por_28(cur, TABLA_CARGA,
+                                                     [f for f in abiertas if f["estado"] != control_ausentes.ESTADO])
+        if n_cub:
+            print(f"  {n_cub} ausentes ya cubiertos por un 28 de varios dias en el Ministerio -> OK sin intentar")
+        cur.execute(f"""
+            SELECT id, dni, desde, hasta, estado FROM {TABLA_CARGA}
+             WHERE corrida_id = %s AND {SQL_FILAS_DE_LA_DEP} AND novedad_siap = %s
+               AND estado IN ('PENDIENTE', 'ERROR', 'ERROR_NAV', 'EXCEPCION', %s)""",
+            (corrida, dependencia, dependencia, NOVEDAD_SIAP, control_ausentes.ESTADO))
+        n_no, n_vuelta, avisos = control_ausentes.marcar(cur, TABLA_CARGA, cur.fetchall())
+        for a in avisos:
+            print(f"  AVISO control de ausentes: {a}")
+        if n_no:
+            print(f"  {n_no} ausentes con fichada o novedad en otro lado -> {control_ausentes.ESTADO} sin intentar")
+        if n_vuelta:
+            print(f"  {n_vuelta} filas {control_ausentes.ESTADO} vuelven a PENDIENTE (ya no tienen motivo)")
+        cn.commit()
+        # Pedido desde /app/asistencia (boton Cargar): si hay, solo esas filas (pedidos_carga.py)
+        pedido = pedidos_carga.tomar_pedido(cur, "ausentes", dependencia)
         cn.commit()
         cur.execute(f"""
-            SELECT dni, nombre, novedad_siap, justificado, desde, hasta, dependencia
+            SELECT id, dni, nombre, novedad_siap, justificado, desde, hasta, dependencia
               FROM {TABLA_CARGA}
              WHERE corrida_id = %s AND {SQL_FILAS_DE_LA_DEP} AND novedad_siap = %s
                AND estado NOT IN {ESTADOS_NO_CARGAR}
              ORDER BY nombre, desde""", (corrida, dependencia, dependencia, NOVEDAD_SIAP))
+        filas_db = cur.fetchall()
+        if pedido is not None:
+            filas_db = [r for r in filas_db if int(r["id"]) in pedido]
+            print(f"  Pedido desde Asistencia: se cargan SOLO {len(filas_db)} fila(s) elegidas (de {len(pedido)} pedidas)")
         # Las que rechazo otra dependencia se prueban en esta: van con la dependencia del run
         filas = [{
             "Nombre": r["nombre"] or r["dni"], "DNI": int(r["dni"]),
             "Novedad SIAPE": r["novedad_siap"], "Justificado": r["justificado"],
             "Desde": fmt_fecha(r["desde"]), "Hasta": fmt_fecha(r["hasta"]) or fmt_fecha(r["desde"]),
             "Dependencia": dependencia,
-        } for r in cur.fetchall()
+        } for r in filas_db
           if not ({r["desde"].year, r["hasta"].year} & SIN_FERIADOS)]
     if test_mode and filas:
         filas = [f for f in filas if f["DNI"] == filas[0]["DNI"]]
@@ -248,12 +284,29 @@ def agrupar_por_dni(filas):
             "desde": f["Desde"],
             "hasta": f["Hasta"],
         })
+    global CTX_PESO
+    with MN.conn() as cn, cn.cursor() as cur:
+        CTX_PESO = ausente_peso.Contexto(cur, list(grupos))
     for dni in grupos:
         grupos[dni] = juntar_rangos(grupos[dni])
         for nv in grupos[dni]:
             if len(nv["partes"]) > 1:
                 PARTES[(int(dni), nv["desde"], nv["hasta"])] = nv["partes"]
     return grupos
+
+
+CTX_PESO = None   # ausente_peso.Contexto (lo arma agrupar_por_dni)
+
+
+def hasta_ministerio(dni, nov):
+    """05/11/2026: hasta del 28 en la Intranet. Domingo vale 3 días, sábado/feriado 2, turno de más
+    de 6 h 2; días seguidos se suman (ver ausente_peso.py). El rango SIAPE (nov desde/hasta) sigue
+    siendo la clave de la tabla."""
+    if CTX_PESO is None:
+        return nov["hasta"]
+    d = datetime.strptime(nov["desde"], "%d/%m/%Y").date()
+    h = datetime.strptime(nov["hasta"], "%d/%m/%Y").date()
+    return CTX_PESO.hasta_ministerio(dni, d, h).strftime("%d/%m/%Y")
 
 
 PARTES = {}   # (dni, desde, hasta) de un RANGO -> [(desde, hasta), ...] filas de la tabla que junta
@@ -619,18 +672,21 @@ def cambiar_dependencia(page, dependencia):
         pass
     page.wait_for_timeout(800)
 
+    # el botón Cambiar recarga la página: se espera hasta 20 s a que el header muestre
+    # el código (mientras navega page.content() falla) y recién ahí se recarga
     for _ in range(2):
-        try:
-            if f"({codigo})" in page.content():
-                print(f"  Dependencia cambiada a {dependencia} ({codigo})")
-                return
-        except Exception:
-            pass
+        for _ in range(40):
+            try:
+                if f"({codigo})" in page.content():
+                    print(f"  Dependencia cambiada a {dependencia} ({codigo})")
+                    return
+            except Exception:
+                pass
+            page.wait_for_timeout(500)
         try:
             page.reload(wait_until="networkidle", timeout=15000)
         except Exception:
             pass
-        page.wait_for_timeout(500)
 
     raise Exception(f"NO se pudo cambiar la dependencia a {dependencia} ({codigo}) - se aborta para no cargar en la dependencia equivocada")
 
@@ -857,6 +913,7 @@ def main():
     parser.add_argument("--solo-cola", action="store_true",
                         help="arma y lista los ausentes pendientes desde la base, sin abrir la Intranet")
     parser.add_argument("--label", dest="label", default=os.environ.get("INTRANET_AUSENTE_LABEL"))
+    parser.add_argument("--mes", help="AAAA-MM: solo los ausentes que EMPIEZAN en ese mes")
     args = parser.parse_args()
 
     password = args.password or os.environ.get("INTRANET_PASS") or input("Contrasena: ")
@@ -872,6 +929,9 @@ def main():
     log_path = None
 
     corrida, filas = cargar_filas_db(dependencia, test_mode=args.test)
+    if args.mes:   # "Desde" viene dd/mm/aaaa
+        filas = [f for f in filas if f["Desde"] and f"{f['Desde'][6:10]}-{f['Desde'][3:5]}" == args.mes]
+        print(f"Filtro --mes {args.mes}: solo ausentes que empiezan en ese mes")
     if corrida is None:
         print("No hay corridas del Comparador 2.0 todavia.")
         MN.registrar_run(SCRIPT_ID, script_desc, "error", motivo="No hay corridas del Comparador 2.0")
@@ -965,7 +1025,10 @@ def main():
             cola = list(pendientes)
             while cola:
                 nov = cola.pop(0)
-                if novedad_ya_cargada(page, nov["desde"], nov["hasta"]):
+                hmin = hasta_ministerio(dni, nov)
+                nota_peso = (f" [28 {nov['desde']} a {hmin}: domingo x3, sábado/feriado x2, turno > 6 h x2]"
+                             if hmin != nov["hasta"] else "")
+                if novedad_ya_cargada(page, nov["desde"], hmin) or novedad_ya_cargada(page, nov["desde"], nov["hasta"]):
                     print(f"  Ya estaba cargada: {nov['desde']} - {nov['hasta']}")
                     ya_ok.add(log_clave(dni, nov["desde"], nov["hasta"]))
                     registros.append({
@@ -976,22 +1039,23 @@ def main():
                     guardar_log(registros, log_path)
                     continue
 
-                print(f"  Cargando ausente: {nov['desde']} -> {nov['hasta']}")
+                print(f"  Cargando ausente: {nov['desde']} -> {nov['hasta']}"
+                      + (f" (28 hasta {hmin})" if hmin != nov["hasta"] else ""))
                 try:
                     historial_url = page.url
-                    exito, msg, real_label = cargar_novedad(page, nov["desde"], nov["hasta"], args.label)
+                    exito, msg, real_label = cargar_novedad(page, nov["desde"], hmin, args.label)
                     if exito:
                         ok_count += 1
                         ya_ok.add(log_clave(dni, nov["desde"], nov["hasta"]))
                         estado = "OK"
-                        detalle = msg or ""
+                        detalle = (msg or "") + nota_peso
                         print(f"  OK - opcion: {real_label}")
                     else:
                         if es_error_superposicion(msg):
-                            msg = detalle_superposicion(page, real_label or args.label or "AUSENTE", nov["desde"], nov["hasta"], msg, historial_url)
+                            msg = detalle_superposicion(page, real_label or args.label or "AUSENTE", nov["desde"], hmin, msg, historial_url)
                         err_count += 1
                         estado = "ERROR"
-                        detalle = msg or ""
+                        detalle = (msg or "") + nota_peso
                         print(f"  ERROR: {detalle}")
                 except Exception as e:
                     err_count += 1

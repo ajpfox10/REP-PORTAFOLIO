@@ -54,11 +54,12 @@ async function waitForLoginFrame(page, timeout = 30000) {
   throw new Error('No se encontro el formulario de login de Farmacia');
 }
 
-async function login(page) {
+// credenciales: { user, password } (por defecto el usuario principal del .env)
+async function login(page, credenciales = config.farmacia) {
   await page.goto(config.farmacia.url, { waitUntil: 'domcontentloaded' });
   const frame = await waitForLoginFrame(page);
-  await frame.locator('#username, input[name="username"], input[type="text"], input:not([type])').first().fill(config.farmacia.user);
-  await frame.locator('#password, input[name="password"], input[type="password"]').first().fill(config.farmacia.password);
+  await frame.locator('#username, input[name="username"], input[type="text"], input:not([type])').first().fill(credenciales.user);
+  await frame.locator('#password, input[name="password"], input[type="password"]').first().fill(credenciales.password);
   const iniciar = frame.locator('form button[type="submit"], form input[type="submit"], button[type="submit"], input[type="submit"]').first();
   if (await iniciar.count()) await iniciar.click();
   else await frame.locator('#password, input[name="password"], input[type="password"]').first().press('Enter');

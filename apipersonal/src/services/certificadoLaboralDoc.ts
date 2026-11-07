@@ -7,6 +7,7 @@
 import JSZip from 'jszip';
 import { Sequelize, QueryTypes } from 'sequelize';
 import { finResidencia, historialLaboral, ymdToDMY, FinResidencia, TramoHistorial } from './certificadoLaboral';
+import { horasSemanalesAgente } from './cargaHoraria';
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
   'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -50,10 +51,7 @@ export async function armarCertificadoLaboral(sequelize: Sequelize, dni: number)
   const [p] = await sequelize.query<any>(
     `SELECT pd.dni, pd.apellido, pd.nombre, pd.dependencia, pd.fecha_ingreso,
             COALESCE(pd.legajo, (SELECT a.legajo FROM agentes a WHERE a.dni = pd.dni AND a.deleted_at IS NULL
-                                  ORDER BY a.id DESC LIMIT 1)) AS legajo,
-            (SELECT rh.nombre FROM agentes a JOIN regimenes_horarios rh ON rh.id = a.regimen_horario_id
-              WHERE a.dni = pd.dni AND a.deleted_at IS NULL AND a.estado_empleo = 'ACTIVO'
-              ORDER BY a.fecha_egreso IS NULL DESC, a.id DESC LIMIT 1) AS hs_semanales
+                                  ORDER BY a.id DESC LIMIT 1)) AS legajo
        FROM personaldetalle pd
       WHERE pd.dni = :dni LIMIT 1`,
     { replacements: { dni }, type: QueryTypes.SELECT },
@@ -75,8 +73,8 @@ export async function armarCertificadoLaboral(sequelize: Sequelize, dni: number)
   const cargo = ultimo?.cargo ?? '';
   const ley = ultimo?.ley ?? '';
   const servicio = ultimo?.servicio ?? '';
-  const hs = String(p.hs_semanales ?? '').trim();
-  const hsSemanales = /^\d+$/.test(hs) ? hs : '';
+  // Horas según la ley (Herramientas → Carga horaria por ley); sin config, régimen del agente.
+  const hsSemanales = (await horasSemanalesAgente(sequelize, dni)).horas;
   const legajo = String(p.legajo ?? '').trim();
 
   // Texto principal

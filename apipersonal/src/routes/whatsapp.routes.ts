@@ -19,9 +19,38 @@ const updateSchema = z.object({
   cantidad: z.number().int().min(0),
 });
 
+// Columnas del conteo AUTOMÁTICO (mig 113). Idempotente: agrega solo las que faltan, y la primera
+// vez que aparece `origen` marca como MANUAL lo ya cargado a mano (cantidad > 0).
+const COLS_AUTO: [string, string][] = [
+  ['mensajes', 'INT NULL AFTER cantidad'], ['personas', 'INT NULL AFTER mensajes'],
+  ['manana', 'INT NULL AFTER personas'], ['tarde', 'INT NULL AFTER manana'],
+  ['noche', 'INT NULL AFTER tarde'], ['finde', 'INT NULL AFTER noche'],
+  ['agentes', 'INT NULL AFTER finde'], ['sin_agente', 'INT NULL AFTER agentes'],
+  ['origen', "ENUM('MANUAL','AUTO') NULL AFTER sin_agente"], ['volcado_at', 'DATETIME NULL AFTER origen'],
+];
+const asegurados = new WeakMap<Sequelize, Promise<void>>();
+export function ensureColumnasAutomatico(sequelize: Sequelize): Promise<void> {
+  let p = asegurados.get(sequelize);
+  if (!p) {
+    p = (async () => {
+      const cols = await sequelize.query<any>('SHOW COLUMNS FROM consultas_whatsapp', { type: QueryTypes.SELECT });
+      const hay = new Set(cols.map((c: any) => String(c.Field)));
+      for (const [col, def] of COLS_AUTO) {
+        if (hay.has(col)) continue;
+        await sequelize.query(`ALTER TABLE consultas_whatsapp ADD COLUMN ${col} ${def}`);
+        if (col === 'origen') await sequelize.query(`UPDATE consultas_whatsapp SET origen = 'MANUAL' WHERE cantidad > 0`);
+      }
+    })();
+    p.catch(() => asegurados.delete(sequelize));
+    asegurados.set(sequelize, p);
+  }
+  return p;
+}
+
 export function buildWhatsappRouter(sequelize: Sequelize): Router {
   const router = Router();
   const perm   = requirePermission('crud:*:*');
+  ensureColumnasAutomatico(sequelize).catch((e: any) => console.error('[whatsapp] columnas automático:', e?.message));
 
   // GET /whatsapp?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&year=YYYY&month=MM
   router.get('/', perm, async (req: Request, res: Response) => {
@@ -36,8 +65,10 @@ export function buildWhatsappRouter(sequelize: Sequelize): Router {
       if (month) { conds.push('MONTH(fecha) = :month'); replacements.month = month; }
 
       const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+      await ensureColumnasAutomatico(sequelize);
       const rows = await sequelize.query<any>(
-        `SELECT id, fecha, cantidad, created_at, updated_at
+        `SELECT id, fecha, cantidad, mensajes, personas, manana, tarde, noche, finde, agentes, sin_agente,
+                origen, volcado_at, created_at, updated_at
          FROM consultas_whatsapp ${where} ORDER BY fecha ASC`,
         { type: QueryTypes.SELECT, replacements }
       );
@@ -53,10 +84,12 @@ export function buildWhatsappRouter(sequelize: Sequelize): Router {
     if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.errors });
     try {
       const { fecha, cantidad } = parsed.data;
+      await ensureColumnasAutomatico(sequelize);
+      // a mano = MANUAL: el volcado automático ya no pisa la cantidad (salvo que la dejen en 0)
       await sequelize.query(
-        `INSERT INTO consultas_whatsapp (fecha, cantidad)
-         VALUES (:fecha, :cantidad)
-         ON DUPLICATE KEY UPDATE cantidad = :cantidad, updated_at = NOW()`,
+        `INSERT INTO consultas_whatsapp (fecha, cantidad, origen)
+         VALUES (:fecha, :cantidad, 'MANUAL')
+         ON DUPLICATE KEY UPDATE cantidad = :cantidad, origen = 'MANUAL', updated_at = NOW()`,
         { replacements: { fecha, cantidad } }
       );
       const [row] = await sequelize.query<any>(
@@ -76,7 +109,8 @@ export function buildWhatsappRouter(sequelize: Sequelize): Router {
     try {
       const { id } = req.params;
       const { fecha, cantidad } = parsed.data;
-      const sets: string[] = ['cantidad = :cantidad'];
+      await ensureColumnasAutomatico(sequelize);
+      const sets: string[] = ['cantidad = :cantidad', "origen = 'MANUAL'"];
       if (fecha) sets.push('fecha = :fecha');
       await sequelize.query(
         `UPDATE consultas_whatsapp SET ${sets.join(', ')} WHERE id = :id`,

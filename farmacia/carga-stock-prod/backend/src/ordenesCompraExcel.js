@@ -10,6 +10,10 @@ const SHEET = 'CONTROL O.C.';
 const HEADERS = ['FECHA DE VENCIMIENTO', 'N° O.C', 'RENGLON', 'CODIGO', 'DESCRIPCION', 'CANTIDAD',
   'CANTIDAD ENTREGADA', 'FALTA', 'COMPLETO', 'N° DE INGRESO', 'OBSERVACION', 'COMPLETA / INCOMPLETA'];
 const WIDTHS = [14, 22, 10, 12, 60, 11, 13, 10, 12, 16, 22, 20];
+// Valores de la col COMPLETO (base, Excel y planilla de Drive)
+const OPCIONES_COMPLETO = ['SI', 'NO', 'CAMBIO', 'DESAFECTADO', 'A REVISAR'];
+// renglones resueltos: entregado, o que ya no se pide (cambio / desafectado)
+const COMPLETO_OK = ['SI', 'CAMBIO', 'DESAFECTADO'];
 // Columnas que carga el usuario a mano y se conservan al regenerar
 const MANUAL_COLS = [7, 9, 10, 11];
 
@@ -132,7 +136,7 @@ async function leerCargaManual(file) {
     const completo = texto(row.getCell(9).value);
     const valores = {
       entregada: Number.isFinite(entregada) ? entregada : null,
-      completo: completo && ['SI', 'NO'].includes(completo.toUpperCase()) ? completo.toUpperCase() : null,
+      completo: completo && OPCIONES_COMPLETO.includes(completo.toUpperCase()) ? completo.toUpperCase() : null,
       nroIngreso: texto(row.getCell(10).value),
       observacion: texto(row.getCell(11).value)
     };
@@ -178,7 +182,7 @@ function construirExcel(ordenes, omitidos = []) {
       });
       [6, 7, 8].forEach((c) => { row.getCell(c).numFmt = '#,##0'; });
       row.getCell(10).numFmt = '@';
-      row.getCell(9).dataValidation = { type: 'list', allowBlank: true, formulae: ['"SI,NO"'] };
+      row.getCell(9).dataValidation = { type: 'list', allowBlank: true, formulae: [`"${OPCIONES_COMPLETO.join(',')}"`] };
       r += 1;
     }
     const r1 = r - 1;
@@ -226,4 +230,4 @@ function construirExcel(ordenes, omitidos = []) {
   return wb;
 }
 
-module.exports = { parseOrdenCompra, hashArchivo, leerPdfsCarpeta, ordenNombres, claveOc, leerCargaManual, construirExcel };
+module.exports = { OPCIONES_COMPLETO, COMPLETO_OK, parseOrdenCompra, hashArchivo, leerPdfsCarpeta, ordenNombres, claveOc, leerCargaManual, construirExcel };

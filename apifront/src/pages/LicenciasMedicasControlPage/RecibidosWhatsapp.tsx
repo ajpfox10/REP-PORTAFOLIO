@@ -106,9 +106,11 @@ function BarrasPorDia({ desde, hasta, porDia }: { desde: string; hasta: string; 
   );
 }
 
-export function RecibidosWhatsapp({ pedirExtension, onCerrar }: {
+export function RecibidosWhatsapp({ pedirExtension, onCerrar, onLeido }: {
   pedirExtension: (type: string, payload?: any, ms?: number) => Promise<any>;
   onCerrar?: () => void;
+  /** después de guardar lo leído (la API ya lo volcó a consultas_whatsapp): refrescar la carga de Reportes */
+  onLeido?: () => void;
 }) {
   const toast = useToast();
   const [desde, setDesde] = useState(haceDias(0));
@@ -150,6 +152,7 @@ export function RecibidosWhatsapp({ pedirExtension, onCerrar }: {
       }
       toast.ok('WhatsApp leído', `${msgs.length} mensajes recibidos en ${ext.chats} chats · ${nuevos} nuevos guardados`);
       await consultar();
+      onLeido?.();
     } catch (e: any) {
       toast.error('Recibidos', e?.message || 'Error');
     } finally {
@@ -364,8 +367,10 @@ function ActualizarTelefono({ numero, agente, onCerrar, onGuardado }: {
 
   return (
     <div role="dialog" aria-modal="true" onClick={onCerrar}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: 16 }}>
-      <div className="card" onClick={e => e.stopPropagation()} style={{ padding: 16, maxWidth: 520, width: '100%', fontSize: '0.85rem' }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.75)', backdropFilter: 'blur(2px)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: 16 }}>
+      {/* fondo sólido: el .card es translúcido (6 % blanco) y sobre la tabla quedaba lavado */}
+      <div className="card" onClick={e => e.stopPropagation()}
+        style={{ padding: 16, maxWidth: 520, width: '100%', fontSize: '0.85rem', background: '#0f172a', border: '1px solid rgba(148,163,184,0.25)', color: '#e2e8f0', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
         <b>📲 Actualizar teléfono en la base</b>
         <div style={{ marginTop: 8 }}>{agente.apellido}, {agente.nombre} <span className="muted">· DNI {agente.dni}</span></div>
         <table style={{ marginTop: 10, borderCollapse: 'collapse', width: '100%' }}>
@@ -387,7 +392,7 @@ function ActualizarTelefono({ numero, agente, onCerrar, onGuardado }: {
             </label>
           </div>
         )}
-        <div style={{ marginTop: 10, padding: '6px 10px', background: 'rgba(34,197,94,0.12)', borderRadius: 6 }}>
+        <div style={{ marginTop: 10, padding: '6px 10px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 6 }}>
           <span className="muted">Va a quedar: </span><b>{despues}</b>
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>

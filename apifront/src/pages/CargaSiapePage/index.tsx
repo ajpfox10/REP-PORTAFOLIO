@@ -5,13 +5,20 @@ import { useToast } from '../../ui/toast';
 
 type DiaRow = {
   id: number; reconocimiento_id: number; dni: string; nombre: string | null; fecha: string;
-  estado: 'CARGADO' | 'YA_EXISTIA' | 'ERROR'; categoria: string | null; detalle: string | null;
+  estado: 'CARGADO' | 'YA_EXISTIA' | 'ERROR' | 'NO_TRABAJA_DIA' | 'BORRAR' | 'BORRADO' | 'ERROR_BORRAR'; categoria: string | null; detalle: string | null;
   intentos: number; actualizado_en: string;
 };
 type Conteo = { estado: string; categoria: string; n: number; agotados: number | string | null };
 
-const ESTADO_COLOR: Record<string, string> = { CARGADO: '#22c55e', YA_EXISTIA: '#38bdf8', ERROR: '#f87171' };
-const ESTADO_LABEL: Record<string, string> = { CARGADO: 'Cargado', YA_EXISTIA: 'Ya existía', ERROR: 'Error' };
+// NO_TRABAJA_DIA / BORRAR / BORRADO / ERROR_BORRAR: días fuera del horario del agente (mig 105, 02/11/2026)
+const ESTADO_COLOR: Record<string, string> = {
+  CARGADO: '#22c55e', YA_EXISTIA: '#38bdf8', ERROR: '#f87171',
+  NO_TRABAJA_DIA: '#94a3b8', BORRAR: '#fb923c', BORRADO: '#64748b', ERROR_BORRAR: '#ef4444',
+};
+const ESTADO_LABEL: Record<string, string> = {
+  CARGADO: 'Cargado', YA_EXISTIA: 'Ya existía', ERROR: 'Error',
+  NO_TRABAJA_DIA: 'No trabaja ese día', BORRAR: 'A borrar', BORRADO: 'Borrado', ERROR_BORRAR: 'No se pudo borrar',
+};
 const CATEGORIA_LABEL: Record<string, string> = {
   YA_EXISTE: 'Ya existía en SiAPe',
   FALTA_FECHA: 'No tomó la fecha',
@@ -103,7 +110,7 @@ function EstadoDiasCarga() {
       </p>
 
       <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-        {(['', 'CARGADO', 'YA_EXISTIA', 'ERROR'] as const).map(e => (
+        {(['', 'CARGADO', 'YA_EXISTIA', 'ERROR', 'NO_TRABAJA_DIA', 'BORRAR', 'BORRADO', 'ERROR_BORRAR'] as const).map(e => (
           <button key={e || 'todos'} type="button" style={chip(estado === e, ESTADO_COLOR[e] ?? '#a78bfa')}
             onClick={() => { setEstado(e); setCategoria(''); }}>
             {e ? ESTADO_LABEL[e] : 'Todos'} ({e ? (porEstado[e] ?? 0) : Object.values(porEstado).reduce((a, b) => a + b, 0)})

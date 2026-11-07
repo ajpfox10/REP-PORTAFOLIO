@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
+import { VERSION_EXT_IMAGEN, enviarFelicitacion, leerConfigFelicitacion, versionExtension } from '../CumpleanosFelicitacionesPage/felicitar';
 
 export interface CumpleanosAlerta {
   dni: number;
@@ -17,6 +18,9 @@ export interface CumpleanosAlerta {
   estado_aviso: 'PENDIENTE' | 'AVISADO' | 'OMITIDO';
   avisado_at: string | null;
   avisado_por_nombre: string | null;
+  celular?: string | null;
+  celular_dudoso?: boolean;
+  whatsapp?: { real: any; prueba: any; intentos: number } | null;
 }
 
 export function fmtCumpleFecha(fecha: string) {
@@ -68,6 +72,33 @@ export function CumpleanosDashboardBanner() {
     }
   };
 
+  // 📲 Felicitar por WhatsApp (tarjeta + texto configurados en /app/cumpleanos-felicitaciones)
+  const felicitar = async (row: CumpleanosAlerta) => {
+    const id = `${row.dni}-${row.anio}`;
+    setLoadingId(id);
+    try {
+      const ext = await versionExtension();
+      const [a, b, c] = (ext || '0').split('.').map(Number);
+      const [x, y, z] = VERSION_EXT_IMAGEN.split('.').map(Number);
+      if (!ext || a * 1e6 + b * 1e3 + (c || 0) < x * 1e6 + y * 1e3 + z) {
+        toast.error('Falta la extension de WhatsApp', `Hace falta la v${VERSION_EXT_IMAGEN} o mas nueva. Instalala desde Felicitaciones.`);
+        return;
+      }
+      const { config } = await leerConfigFelicitacion();
+      const r = await enviarFelicitacion(row, config);
+      if (r.ok) {
+        if (!config.prueba) setRows(prev => prev.filter(x2 => !(x2.dni === row.dni && x2.anio === row.anio)));
+        toast.ok(config.prueba ? 'Prueba enviada (no se marco avisado)' : 'Felicitacion enviada', cumpleNombre(row));
+      } else {
+        toast.error('No se pudo felicitar', r.detalle || r.estado);
+      }
+    } catch (e: any) {
+      toast.error('No se pudo felicitar', e?.message || 'Error');
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
   if (dismissed || rows.length === 0) return null;
 
   const mostradas = rows.slice(0, 6);
@@ -94,12 +125,15 @@ export function CumpleanosDashboardBanner() {
           {mostradas.map(row => {
             const id = `${row.dni}-${row.anio}`;
             return (
-              <div key={id} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto auto', gap: 8, alignItems: 'center', fontSize: '0.82rem' }}>
+              <div key={id} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto auto auto', gap: 8, alignItems: 'center', fontSize: '0.82rem' }}>
                 <div style={{ minWidth: 0 }}>
                   <span style={{ fontWeight: 800 }}>{cumpleNombre(row)}</span>
                   <span className="muted"> · DNI {row.dni} · {fmtCumpleFecha(row.fecha_cumple)} · {row.dias === 0 ? 'hoy' : row.dias < 0 ? `hace ${Math.abs(row.dias)} dias` : `en ${row.dias} dias`}</span>
                   {row.email && <span style={{ color: '#fbcfe8' }}> · {row.email}</span>}
                 </div>
+                <button className="btn" style={{ padding: '4px 10px', fontSize: '0.74rem', background: '#db2777', color: '#fff' }} disabled={loadingId !== null} onClick={() => felicitar(row)} title="Mandar la tarjeta y el saludo por WhatsApp">
+                  {loadingId === id ? 'Enviando...' : '📲 Felicitar'}
+                </button>
                 <button className="btn" style={{ padding: '4px 10px', fontSize: '0.74rem', background: '#16a34a', color: '#fff' }} disabled={loadingId === id} onClick={() => cambiar(row, 'avisar')}>
                   Avisado
                 </button>
@@ -112,7 +146,7 @@ export function CumpleanosDashboardBanner() {
           {restantes > 0 && <div style={{ fontSize: '0.78rem', color: '#fbcfe8' }}>+{restantes} pendientes mas.</div>}
         </div>
         <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#fbcfe8' }}>
-          Ver detalle en <Link to="/app/alertas" style={{ color: '#f9a8d4', fontWeight: 800 }}>Alertas</Link>.
+          Ver detalle en <Link to="/app/alertas" style={{ color: '#f9a8d4', fontWeight: 800 }}>Alertas</Link> · tarjeta, texto y envio automatico en <Link to="/app/cumpleanos-felicitaciones" style={{ color: '#f9a8d4', fontWeight: 800 }}>Felicitaciones</Link>.
         </div>
       </div>
       <button

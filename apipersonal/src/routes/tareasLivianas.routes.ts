@@ -138,6 +138,75 @@ export function buildTareasLivianasRouter(sequelize: Sequelize) {
     }
   });
 
+  // ── GET /mi-sector ────────────────────────────────────────────────────────
+  // Portal del jefe: SOLO las tareas de los agentes con pase abierto en el servicio del
+  // usuario logueado (usuarios.servicio_id). El filtro se hace acá, no en el navegador,
+  // así un jefe no puede pedir las de otro servicio. Admin ve todas (o ?servicio_id=).
+  // ?vigentes=1 → solo las que siguen corriendo hoy (sin hasta o hasta >= hoy).
+  router.get('/mi-sector', requirePermission('api:access'), async (req: Request, res: Response) => {
+    const auth = (req as any).auth ?? {};
+    const perms: string[] = auth.permissions ?? [];
+    const esAdmin = perms.includes('crud:*:*');
+    if (!esAdmin && !perms.includes('app:jefe_servicio:access')) {
+      return res.status(403).json({ ok: false, error: 'Sin permiso' });
+    }
+    try {
+      let servicioId: number | null = null;
+      if (esAdmin && req.query.servicio_id) servicioId = Number(req.query.servicio_id) || null;
+      if (!esAdmin) {
+        if (auth.principalType !== 'user' || !auth.principalId) {
+          return res.status(403).json({ ok: false, error: 'Sin usuario' });
+        }
+        const [usr] = await sequelize.query<any>(
+          `SELECT servicio_id FROM usuarios WHERE id = ? AND deleted_at IS NULL`,
+          { type: QueryTypes.SELECT, replacements: [auth.principalId] },
+        );
+        servicioId = usr?.servicio_id != null ? Number(usr.servicio_id) : null;
+        if (servicioId == null) {
+          return res.status(403).json({ ok: false, error: 'Tu usuario no tiene un servicio asignado' });
+        }
+      }
+
+      const conds: string[] = ['t.activo = 1'];
+      const vals: any[] = [];
+      if (String(req.query.vigentes || '') === '1') {
+        conds.push('(t.fecha_hasta IS NULL OR t.fecha_hasta >= CURDATE())');
+      }
+      if (servicioId != null) {
+        // Mismo criterio que el portal: pase abierto con ese servicio_id, o pase histórico
+        // sin servicio_id cuyo nombre coincide con el del servicio.
+        conds.push(`t.agente_dni IN (
+          SELECT CAST(ags.dni AS CHAR)
+            FROM agentes_servicios ags
+            JOIN servicios srv ON srv.id = ?
+           WHERE ags.fecha_hasta IS NULL AND ags.deleted_at IS NULL
+             AND (ags.servicio_id = srv.id
+                  OR (ags.servicio_id IS NULL AND TRIM(ags.nombre) = TRIM(srv.nombre))))`);
+        vals.push(servicioId);
+      }
+      const rows = await sequelize.query<any>(
+        `SELECT t.id, t.agente_dni, t.agente_nombre, t.servicio, t.turno,
+                t.fecha_desde, t.fecha_hasta, t.cantidad_dias, t.junta_medica_doc_id,
+                t.observaciones, t.creado_at,
+                -- dictamen: el vinculado a la tarea o, si no hay, la última junta escaneada del agente
+                COALESCE(t.junta_medica_doc_id, (
+                  SELECT a.id FROM tblarchivos a
+                   WHERE a.dni = t.agente_dni AND a.deleted_at IS NULL
+                     AND (a.tipo LIKE '%junta%' OR a.nombre LIKE '%junta%' OR a.tipo LIKE '%dictamen%')
+                   ORDER BY a.created_at DESC LIMIT 1)) AS junta_doc_id
+           FROM tareas_livianas t
+          WHERE ${conds.join(' AND ')}
+          ORDER BY (t.fecha_hasta IS NULL OR t.fecha_hasta >= CURDATE()) DESC,
+                   t.fecha_desde DESC, t.id DESC`,
+        { type: QueryTypes.SELECT, replacements: vals },
+      );
+      return res.json({ ok: true, servicio_id: servicioId, data: rows });
+    } catch (e: any) {
+      logger.error({ msg: 'tareas_livianas mi-sector', error: e?.message });
+      return res.status(500).json({ ok: false, error: e?.message });
+    }
+  });
+
   // ── GET /informe ──────────────────────────────────────────────────────────
   // Agrupa las tareas vigentes (o filtradas) por servicio y turno.
   router.get('/informe', requirePermission('api:access'), async (req: Request, res: Response) => {

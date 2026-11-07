@@ -16,12 +16,17 @@ Reglas (definidas con el usuario, 05/10/2026):
 Tablas (se crean solas):
   rotacion_carga_siape      un dia a cargar por fila (UNIQUE dni+fecha: dos rotaciones
                             superpuestas del mismo agente no cargan el dia dos veces)
-                            estado PENDIENTE / OK / YA_EXISTIA / ERROR / SOBRA
+                            estado PENDIENTE / OK / YA_EXISTIA / ERROR / SOBRA /
+                                   NO_TRABAJA_DIA / BORRAR / BORRADO / ERROR_BORRAR
   rotacion_siape_generacion por rotacion: de donde salieron los dias y avisos
 
 Edicion/borrado de rotaciones: al regenerar, los dias que ya no corresponden se borran si no
-estaban cargados; si ya estaban OK quedan SOBRA (borrarlos a mano en SiAPe: el robot nunca
-borra en SiAPe). Un SOBRA que vuelve a corresponder vuelve a OK.
+estaban cargados; si ya estaban OK quedan SOBRA (borrarlos a mano en SiAPe). Un SOBRA que
+vuelve a corresponder vuelve a OK.
+
+(02/11/2026) Dias de rotacion que NO estan en el horario del agente (p.ej. rotacion "Lunes a
+Viernes" de quien no trabaja los martes) quedan NO_TRABAJA_DIA y no se cargan; si ya estaban
+OK quedan BORRAR y el robot los borra en SiAPe -> BORRADO (ver fc_fuera_horario.py).
 
 Uso:
   python cargar_rotaciones_siape.py --solo-generar     # arma/actualiza la cola (no toca SiAPe)
@@ -42,6 +47,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN  # conn() + .env + script_run_items
+import fc_fuera_horario as FH  # dias fuera del horario + borrado del FC en SiAPe
 
 SCRIPT_ID = "siape_carga_rotaciones"
 TABLA = "rotacion_carga_siape"
@@ -207,20 +213,37 @@ def generar(cn):
         gen.append((r["id"], origen, ",".join(DIAS[k] for k in sorted(dias)), aviso))
 
     with cn.cursor() as cur:
+        no_trabaja = FH.dias_fuera_de_horario(cur, deseado)
         cur.execute(f"SELECT id, rotacion_id, dni, fecha, estado FROM {TABLA}")
         actuales = {(int(x["dni"]), x["fecha"]): x for x in cur.fetchall()}
 
-        nuevos = [(rid, dni, f) for (dni, f), rid in deseado.items() if (dni, f) not in actuales]
+        nuevos = [(rid, dni, f, "NO_TRABAJA_DIA" if (dni, f) in no_trabaja else "PENDIENTE",
+                   no_trabaja.get((dni, f)))
+                  for (dni, f), rid in deseado.items() if (dni, f) not in actuales]
         if nuevos:
-            cur.executemany(f"INSERT IGNORE INTO {TABLA} (rotacion_id, dni, fecha) VALUES (%s,%s,%s)", nuevos)
+            cur.executemany(f"INSERT IGNORE INTO {TABLA} (rotacion_id, dni, fecha, estado, detalle) "
+                            f"VALUES (%s,%s,%s,%s,%s)", nuevos)
 
         borrar, sobra, vuelve, reasignar = [], [], [], []
+        a_estado = []           # (estado, detalle, id): cambios por el horario del agente
         for k, x in actuales.items():
             if k in deseado:
                 if x["estado"] == "SOBRA":
                     vuelve.append(x["id"])
                 if x["rotacion_id"] != deseado[k] and x["estado"] in ("PENDIENTE", "ERROR"):
                     reasignar.append((deseado[k], x["id"]))
+                motivo = no_trabaja.get(k)
+                if motivo:
+                    if x["estado"] in ("PENDIENTE", "ERROR"):
+                        a_estado.append(("NO_TRABAJA_DIA", motivo, x["id"]))
+                    elif x["estado"] == "OK":
+                        a_estado.append(("BORRAR", f"{motivo}: lo cargo el robot, hay que borrarlo en SiAPe", x["id"]))
+                elif x["estado"] in ("NO_TRABAJA_DIA", "BORRADO"):
+                    a_estado.append(("PENDIENTE", None, x["id"]))        # cambio el horario
+                elif x["estado"] in ("BORRAR", "ERROR_BORRAR"):
+                    a_estado.append(("OK", None, x["id"]))               # todavia no se borro: queda
+            elif x["estado"] in ("BORRAR", "ERROR_BORRAR"):
+                pass            # ya no es dia de rotacion y ademas no trabaja: se borra igual
             elif x["estado"] in ("OK", "YA_EXISTIA", "SOBRA"):
                 if x["estado"] == "OK":
                     sobra.append(x["id"])
@@ -237,13 +260,17 @@ def generar(cn):
             cur.executemany(f"UPDATE {TABLA} SET estado='OK', detalle=NULL WHERE id = %s", [(i,) for i in vuelve])
         if reasignar:
             cur.executemany(f"UPDATE {TABLA} SET rotacion_id=%s WHERE id = %s", reasignar)
+        if a_estado:
+            # intentos=0: un BORRAR / PENDIENTE nuevo arranca con sus reintentos completos
+            cur.executemany(f"UPDATE {TABLA} SET estado=%s, detalle=%s, intentos=0 WHERE id = %s", a_estado)
 
         cur.execute(f"DELETE FROM {TABLA_GEN}")
         if gen:
             cur.executemany(f"INSERT INTO {TABLA_GEN} (rotacion_id, origen_dias, dias_semana, aviso) VALUES (%s,%s,%s,%s)", gen)
     cn.commit()
     return {"rotaciones": len(rots), "dias": len(deseado), "nuevos": len(nuevos), "borrados": len(borrar),
-            "sobra": len(sobra), "sin_dias": sum(1 for g in gen if g[1] == "NINGUNO")}
+            "sobra": len(sobra), "sin_dias": sum(1 for g in gen if g[1] == "NINGUNO"),
+            "no_trabaja": len(no_trabaja), "a_borrar": sum(1 for e, _d, _i in a_estado if e == "BORRAR")}
 
 
 def traer_cola(cn, rotacion=None, limit_agentes=None):
@@ -271,6 +298,24 @@ def traer_cola(cn, rotacion=None, limit_agentes=None):
     return por_agente
 
 
+def traer_borrar(cn, rotacion=None):
+    """Dias que el robot cargo y no corresponden (BORRAR), agrupados por agente."""
+    sql = f"""
+        SELECT c.id, c.dni, c.fecha, c.intentos, p.cuil,
+               TRIM(CONCAT(COALESCE(p.apellido,''), ' ', COALESCE(p.nombre,''))) AS nombre
+          FROM {TABLA} c
+          LEFT JOIN personal p ON p.dni = c.dni
+         WHERE c.estado = 'BORRAR' AND c.intentos < %s"""
+    params = [FH.MAX_INTENTOS_BORRAR]
+    if rotacion:
+        sql += " AND c.rotacion_id = %s"
+        params.append(rotacion)
+    sql += " ORDER BY c.dni, c.fecha"
+    with cn.cursor() as cur:
+        cur.execute(sql, params)
+        return FH.agrupar_por_agente(cur.fetchall())
+
+
 TOCADAS = set()      # filas que esta corrida ya marco (para no pisarlas al anotar un corte)
 
 
@@ -283,7 +328,7 @@ def anotar(cn, ids, detalle):
     with cn.cursor() as cur:
         cur.execute(
             f"UPDATE {TABLA} SET detalle=%s WHERE id IN ({','.join(['%s'] * len(ids))}) "
-            f"AND estado IN ('PENDIENTE','ERROR')",
+            f"AND estado IN ('PENDIENTE','ERROR','BORRAR')",
             [str(detalle)[:500], *ids])
     cn.commit()
 
@@ -307,18 +352,21 @@ def main():
     ap.add_argument("--rotacion", type=int, help="solo los dias de esta rotacion (id)")
     ap.add_argument("--limit", type=int, help="procesar solo los primeros N agentes")
     ap.add_argument("--max-dias", type=int, help="cargar como mucho N dias por agente (prueba)")
+    ap.add_argument("--sin-borrar", action="store_true", help="no borrar en SiAPe los dias BORRAR")
+    ap.add_argument("--solo-borrar", action="store_true", help="solo borrar los dias BORRAR (no cargar)")
     args = ap.parse_args()
 
     cn = MN.conn()
     res = generar(cn)
     print(f"Cola generada: {res['rotaciones']} rotaciones, {res['dias']} dias de rotacion "
           f"({res['nuevos']} nuevos, {res['borrados']} quitados, {res['sobra']} sobran en SiAPe, "
-          f"{res['sin_dias']} rotaciones sin dias)")
+          f"{res['sin_dias']} rotaciones sin dias, {res['no_trabaja']} fuera de horario, "
+          f"{res['a_borrar']} nuevos a borrar)")
     if args.solo_generar:
         cn.close()
         return 0
 
-    cola = traer_cola(cn, rotacion=args.rotacion, limit_agentes=args.limit)
+    cola = OrderedDict() if args.solo_borrar else traer_cola(cn, rotacion=args.rotacion, limit_agentes=args.limit)
     total = sum(len(v) for v in cola.values())
     print(f"{len(cola)} agente(s), {total} dia(s) vencidos a cargar como {NOVEDAD}")
     for dni, filas in cola.items():
@@ -326,7 +374,12 @@ def main():
         print(f"  {dni:<10} {f0['nombre'] or '?':<38} CUIL {f0['cuil'] or '?':<15} "
               f"{len(filas)}d: " + ", ".join(f"{x['fecha']:%d/%m}" for x in filas[:12])
               + (" ..." if len(filas) > 12 else ""))
-    if args.dry_run or not cola:
+    a_borrar = OrderedDict() if args.sin_borrar else traer_borrar(cn, rotacion=args.rotacion)
+    print(f"{len(a_borrar)} agente(s), {sum(len(v) for v in a_borrar.values())} dia(s) a BORRAR en SiAPe "
+          f"(fuera de su horario)")
+    for dni, filas in a_borrar.items():
+        print(f"  {dni:<10} {filas[0]['nombre'] or '?':<38} " + ", ".join(f"{x['fecha']:%d/%m}" for x in filas))
+    if args.dry_run or not (cola or a_borrar):
         cn.close()
         return 0
 
@@ -455,10 +508,23 @@ def main():
                 corte = f"Despues del error con {dni} no pude volver a entrar a SiAPe: {err_s}"
                 break
 
+    # ── borrar en SiAPe lo que el robot cargo y no corresponde (fuera del horario) ──
+    tot["borrados"] = tot["borrar_err"] = 0
+    if a_borrar and not corte:
+        rb = FH.procesar_borrados(
+            F, a_borrar, lambda i, e, d: marcar(cn, i, e, d),
+            registrar_item=lambda dni, nombre, fs: MN.registrar_item(
+                SCRIPT_ID, dni, nombre, "BORRAR FC", f"{fs[0]['fecha']:%d/%m/%Y}",
+                f"{fs[-1]['fecha']:%d/%m/%Y}", "ok", "borrado fuera de horario"))
+        tot["borrados"], tot["borrar_err"] = rb["borrados"], rb["errores"]
+        agentes_error += rb["agentes_error"]
+        corte = rb["corte"]
+    hubo_error = hubo_error or tot["borrar_err"] > 0
+
     sin_procesar = 0
     if corte:
         hubo_error = True
-        ids = [x["id"] for fs in cola.values() for x in fs if x["id"] not in TOCADAS]
+        ids = [x["id"] for fs in [*cola.values(), *a_borrar.values()] for x in fs if x["id"] not in TOCADAS]
         sin_procesar = len(ids)
         anotar(cn, ids, f"No se proceso: {corte}")
         F.log(f"CORTE: {corte} ({sin_procesar} dia/s quedan pendientes con el motivo anotado)")
@@ -467,6 +533,8 @@ def main():
     F.log("Listo.")
     F.log(f"RESUMEN: {tot['ok']} cargado(s), {tot['ya']} ya existian, {tot['err']} con error"
           + (f", {sin_procesar} sin procesar" if sin_procesar else "")
+          + (f", {tot['borrados']} borrado(s) fuera de horario" if tot["borrados"] else "")
+          + (f", {tot['borrar_err']} sin poder borrar" if tot["borrar_err"] else "")
           + (f" | agentes con error: {', '.join(dict.fromkeys(agentes_error))[:250]}" if agentes_error else "")
           + (f" | {corte[:200]}" if corte else ""))
     return 1 if hubo_error else 0

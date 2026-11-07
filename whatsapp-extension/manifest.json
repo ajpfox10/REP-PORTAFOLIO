@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Personal - Asistente (WhatsApp y CUIL ANSES)",
-  "version": "1.5.0",
-  "description": "Desde la app de Personal: avisos por WhatsApp Web y descarga de la constancia de CUIL de ANSES.",
+  "version": "1.7.0",
+  "description": "Desde la app de Personal: avisos por WhatsApp Web, constancia de CUIL de ANSES y certificado RDAM.",
   "permissions": [
     "tabs",
     "scripting",
@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://web.whatsapp.com/*",
-    "https://servicioswww.anses.gob.ar/*"
+    "https://servicioswww.anses.gob.ar/*",
+    "https://rdam.mjus.gba.gob.ar/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -43,6 +44,15 @@
       ],
       "js": [
         "anses.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://rdam.mjus.gba.gob.ar/*"
+      ],
+      "js": [
+        "rdam.js"
       ],
       "run_at": "document_idle"
     }

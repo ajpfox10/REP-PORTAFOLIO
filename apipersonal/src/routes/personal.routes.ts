@@ -981,6 +981,117 @@ export function buildPersonalRouter(sequelize: Sequelize) {
     }
   );
 
+  // ── GET /personal/:dni/novedades-no-titular ────────────────────────────────
+  // Para becarios (ley 6..13) y transitorios (planta INTERINO/TEMPORARIO/BECA):
+  // lo que cargó Salud Laboral y lo que cargó el jefe en su portal, último año.
+  router.get(
+    '/:dni/novedades-no-titular',
+    requireCrudFor('personal', 'read'),
+    async (req: Request, res: Response) => {
+      const dni = parseInt(req.params.dni, 10);
+      if (!dni || isNaN(dni)) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      try {
+        const tramos = await sequelize.query<any>(`
+          SELECT a.ley_id, a.planta_id, l.nombre AS ley_nombre, p.nombre AS planta_nombre
+          FROM agentes a
+          LEFT JOIN ley l ON l.id = a.ley_id
+          LEFT JOIN plantas p ON p.id = a.planta_id
+          WHERE a.dni = :dni AND a.deleted_at IS NULL AND a.estado_empleo = 'ACTIVO'
+        `, { replacements: { dni }, type: QueryTypes.SELECT });
+        let tipo: 'BECARIO' | 'TRANSITORIO' | null = null;
+        if (tramos.some(t => Number(t.ley_id) >= 6 && Number(t.ley_id) <= 13)) tipo = 'BECARIO';
+        else if (tramos.some(t => [3, 4, 5].includes(Number(t.planta_id)))) tipo = 'TRANSITORIO';
+        if (!tipo) return res.json({ ok: true, data: { aplica: false, tipo: null, salud_laboral: [], jefe: [] } });
+
+        const r = { dni, dniStr: String(dni) };
+        const q = (sql: string) => sequelize.query<any>(sql, { replacements: r, type: QueryTypes.SELECT });
+        const desde = 'DATE_SUB(CURDATE(), INTERVAL 1 YEAR)';
+
+        const [recs, exams, tareas, art26, practicas, papcolpo, examen, prexamen, permiso, novedad, francos, colaSiape, colaIntra] = await Promise.all([
+          q(`SELECT id, COALESCE(fecha_desde, fecha) AS desde, fecha_hasta AS hasta, cantidad_dias AS dias,
+                    tipo, resultado, observaciones
+             FROM reconocimientos_medicos
+             WHERE dni = :dniStr AND deleted_at IS NULL
+               AND COALESCE(fecha_hasta, fecha_desde, fecha) >= ${desde}`),
+          q(`SELECT id, fecha_examen AS desde, anio, resultado, observaciones
+             FROM examen_anual
+             WHERE dni = :dni AND deleted_at IS NULL AND fecha_examen >= ${desde}`),
+          q(`SELECT id, fecha_desde AS desde, fecha_hasta AS hasta, cantidad_dias AS dias,
+                    expediente, servicio, turno, observaciones, activo
+             FROM tareas_livianas
+             WHERE agente_dni = :dniStr AND eliminado_at IS NULL
+               AND COALESCE(fecha_hasta, fecha_desde) >= ${desde}`),
+          q(`SELECT id, fecha AS desde, dias, motivo, estado, jefe_nombre, observaciones
+             FROM articulo_26 WHERE dni = :dni AND deleted_at IS NULL AND fecha >= ${desde}`),
+          q(`SELECT id, fecha_desde AS desde, dias, motivo, estado, jefe_nombre, observaciones
+             FROM practicas_profesionales WHERE dni = :dni AND deleted_at IS NULL AND fecha_desde >= ${desde}`),
+          q(`SELECT id, fecha AS desde, tipo, resultado, jefe_nombre, observaciones
+             FROM papcolpo WHERE dni = :dni AND deleted_at IS NULL AND fecha >= ${desde}`),
+          q(`SELECT id, fecha AS desde, tipo, resultado, jefe_nombre, observaciones
+             FROM examen WHERE dni = :dni AND deleted_at IS NULL AND fecha >= ${desde}`),
+          q(`SELECT id, fecha AS desde, tipo, resultado, jefe_nombre, observaciones
+             FROM prexamen WHERE dni = :dni AND deleted_at IS NULL AND fecha >= ${desde}`),
+          q(`SELECT id, fecha AS desde, hora_desde, hora_hasta, motivo, jefe_nombre, observaciones
+             FROM permiso_salida WHERE dni = :dni AND deleted_at IS NULL AND fecha >= ${desde}`),
+          q(`SELECT id, fecha AS desde, fecha_hasta AS hasta, tipo, resultado, jefe_nombre, observaciones
+             FROM novedad_jefe WHERE dni = :dni AND deleted_at IS NULL AND COALESCE(fecha_hasta, fecha) >= ${desde}`),
+          q(`SELECT id, fecha_franco AS desde, fecha_trabajo, motivo, estado, jefe_nombre, observaciones
+             FROM francos_compensatorios WHERE dni = :dni AND deleted_at IS NULL AND fecha_franco >= ${desde}`),
+          q(`SELECT origen, origen_id, estado FROM jefe_carga_siape WHERE dni = :dni ORDER BY id`),
+          q(`SELECT origen, origen_id, estado FROM jefe_carga_intranet WHERE dni = :dni ORDER BY id`),
+        ]);
+
+        // Estado de carga por (origen, id). Si hay varias filas (por día), se resume.
+        const resumir = (filas: any[]) => {
+          const m = new Map<string, string[]>();
+          for (const f of filas) {
+            const k = `${f.origen}:${f.origen_id}`;
+            if (!m.has(k)) m.set(k, []);
+            m.get(k)!.push(String(f.estado || ''));
+          }
+          const out = new Map<string, string>();
+          for (const [k, est] of m) {
+            const u = [...new Set(est)];
+            out.set(k, u.length === 1 ? u[0] : u.includes('ERROR') ? 'ERROR' : u.includes('PENDIENTE') ? 'PENDIENTE' : u.join('/'));
+          }
+          return out;
+        };
+        const siapeM = resumir(colaSiape);
+        const intraM = resumir(colaIntra);
+
+        const conTipo = (rows: any[], origen: string, etiqueta: string) =>
+          rows.map(x => ({
+            ...x, origen, etiqueta,
+            carga_siape: siapeM.get(`${origen}:${x.id}`) ?? null,
+            carga_ministerio: intraM.get(`${origen}:${x.id}`) ?? null,
+          }));
+        const ts = (v: any) => (v ? new Date(v).getTime() || 0 : 0);
+        const porFecha = (a: any, b: any) => ts(b.desde) - ts(a.desde);
+
+        const salud_laboral = [
+          ...recs.map((x: any) => ({ ...x, origen: 'reconocimientos_medicos', etiqueta: 'Reconocimiento médico' })),
+          ...exams.map((x: any) => ({ ...x, origen: 'examen_anual', etiqueta: 'Examen anual' })),
+          ...tareas.map((x: any) => ({ ...x, origen: 'tareas_livianas', etiqueta: 'Tareas livianas' })),
+        ].sort(porFecha);
+
+        const jefe = [
+          ...conTipo(art26, 'articulo_26', 'Art. 26'),
+          ...conTipo(practicas, 'practicas_profesionales', 'Prácticas'),
+          ...conTipo(papcolpo, 'papcolpo', 'Pap / Colpo'),
+          ...conTipo(examen, 'examen', 'Examen'),
+          ...conTipo(prexamen, 'prexamen', 'Pre-examen'),
+          ...conTipo(permiso, 'permiso_salida', 'Permiso de salida'),
+          ...conTipo(novedad, 'novedad_jefe', 'Novedad'),
+          ...conTipo(francos, 'francos_compensatorios', 'Franco compensatorio'),
+        ].sort(porFecha);
+
+        return res.json({ ok: true, data: { aplica: true, tipo, salud_laboral, jefe } });
+      } catch (err: any) {
+        return res.status(500).json({ ok: false, error: err?.message || 'Error' });
+      }
+    }
+  );
+
   // ── Sub-router historial ──────────────────────────────────────────────────
   router.use('/', buildPersonalHistorialRouter(sequelize));
 

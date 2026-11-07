@@ -6,6 +6,7 @@ import { TramitesTab } from './TramitesTab';
 import { OrdenDocsTab } from './OrdenDocsTab';
 import { CombinarPdfTab } from './CombinarPdfTab';
 import { FaltantesTab } from './FaltantesTab';
+import { BajarAntecedentesMail } from './BajarAntecedentesMail';
 import './styles/TramitesDocumentalesPage.css';
 
 // Pestana "Tramites" reescrita de raiz (2026-08): flujo de tandas de interinos 10430
@@ -17,7 +18,7 @@ export function TramitesDocumentalesPage() {
   const [pageTab, setPageTab] = useState<'tramites' | 'aptos' | 'aptos-tanda' | 'orden' | 'combinar' | 'faltantes'>('tramites');
 
   return (
-    <Layout title="Trámites documentales" showBack>
+    <Layout title="Trámites documentales" showBack fluid>
       {/* Pestañas de la página */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         {([['tramites', '📄 Trámites'], ['aptos', '🩺 Aptos'], ['aptos-tanda', '⏳ Aptos × tanda'], ['orden', '📋 Orden de documentos'], ['combinar', '📎 Combinación de PDF'], ['faltantes', '🔴 Documentación incompleta']] as const).map(([key, label]) => (
@@ -32,6 +33,7 @@ export function TramitesDocumentalesPage() {
             {label}
           </button>
         ))}
+        <BajarAntecedentesMail />
       </div>
 
       {pageTab === 'aptos' ? <AptosTab />

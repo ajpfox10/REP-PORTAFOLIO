@@ -5,6 +5,7 @@ import { SchemaSnapshot } from "../db/schema/types";
 import { env } from "../config/env";
 import { requireCrud, requireMetaRead } from "../middlewares/rbacCrud";
 import { saludLaboralTimeGuard } from "../middlewares/saludLaboralGuard";
+import { validarMesAnteriorSaludLaboral } from "./saludLaboralHabilitaciones.routes";
 import { cacheMiddleware, cacheInvalidateTags } from "../infra/cache";
 import { exportLimiter } from "../middlewares/rateLimiters";
 import { emitPedidoCreated, emitPedidoUpdated, emitPedidoDeleted } from '../socket/handlers/pedidos';
@@ -155,6 +156,45 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     }
 
     return null;
+  };
+
+  // Portal del jefe (04/11/2026, pedido del usuario): no se puede cargar ni mover una novedad a una
+  // fecha de MAS DE 3 DIAS ATRAS (el Art. 26 de un agente se cargo 19 dias tarde y SIAPE ya tenia el
+  // ausente). Solo los administradores (crud:*:*) pueden cargar fechas mas viejas.
+  const FECHA_JEFE: Record<string, string> = {
+    articulo_26: 'fecha', francos_compensatorios: 'fecha_franco', practicas_profesionales: 'fecha_desde',
+    examen: 'fecha', prexamen: 'fecha', papcolpo: 'fecha', permiso_salida: 'fecha', novedad_jefe: 'fecha',
+  };
+  const DIAS_ATRAS_JEFE = 3;
+  const validateFechaJefe = (req: Request, table: string, data: any, before?: any): string | null => {
+    const campo = FECHA_JEFE[table];
+    if (!campo) return null;
+    const perms: string[] = (req as any).auth?.permissions || [];
+    if (perms.includes('crud:*:*')) return null;
+    const nueva = String(data?.[campo] ?? '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nueva)) return null;          // sin fecha: lo valida la tabla
+    const vieja = before ? String(before[campo] ?? '').slice(0, 10) : '';
+    if (before && vieja === nueva) return null;                    // edicion que no toca la fecha
+    const lim = new Date(); lim.setHours(0, 0, 0, 0); lim.setDate(lim.getDate() - DIAS_ATRAS_JEFE);
+    const limite = `${lim.getFullYear()}-${String(lim.getMonth() + 1).padStart(2, '0')}-${String(lim.getDate()).padStart(2, '0')}`;
+    if (nueva < limite) {
+      const [a, m, d] = limite.split('-');
+      return `Solo se puede cargar hasta ${DIAS_ATRAS_JEFE} días para atrás (desde el ${d}/${m}/${a}). Para fechas anteriores, pedilo a Personal.`;
+    }
+    return null;
+  };
+
+  // Salud Laboral (07/11/2026): un reconocimiento médico con fecha_desde anterior al 1° del mes
+  // actual solo se acepta si el admin habilitó a ese agente para ese mes
+  // (salud_laboral_habilitaciones). Los admin (crud:*:*) no tienen esta traba.
+  const validateMesAnteriorSL = async (req: Request, table: string, data: any, before?: any): Promise<string | null> => {
+    if (table !== 'reconocimientos_medicos') return null;
+    const perms: string[] = (req as any).auth?.permissions || [];
+    if (perms.includes('crud:*:*')) return null;
+    const nueva = String(data?.fecha_desde || data?.fecha || '').slice(0, 10);
+    const vieja = before ? String(before.fecha_desde || before.fecha || '').slice(0, 10) : '';
+    if (before && vieja === nueva && String(before.dni) === String(data?.dni)) return null;
+    return validarMesAnteriorSaludLaboral(sequelize, String(data?.dni || ''), nueva);
   };
 
   // ── GET /tables ──────────────────────────────────────────────────────────────
@@ -386,7 +426,9 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
     if (!pk) return res.status(400).json({ ok: false, error: "Tabla sin PK (no soportado)" });
 
     try {
-      const validationError = await validatePracticasProfesionales(table, req.body);
+      const validationError = validateFechaJefe(req, table, req.body)
+        || await validatePracticasProfesionales(table, req.body)
+        || await validateMesAnteriorSL(req, table, req.body);
       if (validationError) return res.status(400).json({ ok: false, error: validationError });
 
       const created = await model.create(req.body);
@@ -475,7 +517,9 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
         return res.status(404).json({ ok: false, error: "No encontrado" });
       }
       const beforeJsonForValidation = (before as any).toJSON ? (before as any).toJSON() : before;
-      const validationError = await validatePracticasProfesionales(table, { ...beforeJsonForValidation, ...req.body });
+      const validationError = validateFechaJefe(req, table, { ...beforeJsonForValidation, ...req.body }, beforeJsonForValidation)
+        || await validatePracticasProfesionales(table, { ...beforeJsonForValidation, ...req.body })
+        || await validateMesAnteriorSL(req, table, { ...beforeJsonForValidation, ...req.body }, beforeJsonForValidation);
       if (validationError) {
         await t.rollback();
         return res.status(400).json({ ok: false, error: validationError });
@@ -527,7 +571,9 @@ export const buildCrudRouter = (sequelize: Sequelize, schema: SchemaSnapshot) =>
         return res.status(404).json({ ok: false, error: "No encontrado" });
       }
       const beforeJsonForValidation = (before as any).toJSON ? (before as any).toJSON() : before;
-      const validationError = await validatePracticasProfesionales(table, { ...beforeJsonForValidation, ...req.body });
+      const validationError = validateFechaJefe(req, table, { ...beforeJsonForValidation, ...req.body }, beforeJsonForValidation)
+        || await validatePracticasProfesionales(table, { ...beforeJsonForValidation, ...req.body })
+        || await validateMesAnteriorSL(req, table, { ...beforeJsonForValidation, ...req.body }, beforeJsonForValidation);
       if (validationError) {
         await t.rollback();
         return res.status(400).json({ ok: false, error: validationError });

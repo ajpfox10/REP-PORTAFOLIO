@@ -1,4 +1,4 @@
-"""
+﻿"""
 Carga en SiAPe (Oracle Forms) los francos compensatorios pendientes
 de personalv5.reconocimientos_medicos.
 
@@ -53,6 +53,7 @@ import pymysql
 # detalle por agente para la pagina Robots (script_run_items)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN
+import fc_fuera_horario as FH  # dias fuera del horario + borrado del FC en SiAPe
 
 try:
     import pyautogui
@@ -1268,8 +1269,36 @@ def conn():
     return pymysql.connect(**DB, cursorclass=pymysql.cursors.DictCursor)
 
 
+# 05/11/2026 (pedido del usuario): agente dado de BAJA (todos sus tramos en agentes son BAJA) no se
+# carga en SiAPe "hasta que yo te lo diga". Para habilitar uno: INSERT INTO siape_baja_autorizados (dni).
+SQL_NO_ES_BAJA = """
+           AND (NOT EXISTS (SELECT 1 FROM agentes a WHERE a.dni = r.dni AND a.deleted_at IS NULL)
+                OR EXISTS (SELECT 1 FROM agentes a WHERE a.dni = r.dni AND a.deleted_at IS NULL
+                                                     AND a.estado_empleo <> 'BAJA')
+                OR EXISTS (SELECT 1 FROM siape_baja_autorizados x WHERE x.dni = r.dni))"""
+
+
+def crear_tabla_baja_autorizados(cn):
+    with cn.cursor() as cur:
+        cur.execute("""CREATE TABLE IF NOT EXISTS siape_baja_autorizados (
+                         dni INT NOT NULL PRIMARY KEY,
+                         motivo VARCHAR(255) NULL,
+                         creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                       ) ENGINE=InnoDB""")
+    cn.commit()
+
+
 def traer_pendientes(cn, solo_id=None, limit=None):
-    """Registros con procesado=0, con el CUIL resuelto desde `personal`."""
+    """Registros con procesado=0, con el CUIL resuelto desde `personal`. Los de agentes dados de
+    BAJA quedan afuera (siguen procesado=0) salvo que estén en siape_baja_autorizados."""
+    crear_tabla_baja_autorizados(cn)
+    with cn.cursor() as cur:
+        cur.execute("""SELECT COUNT(*) AS n FROM reconocimientos_medicos r
+                        WHERE r.deleted_at IS NULL AND r.procesado = 0
+                          AND NOT (1=1 """ + SQL_NO_ES_BAJA + ")")
+        n_baja = (cur.fetchone() or {}).get("n") or 0
+    if n_baja:
+        log(f"{n_baja} registro(s) de agentes dados de BAJA quedan sin cargar (siape_baja_autorizados para habilitar)")
     sql = """
         SELECT r.id, r.dni, p.cuil,
                CONCAT(p.apellido, ' ', p.nombre) AS nombre,
@@ -1280,7 +1309,7 @@ def traer_pendientes(cn, solo_id=None, limit=None):
            AND r.procesado = 0
            AND r.fecha_desde IS NOT NULL
            AND r.fecha_hasta IS NOT NULL
-    """
+    """ + SQL_NO_ES_BAJA
     params = []
     if solo_id:
         sql += " AND r.id = %s"
@@ -1311,7 +1340,7 @@ CREATE TABLE IF NOT EXISTS `siape_carga_dias` (
   reconocimiento_id INT NOT NULL,
   dni VARCHAR(20) NOT NULL,
   fecha DATE NOT NULL,
-  estado ENUM('CARGADO','YA_EXISTIA','ERROR') NOT NULL,
+  estado ENUM('CARGADO','YA_EXISTIA','ERROR','NO_TRABAJA_DIA','BORRAR','BORRADO','ERROR_BORRAR') NOT NULL,
   categoria VARCHAR(40) NULL,
   detalle VARCHAR(500) NULL,
   intentos INT NOT NULL DEFAULT 0,
@@ -1325,7 +1354,8 @@ CREATE TABLE IF NOT EXISTS `siape_carga_dias` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 """
 
-ESTADOS_LISTOS = ("CARGADO", "YA_EXISTIA")
+# (02/11) los dias fuera del horario del agente tampoco se cargan (mig 105, ver revisar_fuera_de_horario)
+ESTADOS_LISTOS = ("CARGADO", "YA_EXISTIA", "NO_TRABAJA_DIA", "BORRAR", "BORRADO", "ERROR_BORRAR")
 
 
 # Lo que el robot BORRA de SiAPe para poner el franco (se anota ANTES de borrar).
@@ -1499,6 +1529,97 @@ def dias_corridos(desde, hasta):
         out.append(d)
         d += timedelta(days=1)
     return out
+
+
+def revisar_fuera_de_horario(cn):
+    """
+    (02/11/2026, pedido del usuario) El franco va solo los dias que el agente trabaja.
+    - Dias de reconocimientos pendientes fuera de su horario -> NO_TRABAJA_DIA (no se cargan).
+    - Dias que el robot ya cargo (CARGADO) fuera del horario -> BORRAR (se borran en SiAPe).
+      Si para cargarlo el robot cambio otra novedad (siape_carga_reemplazos CAMBIADO) no se
+      borra solo: ERROR_BORRAR para revisar a mano (quedaria el dia vacio).
+    - Si cambio el horario: NO_TRABAJA_DIA/BORRADO -> se quita la fila y el reconocimiento
+      vuelve a pendiente; BORRAR/ERROR_BORRAR -> CARGADO.
+    Devuelve {no_trabaja, borrar, revisar_a_mano, vuelven}.
+    """
+    with cn.cursor() as cur:
+        cur.execute("""SELECT id, dni, fecha_desde, fecha_hasta FROM reconocimientos_medicos
+                        WHERE deleted_at IS NULL AND procesado = 0
+                          AND fecha_desde IS NOT NULL AND fecha_hasta IS NOT NULL""")
+        pend = cur.fetchall()
+        cur.execute("SELECT id, reconocimiento_id, dni, fecha, estado FROM siape_carga_dias")
+        filas = {(str(x["dni"]), x["fecha"]): x for x in cur.fetchall()}
+        rec_de = {}
+        for r in pend:
+            if str(r["dni"]).isdigit():
+                for d in dias_corridos(r["fecha_desde"], r["fecha_hasta"]):
+                    rec_de.setdefault((int(r["dni"]), d), r["id"])
+        claves = set(rec_de) | {(int(k[0]), k[1]) for k in filas if k[0].isdigit()}
+        fuera = FH.dias_fuera_de_horario(cur, claves)
+        cur.execute("SELECT dni, fecha, tipo_anterior FROM siape_carga_reemplazos WHERE estado = 'CAMBIADO'")
+        reemp = {(str(x["dni"]), x["fecha"]): x["tipo_anterior"] for x in cur.fetchall()}
+
+    nuevos_nt, upd, quitar, reabrir = [], [], [], set()
+    for (dni, f), rid in rec_de.items():
+        x = filas.get((str(dni), f))
+        if (dni, f) in fuera and (x is None or x["estado"] == "ERROR"):
+            nuevos_nt.append((rid, str(dni), f, fuera[(dni, f)]))
+    for k, x in filas.items():
+        motivo = fuera.get((int(k[0]), k[1])) if k[0].isdigit() else None
+        e = x["estado"]
+        if motivo and e == "CARGADO":
+            ant = reemp.get(k)
+            if ant:
+                upd.append(("ERROR_BORRAR", "REEMPLAZO",
+                            f"{motivo}; antes del franco tenia '{ant}': revisar a mano en SiAPe", x["id"]))
+            else:
+                upd.append(("BORRAR", "FUERA_HORARIO",
+                            f"{motivo}: lo cargo el robot, hay que borrarlo en SiAPe", x["id"]))
+        elif not motivo and e in ("NO_TRABAJA_DIA", "BORRADO"):
+            quitar.append(x["id"])
+            reabrir.add(x["reconocimiento_id"])
+        elif not motivo and e in ("BORRAR", "ERROR_BORRAR"):
+            upd.append(("CARGADO", None, None, x["id"]))
+
+    with cn.cursor() as cur:
+        if nuevos_nt:
+            cur.executemany(
+                """INSERT INTO siape_carga_dias (reconocimiento_id, dni, fecha, estado, categoria, detalle, intentos)
+                   VALUES (%s, %s, %s, 'NO_TRABAJA_DIA', 'FUERA_HORARIO', %s, 0)
+                   ON DUPLICATE KEY UPDATE estado = 'NO_TRABAJA_DIA', categoria = 'FUERA_HORARIO',
+                                           detalle = VALUES(detalle), intentos = 0""", nuevos_nt)
+        if upd:
+            cur.executemany("UPDATE siape_carga_dias SET estado=%s, categoria=%s, detalle=%s, intentos=0 WHERE id=%s", upd)
+        if quitar:
+            cur.executemany("DELETE FROM siape_carga_dias WHERE id = %s", [(i,) for i in quitar])
+            cur.executemany("UPDATE reconocimientos_medicos SET procesado = 0 WHERE id = %s", [(i,) for i in reabrir])
+    cn.commit()
+    return {"no_trabaja": len(nuevos_nt), "borrar": sum(1 for u in upd if u[0] == "BORRAR"),
+            "revisar_a_mano": sum(1 for u in upd if u[0] == "ERROR_BORRAR"), "vuelven": len(quitar)}
+
+
+def traer_borrar(cn, solo_dni=None):
+    """Dias que el robot cargo y no corresponden (BORRAR), agrupados por agente."""
+    sql = """SELECT d.id, d.dni, d.fecha, d.intentos, p.cuil,
+                    TRIM(CONCAT(COALESCE(p.apellido,''), ' ', COALESCE(p.nombre,''))) AS nombre
+               FROM siape_carga_dias d
+               LEFT JOIN personal p ON p.dni = d.dni
+              WHERE d.estado = 'BORRAR' AND d.intentos < %s"""
+    params = [FH.MAX_INTENTOS_BORRAR]
+    if solo_dni:
+        sql += " AND d.dni = %s"
+        params.append(str(solo_dni))
+    sql += " ORDER BY d.dni, d.fecha"
+    with cn.cursor() as cur:
+        cur.execute(sql, params)
+        return FH.agrupar_por_agente(cur.fetchall())
+
+
+def marcar_borrado(cn, fila_id, estado, detalle):
+    with cn.cursor() as cur:
+        cur.execute("UPDATE siape_carga_dias SET estado=%s, detalle=%s, intentos=intentos+1 WHERE id=%s",
+                    (estado, (detalle or "")[:500] or None, fila_id))
+    cn.commit()
 
 
 # HELPERS UI
@@ -2191,9 +2312,18 @@ def _opciones_tipo(combo, combo_info):
 
 
 def tipo_seleccionado_root():
-    """Igual que tipo_seleccionado pero buscando el combo desde la raiz."""
-    combo, combo_info = _jab_buscar_ausencias(role="combo box", desc="TIPO DE AUSENCIA",
-                                           timeout=20, banda_y=(180, 240))
+    """Igual que tipo_seleccionado pero buscando el combo desde la raiz.
+    Primero el combo del catalogo (lo arma _fecha_ficha_arriba justo antes): la busqueda
+    por banda se cortaba por tiempo y devolvia vacio (borrado de FC de Farfan, 03/11)."""
+    combo, combo_info = _CAMPOS_CAT.get("TIPO DE AUSENCIA", (None, None))
+    if combo is not None:
+        try:
+            combo_info = combo.get_element_information()   # estado ACTUAL, no el del recorrido
+        except Exception:
+            combo, combo_info = None, None
+    if not combo:
+        combo, combo_info = _jab_buscar_ausencias(role="combo box", desc="TIPO DE AUSENCIA",
+                                               timeout=20, banda_y=(180, 240))
     if not combo:
         return None
     for nombre, elegido in _opciones_tipo(combo, combo_info):
@@ -3041,6 +3171,8 @@ def main():
                     help="con --id: va a ese dia de la grilla y reemplaza lo que haya por el franco")
     ap.add_argument("--hasta", choices=["leer", "todo"], default="todo",
                     help="con --prueba-reemplazo: 'leer' solo muestra lo que hay, sin borrar")
+    ap.add_argument("--sin-borrar", action="store_true", help="no borrar en SiAPe los dias BORRAR")
+    ap.add_argument("--solo-borrar", action="store_true", help="solo borrar los dias BORRAR (no cargar)")
     args = ap.parse_args()
 
     if args.log:
@@ -3051,7 +3183,13 @@ def main():
 
     cn = conn()
     asegurar_tabla_dias(cn)
-    pendientes = traer_pendientes(cn, solo_id=args.id, limit=args.limit)
+    rf = revisar_fuera_de_horario(cn)
+    log(f"Fuera del horario del agente: {rf['no_trabaja']} dia(s) nuevos que no se cargan, "
+        f"{rf['borrar']} cargado(s) a borrar, {rf['revisar_a_mano']} a revisar a mano, "
+        f"{rf['vuelven']} vuelven a pendiente")
+    pendientes = [] if args.solo_borrar else traer_pendientes(cn, solo_id=args.id, limit=args.limit)
+    a_borrar = ({} if args.sin_borrar or args.id or args.prueba_reemplazo or args.solo_abrir
+                else traer_borrar(cn))
 
     desde_arg = None
     if args.from_date:
@@ -3080,8 +3218,17 @@ def main():
         log(f"  #{r['id']:<4} {r['nombre']:<38} CUIL {r['cuil']}  "
             f"{r['fecha_desde']:%d/%m/%Y} a {r['fecha_hasta']:%d/%m/%Y}  ({len(dias)}d, faltan {faltan})")
 
+    log(f"{len(a_borrar)} agente(s), {sum(len(v) for v in a_borrar.values())} dia(s) a BORRAR en SiAPe "
+        f"(fuera de su horario)")
+    for dni, fs in a_borrar.items():
+        log(f"  {dni:<10} {fs[0]['nombre'] or '?':<38} " + ", ".join(f"{x['fecha']:%d/%m}" for x in fs))
+
     if args.dry_run:
         log("--dry-run: no se toco el SiAPe.")
+        return
+    if not pendientes and not a_borrar:
+        log("Nada para cargar ni borrar: no abro SiAPe.")
+        cn.close()
         return
 
     if pyautogui is None:
@@ -3308,6 +3455,16 @@ def main():
 
         log(f"   -> {cargados} cargado(s), {salteados} salteado(s).")
         cerrar_registro_si_completo(cn, r, cargados)
+
+    # ── borrar en SiAPe lo que el robot cargo y no corresponde (fuera del horario) ──
+    if a_borrar and usar_agente_ausencias:
+        rb = FH.procesar_borrados(
+            sys.modules[__name__], a_borrar, lambda i, e, d: marcar_borrado(cn, i, e, d),
+            registrar_item=lambda dni, nombre, fs: MN.registrar_item(
+                "siape_carga_francos", dni, nombre, "BORRAR FC", f"{fs[0]['fecha']:%d/%m/%Y}",
+                f"{fs[-1]['fecha']:%d/%m/%Y}", "ok", "borrado fuera de horario"))
+        log(f"Borrado fuera de horario: {rb['borrados']} borrado(s), {rb['errores']} sin poder borrar"
+            + (f" | {rb['corte']}" if rb["corte"] else ""))
 
     cn.close()
     log("Listo.")

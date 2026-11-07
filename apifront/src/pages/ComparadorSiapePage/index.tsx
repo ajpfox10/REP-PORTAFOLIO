@@ -13,6 +13,7 @@ import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
 import { CargaSiapeContent } from '../CargaSiapePage';
 import { LicenciasMedicasTab } from './LicenciasMedicasTab';
+import { ControlCrucesTab } from './ControlCrucesTab';
 
 interface CompRow {
   legajo: string;
@@ -97,10 +98,12 @@ const BADGE_RES: Record<string, { label: string; color: string }> = {
   'CAMBIO_SIAPE':    { label: '⚠ Cambió en SIAPE', color: '#e879f9' },
   'NO_EN_PLANTEL':   { label: '🚫 No está en ningún plantel', color: '#f97316' },
   'NO_TRABAJA_DIA':  { label: '📅 Franquero: no trabaja ese día', color: '#38bdf8' },
+  'NO_ES_AUSENTE':   { label: '🔎 No es ausente (fichó / otra novedad)', color: '#a78bfa' },
+  'ELIMINADA':       { label: '🗑 Eliminada en la Intranet', color: '#94a3b8' },
 };
 
 // Estados que no son error (no cuentan como error ni entran en "Reintentar")
-const NO_ERROR = ['OK', 'PENDIENTE', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_TRABAJA_DIA'];
+const NO_ERROR = ['OK', 'PENDIENTE', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_TRABAJA_DIA', 'NO_ES_AUSENTE', 'ELIMINADA'];
 
 const BG: Record<string, string> = {
   'NO COINCIDENTE': 'rgba(239,68,68,0.05)',
@@ -143,10 +146,11 @@ const DEP_COLORS: Record<string, string> = {
 const COLS = ['Estado','Dep.','Ley','Legajo','DNI','Nombre','Nov. Ministerio','Desde Min.','Hasta Min.','Nov. SIAP','Desde SIAP','Hasta SIAP','Motivo','Carga'];
 
 // Estado de carga de una fila SOLO_SIAP (sin fila en la tabla de carga = el robot todavía no la tomó)
-function cargaDe(r: CompRow): 'OK' | 'ERROR' | 'SIN_INTENTAR' | 'DESCARTADA' | 'PERIODO_CERRADO' | null {
+function cargaDe(r: CompRow): 'OK' | 'ERROR' | 'SIN_INTENTAR' | 'DESCARTADA' | 'PERIODO_CERRADO' | 'ELIMINADA' | null {
   if (r.estado !== 'SOLO_SIAP' || r.motivo === 'BECARIO_NO_APLICA') return null;
   if (r.carga_estado === 'OK') return 'OK';
   if (r.carga_estado === 'DESCARTADA') return 'DESCARTADA';
+  if (r.carga_estado === 'ELIMINADA') return 'ELIMINADA';   // FC borrado a propósito en la Intranet: no es error
   if (r.carga_estado === 'PERIODO_CERRADO') return 'PERIODO_CERRADO';
   if (r.carga_estado && r.carga_estado !== 'PENDIENTE') return 'ERROR';
   return 'SIN_INTENTAR';
@@ -158,6 +162,7 @@ const BADGE_CARGA: Record<string, { label: string; color: string }> = {
   SIN_INTENTAR: { label: '● Sin intentar', color: '#f59e0b' },
   DESCARTADA:   { label: '— Descartada',   color: '#64748b' },
   PERIODO_CERRADO: { label: '🔒 Período cerrado', color: '#94a3b8' },
+  ELIMINADA:    { label: '🗑 Eliminada',     color: '#94a3b8' },
 };
 
 function Tabla({ rows }: { rows: CompRow[] }) {
@@ -373,7 +378,7 @@ export function ComparadorSiapePage() {
   const [textoRes, setTextoRes]         = useState('');
   const [comparando, setComparando]     = useState(false);
   const [verAnteriores, setVerAnteriores] = useState(false);
-  const [tab, setTab] = useState<'comparacion' | 'resultados' | 'licencias' | 'carga_siape'>('comparacion');
+  const [tab, setTab] = useState<'comparacion' | 'resultados' | 'licencias' | 'cruces' | 'carga_siape'>('comparacion');
   const { hasPerm } = useAuth();
   const esAdmin = hasPerm('crud:*:*');   // Carga SiAPe era solo admin
   const [filtroDetalle, setFiltroDetalle] = useState('todos');
@@ -480,7 +485,7 @@ export function ComparadorSiapePage() {
 
   // Estado de carga de las SOLO_SIAP (las 3 dependencias, desde la base)
   const cargaConteo = useMemo(() => {
-    const c = { OK: 0, ERROR: 0, SIN_INTENTAR: 0, DESCARTADA: 0, PERIODO_CERRADO: 0 };
+    const c = { OK: 0, ERROR: 0, SIN_INTENTAR: 0, DESCARTADA: 0, PERIODO_CERRADO: 0, ELIMINADA: 0 };
     for (const r of completa) { const k = cargaDe(r); if (k) c[k]++; }
     return c;
   }, [completa]);
@@ -505,6 +510,7 @@ export function ComparadorSiapePage() {
       if (c === 'OK') return 'Sí (cargado por el robot)';
       if (c === 'ERROR') return `No — ${r.carga_detalle || 'error de carga'}`;
       if (c === 'DESCARTADA') return 'No — descartada (no se carga)';
+      if (c === 'ELIMINADA') return 'No — eliminada en la Intranet';
       return 'No';
     };
     const enSiape = (r: CompRow) =>
@@ -669,7 +675,7 @@ export function ComparadorSiapePage() {
 
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        {([['comparacion', '📋 Comparación'], ['resultados', `📤 Resultados de carga${resultado.length > 0 ? ` (${resultado.length})` : ''}`], ['licencias', '🩺 Licencias médicas'], ...(esAdmin ? [['carga_siape', '🏥 Carga SiAPe']] as const : [])] as const).map(([key, label]) => (
+        {([['comparacion', '📋 Comparación'], ['resultados', `📤 Resultados de carga${resultado.length > 0 ? ` (${resultado.length})` : ''}`], ['licencias', '🩺 Licencias médicas'], ['cruces', '🔀 Control de cruces'], ...(esAdmin ? [['carga_siape', '🏥 Carga SiAPe']] as const : [])] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: '7px 18px', fontSize: '0.8rem', fontWeight: tab === key ? 700 : 400,
@@ -776,6 +782,7 @@ export function ComparadorSiapePage() {
                 {' · '}<span style={{ color: '#ef4444' }}><strong>{cargaConteo.ERROR}</strong> con error</span>
                 {' · '}<span style={{ color: '#f59e0b' }}><strong>{cargaConteo.SIN_INTENTAR}</strong> sin intentar</span>
                 {cargaConteo.DESCARTADA > 0 && <>{' · '}<span style={{ color: '#64748b' }}><strong>{cargaConteo.DESCARTADA}</strong> descartadas</span></>}
+                {cargaConteo.ELIMINADA > 0 && <>{' · '}<span style={{ color: '#94a3b8' }}><strong>{cargaConteo.ELIMINADA}</strong> eliminadas en la Intranet</span></>}
               </span>
             )}
           </span>
@@ -819,6 +826,7 @@ export function ComparadorSiapePage() {
       {/* ── Tab: Resultados de carga Ministerio ── */}
       {tab === 'carga_siape' && esAdmin && <CargaSiapeContent />}
       {tab === 'licencias' && <LicenciasMedicasTab />}
+      {tab === 'cruces' && <ControlCrucesTab />}
 
       {tab === 'resultados' && <div style={{ marginTop: 0 }}>
 
@@ -930,10 +938,12 @@ export function ComparadorSiapePage() {
                 <option value="ERROR_NAV">Solo Nav error</option>
                 <option value="PENDIENTE">Solo pendientes</option>
                 <option value="DESCARTADA">Solo descartadas</option>
+                <option value="ELIMINADA">🗑 Eliminadas en la Intranet</option>
                 <option value="CAMBIO_SIAPE">⚠ Cambiaron en SIAPE</option>
                 <option value="PERIODO_CERRADO">🔒 Período cerrado</option>
                 <option value="NO_EN_PLANTEL">🚫 No está en ningún plantel</option>
                 <option value="NO_TRABAJA_DIA">📅 Franquero: no trabaja ese día</option>
+                <option value="NO_ES_AUSENTE">🔎 No es ausente (fichó / otra novedad)</option>
               </select>
               <select className="input" value={filtroDetalleActivo} onChange={e => { setFiltroDetalle(e.target.value); setFiltroPisada('todos'); }}
                 style={{ fontSize: '0.78rem', flex: '1 1 200px', minWidth: 160 }}>

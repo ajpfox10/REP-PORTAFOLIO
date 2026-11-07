@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const { query, transaction } = require('./db');
 const config = require('./config');
+const { COMPLETO_OK } = require('./ordenesCompraExcel');
 
 // Stock actual bajado de Farmacia MS (Reportes > Consulta de Stock, Excel por sector).
 // Cada corrida del robot es una "descarga"; la vigente es la ultima que termino bien.
@@ -226,7 +227,8 @@ async function cruceOrdenesCompra() {
   for (const r of renglones) {
     const f = fila(r.codigo);
     const entregada = r.cantidad_entregada == null ? 0 : Number(r.cantidad_entregada);
-    const pendiente = r.completo === 'SI' ? 0 : Math.max(0, Number(r.cantidad) - entregada);
+    // nada por entregar: renglon resuelto (SI, CAMBIO, DESAFECTADO)
+    const pendiente = COMPLETO_OK.includes(r.completo) ? 0 : Math.max(0, Number(r.cantidad) - entregada);
     f.descripcionOc = f.descripcionOc || r.descripcion;
     f.ordenes.push({ oc: r.numero, proveedor: r.proveedor, renglon: r.renglon, vence: r.vence, cantidad: Number(r.cantidad), entregada: r.cantidad_entregada, completo: r.completo, pendiente });
     f.pedido += Number(r.cantidad);

@@ -266,6 +266,77 @@ function rangoCubierto(desde, hasta, filas) {
   return cubreHasta >= fin;
 }
 
+// ── Peso de los ausentes (05/11/2026, regla del usuario; misma regla que ausente_peso.py) ─────
+// Un AUSENTE SIN AVISO vale en el 28 del Ministerio: domingo 3 días, sábado o feriado 2, turno de
+// más de 6 h ese día 2, si no 1. Días seguidos se suman y el 28 va desde el primero.
+// Coincide si el 28 es el rango SIAPE tal cual (lo cargado antes de la regla) o el rango con peso.
+const DIA_MS = 86400000;
+const DIAS_COL = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab'];   // getUTCDay(): 0 = domingo
+const esAusente = (s) => normNovedad(s.novedad) === 'AUSENTE SIN AVISO';
+function horasTurno(e, s) {
+  const m = (v) => { const x = /^(\d{1,2}):(\d{2})/.exec(String(v ?? '').trim()); return x ? +x[1] * 60 + +x[2] : null; };
+  const a = m(e), b = m(s);
+  if (a == null || b == null) return 0;
+  const dur = (((b - a) % 1440) + 1440) % 1440;
+  return (dur || 1440) / 60;
+}
+async function anotarPesoAusentes(cn, siap) {
+  const aus = siap.filter((s) => esAusente(s) && s.dni && s.desde);
+  if (!aus.length) return;
+  const [fer] = await cn.query('SELECT DATE_FORMAT(fecha, "%Y-%m-%d") AS f FROM feriados');
+  const feriados = new Set(fer.map((r) => r.f));
+  const dnis = [...new Set(aus.map((s) => s.dni))];
+  const cols = DIAS_COL.map((d) => `${d}_e, ${d}_s`).join(', ');
+  const [hs] = await cn.query(
+    `SELECT CAST(dni AS CHAR) AS dni, DATE_FORMAT(fecha, '%Y-%m-%d') AS f, ${cols}
+       FROM horarios_historial WHERE dni IN (?) ORDER BY fecha`, [dnis]);
+  const fotos = {};
+  for (const h of hs) (fotos[h.dni] ||= []).push(h);
+  const iso = (t) => new Date(t).toISOString().slice(0, 10);
+  const peso = (dni, t) => {
+    const d = new Date(t);
+    const wd = d.getUTCDay();
+    if (wd === 0) return 3;
+    if (wd === 6 || feriados.has(iso(t))) return 2;
+    const lista = fotos[dni];
+    if (!lista?.length) return 1;
+    let h = lista[0];
+    for (const x of lista) if (x.f <= iso(t)) h = x;
+    return horasTurno(h[`${DIAS_COL[wd]}_e`], h[`${DIAS_COL[wd]}_s`]) > 6 ? 2 : 1;
+  };
+  const finPeso = (dni, ini, fin) => {
+    let total = 0;
+    for (let t = ini; t <= fin; t += DIA_MS) total += peso(dni, t);
+    return ini + (Math.max(total, 1) - 1) * DIA_MS;
+  };
+  // por fila y por bloque de días seguidos del mismo agente
+  const porDni = {};
+  for (const s of aus) (porDni[s.dni] ||= []).push(s);
+  for (const [dni, filas] of Object.entries(porDni)) {
+    filas.sort((a, b) => toUTCMid(a.desde) - toUTCMid(b.desde));
+    let bloque = null;
+    for (const s of filas) {
+      const ini = toUTCMid(s.desde).getTime();
+      const fin = toUTCMid(s.hasta ?? s.desde).getTime();
+      s.pesoHasta = finPeso(dni, ini, fin);
+      if (bloque && ini <= bloque.fin + DIA_MS) { bloque.fin = Math.max(bloque.fin, fin); bloque.filas.push(s); }
+      else { bloque = { ini, fin, filas: [s] }; }
+      s.bloque = bloque;
+    }
+  }
+  for (const s of aus) if (s.bloque && !s.bloque.pesoHasta) s.bloque.pesoHasta = finPeso(s.dni, s.bloque.ini, s.bloque.fin);
+}
+// el 28 [minD, minH] corresponde a la fila (o a su bloque de días seguidos) con el peso
+function coincideConPeso(s, minD, minH) {
+  if (!s.pesoHasta) return null;
+  const a = toUTCMid(minD).getTime(), b = toUTCMid(minH).getTime();
+  if (a === toUTCMid(s.desde).getTime() && b === s.pesoHasta) return [s];
+  // bloque de días seguidos: con el peso, o tal cual (lo que el robot juntó antes de la regla)
+  if (s.bloque && s.bloque.filas.length > 1 && a === s.bloque.ini &&
+      (b === s.bloque.pesoHasta || b === s.bloque.fin)) return s.bloque.filas;
+  return null;
+}
+
 // ── Comparacion (copia fiel) ─────────────────────────────────────────────────
 function comparar(ministerio, siap, mapeo) {
   const mapeoN = normMapeo(mapeo);
@@ -290,6 +361,7 @@ function comparar(ministerio, siap, mapeo) {
     let vioNovedadMapeada = false;
     let vioRangoDist = false;
     let bestCand = null;
+    let vistosPeso = null;
 
     const match = candidatos.find((s) => {
       if (!novedadesConectanRow(equivs, s)) return false;
@@ -299,9 +371,15 @@ function comparar(ministerio, siap, mapeo) {
       if (!minDesde || !minHasta || !sD || !sH) return false;
       const exact = toUTCMid(minDesde).getTime() === toUTCMid(sD).getTime() &&
         toUTCMid(minHasta).getTime() === toUTCMid(sH).getTime();
-      if (!exact) { if (!bestCand) bestCand = s; vioRangoDist = true; }
-      return exact;
+      if (exact) return true;
+      // ausente con peso (domingo x3, sábado/feriado x2, turno > 6 h x2; días seguidos sumados)
+      const viaPeso = !siapVisto.has(s) ? coincideConPeso(s, minDesde, minHasta) : null;
+      if (viaPeso) { vistosPeso = viaPeso; return true; }
+      if (!bestCand) bestCand = s;
+      vioRangoDist = true;
+      return false;
     });
+    if (match && vistosPeso) vistosPeso.forEach((x) => siapVisto.add(x));
 
     const medicasPendientesCubiertas = !match
       ? candidatos.filter((s) => {
@@ -442,6 +520,7 @@ async function main() {
     const siapExcel = parseExcelSiape(sia.f);
     const examenesAuto = examenesAutomaticos(siapExcel);
     const siap = [...siapExcel, ...examenesAuto];
+    await anotarPesoAusentes(cn, siap);
     const resultado = comparar(ministerio, siap, mapeo);
 
     const mN = normMapeo(mapeo);

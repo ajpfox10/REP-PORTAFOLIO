@@ -36,7 +36,7 @@ interface Rotacion {
 
 interface SiapeRot {
   rotacion_id: number; origen_dias: 'ROTACION' | 'HORARIO' | 'NINGUNO'; dias_semana: string; aviso: string | null;
-  total: number; vencidos: number; ok: number; ya_existia: number; error: number; sobra: number; pendiente: number; futuro: number;
+  total: number; vencidos: number; ok: number; ya_existia: number; error: number; sobra: number; borrar?: number; pendiente: number; futuro: number;
 }
 interface SiapeDia {
   id: number; rotacion_id: number; dni: number; fecha: string; estado: string; detalle: string | null;
@@ -646,6 +646,8 @@ export function ResidentesRotacionPage() {
 
 const ESTADO_COLOR: Record<string, string> = {
   OK: '#10b981', YA_EXISTIA: '#6366f1', ERROR: '#ef4444', SOBRA: '#f59e0b', PENDIENTE: 'rgba(255,255,255,0.55)',
+  // días fuera del horario del agente (02/11/2026): no se cargan / el robot los borra en SiAPe
+  NO_TRABAJA_DIA: 'rgba(255,255,255,0.3)', BORRAR: '#fb923c', BORRADO: '#94a3b8', ERROR_BORRAR: '#ef4444',
 };
 
 function SiapeCelda({ s, borrada, onClick }: { s?: SiapeRot; borrada: boolean; onClick: () => void }) {
@@ -666,6 +668,7 @@ function SiapeCelda({ s, borrada, onClick }: { s?: SiapeRot; borrada: boolean; o
       </span>
       {Number(s.error) > 0 && <span style={{ color: '#ef4444' }}> · {s.error} err</span>}
       {Number(s.sobra) > 0 && <span style={{ color: '#f59e0b' }}> · {s.sobra} sobran</span>}
+      {Number(s.borrar) > 0 && <span style={{ color: '#fb923c' }} title="Cargados en días que no trabaja: el robot los borra en SiAPe"> · {s.borrar} a borrar</span>}
       {Number(s.futuro) > 0 && <span className="muted"> · +{s.futuro}</span>}
       {s.origen_dias === 'HORARIO' && <span style={{ color: '#f59e0b' }}> · 🕑</span>}
     </button>

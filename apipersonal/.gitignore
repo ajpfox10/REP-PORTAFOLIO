@@ -44,3 +44,6 @@ server.log
 /scripts/backup/*.gz
 /scripts/backup/*.7z
 /scripts/backup/*.tar.gz
+# Gmail antecedentes (OAuth)
+scripts/gmail_antecedentes_credentials.json
+scripts/gmail_antecedentes_token.json

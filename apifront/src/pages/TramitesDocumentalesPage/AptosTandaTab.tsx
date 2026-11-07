@@ -1,5 +1,5 @@
 // src/pages/TramitesDocumentalesPage/AptosTandaTab.tsx
-// Cruza los agentes de una TANDA con el Excel de APTOS (D:\G\APTOS\APTOS.xlsx) por DNI
+// Cruza los agentes de una TANDA con los exámenes de SIAPE (tabla examenes_medicos_siape) por DNI
 // y calcula el vencimiento del apto = fecha de aprobación + N meses (editable).
 //   🔴 VENCIDO    → vence < hoy
 //   🟡 POR VENCER → vence dentro de M meses (editable) y todavía no vencido
@@ -13,6 +13,7 @@ import { exportToExcel } from '../../utils/export';
 type AptoRow = {
   dni: number; apellido: string; nombre: string; fecha: string;
   resolucion: string; tipo: string; estado_examen: string;
+  fecha_origen?: string;   // 'certificado' = SIAPE sin FECHA, es la de emisión del certificado
 };
 type TandaRow = {
   tanda: string; dni: number; apellidoNombre: string;
@@ -122,6 +123,60 @@ export function AptosTandaTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Botón "Bajar de SIAPE": lanza el robot de la exportación 123 y espera su corrida ──
+  // (ese robot dispara después, solo, el de certificados si hay pendientes)
+  const ROBOT = 'siape_examenes_medicos';
+  const [robot, setRobot] = useState<{ fase: 'idle' | 'corriendo' | 'ok' | 'error'; msg?: string }>({ fase: 'idle' });
+  const pollRef = React.useRef<number | null>(null);
+  useEffect(() => () => { if (pollRef.current) window.clearInterval(pollRef.current); }, []);
+
+  async function ultimaCorrida(): Promise<{ id: number; estado: string; motivo?: string; filas?: number; actualizado_at?: string } | null> {
+    const r = await apiFetch<{ ok: boolean; data: any[] }>(`/script-runs/historial?script=${ROBOT}&limit=1`);
+    return r.data?.[0] ?? null;
+  }
+
+  async function recargarAptos() {
+    const a = await apiFetch<{ ok: boolean; data: { rows: AptoRow[]; existe: boolean } }>('/tramites-documentales/aptos');
+    setAptos(a.data.rows || []);
+    setExiste(a.data.existe);
+  }
+
+  async function bajarDeSiape() {
+    if (robot.fase === 'corriendo') return;
+    try {
+      const previa = await ultimaCorrida();
+      const idPrevio = previa?.id ?? 0;
+      await apiFetch(`/script-runs/ejecutar/${ROBOT}`, { method: 'POST' });
+      setRobot({ fase: 'corriendo' });
+      const inicio = Date.now();
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const u = await ultimaCorrida();
+          if (u && u.id > idPrevio) {
+            if (pollRef.current) window.clearInterval(pollRef.current);
+            pollRef.current = null;
+            if (u.estado === 'ok') {
+              await recargarAptos().catch(() => {});
+              const msg = `OK${u.filas != null ? ` · ${u.filas} exámenes` : ''}`;
+              setRobot({ fase: 'ok', msg });
+              toast.ok('Exámenes bajados de SIAPE', msg);
+            } else {
+              setRobot({ fase: 'error', msg: u.motivo || 'Error' });
+              toast.error('El robot terminó con error', u.motivo || 'Ver página Robots');
+            }
+          } else if (Date.now() - inicio > 30 * 60 * 1000) {
+            if (pollRef.current) window.clearInterval(pollRef.current);
+            pollRef.current = null;
+            setRobot({ fase: 'error', msg: 'Pasaron 30 min sin terminar — ver página Robots' });
+          }
+        } catch { /* reintenta en el próximo tick */ }
+      }, 15000);
+    } catch (e: any) {
+      setRobot({ fase: 'error', msg: e?.message || 'No se pudo lanzar' });
+      toast.error('No se pudo lanzar el robot', e?.message || 'Error');
+    }
+  }
+
   async function elegirTanda(t: string) {
     setSelectedTanda(t); setFiltroEstado('todos'); setLoading(true);
     try {
@@ -144,6 +199,7 @@ export function AptosTandaTab() {
     return tandaRows.map((ag) => {
       const { apto, ultimo } = aptoDeAgente(ag.dni, aptosByDni, contarResuelto);
       const fechaAprob = apto ? apto.d : null;
+      const fechaCert = apto?.a.fecha_origen === 'certificado';
       const vence = fechaAprob ? addMonths(fechaAprob, mesesVig) : null;
       let estado: Estado;
       if (!vence) estado = 'SIN APTO';
@@ -153,7 +209,7 @@ export function AptosTandaTab() {
       // Con apto → su resolución/tipo; sin apto → la última resolución como contexto.
       const resolucion = apto ? apto.a.resolucion : (ultimo ? `última: ${ultimo.a.resolucion}` : '');
       const tipo = apto ? apto.a.tipo : (ultimo?.a.tipo || '');
-      return { ag, resolucion, tipo, fechaAprob, vence, estado, diasRestantes: vence ? dias(vence, hoy) : null };
+      return { ag, resolucion, tipo, fechaAprob, fechaCert, vence, estado, diasRestantes: vence ? dias(vence, hoy) : null };
     });
   }, [tandaRows, aptosByDni, mesesVig, mesesAviso, contarResuelto]);
 
@@ -172,7 +228,8 @@ export function AptosTandaTab() {
     exportToExcel(`aptos_tanda_${selectedTanda || 'sel'}`, filtradas.map((f) => ({
       DNI: f.ag.dni, Agente: f.ag.apellidoNombre,
       Ley: f.ag.leyNombre || f.ag.ocupacionLey || '', Planta: f.ag.plantaNombre || '',
-      'Fecha aprobación': fmt(f.fechaAprob), 'Vence': fmt(f.vence),
+      'Fecha aprobación': fmt(f.fechaAprob), 'Fecha según': f.fechaAprob ? (f.fechaCert ? 'certificado' : 'SIAPE') : '',
+      'Vence': fmt(f.vence),
       'Días restantes': f.diasRestantes ?? '', Estado: f.estado,
       Resolución: f.resolucion, 'Tipo examen': f.tipo,
     })));
@@ -183,7 +240,7 @@ export function AptosTandaTab() {
   if (!existe) {
     return (
       <div style={{ color: '#f87171', fontSize: '0.85rem', padding: 20 }}>
-        No se encontró <b>D:\G\APTOS\APTOS.xlsx</b>. Dejá el Excel ahí y recargá la página.
+        No hay exámenes en la tabla <b>examenes_medicos_siape</b>. Corré el robot "Exportación Exámenes Médicos Salud" en la página Robots y recargá la página.
       </div>
     );
   }
@@ -200,6 +257,18 @@ export function AptosTandaTab() {
           </button>
         ))}
         {!tandas.length && <span style={{ color: '#64748b', fontSize: '0.82rem' }}>No hay tandas.</span>}
+        <div style={{ flex: 1 }} />
+        {robot.fase !== 'idle' && (
+          <span style={{ fontSize: '0.78rem', color: robot.fase === 'ok' ? '#4ade80' : robot.fase === 'error' ? '#fca5a5' : '#facc15' }}>
+            {robot.fase === 'corriendo' ? '⏳ Bajando de SIAPE… (puede esperar turno de otros robots)'
+              : robot.fase === 'ok' ? `✅ ${robot.msg}` : `❌ ${robot.msg}`}
+          </span>
+        )}
+        <button type="button" onClick={() => void bajarDeSiape()} disabled={robot.fase === 'corriendo'}
+          title="Lanza el robot de la exportación 123 (Exámenes Médicos Salud) y actualiza la tabla al terminar"
+          style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.6)', background: robot.fase === 'corriendo' ? 'rgba(124,58,237,0.15)' : 'rgba(124,58,237,0.3)', color: '#e9d5ff', fontSize: '0.78rem', cursor: robot.fase === 'corriendo' ? 'wait' : 'pointer' }}>
+          {robot.fase === 'corriendo' ? '⏳ Corriendo…' : '🤖 Bajar de SIAPE'}
+        </button>
       </div>
 
       {/* Parámetros de meses */}
@@ -271,7 +340,10 @@ export function AptosTandaTab() {
                       <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: '#cbd5e1' }}>
                         {(f.ag.leyNombre || f.ag.ocupacionLey || '—')}{f.ag.plantaNombre ? ` · ${f.ag.plantaNombre}` : ''}
                       </td>
-                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{fmt(f.fechaAprob)}</td>
+                      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}
+                        title={f.fechaCert ? 'SIAPE no tiene la fecha del examen: es la fecha de emisión del certificado' : undefined}>
+                        {fmt(f.fechaAprob)}{f.fechaCert && <span style={{ color: '#facc15', fontSize: '0.7rem', marginLeft: 4 }}>(certificado)</span>}
+                      </td>
                       <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', fontWeight: 600, color: col.fg }}>{fmt(f.vence)}</td>
                       <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: col.fg }}>
                         {f.diasRestantes == null ? '—'

@@ -1,5 +1,7 @@
 """
-Carga del ARTICULO 26 2.0 en la Intranet MS como novedad FC / FRANCO COMPENSATORIO.
+Carga del ARTICULO 26 2.0 en la Intranet MS como 261 - POR CAUSAS PARTICULARES
+(04/11/2026, decision del usuario; antes iba como FC / FRANCO COMPENSATORIO). En SIAPE sigue como FC
+(cargar_jefe_siape.py) y el robot de Novedades 2.0 no sube ese FC como 34 (descartar_fc_del_jefe).
 
 Diferencias con cargar_art26_intranet.py (version vieja, queda SIN USO como programa; de ahi
 se reutilizan login / navegacion al plantel / control "ya cargada" / carga FC):
@@ -33,6 +35,10 @@ import mapeo_novedades as MN
 import post_carga
 import cargar_art26_intranet as V   # funciones de Intranet de la version vieja
 from cargar_novedades_intranet_v2 import es_error_cierre
+import cargar_novedades_intranet_v2 as IV2   # carga con codigo real (cargar_novedad / ya_cargada_igual)
+import intranet_liberar_28 as L28           # borra 28 que pisan el Art. 26 (04/11/2026)
+
+LABEL_ART26 = "261 - POR CAUSAS PARTICULARES"   # opcion exacta del combo de la Intranet
 
 TABLA = "art26_carga_intranet"
 SCRIPT_ID = None   # lo fija main(): intranet_carga_art26_v2_<dep>
@@ -69,13 +75,15 @@ def crear_tabla(cur):
 
 def sincronizar(cur):
     """Vuelca articulo_26 a la tabla de carga. Lo ya OK no se toca; si un Art. 26 pendiente
-    cambio de fecha/dias se actualiza; si lo anularon/rechazaron/borraron queda BAJA."""
+    cambio de fecha se actualiza (siempre UN dia); si lo anularon/rechazaron/borraron queda BAJA."""
     excl = ",".join(f"'{e}'" for e in ESTADOS_EXCLUIDOS)
     cur.execute(f"""
         INSERT INTO {TABLA} (art26_id, dni, nombre, desde, hasta, estado_art26, dependencia_sugerida)
         SELECT a.id, CAST(a.dni AS CHAR),
                TRIM(CONCAT_WS(', ', NULLIF(TRIM(p.apellido), ''), NULLIF(TRIM(p.nombre), ''))),
-               a.fecha, DATE_ADD(a.fecha, INTERVAL GREATEST(COALESCE(a.dias, 1), 1) - 1 DAY),
+               -- El 26 es SIEMPRE de UN dia (05/11/2026, usuario): desde = hasta = fecha.
+               -- Antes se armaba fecha + dias - 1 y se cargaban 261 con rango (mal). a.dias no se usa.
+               a.fecha, a.fecha,
                a.estado,
                COALESCE((SELECT cn.dependencia FROM comparacion_novedades cn
                           WHERE cn.dni = CAST(a.dni AS CHAR) COLLATE utf8mb4_unicode_ci AND cn.dependencia IN ('HOSPITAL', 'UPA 4', 'UPA 18')
@@ -90,7 +98,8 @@ def sincronizar(cur):
           -- Va ANTES que desde/hasta: MySQL asigna en orden y aca necesita las fechas viejas.
           estado = IF({TABLA}.estado = 'BAJA'
                       OR ({TABLA}.estado = 'PERIODO_CERRADO'
-                          AND ({TABLA}.desde <> VALUES(desde) OR {TABLA}.hasta <> VALUES(hasta))),
+                          AND {TABLA}.desde <> VALUES(desde)),  -- hasta = desde siempre; solo
+                          -- se mira desde, asi el recorte del rango viejo a un dia no reabre los cerrados
                       'PENDIENTE', {TABLA}.estado),
           desde = IF({TABLA}.estado = 'OK', {TABLA}.desde, VALUES(desde)),
           hasta = IF({TABLA}.estado = 'OK', {TABLA}.hasta, VALUES(hasta))""")
@@ -150,6 +159,8 @@ def main():
     parser.add_argument("--solo-cola", action="store_true",
                         help="arma y lista los Art. 26 pendientes desde la base, sin abrir la Intranet")
     parser.add_argument("--label", dest="label", default=os.environ.get("INTRANET_FC_LABEL"))
+    parser.add_argument("--mes", help="AAAA-MM: solo las que EMPIEZAN en ese mes")
+    parser.add_argument("--excluir-dni", default="", help="DNIs separados por coma que no se cargan en esta corrida")
     args = parser.parse_args()
 
     dependencia = args.dependencia.upper().replace("UPA4", "UPA 4").replace("UPA18", "UPA 18")
@@ -158,14 +169,21 @@ def main():
         return
     global SCRIPT_ID
     SCRIPT_ID = f"intranet_carga_art26_v2_{MN.sufijo_dep(dependencia)}"
-    script_desc = f"Carga de Art. 26 (FC) 2.0 en Intranet MS ({dependencia})"
+    script_desc = f"Carga de Art. 26 (261) 2.0 en Intranet MS ({dependencia})"
     t0 = time.time()
 
     filas = cargar_filas_db(dependencia, test_mode=args.test)
+    if args.mes:
+        filas = [f for f in filas if f"{f['Desde'][6:10]}-{f['Desde'][3:5]}" == args.mes]
+        print(f"Filtro --mes {args.mes}: solo las que empiezan en ese mes")
+    if args.excluir_dni:
+        fuera = {int(x) for x in args.excluir_dni.split(",") if x.strip().isdigit()}
+        filas = [f for f in filas if f["DNI"] not in fuera]
+        print(f"Excluidos en esta corrida: {sorted(fuera)}")
     print(f"Art. 26 pendientes para {dependencia}: {len(filas)}")
     if args.solo_cola:
         for f in filas:
-            print(f"  {f['DNI']}  {f['Nombre']}  {f['Desde']} -> {f['Hasta']}")
+            print(f"  {f['DNI']}  {f['Nombre']}  {f['Desde']} -> {f['Hasta']}  => {LABEL_ART26}")
         return
     if not filas:
         MN.registrar_run(SCRIPT_ID, script_desc, "ok", motivo="Sin Art. 26 pendientes",
@@ -181,7 +199,7 @@ def main():
 
     def resultado(f, estado, label, detalle, no_pertenece=False):
         anotar(f["art26_id"], dependencia, estado, label, detalle, no_pertenece)
-        registros.append({"Nombre": f["Nombre"], "DNI": f["DNI"], "Novedad": label or "FC",
+        registros.append({"Nombre": f["Nombre"], "DNI": f["DNI"], "Novedad": label or LABEL_ART26,
                           "Desde": f["Desde"], "Hasta": f["Hasta"], "Estado": estado, "Detalle": detalle})
         MN.items_desde_registros(SCRIPT_ID, registros)
 
@@ -221,29 +239,44 @@ def main():
             if not exito_nav:
                 no_pert = "no pertenece" in str(msg_nav or "").lower()
                 for f in pendientes:
-                    resultado(f, "ERROR_NAV", "FC", msg_nav, no_pertenece=no_pert)
+                    resultado(f, "ERROR_NAV", LABEL_ART26, msg_nav, no_pertenece=no_pert)
                     err_count += 1
                 continue
 
             for f in pendientes:
-                if V.novedad_fc_ya_cargada(page, f["Desde"], f["Hasta"]):
-                    print(f"  Ya estaba cargada FC: {f['Desde']} - {f['Hasta']}")
-                    resultado(f, "OK", "FC", "Ya estaba cargada en la Intranet")
+                if IV2.ya_cargada_igual(page, LABEL_ART26, f["Desde"], f["Hasta"]):
+                    print(f"  Ya estaba cargada 261: {f['Desde']} - {f['Hasta']}")
+                    resultado(f, "OK", LABEL_ART26, "Ya estaba cargada en la Intranet")
                     ok_count += 1
                     continue
-                print(f"  Cargando FC: {f['Desde']} -> {f['Hasta']}")
+                print(f"  Cargando 261: {f['Desde']} -> {f['Hasta']}")
                 try:
-                    exito, msg, real_label = V.cargar_novedad_fc(page, f["Desde"], f["Hasta"], args.label)
+                    exito, msg = IV2.cargar_novedad(page, LABEL_ART26, f["Desde"], f["Hasta"])
                     estado = "OK" if exito else ("PERIODO_CERRADO" if es_error_cierre(msg) else "ERROR")
-                    print(f"  {'OK - opcion: ' + str(real_label) if exito else 'ERROR: ' + str(msg)}")
+                    print(f"  {'OK' if exito else 'ERROR: ' + str(msg)}")
                 except Exception as e:
-                    estado, msg, real_label = "EXCEPCION", str(e)[:200], "FC"
+                    estado, msg = "EXCEPCION", str(e)[:200]
                     print(f"  EXCEPCION: {msg}")
+                if estado == "ERROR" and "superpone" in (msg or "").lower():
+                    # 04/11/2026: si lo que pisa son 28 (ausentes), se borran y se reintenta
+                    try:
+                        if V.ir_a_novedades(page, dni, password, dependencia, nombre=nombre)[0]:
+                            borrados, otros = L28.liberar_28(page, dni, f["Desde"], f["Hasta"], "Art. 26")
+                            if otros:
+                                msg = f"{msg} | Se superpone con: {'; '.join(otros)[:250]} (no es 28: no se toca)"
+                            elif borrados and V.ir_a_novedades(page, dni, password, dependencia, nombre=nombre)[0]:
+                                print(f"  {borrados} 28 borrado(s): reintento el 261")
+                                exito, msg2 = IV2.cargar_novedad(page, LABEL_ART26, f["Desde"], f["Hasta"])
+                                estado = "OK" if exito else ("PERIODO_CERRADO" if es_error_cierre(msg2) else "ERROR")
+                                msg = f"Se borro {borrados} 28 (ausente) que pisaba el Art. 26. {msg2 or ''}".strip()
+                                print(f"  {'OK' if exito else 'ERROR: ' + str(msg2)}")
+                    except Exception as e:
+                        msg = f"{msg} | no pude liberar los 28: {e}"[:480]
                 if estado == "OK":
                     ok_count += 1
                 else:
                     err_count += 1
-                resultado(f, estado, real_label or "FC", msg or "")
+                resultado(f, estado, LABEL_ART26, msg or "")
                 try:
                     exito_nav2, _ = V.ir_a_novedades(page, dni, password, dependencia, nombre=nombre)
                     if not exito_nav2:

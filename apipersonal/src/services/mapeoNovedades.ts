@@ -217,3 +217,17 @@ export async function bajaReglaCie(sequelize: Sequelize, id: number): Promise<bo
   );
   return Number(r?.affectedRows ?? 0) > 0;
 }
+
+// 06/11/2026: novedades SIAPE que el robot de carga SABE cargar (regla general activa con
+// usar_para_cargar=1, sin CIE; igual que scripts/mapeo_novedades.cargar_mapa_carga). Lo que no está acá no
+// tiene código en el Ministerio: el botón Cargar de /app/asistencia no lo ofrece y /cargar-filas lo rechaza.
+export function normNovedadCarga(s: any): string {
+  return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+}
+export async function novedadesConCodigoCarga(sequelize: Sequelize): Promise<Set<string>> {
+  const rows = await sequelize.query<{ novedad_siape: string }>(
+    `SELECT DISTINCT novedad_siape FROM mapeo_novedades
+      WHERE activo = 1 AND usar_para_cargar = 1 AND (codigo_cie IS NULL OR codigo_cie = '')`,
+    { type: QueryTypes.SELECT });
+  return new Set(rows.map(r => normNovedadCarga(r.novedad_siape)));
+}

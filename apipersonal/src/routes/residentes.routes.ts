@@ -4,6 +4,7 @@ import { Router, Request, Response } from 'express';
 import { QueryTypes, Sequelize } from 'sequelize';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
+import { controlResidentesSiape } from '../services/residentesControlSiape';
 
 let XLSX: any;
 try { XLSX = require('xlsx'); } catch { XLSX = null; }
@@ -205,6 +206,31 @@ export function buildResidentesRouter(sequelize: Sequelize) {
     } catch (err: any) {
       logger.error({ msg: '[residentes] resumen error', error: err?.message, sql: err?.sql });
       return res.status(500).json({ ok: false, error: err?.message || 'Error cargando resumen de residentes' });
+    }
+  });
+
+  // Control "residentes activos en SIAPE": residentes + ex residentes (<1 año) activos en la base
+  // que tienen que figurar en SIAPE (HORARIOS.xlsx). Ver services/residentesControlSiape.ts.
+  router.get('/control-siape', async (req: Request, res: Response) => {
+    try {
+      const data = await controlResidentesSiape(sequelize, { force: String(req.query.refresh || '') === '1' });
+      return res.json({ ok: true, data });
+    } catch (err: any) {
+      logger.error({ msg: '[residentes] control-siape error', error: err?.message, sql: err?.sql });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error en el control SIAPE' });
+    }
+  });
+
+  // Para el banner del dashboard: solo los que SIAPE dio de baja.
+  router.get('/control-siape/alertas', async (_req: Request, res: Response) => {
+    try {
+      const data = await controlResidentesSiape(sequelize);
+      const rows = data.rows.filter((r) => r.estado === 'BAJA_SIAPE')
+        .map(({ presencia, ...r }) => r);
+      return res.json({ ok: true, data: rows, foto: data.foto });
+    } catch (err: any) {
+      logger.error({ msg: '[residentes] control-siape/alertas error', error: err?.message });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error en el control SIAPE' });
     }
   });
 

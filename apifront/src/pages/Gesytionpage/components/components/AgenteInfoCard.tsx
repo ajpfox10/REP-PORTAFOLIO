@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../../../../api/http';
 import { EspecialidadesPanel } from './EspecialidadesPanel';
 import { FichajesRecienteBlock } from './FichajesRecienteBlock';
+import { NovedadesNoTitularBlock } from './NovedadesNoTitularBlock';
 import { type UltimasLicencias, type UltimaLicencia, fmtFechaLic, fmtHoraArchivo } from './UltimasLicenciasCard';
 
 // ─── Rolodex keyframes (inyectados una sola vez) ──────────────────────────────
@@ -403,7 +404,10 @@ export function AgenteInfoCard({ row, onChanged, licencias }: Props) {
               </div>
               {/* licencias y fichajes lado a lado (uno abajo del otro si no entra) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', columnGap: 20, alignItems: 'start' }}>
-                {licencias && <LicenciasBlock licencias={licencias} />}
+                <div style={{ minWidth: 0 }}>
+                  {licencias && <LicenciasBlock licencias={licencias} />}
+                  {row?.dni && <NovedadesNoTitularBlock dni={String(row.dni).replace(/\D/g, '')} />}
+                </div>
                 {row?.dni && <FichajesRecienteBlock dni={String(row.dni).replace(/\D/g, '')} />}
               </div>
             </>

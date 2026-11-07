@@ -80,6 +80,11 @@ module.exports = {
     url: process.env.FARMACIA_WEB_URL || 'https://sistemas.ms.gba.gov.ar/intranet/intranet.php',
     user: process.env.FARMACIA_WEB_USER || '',
     password: process.env.FARMACIA_WEB_PASSWORD || '',
-    sector: process.env.FARMACIA_WEB_SECTOR || 'FARMACIA UNIFICADA'
+    sector: process.env.FARMACIA_WEB_SECTOR || 'FARMACIA UNIFICADA',
+    // usuario de respaldo: lo usa el robot de pendientes de O.C. (y sirve si el principal queda bloqueado)
+    respaldo: {
+      user: process.env.FARMACIA_WEB_USER_RESPALDO || '',
+      password: process.env.FARMACIA_WEB_PASSWORD_RESPALDO || ''
+    }
   }
 };

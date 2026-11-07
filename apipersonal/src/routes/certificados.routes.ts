@@ -7,6 +7,7 @@ import { Sequelize, QueryTypes } from "sequelize";
 import { generateCvJpg } from "../services/cvImage";
 import { env } from "../config/env";
 import { finResidencia } from "../services/certificadoLaboral";
+import { horasSemanalesAgente } from "../services/cargaHoraria";
 import { armarCertificadoLaboral, renderCertificadoLaboralHtml, renderCertificadoLaboralDocx } from "../services/certificadoLaboralDoc";
 import { datosDiferencial2pct, armarCertificadoDiferencial, renderCertificadoDiferencialHtml, renderCertificadoDiferencialDocx } from "../services/certificadoDiferencialDoc";
 
@@ -195,7 +196,11 @@ export async function fillDocxTemplate(
 
     for (const [k, v] of Object.entries(replacements)) {
       // Reemplazo directo (placeholder en un solo run)
-      if (k === "SERVICIO") {
+      if (k === "SERVICIO" && xml.includes("SERVICIO DE SERVICIO")) {
+        // certBaseVieja: "EN EL SERVICIO DE SERVICIO" → solo el segundo es el placeholder
+        // (antes se reemplazaban los dos y el servicio salía repetido).
+        xml = xml.split("SERVICIO DE SERVICIO").join(`SERVICIO DE ${v ?? ""}`);
+      } else if (k === "SERVICIO") {
         xml = xml.replace(/(^|[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9_])SERVICIO(?![A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9_])/g, (_m, prefix) => `${prefix}${v ?? ""}`);
       } else {
         xml = xml.split(k).join(v ?? "");
@@ -1094,7 +1099,8 @@ p{margin:0 0 10px 0}</style></head><body>${result.value}</body></html>`;
         dependencia: String(p.dependencia ?? ""),
         servicio:    String(p.servicio ?? ""),
         cargo:       String(p.cargo ?? ""),
-        hsSemanales: p.hs_semanales != null ? String(p.hs_semanales) : "",
+        // Horas según la ley (Herramientas → Carga horaria por ley); sin config, régimen del agente.
+        hsSemanales: (await horasSemanalesAgente(sequelize, dni)).horas,
         hasta:       (await finResidencia(sequelize, dni)).finTxt,
       },
     });

@@ -10,6 +10,7 @@ import { useToast } from "../../ui/toast";
 import { apiFetch } from "../../api/http";
 import { LicenciasPdfSection } from "./LicenciasPdfSection";
 import FichajesSection from "./FichajesSection";
+import AusentesMesSection from "./AusentesMesSection";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 interface ArchivoInfo {
@@ -34,7 +35,7 @@ interface CompareRow {
   novedad_siap: string;
   fecha_desde_siap: string;
   fecha_hasta_siap: string;
-  estado: "COINCIDENTE" | "NO COINCIDENTE" | "RANGO_DISTINTO" | "OMITIDO";
+  estado: "COINCIDENTE" | "NO COINCIDENTE" | "RANGO_DISTINTO" | "OMITIDO" | "BAJA";
   upa?: string;
   motivo?: string;
   justificado?: string; // "SI" | "NO" del SIAP
@@ -42,6 +43,57 @@ interface CompareRow {
   detalle_carga?: string;
   novedad_carga?: string;
   archivo_carga?: string;
+  // cola real del robot 2.0 (novedades_carga_intranet)
+  cargada_en_otra_dep?: string;
+  diferencia?: string;
+  sin_codigo_carga?: boolean;     // la novedad no tiene código de carga en el mapeo: el robot no puede cargarla            // texto claro de la diferencia SIAPE vs Ministerio (comparador 06/11)   // ya figura en el Ministerio, en el plantel de otra dependencia (= OK)
+  en_cola?: boolean;
+  carga_id?: number;
+  label_carga?: string | null;
+  carga_intentos?: number;
+  carga_ultimo?: string | null;
+  carga_cargado_en?: string | null;
+}
+
+// Estados de la cola que el robot NO vuelve a intentar solo: para cargarlas hay que confirmar (quedan FORZADA).
+const ESTADOS_CARGA_CONFIRMAR = ["DESCARTADA", "PERIODO_CERRADO", "CAMBIO_SIAPE", "ELIMINADA", "NO_ES_AUSENTE"];
+
+// Resumen de "qué pasó con la carga en la Intranet" para el filtro y el color del badge.
+function cargaGeneral(r: CompareRow): string {
+  const e = String(r.estado_carga || "").toUpperCase();
+  if (r.cargada_en_otra_dep) return "Cargado OK";
+  if (r.sin_codigo_carga && String(r.estado_carga || "").toUpperCase() !== "OK") return "Sin código para cargar";
+  if (r.en_cola === false && !e) return "Falta cargar (el robot no la tomó)";
+  if (!e) return "Sin dato";
+  if (e === "OK") return "Cargado OK";
+  if ((e === "PENDIENTE" || e === "FORZADA") && !r.carga_intentos) return "Falta cargar (nunca se intentó)";
+  if (e === "PENDIENTE" || e === "FORZADA") return "Se vuelve a intentar";
+  if (e === "DESCARTADA") return "No se carga (a propósito)";
+  if (e === "PERIODO_CERRADO") return "Mes cerrado";
+  if (e.startsWith("ERROR")) return "No se pudo cargar";
+  if (e === "CAMBIO_SIAPE") return "Cambió en SIAPE";
+  if (e === "ELIMINADA") return "Borrada de la Intranet";
+  if (e === "NO_EN_PLANTEL") return "No es de ninguna dependencia";
+  if (e === "NO_TRABAJA_DIA") return "Ese día no le tocaba trabajar";
+  if (e === "NO_ES_AUSENTE") return "No es ausente";
+  return e;
+}
+
+function colorCarga(g: string): { bg: string; bd: string; fg: string } {
+  if (g === "Cargado OK") return { bg: "rgba(16,185,129,.15)", bd: "rgba(16,185,129,.35)", fg: "#34d399" };
+  if (g === "No se pudo cargar") return { bg: "rgba(239,68,68,.14)", bd: "rgba(239,68,68,.35)", fg: "#f87171" };
+  if (g.startsWith("Falta cargar")) return { bg: "rgba(245,158,11,.14)", bd: "rgba(245,158,11,.4)", fg: "#fbbf24" };
+  if (g === "Se vuelve a intentar") return { bg: "rgba(59,130,246,.14)", bd: "rgba(59,130,246,.4)", fg: "#93c5fd" };
+  return { bg: "rgba(148,163,184,.12)", bd: "rgba(148,163,184,.35)", fg: "#cbd5e1" };
+}
+
+// Se puede mandar a cargar: tiene novedad y fechas SIAPE y no está ya OK.
+function esCargable(r: CompareRow): boolean {
+  const nov = String(r.novedad_siap || "").trim();
+  if (r.cargada_en_otra_dep) return false;   // ya está en el Ministerio (otra dependencia)
+  if (r.sin_codigo_carga) return false;      // sin código en el mapeo: el robot no puede cargarla
+  return !!nov && nov !== "—" && /^\d{4}-\d{2}-\d{2}$/.test(String(r.fecha_desde_siap || ""))
+    && !!r.upa && String(r.estado_carga || "").toUpperCase() !== "OK";
 }
 
 function norm(s: string) {
@@ -55,16 +107,93 @@ function norm(s: string) {
     .trim();
 }
 
-function detalleCargaGeneral(v?: string) {
-  const t = norm(v ?? "");
-  if (!t) return "Sin detalle";
-  if (t.includes("OPCION NO DISPONIBLE")) return "Opcion no disponible";
-  if (t.includes("NO PERTENECE") || t.includes("PLANTEL")) return "No pertenece al plantel";
-  if (t.includes("SUPERPONE") || t.includes("SUPERPOSICION")) return "Superposicion";
-  if (t.includes("MAXIMO") || t.includes("2 DESCANSOS")) return "Limite anual";
-  if (t.includes("OK") || t.includes("CORRECTAMENTE")) return "Cargado OK";
-  if (t.includes("TIMEOUT") || t.includes("NAV") || t.includes("CONNECTION")) return "Error de navegacion";
-  return "Otros";
+// "Qué pasó en la carga" en castellano: traduce lo que guardó el robot (respuesta de la Intranet + notas
+// internas). El texto original queda en el tooltip.
+function detalleClaro(raw?: string | null): string {
+  let d = String(raw || "")
+    .replace(/[×✕�]/g, " ").replace(/\bClose\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+  if (!d) return "";
+  let x: RegExpMatchArray | null;
+  const sinPunto = (s: string) => s.replace(/[.\s]+$/, "");
+
+  if ((x = d.match(/^Carga pedida desde Asistencia (\S+) (\d{1,2}:\d{2})\.?\s*(?:Antes:\s*(.*))?$/i)))
+    return `Pediste cargarla el ${x[1]} a las ${x[2]}; está esperando al robot.` + (x[3] ? ` La vez anterior: ${detalleClaro(x[3])}` : "");
+  if ((x = d.match(/^Repuesta (\S+): becario se carga con 291/i)))
+    return "Se vuelve a intentar con el código 291 (becario).";
+  if ((x = d.match(/^CONFLICTO con el Ministerio: periodo anterior cerrado y el recorte desde (\S+) dio:\s*(.*)$/i)))
+    return `El mes anterior ya está cerrado en el Ministerio; se probó cargarla desde el ${x[1]} y tampoco se pudo: ${detalleClaro(x[2])}`;
+  if ((x = d.match(/^Cargado en rango (\S+) a (\S+) \((\d+) filas\)\.?\s*(.*)$/i)))
+    return `Se cargó junto con los días seguidos, del ${x[1]} al ${x[2]}.`;
+  if (/Se agreg. correctamente la novedad/i.test(d)) return "Se cargó bien en la Intranet.";
+  if (/^Guardado \(verificado|verificado en el historial/i.test(d)) return "Se cargó (la Intranet no avisó, pero se comprobó en el historial del agente).";
+  if (/^YA ESTABA CARGADA|^Ya figura en el Ministerio/i.test(d)) return "Ya estaba cargada en el Ministerio.";
+  if ((x = d.match(/^OK AJUSTADO: maximo (\d+) dias por mes\. Original (\S+) a (\S+)/i)))
+    return `Se cargó recortada al máximo de ${x[1]} días por mes (en SIAPE era del ${x[2]} al ${x[3]}).`;
+  if (/^OK RECORTADO/i.test(d)) return "Se cargó solo la parte del mes abierto (el mes anterior ya estaba cerrado).";
+  if (/^Partido en dos por cruce de a/i.test(d)) return "Se cargó en dos partes porque cruza de año.";
+  if (/^Cambi. en SIAPE/i.test(d)) return "En SIAPE la cambiaron o la borraron, así que esta ya no se carga.";
+  if ((x = d.match(/^No pertenece al plantel de (.+?):/i)))
+    return `El Ministerio dice que el agente no es de ${x[1]}; se prueba en las otras dependencias.`;
+  if (/^Opci.n no disponible/i.test(d)) return "En la Intranet no aparece esa novedad para este agente (no está habilitada en su plantel).";
+  if ((x = d.match(/superando el m.ximo permitido de (\d+) (d.as|minutos) por (a.o|mes)/i)))
+    return `El Ministerio la rechazó: supera el máximo de ${x[1]} ${/min/i.test(x[2]) ? "minutos" : "días"} por ${/mes/i.test(x[3]) ? "mes" : "año"} (ya tiene cargado lo permitido).`;
+  if ((x = d.match(/ya posee (\d+) descansos anuales en el a.o (\d+)/i)))
+    return `El Ministerio la rechazó: ya tiene ${x[1]} vacaciones anuales cargadas en ${x[2]}.`;
+  if (/Ambas fechas deben ser del mismo a/i.test(d)) return "El Ministerio la rechazó: cruza de año, hay que partirla en dos.";
+  if (/fecha de .ltimo cierre|fecha desde no debe ser menor/i.test(d)) return "El Ministerio la rechazó: ese mes ya está cerrado.";
+  if (/^Mes cerrado en el Ministerio/i.test(d)) return "El Ministerio ya cerró ese mes; no se puede cargar.";
+  if (/no presta servicio en su dependencia/i.test(d)) return "El Ministerio dice que el agente no presta servicio (baja o licencia sin sueldo); no deja cargar novedades.";
+  if ((x = d.match(/^Superposicion no exacta: intentaba (.+?) (\S+) a (\S+); se pisa con (.+?) (\S+) a (\S+)/i)))
+    return `No se cargó: en el Ministerio ya hay ${x[4]} del ${x[5]} al ${x[6]}, que se pisa con estas fechas.`;
+  if (/^Superposicion no exacta/i.test(d)) return "No se cargó: se pisa con otra novedad ya cargada en el Ministerio.";
+  if (/^Descartada: esta novedad no se carga en la Intranet a becarios/i.test(d)) return "No se carga a becarios.";
+  if (/^Descartada: FC no se carga en la Intranet a ley/i.test(d)) return "No se carga: a ley 10471 (planta/guardia) no se le cargan francos.";
+  if (/^Descartada: FC de rotacion/i.test(d)) return "No se carga: es un franco por rotación de residente (va solo a SIAPE).";
+  if (/^Descartada: FC de relleno noche por medio/i.test(d)) return "No se carga: franco de relleno del turno noche por medio.";
+  if ((x = d.match(/^Descartada: lo sube el robot del jefe con su codigo \((.+?)\)/i)))
+    return `No se carga acá: lo carga el robot del jefe con su código propio (${x[1].replace(/_/g, " ")}).`;
+  if (/^Descartada a pedido/i.test(d)) return "No se carga (decisión tuya: los francos de septiembre no van).";
+  if (/^Descartada/i.test(d)) return `No se carga: ${sinPunto(d.replace(/^Descartada:?\s*/i, ""))}.`;
+  if (/^Eliminada en la Intranet/i.test(d)) return "Se borró de la Intranet.";
+  if ((x = d.match(/^E corregida a (.+?) en la Intranet/i))) return `Estaba como "pendiente de justificación" y se corrigió a ${x[1]}.`;
+  if (/^No es ausente/i.test(d)) return `No es un ausente: ${sinPunto(d.replace(/^No es ausente:\s*/i, ""))}.`;
+  if (/^Sin fila v.lida/i.test(d)) return "No se encontró un cargo válido del agente en la Intranet (todos de baja u horas cátedra).";
+  if (/Timeout|Locator|ERR_CONNECTION|Re-login|Page\.goto|Target page/i.test(d))
+    return "Falló el robot en la Intranet (problema técnico, no de la licencia); se vuelve a intentar.";
+  if (/^Examen autom.tico tras pre-examen/i.test(d)) return "Examen agregado solo al día siguiente del pre-examen; se cargó.";
+  return d;
+}
+
+// Motivo del comparador en castellano (el código interno no cambia; filtros y back siguen usando el código)
+function motivoTexto(m?: string): string {
+  const c = String(m || "").trim();
+  if (!c || c === "—") return "Exacta";
+  const fijos: Record<string, string> = {
+    FECHAS_DISTINTAS: "Misma licencia, con fechas distintas",
+    OTRA_LICENCIA: "En esas fechas el Ministerio tiene otra licencia",
+    FALTA_EN_MINISTERIO: "Falta en el Ministerio",
+    MINISTERIO_YA_MATCHADO_EN_OTRA_FILA: "Falta cargar en el Ministerio (el agente tiene otras novedades, esta no)",
+    MAPEO_NO_ENCUENTRA_EQUIVALENTE: "Falta cargar en el Ministerio (no hay ninguna equivalente)",
+    MAPEO_OK_PERO_SIN_MATCH: "Falta cargar en el Ministerio",
+    SIN_NOVEDAD_CARGADA_EN_MINISTERIO: "Falta cargar: el agente no tiene ninguna novedad en el Ministerio",
+    NOVEDAD_DISTINTA: "En el Ministerio hay otra novedad en esas fechas",
+    RANGO_DISTINTO: "Está en el Ministerio con otras fechas",
+    SOLAPA_PERO_NO_IGUAL: "Está en el Ministerio con fechas que se pisan, pero no iguales",
+    NO_ESTA_EN_PLANTEL_MINISTERIO: "No está en el plantel del Ministerio",
+    NO_ESTA_EN_PLANTEL_NI_EN_PERSONAL: "No está en el plantel del Ministerio ni en Personal",
+    DNI_NO_EXISTE_EN_PERSONAL: "El DNI no existe en Personal",
+    "Sin UPA en SIAP": "SIAPE no dice la dependencia",
+  };
+  if (fijos[c]) return fijos[c];
+  let x: RegExpExecArray | null;
+  if ((x = /^AGENTE_DE_BAJA(?: \((.*)\))?$/.exec(c))) return `Agente de baja${x[1] ? ` (${x[1]})` : ""}`;
+  if ((x = /^SIN_NOVEDAD_CARGADA_EN_MINISTERIO_\(PLANTEL_(.+)\)$/.exec(c))) return `Falta cargar: el agente está en el plantel de ${x[1]} y no tiene novedades`;
+  if ((x = /^DNI_CON_NOVEDADES_EN_MINISTERIO_(.+)_\(SIAP_DICE_(.+)\)$/.exec(c))) return `Falta cargar: en el Ministerio figura en ${x[1]}, en SIAPE en ${x[2]}`;
+  if ((x = /^CARGADA_EN_MINISTERIO_(.+)_\(SIAP_DICE_(.+)\)$/.exec(c))) return `Cargada en el Ministerio en ${x[1]} (SIAPE dice ${x[2]})`;
+  if ((x = /^DNI_NO_EXISTE_EN_MINISTERIO_PARA_(.+)$/.exec(c))) return `El agente no figura en el Ministerio de ${x[1]}`;
+  if ((x = /^Sin archivo ministerio para (.+)$/.exec(c))) return `Falta el archivo del Ministerio de ${x[1]}`;
+  return c.replace(/_/g, " ").toLowerCase().replace(/^./, (l) => l.toUpperCase());
 }
 
 function monthBounds(periodo: string) {
@@ -173,10 +302,10 @@ async function exportXLSX(rows: CompareRow[], meta: CompareMeta | null) {
     r.upa ?? "",
     r.justificado ?? "",
     r.estado,
-    r.motivo ?? "",
+    r.diferencia || (r.motivo ? motivoTexto(r.motivo) : ""),
     r.estado_carga ?? "",
     r.novedad_carga ?? "",
-    r.detalle_carga ?? "",
+    detalleClaro(r.detalle_carga),
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
@@ -1307,7 +1436,7 @@ export function AsistenciaPage() {
   const [tab, setTab] = useState<"TODOS" | "PENDIENTES">("TODOS");
 
   // Sección principal de la página
-  const [seccion, setSeccion] = useState<"excel" | "pdf" | "fichajes">("excel");
+  const [seccion, setSeccion] = useState<"excel" | "pdf" | "fichajes" | "ausentes">("excel");
 
   useEffect(() => {
     apiFetch<any>("/asistencia/config")
@@ -1419,6 +1548,48 @@ export function AsistenciaPage() {
       })
       .catch(() => {});
   };
+
+  // ── Bajar archivos: lanza solo los robots de descarga (no cargan nada) y sigue su avance ──
+  const [bajada, setBajada] = useState<{
+    desde: string;
+    robots: { script: string; nombre: string; corrida: { estado: string; motivo: string | null; hora: string } | null }[];
+    terminado: boolean;
+    comparacion?: { estado: "esperando" | "corriendo" | "ok" | "error" | "salteada"; motivo: string | null; hora: string | null } | null;
+  } | null>(null);
+  const [lanzandoBajada, setLanzandoBajada] = useState(false);
+
+  const bajarArchivos = async () => {
+    if (!window.confirm("Se van a lanzar los robots que bajan los archivos (SIAPE y Ministerio) y, cuando terminen, se compara SIAPE vs Ministerio con los archivos nuevos. No cargan nada. ¿Seguimos?")) return;
+    setLanzandoBajada(true);
+    try {
+      const r = await apiFetch<any>("/comparacion-v2/bajar-archivos", { method: "POST" });
+      if (!r?.ok) throw new Error(r?.error || "No se pudieron lanzar");
+      setBajada({ desde: r.desde, robots: [], terminado: false });
+      if (r.fallidos?.length) toast.error("Algunas descargas no arrancaron", r.fallidos.map((f: any) => f.script).join(", "));
+      else toast.ok("Descargas lanzadas", r.msg);
+    } catch (e: any) {
+      toast.error("No se pudieron lanzar las descargas", String(e?.message ?? e));
+    } finally {
+      setLanzandoBajada(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!bajada || bajada.terminado) return;
+    let vivo = true;
+    const consultar = () =>
+      apiFetch<any>(`/comparacion-v2/bajar-archivos/estado?desde=${encodeURIComponent(bajada.desde)}`)
+        .then((r) => {
+          if (!vivo || !r?.ok) return;
+          setBajada((b) => (b ? { ...b, robots: r.robots, terminado: r.terminado, comparacion: r.comparacion } : b));
+          if (r.terminado) reloadArchivos();
+        })
+        .catch(() => {});
+    consultar();
+    const t = setInterval(consultar, 15000);
+    return () => { vivo = false; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bajada?.desde, bajada?.terminado]);
 
   const addCustomSkip = () => {
     const raw = customSkip.trim();
@@ -1551,8 +1722,16 @@ export function AsistenciaPage() {
   const motivoOptions = monthResults.length
     ? Array.from(new Set(monthResults.map((r) => r.motivo || "—"))).sort()
     : [];
-  const detalleCargaCounts = monthResults.reduce<Record<string, number>>((acc, r) => {
-    const k = detalleCargaGeneral(r.detalle_carga);
+  // Cantidades de los desplegables: respetan dependencia y estado elegidos
+  const baseConteo = monthResults.filter((r) =>
+    (filtroDep === "TODAS" || (r.upa || "—") === filtroDep) && (filtroEstado === "TODOS" || r.estado === filtroEstado));
+  const motivoCounts = baseConteo.reduce<Record<string, number>>((acc, r) => {
+    const k = r.motivo || "—";
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+  const detalleCargaCounts = baseConteo.reduce<Record<string, number>>((acc, r) => {
+    const k = cargaGeneral(r);
     acc[k] = (acc[k] || 0) + 1;
     return acc;
   }, {});
@@ -1577,7 +1756,7 @@ export function AsistenciaPage() {
         if (filtroEstado !== "TODOS" && r.estado !== filtroEstado) return false;
         if (filtroDep !== "TODAS" && (r.upa || "—") !== filtroDep) return false;
         if (filtroMotivo !== "TODOS" && (r.motivo || "—") !== filtroMotivo) return false;
-        if (filtroDetalleCarga !== "TODOS" && detalleCargaGeneral(r.detalle_carga) !== filtroDetalleCarga) return false;
+        if (filtroDetalleCarga !== "TODOS" && cargaGeneral(r) !== filtroDetalleCarga) return false;
         if (
           filtroLicencia !== "TODAS" &&
           r.novedad_siap !== filtroLicencia &&
@@ -1613,12 +1792,83 @@ export function AsistenciaPage() {
   // Filas que se muestran según la pestaña activa (sobre el resto de filtros).
   const shown = tab === "PENDIENTES" ? filtered.filter(esPendienteJust) : filtered;
 
+  // ▶ Cargar: pone las filas en la cola del robot 2.0 y lanza el robot de su dependencia.
+  // Las DESCARTADA / mes cerrado / etc. piden confirmación mostrando el motivo (quedan FORZADA).
+  const [cargando, setCargando] = useState(false);
+  const cargarEnIntranet = async (rows: CompareRow[]) => {
+    if (!rows.length) return;
+    const payload = rows.map((r) => ({
+      dni: r.dni, nombre: r.nombre, novedad_siap: r.novedad_siap,
+      desde: r.fecha_desde_siap, hasta: r.fecha_hasta_siap || r.fecha_desde_siap,
+      dependencia: r.upa, justificado: r.justificado,
+    }));
+    if (rows.length > 1 && !window.confirm(`Se van a mandar a cargar en la Intranet ${rows.length} novedad(es). El robot carga SOLO estas, no el resto de la cola. ¿Seguimos?`)) return;
+    setCargando(true);
+    try {
+      // lanzar=false: primero se arma el pedido (y se confirman las descartadas); el robot se lanza UNA vez al final
+      let r = await apiFetch<any>("/comparacion-v2/cargar-filas", { method: "POST", body: JSON.stringify({ filas: payload, lanzar: false }) });
+      const aLanzar = new Map<string, { tipo: string; dependencia: string }>();
+      const sumar = (lst: any[]) => (lst || []).forEach((x) => aLanzar.set(`${x.tipo}|${x.dependencia}`, x));
+      sumar(r.a_lanzar);
+      if (!r?.ok) throw new Error(r?.error || "No se pudo mandar a cargar");
+      let forzadas = 0;
+      const conf: any[] = r.requieren_confirmacion || [];
+      if (conf.length) {
+        const fechaDM = (iso: string) => { const [, m, d] = String(iso).split("-"); return d && m ? `${d}/${m}` : iso; };
+        const novLinda = (n: string) => String(n || "").toLowerCase().replace(/^./, (l) => l.toUpperCase());
+        const lista = conf.slice(0, 8).map((c) =>
+          `• ${c.nombre || c.dni} – ${novLinda(c.novedad_siap)} del ${fechaDM(c.desde)}${c.hasta && c.hasta !== c.desde ? ` al ${fechaDM(c.hasta)}` : ""}: `
+          + (detalleClaro(c.detalle) || cargaGeneral({ estado_carga: c.estado } as CompareRow))).join("\n");
+        const ok = window.confirm(
+          `Estas ${conf.length} novedad(es) no se cargaron por este motivo:\n\n${lista}${conf.length > 8 ? `\n… y ${conf.length - 8} más` : ""}\n\n¿Las cargo igual?`);
+        if (ok) {
+          const f = await apiFetch<any>("/comparacion-v2/cargar-filas", {
+            method: "POST",
+            body: JSON.stringify({ forzar: true, lanzar: false, filas: payload.filter((p) => conf.some((c) => c.dni === p.dni && c.desde === p.desde && c.novedad_siap === p.novedad_siap)) }),
+          });
+          if (!f?.ok) throw new Error(f?.error || "No se pudieron forzar");
+          forzadas = f.forzadas || 0;
+          sumar(f.a_lanzar);
+          r = { ...r, msg: `${r.msg} · ${f.msg}` };
+        }
+      }
+      const lanzados: string[] = [];
+      const fallidos: string[] = [];
+      for (const x of aLanzar.values()) {
+        try {
+          const l = await apiFetch<any>("/comparacion-v2/lanzar", { method: "POST", body: JSON.stringify(x) });
+          if (!l?.ok) throw new Error(l?.error || "no arrancó");
+          lanzados.push(`${x.tipo} ${x.dependencia}`);
+        } catch (e: any) {
+          fallidos.push(`${x.tipo} ${x.dependencia}: ${String(e?.message ?? e)}`);
+        }
+      }
+      r = { ...r, fallidos, msg: `${r.msg}${lanzados.length ? ` · robot lanzado (solo estas filas): ${lanzados.join(", ")}` : ""}${fallidos.length ? ` · NO arrancó: ${fallidos.join(" | ")}` : ""}` };
+      // reflejar en la tabla sin recomparar: lo mandado queda PENDIENTE/FORZADA hasta que corra el robot
+      const claves = new Set(payload.map((p) => `${p.dni}|${p.novedad_siap}|${p.desde}`));
+      const confClaves = new Set(conf.map((c) => `${c.dni}|${c.novedad_siap}|${c.desde}`));
+      setResults((prev) => prev && prev.map((x) => {
+        const k = `${x.dni}|${x.novedad_siap}|${x.fecha_desde_siap}`;
+        if (!claves.has(k) || String(x.estado_carga || "").toUpperCase() === "OK") return x;
+        if (confClaves.has(k) && !forzadas) return x;
+        return { ...x, en_cola: true, estado_carga: confClaves.has(k) ? "FORZADA" : "PENDIENTE", detalle_carga: "Carga pedida desde Asistencia: robot lanzado", carga_intentos: x.carga_intentos ?? 0 };
+      }));
+      if (r.fallidos?.length) toast.error("Mandadas a la cola, pero un robot no arrancó", r.msg);
+      else toast.ok("Mandadas a cargar", r.msg);
+    } catch (e: any) {
+      toast.error("No se pudo mandar a cargar", String(e?.message ?? e));
+    } finally {
+      setCargando(false);
+    }
+  };
+
   const estadoCounts = {
     todos: monthResults.length,
     coincidente: monthResults.filter((r) => r.estado === "COINCIDENTE").length,
     noCoincidente: monthResults.filter((r) => r.estado === "NO COINCIDENTE").length,
     rango: monthResults.filter((r) => r.estado === "RANGO_DISTINTO").length,
     omitido: monthResults.filter((r) => r.estado === "OMITIDO").length,
+    baja: monthResults.filter((r) => r.estado === "BAJA").length,
   };
 
   // Novedades del SIAP que NO tienen equivalencia en el mapeo.
@@ -1673,11 +1923,12 @@ export function AsistenciaPage() {
     marginBottom: 8,
   };
 
-  const estadoLabel = (estado: CompareRow["estado"]) =>
-    estado === "COINCIDENTE" ? "OK" :
-    estado === "NO COINCIDENTE" ? "NO" :
-    estado === "RANGO_DISTINTO" ? "RANGO" :
-    "OMIT.";
+  // Estado de la fila según la comparación (06/11): EXACTA / FECHAS DISTINTAS / OTRA LICENCIA / FALTA
+  const estadoTexto = (r: CompareRow) =>
+    r.estado === "COINCIDENTE" ? "EXACTA" :
+    r.estado === "RANGO_DISTINTO" ? "FECHAS DISTINTAS" :
+    r.estado === "NO COINCIDENTE" ? (r.motivo === "OTRA_LICENCIA" ? "OTRA LICENCIA" : "FALTA") :
+    r.estado === "BAJA" ? "BAJA" : "OMIT.";
 
   const badge: Record<string, React.CSSProperties> = {
     COINCIDENTE: {
@@ -1707,6 +1958,15 @@ export function AsistenciaPage() {
       fontSize: "0.72rem",
       fontWeight: 600,
     },
+    BAJA: {
+      background: "rgba(139,92,246,.15)",
+      border: "1px solid rgba(139,92,246,.45)",
+      color: "#a78bfa",
+      borderRadius: 8,
+      padding: "2px 10px",
+      fontSize: "0.72rem",
+      fontWeight: 600,
+    },
     OMITIDO: {
       background: "rgba(255,255,255,.05)",
       border: "1px solid rgba(255,255,255,.12)",
@@ -1718,7 +1978,7 @@ export function AsistenciaPage() {
   };
 
   return (
-    <Layout title="Estadistica de Asistencia" showBack>
+    <Layout title="Estadistica de Asistencia" showBack fluid={seccion === "ausentes" || seccion === "excel"}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
         {/* ── TABS DE SECCIÓN ── */}
@@ -1727,6 +1987,7 @@ export function AsistenciaPage() {
             { key: "excel", label: "Novedades Excel (Min. vs SIAP)" },
             { key: "pdf",   label: "Licencias PDF (Anual vs Novedades)" },
             { key: "fichajes", label: "🕐 Fichajes de agentes" },
+            { key: "ausentes", label: "🚫 Ausentes del mes" },
           ] as const).map(({ key, label }) => (
             <button
               key={key}
@@ -1751,6 +2012,7 @@ export function AsistenciaPage() {
         {/* ── SECCIÓN PDF ── */}
         {seccion === "pdf" && <LicenciasPdfSection />}
         {seccion === "fichajes" && <FichajesSection />}
+        {seccion === "ausentes" && <AusentesMesSection />}
 
         {/* ── SECCIÓN EXCEL ── */}
         {seccion === "excel" && <>
@@ -1807,7 +2069,56 @@ export function AsistenciaPage() {
         >
           {/* ── SELECCION DE ARCHIVOS ── */}
           <div className="card gp-card-14" style={{ padding: 16 }}>
-            <div style={sh}>SELECCION DE ARCHIVOS</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={sh}>SELECCION DE ARCHIVOS</div>
+              <button
+                className="btn"
+                onClick={bajarArchivos}
+                disabled={lanzandoBajada || (!!bajada && !bajada.terminado)}
+                title="Lanza los robots que bajan SIAPE.xlsx, los 3 del Ministerio y las otras exportaciones de SIAPE. No cargan nada."
+                style={{ fontSize: "0.74rem", padding: "4px 10px", marginBottom: 8 }}
+              >
+                {lanzandoBajada ? "Lanzando..." : bajada && !bajada.terminado ? "⏳ Bajando..." : "⬇ Bajar archivos"}
+              </button>
+            </div>
+
+            {bajada && (
+              <div style={{ fontSize: "0.74rem", marginBottom: 10, padding: 8, borderRadius: 8, background: "rgba(15,23,42,0.6)", border: "1px solid rgba(255,255,255,.08)" }}>
+                {bajada.robots.length === 0 && <div style={{ color: "var(--muted)" }}>Esperando a los robots...</div>}
+                {bajada.robots.map((r) => (
+                  <div key={r.script} style={{ display: "flex", gap: 6, color: !r.corrida ? "var(--muted)" : r.corrida.estado === "ok" ? "#86efac" : "var(--danger)" }}>
+                    <span style={{ width: 16 }}>{!r.corrida ? "⏳" : r.corrida.estado === "ok" ? "✓" : "✕"}</span>
+                    <span style={{ flex: 1 }}>{r.nombre}</span>
+                    <span title={r.corrida?.motivo ?? ""}>{r.corrida ? r.corrida.hora : "en cola"}</span>
+                  </div>
+                ))}
+                {bajada.comparacion && (() => {
+                  const c = bajada.comparacion;
+                  const ico = { esperando: "⏳", corriendo: "⚙", ok: "✓", error: "✕", salteada: "⚠" }[c.estado];
+                  const txt = {
+                    esperando: "Comparación SIAPE vs Ministerio: cuando terminen las 4 descargas",
+                    corriendo: "Comparando SIAPE vs Ministerio con los archivos nuevos...",
+                    ok: "Comparación SIAPE vs Ministerio hecha con los archivos nuevos",
+                    error: "La comparación falló",
+                    salteada: "No se comparó",
+                  }[c.estado];
+                  const color = c.estado === "ok" ? "#86efac" : c.estado === "error" || c.estado === "salteada" ? "var(--danger)" : "var(--muted)";
+                  return (
+                    <div style={{ display: "flex", gap: 6, color, marginTop: 4, borderTop: "1px solid rgba(255,255,255,.06)", paddingTop: 4 }}>
+                      <span style={{ width: 16 }}>{ico}</span>
+                      <span style={{ flex: 1 }}>{txt}{c.motivo ? ` · ${c.motivo}` : ""}</span>
+                      <span>{c.hora ?? ""}</span>
+                    </div>
+                  );
+                })()}
+                {bajada.terminado && (
+                  <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: "var(--muted)" }}>Listo: la lista de archivos se actualizó.</span>
+                    <button className="btn" style={{ fontSize: "0.7rem", padding: "2px 8px" }} onClick={() => setBajada(null)}>Cerrar</button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {/* ── Archivos Ministerio por UPA ── */}
@@ -2298,6 +2609,7 @@ export function AsistenciaPage() {
                   <option value="COINCIDENTE">Coincidentes ({estadoCounts.coincidente})</option>
                   <option value="NO COINCIDENTE">No coinc. ({estadoCounts.noCoincidente})</option>
                   <option value="RANGO_DISTINTO">Rango distinto ({estadoCounts.rango})</option>
+                  <option value="BAJA">De baja ({estadoCounts.baja})</option>
                   <option value="OMITIDO">Omitidos ({estadoCounts.omitido})</option>
                 </select>
               </div>
@@ -2312,17 +2624,17 @@ export function AsistenciaPage() {
                   style={{ ...fs, width: "auto", minWidth: 190, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
                   onChange={(e) => setFiltroMotivo(e.target.value)}
                 >
-                  <option value="TODOS">Todos</option>
+                  <option value="TODOS">Todos ({baseConteo.length})</option>
                   {motivoOptions.map((m) => (
                     <option key={m} value={m}>
-                      {m}
+                      {motivoTexto(m)} ({motivoCounts[m] || 0})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="as-filtro-detalle-carga" style={lbl}>DETALLE CARGA</label>
+                <label htmlFor="as-filtro-detalle-carga" style={lbl}>QUÉ PASÓ EN LA CARGA</label>
                 <select
                   id="as-filtro-detalle-carga"
                   name="filtroDetalleCarga"
@@ -2331,7 +2643,7 @@ export function AsistenciaPage() {
                   style={{ ...fs, width: "auto", minWidth: 190, fontSize: "0.76rem", color: "var(--text)", background: "rgba(15,23,42,0.9)" }}
                   onChange={(e) => setFiltroDetalleCarga(e.target.value)}
                 >
-                  <option value="TODOS">Todos</option>
+                  <option value="TODOS">Todos ({baseConteo.length})</option>
                   {detalleCargaOptions.map(({ name, count }) => (
                     <option key={name} value={name}>
                       {name} ({count})
@@ -2409,10 +2721,21 @@ export function AsistenciaPage() {
               >
                 Exportar Excel
               </button>
+
+              <button
+                className="btn"
+                disabled={cargando || shown.filter(esCargable).length === 0}
+                onClick={() => cargarEnIntranet(shown.filter(esCargable))}
+                title="Pone en la cola del robot las filas filtradas que no están OK y lanza el robot de carga de su dependencia"
+                style={{ padding: "7px 12px", fontSize: "0.76rem", whiteSpace: "nowrap" as const, alignSelf: "flex-end" as const,
+                  background: "rgba(245,158,11,.18)", border: "1px solid rgba(245,158,11,.5)", color: "#fbbf24" }}
+              >
+                {cargando ? "Lanzando…" : `▶ Cargar filtradas (${shown.filter(esCargable).length})`}
+              </button>
             </div>
 
             <div style={{ overflow: "auto" as const, maxHeight: "70vh" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: "0.78rem", tableLayout: "fixed" as const }}>
+              <table style={{ width: "100%", minWidth: 1100, borderCollapse: "collapse" as const, fontSize: "0.78rem", tableLayout: "fixed" as const }}>
                 <thead>
                   <tr
                     style={{
@@ -2425,20 +2748,20 @@ export function AsistenciaPage() {
                   >
                     {/* ✅ ACA estaba el error: tenías un { [ { [ ... */ }
                     {[
-                      { h: "DNI", w: "8%" },
-                      { h: "NOMBRE", w: "11%" },
-                      { h: "NOV. MIN", w: "10%" },
-                      { h: "DESDE MIN", w: "6%" },
-                      { h: "HASTA MIN", w: "6%" },
-                      { h: "NOV. SIAP", w: "10%" },
-                      { h: "DESDE SIAP", w: "6%" },
-                      { h: "HASTA SIAP", w: "6%" },
-                      { h: "DEP.", w: "8%" },
-                      { h: "J.", w: "3%" },
+                      { h: "DNI", w: "6%" },
+                      { h: "NOMBRE", w: "10%" },
+                      { h: "NOV. MIN", w: "8%" },
+                      { h: "DESDE MIN", w: "5.5%" },
+                      { h: "HASTA MIN", w: "5.5%" },
+                      { h: "NOV. SIAP", w: "8%" },
+                      { h: "DESDE SIAP", w: "5.5%" },
+                      { h: "HASTA SIAP", w: "5.5%" },
+                      { h: "DEP.", w: "6%" },
+                      { h: "J.", w: "2%" },
                       { h: "ESTADO", w: "7%" },
-                      { h: "MOTIVO", w: "10%" },
-                      { h: "CARGA", w: "6%" },
-                      { h: "DETALLE CARGA", w: "9%" },
+                      { h: "DIFERENCIA", w: "13%" },
+                      { h: "QUÉ PASÓ EN LA CARGA", w: "14%" },
+                      { h: "", w: "5%" },
                     ].map(({ h, w }) => (
                       <th
                         key={h}
@@ -2585,38 +2908,63 @@ export function AsistenciaPage() {
 
                         <td style={{ padding: "4px 5px" }}>
                           <span style={{ ...(badge as any)[r.estado], padding: "1px 6px", fontSize: "0.65rem" }}>
-                            {estadoLabel(r.estado)}
+                            {estadoTexto(r)}
                           </span>
                         </td>
 
-                        <td style={{ padding: "4px 6px", fontSize: "0.68rem", color: "#fca5a5", wordBreak: "break-word" as const, whiteSpace: "normal" as const }}>
-                          {r.motivo || "—"}
-                        </td>
-
-                        <td style={{ padding: "4px 5px" }}>
-                          {r.estado_carga ? (
-                            <span
-                              title={r.novedad_carga || ""}
-                              style={{
-                                background: norm(r.estado_carga).includes("OK") ? "rgba(16,185,129,.15)" : "rgba(239,68,68,.14)",
-                                border: norm(r.estado_carga).includes("OK") ? "1px solid rgba(16,185,129,.35)" : "1px solid rgba(239,68,68,.35)",
-                                color: norm(r.estado_carga).includes("OK") ? "#34d399" : "#f87171",
-                                borderRadius: 4,
-                                padding: "1px 5px",
-                                fontSize: "0.62rem",
-                                fontWeight: 700,
-                                whiteSpace: "nowrap" as const,
-                              }}
-                            >
-                              {r.estado_carga}
-                            </span>
-                          ) : (
-                            <span style={{ color: "#334155" }}>—</span>
-                          )}
+                        <td style={{ padding: "4px 6px", fontSize: "0.68rem", color: r.estado === "COINCIDENTE" ? "#6ee7b7" : "#fca5a5", wordBreak: "break-word" as const, whiteSpace: "normal" as const }}>
+                          {r.diferencia || (r.estado === "COINCIDENTE" && !r.motivo ? "Exacta" : motivoTexto(r.motivo))}
                         </td>
 
                         <td style={{ padding: "4px 6px", fontSize: "0.66rem", color: "#cbd5e1", wordBreak: "break-word" as const, whiteSpace: "normal" as const }}>
-                          {r.detalle_carga || "—"}
+                          {(() => {
+                            const g = cargaGeneral(r);
+                            const c = colorCarga(g);
+                            const sub = [
+                              r.carga_intentos ? `intentó ${r.carga_intentos} ${r.carga_intentos > 1 ? "veces" : "vez"}` : "",
+                              r.carga_cargado_en ? `cargada el ${r.carga_cargado_en}` : r.carga_ultimo ? `último intento ${r.carga_ultimo}` : "",
+                            ].filter(Boolean).join(" · ");
+                            return (
+                              <>
+                                <span style={{ background: c.bg, border: `1px solid ${c.bd}`, color: c.fg, borderRadius: 4,
+                                  padding: "1px 5px", fontSize: "0.62rem", fontWeight: 700, whiteSpace: "nowrap" as const }}>
+                                  {g}
+                                </span>
+                                {sub && <div style={{ color: "#64748b", fontSize: "0.6rem", marginTop: 2 }}>{sub}</div>}
+                                {g === "Sin código para cargar" ? (
+                                  <div style={{ marginTop: 2, color: "#94a3b8" }}>No tiene código para cargar en el Ministerio (falta en el mapeo)</div>
+                                ) : r.cargada_en_otra_dep ? (
+                                  <div style={{ marginTop: 2 }}>Ya figura en el Ministerio, en el plantel de {r.cargada_en_otra_dep}</div>
+                                ) : r.detalle_carga ? (
+                                  <div style={{ marginTop: 2 }} title={`${r.label_carga ? `Código Intranet: ${r.label_carga}
+` : ""}Texto original: ${r.detalle_carga}`}>{detalleClaro(r.detalle_carga)}</div>
+                                ) : g === "Falta cargar (el robot no la tomó)" ? (
+                                  <div style={{ marginTop: 2, color: "#94a3b8" }}>El robot nunca la tomó para cargar</div>
+                                ) : g === "Falta cargar (nunca se intentó)" ? (
+                                  <div style={{ marginTop: 2, color: "#94a3b8" }}>Está en la cola pero el robot todavía no la probó</div>
+                                ) : null}
+                              </>
+                            );
+                          })()}
+                        </td>
+
+                        <td style={{ padding: "4px 4px", textAlign: "center" as const }}>
+                          {esCargable(r) ? (
+                            <button
+                              className="btn"
+                              disabled={cargando}
+                              onClick={() => cargarEnIntranet([r])}
+                              title={ESTADOS_CARGA_CONFIRMAR.includes(String(r.estado_carga || "").toUpperCase())
+                                ? "El robot la dejó sin cargar a propósito: pide confirmación"
+                                : "Mandar a cargar en la Intranet y lanzar el robot"}
+                              style={{ padding: "3px 8px", fontSize: "0.66rem", whiteSpace: "nowrap" as const,
+                                background: "rgba(245,158,11,.15)", border: "1px solid rgba(245,158,11,.45)", color: "#fbbf24" }}
+                            >
+                              ▶ Cargar
+                            </button>
+                          ) : (
+                            <span style={{ color: "#334155" }}>—</span>
+                          )}
                         </td>
                       </tr>
                       );

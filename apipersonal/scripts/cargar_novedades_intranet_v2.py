@@ -30,6 +30,8 @@ from playwright.sync_api import sync_playwright, Error as PWError
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapeo_novedades as MN
 import post_carga
+import fc_noche_por_medio
+import pedidos_carga
 
 # Forzar UTF-8 en la consola: evita que print() de '→', acentos, etc. crashee
 # en CMD con codepage cp1252 (UnicodeEncodeError 'charmap').
@@ -147,6 +149,25 @@ def es_no_pertenece(mensaje):
     return "NO PERTENECE A SU PLANTEL" in _sin_acentos(mensaje)
 
 
+def traer_rechazadas_de_otras(cur, corrida, dependencia, ausentes=False):
+    """05/11/2026: filas que OTRA dependencia rechazo ("No pertenece a su plantel") y que siguen saliendo
+    en la ultima comparacion -> se pasan a esa corrida para que ESTA dependencia las pruebe.
+    Antes quedaban con la corrida del robot que las rechazo y, como cada robot solo toma la ultima
+    corrida, nunca las veian las otras dos (quedaban trabadas). Devuelve filas movidas."""
+    return cur.execute(f"""
+        UPDATE {TABLA_CARGA} q
+          JOIN comparacion_novedades c
+            ON c.corrida_id = %s AND c.estado = 'SOLO_SIAP' AND c.dni = q.dni
+           AND c.novedad_siap = q.novedad_siap AND c.desde_siap = q.desde
+           AND COALESCE(c.hasta_siap, c.desde_siap) = q.hasta
+           SET q.corrida_id = %s
+         WHERE q.deps_descartadas <> '' AND q.corrida_id <> %s
+           AND NOT FIND_IN_SET(%s, q.deps_descartadas)
+           AND q.estado NOT IN {ESTADOS_NO_CARGAR}
+           AND q.novedad_siap {"=" if ausentes else "<>"} 'AUSENTE SIN AVISO'""",
+        (corrida, corrida, corrida, dependencia))
+
+
 def anotar_no_pertenece(cur, dni, novedad_siap, desde, hasta, dependencia, label):
     """Suma la dependencia a deps_descartadas: PENDIENTE para las otras o NO_EN_PLANTEL si ya van las 3."""
     cur.execute(f"""
@@ -169,15 +190,34 @@ def anotar_no_pertenece(cur, dni, novedad_siap, desde, hasta, dependencia, label
 # Novedades SIAPE que NO se cargan en la Intranet a los BECARIOS (ley "Programa ..."; decision del
 # usuario 04/10/2026: la anual complementaria da "Opcion no disponible en este plantel"). 18/10/2026:
 # solo becas; 10471, residentes y demas SI se cargan (29-COMPLEMENTARIA). Quedan DESCARTADA en la tabla.
-NOVEDADES_DESCARTADAS = ("ANUAL COMPLEMENTARIA",)
+NOVEDADES_DESCARTADAS = ("ANUAL COMPLEMENTARIA",)   # SIN USO desde 05/11/2026 (ver LABEL_BECARIOS)
 LEY_BECAS_LIKE = "Programa%"
+# 05/11/2026 (pedido del usuario): a los becarios la 29 no existe en su plantel, les corresponde la 291.
+# Ya no se descartan: se cargan con este codigo (el resto sigue con el mapeo, 29-COMPLEMENTARIA).
+LABEL_BECARIOS = {"ANUAL COMPLEMENTARIA": "291 - LICENCIA ANUAL COMPLEMENTARIA LEY 10430 Y MODIF."}
+
+
+def dnis_becarios():
+    """DNIs (int) con tramo activo de ley 'Programa ...' (becas)."""
+    with MN.conn() as cn, cn.cursor() as cur:
+        cur.execute("""SELECT DISTINCT a.dni FROM agentes a JOIN ley l ON l.id = a.ley_id
+                        WHERE a.deleted_at IS NULL AND a.estado_empleo <> 'BAJA' AND l.nombre LIKE %s""",
+                    (LEY_BECAS_LIKE,))
+        out = set()
+        for r in cur.fetchall():
+            try:
+                out.add(int(r["dni"]))
+            except Exception:
+                pass
+        return out
 
 # Estados de la tabla que los robots NO vuelven a intentar: PERIODO_CERRADO = el Ministerio ya cerro
 # el periodo ("fecha de ultimo cierre", no se puede cargar nunca); CAMBIO_SIAPE = alerta del comparador
 # (ya no figura en SIAPE; si vuelve a salir pendiente, el INSERT ... ON DUPLICATE la repone a PENDIENTE).
 # NO_TRABAJA_DIA: ausente de un franquero en un dia que no esta en su horario ni es feriado
 # (lo marca cargar_ausentes_intranet_v2.filtrar_franqueros y lo revisa en cada corrida)
-ESTADOS_NO_CARGAR = "('OK', 'ELIMINADA', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_EN_PLANTEL', 'NO_TRABAJA_DIA')"
+# NO_ES_AUSENTE: ausente que ficho o tiene novedad en otra fuente (control_ausentes.py, 04/11/2026)
+ESTADOS_NO_CARGAR = "('OK', 'ELIMINADA', 'DESCARTADA', 'PERIODO_CERRADO', 'CAMBIO_SIAPE', 'NO_EN_PLANTEL', 'NO_TRABAJA_DIA', 'NO_ES_AUSENTE')"
 
 
 def estado_resultado(r):
@@ -237,6 +277,48 @@ def descartar_fc_ley_10471(cur, corrida, dependencia):
         (corrida, dependencia, *LEY_IDS_SIN_FC))
 
 
+# FC de SIAPE que vienen de la pagina del jefe y que el robot del jefe (cargar_jefe_intranet_v2) ya sube
+# al Ministerio con su CODIGO REAL (04/11/2026): aca no se cargan como 34 (seria doble carga).
+# Pap/Colpo sigue yendo como FC, por eso no esta. Art. 26 va como 261 (cargar_art26_intranet_v2.py).
+ORIGENES_JEFE_CODIGO_REAL = ("examen", "prexamen", "practicas_profesionales", "novedad_jefe", "articulo_26")
+
+
+def descartar_fc_del_jefe(cur, corrida, dependencia):
+    """FC de SIAPE de un dia que cargo el jefe (jefe_carga_siape) con origen de codigo real -> DESCARTADA."""
+    return cur.execute(f"""
+        UPDATE {TABLA_CARGA} q
+           SET q.estado = 'DESCARTADA',
+               q.detalle = CONCAT('Descartada: lo sube el robot del jefe con su codigo (',
+                   (SELECT j.origen FROM jefe_carga_siape j
+                     WHERE j.dni = CAST(q.dni AS UNSIGNED) AND j.fecha BETWEEN q.desde AND q.hasta
+                       AND j.origen IN ({",".join(["%s"] * len(ORIGENES_JEFE_CODIGO_REAL))}) LIMIT 1), ')')
+         WHERE q.corrida_id = %s AND q.dependencia = %s AND q.estado IN {ESTADOS_ABIERTOS}
+           AND q.novedad_siap LIKE 'FRANCO COMPENSATORIO%%'
+           AND EXISTS (SELECT 1 FROM jefe_carga_siape j
+                        WHERE j.dni = CAST(q.dni AS UNSIGNED) AND j.fecha BETWEEN q.desde AND q.hasta
+                          AND j.origen IN ({",".join(["%s"] * len(ORIGENES_JEFE_CODIGO_REAL))}))""",
+        (*ORIGENES_JEFE_CODIGO_REAL, corrida, dependencia, *ORIGENES_JEFE_CODIGO_REAL))
+
+
+# Rotaciones de residentes (rotacion_carga_siape): en SIAPE van como FC, pero al Ministerio NO se
+# cargan (04/11/2026, pedido del usuario). Dias de rotacion validos = los que no se anularon/borraron.
+ESTADOS_ROTACION_VALIDOS_EXCL = "('ANULADO', 'BORRADO', 'BORRAR', 'ERROR_BORRAR', 'SOBRA')"
+
+
+def descartar_fc_rotaciones(cur, corrida, dependencia):
+    """FC de SIAPE en un dia de rotacion del residente -> DESCARTADA (solo va a SIAPE)."""
+    return cur.execute(f"""
+        UPDATE {TABLA_CARGA} q
+           SET q.estado = 'DESCARTADA',
+               q.detalle = 'Descartada: FC de rotacion de residente (solo se carga en SIAPE, no en el Ministerio)'
+         WHERE q.corrida_id = %s AND q.dependencia = %s AND q.estado IN {ESTADOS_ABIERTOS}
+           AND q.novedad_siap LIKE 'FRANCO COMPENSATORIO%%'
+           AND EXISTS (SELECT 1 FROM rotacion_carga_siape r
+                        WHERE r.dni = CAST(q.dni AS UNSIGNED) AND r.fecha BETWEEN q.desde AND q.hasta
+                          AND r.estado NOT IN {ESTADOS_ROTACION_VALIDOS_EXCL})""",
+        (corrida, dependencia))
+
+
 def cargar_filas_db(dependencia, test_mode=False):
     """Pendientes de la ULTIMA corrida del Comparador 2.0 para esta dependencia.
     Primero los registra en novedades_carga_intranet (sin pisar las que ya estan OK) y
@@ -260,34 +342,45 @@ def cargar_filas_db(dependencia, test_mode=False):
               justificado = VALUES(justificado), motivo_comparacion = VALUES(motivo_comparacion),
               estado = IF({TABLA_CARGA}.estado = 'CAMBIO_SIAPE', 'PENDIENTE', {TABLA_CARGA}.estado)""",
             (corrida, dependencia))
-        cur.execute(f"""
-            UPDATE {TABLA_CARGA} q
-               SET q.estado = 'DESCARTADA', q.detalle = 'Descartada: esta novedad no se carga en la Intranet a becarios'
-             WHERE q.corrida_id = %s AND q.dependencia = %s AND q.estado IN {ESTADOS_ABIERTOS}
-               AND q.novedad_siap IN ({",".join(["%s"] * len(NOVEDADES_DESCARTADAS))})
-               AND EXISTS (SELECT 1 FROM agentes a JOIN ley l ON l.id = a.ley_id
-                            WHERE a.dni = q.dni AND a.deleted_at IS NULL AND a.estado_empleo <> 'BAJA'
-                              AND l.nombre LIKE %s)""",
-            (corrida, dependencia, *NOVEDADES_DESCARTADAS, LEY_BECAS_LIKE))
+        n_otras = traer_rechazadas_de_otras(cur, corrida, dependencia)
+        if n_otras:
+            print(f"  {n_otras} filas rechazadas por otra dependencia pasan a esta corrida para probarlas aca")
+        # 05/11/2026: ya NO se descarta la complementaria a becarios; se carga con 291 (LABEL_BECARIOS en agrupar_por_dni)
         n_fc = descartar_fc_ley_10471(cur, corrida, dependencia)
         if n_fc:
             print(f"  {n_fc} FC de ley 10471 descartados (no se cargan en la Intranet)")
+        n_rot = descartar_fc_rotaciones(cur, corrida, dependencia)
+        if n_rot:
+            print(f"  {n_rot} FC de rotaciones descartados (solo van a SIAPE, no al Ministerio)")
+        n_jefe = descartar_fc_del_jefe(cur, corrida, dependencia)
+        if n_jefe:
+            print(f"  {n_jefe} FC del jefe descartados (los sube el robot del jefe con su codigo real)")
+        n_np = fc_noche_por_medio.descartar_fc_relleno(cur, corrida, dependencia, TABLA_CARGA, ESTADOS_ABIERTOS)
+        if n_np:
+            print(f"  {n_np} FC de relleno noche por medio descartados (no se cargan en la Intranet)")
         fin, n_cerr = marcar_meses_cerrados(cur, corrida, dependencia)
         if n_cerr:
             print(f"  {n_cerr} filas en meses cerrados (hasta {fin:%d/%m/%Y}) -> PERIODO_CERRADO sin intentar")
         cn.commit()
+        # Pedido desde /app/asistencia (boton Cargar): si hay, solo esas filas (pedidos_carga.py)
+        pedido = pedidos_carga.tomar_pedido(cur, "novedades", dependencia)
+        cn.commit()
         cur.execute(f"""
-            SELECT dependencia, dni, nombre, novedad_siap, desde, hasta, justificado, motivo_comparacion
+            SELECT id, dependencia, dni, nombre, novedad_siap, desde, hasta, justificado, motivo_comparacion
               FROM {TABLA_CARGA}
              WHERE corrida_id = %s AND {SQL_FILAS_DE_LA_DEP} AND estado NOT IN {ESTADOS_NO_CARGAR}
              ORDER BY nombre, desde""", (corrida, dependencia, dependencia))
+        filas_db = cur.fetchall()
+        if pedido is not None:
+            filas_db = [r for r in filas_db if int(r["id"]) in pedido]
+            print(f"  Pedido desde Asistencia: se cargan SOLO {len(filas_db)} fila(s) elegidas (de {len(pedido)} pedidas)")
         # Las que rechazo otra dependencia se prueban en esta: van con la dependencia del run
         filas = [{
             "Estado": "SOLO_SIAP", "Dependencia": dependencia, "DNI": int(r["dni"]),
             "Nombre": r["nombre"], "Nov. SIAP": r["novedad_siap"],
             "Desde SIAP": r["desde"], "Hasta SIAP": r["hasta"],
             "JUSTIFICADO": r["justificado"], "Motivo": r["motivo_comparacion"],
-        } for r in cur.fetchall()]
+        } for r in filas_db]
     if test_mode and filas:
         filas = [f for f in filas if f["DNI"] == filas[0]["DNI"]]
     return corrida, filas
@@ -306,6 +399,7 @@ def agrupar_por_dni(filas, mapa, justificados=None, licencias=None, stats=None):
     stats = stats if stats is not None else {}
     stats.setdefault("por_cie", [])
     stats.setdefault("medicas_sin_cie", 0)
+    becarios = dnis_becarios() if any(str(f["Nov. SIAP"]).strip().upper() in LABEL_BECARIOS for f in filas) else set()
     for f in filas:
         siap = str(f["Nov. SIAP"]).strip().upper()
         label, cie, por_cie = MN.elegir_label(mapa, licencias, f["DNI"], siap, f["Desde SIAP"], f["Hasta SIAP"])
@@ -314,6 +408,14 @@ def agrupar_por_dni(filas, mapa, justificados=None, licencias=None, stats=None):
             stats["por_cie"].append(f"{f['Nombre']} CIE {cie} → {label}")
         elif es_medica_sin_justificar(siap) and not cie:
             stats["medicas_sin_cie"] += 1
+        if siap in LABEL_BECARIOS:
+            try:
+                es_beca = int(f["DNI"]) in becarios
+            except Exception:
+                es_beca = False
+            if es_beca:
+                label = LABEL_BECARIOS[siap]
+                print(f"    {f['Nombre']}: {siap} (becario) → se carga como {label}")
         if not label:
             sin_mapeo.append(f"{f['Nombre']} — {siap}")
             continue
@@ -407,12 +509,19 @@ def _fecha_iso(ddmmyyyy):
 
 
 # ── Rangos: dias seguidos en una sola carga (19/10/2026) ─────────────────────
-# El SIAPE trae una fila por dia (FC, ausentes, causas particulares...) y se cargaban de a una.
+# El SIAPE trae una fila por dia (FC, ausentes...) y se cargaban de a una. El 26 NO se junta nunca.
 # Los dias SEGUIDOS del mismo agente con la misma novedad van en UNA carga desde-hasta (7 y 8 ->
 # 07 a 08; 7 y 9 -> dos cargas). Puede pasar a los meses siguientes; si el Ministerio rechaza el
 # arranque por periodo cerrado se recorta al mes abierto como siempre. Si el rango da otro error
 # se reintenta dia por dia. En la tabla sigue una fila por dia: el resultado se anota en cada una.
 # No se juntan anual/complementaria (tope de dias por mes) ni el examen automatico.
+
+# El 26 (261 - POR CAUSAS PARTICULARES) es SIEMPRE de UN dia: nunca se junta en rango
+# (05/11/2026, usuario; antes se juntaba como cualquier otra novedad).
+def es_causas_particulares(label):
+    t = str(label or "").strip().upper()
+    return t.startswith("261") or t.startswith("26 ") or t.startswith("26-") or "CAUSAS PARTICULARES" in t
+
 
 def juntar_rangos(novs):
     """Junta las novedades de UN agente cuyos dias son seguidos (mismo label y misma novedad
@@ -427,7 +536,8 @@ def juntar_rangos(novs):
                 and _parse_fecha_ddmmyyyy(nv["hasta"])
                 and prev.get("label") == nv.get("label") and prev.get("siap") == nv.get("siap")
                 and not nv.get("auto") and not prev.get("auto")
-                and not es_anual_o_complementaria(nv.get("label") or "")):
+                and not es_anual_o_complementaria(nv.get("label") or "")
+                and not es_causas_particulares(nv.get("label") or "")):
             prev["hasta"] = nv["hasta"]
             prev["partes"].append((nv["desde"], nv["hasta"]))
         else:
@@ -857,18 +967,21 @@ def cambiar_dependencia(page, dependencia):
     page.wait_for_timeout(800)
 
     # Verificación DURA contra el header; un reload por si quedó cacheado
+    # el botón Cambiar recarga la página: se espera hasta 20 s a que el header muestre
+    # el código (mientras navega page.content() falla) y recién ahí se recarga
     for _ in range(2):
-        try:
-            if f"({codigo})" in page.content():
-                print(f"  Dependencia cambiada a {dependencia} ({codigo})")
-                return
-        except Exception:
-            pass
+        for _ in range(40):
+            try:
+                if f"({codigo})" in page.content():
+                    print(f"  Dependencia cambiada a {dependencia} ({codigo})")
+                    return
+            except Exception:
+                pass
+            page.wait_for_timeout(500)
         try:
             page.reload(wait_until="networkidle", timeout=15000)
         except Exception:
             pass
-        page.wait_for_timeout(500)
 
     raise Exception(f"NO se pudo cambiar la dependencia a {dependencia} ({codigo}) — se aborta para no cargar en la dependencia equivocada")
 
@@ -1198,6 +1311,7 @@ def main():
                         help="HOSPITAL / UPA 4 / UPA 18")
     parser.add_argument("--solo-cola", action="store_true",
                         help="arma y lista los pendientes desde la base, sin abrir la Intranet")
+    parser.add_argument("--mes", help="AAAA-MM: solo las que EMPIEZAN en ese mes (aunque terminen despues)")
     args = parser.parse_args()
 
     password   = args.password or os.environ.get("INTRANET_PASS") or input("Contraseña: ")
@@ -1216,6 +1330,9 @@ def main():
     corrida, filas = cargar_filas_db(dependencia, test_mode=args.test)
     if args.dni:
         filas = [f for f in filas if f["DNI"] == int(args.dni)]
+    if args.mes:
+        filas = [f for f in filas if f["Desde SIAP"].strftime("%Y-%m") == args.mes]
+        print(f"Filtro --mes {args.mes}: solo novedades que empiezan en ese mes")
     if corrida is None:
         print("No hay corridas del Comparador 2.0 todavia.")
         MN.registrar_run(script_id, script_desc, "error", motivo="No hay corridas del Comparador 2.0",

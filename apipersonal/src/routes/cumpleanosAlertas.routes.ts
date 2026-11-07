@@ -3,6 +3,11 @@ import { QueryTypes, Sequelize } from 'sequelize';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { logger } from '../logging/logger';
 import { trackAction } from '../logging/track';
+import multer from 'multer';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { celularDe } from './licenciasMedicasControl.routes';
 
 type CumpleEstado = 'PENDIENTE' | 'AVISADO' | 'OMITIDO';
 
@@ -130,6 +135,170 @@ async function setEstado(sequelize: Sequelize, req: Request, res: Response, esta
   }
 }
 
+// ── Felicitaciones por WhatsApp ─────────────────────────────────────────────
+// La tarjeta (imagen) la arma el front en un canvas (diseño predefinido o imagen subida + nombre)
+// y la extensión de Chrome la manda por WhatsApp Web con el texto como comentario.
+// Acá se guardan: la configuración (una fila), las imágenes subidas y cada intento de envío.
+const felicitacionInit = new WeakSet<Sequelize>();
+async function ensureFelicitacionTables(sequelize: Sequelize) {
+  if (felicitacionInit.has(sequelize)) return;
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS cumpleanos_felicitacion_config (
+      id INT NOT NULL,
+      plantilla TEXT NULL,
+      imagen VARCHAR(40) NOT NULL DEFAULT 'diseno:globos',
+      nombre_en_imagen TINYINT(1) NOT NULL DEFAULT 1,
+      automatico TINYINT(1) NOT NULL DEFAULT 0,
+      hora VARCHAR(5) NOT NULL DEFAULT '09:00',
+      prueba TINYINT(1) NOT NULL DEFAULT 1,
+      destino_prueba VARCHAR(50) NULL,
+      modo VARCHAR(20) NOT NULL DEFAULT 'TELEFONO',
+      updated_by INT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS cumpleanos_felicitacion_imagenes (
+      id INT NOT NULL AUTO_INCREMENT,
+      nombre VARCHAR(200) NOT NULL,
+      mime VARCHAR(50) NOT NULL,
+      datos MEDIUMBLOB NOT NULL,
+      created_by INT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at DATETIME NULL,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS cumpleanos_felicitacion_envios (
+      id INT NOT NULL AUTO_INCREMENT,
+      dni INT NOT NULL,
+      anio INT NOT NULL,
+      estado VARCHAR(20) NOT NULL,
+      modo VARCHAR(20) NULL,
+      destino VARCHAR(100) NULL,
+      detalle VARCHAR(500) NULL,
+      imagen VARCHAR(40) NULL,
+      prueba TINYINT(1) NOT NULL DEFAULT 0,
+      automatico TINYINT(1) NOT NULL DEFAULT 0,
+      enviado_por INT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_cfe_dni_anio (dni, anio),
+      KEY idx_cfe_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  // "Toma" de un cumpleaños por la PC que lo va a mandar en automático: evita que dos PCs
+  // con la app abierta manden el mismo saludo a la vez (la toma vence a los 10 minutos).
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS cumpleanos_felicitacion_tomas (
+      dni INT NOT NULL,
+      anio INT NOT NULL,
+      prueba TINYINT(1) NOT NULL,
+      token VARCHAR(40) NOT NULL,
+      tomado_at DATETIME NOT NULL,
+      PRIMARY KEY (dni, anio, prueba)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await sequelize.query(`INSERT IGNORE INTO cumpleanos_felicitacion_config (id) VALUES (1)`);
+  // imagen pasó de VARCHAR(40) a 255 para guardar 'carpeta:<nombre de archivo>'
+  await sequelize.query(`ALTER TABLE cumpleanos_felicitacion_config MODIFY imagen VARCHAR(255) NOT NULL DEFAULT 'diseno:globos'`);
+  await sequelize.query(`ALTER TABLE cumpleanos_felicitacion_envios MODIFY imagen VARCHAR(255) NULL`);
+  felicitacionInit.add(sequelize);
+}
+
+// Carpeta de tarjetas propias: toda imagen que se guarde ahí aparece en la página para elegir.
+// En el servidor es D:\G\TARJETAS CUMPLEANOS (en la red \\host\G\TARJETAS CUMPLEANOS);
+// adentro hay un LEEME con las instrucciones.
+const TARJETAS_DIR = path.resolve(process.env.FELICITACIONES_TARJETAS_DIR?.trim() || 'D:\\G\\TARJETAS CUMPLEANOS');
+const TARJETAS_MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+const TARJETAS_MAX_BYTES = 8 * 1024 * 1024;
+
+function listarCarpetaTarjetas() {
+  const existe = fs.existsSync(TARJETAS_DIR);
+  const imagenes = !existe ? [] : fs.readdirSync(TARJETAS_DIR, { withFileTypes: true })
+    .filter((d) => d.isFile() && TARJETAS_MIME[path.extname(d.name).toLowerCase()])
+    .map((d) => {
+      const st = fs.statSync(path.join(TARJETAS_DIR, d.name));
+      return { archivo: d.name, nombre: path.basename(d.name, path.extname(d.name)), bytes: st.size, modificado: st.mtime };
+    })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  return {
+    ruta: TARJETAS_DIR,
+    // relativa al share (lo que va después de \\host\): D:\G\X → G\X
+    uncRel: TARJETAS_DIR.replace(/^[a-zA-Z]:[\\/]/, '').replace(/\//g, '\\'),
+    existe,
+    imagenes,
+  };
+}
+
+/** Archivo de la carpeta de tarjetas, o null si el nombre no es válido (sin subcarpetas ni "..") */
+function archivoTarjeta(nombre: string) {
+  const base = path.basename(String(nombre || ''));
+  if (!base || base !== nombre || !TARJETAS_MIME[path.extname(base).toLowerCase()]) return null;
+  const full = path.join(TARJETAS_DIR, base);
+  return path.dirname(full) === TARJETAS_DIR ? full : null;
+}
+
+const PLANTILLA_FELICITACION_DEFAULT =
+  '¡Feliz cumpleaños, {nombre}! 🎂🎉\n\nDe parte de todo el equipo de Personal te deseamos un día hermoso, rodeado de afecto. ¡Que lo disfrutes mucho!';
+
+const imagenUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
+
+async function leerConfigFelicitacion(sequelize: Sequelize) {
+  await ensureFelicitacionTables(sequelize);
+  const [c] = await sequelize.query<any>(`SELECT * FROM cumpleanos_felicitacion_config WHERE id = 1`, { type: QueryTypes.SELECT });
+  return {
+    plantilla: c?.plantilla || PLANTILLA_FELICITACION_DEFAULT,
+    imagen: c?.imagen || 'diseno:globos',
+    nombre_en_imagen: !!Number(c?.nombre_en_imagen ?? 1),
+    automatico: !!Number(c?.automatico ?? 0),
+    hora: c?.hora || '09:00',
+    prueba: !!Number(c?.prueba ?? 1),
+    destino_prueba: c?.destino_prueba || '',
+    modo: c?.modo || 'TELEFONO',
+    updated_at: c?.updated_at || null,
+  };
+}
+
+async function marcarAvisado(sequelize: Sequelize, dni: number, anio: number, userId: number | null) {
+  const rows = await sequelize.query<{ fecha_nacimiento: string }>(
+    `SELECT fecha_nacimiento FROM personal WHERE dni = :dni AND deleted_at IS NULL LIMIT 1`,
+    { replacements: { dni }, type: QueryTypes.SELECT },
+  );
+  const cumple = rows.length ? birthdayForYear(rows[0].fecha_nacimiento, anio) : null;
+  if (!cumple) return;
+  await sequelize.query(
+    `INSERT INTO alertas_cumpleanos_estado
+       (dni, anio, fecha_cumple, estado, avisado_at, avisado_por, created_at, updated_at)
+     VALUES (:dni, :anio, :fechaCumple, 'AVISADO', NOW(), :userId, NOW(), NOW())
+     ON DUPLICATE KEY UPDATE estado = 'AVISADO', avisado_at = NOW(), avisado_por = :userId, updated_at = NOW()`,
+    { replacements: { dni, anio, fechaCumple: dateOnly(cumple), userId } },
+  );
+}
+
+/** Último envío (real y de prueba) por dni-anio, para mostrar en la lista. */
+async function ultimosEnvios(sequelize: Sequelize, claves: { dni: number; anio: number }[]) {
+  const map = new Map<string, any>();
+  if (!claves.length) return map;
+  const dnis = [...new Set(claves.map((c) => c.dni))];
+  const anios = [...new Set(claves.map((c) => c.anio))];
+  const rows = await sequelize.query<any>(
+    `SELECT e.* FROM cumpleanos_felicitacion_envios e WHERE e.dni IN (:dnis) AND e.anio IN (:anios) ORDER BY e.id`,
+    { replacements: { dnis, anios }, type: QueryTypes.SELECT },
+  );
+  for (const r of rows) {
+    const k = `${r.dni}-${r.anio}`;
+    const prev = map.get(k) || { real: null, prueba: null, intentos: 0 };
+    prev.intentos++;
+    const dato = { estado: r.estado, modo: r.modo, destino: r.destino, detalle: r.detalle, automatico: !!Number(r.automatico), at: r.created_at };
+    if (Number(r.prueba)) prev.prueba = dato; else prev.real = dato;
+    map.set(k, prev);
+  }
+  return map;
+}
+
 export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
   const router = Router();
 
@@ -252,7 +421,14 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
         })
         .sort((a: any, b: any) => a.dias - b.dias || String(a.apellido).localeCompare(String(b.apellido), 'es'));
 
-      return res.json({ ok: true, data, meta: { total: data.length, dias, estado: estadoFiltro } });
+      await ensureFelicitacionTables(sequelize);
+      const envios = await ultimosEnvios(sequelize, data.map((d: any) => ({ dni: Number(d.dni), anio: Number(d.anio) })));
+      const conWsp = data.map((d: any) => {
+        const cel = celularDe(d.telefono);
+        return { ...d, celular: cel.celular, celular_dudoso: cel.dudoso, whatsapp: envios.get(`${d.dni}-${d.anio}`) || null };
+      });
+
+      return res.json({ ok: true, data: conWsp, meta: { total: conWsp.length, dias, estado: estadoFiltro } });
     } catch (err: any) {
       logger.error({ msg: 'Error listando alertas de cumpleanos', err });
       return res.status(500).json({ ok: false, error: 'Error al listar cumpleanos' });
@@ -262,6 +438,218 @@ export function buildCumpleanosAlertasRouter(sequelize: Sequelize) {
   router.post('/:dni/:anio/avisar', requirePermission('api:access'), (req, res) => setEstado(sequelize, req, res, 'AVISADO'));
   router.post('/:dni/:anio/omitir', requirePermission('api:access'), (req, res) => setEstado(sequelize, req, res, 'OMITIDO'));
   router.post('/:dni/:anio/pendiente', requirePermission('api:access'), (req, res) => setEstado(sequelize, req, res, 'PENDIENTE'));
+
+  // ── Felicitaciones por WhatsApp ───────────────────────────────────────────
+  router.get('/felicitacion/config', requirePermission('api:access'), async (_req, res) => {
+    try {
+      const config = await leerConfigFelicitacion(sequelize);
+      const imagenes = await sequelize.query<any>(
+        `SELECT id, nombre, mime, LENGTH(datos) AS bytes, created_at FROM cumpleanos_felicitacion_imagenes
+          WHERE deleted_at IS NULL ORDER BY id DESC`,
+        { type: QueryTypes.SELECT },
+      );
+      let carpeta: any;
+      try { carpeta = listarCarpetaTarjetas(); } catch (e: any) {
+        carpeta = { ruta: TARJETAS_DIR, uncRel: '', existe: false, imagenes: [], error: e?.message || 'No se pudo leer la carpeta' };
+      }
+      return res.json({ ok: true, data: { config, imagenes, carpeta, plantilla_default: PLANTILLA_FELICITACION_DEFAULT } });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion config', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo leer la configuración' });
+    }
+  });
+
+  router.put('/felicitacion/config', requirePermission('crud:*:*'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const b = req.body || {};
+      const hora = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.hora || '')) ? String(b.hora) : '09:00';
+      const img = String(b.imagen || '');
+      const imagen = /^(diseno:[a-z]+|subida:\d+)$/.test(img) || (img.startsWith('carpeta:') && img.length <= 255 && archivoTarjeta(img.slice(8)))
+        ? img : 'diseno:globos';
+      const modo = ['TELEFONO', 'NOMBRE_TELEFONO'].includes(String(b.modo)) ? String(b.modo) : 'TELEFONO';
+      const plantilla = String(b.plantilla ?? '').slice(0, 2000).trim() || null;
+      await sequelize.query(
+        `UPDATE cumpleanos_felicitacion_config SET plantilla = :plantilla, imagen = :imagen, nombre_en_imagen = :nei,
+            automatico = :auto, hora = :hora, prueba = :prueba, destino_prueba = :dp, modo = :modo, updated_by = :uid
+          WHERE id = 1`,
+        { replacements: {
+          plantilla, imagen, nei: b.nombre_en_imagen === false ? 0 : 1, auto: b.automatico ? 1 : 0, hora,
+          prueba: b.prueba === false ? 0 : 1, dp: String(b.destino_prueba || '').slice(0, 50) || null, modo,
+          uid: (req as any).auth?.principalId ?? null,
+        } },
+      );
+      trackAction('cumpleanos_felicitacion_config', { actor: (req as any).auth?.principalId ?? null, automatico: !!b.automatico, prueba: b.prueba !== false });
+      return res.json({ ok: true, data: await leerConfigFelicitacion(sequelize) });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion config put', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo guardar la configuración' });
+    }
+  });
+
+  router.get('/felicitacion/imagenes/:id', requirePermission('api:access'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const [img] = await sequelize.query<any>(
+        `SELECT mime, datos FROM cumpleanos_felicitacion_imagenes WHERE id = :id AND deleted_at IS NULL`,
+        { replacements: { id: Number(req.params.id) || 0 }, type: QueryTypes.SELECT },
+      );
+      if (!img) return res.status(404).json({ ok: false, error: 'Imagen no encontrada' });
+      return res.json({ ok: true, data: { mime: img.mime, base64: Buffer.from(img.datos).toString('base64') } });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion imagen get', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo leer la imagen' });
+    }
+  });
+
+  // Instructivo de la carpeta (el .txt que empieza con LEEME): la página lo muestra tal cual,
+  // así si se edita el archivo cambia en los dos lados.
+  router.get('/felicitacion/carpeta-leeme', requirePermission('api:access'), async (_req, res) => {
+    try {
+      const archivo = fs.existsSync(TARJETAS_DIR)
+        ? fs.readdirSync(TARJETAS_DIR).find((n) => /^LEEME.*\.txt$/i.test(n))
+        : undefined;
+      if (!archivo) return res.status(404).json({ ok: false, error: `No hay ningún LEEME*.txt en ${TARJETAS_DIR}` });
+      const texto = fs.readFileSync(path.join(TARJETAS_DIR, archivo), 'utf8').replace(/^\uFEFF/, '');
+      return res.json({ ok: true, data: { archivo, texto } });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion leeme', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo leer el instructivo' });
+    }
+  });
+
+  // Imagen de la carpeta de tarjetas (D:\G\TARJETAS CUMPLEANOS)
+  router.get('/felicitacion/carpeta/:archivo', requirePermission('api:access'), async (req, res) => {
+    try {
+      const full = archivoTarjeta(req.params.archivo);
+      if (!full || !fs.existsSync(full)) return res.status(404).json({ ok: false, error: 'La tarjeta ya no está en la carpeta' });
+      const st = fs.statSync(full);
+      if (st.size > TARJETAS_MAX_BYTES) return res.status(400).json({ ok: false, error: 'La imagen pesa más de 8 MB' });
+      const mime = TARJETAS_MIME[path.extname(full).toLowerCase()];
+      return res.json({ ok: true, data: { mime, base64: fs.readFileSync(full).toString('base64') } });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion carpeta get', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo leer la tarjeta' });
+    }
+  });
+
+  router.post('/felicitacion/imagenes', requirePermission('crud:*:*'), imagenUpload.single('archivo'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const f = (req as any).file as { mimetype: string; originalname: string; buffer: Buffer } | undefined;
+      if (!f) return res.status(400).json({ ok: false, error: 'Falta el archivo' });
+      if (!/^image\/(png|jpeg|webp)$/.test(f.mimetype)) return res.status(400).json({ ok: false, error: 'Solo imágenes JPG, PNG o WEBP' });
+      const nombre = String(req.body?.nombre || f.originalname || 'imagen').slice(0, 200);
+      const [id] = await sequelize.query(
+        `INSERT INTO cumpleanos_felicitacion_imagenes (nombre, mime, datos, created_by) VALUES (:nombre, :mime, :datos, :uid)`,
+        { replacements: { nombre, mime: f.mimetype, datos: f.buffer, uid: (req as any).auth?.principalId ?? null } },
+      );
+      return res.json({ ok: true, data: { id, nombre } });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion imagen post', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo guardar la imagen' });
+    }
+  });
+
+  router.delete('/felicitacion/imagenes/:id', requirePermission('crud:*:*'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const id = Number(req.params.id) || 0;
+      await sequelize.query(`UPDATE cumpleanos_felicitacion_imagenes SET deleted_at = NOW() WHERE id = :id`, { replacements: { id } });
+      // Si era la elegida, vuelve al diseño por defecto
+      await sequelize.query(`UPDATE cumpleanos_felicitacion_config SET imagen = 'diseno:globos' WHERE id = 1 AND imagen = :img`, { replacements: { img: `subida:${id}` } });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion imagen delete', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo borrar la imagen' });
+    }
+  });
+
+  // Envío automático: la PC que va a mandar "toma" el cumpleaños. tomado=false si ya hubo un
+  // intento automático (en el mismo modo prueba/real), si ya está avisado/omitido (real) o si otra
+  // PC lo tomó hace menos de 10 minutos.
+  router.post('/felicitacion/tomar', requirePermission('api:access'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const dni = Number(req.body?.dni), anio = Number(req.body?.anio), prueba = req.body?.prueba ? 1 : 0;
+      if (!Number.isInteger(dni) || !Number.isInteger(anio)) return res.status(400).json({ ok: false, error: 'Parámetros inválidos' });
+      const [previo] = await sequelize.query<any>(
+        `SELECT COUNT(*) AS n FROM cumpleanos_felicitacion_envios WHERE dni = :dni AND anio = :anio AND automatico = 1 AND prueba = :prueba`,
+        { replacements: { dni, anio, prueba }, type: QueryTypes.SELECT },
+      );
+      if (Number(previo?.n) > 0) return res.json({ ok: true, tomado: false, motivo: 'Ya hubo un intento automático' });
+      if (!prueba) {
+        const [est] = await sequelize.query<any>(
+          `SELECT estado FROM alertas_cumpleanos_estado WHERE dni = :dni AND anio = :anio`,
+          { replacements: { dni, anio }, type: QueryTypes.SELECT },
+        );
+        if (est && est.estado !== 'PENDIENTE') return res.json({ ok: true, tomado: false, motivo: `Ya está ${est.estado}` });
+      }
+      const token = crypto.randomBytes(12).toString('hex');
+      await sequelize.query(
+        `INSERT INTO cumpleanos_felicitacion_tomas (dni, anio, prueba, token, tomado_at) VALUES (:dni, :anio, :prueba, :token, NOW())
+         ON DUPLICATE KEY UPDATE
+           token = IF(tomado_at < NOW() - INTERVAL 10 MINUTE, VALUES(token), token),
+           tomado_at = IF(tomado_at < NOW() - INTERVAL 10 MINUTE, VALUES(tomado_at), tomado_at)`,
+        { replacements: { dni, anio, prueba, token } },
+      );
+      const [t] = await sequelize.query<any>(
+        `SELECT token FROM cumpleanos_felicitacion_tomas WHERE dni = :dni AND anio = :anio AND prueba = :prueba`,
+        { replacements: { dni, anio, prueba }, type: QueryTypes.SELECT },
+      );
+      return res.json({ ok: true, tomado: t?.token === token, motivo: t?.token === token ? null : 'Lo está mandando otra PC' });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion tomar', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo tomar el cumpleaños' });
+    }
+  });
+
+  // Resultado de un envío (manual o automático). Si salió bien y no es prueba → AVISADO.
+  router.post('/felicitacion/envios', requirePermission('api:access'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const b = req.body || {};
+      const dni = Number(b.dni), anio = Number(b.anio);
+      if (!Number.isInteger(dni) || !Number.isInteger(anio)) return res.status(400).json({ ok: false, error: 'Parámetros inválidos' });
+      const estado = String(b.estado || 'ERROR').slice(0, 20);
+      const prueba = b.prueba ? 1 : 0;
+      const userId = (req as any).auth?.principalId ?? null;
+      await sequelize.query(
+        `INSERT INTO cumpleanos_felicitacion_envios (dni, anio, estado, modo, destino, detalle, imagen, prueba, automatico, enviado_por)
+         VALUES (:dni, :anio, :estado, :modo, :destino, :detalle, :imagen, :prueba, :auto, :uid)`,
+        { replacements: {
+          dni, anio, estado, modo: b.modo ? String(b.modo).slice(0, 20) : null, destino: b.destino ? String(b.destino).slice(0, 100) : null,
+          detalle: b.detalle ? String(b.detalle).slice(0, 500) : null, imagen: b.imagen ? String(b.imagen).slice(0, 255) : null,
+          prueba, auto: b.automatico ? 1 : 0, uid: userId,
+        } },
+      );
+      if (estado === 'ENVIADO' && !prueba) await marcarAvisado(sequelize, dni, anio, userId);
+      trackAction('cumpleanos_felicitacion_envio', { actor: userId, dni, anio, estado, prueba: !!prueba, automatico: !!b.automatico });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion envio', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo registrar el envío' });
+    }
+  });
+
+  router.get('/felicitacion/envios', requirePermission('api:access'), async (req, res) => {
+    try {
+      await ensureFelicitacionTables(sequelize);
+      const limite = toInt(req.query.limite, 200, 1, 1000);
+      const rows = await sequelize.query<any>(
+        `SELECT e.*, p.apellido, p.nombre, COALESCE(NULLIF(u.nombre, ''), u.email) AS enviado_por_nombre
+           FROM cumpleanos_felicitacion_envios e
+           LEFT JOIN personal p ON p.dni = e.dni
+           LEFT JOIN usuarios u ON u.id = e.enviado_por
+          ORDER BY e.id DESC LIMIT ${limite}`,
+        { type: QueryTypes.SELECT },
+      );
+      return res.json({ ok: true, data: rows });
+    } catch (err: any) {
+      logger.error({ msg: 'felicitacion envios get', err: err?.message });
+      return res.status(500).json({ ok: false, error: 'No se pudo leer el historial' });
+    }
+  });
 
   return router;
 }

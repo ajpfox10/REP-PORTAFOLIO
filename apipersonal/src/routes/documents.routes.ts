@@ -14,6 +14,7 @@ import { DocumentController } from '../domains/personalv5/controllers/document.c
 import { buildDocumentsVersionsRouter } from './documents.versions.routes';
 import { buildDocumentsPreviewRouter } from './documents.preview.routes';
 import { buildDocumentsOcrRouter } from './documents.ocr.routes';
+import { requireDocumentsList, requireDocumentFile } from '../middlewares/documentsAccess';
 
 export function buildDocumentsRouter(sequelize: any) {
   const router = Router();
@@ -24,6 +25,7 @@ export function buildDocumentsRouter(sequelize: any) {
   // GET /api/v1/documents?page=&limit=&q=&dni=
   router.get(
     '/',
+    requireDocumentsList(),
     cacheMiddleware({
       ttl: 60,
       tags: (req: any) => {
@@ -43,7 +45,7 @@ export function buildDocumentsRouter(sequelize: any) {
 
   // GET /api/v1/documents/:id/file  ← ESTE ES EL FIX PRINCIPAL
   // Ahora usa DocumentService.resolveFile() que maneja todas las variantes de ruta
-  router.get('/:id/file', ctrl.getFile);
+  router.get('/:id/file', requireDocumentFile(sequelize), ctrl.getFile);
 
   // DELETE /api/v1/documents/:id
   router.delete('/:id', ctrl.delete);

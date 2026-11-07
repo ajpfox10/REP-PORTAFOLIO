@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { CuilAnsesPanel } from './CuilAnsesPanel';
+import { RdamPanel } from './RdamPanel';
+import { FormularioDesignacionPanel } from './FormularioDesignacionPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Flujo nuevo (2026-08): consulta de interinos 10430 por rango de años -> cuadro
@@ -77,10 +79,22 @@ function grupoLabel(g: string): string {
   return g;
 }
 
-const ESTADOS = ['pendiente', 'hecho', 'aprobado'] as const;
+// Estado del trámite de cada agente (marca manual). Los valores son los que guarda la base.
+const ESTADOS = ['pendiente', 'falta documentacion', 'carpeta completa', 'presentado', 'observado', 'aprobado'] as const;
+const ESTADO_LABEL: Record<string, string> = {
+  pendiente: 'Pendiente',
+  'falta documentacion': 'Falta documentación',
+  'carpeta completa': 'Carpeta completa',
+  presentado: 'Presentado',
+  observado: 'Observado',
+  aprobado: 'Aprobado',
+};
 const ESTADO_COLOR: Record<string, string> = {
   pendiente: '#94a3b8',
-  hecho: '#f59e0b',
+  'falta documentacion': '#ef4444',
+  'carpeta completa': '#38bdf8',
+  presentado: '#f59e0b',
+  observado: '#e879f9',
   aprobado: '#22c55e',
 };
 
@@ -221,6 +235,9 @@ export function TramitesTab() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [listaPage, setListaPage] = useState(0);
   const [verCuil, setVerCuil] = useState(false);
+  const [verRdam, setVerRdam] = useState(false);
+  const [verRdamSueltos, setVerRdamSueltos] = useState(false);
+  const [verFormulario, setVerFormulario] = useState(false);
 
   // Tandas
   const [tandaRows, setTandaRows] = useState<TandaAgente[]>([]);
@@ -767,11 +784,33 @@ export function TramitesTab() {
           onGuardado={(dni) => { if (agente?.dni === dni) void loadDocu(dni); }} />
       ) : null}
 
+      {verRdam && selectedTanda ? (
+        <RdamPanel tanda={selectedTanda} onCerrar={() => setVerRdam(false)}
+          onGuardado={(dni) => { if (agente?.dni === dni) void loadDocu(dni); }} />
+      ) : null}
+
+      {verRdamSueltos ? (
+        <RdamPanel tanda={null} onCerrar={() => setVerRdamSueltos(false)}
+          onGuardado={(dni) => { if (agente?.dni === dni) void loadDocu(dni); }} />
+      ) : null}
+
+      {verFormulario && selectedTanda ? (
+        <FormularioDesignacionPanel key={selectedTanda} tanda={selectedTanda} onCerrar={() => setVerFormulario(false)} />
+      ) : null}
+
       {/* ── Tandas + detalle del agente ───────────────────────────────────── */}
       <section style={{ background: CARD_BG, border: BORDER, borderRadius: 12, padding: 16, display: 'flex', gap: 16, minHeight: 460 }}>
         {/* Columna izquierda: tandas + agentes */}
         <div style={{ width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={eyebrowStyle}>Tandas</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={eyebrowStyle}>Tandas</div>
+            <span style={{ flex: 1 }} />
+            <button type="button" onClick={() => setVerRdamSueltos(true)} disabled={verRdamSueltos}
+              title="Bajar el certificado RDAM de agentes que no están en ninguna tanda: pegás los DNI o los buscás en la base"
+              style={{ ...chipBtn, background: verRdamSueltos ? 'rgba(255,255,255,0.05)' : '#6d28d9', color: '#fff', cursor: verRdamSueltos ? 'default' : 'pointer' }}>
+              ⚖️ RDAM por DNI
+            </button>
+          </div>
           {tandas.length ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {tandas.map((t) => (
@@ -820,21 +859,32 @@ export function TramitesTab() {
           </div>
 
           {selectedTanda ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            // Acciones sobre la tanda elegida, de a dos por fila (el nombre de la tanda va en el title).
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               <button type="button" onClick={() => void crearSubcarpetas()} disabled={creandoSub || ordenando}
-                title="Crea en DOCU\<dni> una subcarpeta por cada documento del orden (según la ley del agente), sin duplicar"
-                style={{ ...primaryBtn, background: creandoSub ? 'rgba(255,255,255,0.08)' : ACCENT, cursor: creandoSub || ordenando ? 'default' : 'pointer', fontSize: '0.78rem', padding: '8px 12px' }}>
-                {creandoSub ? 'Analizando…' : `📁 Crear subcarpetas en "${selectedTanda}"`}
+                title={`Crea en DOCU\\<dni> de cada agente de "${selectedTanda}" una subcarpeta por cada documento del orden (según la ley del agente), sin duplicar`}
+                style={{ ...primaryBtn, ...accionBtn, background: creandoSub ? 'rgba(255,255,255,0.08)' : ACCENT, cursor: creandoSub || ordenando ? 'default' : 'pointer' }}>
+                {creandoSub ? 'Analizando…' : '📁 Subcarpetas'}
               </button>
               <button type="button" onClick={() => void ordenarArchivos()} disabled={ordenando || creandoSub}
-                title="Clasifica los archivos sueltos de cada agente (nombre + OCR) y los mueve a la subcarpeta DNI/CUIL/Título/Matrícula/Ético"
-                style={{ ...primaryBtn, background: ordenando ? 'rgba(255,255,255,0.08)' : '#0f766e', cursor: ordenando || creandoSub ? 'default' : 'pointer', fontSize: '0.78rem', padding: '8px 12px' }}>
-                {ordenando && ordenProg ? `Ordenando ${ordenProg.done}/${ordenProg.total}…` : `🗂️ Ordenar archivos de "${selectedTanda}"`}
+                title={`Clasifica los archivos sueltos de cada agente de "${selectedTanda}" (nombre + OCR) y los mueve a la subcarpeta DNI/CUIL/Título/Matrícula/Ético`}
+                style={{ ...primaryBtn, ...accionBtn, background: ordenando ? 'rgba(255,255,255,0.08)' : '#0f766e', cursor: ordenando || creandoSub ? 'default' : 'pointer' }}>
+                {ordenando && ordenProg ? `${ordenProg.done}/${ordenProg.total}…` : '🗂️ Ordenar'}
               </button>
               <button type="button" onClick={() => setVerCuil(true)} disabled={verCuil}
-                title="Baja la constancia de CUIL de ANSES con la extensión de Chrome y la guarda en DOCU\<dni>\CUIL"
-                style={{ ...primaryBtn, background: verCuil ? 'rgba(255,255,255,0.08)' : '#0e7490', cursor: verCuil ? 'default' : 'pointer', fontSize: '0.78rem', padding: '8px 12px' }}>
-                {`🪪 Bajar CUIL de ANSES ("${selectedTanda}")`}
+                title={`Baja la constancia de CUIL de ANSES de los agentes de "${selectedTanda}" con la extensión de Chrome y la guarda en DOCU\\<dni>\\CUIL`}
+                style={{ ...primaryBtn, ...accionBtn, background: verCuil ? 'rgba(255,255,255,0.08)' : '#0e7490', cursor: verCuil ? 'default' : 'pointer' }}>
+                📄 CUIL ANSES
+              </button>
+              <button type="button" onClick={() => setVerRdam(true)} disabled={verRdam}
+                title={`Baja el certificado del RDAM (deudores alimentarios) de los agentes de "${selectedTanda}" con la extensión de Chrome y lo guarda en DOCU\\<dni>\\RDAM`}
+                style={{ ...primaryBtn, ...accionBtn, background: verRdam ? 'rgba(255,255,255,0.08)' : '#6d28d9', cursor: verRdam ? 'default' : 'pointer' }}>
+                ⚖️ RDAM
+              </button>
+              <button type="button" onClick={() => setVerFormulario(true)} disabled={verFormulario}
+                title={`Baja el script del formulario de Google de Designación y manda el link por WhatsApp a los agentes de "${selectedTanda}"`}
+                style={{ ...primaryBtn, ...accionBtn, background: verFormulario ? 'rgba(255,255,255,0.08)' : '#16a34a', cursor: verFormulario ? 'default' : 'pointer' }}>
+                📝 Formulario
               </button>
             </div>
           ) : null}
@@ -858,9 +908,9 @@ export function TramitesTab() {
                 <input value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)}
                   placeholder="Filtrar nombre o DNI" style={{ ...inputStyle, flex: 1, minWidth: 0, padding: '6px 8px', fontSize: '0.78rem' }} />
                 <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}
-                  style={{ ...inputStyle, width: 110, padding: '6px 6px', fontSize: '0.78rem' }}>
-                  <option value="" style={{ color: '#111' }}>Todos</option>
-                  {ESTADOS.map((es) => <option key={es} value={es} style={{ color: '#111' }}>{es}</option>)}
+                  style={{ ...inputStyle, width: 150, padding: '6px 6px', fontSize: '0.78rem' }}>
+                  <option value="" style={OPCION}>Todos</option>
+                  {ESTADOS.map((es) => <option key={es} value={es} style={{ ...OPCION, color: ESTADO_COLOR[es] }}>{ESTADO_LABEL[es]}</option>)}
                 </select>
               </div>
             </>
@@ -890,7 +940,7 @@ export function TramitesTab() {
                     background: 'rgba(255,255,255,0.05)', border: BORDER, borderRadius: 6, padding: '3px 4px',
                     color: ESTADO_COLOR[a.estado] || '#cbd5e1', fontSize: '0.72rem', cursor: 'pointer',
                   }}>
-                  {ESTADOS.map((es) => <option key={es} value={es} style={{ color: '#111' }}>{es}</option>)}
+                  {ESTADOS.map((es) => <option key={es} value={es} style={{ ...OPCION, color: ESTADO_COLOR[es] }}>{ESTADO_LABEL[es]}</option>)}
                 </select>
                 <button type="button" title="Quitar de la tanda"
                   onClick={(e) => { e.stopPropagation(); void quitarDeTanda(a.tanda, a.dni); }}
@@ -1075,6 +1125,9 @@ const labelStyle: React.CSSProperties = { color: '#64748b', fontSize: '0.72rem',
 const eyebrowStyle: React.CSSProperties = { color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 };
 const inputStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.05)', border: BORDER, borderRadius: 8, padding: '7px 10px', color: '#fff', fontSize: '0.85rem' };
 const primaryBtn: React.CSSProperties = { background: ACCENT, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' };
+// Opciones de los combos: fondo oscuro fijo (Chrome dibuja la lista oscura y la letra negra no se veía).
+const OPCION: React.CSSProperties = { background: '#1e1b2e', color: '#e2e8f0' };
+const accionBtn: React.CSSProperties = { flex: 1, minWidth: 0, fontSize: '0.74rem', padding: '8px 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 const chipBtn: React.CSSProperties = { border: BORDER, borderRadius: 20, padding: '4px 12px', fontSize: '0.78rem', cursor: 'pointer' };
 const miniBtn: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', border: BORDER, borderRadius: 6, padding: '3px 8px', fontSize: '0.72rem', color: '#cbd5e1', cursor: 'pointer' };
 const xBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem', padding: 4 };

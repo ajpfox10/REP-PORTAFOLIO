@@ -995,7 +995,21 @@ function WhatsappTab() {
     });
   }, [rowsHabil, verAnio]);
 
-  const exportRows = rowsHabil.map(r => ({ fecha: fmtLocalDate(r.fecha), cantidad: r.cantidad }));
+  const exportRows = rowsHabil.map(r => ({
+    fecha: fmtLocalDate(r.fecha), cantidad: r.cantidad, origen: r.origen ?? '',
+    mensajes: r.mensajes ?? '', personas: r.personas ?? '',
+    manana: r.manana ?? '', tarde: r.tarde ?? '', noche: r.noche ?? '',
+    agentes: r.agentes ?? '', sin_agente: r.sin_agente ?? '',
+  }));
+  // columnas del conteo automático (null = ese día no hubo lectura de WhatsApp)
+  const COLS_AUTO: { k: string; h: string; title: string }[] = [
+    { k: 'mensajes', h: 'MENSAJES', title: 'Mensajes recibidos ese día (conteo automático)' },
+    { k: 'manana', h: 'MAÑANA', title: 'Personas que escribieron de 6 a 12' },
+    { k: 'tarde', h: 'TARDE', title: 'Personas que escribieron de 12 a 18' },
+    { k: 'noche', h: 'NOCHE', title: 'Personas que escribieron de 18 a 6' },
+    { k: 'agentes', h: 'AGENTES', title: 'Personas que son agentes (por celular o nombre agendado)' },
+    { k: 'sin_agente', h: 'SIN AGENTE', title: 'Personas que no se pudieron cruzar con un agente' },
+  ];
   const exportFilename = verAnio
     ? `whatsapp_${filtroAnio}.xlsx`
     : `whatsapp_${filtroAnio}_${filtroMes.padStart(2,'0')}.xlsx`;
@@ -1023,6 +1037,20 @@ function WhatsappTab() {
             : <strong style={{ color: '#4ade80' }}>{r.cantidad}</strong>
           }
         </td>
+        <td style={{ padding: '5px 10px' }}>
+          {r.origen === 'AUTO'
+            ? <span title={`Personas distintas que escribieron (volcado ${r.volcado_at ? new Date(r.volcado_at).toLocaleString('es-AR') : ''})`}
+                style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: 6, background: 'rgba(56,189,248,0.15)', color: '#38bdf8' }}>🤖 Auto</span>
+            : r.origen === 'MANUAL'
+              ? <span title="Cargado a mano: el conteo automático no pisa la cantidad"
+                  style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: 6, background: 'rgba(148,163,184,0.15)', color: '#cbd5e1' }}>✍️ Manual</span>
+              : null}
+        </td>
+        {COLS_AUTO.map(c => (
+          <td key={c.k} style={{ padding: '5px 10px', textAlign: 'right', color: '#cbd5e1' }}>
+            {r[c.k] ?? <span style={{ color: '#475569' }}>—</span>}
+          </td>
+        ))}
         <td style={{ padding: '5px 10px', textAlign: 'right' }}>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
             {editingId === r.id ? (
@@ -1053,16 +1081,20 @@ function WhatsappTab() {
 
   function TablaFilas({ filas, labelTotal }: { filas: any[]; labelTotal: string }) {
     const tot = filas.reduce((s, r) => s + Number(r.cantidad), 0);
+    const th = (h: string, right: boolean, title?: string) => (
+      <th key={h} title={title} style={{ padding: '5px 10px', textAlign: right ? 'right' : 'left',
+        color: '#94a3b8', fontSize: '0.72rem', whiteSpace: 'nowrap',
+        borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{h}</th>
+    );
     return (
       <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
-            {['ID','FECHA','CANTIDAD',''].map(h => (
-              <th key={h} style={{ padding: '5px 10px',
-                textAlign: h === 'CANTIDAD' ? 'right' : 'left',
-                color: '#94a3b8', fontSize: '0.72rem',
-                borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{h}</th>
-            ))}
+            {th('ID', false)}{th('FECHA', false)}
+            {th('CANTIDAD', true, 'Consultas del día: a mano, o personas distintas que escribieron (automático)')}
+            {th('ORIGEN', false)}
+            {COLS_AUTO.map(c => th(c.h, true, c.title))}
+            {th('', false)}
           </tr>
         </thead>
         <tbody>
@@ -1075,6 +1107,12 @@ function WhatsappTab() {
               {tot}
             </td>
             <td />
+            {COLS_AUTO.map(c => (
+              <td key={c.k} style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: '#cbd5e1' }}>
+                {filas.reduce((s, r) => s + Number(r[c.k] ?? 0), 0)}
+              </td>
+            ))}
+            <td />
           </tr>
         </tbody>
       </table>
@@ -1084,8 +1122,8 @@ function WhatsappTab() {
   return (
     <div style={{ display: 'grid', gap: 12 }}>
 
-      {/* Conteo automático (extensión de Chrome sobre WhatsApp Web) */}
-      <WhatsappAutomatico />
+      {/* Conteo automático (extensión de Chrome sobre WhatsApp Web): lo leído se vuelca a la tabla de abajo */}
+      <WhatsappAutomatico onLeido={cargar} />
 
       {/* Formulario nuevo */}
       <div className="card">

@@ -1723,7 +1723,8 @@ function uniqueDest(dest: string): string {
   return path.join(dir, `${base}-${Date.now()}${ext}`);
 }
 
-const ESTADOS_TANDA = ['pendiente', 'hecho', 'aprobado'];
+// Estado del trámite de cada agente en la tanda (marca manual, en orden del trámite).
+const ESTADOS_TANDA = ['pendiente', 'falta documentacion', 'carpeta completa', 'presentado', 'observado', 'aprobado'];
 
 // Multer propio para subir a DOCU: en memoria (buffers) y varios archivos.
 const docuUpload = multer({
@@ -2376,36 +2377,36 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
   });
 
   // ── GET /tramites-documentales/aptos ──────────────────────────────────────
-  // Cruza D:\G\APTOS\APTOS.xlsx (exámenes de aptitud del Ministerio) con la base:
-  // por DNI trae ley, planta, ocupación y estado del agente. Los que no están
-  // en personal salen con en_sistema=false.
+  // Exámenes de aptitud de SIAPE desde la tabla examenes_medicos_siape (mig 100),
+  // que llena la exportación "Examenes Médicos Salud" (acumula, no borra) y el
+  // robot de certificados. Antes leía D:\G\APTOS\APTOS.xlsx (copia a mano).
+  // Cruza con la base: por DNI trae ley, planta, ocupación y estado del agente.
+  // Los que no están en personal salen con en_sistema=false.
   router.get('/aptos', async (_req: Request, res: Response) => {
-    const APTOS_XLSX = 'D:\\G\\APTOS\\APTOS.xlsx';
+    const ORIGEN = 'tabla examenes_medicos_siape';
     try {
-      if (!fs.existsSync(APTOS_XLSX)) {
-        return res.json({ ok: true, data: { rows: [], existe: false, path: APTOS_XLSX } });
-      }
-      const wb = XLSX.readFile(APTOS_XLSX, { cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json<any>(ws, { defval: '' });
-
-      const fmtFecha = (v: any): string => {
-        if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0, 10);
-        return String(v ?? '').trim();
-      };
+      const raw = await sequelize.query<any>(
+        `SELECT codigo_examen, dni, apellido, nombre, cuil, tipo_examen, modalidad,
+                DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, fecha_origen, estado_examen, resolucion, tipo_tramite
+         FROM examenes_medicos_siape
+         ORDER BY apellido, nombre, fecha`,
+        { type: QueryTypes.SELECT }
+      );
 
       const rows = raw.map((r: any) => ({
-        dni:        Number(String(r['NRO_DOCUMENTO'] ?? '').replace(/\D/g, '')) || 0,
-        apellido:   String(r['APELLIDO'] ?? '').trim(),
-        nombre:     String(r['NOMBRE'] ?? '').trim(),
-        cuil:       String(r['CUIT_CUIL'] ?? '').trim(),
-        codigo:     String(r['CODIGO_EXAMEN'] ?? '').trim(),
-        tipo:       String(r['TIPO_EXAMEN'] ?? '').trim(),
-        modalidad:  String(r['MODALIDAD_EXAMEN'] ?? '').trim(),
-        fecha:      fmtFecha(r['FECHA']),
-        estado_examen: String(r['ESTADO_EXAMEN'] ?? '').trim(),
-        resolucion: String(r['RESOLUCION'] ?? '').trim(),
-        tipo_tramite: String(r['TIPO_TRAMITE'] ?? '').trim(),
+        dni:        Number(r.dni) || 0,
+        apellido:   String(r.apellido ?? '').trim(),
+        nombre:     String(r.nombre ?? '').trim(),
+        cuil:       String(r.cuil ?? '').trim(),
+        codigo:     String(r.codigo_examen ?? '').trim(),
+        tipo:       String(r.tipo_examen ?? '').trim(),
+        modalidad:  String(r.modalidad ?? '').trim(),
+        fecha:      String(r.fecha ?? '').trim(),
+        // 'certificado' = SIAPE sin FECHA, se tomó la de emisión del certificado (mig 101)
+        fecha_origen: String(r.fecha_origen ?? '').trim(),
+        estado_examen: String(r.estado_examen ?? '').trim(),
+        resolucion: String(r.resolucion ?? '').trim(),
+        tipo_tramite: String(r.tipo_tramite ?? '').trim(),
         // enriquecimiento DB (defaults si no está)
         en_sistema: false,
         nombre_db:  '',
@@ -2459,10 +2460,10 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
         logger.warn({ msg: '[tramites] aptos: no se pudo enriquecer desde DB', error: dbErr?.message });
       }
 
-      return res.json({ ok: true, data: { rows, existe: true, path: APTOS_XLSX } });
+      return res.json({ ok: true, data: { rows, existe: rows.length > 0, path: ORIGEN } });
     } catch (err: any) {
       logger.error({ msg: '[tramites] aptos error', error: err?.message });
-      return res.status(500).json({ ok: false, error: err?.message || 'Error al leer APTOS.xlsx' });
+      return res.status(500).json({ ok: false, error: err?.message || 'Error al leer examenes_medicos_siape' });
     }
   });
 
@@ -2764,15 +2765,55 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
     }
   });
 
-  // Agentes de la tanda para bajar la constancia de CUIL de ANSES (lo hace la extensión de Chrome
-  // desde la PC del usuario: ANSES bloquea las consultas automáticas del servidor). Devuelve los
-  // datos que pide el formulario de ANSES y si ya hay algo en la subcarpeta CUIL de DOCU.
+  // Después de guardar un certificado RDAM nuevo: borra los viejos de DOCU\<dni>\RDAM (solo archivos
+  // con "RDAM" en el nombre) salvo el que se acaba de subir. Body: { dni, conservar }.
+  router.post('/docu-rdam-limpiar', (req: Request, res: Response) => {
+    try {
+      const dni = parseDni(req.body?.dni);
+      if (!dni) return res.status(400).json({ ok: false, error: 'DNI inválido' });
+      const conservar = path.basename(String(req.body?.conservar || ''));
+      if (!conservar) return res.status(400).json({ ok: false, error: 'Falta el archivo a conservar' });
+      const dir = resolveInsideDocu(dni, 'RDAM');
+      if (!fs.existsSync(path.join(dir, conservar))) {
+        return res.status(400).json({ ok: false, error: 'El certificado nuevo no está en la carpeta: no se borra nada' });
+      }
+      const borrados: string[] = [];
+      for (const f of fs.readdirSync(dir)) {
+        const full = path.join(dir, f);
+        if (f === conservar || !/RDAM/i.test(f) || !fs.statSync(full).isFile()) continue;
+        fs.unlinkSync(full);
+        borrados.push(f);
+      }
+      return res.json({ ok: true, data: { borrados } });
+    } catch (err: any) {
+      return res.status(err?.status || 500).json({ ok: false, error: err?.message || 'Error al borrar' });
+    }
+  });
+
+  // Agentes de la tanda para bajar la constancia de CUIL de ANSES o el certificado RDAM (lo hace la
+  // extensión de Chrome desde la PC del usuario: ANSES bloquea al servidor y el RDAM pide captcha
+  // en el login). Devuelve los datos que piden los formularios y si ya hay algo en la subcarpeta
+  // de DOCU (?carpeta=CUIL por defecto, o RDAM). En vez de la tanda acepta ?dnis=1,2,3 (agentes
+  // sueltos de la base, sin tanda).
   router.get('/tandas/cuil-pendientes', async (req: Request, res: Response) => {
     try {
       const tanda = queryString(req.query.tanda);
-      if (!tanda) return res.status(400).json({ ok: false, error: 'Falta la tanda' });
+      const dnis = Array.from(new Set(String(queryString(req.query.dnis) || '').split(/[^\d]+/)
+        .map((d) => parseDni(d)).filter((d): d is number => !!d))).slice(0, 500);
+      if (!tanda && !dnis.length) return res.status(400).json({ ok: false, error: 'Falta la tanda o los DNI' });
+      const carpeta = queryString(req.query.carpeta) === 'RDAM' ? 'RDAM' : 'CUIL';
       const rows = await sequelize.query<any>(
+        dnis.length
+          ? `
+          SELECT p.dni, p.apellido, p.nombre, p.cuil,
+                 DATE_FORMAT(p.fecha_nacimiento, '%Y-%m-%d') AS fechaNacimiento,
+                 UPPER(s.nombre) AS sexo
+          FROM personal p
+          LEFT JOIN sexos s ON s.id = p.sexo_id
+          WHERE p.deleted_at IS NULL AND p.dni IN (:dnis)
+          ORDER BY p.apellido, p.nombre
         `
+          : `
           SELECT t.dni, p.apellido, p.nombre, p.cuil,
                  DATE_FORMAT(p.fecha_nacimiento, '%Y-%m-%d') AS fechaNacimiento,
                  UPPER(s.nombre) AS sexo
@@ -2782,12 +2823,12 @@ export function buildTramitesDocumentalesRouter(sequelize: Sequelize) {
           WHERE t.tanda = :tanda
           ORDER BY p.apellido, p.nombre
         `,
-        { replacements: { tanda }, type: QueryTypes.SELECT }
+        { replacements: { tanda, dnis }, type: QueryTypes.SELECT }
       );
       const out = rows.map((r) => {
         let archivos: string[] = [];
         try {
-          const dir = resolveInsideDocu(Number(r.dni), 'CUIL');
+          const dir = resolveInsideDocu(Number(r.dni), carpeta);
           if (fs.existsSync(dir)) archivos = fs.readdirSync(dir).filter((f) => !/^thumbs\.db$/i.test(f) && !f.startsWith('~$'));
         } catch { /* sin carpeta DOCU */ }
         const faltan = ['apellido', 'nombre', 'fechaNacimiento', 'sexo'].filter((k) => !r[k]);

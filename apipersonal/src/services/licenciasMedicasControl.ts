@@ -17,6 +17,10 @@ try { XLSX = require('xlsx'); } catch { XLSX = null; }
 // relleno que el SIAPE pone en CODIGO_OMS cuando no hay diagnóstico real
 const CIE_RELLENO = new Set(['', '-', '999', '66666666', '88888888', '99999999']);
 
+// resoluciones SIAPE con la licencia ya justificada; cualquier otra (PENDIENTE, DENEGADA...) = E
+const RESOLUCION_RESUELTA = new Set(['OTORGADA', 'APROBADA']);
+const NOVEDAD_E = 'E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)';
+
 export type EstadoLic = 'OK' | 'DISTINTO' | 'NO_CARGADA' | 'SIN_CIE';
 
 export interface FilaLicencia {
@@ -108,6 +112,7 @@ export async function controlLicenciasMedicas(
       legajo: String(r.LEGAJO ?? '').trim(),
       novedad_siape: String(r.NOVEDAD ?? '').trim(),
       resolucion: String(r.RESOLUCION ?? '').trim(),
+      justificado: norm(r.JUSTIFICADO),
       desde: aIso(r.FECHA_DESDE),
       hasta: aIso(r.FECHA_HASTA) || aIso(r.FECHA_DESDE),
       dias: Number(r.DIAS) || null,
@@ -170,13 +175,20 @@ export async function controlLicenciasMedicas(
     const relleno = CIE_RELLENO.has(cie);
     const nov = norm(l.novedad_siape);
     const porCie = !relleno ? regla.get(`${nov}|${cie}`) : undefined;
-    const esperado = porCie ?? regla.get(`${nov}|`) ?? '';
     const pisan = (minPorDni.get(l.dni) ?? []).filter(m => m.d <= l.hasta && m.h >= l.desde);
     const codigos = [...new Set(pisan.map(m => (m.codigo || codigoDe(m.novedad)).toUpperCase()))];
+    // 05/11/2026: mientras la licencia no esté OTORGADA/APROBADA en SIAPE (pendiente, denegada,
+    // observada...) lo correcto en el Ministerio es la E (pendiente de justificación). Una vez
+    // otorgada, la E tiene que cambiarse por el código real (robot corregir_licencias_e_intranet).
+    const resuelta = l.justificado === 'SI' || RESOLUCION_RESUELTA.has(norm(l.resolucion));
+    const esperado = !resuelta && codigos.includes('E')
+      ? NOVEDAD_E
+      : porCie ?? regla.get(`${nov}|`) ?? '';
     const rob = (robPorDni.get(l.dni) ?? []).find(r => norm(r.novedad_siap) === nov && r.desde <= l.hasta && r.hasta >= l.desde);
     const esperadoCod = codigoDe(esperado);
     let estado: EstadoLic;
     if (!pisan.length) estado = 'NO_CARGADA';
+    else if (esperadoCod === 'E') estado = 'OK';
     else if (relleno && novConCie.has(nov)) estado = 'SIN_CIE'; // el CIE decide y vino de relleno
     else if (esperadoCod && codigos.includes(esperadoCod)) estado = 'OK';
     else estado = 'DISTINTO';

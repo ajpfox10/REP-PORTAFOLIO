@@ -12,7 +12,7 @@ import { DistribucionEnfermeria } from '../EnfermeriaDistribucionPage';
 import { DotacionCategorias } from './DotacionCategorias';
 import { useToast } from '../../ui/toast';
 import { useAuth } from '../../auth/AuthProvider';
-import { apiFetch } from '../../api/http';
+import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { loadSession } from '../../auth/session';
 import { hasPermission } from '../../auth/permissions';
 import { exportToExcel, exportToPdf, exportToWord, printTable } from '../../utils/export';
@@ -1049,7 +1049,7 @@ function NuevoFrancoSectorModal({ agentes, sectorId, jefeNombre, onClose, onSave
             </div>
             <div className="js-field">
               <label htmlFor="nfs-fecha-franco" style={lbl}>Fecha del franco *</label>
-              <input id="nfs-fecha-franco" name="fecha_franco" type="date" className="input" style={fld}
+              <input id="nfs-fecha-franco" name="fecha_franco" type="date" className="input" style={fld} min={fechaMinJefe()}
                 value={form.fecha_franco} onChange={e => set('fecha_franco', e.target.value)} />
             </div>
             <div className="js-field">
@@ -1149,7 +1149,7 @@ function NuevoFrancoModal({ agente, sectorId, jefeNombre, onClose, onSaved }: Nu
           <div className="js-form-grid">
             <div className="js-field">
               <label htmlFor="nfm-fecha-franco" style={lbl}>Fecha del franco *</label>
-              <input id="nfm-fecha-franco" name="fecha_franco" type="date" className="input" style={fld}
+              <input id="nfm-fecha-franco" name="fecha_franco" type="date" className="input" style={fld} min={fechaMinJefe()}
                 value={form.fecha_franco} onChange={e => set('fecha_franco', e.target.value)} />
             </div>
             <div className="js-field">
@@ -1634,7 +1634,7 @@ function PracticasModal({ agente, agentes, sectorId, jefeNombre, record, onClose
             )}
             <div className="js-field">
               <label htmlFor="prac-fecha" style={lbl}>Fecha desde *</label>
-              <input id="prac-fecha" name="fecha_desde" type="date" className="input" style={fld} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
+              <input id="prac-fecha" name="fecha_desde" type="date" className="input" style={fld} min={fechaMinJefe()} value={form.fecha_desde} onChange={e => set('fecha_desde', e.target.value)} />
             </div>
             <div className="js-field">
               <label htmlFor="prac-dias" style={lbl}>Días * (máx. 10)</label>
@@ -1802,6 +1802,54 @@ function PracticasAgente({ agente, sectorId, jefeNombre }: PracticasAgenteProps)
 }
 
 // ─── Componentes genéricos: Papcolpo / Examen / Pre-examen ──────────────────
+// Portal del jefe: no se carga nada de mas de 3 dias para atras (04/11/2026). La API lo valida igual
+// (crud.routes validateFechaJefe); aca solo limita el selector de fecha.
+const DIAS_ATRAS_JEFE = 3;
+const fechaMinJefe = (): string => {
+  const d = new Date(); d.setDate(d.getDate() - DIAS_ATRAS_JEFE);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Novedades que el jefe carga a los BECADOS y que SIAPE no tiene (04/11/2026). Texto EXACTO de la
+// opción del combo de la Intranet MS: el robot del jefe la carga así en el Ministerio y en SIAPE
+// va como FRANCO COMPENSATORIO. Fuera a propósito: enfermedad (01, 04, 05, 07, 1R, 5D1, E, IL, JM),
+// lo que ya viene de SIAPE (08, 28, 261, 291, 34, DF, PC, PA, PAF, PAT, V43, VV), sanciones (AI, S, SS)
+// y lo que ya tiene su propia pestaña (17 pre-examen, 18 examen, 43 permiso de salida, 45 prácticas).
+const NOVEDADES_JEFE: string[] = [
+  '06 - POR MATERNIDAD',
+  '061 - MATERNIDAD NACIMIENTO MULTIPLE',
+  '111 - POR DEFUNCIÓN FETAL',
+  '311 - LICENCIA POR NACIMIENTO CORRESPONSAL PARENTAL NO GESTANTE',
+  '312 - PATERNIDAD/CORRESPONSAL PARENTAL NACIMIENTO MULTIPLE',
+  'NP1 - NACIMIENTO PREMATURO',
+  'RN1 - RECIEN NACIDO',
+  '421 - POR ADOPCION',
+  'AN1 - ABRIGO NIÑO/A',
+  'AE1 - ADAPTACION ESCOLAR',
+  '6F1 - FERTILIZACION ASISTIDA C SUELDO',
+  '14 - DUELO FAMILIAR DIRECTO',
+  '15 - DUELO FAMILIAR INDIRECTO',
+  '141 - FALLECIMIENTO DE CORRESPONSAL PARENTAL CON HIJO MENOR 18 Y/O DISC',
+  '19 - POR ÚLTIMA MATERIA',
+  '20 - ESPECIAL C/SUELDO',
+  '22 - ACTIVIDAD GREMIAL',
+  '24 - LLEGADA TARDE JUSTIFICADA',
+  '30 - COMISION DE SERVICIOS',
+  '33 - POR DONACIÓN DE SANGRE',
+  '41 - POR DONACIÓN DE ÓRGANOS O PIEL',
+  '38 - ACT.DEPORT.ART.C/SUELDO',
+  '44 - PERMISO CITACIONES ORG.OFICIAL',
+  '52 - LICENCIA CON SUELDO ART.36 2ºP',
+  '81 - LICENCIA ANTERIOR DENEGADA',
+  '09 - POR INCORPORACIÓN A LAS FUERZAS ARMADAS',
+  '95A - AÑO NUEVO JUDIO (ROSH HASHABA)',
+  '95D - DIA DEL PERDON (IOM KIPUR)',
+  '95P - PASCUA JUDIA (PESAJ)',
+  'AS - ASUETO',
+  'CM - CAUSA MAYOR',
+  'LC - LICENCIA POR CANDIDATURA',
+];
+
 // Reutilizamos un único modal y un único panel por tabla.
 interface MedModalProps {
   agente: any;
@@ -1812,18 +1860,20 @@ interface MedModalProps {
   label: string;
   tipoOpciones: string[] | null;  // null → input libre
   conHoras?: boolean;       // true → hora_desde/hora_hasta + motivo (permiso de salida)
+  conHasta?: boolean;       // true → fecha_hasta en lugar de resultado (novedades del jefe)
   record?: any;
   onClose: () => void;
   onSaved: () => void;
 }
-function MedModal({ agente, agentes, sectorId, jefeNombre, endpoint, label, tipoOpciones, conHoras, record, onClose, onSaved }: MedModalProps) {
+function MedModal({ agente, agentes, sectorId, jefeNombre, endpoint, label, tipoOpciones, conHoras, conHasta, record, onClose, onSaved }: MedModalProps) {
   const toast = useToast();
   const [agenteSel, setAgenteSel] = useState<any>(null);
   const ag = agente || agenteSel;
   const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     fecha:        record?.fecha?.slice(0, 10) || hoy,
-    tipo:         record?.tipo || (tipoOpciones ? tipoOpciones[0] : ''),
+    fecha_hasta:  record?.fecha_hasta?.slice(0, 10) || record?.fecha?.slice(0, 10) || hoy,
+    tipo:         record?.tipo || (tipoOpciones && !conHasta ? tipoOpciones[0] : ''),
     resultado:    record?.resultado || '',
     hora_desde:   record?.hora_desde?.slice(0, 5) || '',
     hora_hasta:   record?.hora_hasta?.slice(0, 5) || '',
@@ -1838,9 +1888,21 @@ function MedModal({ agente, agentes, sectorId, jefeNombre, endpoint, label, tipo
   const guardar = async () => {
     if (!ag) { toast.error('Seleccioná un agente'); return; }
     if (!form.fecha) { toast.error('Ingresá la fecha'); return; }
+    if (conHasta) {
+      if (!form.tipo) { toast.error('Elegí la novedad'); return; }
+      if (!form.fecha_hasta || form.fecha_hasta < form.fecha) { toast.error('La fecha hasta no puede ser anterior a la fecha desde'); return; }
+    }
     setSaving(true);
     try {
-      const body = conHoras ? {
+      const body = conHasta ? {
+        dni:          ag.dni,
+        fecha:        form.fecha,
+        fecha_hasta:  form.fecha_hasta,
+        tipo:         form.tipo,
+        observaciones: form.observaciones || null,
+        sector_id:    sectorId ?? null,
+        jefe_nombre:  jefeNombre || null,
+      } : conHoras ? {
         dni:          ag.dni,
         fecha:        form.fecha,
         hora_desde:   form.hora_desde || null,
@@ -1890,10 +1952,28 @@ function MedModal({ agente, agentes, sectorId, jefeNombre, endpoint, label, tipo
               <AgenteSelectorField agentes={agentes} value={agenteSel} onChange={setAgenteSel} />
             )}
             <div className="js-field">
-              <label htmlFor="med-fecha" style={lbl}>Fecha *</label>
-              <input id="med-fecha" name="fecha" type="date" className="input" style={fld} value={form.fecha} onChange={e => set('fecha', e.target.value)} />
+              <label htmlFor="med-fecha" style={lbl}>{conHasta ? 'Desde *' : 'Fecha *'}</label>
+              <input id="med-fecha" name="fecha" type="date" className="input" style={fld} min={fechaMinJefe()} value={form.fecha}
+                onChange={e => { const v = e.target.value; setForm(f => ({ ...f, fecha: v, fecha_hasta: f.fecha_hasta < v ? v : f.fecha_hasta })); }} />
             </div>
-            {conHoras ? (
+            {conHasta ? (
+              <>
+                <div className="js-field">
+                  <label htmlFor="med-fecha-hasta" style={lbl}>Hasta *</label>
+                  <input id="med-fecha-hasta" name="fecha_hasta" type="date" className="input" style={fld} value={form.fecha_hasta} min={form.fecha} onChange={e => set('fecha_hasta', e.target.value)} />
+                </div>
+                <div className="js-field js-field-full">
+                  <label htmlFor="med-novedad" style={lbl}>Novedad *</label>
+                  <select id="med-novedad" name="tipo" className="input" style={fld} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+                    <option value="">Seleccioná la novedad…</option>
+                    {(tipoOpciones || []).map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="js-field js-field-full" style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                  En SIAPE se carga como Franco Compensatorio y en el Ministerio con este código.
+                </div>
+              </>
+            ) : conHoras ? (
               <>
                 <div className="js-field">
                   <label htmlFor="med-hora-desde" style={lbl}>Hora desde</label>
@@ -1960,9 +2040,10 @@ interface MedAgenteProps {
   emoji: string;
   tipoOpciones: string[] | null;
   conHoras?: boolean;
+  conHasta?: boolean;
 }
 const hhmm = (t: any): string => t ? String(t).slice(0, 5) : '—';
-function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoOpciones, conHoras }: MedAgenteProps) {
+function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoOpciones, conHoras, conHasta }: MedAgenteProps) {
   const toast = useToast();
   const [records,    setRecords]    = useState<any[]>([]);
   const [loading,    setLoading]    = useState(false);
@@ -2061,7 +2142,7 @@ function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoO
                       </div>
                     </div>
                     <div style={{ color: '#94a3b8', display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
-                      <span>Fecha: <b>{fmt(r.fecha)}</b></span>
+                      <span>Fecha: <b>{fmt(r.fecha)}</b>{conHasta && r.fecha_hasta && String(r.fecha_hasta).slice(0, 10) !== String(r.fecha).slice(0, 10) && <> → <b>{fmt(r.fecha_hasta)}</b></>}</span>
                       {r.jefe_nombre && <span>👤 {r.jefe_nombre}</span>}
                     </div>
                     {r.observaciones && <div style={{ color: '#64748b', marginTop: 2, fontStyle: 'italic' }}>{r.observaciones}</div>}
@@ -2082,6 +2163,7 @@ function MedAgente({ agente, sectorId, jefeNombre, endpoint, label, emoji, tipoO
           label={label}
           tipoOpciones={tipoOpciones}
           conHoras={conHoras}
+          conHasta={conHasta}
           record={editRecord}
           onClose={() => { setModalOpen(false); setEditRecord(null); }}
           onSaved={() => { setExpanded(true); cargar(); }}
@@ -2105,8 +2187,9 @@ interface MedTablaGlobalProps {
   agentes: any[];            // no titulares del sector (ya filtrado por el que lo usa)
   jefeNombre: string;
   tipoOpciones: string[] | null;
+  conHasta?: boolean;
 }
-function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal, servicios, sectores, conHoras, agentes, jefeNombre, tipoOpciones }: MedTablaGlobalProps) {
+function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal, servicios, sectores, conHoras, agentes, jefeNombre, tipoOpciones, conHasta }: MedTablaGlobalProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -2149,6 +2232,7 @@ function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal
           label={label}
           tipoOpciones={tipoOpciones}
           conHoras={conHoras}
+          conHasta={conHasta}
           onClose={() => setModalOpen(false)}
           onSaved={cargar}
         />
@@ -2164,9 +2248,9 @@ function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal
               <tr>
                 <th>DNI</th>
                 <th>Agente</th>
-                <th>{conHoras ? 'Motivo' : 'Tipo'}</th>
-                <th>Fecha</th>
-                <th>{conHoras ? 'Horario' : 'Resultado'}</th>
+                <th>{conHoras ? 'Motivo' : conHasta ? 'Novedad' : 'Tipo'}</th>
+                <th>{conHasta ? 'Desde' : 'Fecha'}</th>
+                <th>{conHoras ? 'Horario' : conHasta ? 'Hasta' : 'Resultado'}</th>
                 <th>Jefe</th>
                 <th>Cargado el</th>
               </tr>
@@ -2184,6 +2268,7 @@ function MedTablaGlobal({ endpoint, label, emoji, agentesMap, sectorId, isGlobal
                     <td className="js-td-muted" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {conHoras
                         ? ((r.hora_desde || r.hora_hasta) ? `${hhmm(r.hora_desde)}–${hhmm(r.hora_hasta)}` : '—')
+                        : conHasta ? fmt(r.fecha_hasta || r.fecha)
                         : (r.resultado || '—')}
                     </td>
                     <td className="js-td-muted">{r.jefe_nombre || '—'}</td>
@@ -2377,7 +2462,7 @@ export function JefeServicioPage() {
   const [modalCerrar,        setModalCerrar]        = useState<any>(null);
 
   // Tab
-  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen' | 'permiso_salida'>('agentes');
+  const [tab, setTab] = useState<'agentes' | 'asignados' | 'todos_pases' | 'licencias' | 'articulo26' | 'francos' | 'practicas' | 'papcolpo' | 'examen' | 'prexamen' | 'permiso_salida' | 'novedad_jefe' | 'tareas_livianas'>('agentes');
 
   // Agentes de licencia (reconocimientos médicos activos del sector)
   const [licenciasActivas, setLicenciasActivas] = useState<any[]>([]);
@@ -2689,6 +2774,35 @@ export function JefeServicioPage() {
   useEffect(() => {
     if (tab === 'francos') cargarFrancos();
   }, [tab, cargarFrancos]);
+
+  // ── Tareas livianas (junta médica) del sector ────────────────────────────
+  // El back filtra por el servicio del usuario logueado: el jefe nunca recibe las de otro servicio.
+  const [tareasLivianas,     setTareasLivianas]     = useState<any[]>([]);
+  const [loadingTareasLiv,   setLoadingTareasLiv]   = useState(false);
+  const [soloTareasVigentes, setSoloTareasVigentes] = useState(true);
+  const cargarTareasLivianas = useCallback(async () => {
+    setLoadingTareasLiv(true);
+    try {
+      const res = await apiFetch<any>(`/tareas-livianas/mi-sector${soloTareasVigentes ? '?vigentes=1' : ''}`);
+      setTareasLivianas(res?.data ?? []);
+    } catch (e: any) {
+      setTareasLivianas([]);
+      toast.error('Error cargando tareas livianas', e?.message);
+    } finally {
+      setLoadingTareasLiv(false);
+    }
+  }, [soloTareasVigentes]);
+  useEffect(() => {
+    if (tab === 'tareas_livianas') cargarTareasLivianas();
+  }, [tab, cargarTareasLivianas]);
+  const abrirJuntaMedica = useCallback(async (docId: number) => {
+    try {
+      const { blob } = await apiFetchBlobWithMeta(`/documents/${docId}/file`);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) { toast.error('No se pudo abrir el dictamen', e?.message); }
+  }, []);
 
   const cambiarEstadoFranco = useCallback(async (id: number, estado: string) => {
     setSavingFrancoId(id);
@@ -3434,6 +3548,16 @@ export function JefeServicioPage() {
               >🚪 Permiso salida</button>
               <button
                 type="button"
+                className={`js-tab${tab === 'novedad_jefe' ? ' active' : ''}`}
+                onClick={() => setTab('novedad_jefe')}
+              >🗂️ Novedades becados</button>
+              <button
+                type="button"
+                className={`js-tab${tab === 'tareas_livianas' ? ' active' : ''}`}
+                onClick={() => setTab('tareas_livianas')}
+              >🩹 Tareas livianas</button>
+              <button
+                type="button"
                 className={`js-tab${tab === 'asignados' ? ' active' : ''}`}
                 onClick={() => setTab('asignados')}
               >
@@ -3591,6 +3715,23 @@ export function JefeServicioPage() {
                           emoji="🚪"
                           tipoOpciones={null}
                           conHoras
+                        />
+                      </div>
+                    )}
+
+                    {/* Novedades del jefe (maternidad, duelo, etc.) — SOLO becados.
+                        SIAPE: FC · Ministerio: el código real */}
+                    {revistaTag(agenteActivo) === 'BECA' && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 10, paddingTop: 10 }}>
+                        <MedAgente
+                          agente={agenteActivo}
+                          sectorId={sectorId}
+                          jefeNombre={u?.nombre || ''}
+                          endpoint="/novedad_jefe"
+                          label="Novedades"
+                          emoji="🗂️"
+                          tipoOpciones={NOVEDADES_JEFE}
+                          conHasta
                         />
                       </div>
                     )}
@@ -4013,12 +4154,13 @@ export function JefeServicioPage() {
             />
           )}
           {/* ── Tabs genéricos: Papcolpo / Examen / Pre-examen / Permiso salida ── */}
-          {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen' || tab === 'permiso_salida') && (() => {
+          {(tab === 'papcolpo' || tab === 'examen' || tab === 'prexamen' || tab === 'permiso_salida' || tab === 'novedad_jefe') && (() => {
             const cfg = {
               papcolpo:       { endpoint: '/papcolpo',       label: 'Pap / Colposcopía',           emoji: '🩺', conHoras: false, tipoOpciones: ['PAP', 'COLPO', 'PAP_COLPO'] as string[] | null, soloBeca: false },
               examen:         { endpoint: '/examen',         label: 'Examen (Facultad)',           emoji: '🎓', conHoras: false, tipoOpciones: null as string[] | null, soloBeca: false },
               prexamen:       { endpoint: '/prexamen',       label: 'Pre-examen (Facultad)',       emoji: '📝', conHoras: false, tipoOpciones: null as string[] | null, soloBeca: false },
               permiso_salida: { endpoint: '/permiso_salida', label: 'Permiso de salida (Becados)', emoji: '🚪', conHoras: true,  tipoOpciones: null as string[] | null, soloBeca: true },
+              novedad_jefe:   { endpoint: '/novedad_jefe',   label: 'Novedades (Becados)',         emoji: '🗂️', conHoras: false, tipoOpciones: NOVEDADES_JEFE as string[] | null, soloBeca: true },
             }[tab];
 
             // Permiso de salida es solo para becados; el resto, cualquier no titular.
@@ -4039,9 +4181,98 @@ export function JefeServicioPage() {
                 agentes={agentesTab}
                 jefeNombre={u?.nombre || ''}
                 tipoOpciones={cfg.tipoOpciones}
+                conHasta={tab === 'novedad_jefe'}
               />
             );
           })()}
+
+          {/* ── Tab Tareas livianas (resultado de junta médica, cargadas por Salud Laboral) ── */}
+          {tab === 'tareas_livianas' && (
+            <div className="card js-card">
+              <div className="js-section-header">
+                <div className="js-section-title">
+                  🩹 Tareas livianas (junta médica)
+                  <span style={{ marginLeft: 8, fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
+                    ({tareasLivianas.length} {soloTareasVigentes ? 'vigentes' : 'en total'})
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <label style={{ fontSize: '0.8rem', display: 'flex', gap: 4, alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={soloTareasVigentes}
+                      onChange={e => setSoloTareasVigentes(e.target.checked)}
+                    />
+                    Solo vigentes
+                  </label>
+                  <button type="button" className="btn" onClick={cargarTareasLivianas} title="Recargar">🔄</button>
+                </div>
+              </div>
+              {loadingTareasLiv ? (
+                <div className="js-loading">🔄 Cargando tareas livianas…</div>
+              ) : tareasLivianas.length === 0 ? (
+                <div className="js-empty">
+                  {soloTareasVigentes
+                    ? 'No hay agentes del sector con tareas livianas vigentes.'
+                    : 'No hay tareas livianas cargadas para agentes del sector.'}
+                </div>
+              ) : (
+                <div className="js-tabla-wrap">
+                  <table className="js-tabla">
+                    <thead>
+                      <tr>
+                        <th>DNI</th>
+                        <th>Agente</th>
+                        <th>Desde</th>
+                        <th>Hasta</th>
+                        <th>Días</th>
+                        <th>Turno</th>
+                        <th>Junta</th>
+                        <th>Observaciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tareasLivianas.map((t: any) => {
+                        const ag = agentes.find((a: any) => String(a.dni) === String(t.agente_dni));
+                        const hasta = String(t.fecha_hasta || '').slice(0, 10);
+                        const vigente = !hasta || hasta >= hoyISO();
+                        return (
+                          <tr
+                            key={t.id}
+                            style={{ background: vigente ? 'rgba(14,165,233,0.06)' : undefined, cursor: ag ? 'pointer' : undefined }}
+                            onDoubleClick={() => { if (ag) { seleccionarAgente(ag); setTab('agentes'); } }}
+                            title={ag ? 'Doble clic: ver agente' : undefined}
+                          >
+                            <td className="js-td-dni">{t.agente_dni}</td>
+                            <td>{ag ? `${ag.apellido}, ${ag.nombre}` : (t.agente_nombre || '—')}</td>
+                            <td>{fmt(t.fecha_desde)}</td>
+                            <td style={{ fontWeight: 700, color: vigente ? '#38bdf8' : undefined }}>
+                              {t.fecha_hasta ? fmt(t.fecha_hasta) : 'Sin fecha de fin'}
+                            </td>
+                            <td>{t.cantidad_dias ? `${t.cantidad_dias}d` : '—'}</td>
+                            <td>{t.turno || '—'}</td>
+                            <td>
+                              {t.junta_doc_id ? (
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  title="Ver dictamen de la junta médica"
+                                  onClick={e => { e.stopPropagation(); abrirJuntaMedica(Number(t.junta_doc_id)); }}
+                                >📄</button>
+                              ) : '—'}
+                            </td>
+                            <td className="js-td-muted" style={{ maxWidth: 260, whiteSpace: 'pre-wrap' }}>
+                              {t.observaciones || '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Tab Agentes Asignados ── */}
           {tab === 'asignados' && (

@@ -24,6 +24,7 @@ import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
 import { logger } from '../logging/logger';
 import { armarTurnos, type Turno } from '../services/ausentismoEval';
+import { ensureColumnasAutomatico } from './whatsapp.routes';
 
 let XLSX: any;
 try { XLSX = require('xlsx'); } catch { XLSX = null; }
@@ -133,6 +134,11 @@ interface Horario { turnos: Turno[]; servicio: string }
 function parseHorarios(fp: string): Map<string, Horario> {
   const raw = leerHoja(fp, false); // horas como texto HH:MM (raw:true las trae como fracción de día)
   const map = new Map<string, Horario>();
+  // 07/11/2026: solo archivos con el layout de HORARIOS.xlsx (DNI en col 3, LUNES_ENTRADA en col 4).
+  // HORARIO_CONSOLIDADO.xlsx trae LEGAJO de más (columnas corridas) y pisaba el horario real
+  // con uno vacío → "no le tocaba" → la denegada no salía en Deben reclamar (caso Olivarez).
+  const hdr = (raw[0] || []).map((x: any) => String(x ?? '').trim().toUpperCase());
+  if (hdr[3] !== 'NRO_DOCUMENTO' || hdr[4] !== 'LUNES_ENTRADA') return map;
   for (let i = 1; i < raw.length; i++) {
     const r = raw[i] || [];
     const dni = normDni(r[3]);
@@ -176,7 +182,9 @@ function cargarFuentes() {
   const licenciasMtime = new Date(fs.statSync(path.join(dir, licFile)).mtimeMs).toISOString();
 
   const horarios = new Map<string, Horario>();
-  const horFiles = fs.readdirSync(dir).filter(f => excel(f) && f.toLowerCase().includes('horario'));
+  // HORARIOS.xlsx (el del día) se lee último para que gane sobre los demás (guardia, etc.)
+  const horFiles = fs.readdirSync(dir).filter(f => excel(f) && f.toLowerCase().includes('horario'))
+    .sort((a, b) => Number(/^horarios\.xls/i.test(a)) - Number(/^horarios\.xls/i.test(b)));
   for (const f of horFiles) for (const [k, v] of conCache(path.join(dir, f), parseHorarios)) horarios.set(k, v);
 
   const siape = new Map<string, NovSiape[]>();
@@ -988,6 +996,127 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
     }
   });
 
+  // Cruce remitente de WhatsApp → agente. Primero por celular (cualquiera de los números de
+  // personal.telefono, activos primero); si el número no está en la base, agente activo cuyo
+  // apellido completo + primer nombre aparecen en el nombre agendado ("Peveri Alejandro THE BOSS",
+  // "Vergara Ortiz Dolly Darsy - UPA 18 - ENFERMERA"). Lo usan el resumen y el volcado diario.
+  async function armarCruceAgentes() {
+    const [personal, activos, avisos] = await Promise.all([
+      sequelize.query<any>(
+        `SELECT p.dni, p.apellido, p.nombre, p.telefono,
+                EXISTS (SELECT 1 FROM agentes a WHERE a.dni = p.dni AND a.estado_empleo = 'ACTIVO') AS activo
+           FROM personal p WHERE p.telefono IS NOT NULL AND p.telefono <> ''`,
+        { type: QueryTypes.SELECT },
+      ),
+      // agentes activos (con o sin teléfono) para el cruce por nombre agendado
+      sequelize.query<any>(
+        `SELECT p.dni, p.apellido, p.nombre, p.telefono FROM personal p
+          WHERE EXISTS (SELECT 1 FROM agentes a WHERE a.dni = p.dni AND a.estado_empleo = 'ACTIVO')`,
+        { type: QueryTypes.SELECT },
+      ),
+      sequelize.query<any>(
+        `SELECT dni, MAX(created_at) AS ultimo_aviso FROM licencias_medicas_whatsapp_envios
+          WHERE estado = 'ENVIADO' AND prueba = 0 GROUP BY dni`,
+        { type: QueryTypes.SELECT },
+      ),
+    ]);
+    const porCel = new Map<string, any[]>();
+    for (const p of personal) {
+      for (const o of celularDe(p.telefono).opciones) {
+        if (!porCel.has(o.celular)) porCel.set(o.celular, []);
+        porCel.get(o.celular)!.push({ dni: String(p.dni), apellido: p.apellido ?? '', nombre: p.nombre ?? '', activo: !!Number(p.activo) });
+      }
+    }
+    const palabras = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+      .replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+    const porNombre = activos.map((p: any) => ({
+      dni: String(p.dni), apellido: p.apellido ?? '', nombre: p.nombre ?? '', telefono: p.telefono ?? '',
+      ape: palabras(p.apellido), nom1: palabras(p.nombre)[0],
+    })).filter((p: any) => p.ape.length && p.nom1);
+    const buscarPorNombre = (nombreWa: string) => {
+      const t = new Set(palabras(nombreWa));
+      if (!t.size) return [];
+      return porNombre.filter((p: any) => p.nom1 && t.has(p.nom1) && p.ape.every((w: string) => t.has(w)))
+        .map(({ ape: _a, nom1: _n, ...p }: any) => ({ ...p, activo: true }));
+    };
+    const cruzar = (numero: string, nombreWa: string) => {
+      const ags = [...(porCel.get(numero) || [])].sort((x, y) => Number(y.activo) - Number(x.activo));
+      let agente: any = ags[0] || null;
+      let cruce: 'NUMERO' | 'NOMBRE' | 'VARIOS' | null = agente ? 'NUMERO' : null;
+      let candidatos: any[] = [];
+      if (!agente) {
+        const c = buscarPorNombre(nombreWa);
+        if (c.length === 1) { agente = c[0]; cruce = 'NOMBRE'; }
+        else if (c.length > 1) { candidatos = c; cruce = 'VARIOS'; }
+      }
+      return { agente, cruce, candidatos, otros_agentes: Math.max(0, ags.length - 1) };
+    };
+    const avisoDe = new Map<string, Date>(avisos.map((a: any) => [String(a.dni), new Date(a.ultimo_aviso)]));
+    return { cruzar, avisoDe };
+  }
+
+  // Vuelca el conteo automático a consultas_whatsapp (la carga "manual" de Reportes → WhatsApp,
+  // que usa el comparativo Ventanilla/WhatsApp/Citaciones). Por día (hora argentina):
+  // cantidad = personas distintas; mensajes; personas por franja; agentes / sin agente.
+  // Si el día fue cargado a mano (origen MANUAL con cantidad > 0) la cantidad NO se pisa: solo se
+  // completan las columnas del automático. dias = null → todos los días con recibidos.
+  async function volcarConsultasWhatsapp(dias: string[] | null): Promise<number> {
+    await Promise.all([tablaWhatsapp, ensureColumnasAutomatico(sequelize)]);
+    if (dias && !dias.length) return 0;
+    const filtro = dias ? 'WHERE DATE(fecha - INTERVAL 3 HOUR) IN (:dias)' : '';
+    const filas = await sequelize.query<any>(
+      `SELECT DATE_FORMAT(l, '%Y-%m-%d') AS dia, numero, MAX(nombre_wa) AS nombre_wa, COUNT(*) AS n,
+              CASE WHEN DAYOFWEEK(l) IN (1, 7) THEN 'finde'
+                   WHEN HOUR(l) >= 6 AND HOUR(l) < 12 THEN 'manana'
+                   WHEN HOUR(l) >= 12 AND HOUR(l) < 18 THEN 'tarde'
+                   ELSE 'noche' END AS franja
+         FROM (SELECT fecha - INTERVAL 3 HOUR AS l, numero, nombre_wa FROM whatsapp_recibidos ${filtro}) x
+        GROUP BY dia, numero, franja`,
+      { replacements: { dias }, type: QueryTypes.SELECT },
+    );
+    if (!filas.length) return 0;
+    const { cruzar } = await armarCruceAgentes();
+    type Dia = { mensajes: number; personas: Map<string, string>; franjas: Record<string, Set<string>> };
+    const porDia = new Map<string, Dia>();
+    for (const f of filas) {
+      let d = porDia.get(f.dia);
+      if (!d) porDia.set(f.dia, d = { mensajes: 0, personas: new Map(), franjas: { manana: new Set(), tarde: new Set(), noche: new Set(), finde: new Set() } });
+      d.mensajes += Number(f.n);
+      if (!d.personas.get(f.numero)) d.personas.set(f.numero, f.nombre_wa ?? '');
+      d.franjas[f.franja].add(f.numero);
+    }
+    const lista = [...porDia.entries()];
+    for (let i = 0; i < lista.length; i += 200) {
+      const repl: Record<string, any> = {};
+      const vals = lista.slice(i, i + 200).map(([dia, d], j) => {
+        let agentes = 0;
+        for (const [numero, nombreWa] of d.personas) if (cruzar(numero, nombreWa).agente) agentes++;
+        const personas = d.personas.size;
+        Object.assign(repl, {
+          [`f${j}`]: dia, [`m${j}`]: d.mensajes, [`p${j}`]: personas,
+          [`a${j}`]: d.franjas.manana.size, [`b${j}`]: d.franjas.tarde.size, [`c${j}`]: d.franjas.noche.size, [`d${j}`]: d.franjas.finde.size,
+          [`g${j}`]: agentes, [`s${j}`]: personas - agentes,
+        });
+        return `(:f${j}, :p${j}, :m${j}, :p${j}, :a${j}, :b${j}, :c${j}, :d${j}, :g${j}, :s${j}, 'AUTO', NOW())`;
+      });
+      // origen se decide ANTES que cantidad (MySQL asigna de izquierda a derecha con el valor viejo de cantidad)
+      await sequelize.query(
+        `INSERT INTO consultas_whatsapp (fecha, cantidad, mensajes, personas, manana, tarde, noche, finde, agentes, sin_agente, origen, volcado_at)
+         VALUES ${vals.join(', ')}
+         ON DUPLICATE KEY UPDATE
+           mensajes = VALUES(mensajes), personas = VALUES(personas),
+           manana = VALUES(manana), tarde = VALUES(tarde), noche = VALUES(noche), finde = VALUES(finde),
+           agentes = VALUES(agentes), sin_agente = VALUES(sin_agente), volcado_at = NOW(),
+           origen = IF(origen = 'MANUAL' AND cantidad > 0, 'MANUAL', 'AUTO'),
+           cantidad = IF(origen = 'MANUAL', cantidad, VALUES(cantidad))`,
+        { replacements: repl },
+      );
+    }
+    return lista.length;
+  }
+  // Al arrancar: vuelca todo lo ya leído (idempotente; también completa lo anterior a este cambio)
+  volcarConsultasWhatsapp(null).catch((e: any) => console.error('[whatsapp] volcado inicial a consultas_whatsapp:', e?.message));
+
   // Guarda los recibidos que leyó la extensión. Body: { mensajes: [{ id, numero, t (unix), nombre }] }
   // INSERT IGNORE por msg_id: lo ya guardado se saltea. Devuelve cuántos eran nuevos.
   router.post('/whatsapp/recibidos', requirePermission('crud:*:*'), async (req: Request, res: Response) => {
@@ -1017,7 +1146,15 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
         );
         nuevos += Number(afectadas) || 0;
       }
-      return res.json({ ok: true, recibidos: validos.length, nuevos });
+      // pasa el conteo de los días leídos a la carga de Reportes → WhatsApp (día en hora argentina)
+      let dias_volcados = 0;
+      try {
+        const dias = [...new Set(validos.map((m: any) => new Date((m.t - 3 * 3600) * 1000).toISOString().slice(0, 10)))] as string[];
+        dias_volcados = await volcarConsultasWhatsapp(dias);
+      } catch (e: any) {
+        console.error('[whatsapp] volcado a consultas_whatsapp:', e?.message);
+      }
+      return res.json({ ok: true, recibidos: validos.length, nuevos, dias_volcados });
     } catch (err: any) {
       return errorRes(res, err, 'Error guardando los mensajes recibidos');
     }
@@ -1032,7 +1169,7 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
       if (!esFecha(req.query.desde) || !esFecha(req.query.hasta)) return res.status(400).json({ ok: false, error: 'Faltan desde/hasta' });
       // fecha se guarda en UTC (la sesión de Sequelize es +00:00): días y rango en hora argentina (-3)
       const rango = { desde: `${req.query.desde} 00:00:00`, hasta: `${req.query.hasta} 23:59:59` };
-      const [porNumero, porDia, porFranja, personal, activos, avisos, ultima] = await Promise.all([
+      const [porNumero, porDia, porFranja, cruce, ultima] = await Promise.all([
         sequelize.query<any>(
           `SELECT numero, COUNT(*) AS cantidad, MIN(fecha) AS primero, MAX(fecha) AS ultimo, MAX(nombre_wa) AS nombre_wa
              FROM whatsapp_recibidos WHERE fecha BETWEEN :desde + INTERVAL 3 HOUR AND :hasta + INTERVAL 3 HOUR GROUP BY numero`,
@@ -1055,63 +1192,16 @@ export function buildLicenciasMedicasControlRouter(sequelize: Sequelize) {
             GROUP BY franja`,
           { replacements: rango, type: QueryTypes.SELECT },
         ),
-        sequelize.query<any>(
-          `SELECT p.dni, p.apellido, p.nombre, p.telefono,
-                  EXISTS (SELECT 1 FROM agentes a WHERE a.dni = p.dni AND a.estado_empleo = 'ACTIVO') AS activo
-             FROM personal p WHERE p.telefono IS NOT NULL AND p.telefono <> ''`,
-          { type: QueryTypes.SELECT },
-        ),
-        // agentes activos (con o sin teléfono) para el cruce por nombre agendado
-        sequelize.query<any>(
-          `SELECT p.dni, p.apellido, p.nombre, p.telefono FROM personal p
-            WHERE EXISTS (SELECT 1 FROM agentes a WHERE a.dni = p.dni AND a.estado_empleo = 'ACTIVO')`,
-          { type: QueryTypes.SELECT },
-        ),
-        sequelize.query<any>(
-          `SELECT dni, MAX(created_at) AS ultimo_aviso FROM licencias_medicas_whatsapp_envios
-            WHERE estado = 'ENVIADO' AND prueba = 0 GROUP BY dni`,
-          { type: QueryTypes.SELECT },
-        ),
+        armarCruceAgentes(),
         sequelize.query<any>('SELECT MAX(created_at) AS ultima FROM whatsapp_recibidos', { type: QueryTypes.SELECT }),
       ]);
-      // celular → agentes (cualquiera de los números de su teléfono); activos primero
-      const porCel = new Map<string, any[]>();
-      for (const p of personal) {
-        for (const o of celularDe(p.telefono).opciones) {
-          if (!porCel.has(o.celular)) porCel.set(o.celular, []);
-          porCel.get(o.celular)!.push({ dni: String(p.dni), apellido: p.apellido ?? '', nombre: p.nombre ?? '', activo: !!Number(p.activo) });
-        }
-      }
-      // Si el número no está en la base: agente activo cuyo apellido completo + primer nombre
-      // aparecen en el nombre agendado en WhatsApp ("Peveri Alejandro THE BOSS", "Vergara Ortiz
-      // Dolly Darsy - UPA 18 - ENFERMERA"). Es una sugerencia: el teléfono se corrige a mano.
-      const palabras = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
-        .replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
-      const porNombre = activos.map((p: any) => ({
-        dni: String(p.dni), apellido: p.apellido ?? '', nombre: p.nombre ?? '', telefono: p.telefono ?? '',
-        ape: palabras(p.apellido), nom1: palabras(p.nombre)[0],
-      })).filter((p: any) => p.ape.length && p.nom1);
-      const buscarPorNombre = (nombreWa: string) => {
-        const t = new Set(palabras(nombreWa));
-        if (!t.size) return [];
-        return porNombre.filter((p: any) => p.nom1 && t.has(p.nom1) && p.ape.every((w: string) => t.has(w)))
-          .map(({ ape: _a, nom1: _n, ...p }: any) => ({ ...p, activo: true }));
-      };
-      const avisoDe = new Map<string, Date>(avisos.map((a: any) => [String(a.dni), new Date(a.ultimo_aviso)]));
+      const { avisoDe } = cruce;
       const personas = porNumero.map((r: any) => {
-        const ags = (porCel.get(r.numero) || []).sort((x, y) => Number(y.activo) - Number(x.activo));
-        let agente = ags[0] || null;
-        let cruce: 'NUMERO' | 'NOMBRE' | 'VARIOS' | null = agente ? 'NUMERO' : null;
-        let candidatos: any[] = [];
-        if (!agente) {
-          const c = buscarPorNombre(r.nombre_wa);
-          if (c.length === 1) { agente = c[0]; cruce = 'NOMBRE'; }
-          else if (c.length > 1) { candidatos = c; cruce = 'VARIOS'; }
-        }
+        const { agente, cruce: tipo, candidatos, otros_agentes } = cruce.cruzar(r.numero, r.nombre_wa);
         const aviso = agente ? avisoDe.get(agente.dni) || null : null;
         return {
           numero: r.numero, nombre_wa: r.nombre_wa ?? '', cantidad: Number(r.cantidad), primero: r.primero, ultimo: r.ultimo,
-          agente, cruce, candidatos, otros_agentes: Math.max(0, ags.length - 1),
+          agente, cruce: tipo, candidatos, otros_agentes,
           ultimo_aviso: aviso, respondio: !!aviso && new Date(r.ultimo) > aviso,
         };
       }).sort((x: any, y: any) => +new Date(y.ultimo) - +new Date(x.ultimo));

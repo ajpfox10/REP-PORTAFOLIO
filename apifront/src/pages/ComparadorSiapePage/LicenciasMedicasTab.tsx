@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { exportToExcel } from '../../utils/export';
+import { lanzarRobot } from '../../components/RobotsFallidosBanner';
 
 type Estado = 'OK' | 'DISTINTO' | 'NO_CARGADA' | 'SIN_CIE';
 
@@ -115,6 +116,25 @@ export function LicenciasMedicasTab() {
   const opcionesNovedad = contar(filas, (f) => f.novedad_siape).map(([k]) => k).sort();
   const opcionesDep = [...new Set(filas.flatMap((f) => f.dependencia.split(', ').filter(Boolean)))].sort();
 
+  // licencias ya otorgadas en SIAPE que en el Ministerio siguen con E: las corrige el robot
+  const conE = filas.filter((f) => f.estado === 'DISTINTO' && f.cargado_codigos.includes('E'));
+  const [lanzando, setLanzando] = useState(false);
+  const corregirE = async () => {
+    if (!window.confirm(
+      `Se van a corregir en la Intranet ${conE.length} licencia(s) cargadas como E que SIAPE ya otorgó:\n` +
+      'se borra la E y se carga el código que corresponde (si la carga falla, se repone la E).\n\n¿Lanzar el robot ahora?'
+    )) return;
+    setLanzando(true);
+    try {
+      await lanzarRobot('intranet_corregir_licencias_e', null);
+      window.alert('Robot lanzado. El resultado queda en Herramientas → Robots. Los cambios se ven acá después de la próxima descarga del Ministerio.');
+    } catch (e: any) {
+      window.alert(`No se pudo lanzar: ${e?.message || e}`);
+    } finally {
+      setLanzando(false);
+    }
+  };
+
   const exportar = () =>
     exportToExcel(
       `licencias_medicas_control_${desde}_${hasta}`,
@@ -173,7 +193,16 @@ export function LicenciasMedicasTab() {
         <button className="btn" onClick={cargar} disabled={loading}>
           {loading ? '⏳ Leyendo…' : '🔄 Actualizar'}
         </button>
-        <button className="btn" onClick={exportar} disabled={!vista.length} style={{ marginLeft: 'auto' }}>
+        <button
+          className="btn"
+          onClick={corregirE}
+          disabled={lanzando || !conE.length}
+          style={{ marginLeft: 'auto' }}
+          title="Borra en la Intranet la E (pendiente de justificación) de las licencias que SIAPE ya otorgó y carga el código que corresponde (robot intranet_corregir_licencias_e)"
+        >
+          {lanzando ? '⏳ Lanzando…' : `🤖 Corregir E otorgadas (${conE.length})`}
+        </button>
+        <button className="btn" onClick={exportar} disabled={!vista.length}>
           📥 Exportar ({vista.length})
         </button>
       </div>

@@ -39,3 +39,12 @@ CUIL de ANSES (desde v1.5.0):
   base), toca CONSULTAR y baja el PDF; la app lo guarda en DOCU\<dni>\CUIL\Constancia CUIL ANSES.pdf.
   Deja 5 s entre agentes. Si ANSES responde con su protección anti-robots, se frena todo (no se reintenta).
   Archivo: anses.js.
+
+Certificado RDAM (desde v1.6.0):
+  Trámites documentales → Trámites → elegir tanda → "⚖️ RDAM". Usa el trámite público
+  https://rdam.mjus.gba.gob.ar/solicitudCertificado (sin login ni captcha). La extensión abre el formulario
+  en una pestaña de fondo, completa DNI + sexo (+ apellido/nombre si RENAPER no los trae), toca "Imprimir
+  certificado" y toma el código del redirect a /certificado-libre-deuda-RDAM/<código> (el PDF). Si además
+  hay sesión iniciada en el RDAM, reusa el certificado de HOY de ese DNI. La app lo guarda en
+  DOCU\<dni>\RDAM\Certificado RDAM aaaa-mm-dd.pdf (crea la carpeta). Archivo: rdam.js.
+  Robot equivalente sin extensión: apipersonal\scripts\descargar_rdam.py.

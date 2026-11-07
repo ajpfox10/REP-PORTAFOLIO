@@ -12,6 +12,7 @@ import { DocumentsPage } from '../pages/DocumentsPage';
 import { TableViewPage } from '../pages/TableViewPage';
 import { GestionPage } from '../pages/Gesytionpage';
 import { MensajesRelojPage } from '../pages/MensajesRelojPage';
+import { DesignacionesGrhPage } from '../pages/DesignacionesGrhPage';
 import { AdminPage } from '../pages/AdminPage';
 import { CargaAgentePage } from '../pages/CargaAgentePage';
 import { ConsultasPage } from '../pages/ConsultasPage';
@@ -23,6 +24,7 @@ import { EstadisticasPage } from '../pages/EstadisticasPage';
 import { OrganigramaPage } from '../pages/OrganigramaPage';
 import { ComparadorPage } from '../pages/ComparadorPage';
 import { ComparadorSiapePage } from '../pages/ComparadorSiapePage';
+import { LicenciasPorAgentePage } from '../pages/LicenciasPorAgentePage';
 import { Art26MinisterioPage } from '../pages/Art26MinisterioPage';
 import { LicenciasConsultorioPage } from '../pages/LicenciasConsultorioPage';
 import { HorariosExtendidosPage } from '../pages/HorariosExtendidosPage';
@@ -34,6 +36,7 @@ import { LicenciasPlusPage } from '../pages/LicenciasPlusPage';
 import { FeriadosPage } from '../pages/FeriadosPage';
 import { ComisionesPage } from '../pages/ComisionesPage';
 import { VacacionesAdelantadasPage } from '../pages/VacacionesAdelantadasPage';
+import { CargaHorariaLeyPage } from '../pages/CargaHorariaLeyPage';
 import { LegajoPage } from '../pages/LegajoPage';
 import { AlertasPage } from '../pages/AlertasPage';
 import { BuscadorPage } from '../pages/BuscadorPage';
@@ -81,6 +84,7 @@ import { BecariosArtPage }      from '../pages/BecariosArtPage';
 import { ScriptsSiapePage }     from '../pages/ScriptsSiapePage';
 import { TramitesDocumentalesPage } from '../pages/TramitesDocumentalesPage';
 import { CargaSiapePage } from '../pages/CargaSiapePage';
+import { CumpleanosFelicitacionesPage } from '../pages/CumpleanosFelicitacionesPage';
 
 function Private({ children }: { children: React.ReactNode }) {
   const { session, isReady } = useAuth();
@@ -280,6 +284,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/designaciones-grh"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <DesignacionesGrhPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/guarderia"
               element={
                 <Private>
@@ -404,6 +418,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/licencias-por-agente"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <LicenciasPorAgentePage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/comparador-siape"
               element={
                 <Private>
@@ -484,6 +508,16 @@ export function App() {
               }
             />
             <Route
+              path="/app/carga-horaria-ley"
+              element={
+                <Private>
+                  <Guard anyOf={['crud:*:*']}>
+                    <CargaHorariaLeyPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
               path="/app/vacaciones-adelantadas"
               element={
                 <Private>
@@ -519,6 +553,16 @@ export function App() {
                 <Private>
                   <Guard perm="crud:*:*">
                     <LegajoPage />
+                  </Guard>
+                </Private>
+              }
+            />
+            <Route
+              path="/app/cumpleanos-felicitaciones"
+              element={
+                <Private>
+                  <Guard perm="crud:*:*">
+                    <CumpleanosFelicitacionesPage />
                   </Guard>
                 </Private>
               }

@@ -4,6 +4,7 @@
 // en public/extension-whatsapp/ (van a prod con el deploy del front).
 import { useEffect, useState } from 'react';
 import { useToast } from '../../ui/toast';
+import { copiarTexto } from '../../utils/abrirCarpeta';
 
 const BASE = '/extension-whatsapp';
 const ZIP = 'personal-whatsapp-extension.zip';
@@ -64,7 +65,9 @@ export function ExtensionDescarga({ instalada, publicada, onCerrar }: {
   const toast = useToast();
   const actualizar = hayVersionNueva(instalada, publicada);
   const copiar = async (txt: string) => {
-    try { await navigator.clipboard.writeText(txt); toast.ok('Copiado', txt); } catch { toast.error('No se pudo copiar', txt); }
+    // La app se abre por http (IP): navigator.clipboard no existe ahí → copiarTexto usa el fallback.
+    if (await copiarTexto(txt)) toast.ok('Copiado', txt);
+    else toast.error('No se pudo copiar', txt);
   };
   const paso = (n: number, contenido: React.ReactNode) => (
     <li style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>

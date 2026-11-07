@@ -61,8 +61,9 @@ export function buildRotacionSiapeRouter(sequelize: Sequelize) {
       if (!(await tablasExisten(sequelize))) await correrGenerar();
       const porRotacion = await sequelize.query<any>(
         `SELECT g.rotacion_id, g.origen_dias, g.dias_semana, g.aviso,
-                COUNT(c.id) AS total,
-                COALESCE(SUM(c.fecha <= CURDATE()), 0) AS vencidos,
+                COALESCE(SUM(c.estado NOT IN ('NO_TRABAJA_DIA', 'BORRADO')), 0) AS total,
+                COALESCE(SUM(c.fecha <= CURDATE() AND c.estado NOT IN ('NO_TRABAJA_DIA', 'BORRADO')), 0) AS vencidos,
+                COALESCE(SUM(c.estado IN ('BORRAR', 'ERROR_BORRAR')), 0) AS borrar,
                 COALESCE(SUM(c.estado = 'OK'), 0) AS ok,
                 COALESCE(SUM(c.estado = 'YA_EXISTIA'), 0) AS ya_existia,
                 COALESCE(SUM(c.estado = 'ERROR'), 0) AS error,

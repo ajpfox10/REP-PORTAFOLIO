@@ -12,6 +12,7 @@ import { trackAction } from '../logging/track';
 import { cacheInvalidateTags } from '../infra/cache';
 import { createVersion } from '../services/documentVersion.service';
 import { emitDocumentoUploaded } from '../webhooks/emitters';
+import { requireDocumentsUpload } from '../middlewares/documentsAccess';
 
 export function buildDocumentsUploadRouter(sequelize: Sequelize) {
   const router = Router();
@@ -19,7 +20,7 @@ export function buildDocumentsUploadRouter(sequelize: Sequelize) {
   // ------------------------------------------------------------------------
   // POST /api/v1/documents/upload - Subir nuevo documento
   // ------------------------------------------------------------------------
-  router.post('/upload', uploadMiddleware, async (req: any, res: any) => {
+  router.post('/upload', requireDocumentsUpload(), uploadMiddleware, async (req: any, res: any) => {
     try {
       if (!req.file) {
         return res.status(400).json({ ok: false, error: 'No se envió ningún archivo' });
@@ -166,7 +167,7 @@ export function buildDocumentsUploadRouter(sequelize: Sequelize) {
   // ------------------------------------------------------------------------
   // POST /api/v1/documents/:id/versions - Subir nueva versión
   // ------------------------------------------------------------------------
-  router.post('/:id/versions', uploadMiddleware, async (req: any, res: any) => {
+  router.post('/:id/versions', requireDocumentsUpload(), uploadMiddleware, async (req: any, res: any) => {
     try {
       const documentoId = parseInt(req.params.id, 10);
       if (isNaN(documentoId)) {

@@ -367,6 +367,18 @@ export function SaludLaboralPage() {
   const [savingRec, setSavingRec] = useState(false);
   const [procesadoLoading, setProcesadoLoading] = useState<number | null>(null);
 
+  // ── Habilitaciones de mes anterior (07/11/2026) ──
+  // Salud Laboral no puede cargar un reconocimiento con fecha anterior al 1° del mes actual
+  // salvo que el admin haya habilitado a ese agente para ese mes. El server lo valida igual.
+  const [habilitaciones, setHabilitaciones] = useState<Habilitacion[]>([]);
+  const [formHab, setFormHab] = useState({ mes: mesAnteriorStr(), vigente_hasta: sumarDiasStr(3), motivo: '' });
+  const [savingHab, setSavingHab] = useState(false);
+  const loadHabilitaciones = useCallback(async () => {
+    try { const r = await apiFetch<any>('/salud-laboral-habilitaciones'); setHabilitaciones(r?.data || []); }
+    catch { setHabilitaciones([]); }
+  }, []);
+  useEffect(() => { loadHabilitaciones(); }, [loadHabilitaciones]);
+
   // ── Exámenes ──
   const [allExams, setAllExams] = useState<ExamenAnual[]>([]);
   const [loadingExams, setLoadingExams] = useState(false);
@@ -419,6 +431,13 @@ export function SaludLaboralPage() {
   const recDni  = recSearch.selected  ? String(recSearch.selected.dni).replace(/\D/g, '')  : '';
   const examDni = examSearch.selected ? String(examSearch.selected.dni).replace(/\D/g, '') : '';
   const recs  = recDni  ? allRecs.filter(r  => String(r.dni).replace(/\D/g,'')  === recDni)  : allRecs;
+  const inicioMes = inicioMesStr();
+  const habsAgente = recDni ? habilitaciones.filter(h => String(h.dni).replace(/\D/g, '') === recDni) : [];
+  const mesesHabilitados = new Set(habsAgente.map(h => h.mes));
+  // Admin: sin límite. Resto: desde el 1° del mes actual, o desde el mes habilitado más viejo.
+  const minFechaDesde = isAdmin ? undefined
+    : (habsAgente.length ? [...mesesHabilitados].sort()[0] + '-01' : inicioMes);
+  const fechaFueraDeMes = (f: string) => !isAdmin && !!f && f < inicioMes && !mesesHabilitados.has(f.slice(0, 7));
   const exams = examDni ? allExams.filter(e => String(e.dni).replace(/\D/g,'') === examDni) : allExams;
 
   // Reset forms al cambiar selección
@@ -448,6 +467,11 @@ export function SaludLaboralPage() {
     // fecha_desde es opcional — solo requerida para el rol salud_laboral (no admin)
     const isSaludLaboral = canCrud('reconocimientos_medicos', 'create') && !isAdmin;
     if (isSaludLaboral && !formRec.ausentismo && !formRec.fecha_desde) { toast.error('Requerido', 'La fecha desde es obligatoria.'); return; }
+    if (!formRec.ausentismo && fechaFueraDeMes(formRec.fecha_desde)
+        && !(editingRec && String(editingRec.fecha_desde || '').slice(0, 10) === formRec.fecha_desde)) {
+      toast.error('Mes anterior', 'La licencia es de un mes anterior: el admin tiene que habilitar a este agente para ese mes.');
+      return;
+    }
     setSavingRec(true);
     try {
       const dni = String(recSearch.selected.dni).replace(/\D/g, '');
@@ -870,8 +894,86 @@ export function SaludLaboralPage() {
             )}
           </div>
 
+          {/* Habilitaciones de mes anterior: el admin habilita agente + mes */}
+          {isAdmin && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="h2" style={{ marginBottom: 6 }}>🔓 Habilitar carga de mes anterior</div>
+              <div className="muted" style={{ fontSize: '0.8rem', marginBottom: 10 }}>
+                Salud Laboral no puede cargar reconocimientos con fecha anterior al {fmt(inicioMes)} salvo para los agentes y meses habilitados acá.
+              </div>
+              {recSearch.selected && !recSearch.selected.baja ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: 10, alignItems: 'end' }}>
+                  <div style={fg}>
+                    <label htmlFor="sl-hab-mes" style={lbl}>Mes a habilitar</label>
+                    <input id="sl-hab-mes" className="input" type="month" value={formHab.mes} max={mesAnteriorStr()}
+                      onChange={e => setFormHab(f => ({ ...f, mes: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-hab-hasta" style={lbl}>Vale hasta</label>
+                    <input id="sl-hab-hasta" className="input" type="date" value={formHab.vigente_hasta} min={sumarDiasStr(0)}
+                      onChange={e => setFormHab(f => ({ ...f, vigente_hasta: e.target.value }))} />
+                  </div>
+                  <div style={fg}>
+                    <label htmlFor="sl-hab-motivo" style={lbl}>Motivo (opcional)</label>
+                    <input id="sl-hab-motivo" className="input" value={formHab.motivo} maxLength={500}
+                      onChange={e => setFormHab(f => ({ ...f, motivo: e.target.value }))} />
+                  </div>
+                  <button className="btn" type="button" disabled={savingHab || !formHab.mes || !formHab.vigente_hasta}
+                    onClick={async () => {
+                      const sel = recSearch.selected!;
+                      setSavingHab(true);
+                      try {
+                        await apiFetch('/salud-laboral-habilitaciones', { method: 'POST', body: JSON.stringify({
+                          dni: recDni, agente_nombre: `${sel.apellido}, ${sel.nombre}`,
+                          mes: formHab.mes, vigente_hasta: formHab.vigente_hasta, motivo: formHab.motivo,
+                        }) });
+                        toast.ok('Habilitado', `${sel.apellido}: ${formHab.mes.slice(5, 7)}/${formHab.mes.slice(0, 4)} hasta el ${fmt(formHab.vigente_hasta)}.`);
+                        setFormHab(f => ({ ...f, motivo: '' }));
+                        loadHabilitaciones();
+                      } catch (e: any) { toast.error('Error', e?.message); }
+                      finally { setSavingHab(false); }
+                    }}>
+                    {savingHab ? 'Guardando…' : `Habilitar a ${recSearch.selected.apellido}`}
+                  </button>
+                </div>
+              ) : (
+                <div className="muted" style={{ fontSize: '0.82rem' }}>Seleccioná un agente arriba para habilitarlo.</div>
+              )}
+              {habilitaciones.length > 0 && (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', marginTop: 12 }}>
+                  <thead><tr>
+                    <th style={{ ...td, textAlign: 'left' }}>Agente</th>
+                    <th style={{ ...td, textAlign: 'left' }}>Mes</th>
+                    <th style={{ ...td, textAlign: 'left' }}>Vale hasta</th>
+                    <th style={{ ...td, textAlign: 'left' }}>Motivo</th>
+                    <th style={{ ...td, textAlign: 'left' }}>Habilitó</th>
+                    <th style={td}></th>
+                  </tr></thead>
+                  <tbody>
+                    {habilitaciones.map(h => (
+                      <tr key={h.id}>
+                        <td style={td}>{h.agente_nombre || h.dni} <span className="muted">({h.dni})</span></td>
+                        <td style={td}>{h.mes.slice(5, 7)}/{h.mes.slice(0, 4)}</td>
+                        <td style={td}>{fmt(h.vigente_hasta)}</td>
+                        <td style={td}>{h.motivo || <span className="muted">—</span>}</td>
+                        <td style={td}>{h.creado_por_email || <span className="muted">—</span>}</td>
+                        <td style={td}>
+                          <button className="btn" type="button" style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                            onClick={async () => {
+                              if (!window.confirm(`¿Revocar la habilitación de ${h.agente_nombre || h.dni} para ${h.mes.slice(5, 7)}/${h.mes.slice(0, 4)}?`)) return;
+                              try { await apiFetch(`/salud-laboral-habilitaciones/${h.id}`, { method: 'DELETE' }); loadHabilitaciones(); }
+                              catch (e: any) { toast.error('Error', e?.message); }
+                            }}>Revocar</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
           {/* Formulario reconocimientos */}
-                  {/* Formulario reconocimientos */}
                   {canCrud('reconocimientos_medicos', 'create') && (
                       <div className="card" style={{ marginBottom: 16 }}>
                           <div className="h2" style={{ marginBottom: 10 }}>
@@ -880,6 +982,11 @@ export function SaludLaboralPage() {
                           </div>
                           {!recSearch.selected && <div style={alertStyle}>⚠️ Buscá y seleccioná un becado antes de cargar.</div>}
                           {recBloqueado && <div style={alertStyle}>⛔ Agente dado de baja: no se le pueden cargar días.</div>}
+                          {!isAdmin && recSearch.selected && !recBloqueado && (
+                              habsAgente.length
+                                ? <div className="muted" style={{ fontSize: '0.8rem', marginBottom: 8 }}>🔓 Habilitado por admin para {habsAgente.map(h => `${h.mes.slice(5, 7)}/${h.mes.slice(0, 4)} (hasta el ${fmt(h.vigente_hasta)})`).join(', ')}.</div>
+                                : <div className="muted" style={{ fontSize: '0.8rem', marginBottom: 8 }}>Solo se pueden cargar fechas desde el {fmt(inicioMes)}. Para un mes anterior, pedile al admin que habilite a este agente.</div>
+                          )}
                           <form onSubmit={handleSaveRec}>
 
                               {/* Checkbox ausentismo */}
@@ -908,6 +1015,7 @@ export function SaludLaboralPage() {
                                           <div style={fg}>
                                               <label htmlFor="sl-rec-fecha-desde" style={lbl}>Fecha desde</label>
                                               <input id="sl-rec-fecha-desde" name="fecha_desde" className="input" type="date" value={formRec.fecha_desde}
+                                                  min={minFechaDesde}
                                                   onChange={e => setFormRec(f => ({ ...f, fecha_desde: e.target.value, fecha: e.target.value }))} />
                                           </div>
                                           <div style={fg}>
@@ -1479,3 +1587,18 @@ const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', border
 const td: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'middle' };
 const bajaBadge: React.CSSProperties = { marginLeft: 8, padding: '1px 7px', borderRadius: 6, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', background: 'rgba(148,163,184,0.18)', border: '1px solid rgba(148,163,184,0.4)', color: 'rgba(226,232,240,0.85)', whiteSpace: 'nowrap' };
 const alertStyle: React.CSSProperties = { padding: '10px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, marginBottom: 12, fontSize: '0.82rem', color: 'rgba(245,158,11,0.9)' };
+
+// ─── Habilitaciones de mes anterior ──────────────────────────────────────────
+interface Habilitacion {
+  id: number;
+  dni: string;
+  agente_nombre: string | null;
+  mes: string;              // 'YYYY-MM'
+  vigente_hasta: string;    // 'YYYY-MM-DD'
+  motivo: string | null;
+  creado_por_email: string | null;
+}
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function inicioMesStr(): string { return ymd(new Date()).slice(0, 8) + '01'; }
+function mesAnteriorStr(): string { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return ymd(d).slice(0, 7); }
+function sumarDiasStr(n: number): string { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d); }

@@ -2,7 +2,7 @@
 // Pestaña "Documentación incompleta": por tanda, muestra qué agentes tienen
 // subcarpetas de documento SIN archivo (pdf/tiff/jpg/png/bmp) y qué les falta.
 // Solo lista los incompletos.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../../api/http';
 import { useToast } from '../../ui/toast';
 import { exportToExcel } from '../../utils/export';
@@ -25,6 +25,32 @@ export function FaltantesTab() {
   // Se incrementa en cada click de chip: sin esto, volver a tocar el MISMO chip no
   // renavega (el estado no cambia y el efecto del visor no se vuelve a disparar).
   const [targetNonce, setTargetNonce] = useState(0);
+  // Filtro por documento faltante: si hay alguno tildado, se ven solo los agentes a
+  // los que les falta al menos uno de esos, y en cada uno solo esos chips.
+  const [filtroDocs, setFiltroDocs] = useState<Set<string>>(new Set());
+
+  function toggleFiltroDoc(d: string) {
+    setFiltroDocs((cur) => {
+      const next = new Set(cur);
+      if (next.has(d)) next.delete(d); else next.add(d);
+      return next;
+    });
+  }
+
+  // Documentos que faltan en la tanda, con cuántos agentes los deben (más frecuentes primero).
+  const docsFaltantes = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of data?.incompletos || []) for (const d of a.faltan) m.set(d, (m.get(d) || 0) + 1);
+    return [...m.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]));
+  }, [data]);
+
+  const visibles = useMemo(() => {
+    const lista = data?.incompletos || [];
+    if (!filtroDocs.size) return lista;
+    return lista
+      .map((a) => ({ ...a, faltan: a.faltan.filter((d) => filtroDocs.has(d)) }))
+      .filter((a) => a.faltan.length > 0);
+  }, [data, filtroDocs]);
 
   // Click en el DNI: abre/cierra el visor in-app del agente (desde la raíz).
   function toggleAgente(dni: number) {
@@ -63,7 +89,7 @@ export function FaltantesTab() {
   }, []);
 
   async function analizar(tanda: string) {
-    setSelectedTanda(tanda); setData(null); setExpandedDni(null); setTargetDoc(null); setLoading(true);
+    setSelectedTanda(tanda); setData(null); setExpandedDni(null); setTargetDoc(null); setFiltroDocs(new Set()); setLoading(true);
     try {
       const res = await apiFetch<{ ok: boolean; data: Data }>(`/tramites-documentales/faltantes?tanda=${encodeURIComponent(tanda)}`);
       setData(res.data);
@@ -74,7 +100,7 @@ export function FaltantesTab() {
 
   function exportar() {
     if (!data) return;
-    const rows = data.incompletos.map((a) => ({
+    const rows = visibles.map((a) => ({
       DNI: a.dni, Agente: a.nombre, Ley: a.ley,
       'Tiene carpeta': a.sinCarpeta ? 'NO' : 'SI',
       Completos: a.completos, Total: a.total, Faltan: a.faltan.length,
@@ -98,7 +124,7 @@ export function FaltantesTab() {
         ))}
         {!tandas.length && <span style={{ color: '#64748b', fontSize: '0.82rem' }}>No hay tandas.</span>}
         <div style={{ flex: 1 }} />
-        {data && data.incompletos.length > 0 && (
+        {data && visibles.length > 0 && (
           <button type="button" onClick={exportar}
             style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#cbd5e1', fontSize: '0.78rem', cursor: 'pointer' }}>
             ⬇ Exportar
@@ -117,10 +143,38 @@ export function FaltantesTab() {
             <span style={{ color: '#f87171' }}><strong>{data.incompletos.length}</strong> incompletos</span>
             <span style={{ color: '#34d399' }}><strong>{data.completos}</strong> completos</span>
             {data.sinLey.length > 0 && <span style={{ color: '#fbbf24' }}><strong>{data.sinLey.length}</strong> sin ley</span>}
+            {filtroDocs.size > 0 && <span style={{ color: '#c4b5fd' }}>filtrando: <strong>{visibles.length}</strong> agentes</span>}
           </div>
 
+          {docsFaltantes.length > 0 && (
+            <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '8px 10px', marginBottom: 14, background: 'rgba(255,255,255,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>Filtrar por lo que falta</span>
+                {filtroDocs.size > 0 && (
+                  <button type="button" onClick={() => setFiltroDocs(new Set())}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#7dd3fc', fontSize: '0.72rem', textDecoration: 'underline' }}>
+                    Quitar filtro
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {docsFaltantes.map(([d, n]) => {
+                  const on = filtroDocs.has(d);
+                  return (
+                    <label key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', cursor: 'pointer',
+                      background: on ? 'rgba(124,58,237,0.35)' : 'rgba(255,255,255,0.04)', color: on ? '#fff' : '#cbd5e1',
+                      border: `1px solid ${on ? '#7c3aed' : 'rgba(255,255,255,0.12)'}` }}>
+                      <input type="checkbox" checked={on} onChange={() => toggleFiltroDoc(d)} style={{ margin: 0 }} />
+                      {d} <span style={{ opacity: 0.65 }}>({n})</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {data.incompletos.map((a) => (
+            {visibles.map((a) => (
               <div key={a.dni} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                   <strong style={{ color: '#e2e8f0', fontSize: '0.85rem' }}>{a.nombre}</strong>

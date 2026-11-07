@@ -4,6 +4,7 @@
 //               Si no aparece, aparecen varios o algo falla → el background prueba por teléfono.
 //   POR_LINK:   la pestaña ya se abrió en /send?phone=…; espera el chat (o el aviso de número
 //               inválido), pega el mensaje y envía.
+//   Si viene `imagen` (data URL), se manda la imagen con el texto como comentario (cumpleaños).
 // Los selectores de WhatsApp cambian seguido: si algo deja de andar, se ajusta acá.
 (() => {
   if (window.__hpwWa) return;
@@ -99,7 +100,87 @@
     return enviado ? { ok: true, estado: 'ENVIADO' } : { ok: false, estado: 'ERROR', detalle: 'El mensaje quedó escrito sin enviar' };
   }
 
-  async function porNombre({ buscar, palabras, texto }) {
+  // ── Imagen + texto (felicitaciones de cumpleaños) ─────────────────────────────
+  // Se pega la imagen en la caja del chat (como un Ctrl+V): WhatsApp abre la vista previa con
+  // la caja "Añade un comentario". Ahí se pega el texto y se toca Enviar. Si el pegado no abre
+  // la vista previa, se prueba por el botón de adjuntar (input de archivos de fotos).
+  function archivoDe(dataUrl) {
+    const [cab, b64] = String(dataUrl).split(',');
+    const mime = (/data:([^;]+)/.exec(cab) || [])[1] || 'image/jpeg';
+    const bin = atob(b64 || '');
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], mime === 'image/png' ? 'felicitacion.png' : 'felicitacion.jpg', { type: mime });
+  }
+
+  // Caja del comentario de la vista previa: un contenteditable que NO es el del chat.
+  function cajaComentario() {
+    const eds = [...document.querySelectorAll('[contenteditable="true"]')]
+      .filter((el) => !el.closest('#main footer') && !el.closest('#side') && el.offsetParent !== null);
+    return eds.find((el) => /coment|caption|mensaje|message/i.test(el.getAttribute('aria-label') || el.getAttribute('aria-placeholder') || ''))
+      || eds[eds.length - 1] || null;
+  }
+  const vistaPrevia = () => {
+    const c = cajaComentario();
+    return c && !c.closest('#main footer') ? c : null;
+  };
+  function botonEnviarVista() {
+    const icos = [...document.querySelectorAll('[data-icon="send"], [data-icon="wds-ic-send-filled"]')]
+      .filter((i) => !i.closest('#main footer') && i.offsetParent !== null);
+    const ico = icos[icos.length - 1];
+    return ico?.closest('[role="button"], button') || ico
+      || [...document.querySelectorAll('[aria-label="Enviar"], [aria-label="Send"]')].find((b) => !b.closest('#main footer'));
+  }
+
+  async function adjuntarPorBoton(file) {
+    const clip = document.querySelector('#main footer [data-icon="plus"], #main footer [data-icon="plus-rounded"], #main footer [data-icon="clip"], #main footer [data-icon="attach-menu-plus"], #main footer [title="Adjuntar"], #main footer [aria-label="Adjuntar"], #main footer [aria-label="Attach"]');
+    if (clip) { clic(clip.closest('[role="button"], button') || clip); await sleep(700); }
+    const input = await esperar(() => [...document.querySelectorAll('input[type="file"]')]
+      .find((i) => /image/.test(i.getAttribute('accept') || '')), 4000);
+    if (!input) return false;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  async function pegarImagenYEnviar(imagen, texto, msCaja = 15000) {
+    const caja = await esperar(composer, msCaja);
+    if (!caja) return { ok: false, estado: 'ERROR', detalle: 'No apareció la caja de mensaje' };
+    const file = archivoDe(imagen);
+    caja.focus();
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    caja.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    let comentario = await esperar(vistaPrevia, 6000);
+    if (!comentario) {
+      if (!(await adjuntarPorBoton(file))) return { ok: false, estado: 'ERROR', detalle: 'No se pudo adjuntar la imagen' };
+      comentario = await esperar(vistaPrevia, 10000);
+    }
+    if (!comentario) return { ok: false, estado: 'ERROR', detalle: 'No se abrió la vista previa de la imagen' };
+    await sleep(600);
+
+    if (texto) {
+      comentario.focus();
+      const dtt = new DataTransfer();
+      dtt.setData('text/plain', texto);
+      comentario.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dtt, bubbles: true, cancelable: true }));
+      await sleep(500);
+      if (!norm(textoDe(comentario))) { document.execCommand('insertText', false, texto); await sleep(400); }
+    }
+
+    const btn = await esperar(botonEnviarVista, 5000);
+    if (btn) clic(btn);
+    else comentario.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+
+    const cerrada = await esperar(() => !vistaPrevia(), 15000);
+    return cerrada ? { ok: true, estado: 'ENVIADO' } : { ok: false, estado: 'ERROR', detalle: 'La imagen quedó en la vista previa sin enviar' };
+  }
+
+  const mandar = (texto, imagen, msCaja) => (imagen ? pegarImagenYEnviar(imagen, texto, msCaja) : pegarYEnviar(texto, msCaja));
+
+  async function porNombre({ buscar, palabras, texto, imagen }) {
     const caja = await esperar(buscador, 5000);
     if (!caja) return { ok: false, estado: 'ERROR', detalle: 'No encontré el buscador de WhatsApp' };
     const pide = (palabras || []).map(norm).filter(Boolean);
@@ -129,7 +210,7 @@
         return h && norm(h.textContent).includes(norm(titulo));
       }, 6000);
       if (!abierto) return { ok: false, estado: 'ERROR', detalle: `No se abrió el chat de ${titulo}` };
-      const r = await pegarYEnviar(texto, 6000);
+      const r = await mandar(texto, imagen, 6000);
       return { ...r, destino: titulo };
     } finally {
       const c = buscador();
@@ -137,7 +218,7 @@
     }
   }
 
-  async function porLink({ texto }) {
+  async function porLink({ texto, imagen }) {
     const res = await esperar(() => {
       const dlg = document.querySelector('[data-animate-modal-popup="true"], [role="dialog"]');
       const t = norm(dlg?.textContent);
@@ -152,7 +233,7 @@
     }, 60000, 400);
     if (!res) return { ok: false, estado: 'ERROR', detalle: 'No se abrió el chat del número' };
     if (res !== 'chat') return res;
-    return pegarYEnviar(texto);
+    return mandar(texto, imagen);
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

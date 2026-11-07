@@ -522,18 +522,21 @@ def cambiar_dependencia(page, dependencia):
         pass
     page.wait_for_timeout(800)
 
+    # el botón Cambiar recarga la página: se espera hasta 20 s a que el header muestre
+    # el código (mientras navega page.content() falla) y recién ahí se recarga
     for _ in range(2):
-        try:
-            if f"({codigo})" in page.content():
-                print(f"  Dependencia cambiada a {dependencia} ({codigo})")
-                return
-        except Exception:
-            pass
+        for _ in range(40):
+            try:
+                if f"({codigo})" in page.content():
+                    print(f"  Dependencia cambiada a {dependencia} ({codigo})")
+                    return
+            except Exception:
+                pass
+            page.wait_for_timeout(500)
         try:
             page.reload(wait_until="networkidle", timeout=15000)
         except Exception:
             pass
-        page.wait_for_timeout(500)
 
     raise Exception(f"NO se pudo cambiar la dependencia a {dependencia} ({codigo}) - se aborta para no cargar en la dependencia equivocada")
 

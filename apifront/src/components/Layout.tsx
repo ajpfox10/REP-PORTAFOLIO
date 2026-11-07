@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { useKiosk } from '../hooks/useKiosk';
 import { RobotsFallidosBanner } from './RobotsFallidosBanner';
 import { AlertasJubilacionBloqueo } from './AlertasJubilacionBloqueo';
+import { FelicitacionAutomatica } from '../pages/CumpleanosFelicitacionesPage/FelicitacionAutomatica';
 import { FeriadosBloqueo } from './FeriadosBloqueo';
 
 export function Layout({ title, children, showBack, fluid }: {
@@ -251,6 +252,7 @@ export function Layout({ title, children, showBack, fluid }: {
                       {(hasPerm('crud:fc_cert_reemplazos:read') || isAdmin) && navLink('/app/fc-cert-reemplazos', '📋 FC / Cert. / Reemplazos')}
                       {navLink('/app/organigrama', '🏗️ Organigrama')}
                       {navLink('/app/alertas', '🔔 Alertas')}
+                      {isAdmin && navLink('/app/cumpleanos-felicitaciones', '🎂 Felicitaciones')}
                       {navLink('/app/atencion', '🏛️ Atención al Público')}
                       {navLink('/app/agentes-servicios', '🏥 Agentes por Servicio')}
                       {navLink('/app/mi-sector', '🏢 Gestión de Sectores')}
@@ -339,6 +341,9 @@ export function Layout({ title, children, showBack, fluid }: {
 
       {/* Feriados del año sin confirmar: aviso y, desde el 4.º día hábil de enero, bloqueo (solo administradores) */}
       {hasPerm('crud:*:*') && <FeriadosBloqueo />}
+
+      {/* Felicitaciones de cumpleaños automáticas: solo en la PC marcada (localStorage) */}
+      <FelicitacionAutomatica />
 
       <div style={{ marginTop: 16 }}>{children}</div>
     </div>

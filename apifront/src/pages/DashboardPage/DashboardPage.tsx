@@ -15,6 +15,7 @@ import { GuarderiaAlertaBanner } from '../GuarderiaPage';
 import { AlertasAgenteDashboardBanner } from '../AlertasAgentePage';
 import { CumpleanosDashboardBanner } from '../AlertasPage/CumpleanosBanner';
 import { ResidenciasBajaBanner } from '../DuracionResidenciasPage/ResidenciasBajaBanner';
+import { ControlSiapeBanner } from '../ResidentesPage/ControlSiapeBanner';
 import { ReclamosHaberesDashboardBanner } from '../AlertasPage/ReclamosHaberesBanner';
 import { ConcursosFuncionesBanner } from '../ConcursosPage/ConcursosFuncionesExamenes';
 import { JubilacionCargaBanner } from '../HerramientasPage/JubilacionCargaBanner';
@@ -492,6 +493,7 @@ export function DashboardPage() {
       {canSeeAlertasAgente && alert('alertasAgente', <AlertasAgenteDashboardBanner />)}
       {canSeeJubilacionCarga && alert('jubilacionCarga', <JubilacionCargaBanner />)}
       {hasPerm('crud:*:*') && <ResidenciasBajaBanner />}
+      {canSeeResidentes && <ControlSiapeBanner />}
 
       <div style={{ marginBottom: 6 }}>
         <div className="muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -515,6 +517,9 @@ export function DashboardPage() {
           )}
           {(hasPerm('crud:resoluciones:read') || hasPerm('crud:*:*')) && (
             <Tile to="/app/resoluciones" title="📋 Resoluciones" desc="Resoluciones, expedientes y archivos escaneados por agente." accent="#0d9488" />
+          )}
+          {hasPerm('crud:*:*') && (
+            <Tile to="/app/designaciones-grh" title="📝 Designaciones (Ministerio)" desc="Datos del formulario de Google para el sistema de Designaciones: estudios, DDJJ, experiencia, salud." accent="#16a34a" />
           )}
           <Tile to="/app/guarderia" title="🧒 Guardería" desc="Registro de agentes con hijos en edad de guardería, alertas de cumpleaños de 45 días y seguimiento de trámites." accent="#f59e0b" />
           <Tile to="/app/becarios-art" title="🩺 Carga de ART" desc="Carga de agentes en ART. Pendientes, registrados y errores de la carga automática para corregir." accent="#06b6d4" />
@@ -569,6 +574,9 @@ export function DashboardPage() {
           )}
           {(hasPerm('crud:*:*') || hasPerm('personal:write') || hasPerm('crud:personal:update')) && (
             <Tile to="/app/vacaciones-adelantadas" title="🏖️ Vacaciones adelantadas" desc="Adelantos de vacaciones: período, días y año imputado. Búsqueda por agente, DNI, servicio y dependencia, con quién cargó, editó o borró cada uno." accent="#0ea5e9" />
+          )}
+          {hasPerm('crud:*:*') && (
+            <Tile to="/app/carga-horaria-ley" title="⏱️ Carga horaria por ley" desc="Horas semanales que salen en los certificados según la ley: base, insalubridad (por ocupación) y agotamiento prematuro (por servicio)." accent="#0d9488" />
           )}
           <Tile to="/app/herramientas" title="⚖️ Jubilación IPS" desc="Calculadora de jubilación IPS para Leyes 10471 y 10430. Servicio nombrado, becas, ANSES, insalubridad y prorrateo." accent="#7c3aed" />
           <Tile to="/app/concursos" title="🏆 Concursos Ley 10471" desc="Concurso de ingreso por año, ley, servicio y agente. Concurso de funciones: Ley 10471 con más de 15 años de antigüedad. Exportación a Excel." accent="#6366f1" />

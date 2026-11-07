@@ -7,7 +7,7 @@ import { useToast } from '../../ui/toast';
 import { apiFetch, apiFetchBlobWithMeta } from '../../api/http';
 import { searchPersonal } from '../../api/searchPersonal';
 import { TIPOS_DOCUMENTO, GROUP_LABELS } from './documentTypes';
-import { SUBCARPETAS_PRESETS, presetSubdivisiones } from './subcarpetas';
+import { SUBCARPETAS_PRESETS, presetSubdivisiones, CARPETA_POR_TIPO } from './subcarpetas';
 import { ScanPagesOrganizer, scanPageId, applyScanPageOrder } from './ScanPagesOrganizer';
 import './styles/EscaneoPage.css';
 
@@ -488,6 +488,13 @@ export function EscaneoPage() {
     setSubDiskL2([]);
     if (cat) cargarSubDisk(dniStr, cat, 2);
   }, [cargarSubDisk]);
+
+  // Tipos con carpeta fija en el legajo (antecedentes): se preselecciona; se puede cambiar a mano
+  const elegirTipo = useCallback((tipo: string) => {
+    setTipoDoc(tipo);
+    const carpeta = CARPETA_POR_TIPO[tipo];
+    if (carpeta && agente) seleccionarCategoria(carpeta, String(agente.dni));
+  }, [agente, seleccionarCategoria]);
 
   const crearSubcarpeta = useCallback(async () => {
     const nombre = nuevaSub.trim();
@@ -1127,7 +1134,7 @@ export function EscaneoPage() {
                     <button
                       key={t.value}
                       className={`scan-tipo-btn${tipoDoc === t.value ? ' selected' : ''}`}
-                      onClick={() => setTipoDoc(t.value)}
+                      onClick={() => elegirTipo(t.value)}
                       type="button"
                     >
                       <span className="scan-tipo-icon">{t.icon}</span>
@@ -1144,7 +1151,7 @@ export function EscaneoPage() {
                         <button
                           key={t.value}
                           className={`scan-tipo-btn${tipoDoc === t.value ? ' selected' : ''}`}
-                          onClick={() => setTipoDoc(t.value)}
+                          onClick={() => elegirTipo(t.value)}
                           type="button"
                         >
                           <span className="scan-tipo-icon">{t.icon}</span>

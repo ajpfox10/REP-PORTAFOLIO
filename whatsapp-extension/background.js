@@ -2,7 +2,7 @@
 // (cualquiera sea su posición), busca por nombre y, si no lo encuentra, abre el chat por teléfono.
 // Al terminar devuelve el foco a la pestaña de la app.
 //
-// payload: { modo: 'NOMBRE_TELEFONO' | 'NOMBRE' | 'TELEFONO', buscar, palabras: string[], telefono, texto }
+// payload: { modo: 'NOMBRE_TELEFONO' | 'NOMBRE' | 'TELEFONO', buscar, palabras: string[], telefono, texto, imagen? (data URL) }
 // respuesta: { ok, estado: 'ENVIADO'|'NO_ENCONTRADO'|'SIN_WHATSAPP'|'ERROR', modo: 'NOMBRE'|'TELEFONO', destino, detalle }
 
 const WA = 'https://web.whatsapp.com/';
@@ -36,7 +36,11 @@ chrome.runtime.onConnect.addListener((port) => {
         : type === 'CONTACTOS' ? await contactos()
         : type === 'RECIBIDOS' ? await recibidos()
         : type === 'CUIL_ANSES' ? await cuilAnses(payload)
+        : type === 'RDAM' ? await rdam(payload)
         : { ok: false, estado: 'ERROR', detalle: `Acción desconocida: ${type}` };
+      // Si la página pide algo que este código no conoce, Chrome quedó con un fondo viejo:
+      // se recarga la extensión para tomar los archivos del disco (la próxima vez anda).
+      if (r.detalle?.startsWith('Acción desconocida')) setTimeout(() => chrome.runtime.reload(), 500);
     } catch (e) {
       r = { ok: false, estado: 'ERROR', detalle: String(e?.message || e).slice(0, 200) };
     } finally {
@@ -57,7 +61,7 @@ async function enviar(p, appTab) {
 
     let porNombre = null;
     if (p.modo !== 'TELEFONO' && p.buscar) {
-      porNombre = await aTab(tab.id, { type: 'POR_NOMBRE', buscar: p.buscar, palabras: p.palabras, texto: p.texto }, 45000);
+      porNombre = await aTab(tab.id, { type: 'POR_NOMBRE', buscar: p.buscar, palabras: p.palabras, texto: p.texto, imagen: p.imagen || null }, p.imagen ? 75000 : 45000);
       // Cualquier falla por nombre (no agendado, varios, chat que no abre…) pasa al teléfono.
       // Salvo que se haya cortado por tiempo: el script podría seguir y mandarlo igual → no duplicar.
       if (porNombre.ok || porNombre.timeout || p.modo === 'NOMBRE') return { ...porNombre, modo: 'NOMBRE' };
@@ -70,7 +74,7 @@ async function enviar(p, appTab) {
     await chrome.tabs.update(tab.id, { url: `${WA}send?phone=${encodeURIComponent(p.telefono)}` });
     await cargaCompleta(tab.id);
     await asegurarScript(tab.id);
-    const r = await aTab(tab.id, { type: 'POR_LINK', texto: p.texto }, 90000);
+    const r = await aTab(tab.id, { type: 'POR_LINK', texto: p.texto, imagen: p.imagen || null }, 90000);
     return {
       ...r, modo: 'TELEFONO', destino: `+${p.telefono}`,
       detalle: [porNombre?.detalle && `Por nombre: ${porNombre.detalle}`, r.detalle].filter(Boolean).join(' · ') || null,
@@ -241,4 +245,109 @@ async function cuilAnses(p) {
     chrome.tabs.sendMessage(tab.id, { type: 'CONSULTAR', ...p }),
     sleep(60000).then(() => ({ ok: false, estado: 'ERROR', detalle: 'ANSES tardó demasiado en responder' })),
   ]);
+}
+
+// ── Certificado RDAM (Registro de Deudores Alimentarios Morosos) ─────────────
+// El formulario /solicitudCertificado es un trámite PÚBLICO: no pide login ni captcha. Al tocar
+// "Imprimir certificado", Livewire redirige la pestaña a /certificado-libre-deuda-RDAM/<código>,
+// que es el PDF (se baja sin cookies). Si la persona además está logueada, la página muestra la
+// tabla "Certificados solicitados": ahí se reusa el certificado de HOY de ese DNI (no se piden dos)
+// y sirve de respaldo para encontrar el código si no hubo redirect.
+// payload: { dni, sexo: '1'|'2', apellido, nombre, forzar }
+// respuesta: { ok, estado: 'OK'|'NO_GENERADO'|'ERROR', reusado, codigo, pdf (base64), detalle }
+const RDAM_BASE = 'https://rdam.mjus.gba.gob.ar';
+const RDAM_URL = `${RDAM_BASE}/solicitudCertificado?sort=created_at&search=`;
+const RDAM_COD = /\/certificado-(?:libre-deuda|ver)-RDAM\/([^/?#]+)/;
+let rdamTabId = null;
+
+// Abre el formulario (con la tabla, si hay sesión, ya filtrada por ese DNI).
+async function rdamAbrir(dni) {
+  const url = RDAM_URL + encodeURIComponent(String(dni));
+  let tab = null;
+  if (rdamTabId != null) { try { tab = await chrome.tabs.get(rdamTabId); } catch { tab = null; } }
+  // Entrar directo a la URL a veces rebota al tablero: se reintenta.
+  for (let intento = 0; intento < 3; intento++) {
+    if (tab) await chrome.tabs.update(tab.id, { url });
+    else { tab = await chrome.tabs.create({ url, active: false }); rdamTabId = tab.id; }
+    await cargaCompleta(tab.id);
+    let ping = null;
+    for (let i = 0; i < 20 && !ping?.ok; i++) {
+      try { ping = await chrome.tabs.sendMessage(tab.id, { type: 'PING' }); } catch { /* cargando */ }
+      if (!ping?.ok && i === 2) {
+        try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['rdam.js'] }); } catch { /* cargando */ }
+      }
+      if (!ping?.ok) await sleep(500);
+    }
+    if (ping?.enFormulario) return { tab };
+  }
+  return { tab, error: 'No se pudo abrir el formulario del RDAM' };
+}
+
+function rdamA(tabId, msg, ms = 60000) {
+  return Promise.race([
+    chrome.tabs.sendMessage(tabId, msg),
+    sleep(ms).then(() => ({ ok: false, estado: 'ERROR', detalle: 'El RDAM tardó demasiado en responder' })),
+  ]);
+}
+
+// Espera que la pestaña navegue al PDF del certificado y devuelve el código (o null).
+function rdamEsperarCodigo(tabId, ms) {
+  return new Promise((resolve) => {
+    const fin = setTimeout(() => { chrome.tabs.onUpdated.removeListener(oir); resolve(null); }, ms);
+    function oir(id, info, t) {
+      const m = id === tabId && RDAM_COD.exec(info.url || t?.url || '');
+      if (m) { clearTimeout(fin); chrome.tabs.onUpdated.removeListener(oir); resolve(m[1]); }
+    }
+    chrome.tabs.onUpdated.addListener(oir);
+  });
+}
+
+async function rdamPdf(codigo) {
+  const r = await fetch(`${RDAM_BASE}/certificado-libre-deuda-RDAM/${encodeURIComponent(codigo)}`, { credentials: 'include' });
+  if (!r.ok) throw new Error(`El RDAM no entregó el PDF (HTTP ${r.status})`);
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (String.fromCharCode(...bytes.slice(0, 4)) !== '%PDF') throw new Error('Lo que devolvió el RDAM no es un PDF');
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function hoyLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function rdam(p) {
+  let a = await rdamAbrir(p.dni);
+  if (a.error) return { ok: false, estado: 'ERROR', detalle: a.error };
+
+  const antes = await rdamA(a.tab.id, { type: 'LISTAR', dni: p.dni });
+  if (!antes.ok) return antes;
+  const deHoy = antes.filas.find((f) => f.fecha.startsWith(hoyLocal()));
+  let codigo = !p.forzar && deHoy ? deHoy.codigo : null;
+  const reusado = !!codigo;
+  let aviso = null;
+
+  if (!codigo) {
+    const redirect = rdamEsperarCodigo(a.tab.id, 90000);
+    // Si la página navega al PDF, el script de la pestaña muere y el mensaje se corta: es lo esperado.
+    const env = await rdamA(a.tab.id, { type: 'SOLICITAR', dni: p.dni, sexo: p.sexo, apellido: p.apellido, nombre: p.nombre }, 90000)
+      .catch(() => ({ ok: true, estado: 'ENVIADO', detalle: null }));
+    aviso = env.detalle || null;
+    codigo = await Promise.race([redirect, sleep(env.ok ? 15000 : 1000).then(() => null)]);
+    if (!codigo && !env.ok) return env;
+    // Respaldo con sesión: la tabla no se refresca sola, se recarga y se busca la fila nueva.
+    const viejos = new Set(antes.filas.map((f) => f.codigo));
+    for (let i = 0; i < 3 && !codigo; i++) {
+      a = await rdamAbrir(p.dni);
+      if (a.error) break;
+      const despues = await rdamA(a.tab.id, { type: 'LISTAR', dni: p.dni });
+      if (!despues.ok) break;
+      codigo = despues.filas.find((f) => !viejos.has(f.codigo))?.codigo || null;
+      if (!codigo) await sleep(2000);
+    }
+    if (!codigo) return { ok: false, estado: 'NO_GENERADO', detalle: aviso || 'El RDAM no generó el certificado' };
+  }
+
+  return { ok: true, estado: 'OK', reusado, codigo, pdf: await rdamPdf(codigo), detalle: aviso };
 }

@@ -73,6 +73,7 @@ CONSULTAS = {
         "destino_dir": COMPARACION,
         "destino_nombre": "EXAMENES_MEDICOS.xlsx",
         "periodo": "anio",
+        "post": "examenes_medicos",     # acumula en la tabla examenes_medicos_siape (mig 100)
     },
     "Horario Administrativo a un dia": {
         "nro": 76,
@@ -179,6 +180,21 @@ def importar_historial(destino, desde, hasta):
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
+def lanzar_certificados():
+    """Despues de actualizar examenes_medicos_siape dispara el robot de certificados (baja el apto
+    nuevo de quien vencio y volvio a estar vigente, y lo que falte de las tandas). Va suelto por
+    run_robot: espera el turno de SIAPE (lo tiene esta exportacion) y queda en la pagina Robots.
+    Si no hay nada que bajar termina enseguida sin abrir SIAPE."""
+    scripts = Path(__file__).resolve().parents[1]
+    try:
+        subprocess.Popen([sys.executable, "run_robot.py", "siape_certificados_examen"], cwd=str(scripts),
+                         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        F.log("Lance el robot de certificados (siape_certificados_examen).")
+    except Exception as e:
+        F.log(f"AVISO: no pude lanzar el robot de certificados: {e}")
+
+
 def post_descarga(cfg, destino, args=None):
     """Paso extra despues de copiar el archivo. Devuelve (filas, detalle) para el registro."""
     if cfg.get("post") == "historial":
@@ -212,6 +228,18 @@ def post_descarga(cfg, destino, args=None):
             return n, f"{n} agentes"
         except Exception as e:
             F.log(f"AVISO: no pude cargar horarios_historial: {e}")
+    if cfg.get("post") == "examenes_medicos":
+        # no rompe la exportacion: EXAMENES_MEDICOS.xlsx ya quedo copiado
+        try:
+            import examenes_medicos_tabla as EM
+            r = EM.importar(destino)
+            detalle = f"{r['filas']} examenes: {r['nuevos']} nuevos, {r['actualizados']} actualizados"
+            F.log(f"Tabla examenes_medicos_siape: {detalle}")
+            lanzar_certificados()
+            return r["filas"], detalle
+        except Exception as e:
+            F.log(f"AVISO: no pude cargar examenes_medicos_siape: {e}")
+            return None, f"AVISO: no pude cargar examenes_medicos_siape: {e}"
     return None, None
 
 

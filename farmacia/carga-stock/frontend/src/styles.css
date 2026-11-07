@@ -337,6 +337,7 @@ th {
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td { background: #f3f8fa; }
 tr.detail-row > td { background: #f8fafb; padding: 10px 12px; }
+.solo-excel { display: none; }
 tr.detail-row .table-wrap { border: 0; background: transparent; }
 table.mini { min-width: 0; width: auto; }
 table.compact { min-width: 0; }
@@ -630,6 +631,15 @@ table.oc-renglones td { vertical-align: middle; }
 table.oc-renglones select { padding: 4px 6px; }
 tr.oc-ok > td { background: #dff6e8; }
 tr.oc-parcial > td { background: #fff6d6; }
+.oc-entregada { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.oc-entregada button.small { padding: 3px 8px; font-size: 12px; white-space: nowrap; }
+.oc-entregada .link-btn { background: none; border: 0; padding: 0; color: #00798a; text-decoration: underline; cursor: pointer; font-size: 12px; }
+tr.oc-entrega-form > td, tr.oc-entregas-historial > td { background: #f4f9fb; }
+tr.oc-entrega-form form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+tr.oc-entrega-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #47515c; }
+tr.oc-entrega-form input { padding: 5px 8px; min-width: 110px; }
+tr.oc-entregas-historial table { width: auto; min-width: 520px; font-size: 13px; }
+tr.oc-entregas-historial tr.total td { font-weight: 700; border-top: 1px solid #cdd9e3; }
 .oc-drive-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #5b6b76; }
 a.oc-link { display: inline-flex; align-items: center; gap: 8px; border-radius: 6px; text-decoration: none; font-weight: 700; }
 .oc-backup { margin-top: 12px; color: #47515c; font-size: 13px; line-height: 1.6; }
@@ -648,3 +658,55 @@ a.oc-link { display: inline-flex; align-items: center; gap: 8px; border-radius: 
 .req-page table.compact th, .req-page table.compact td { padding: 7px 10px; font-size: 15px; line-height: 1.35; }
 .req-page .filters, .req-page .filters input, .req-page .filters select { font-size: 15px; }
 .req-page .status { font-size: 13px; }
+
+/* Alerta de O.C. por vencer */
+.oc-vto { width: min(920px, 100%); max-height: 85vh; overflow: auto; }
+.oc-vto h2 { display: flex; align-items: center; gap: 8px; }
+.oc-vto-titulo { margin: 16px 0 8px; font-size: 16px; }
+.oc-vto-titulo.urgente { color: #b42318; }
+.oc-vto-titulo.aviso { color: #b54708; }
+.oc-vto-tabla { width: 100%; border-collapse: collapse; }
+.oc-vto-tabla th, .oc-vto-tabla td { padding: 6px 8px; border-bottom: 1px solid #e5eaee; text-align: left; }
+.oc-vto-nota { margin-top: 12px; color: #5b6673; }
+.oc-vto-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.oc-vto-banner span { flex: 1; }
+
+/* Pendientes de ingreso segun Farmacia MS, en el detalle de cada O.C. */
+.oc-ms-nota { color: #5b6673; font-size: 13px; margin: 4px 0 6px; }
+
+/* Control con Farmacia MS: diferencias por color */
+.dif-rojo td { background: #fde8e8; }
+.dif-naranja td { background: #ffedd5; }
+.dif-amarillo td { background: #fef9c3; }
+.dif-gris td { background: #f1f3f5; }
+.dif-chip { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 13px; white-space: nowrap; cursor: help; }
+.dif-chip.dif-rojo { background: #fde8e8; color: #b42318; }
+.dif-chip.dif-naranja { background: #ffedd5; color: #b54708; }
+.dif-chip.dif-amarillo { background: #fef9c3; color: #854d0e; }
+.dif-chip.dif-gris { background: #f1f3f5; color: #5b6673; }
+.dif-chip.dif-ok { background: #e7f7ec; color: #1f7a3f; }
+.dif-metric { text-align: left; cursor: pointer; border: 2px solid transparent; font: inherit; }
+.dif-metric span { font-size: 13px; }
+.dif-metric.dif-rojo { background: #fde8e8; }
+.dif-metric.dif-naranja { background: #ffedd5; }
+.dif-metric.dif-amarillo { background: #fef9c3; }
+.dif-metric.dif-gris { background: #f1f3f5; }
+.dif-metric.activo { border-color: #27313d; }
+.dif-texto-error { color: #b42318; }
+.dif-banner { background: #fff4e5; color: #8a4b08; }
+.table-actions {
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.paginador {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  color: #5b6b76;
+  font-size: 14px;
+}
+.paginador button { min-width: 32px; justify-content: center; }
+.paginador select { padding: 4px 6px; font-size: 13px; }
+.paginador-abajo .paginador { justify-content: flex-end; margin: 8px 0 0; }

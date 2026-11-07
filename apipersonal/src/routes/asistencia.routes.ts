@@ -1,14 +1,14 @@
-﻿// src/routes/asistencia.routes.ts
+// src/routes/asistencia.routes.ts
 // Comparador de asistencia MINISTERIO vs SIAP
 //
 // FLUJO:
-//  GET  /asistencia/config          â†’ directorio configurado en .env
-//  GET  /asistencia/archivos        â†’ lista los .xlsx/.xltx de EXCEL_ASISTENCIA_DIR
-//  GET  /asistencia/mapeo           â†’ devuelve el mapeo actual de novedades (tabla mapeo_novedades)
-//  PUT  /asistencia/mapeo           â†’ guarda el mapeo editado (tabla mapeo_novedades, reglas generales)
-//  DELETE /asistencia/mapeo         â†’ restaura el mapeo de la carga inicial (migración 055)
-//  POST /asistencia/comparar        â†’ compara usando los archivos del directorio
-//  GET  /asistencia/ausentes28      â†’ ausentes cÃ³digo 28 cruzados con fichajes y horarios
+//  GET  /asistencia/config          → directorio configurado en .env
+//  GET  /asistencia/archivos        → lista los .xlsx/.xltx de EXCEL_ASISTENCIA_DIR
+//  GET  /asistencia/mapeo           → devuelve el mapeo actual de novedades (tabla mapeo_novedades)
+//  PUT  /asistencia/mapeo           → guarda el mapeo editado (tabla mapeo_novedades, reglas generales)
+//  DELETE /asistencia/mapeo         → restaura el mapeo de la carga inicial (migración 055)
+//  POST /asistencia/comparar        → compara usando los archivos del directorio
+//  GET  /asistencia/ausentes28      → ausentes código 28 cruzados con fichajes y horarios
 //
 // El directorio se configura en .env:
 //   EXCEL_ASISTENCIA_DIR=D:\Asistencia\Excel
@@ -26,6 +26,7 @@ import mysql, { RowDataPacket } from 'mysql2/promise';
 import {
   loadMapeoTabla, saveMapeoTabla, restaurarMapeoTabla,
   loadMapeoGeneral, listReglasCie, addReglasCie, bajaReglaCie, normCie,
+  novedadesConCodigoCarga, normNovedadCarga,
 } from '../services/mapeoNovedades';
 import { requirePermission } from '../middlewares/rbacCrud';
 import { env } from '../config/env';
@@ -36,14 +37,14 @@ let ExcelJS: any;
 try { ExcelJS = require('exceljs'); } catch { ExcelJS = null; }
 
 // SheetJS: ExcelJS NO sabe leer el formato viejo .xls (binario OLE/BIFF).
-// Lo usamos solo para convertir .xls â†’ .xlsx en memoria y dÃ¡rselo a ExcelJS.
+// Lo usamos solo para convertir .xls → .xlsx en memoria y dárselo a ExcelJS.
 let XLSX_SJS: any;
 try { XLSX_SJS = require('xlsx'); } catch { XLSX_SJS = null; }
 
 /**
  * Carga un workbook ExcelJS desde cualquier formato soportado.
- *  - .xlsx / .xltx â†’ lectura nativa de ExcelJS.
- *  - .xls          â†’ se convierte a .xlsx en memoria con SheetJS y se carga el
+ *  - .xlsx / .xltx → lectura nativa de ExcelJS.
+ *  - .xls          → se convierte a .xlsx en memoria con SheetJS y se carga el
  *                    buffer. Sin esto, ExcelJS tira "Can't find end of central
  *                    directory" porque el .xls no es un ZIP.
  */
@@ -53,10 +54,10 @@ async function loadWorkbook(fp: string): Promise<any> {
     if (!XLSX_SJS) {
       throw new Error('Falta dependencia "xlsx" para leer archivos .xls (npm i xlsx)');
     }
-    // cellDates:false a propÃ³sito: dejamos las fechas como serial numÃ©rico.
+    // cellDates:false a propósito: dejamos las fechas como serial numérico.
     // Si SheetJS crea objetos Date, los arma en la zona horaria local del server
-    // (UTC-3) y una fecha-entero (medianoche) termina cayendo el dÃ­a anterior en
-    // UTC â†’ todo el Ministerio salÃ­a corrido -1 dÃ­a. Como nÃºmero, parseDate las
+    // (UTC-3) y una fecha-entero (medianoche) termina cayendo el día anterior en
+    // UTC → todo el Ministerio salía corrido -1 día. Como número, parseDate las
     // convierte en UTC sin corrimiento.
     const sjsWb = XLSX_SJS.readFile(fp, { cellDates: false });
     const buf = XLSX_SJS.write(sjsWb, { type: 'buffer', bookType: 'xlsx' });
@@ -70,9 +71,9 @@ async function loadWorkbook(fp: string): Promise<any> {
 
 // Normaliza textos de "Novedad" para evitar falsos NO COINCIDENTE por:
 // - espacios alrededor de '-' o '.'
-// - mayÃºsculas/minÃºsculas
+// - mayúsculas/minúsculas
 // - acentos
-// - espacios mÃºltiples
+// - espacios múltiples
 function normHeader(s: any): string {
   return String(s ?? '')
     .toLowerCase()
@@ -117,7 +118,7 @@ function normMapeo(mapeo: Record<string, string[]>): Record<string, string[]> {
   return out;
 }
 
-// Divide novedades compuestas solo cuando la barra estÃ¡ usada como separador con espacios.
+// Divide novedades compuestas solo cuando la barra está usada como separador con espacios.
 // No rompe textos legales como "Y/O" o "MAMARIO/PROSTATA/COLON".
 function splitNovedadesCompuestas(v: any): string[] {
   const base = normNovedad(v);
@@ -325,7 +326,7 @@ function parseDate(val: any): Date | null {
   return null;
 }
 
-// Usar UTC para evitar que fechas midnight se desplacen un dÃ­a en zonas UTC-X
+// Usar UTC para evitar que fechas midnight se desplacen un día en zonas UTC-X
 const dateToStr = (d: Date | null): string => d ? d.toISOString().slice(0, 10) : '';
 // Normalizar a UTC midnight antes de comparar
 const toUTCMidnight = (d: Date) =>
@@ -335,7 +336,7 @@ const overlap = (s1: Date, e1: Date, s2: Date, e2: Date) =>
 
 
 
-// â”€â”€ Periodo (mes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Periodo (mes) ────────────────────────────────────────────────────────────
 function parsePeriodoMes(val: any): { start: Date; end: Date } | null {
   const s = String(val ?? '').trim();
   const m = s.match(/^(\d{4})-(\d{2})$/);
@@ -344,7 +345,7 @@ function parsePeriodoMes(val: any): { start: Date; end: Date } | null {
   const mo = Number(m[2]) - 1;
   if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 0 || mo > 11) return null;
   const start = new Date(Date.UTC(y, mo, 1));
-  // Ãºltimo dÃ­a del mes
+  // último día del mes
   const end = new Date(Date.UTC(y, mo + 1, 0));
   return { start, end };
 }
@@ -505,7 +506,7 @@ async function parseSiap(fp: string): Promise<any[]> {
     if (v) headers[v] = col;
   });
 
-  // Columnas reales del SIAP segÃºn estructura del Excel
+  // Columnas reales del SIAP según estructura del Excel
   const colDni      = headers['nro_documento'] ?? headers['nro documento'] ?? headers['dni'] ?? headers['documento'] ?? 5;
   const colApellido = headers['apellido'] ?? 2;
   const colNombreFirst = headers['nombre'] ?? 3;
@@ -515,16 +516,16 @@ async function parseSiap(fp: string): Promise<any[]> {
   const colHasta    = headers['fecha_hasta'] ?? headers['fecha hasta'] ?? headers['hasta'] ?? 14;
   const colJustificado = headers['justificado'] ?? 15;
   const colAgrup    = headers['agrupamiento'] ?? 10;
-  // E5 = col 21, E6 = col 22 â€” juntos determinan la dependencia
+  // E5 = col 21, E6 = col 22 — juntos determinan la dependencia
   const colE5 = headers['e5'] ?? 21;
   const colE6 = headers['e6'] ?? 22;
 
   /** Resuelve la dependencia a partir de E5 y E6:
-   *  - E6 contiene "UPA 18" o "UNIDAD PRONTA ATENCIÃ“N 18"  â†’ "UPA 18"
-   *  - E6 contiene "UPA 4"  o "UNIDAD PRONTA ATENCIÃ“N 4"   â†’ "UPA 4"
-   *  - E5 contiene "UPA 18" o "UNIDAD PRONTA ATENCIÃ“N 18"  â†’ "UPA 18"  (fallback cuando E6 es "-")
-   *  - E5 contiene "UPA 4"  o "UNIDAD PRONTA ATENCIÃ“N 4"   â†’ "UPA 4"   (fallback cuando E6 es "-")
-   *  - todo lo demÃ¡s                                         â†’ "HOSPITAL"
+   *  - E6 contiene "UPA 18" o "UNIDAD PRONTA ATENCIÓN 18"  → "UPA 18"
+   *  - E6 contiene "UPA 4"  o "UNIDAD PRONTA ATENCIÓN 4"   → "UPA 4"
+   *  - E5 contiene "UPA 18" o "UNIDAD PRONTA ATENCIÓN 18"  → "UPA 18"  (fallback cuando E6 es "-")
+   *  - E5 contiene "UPA 4"  o "UNIDAD PRONTA ATENCIÓN 4"   → "UPA 4"   (fallback cuando E6 es "-")
+   *  - todo lo demás                                         → "HOSPITAL"
    */
 function resolveDepedencia(e5raw: string, e6raw: string): string {
   const norm = (s: string) =>
@@ -537,11 +538,11 @@ function resolveDepedencia(e5raw: string, e6raw: string): string {
   const e5 = norm(e5raw);
 
   // prioridad: si E6 dice UPA, manda (casos tipo "Albert")
-  // Acepta tanto "UPA 4" como "UNIDAD PRONTA ATENCIÃ“N 4" / "UNIDAD PRONTA ATENCION 4"
+  // Acepta tanto "UPA 4" como "UNIDAD PRONTA ATENCIÓN 4" / "UNIDAD PRONTA ATENCION 4"
   const upaInE6 = e6.match(/UPA\s*(\d+)/) ?? e6.match(/UNIDAD\s+PRONTA\s+ATEN[A-Z]*\s+(\d+)/);
   if (upaInE6) return `UPA ${upaInE6[1]}`;
 
-  // fallback: E5 â€” Ã­dem
+  // fallback: E5 — ídem
   const upaInE5 = e5.match(/UPA\s*(\d+)/) ?? e5.match(/UNIDAD\s+PRONTA\s+ATEN[A-Z]*\s+(\d+)/);
   if (upaInE5) return `UPA ${upaInE5[1]}`;
 
@@ -574,7 +575,7 @@ function resolveDepedencia(e5raw: string, e6raw: string): string {
       novedad: cellToText(nov),
       desde,
       hasta,
-      justificado, // leÃ­do directo del SIAP, no calculado
+      justificado, // leído directo del SIAP, no calculado
       upa: dependencia, // clave para elegir el archivo ministerio correcto
       agrupamiento: cellToText(r.getCell(colAgrup)?.value),
     });
@@ -664,7 +665,7 @@ function labelsCargaParaFila(row: any, mapeo: Record<string, string[]>): string[
   const labels = new Set<string>();
   const add = (v: any) => {
     const n = normNovedad(v);
-    if (n && n !== 'â€”' && n !== '(SIN MAPEO)' && !n.includes('SIN NOVEDAD MINISTERIO')) labels.add(n);
+    if (n && n !== '—' && n !== '(SIN MAPEO)' && !n.includes('SIN NOVEDAD MINISTERIO')) labels.add(n);
   };
 
   add(row?.novedad_ministerio);
@@ -676,8 +677,8 @@ function labelsCargaParaFila(row: any, mapeo: Record<string, string[]>): string[
     novSN.includes('ENFERMEDAD DE FAMILIAR') ||
     novSN.includes('ATENCION FAMILIAR ENFERMO');
   if (siapEsMedica && justS === 'NO') {
-    add('E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÃ“N)');
-    add('E - LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÃ“N)');
+    add('E-LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)');
+    add('E - LICENCIA POR ENFERMEDAD (PENDIENTE JUSTIFICCIÓN)');
   }
 
   const mapeoN = normMapeo(mapeo);
@@ -716,6 +717,63 @@ function enriquecerConResultadoCarga(rows: any[], mapeo: Record<string, string[]
       detalle_carga: hit.detalle,
       novedad_carga: hit.novedad,
       archivo_carga: hit.archivo,
+    };
+  });
+}
+
+// 05/11/2026: qué pasó con la carga en la Intranet, desde la cola real del robot 2.0
+// (novedades_carga_intranet). Los resultado_carga*.xlsx quedan solo como respaldo si no hay fila en la cola.
+// Agrega carga_id, estado_carga, detalle_carga, carga_intentos, carga_ultimo (dd/mm/aaaa hh:mm),
+// carga_cargado_en; en_cola=false si el robot nunca tomó esa novedad.
+async function enriquecerConColaCarga(
+  rows: any[],
+  sequelize: import('sequelize').Sequelize | undefined,
+): Promise<any[]> {
+  if (!sequelize || rows.length === 0) return rows;
+  const dnis = Array.from(new Set(rows.map(r => normDni(r?.dni)).filter(Boolean)));
+  if (!dnis.length) return rows;
+  let cola: any[] = [];
+  try {
+    const [res] = await sequelize.query(
+      `SELECT id, dni, novedad_siap, DATE_FORMAT(desde, '%Y-%m-%d') AS desde, DATE_FORMAT(hasta, '%Y-%m-%d') AS hasta,
+              estado, label_intranet, detalle, intentos,
+              DATE_FORMAT(actualizado_en, '%d/%m/%Y %H:%i') AS ultimo,
+              DATE_FORMAT(cargado_en, '%d/%m/%Y %H:%i') AS cargado_en
+         FROM novedades_carga_intranet WHERE dni IN (:dnis)`,
+      { replacements: { dnis } });
+    cola = res as any[];
+  } catch (err) {
+    logger.warn({ msg: 'asistencia: no se pudo leer novedades_carga_intranet', err });
+    return rows;
+  }
+  const exacta = new Map<string, any>();
+  const porFecha = new Map<string, any[]>();
+  for (const c of cola) {
+    exacta.set(cargaKey(c.dni, normNovedad(c.novedad_siap), c.desde, c.hasta), c);
+    const k = cargaFechaKey(c.dni, c.desde, c.hasta);
+    (porFecha.get(k) || porFecha.set(k, []).get(k)!).push(c);
+  }
+  return rows.map((r: any) => {
+    const dni = normDni(r?.dni);
+    const desde = dateToStr(parseDate(r?.fecha_desde_siap));
+    const hasta = dateToStr(parseDate(r?.fecha_hasta_siap)) || desde;
+    if (!dni || !desde || !r?.novedad_siap || r.novedad_siap === '—') return r;
+    let hit = exacta.get(cargaKey(dni, normNovedad(r.novedad_siap), desde, hasta));
+    if (!hit) {
+      const f = porFecha.get(cargaFechaKey(dni, desde, hasta)) || [];
+      if (f.length === 1) hit = f[0];
+    }
+    if (!hit) return { ...r, en_cola: false };
+    return {
+      ...r,
+      en_cola: true,
+      carga_id: hit.id,
+      estado_carga: hit.estado,
+      detalle_carga: String(hit.detalle || '').replace(/^\W*Close\s+/i, '').trim() || null,
+      label_carga: hit.label_intranet,
+      carga_intentos: Number(hit.intentos || 0),
+      carga_ultimo: hit.ultimo,
+      carga_cargado_en: hit.cargado_en,
     };
   });
 }
@@ -763,7 +821,7 @@ function compareRows(
         novedad_ministerio: nov,
         fecha_desde_ministerio: dateToStr(parseDate((min as any).desde)),
         fecha_hasta_ministerio: dateToStr(parseDate((min as any).hasta)),
-        novedad_siap: 'â€”', fecha_desde_siap: 'â€”', fecha_hasta_siap: 'â€”',
+        novedad_siap: '—', fecha_desde_siap: '—', fecha_hasta_siap: '—',
         estado: 'OMITIDO', upa,
       };
       return;
@@ -842,9 +900,9 @@ function compareRows(
       novedad_ministerio: p.nov,
       fecha_desde_ministerio: dateToStr(getOriginalDesde(p.min)),
       fecha_hasta_ministerio: dateToStr(getOriginalHasta(p.min)),
-      novedad_siap: bestCandidate ? bestCandidate.novedad : 'â€”',
-      fecha_desde_siap: bestCandidate ? dateToStr(getOriginalDesde(bestCandidate)) : 'â€”',
-      fecha_hasta_siap: bestCandidate ? dateToStr(getOriginalHasta(bestCandidate)) : 'â€”',
+      novedad_siap: bestCandidate ? bestCandidate.novedad : '—',
+      fecha_desde_siap: bestCandidate ? dateToStr(getOriginalDesde(bestCandidate)) : '—',
+      fecha_hasta_siap: bestCandidate ? dateToStr(getOriginalHasta(bestCandidate)) : '—',
       estado: bestCandidate && motivo !== 'RANGO_DISTINTO' && motivo !== 'SOLAPA_PERO_NO_IGUAL' ? 'NO COINCIDENTE' : (bestCandidate ? 'RANGO_DISTINTO' : 'NO COINCIDENTE'),
       motivo,
       upa: p.upa,
@@ -853,6 +911,189 @@ function compareRows(
 
   return out;
 }
+// ── Comparador SIAPE → Ministerio (06/11/2026, pedido del usuario) ─────────────────────────────
+// Muestra cuáles NO son exactas y en qué difieren (nunca da por OK algo parecido). Por agente+dependencia:
+//  1) EXACTA (COINCIDENTE): misma licencia (mapeo) y mismas fechas.
+//  2) EXACTA por unión: licencias de SIAPE partidas en días seguidos que JUNTAS dan exactamente el rango
+//     del Ministerio (el robot carga los días seguidos juntos). Un día de más o de menos ya no es exacta.
+//  3) FECHAS_DISTINTAS (RANGO_DISTINTO): misma licencia que se pisa en fechas → dice qué días sobran/faltan.
+//     Se elige la del Ministerio que más días comparte (nunca una de otra semana).
+//  4) OTRA_LICENCIA: en esas fechas el Ministerio tiene otra cosa.
+//  5) FALTA_EN_MINISTERIO: nada en esas fechas (si el agente no tiene nada en esa dependencia, sigue el
+//     motivo DNI_NO_EXISTE_EN_MINISTERIO_PARA_ que después precisa precisarDniSinMinisterio).
+// `diferencia` = texto claro para la pantalla. Un registro del Ministerio puede explicar varias filas de SIAPE.
+const DIA_MS = 86_400_000;
+const fmtDM = (d: Date) => `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+const diasEntre = (a: Date, b: Date) => Math.round((toUTCMidnight(b).getTime() - toUTCMidnight(a).getTime()) / DIA_MS) + 1;
+const masDias = (d: Date, n: number) => new Date(toUTCMidnight(d).getTime() + n * DIA_MS);
+function rangoTxt(a: Date, b: Date): string {
+  return a.getTime() === b.getTime() ? `el ${fmtDM(a)}` : `del ${fmtDM(a)} al ${fmtDM(b)}`;
+}
+function nombreNov(n: any): string {
+  return String(n || '').trim().replace(/\s+/g, ' ');
+}
+
+function compararSiapVsMinisterioDetalle(
+  siap: any[],
+  ministerioMap: Record<string, any[]>,
+  mapeo: Record<string, string[]>,
+  skipNovedades: string[],
+): any[] {
+  const mapeoN = normMapeo(mapeo);
+  const minByUpaAndDni: Record<string, Record<string, any[]>> = {};
+  for (const [upa, rows] of Object.entries(ministerioMap)) {
+    minByUpaAndDni[upa] = {};
+    for (const m of rows) (minByUpaAndDni[upa][normDni((m as any).dni)] ||= []).push(m);
+  }
+  const conecta = (m: any, s: any) => novedadesMinisterioSiapConectan(mapeoN, m.novedad, s.novedad, s.justificado);
+  const rango = (r: any) => {
+    const d = getOriginalDesde(r); const h = getOriginalHasta(r) ?? d;
+    return d && h ? { d: toUTCMidnight(d), h: toUTCMidnight(h) } : null;
+  };
+  const comparte = (a: { d: Date; h: Date }, b: { d: Date; h: Date }) => {
+    const ini = a.d > b.d ? a.d : b.d; const fin = a.h < b.h ? a.h : b.h;
+    return fin >= ini ? diasEntre(ini, fin) : 0;
+  };
+
+  const out: any[] = new Array(siap.length);
+  // agrupar SIAPE por agente+dependencia (las omitidas / sin archivo se resuelven acá mismo)
+  const grupos = new Map<string, number[]>();
+  siap.forEach((s: any, idx) => {
+    const upa = String(s.upa || '').trim();
+    const novS = String(s.novedad || '').trim();
+    const novSN = normNovedad(novS);
+    const base = {
+      dni: s.dni, nombre: s.nombre, novedad_siap: novS,
+      fecha_desde_siap: dateToStr(getOriginalDesde(s)), fecha_hasta_siap: dateToStr(getOriginalHasta(s)),
+      upa, justificado: String(s.justificado || '').trim().toUpperCase(),
+    };
+    const vacio = { novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—' };
+    if (skipNovedades.some(sk => novSN.includes(normNovedad(sk)))) { out[idx] = { ...base, ...vacio, estado: 'OMITIDO' }; return; }
+    if (!upa || !minByUpaAndDni[upa]) {
+      out[idx] = { ...base, ...vacio, estado: 'NO COINCIDENTE', motivo: upa ? `Sin archivo ministerio para ${upa}` : 'Sin UPA en SIAP' };
+      return;
+    }
+    out[idx] = base;   // se completa abajo
+    const k = `${upa}|${normDni(s.dni)}`;
+    (grupos.get(k) || grupos.set(k, []).get(k)!).push(idx);
+  });
+
+  for (const [k, idxs] of grupos) {
+    const [upa, dni] = k.split('|');
+    let mins = minByUpaAndDni[upa][dni] || [];
+    // Sin nada en su dependencia pero con novedades en el archivo de otra: se compara contra esa
+    // (misma lógica exacta/unión/fechas) y se aclara dónde está cargada.
+    let otraDep = '';
+    if (mins.length === 0) {
+      for (const [u, porDni] of Object.entries(minByUpaAndDni)) {
+        if (u !== upa && porDni[dni]?.length) { mins = porDni[dni]; otraDep = u; break; }
+      }
+    }
+    const notaDep = otraDep ? ` · en el Ministerio figura en ${otraDep} (SIAPE dice ${upa})` : '';
+    const pend = new Set(idxs);
+    const usados = new Set<any>();
+    const ponerMin = (idx: number, m: any, estado: string, motivo: string, diferencia: string) => {
+      out[idx] = {
+        ...out[idx],
+        novedad_ministerio: m ? String(m.novedad || '').trim() : '—',
+        fecha_desde_ministerio: m ? dateToStr(getOriginalDesde(m)) : '—',
+        fecha_hasta_ministerio: m ? dateToStr(getOriginalHasta(m)) : '—',
+        estado, motivo, diferencia: diferencia + notaDep,
+        ...(otraDep && estado === 'COINCIDENTE' ? { cargada_en_otra_dep: otraDep } : {}),
+      };
+      pend.delete(idx);
+    };
+
+    // Aviso: días repetidos en SIAPE (dos licencias del agente que se pisan)
+    const avisoRepetido = new Map<number, string>();
+    for (const a of idxs) for (const b of idxs) {
+      if (a >= b) continue;
+      const ra = rango(siap[a]); const rb = rango(siap[b]);
+      if (!ra || !rb || !comparte(ra, rb)) continue;
+      const ini = ra.d > rb.d ? ra.d : rb.d; const fin = ra.h < rb.h ? ra.h : rb.h;
+      const t = `SIAPE tiene ${rangoTxt(ini, fin)} repetido en dos licencias`;
+      avisoRepetido.set(a, t); avisoRepetido.set(b, t);
+    }
+    const conAviso = (idx: number, t: string) => (avisoRepetido.has(idx) ? `${t} · ${avisoRepetido.get(idx)}` : t);
+
+    // 1) exactas
+    for (const idx of idxs) {
+      const s = siap[idx]; const rs = rango(s); if (!rs) continue;
+      const m = mins.find(m => !usados.has(m) && conecta(m, s) && sameDateRange(getOriginalDesde(m), getOriginalHasta(m), rs.d, rs.h));
+      if (m) { usados.add(m); ponerMin(idx, m, 'COINCIDENTE', '', conAviso(idx, 'Exacta')); }
+    }
+
+    // 2) exacta por unión de días seguidos de la misma licencia
+    for (const m of mins) {
+      if (usados.has(m)) continue;
+      const rm = rango(m); if (!rm) continue;
+      const dentro = [...pend].filter(i => { const r = rango(siap[i]); return r && conecta(m, siap[i]) && r.d >= rm.d && r.h <= rm.h; })
+        .sort((a, b) => rango(siap[a])!.d.getTime() - rango(siap[b])!.d.getTime());
+      if (dentro.length < 2) continue;
+      let cubre = rm.d; let ok = true;
+      // cubre = primer día todavía no cubierto; un hueco (r.d > cubre) ya no es exacta
+      for (const i of dentro) {
+        const r = rango(siap[i])!;
+        if (r.d.getTime() > cubre.getTime()) { ok = false; break; }
+        const sig = masDias(r.h, 1); if (sig > cubre) cubre = sig;
+      }
+      if (ok && cubre.getTime() === masDias(rm.h, 1).getTime()) {
+        usados.add(m);
+        for (const i of dentro) ponerMin(i, m, 'COINCIDENTE', '', conAviso(i, `Exacta: en el Ministerio está junta ${rangoTxt(rm.d, rm.h)}`));
+      }
+    }
+
+    // 3/4/5) el resto: describir la diferencia
+    for (const idx of [...pend]) {
+      const s = siap[idx]; const rs = rango(s);
+      if (!rs) { ponerMin(idx, null, 'NO COINCIDENTE', 'FALTA_EN_MINISTERIO', 'SIAPE sin fechas'); continue; }
+      if (mins.length === 0) {
+        ponerMin(idx, null, 'NO COINCIDENTE', `DNI_NO_EXISTE_EN_MINISTERIO_PARA_${upa}`,
+          `En el Ministerio el agente no tiene ninguna novedad en ${upa}`);
+        out[idx]._sDesde = rs.d; out[idx]._sHasta = rs.h;
+        continue;
+      }
+      const conDias = (lista: any[]) => lista.map(m => ({ m, rm: rango(m)!, n: rango(m) ? comparte(rango(m)!, rs) : 0 }))
+        .filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+      const misma = conDias(mins.filter(m => conecta(m, s)));
+      if (misma.length) {
+        const { m, rm } = misma[0];
+        const partes: string[] = [];
+        if (rm.d < rs.d) partes.push(`el Ministerio tiene de más ${rangoTxt(rm.d, masDias(rs.d, -1))}`);
+        if (rm.h > rs.h) partes.push(`el Ministerio tiene de más ${rangoTxt(masDias(rs.h, 1), rm.h)}`);
+        if (rs.d < rm.d) partes.push(`faltan en el Ministerio ${rangoTxt(rs.d, masDias(rm.d, -1))}`);
+        if (rs.h > rm.h) partes.push(`faltan en el Ministerio ${rangoTxt(masDias(rm.h, 1), rs.h)}`);
+        // qué dice SIAPE en los días que el Ministerio tiene de más
+        const extras: string[] = [];
+        for (const [a, b] of [[rm.d, masDias(rs.d, -1)], [masDias(rs.h, 1), rm.h]] as [Date, Date][]) {
+          if (b < a) continue;
+          for (const j of idxs) {
+            if (j === idx) continue;
+            const rj = rango(siap[j]); if (!rj) continue;
+            const ini = rj.d > a ? rj.d : a; const fin = rj.h < b ? rj.h : b;
+            if (fin >= ini && normNovedad(siap[j].novedad) !== normNovedad(s.novedad))
+              extras.push(`en SIAPE ${rangoTxt(ini, fin)} es ${String(siap[j].novedad).trim().toLowerCase()}`);
+          }
+        }
+        const txt = `Ministerio: ${nombreNov(m.novedad)} ${rangoTxt(rm.d, rm.h)} · SIAPE: ${rangoTxt(rs.d, rs.h)} → `
+          + partes.join(' y ') + (extras.length ? ` (${extras.join('; ')})` : '');
+        ponerMin(idx, m, 'RANGO_DISTINTO', 'FECHAS_DISTINTAS', conAviso(idx, txt));
+        continue;
+      }
+      const otra = conDias(mins);
+      if (otra.length) {
+        const { m, rm } = otra[0];
+        ponerMin(idx, m, 'NO COINCIDENTE', 'OTRA_LICENCIA',
+          conAviso(idx, `En esas fechas el Ministerio tiene otra licencia: ${nombreNov(m.novedad)} ${rangoTxt(rm.d, rm.h)}`));
+        continue;
+      }
+      ponerMin(idx, null, 'NO COINCIDENTE', 'FALTA_EN_MINISTERIO',
+        conAviso(idx, `Falta en el Ministerio: no tiene nada ${rangoTxt(rs.d, rs.h)}`));
+    }
+  }
+  return out;
+}
+
 function compareRowsSiapVsMinisterio(
   siap: any[],
   ministerioMap: Record<string, any[]>,
@@ -900,12 +1141,12 @@ function compareRowsSiapVsMinisterio(
     };
 
     if (skipNovedades.some(sk => novSN.includes(normNovedad(sk)))) {
-      out[idx] = { ...baseRow, novedad_ministerio: 'â€”', fecha_desde_ministerio: 'â€”', fecha_hasta_ministerio: 'â€”', estado: 'OMITIDO' };
+      out[idx] = { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—', estado: 'OMITIDO' };
       return;
     }
 
     if (!upa || !minByUpaAndDni[upa]) {
-      out[idx] = { ...baseRow, novedad_ministerio: 'â€”', fecha_desde_ministerio: 'â€”', fecha_hasta_ministerio: 'â€”',
+      out[idx] = { ...baseRow, novedad_ministerio: '—', fecha_desde_ministerio: '—', fecha_hasta_ministerio: '—',
         estado: 'NO COINCIDENTE', motivo: upa ? `Sin archivo ministerio para ${upa}` : 'Sin UPA en SIAP' };
       return;
     }
@@ -976,19 +1217,167 @@ function compareRowsSiapVsMinisterio(
       ? String(bestCandidate.novedad || '').trim()
       : disponibles.length > 0
         ? 'SIN NOVEDAD MINISTERIO EQUIVALENTE'
-        : 'â€”';
+        : '—';
 
     out[p.idx] = {
       ...p.baseRow,
       novedad_ministerio:     novedadesMinTexto,
-      fecha_desde_ministerio: bestCandidate ? dateToStr(getOriginalDesde(bestCandidate)) : 'â€”',
-      fecha_hasta_ministerio: bestCandidate ? dateToStr(getOriginalHasta(bestCandidate)) : 'â€”',
+      fecha_desde_ministerio: bestCandidate ? dateToStr(getOriginalDesde(bestCandidate)) : '—',
+      fecha_hasta_ministerio: bestCandidate ? dateToStr(getOriginalHasta(bestCandidate)) : '—',
       estado: bestCandidate && motivo !== 'RANGO_DISTINTO' && motivo !== 'SOLAPA_PERO_NO_IGUAL' ? 'NO COINCIDENTE' : (bestCandidate ? 'RANGO_DISTINTO' : 'NO COINCIDENTE'),
       motivo,
+      // fechas de comparación del SIAP: las usa precisarDniSinMinisterio y las saca antes de responder
+      ...(p.mins.length === 0 ? { _sDesde: p.sDesde, _sHasta: p.sHasta } : {}),
     };
   }
 
   return out;
+}
+
+// Plantel nominado del Ministerio (D:\G\comparacion\plantel nominado.xlsx): DNI → dependencia ("UPA 18" | "UPA 4" | "HOSPITAL").
+async function leerPlantelNominado(dir: string): Promise<Map<string, string> | null> {
+  const fp = path.join(dir, 'plantel nominado.xlsx');
+  if (!fs.existsSync(fp)) return null;
+  try {
+    const wb = await loadWorkbook(fp);
+    const ws = wb.worksheets[0];
+    if (!ws) return null;
+    const headers: Record<string, number> = {};
+    ws.getRow(1).eachCell((c: any, col: number) => {
+      const v = String(c?.value ?? '').trim().toUpperCase();
+      if (v) headers[v] = col;
+    });
+    const colDni = headers['NRO_DOCUMENTO'];
+    const colEst = headers['ESTRUCTURA_SERVICIO'];
+    if (!colDni) return null;
+    const out = new Map<string, string>();
+    ws.eachRow((r: any, n: number) => {
+      if (n === 1) return;
+      const dni = normDni(cellToText(r.getCell(colDni)?.value));
+      if (!dni) return;
+      const est = colEst ? cellToText(r.getCell(colEst)?.value).toUpperCase() : '';
+      const m = est.match(/UPA\s*(\d+)/) ?? est.match(/UNIDAD\s+PRONTA\s+ATEN[A-Z]*\s+(\d+)/);
+      out.set(dni, m ? `UPA ${m[1]}` : 'HOSPITAL');
+    });
+    return out;
+  } catch (e: any) {
+    logger.warn({ msg: 'asistencia: no se pudo leer plantel nominado', error: e?.message });
+    return null;
+  }
+}
+
+// Las filas SIAP sin ninguna novedad del DNI en el archivo Ministerio de su dependencia antes salían
+// como "DNI_NO_EXISTE_EN_MINISTERIO_PARA_X", que casi nunca era cierto. Se precisa el motivo:
+//   1) el DNI tiene novedades en el archivo de OTRA dependencia (UPA 4 / UPA 18 / HOSPITAL);
+//   2) el agente está de BAJA en personal (sin tramo ACTIVO) → estado nuevo 'BAJA';
+//   3) está en el plantel nominado del Ministerio pero no tiene la novedad cargada (falta cargar);
+//   4) no está en el plantel del Ministerio / no existe en personal.
+async function precisarDniSinMinisterio(
+  rows: any[],
+  ministerioMap: Record<string, any[]>,
+  mapeo: Record<string, string[]>,
+  sequelize: import('sequelize').Sequelize | undefined,
+  dir: string,
+): Promise<any[]> {
+  const PREFIJO = 'DNI_NO_EXISTE_EN_MINISTERIO_PARA_';
+  const objetivo = rows.filter(r => String(r?.motivo || '').startsWith(PREFIJO));
+  if (objetivo.length === 0) return rows;
+
+  const mapeoN = normMapeo(mapeo);
+  const porUpa: Record<string, Record<string, any[]>> = {};
+  for (const [upa, list] of Object.entries(ministerioMap)) {
+    porUpa[upa] = {};
+    for (const m of list) {
+      const d = normDni((m as any).dni);
+      (porUpa[upa][d] = porUpa[upa][d] || []).push(m);
+    }
+  }
+
+  // Estado en personal: existe / tiene tramo ACTIVO / último egreso.
+  const personal = new Map<string, { activo: boolean; egreso: string | null; motivoBaja: string | null }>();
+  const nums = [...new Set(objetivo.map(r => Number(normDni(r.dni))).filter(n => n > 0))];
+  if (sequelize && nums.length) {
+    try {
+      const [dbRows] = await sequelize.query(
+        `SELECT a.dni,
+                MAX(a.estado_empleo = 'ACTIVO') AS activo,
+                MAX(a.fecha_egreso) AS egreso,
+                SUBSTRING_INDEX(GROUP_CONCAT(COALESCE(a.motivo_baja,'') ORDER BY a.fecha_egreso DESC SEPARATOR '||'), '||', 1) AS motivo_baja
+           FROM agentes a
+          WHERE a.dni IN (${nums.map(() => '?').join(',')}) AND a.deleted_at IS NULL
+          GROUP BY a.dni`,
+        { replacements: nums },
+      ) as [any[], unknown];
+      for (const r of dbRows) {
+        personal.set(normDni(String(r.dni)), {
+          activo: Number(r.activo) === 1,
+          egreso: r.egreso ? dateToStr(new Date(r.egreso)) : null,
+          motivoBaja: r.motivo_baja ? String(r.motivo_baja).trim() || null : null,
+        });
+      }
+    } catch (e: any) {
+      logger.warn({ msg: 'asistencia: error consultando agentes para DNI sin Ministerio', error: e?.message });
+    }
+  }
+
+  const plantel = await leerPlantelNominado(dir);
+
+  return rows.map(row => {
+    if (!String(row?.motivo || '').startsWith(PREFIJO)) return row;
+    // diferencia afuera: acá se precisa el motivo (otra dependencia, baja, plantel) y el front lo traduce
+    const { _sDesde, _sHasta, diferencia: _dif, ...r } = row;
+    const dni = normDni(r.dni);
+    const upa = String(r.upa || '').trim();
+
+    // 1) Novedades en el archivo de otra dependencia
+    for (const [otra, idx] of Object.entries(porUpa)) {
+      if (otra === upa) continue;
+      const mins = idx[dni];
+      if (!mins || mins.length === 0) continue;
+      const sDesde: Date | null = _sDesde ?? null;
+      const sHasta: Date | null = _sHasta ?? null;
+      const match = mins.find((m: any) =>
+        novedadesMinisterioSiapConectan(mapeoN, m.novedad, r.novedad_siap, r.justificado) &&
+        sameDateRange(getCmpDesde(m), getCmpHasta(m), sDesde, sHasta));
+      if (match) {
+        return {
+          ...r,
+          novedad_ministerio: String(match.novedad || '').trim(),
+          fecha_desde_ministerio: dateToStr(getOriginalDesde(match)),
+          fecha_hasta_ministerio: dateToStr(getOriginalHasta(match)),
+          // 05/11/2026 (usuario): está cargada, solo que en el plantel de otra dependencia → OK, no es error
+          // 06/11: sin motivo (no es un error); el dato de la otra dependencia va en cargada_en_otra_dep
+          estado: 'COINCIDENTE',
+          cargada_en_otra_dep: otra,
+          motivo: '',
+          diferencia: `Exacta, pero cargada en el Ministerio de ${otra} (SIAPE dice ${upa})`,
+        };
+      }
+      return { ...r, motivo: `DNI_CON_NOVEDADES_EN_MINISTERIO_${otra}_(SIAP_DICE_${upa})` };
+    }
+
+    // 2) De baja en personal
+    const p = personal.get(dni);
+    if (p && !p.activo) {
+      const extra = [p.egreso ? `egreso ${p.egreso}` : '', p.motivoBaja || ''].filter(Boolean).join(' - ');
+      return { ...r, estado: 'BAJA', motivo: `AGENTE_DE_BAJA${extra ? ` (${extra})` : ''}` };
+    }
+
+    // 3/4) Plantel nominado del Ministerio
+    if (plantel) {
+      const depPlantel = plantel.get(dni);
+      if (depPlantel) {
+        return {
+          ...r,
+          motivo: depPlantel === upa
+            ? 'SIN_NOVEDAD_CARGADA_EN_MINISTERIO'
+            : `SIN_NOVEDAD_CARGADA_EN_MINISTERIO_(PLANTEL_${depPlantel})`,
+        };
+      }
+      return { ...r, motivo: p ? 'NO_ESTA_EN_PLANTEL_MINISTERIO' : 'NO_ESTA_EN_PLANTEL_NI_EN_PERSONAL' };
+    }
+    return { ...r, motivo: p ? 'SIN_NOVEDAD_CARGADA_EN_MINISTERIO' : 'DNI_NO_EXISTE_EN_PERSONAL' };
+  });
 }
 // Período pedido: rango libre desde/hasta (YYYY-MM-DD, puede cruzar meses) o, si no, el mes de `periodo`.
 function periodoDeQuery(q: any): { start: Date; end: Date } | null {
@@ -1130,7 +1519,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       if (!sequelize) throw new Error('Sin conexión a DB');
       const mapeo = req.body?.mapeo;
       if (!mapeo || typeof mapeo !== 'object') {
-        return res.status(400).json({ ok: false, error: 'Body invÃ¡lido: { mapeo: {...} }' });
+        return res.status(400).json({ ok: false, error: 'Body inválido: { mapeo: {...} }' });
       }
       await saveMapeoTabla(sequelize, mapeo);
       return res.json({ ok: true });
@@ -1268,10 +1657,10 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const siapFile       = req.query?.siapFile       ? resolveExcelPath(dir, String(req.query.siapFile))       : auto.siap;
 
       if (!ministerioFile || !fs.existsSync(ministerioFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ archivo MINISTERIO (auto o provisto)' });
+        return res.status(400).json({ ok: false, error: 'No se encontró archivo MINISTERIO (auto o provisto)' });
       }
       if (!siapFile || !fs.existsSync(siapFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ archivo SIAP (auto o provisto)' });
+        return res.status(400).json({ ok: false, error: 'No se encontró archivo SIAP (auto o provisto)' });
       }
 
       const [ministerioRows, siapRows] = await Promise.all([
@@ -1319,22 +1708,22 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         : String(req.body?.skipNovedades || '').split(',').map((s: string) => s.trim()).filter(Boolean);
       const skipFinal = skip.length ? skip : DEFAULT_SKIP_NOVEDADES;
 
-      // â”€â”€ Archivo SIAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Archivo SIAP ──────────────────────────────────────────────────────
       const siapFile = req.body?.siapFile ? resolveExcelPath(dir, req.body.siapFile) : auto.siap;
       if (!siapFile || !fs.existsSync(siapFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ archivo SIAP' });
+        return res.status(400).json({ ok: false, error: 'No se encontró archivo SIAP' });
       }
 
-      // â”€â”€ Archivos Ministerio: array [{ file, upa }] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Archivos Ministerio: array [{ file, upa }] ─────────────────────────
       // ministerioFiles: [{ file: "nombre.xlsx", upa: "UPA 18" }, { file: "otro.xlsx", upa: "UPA 4" }]
-      // Si no viene ministerioFiles, retrocompatibilidad con ministerioFile Ãºnico
+      // Si no viene ministerioFiles, retrocompatibilidad con ministerioFile único
       type MinFile = { file: string; upa: string };
       let ministerioFiles: MinFile[] = [];
 
       if (Array.isArray(req.body?.ministerioFiles) && req.body.ministerioFiles.length > 0) {
         ministerioFiles = req.body.ministerioFiles;
       } else if (req.body?.ministerioFile) {
-        // compatibilidad: un solo archivo sin UPA asignada â†’ se llama "GENERAL"
+        // compatibilidad: un solo archivo sin UPA asignada → se llama "GENERAL"
         ministerioFiles = [{ file: req.body.ministerioFile, upa: 'GENERAL' }];
       } else if (auto.ministerio) {
         const autoMinisterioName = files.find(f => f.fullPath === auto.ministerio)?.name ?? path.basename(auto.ministerio);
@@ -1342,26 +1731,26 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       }
 
       if (ministerioFiles.length === 0) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ ningÃºn archivo MINISTERIO' });
+        return res.status(400).json({ ok: false, error: 'No se encontró ningún archivo MINISTERIO' });
       }
 
-      // â”€â”€ Parsear todos los ministerios en paralelo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Parsear todos los ministerios en paralelo ─────────────────────────
       const ministerioMap: Record<string, any[]> = {};
       let totalMinisterioRows = 0;
       await Promise.all(
         ministerioFiles.map(async ({ file, upa }) => {
           const fp = resolveExcelPath(dir, file);
-          if (!fs.existsSync(fp)) return; // si no existe, esa UPA quedarÃ¡ sin rows
+          if (!fs.existsSync(fp)) return; // si no existe, esa UPA quedará sin rows
           const rows = await parseMinisterio(fp);
           ministerioMap[upa] = rows;
           totalMinisterioRows += rows.length;
         })
       );
 
-      // â”€â”€ Parsear SIAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Parsear SIAP ──────────────────────────────────────────────────────
       let siapRows = await parseSiap(siapFile);
 
-      // â”€â”€ Deduplicar filas idÃ©nticas del SIAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Deduplicar filas idénticas del SIAP ──────────────────────────────
       // El SIAP a veces exporta la misma fila duplicada (mismo DNI + novedad + desde + hasta).
       // Mantener duplicados genera filas extra de "NO COINCIDENTE" en pantalla.
       {
@@ -1375,7 +1764,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       }
 
 
-      // â”€â”€ Deduplicar filas idÃ©nticas del Ministerio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Deduplicar filas idénticas del Ministerio ─────────────────────────
       // Al igual que SIAP, el Ministerio puede tener filas duplicadas.
       for (const upa of Object.keys(ministerioMap)) {
         const seen = new Set<string>();
@@ -1387,25 +1776,40 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         });
       }
 
-      // â”€â”€ Comparar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Comparar ──────────────────────────────────────────────────────────
       const direccion = req.body?.direccion ?? 'SIAP_VS_MIN';
       let comparado: any[];
       if (direccion === 'MIN_VS_SIAP') {
-        // Itera el Ministerio â€” quÃ© tiene el Ministerio y si coincide en SIAP
+        // Itera el Ministerio — qué tiene el Ministerio y si coincide en SIAP
         const allMinRows = Object.entries(ministerioMap)
           .flatMap(([upa, rows]) => rows.map((r: any) => ({ ...r, upa })));
         comparado = compareRows(allMinRows, siapRows, mapeo, skipFinal);
       } else {
-        // Itera el SIAP â€” quÃ© tiene el SIAP y si coincide en Ministerio
-        comparado = compareRowsSiapVsMinisterio(siapRows, ministerioMap, mapeo, skipFinal);
+        // Itera el SIAP — qué tiene el SIAP y si coincide en Ministerio
+        // 06/11/2026: comparador por diferencias concretas (el viejo compareRowsSiapVsMinisterio queda SIN USO)
+        comparado = compararSiapVsMinisterioDetalle(siapRows, ministerioMap, mapeo, skipFinal);
+        comparado = await precisarDniSinMinisterio(comparado, ministerioMap, mapeo, sequelize, dir);
       }
 
       const resultadoCarga = await loadResultadosCargaIndex();
       comparado = enriquecerConResultadoCarga(comparado, mapeo, resultadoCarga);
+      comparado = await enriquecerConColaCarga(comparado, sequelize);
+      // 06/11/2026: sin código de carga en el mapeo → el robot no la puede cargar (sin botón Cargar)
+      if (sequelize) {
+        try {
+          const conCodigo = await novedadesConCodigoCarga(sequelize);
+          comparado = comparado.map((r: any) => {
+            const nov = String(r?.novedad_siap || '').trim();
+            return nov && nov !== '—' && !conCodigo.has(normNovedadCarga(nov)) ? { ...r, sin_codigo_carga: true } : r;
+          });
+        } catch (err) { logger.warn({ msg: 'asistencia: no se pudo leer el mapeo de carga', err }); }
+      }
+      // 06/11/2026: se sacó el "OK porque el robot la cargó" (escondía diferencias, p.ej. cargas recortadas):
+      // el estado sale solo de comparar SIAPE vs Ministerio; lo del robot queda en "Qué pasó en la carga".
 
       const comparadoCompleto = comparado;
       // Por defecto esta pantalla devuelve solo errores/inconsistencias.
-      // Si alguna vez necesitÃ¡s ver todo, mandÃ¡ { soloErrores: false } desde el front.
+      // Si alguna vez necesitás ver todo, mandá { soloErrores: false } desde el front.
       const soloErrores = req.body?.soloErrores !== false;
       if (soloErrores) {
         comparado = comparado.filter((r: any) => r.estado !== 'COINCIDENTE' && r.estado !== 'OMITIDO');
@@ -1424,6 +1828,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             no_coinciden:  comparadoCompleto.filter(r => r.estado === 'NO COINCIDENTE').length,
             rango_distinto: comparadoCompleto.filter(r => r.estado === 'RANGO_DISTINTO').length,
             omitidos:      comparadoCompleto.filter(r => r.estado === 'OMITIDO').length,
+            bajas:         comparadoCompleto.filter(r => r.estado === 'BAJA').length,
           },
           files: {
             ministerioFiles: ministerioFiles.map(m => m.file),
@@ -1437,13 +1842,13 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€ GET /ausentes28 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Devuelve cada dÃ­a con cÃ³digo 28-INASISTENCIA cruzado con:
-  //   - Â¿Le correspondÃ­a venir? (desde horarios.xlsx, columna XDIA_CONTROLABLE)
-  //   - Â¿FichÃ³ ese dÃ­a? (desde DB biomÃ©trica usando la config de fichero_config.json)
+  // ── GET /ausentes28 ─────────────────────────────────────────────────────────
+  // Devuelve cada día con código 28-INASISTENCIA cruzado con:
+  //   - ¿Le correspondía venir? (desde horarios.xlsx, columna XDIA_CONTROLABLE)
+  //   - ¿Fichó ese día? (desde DB biométrica usando la config de fichero_config.json)
   //
   // Query params (todos opcionales):
-  //   periodo        YYYY-MM   â†’ filtra por mes
+  //   periodo        YYYY-MM   → filtra por mes
   //   ministerioFile nombre.xlsx
   //   horariosFile   nombre.xlsx
   router.get('/ausentes28', requirePermission('api:access'), async (req: Request, res: Response) => {
@@ -1454,13 +1859,13 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const dir   = getDir();
       const files = listExcelFiles(dir);
 
-      // â”€â”€ Archivos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Archivos ────────────────────────────────────────────────────────────
       const auto = findAutoFiles(files);
       const ministerioFile = req.query.ministerioFile
         ? path.join(dir, String(req.query.ministerioFile))
         : auto.ministerio;
       if (!ministerioFile || !fs.existsSync(ministerioFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ archivo MINISTERIO' });
+        return res.status(400).json({ ok: false, error: 'No se encontró archivo MINISTERIO' });
       }
 
       const autoHorarios = files.find(f => f.name.toLowerCase().includes('horario'));
@@ -1468,10 +1873,10 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         ? path.join(dir, String(req.query.horariosFile))
         : autoHorarios?.fullPath ?? null;
 
-      // â”€â”€ Periodo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Periodo ─────────────────────────────────────────────────────────────
       const period = periodoDeQuery(req.query);
 
-      // â”€â”€ 1. Leer MINISTERIO â†’ solo novedad 28 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 1. Leer MINISTERIO → solo novedad 28 ────────────────────────────────
       const allMin = await parseMinisterio(ministerioFile);
       let rows28 = allMin.filter(r => {
         const n = normNovedad(String(r.novedad ?? ''));
@@ -1484,7 +1889,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         return res.json({ ok: true, data: [], meta: { total: 0, conFichaje: 0, sinFichaje: 0, debiaVenir: 0, noDebiaVenir: 0, sinInfoHorario: 0 } });
       }
 
-      // â”€â”€ 2. Leer horarios â†’ mapa DNI â†’ dÃ­as controlables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 2. Leer horarios → mapa DNI → días controlables ─────────────────────
       type HorarioDia = { lunes: boolean; martes: boolean; miercoles: boolean; jueves: boolean; viernes: boolean; sabado: boolean; domingo: boolean };
       const horariosMap: Record<string, HorarioDia> = {};
       if (horariosFile && fs.existsSync(horariosFile)) {
@@ -1538,18 +1943,18 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ 3. Expandir rangos a dÃ­as individuales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 3. Expandir rangos a días individuales ───────────────────────────────
       // DOW (getUTCDay): 0=dom, 1=lun, 2=mar, 3=mie, 4=jue, 5=vie, 6=sab
       const DOW_KEYS: (keyof HorarioDia)[] = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
       const DOW_LABELS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
-      // â”€â”€ 3b. Leer SIAP (opcional) â†’ mapa DNI â†’ rangos con novedad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 3b. Leer SIAP (opcional) → mapa DNI → rangos con novedad ───────────────
       const autoSiap = files.find(f => f.name.toLowerCase().includes('siap'));
       const siapFile = req.query.siapFile
         ? path.join(dir, String(req.query.siapFile))
         : autoSiap?.fullPath ?? null;
 
-      // siapByDni: dni â†’ [{ novedad, desde, hasta, justificado }]
+      // siapByDni: dni → [{ novedad, desde, hasta, justificado }]
       const siapByDni: Record<string, Array<{ novedad: string; desde: Date; hasta: Date; justificado: string }>> = {};
       if (siapFile && fs.existsSync(siapFile)) {
         try {
@@ -1583,7 +1988,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         return [...new Set(matches.map(e => e.novedad).filter(Boolean))].join(' / ');
       };
 
-      // null = sin novedad SIAP, true = justificada (SI), false = no justificada (NO/vacÃ­o)
+      // null = sin novedad SIAP, true = justificada (SI), false = no justificada (NO/vacío)
       const getSiapJustificada = (dni: string, fecha: string): boolean | null => {
         const d = parseDate(fecha);
         if (!d) return null;
@@ -1625,7 +2030,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ 4. Consultar DB biomÃ©trica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 4. Consultar DB biométrica ───────────────────────────────────────────
       type FichajeInfo = { entrada: string | null; salida: string | null };
       const fichajesMap: Record<string, Record<string, FichajeInfo>> = {};
       let dbError: string | null = null;
@@ -1682,19 +2087,19 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             }
           }
         } catch (e: any) {
-          dbError = e?.message ?? 'Error al consultar DB biomÃ©trica';
-          logger.warn({ msg: 'ausentes28: error DB biomÃ©trica', error: dbError });
+          dbError = e?.message ?? 'Error al consultar DB biométrica';
+          logger.warn({ msg: 'ausentes28: error DB biométrica', error: dbError });
         }
       } else {
-        dbError = 'fichero_config.json no encontrado â€” configura la conexiÃ³n en el mÃ³dulo Fichero';
+        dbError = 'fichero_config.json no encontrado — configura la conexión en el módulo Fichero';
       }
 
-      // â”€â”€ 5. Consultar reconocimientos_medicos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 5. Consultar reconocimientos_medicos ─────────────────────────────────
       // licMedicaMap: "dni|YYYY-MM-DD" → licencia que dio la médica (grilla Reconocimientos de Salud Laboral)
       const licMedicaMap = await buscarLicenciasMedicas(sequelize, expanded);
       const becadosMap   = await buscarBecados(sequelize, expanded.map(r => r.dni));
 
-      // â”€â”€ 6. Construir resultado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 6. Construir resultado ───────────────────────────────────────────────
       const data = expanded.map(r => {
         const fich = fichajesMap[r.dni]?.[r.fecha];
         const recKey = `${r.dni}|${r.fecha}`;
@@ -1710,7 +2115,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           tieneFichaje:      fich !== undefined,
           entrada:           fich?.entrada ?? null,
           salida:            fich?.salida  ?? null,
-          recMedico:         licMedicaMap.has(recKey) ? (licMedicaMap.get(recKey)!.tipo || 'SÃ­') : null,
+          recMedico:         licMedicaMap.has(recKey) ? (licMedicaMap.get(recKey)!.tipo || 'Sí') : null,
           licMedica:         licMedicaMap.get(recKey) ?? null,
           becado:            becadosMap.get(r.dni) ?? null,
         };
@@ -1735,7 +2140,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€ GET /siap-fichajes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── GET /siap-fichajes ──────────────────────────────────────────────────────
   // Query params: periodo, siapFile, ministerioFile (opcional), horariosFile (opcional)
   router.get('/siap-fichajes', requirePermission('api:access'), async (req: Request, res: Response) => {
     if (!ExcelJS) {
@@ -1746,12 +2151,12 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const files = listExcelFiles(dir);
       const auto  = findAutoFiles(files);
 
-      // â”€â”€ Archivos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Archivos ──────────────────────────────────────────────────────────────
       const siapFilePath = req.query.siapFile
         ? path.join(dir, String(req.query.siapFile))
         : auto.siap ?? null;
       if (!siapFilePath || !fs.existsSync(siapFilePath)) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ archivo SIAP' });
+        return res.status(400).json({ ok: false, error: 'No se encontró archivo SIAP' });
       }
 
       const ministerioFilePath = req.query.ministerioFile
@@ -1765,15 +2170,15 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       const period = periodoDeQuery(req.query);
 
-      // tipo: 'ausente' (default) â†’ novedades AUSENTE (comportamiento histÃ³rico).
-      //       'presente'          â†’ dÃ­as marcados PRESENTE por el jefe en SIAPE.
-      // El resto del pipeline (expandir a dÃ­as + cruce con reloj) es idÃ©ntico:
-      // solo cambia quÃ© novedades del SIAP se conservan.
+      // tipo: 'ausente' (default) → novedades AUSENTE (comportamiento histórico).
+      //       'presente'          → días marcados PRESENTE por el jefe en SIAPE.
+      // El resto del pipeline (expandir a días + cruce con reloj) es idéntico:
+      // solo cambia qué novedades del SIAP se conservan.
       const tipo = String(req.query.tipo || 'ausente').toLowerCase() === 'presente'
         ? 'presente'
         : 'ausente';
 
-      // â”€â”€ 1. Leer SIAP â†’ expandir a dÃ­as individuales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 1. Leer SIAP → expandir a días individuales ──────────────────────────
       const DOW_KEYS2 = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'] as const;
       const DOW_LABELS2 = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
@@ -1791,13 +2196,13 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         siapRaw = siapRaw.map(r => clipRowToPeriod(r, period)).filter(Boolean) as any[];
       }
 
-      // Filtrar segÃºn tipo. "PRESENTE CON RETENCION DE TAREAS" tambiÃ©n cuenta
+      // Filtrar según tipo. "PRESENTE CON RETENCION DE TAREAS" también cuenta
       // como presente (contiene 'PRESENTE').
       const palabraFiltro = tipo === 'presente' ? 'PRESENTE' : 'AUSENTE';
       siapRaw = siapRaw.filter((r: any) => normNovedad(r.novedad).includes(palabraFiltro));
 
-      // â”€â”€ 1b. Leer horarios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // Para cada DNI: guarda la entrada por dÃ­a y si es guardia rotativa 18-06
+      // ── 1b. Leer horarios ────────────────────────────────────────────────────
+      // Para cada DNI: guarda la entrada por día y si es guardia rotativa 18-06
       interface HorarioDia2 {
         lunes: string | null; martes: string | null; miercoles: string | null;
         jueves: string | null; viernes: string | null; sabado: string | null; domingo: string | null;
@@ -1825,7 +2230,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
               if (v) hdr2[v] = col;
             });
             const colDni2 = hdr2['nro_documento'] ?? hdr2['nro documento'] ?? hdr2['documento'] ?? 4;
-            // columnas de entrada por dÃ­a (formato: LUNES_ENTRADA = col 5, etc.)
+            // columnas de entrada por día (formato: LUNES_ENTRADA = col 5, etc.)
             const cols: Record<string, number> = {
               lunes:     hdr2['lunes_entrada']     ?? 5,
               martes:    hdr2['martes_entrada']    ?? 7,
@@ -1848,7 +2253,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
               const xE = getEntrada(r, cols.miercoles);
               const jE = getEntrada(r, cols.jueves);
               const vE = getEntrada(r, cols.viernes);
-              // Guardia rotativa: los 5 dÃ­as de semana tienen 18:00 como entrada
+              // Guardia rotativa: los 5 días de semana tienen 18:00 como entrada
               const is18 = (v: string | null) => v !== null && v.startsWith('18');
               const guardiaRotativa = is18(lE) && is18(mE) && is18(xE) && is18(jE) && is18(vE);
               horariosMap2[dni] = {
@@ -1864,7 +2269,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // debiaVenir se calcula despuÃ©s de tener fichajesMap (ver paso 5)
+      // debiaVenir se calcula después de tener fichajesMap (ver paso 5)
 
       interface SiapDiaRow {
         dni: string;
@@ -1893,7 +2298,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             justificadoSiap: String(r.justificado  ?? '').trim().toUpperCase(),
             fecha,
             diaSemana:       DOW_LABELS2[cur.getUTCDay()],
-            debiaVenir:      null, // se rellena en paso 5, despuÃ©s de tener fichajes
+            debiaVenir:      null, // se rellena en paso 5, después de tener fichajes
           });
           cur.setUTCDate(cur.getUTCDate() + 1);
         }
@@ -1903,8 +2308,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         return res.json({ ok: true, data: [], meta: { total: 0, conFichaje: 0, sinFichaje: 0, enMinisterio: 0, sinMinisterio: 0, sinBiometrico: false, dbError: null } });
       }
 
-      // â”€â”€ 2. Indexar Ministerio por DNI â†’ rangos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      // minByDni: dni â†’ [{ novedad, desde, hasta }]
+      // ── 2. Indexar Ministerio por DNI → rangos ───────────────────────────────
+      // minByDni: dni → [{ novedad, desde, hasta }]
       const minByDni: Record<string, Array<{ novedad: string; desde: Date; hasta: Date }>> = {};
       if (ministerioFilePath && fs.existsSync(ministerioFilePath)) {
         try {
@@ -1935,7 +2340,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         return [...new Set(matches.map(m => m.novedad).filter(Boolean))].join(' / ');
       };
 
-      // â”€â”€ 3. Consultar DB biomÃ©trica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 3. Consultar DB biométrica ────────────────────────────────────────────
       type FichajeInfo2 = { entrada: string | null; salida: string | null };
       const fichajesMap2: Record<string, Record<string, FichajeInfo2>> = {};
       let dbError2: string | null = null;
@@ -1992,20 +2397,20 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             }
           }
         } catch (e: any) {
-          dbError2 = e?.message ?? 'Error al consultar DB biomÃ©trica';
-          logger.warn({ msg: 'siap-fichajes: error DB biomÃ©trica', error: dbError2 });
+          dbError2 = e?.message ?? 'Error al consultar DB biométrica';
+          logger.warn({ msg: 'siap-fichajes: error DB biométrica', error: dbError2 });
         }
       } else {
         dbError2 = 'fichero_config.json no encontrado';
       }
 
-      // â”€â”€ 4. Construir resultado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 4. Construir resultado ────────────────────────────────────────────────
 
-      // Helper: dado un DNI y una fecha, devuelve las fechas Lunâ†’Vie de esa semana ISO
+      // Helper: dado un DNI y una fecha, devuelve las fechas Lun→Vie de esa semana ISO
       const semanaISO = (fecha: string): string[] => {
         const d = parseDate(fecha);
         if (!d) return [];
-        const dow = d.getUTCDay() || 7; // 1=lun â€¦ 7=dom
+        const dow = d.getUTCDay() || 7; // 1=lun … 7=dom
         const lunes = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - (dow - 1)));
         return [0,1,2,3,4].map(i => {
           const x = new Date(lunes);
@@ -2015,7 +2420,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       };
 
       // Para guardia rotativa: mira fichajes de la semana para saber si es LMV o MJ
-      // Busca en la semana actual, luego en Â±1 semana con ciclo invertido
+      // Busca en la semana actual, luego en ±1 semana con ciclo invertido
       const cicloGuardia = (dni: string, fecha: string): 'LMV' | 'MJ' | null => {
         const fichDni = fichajesMap2[dni] ?? {};
 
@@ -2109,8 +2514,8 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€ GET /agente-mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Devuelve todos los dÃ­as del mes para un DNI: fichaje + novedades SIAP y Ministerio
+  // ── GET /agente-mes ─────────────────────────────────────────────────────────
+  // Devuelve todos los días del mes para un DNI: fichaje + novedades SIAP y Ministerio
   // Query params: dni, periodo (YYYY-MM), siapFile, ministerioFile
   router.get('/agente-mes', requirePermission('api:access'), async (req: Request, res: Response) => {
     if (!ExcelJS) return res.status(500).json({ ok: false, error: 'Falta exceljs' });
@@ -2131,7 +2536,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       const DOW_LABELS3 = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
-      // â”€â”€ Todos los dÃ­as del mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Todos los días del mes ──────────────────────────────────────────────
       const dias: { fecha: string; diaSemana: string }[] = [];
       const cur = new Date(period.start);
       while (cur <= period.end) {
@@ -2139,7 +2544,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         cur.setUTCDate(cur.getUTCDate() + 1);
       }
 
-      // â”€â”€ SIAP: novedades del agente en el mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── SIAP: novedades del agente en el mes ────────────────────────────────
       const siapByFecha: Record<string, { novedad: string; justificado: string }[]> = {};
       if (siapFilePath && fs.existsSync(siapFilePath)) {
         let siapRows = await parseSiap(siapFilePath);
@@ -2162,7 +2567,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ Ministerio: novedades del agente en el mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Ministerio: novedades del agente en el mes ──────────────────────────
       const minByFecha: Record<string, string[]> = {};
       if (ministerioFilePath && fs.existsSync(ministerioFilePath)) {
         let minRows = await parseMinisterio(ministerioFilePath);
@@ -2182,7 +2587,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ Fichajes del agente en el mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Fichajes del agente en el mes ───────────────────────────────────────
       const fichajesByFecha: Record<string, { entrada: string | null; salida: string | null }> = {};
       let dbErr: string | null = null;
       const cfgPath3 = path.resolve(process.cwd(), 'fichero_config.json');
@@ -2224,10 +2629,10 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
           dbErr = e?.message ?? 'Error DB';
         }
       } else {
-        dbErr = 'Sin conexiÃ³n biomÃ©trica';
+        dbErr = 'Sin conexión biométrica';
       }
 
-      // â”€â”€ Horarios del agente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Horarios del agente ─────────────────────────────────────────────────
       const DOW_HOR_KEYS = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
       const horarioPorDow: (string | null)[] = [null, null, null, null, null, null, null];
       const horarioSemanal: { dow: number; entrada: string | null; salida: string | null; controlable: boolean }[] = [];
@@ -2267,7 +2672,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ Armar respuesta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Armar respuesta ─────────────────────────────────────────────────────
       const data = dias.map(d => {
         const novsSiap = siapByFecha[d.fecha] ?? [];
         const novsMin  = minByFecha[d.fecha]  ?? [];
@@ -2306,12 +2711,12 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€ GET /presentes-turno â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── GET /presentes-turno ─────────────────────────────────────────────────
   // Para una fecha y servicio: arma esperados desde horarios, cruza fichadas
-  // biomÃ©tricas y muestra justificaciÃ³n SIAP/Ministerio para quienes no ficharon.
+  // biométricas y muestra justificación SIAP/Ministerio para quienes no ficharon.
   router.get('/presentes-turno', requirePermission('api:access'), async (req: Request, res: Response) => {
     if (!ExcelJS) return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs' });
-    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexiÃ³n a DB principal' });
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
 
     try {
       const servicioId = req.query.servicio_id ? Number(req.query.servicio_id) : null;
@@ -2319,7 +2724,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       const fecha = String(req.query.fecha ?? '').trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-        return res.status(400).json({ ok: false, error: 'Falta fecha vÃ¡lida (YYYY-MM-DD)' });
+        return res.status(400).json({ ok: false, error: 'Falta fecha válida (YYYY-MM-DD)' });
       }
 
       const dir = getDir();
@@ -2330,7 +2735,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         ? resolveExcelPath(dir, String(req.query.horariosFile))
         : auto.horarios ?? null;
       if (!horariosFile || !fs.existsSync(horariosFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ el archivo de horarios' });
+        return res.status(400).json({ ok: false, error: 'No se encontró el archivo de horarios' });
       }
 
       const siapFile = req.query.siapFile
@@ -2406,7 +2811,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
 
       const wb = await loadWorkbook(horariosFile);
       const ws = wb.worksheets[0];
-      if (!ws) return res.status(400).json({ ok: false, error: 'Archivo de horarios vacÃ­o' });
+      if (!ws) return res.status(400).json({ ok: false, error: 'Archivo de horarios vacío' });
 
       const hdr: Record<string, number> = {};
       ws.getRow(1).eachCell((c: any, col: number) => {
@@ -2523,7 +2928,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
             (fichajesMap[dni] = fichajesMap[dni] || []).push(`${f} ${h}`);
           }
         } catch (e: any) {
-          dbError = e?.message || 'No se pudo leer biomÃ©trico';
+          dbError = e?.message || 'No se pudo leer biométrico';
         }
       } else if (!fs.existsSync(cfgPath)) {
         dbError = 'fichero_config.json no encontrado';
@@ -2583,13 +2988,13 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€ GET /reporte-servicio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Reporte mensual de asistencia por servicio: horas teÃ³ricas vs reales,
-  // fichajes diarios, feriados y resÃºmenes semanales/mensuales.
+  // ── GET /reporte-servicio ─────────────────────────────────────────────────
+  // Reporte mensual de asistencia por servicio: horas teóricas vs reales,
+  // fichajes diarios, feriados y resúmenes semanales/mensuales.
   // Query params: servicio_id, periodo (YYYY-MM), siapFile, horariosFile
   router.get('/reporte-servicio', requirePermission('api:access'), async (req: Request, res: Response) => {
     if (!ExcelJS) return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs' });
-    if (!sequelize)  return res.status(500).json({ ok: false, error: 'Sin conexiÃ³n a DB principal' });
+    if (!sequelize)  return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
 
     try {
       const servicioId = req.query.servicio_id ? Number(req.query.servicio_id) : null;
@@ -2598,7 +3003,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const periodoStr = req.query.periodo ? String(req.query.periodo) : null;
       if (!periodoStr) return res.status(400).json({ ok: false, error: 'Falta periodo (YYYY-MM)' });
       const period = parsePeriodoMes(periodoStr);
-      if (!period) return res.status(400).json({ ok: false, error: 'PerÃ­odo invÃ¡lido, usar formato YYYY-MM' });
+      if (!period) return res.status(400).json({ ok: false, error: 'Período inválido, usar formato YYYY-MM' });
 
       const dir   = getDir();
       const files = listExcelFiles(dir);
@@ -2611,7 +3016,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         ? path.join(dir, String(req.query.siapFile))
         : auto.siap ?? null;
 
-      // â”€â”€ 1. Nombre del servicio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 1. Nombre del servicio ─────────────────────────────────────────────
       const { QueryTypes } = await import('sequelize');
       const [svcRow] = await sequelize.query<{ id: number; nombre: string }>(
         'SELECT id, nombre FROM servicios WHERE id = :id AND deleted_at IS NULL LIMIT 1',
@@ -2619,7 +3024,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       );
       if (!svcRow) return res.status(404).json({ ok: false, error: `Servicio ${servicioId} no encontrado` });
 
-      // â”€â”€ 2. Agentes del servicio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 2. Agentes del servicio ────────────────────────────────────────────
       const agentesDb = await sequelize.query<{ dni: string; nombre_agente: string | null }>(
         `SELECT DISTINCT ags.dni,
                 ags.nombre AS nombre_agente
@@ -2634,7 +3039,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       const dniList = [...new Set(agentesDb.map(a => normDni(a.dni)).filter(Boolean))];
       if (!dniList.length) return res.json({ ok: true, servicio: svcRow, periodo: periodoStr, feriados: [], agentes: [] });
 
-      // â”€â”€ 3. Feriados del mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 3. Feriados del mes ────────────────────────────────────────────────
       const feriadosDb = await sequelize.query<{ fecha: string; nombre: string; tipo: string }>(
         `SELECT DATE_FORMAT(fecha,'%Y-%m-%d') AS fecha, nombre, tipo
          FROM feriados
@@ -2644,7 +3049,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
       );
       const feriadoSet = new Set(feriadosDb.map(f => f.fecha));
 
-      // â”€â”€ 4. Horarios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 4. Horarios ────────────────────────────────────────────────────────
       const DOW_KEYS_RS = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'] as const;
       type HoraDia = { entrada: string|null; salida: string|null; controlable: boolean };
       type AgHorario = { nombre: string; esGuardia: boolean; dias: Record<string, HoraDia> };
@@ -2693,7 +3098,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ 5. SIAP del mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 5. SIAP del mes ────────────────────────────────────────────────────
       type NovedadEntry = { novedad: string; desde: string; hasta: string };
       const siapMap: Record<string, NovedadEntry[]> = {};
       if (siapFile && fs.existsSync(siapFile)) {
@@ -2712,7 +3117,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ 5b. Ministerio del mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 5b. Ministerio del mes ─────────────────────────────────────────────
       const minFile = req.query.ministerioFile
         ? path.join(dir, String(req.query.ministerioFile))
         : files.find(f => f.name.toLowerCase().includes('ministerio'))?.fullPath ?? null;
@@ -2733,13 +3138,13 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ 7. Helpers y dÃ­as del mes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 7. Helpers y días del mes ──────────────────────────────────────────
       const toMins = (hhmm: string): number => {
         const [h, m] = hhmm.split(':').map(Number);
         return h * 60 + m;
       };
       const minsHoras = (ent: string, sal: string): number => {
-        if (ent === sal) return 1440; // turno 24hs: entra y sale a la misma hora del dÃ­a siguiente
+        if (ent === sal) return 1440; // turno 24hs: entra y sale a la misma hora del día siguiente
         let diff = toMins(sal) - toMins(ent);
         if (diff < 0) diff += 1440; // turno nocturno: cruza medianoche
         return diff;
@@ -2771,7 +3176,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         }
       }
 
-      // â”€â”€ 8. Construir reporte por agente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 8. Construir reporte por agente ────────────────────────────────────
       const agentes = agentesDb.map(ag => {
         const dni3 = normDni(ag.dni);
         const horAg = horariosMap[dni3] ?? null;
@@ -2912,14 +3317,14 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€â”€ GET /asistencia/cruce-horarios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Cruza el archivo de horarios (entrada/salida por dÃ­a) con el servicio vigente
-  // y la ley de revista de la BD. Clasifica cada dÃ­a en turno maÃ±ana/tarde/noche/24hs
+  // ─── GET /asistencia/cruce-horarios ─────────────────────────────────────────
+  // Cruza el archivo de horarios (entrada/salida por día) con el servicio vigente
+  // y la ley de revista de la BD. Clasifica cada día en turno mañana/tarde/noche/24hs
   // (nocturno = salida < entrada, 24hs = salida == entrada) y marca franqueros
-  // (solo trabajan sÃ¡bado/domingo).
+  // (solo trabajan sábado/domingo).
   router.get('/cruce-horarios', requirePermission('api:access'), async (req: Request, res: Response) => {
     if (!ExcelJS) return res.status(500).json({ ok: false, error: 'Falta dependencia exceljs' });
-    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexiÃ³n a DB principal' });
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
     try {
       const dir = getDir();
       const files = listExcelFiles(dir);
@@ -2927,7 +3332,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         ? path.join(dir, String(req.query.horariosFile))
         : files.find(f => f.name.toLowerCase().includes('horario'))?.fullPath ?? null;
       if (!horariosFile || !fs.existsSync(horariosFile)) {
-        return res.status(400).json({ ok: false, error: 'No se encontrÃ³ el archivo de horarios' });
+        return res.status(400).json({ ok: false, error: 'No se encontró el archivo de horarios' });
       }
 
       const toMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
@@ -2949,10 +3354,10 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         return ((toMin(sal) - toMin(ent) + 1440) % 1440) / 60;
       };
 
-      // â”€â”€ 1. Parsear horarios.xlsx completo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 1. Parsear horarios.xlsx completo ──────────────────────────────────
       const wb = await loadWorkbook(horariosFile);
       const ws = wb.worksheets[0];
-      if (!ws) return res.status(400).json({ ok: false, error: 'Archivo de horarios vacÃ­o' });
+      if (!ws) return res.status(400).json({ ok: false, error: 'Archivo de horarios vacío' });
 
       const hdr: Record<string, number> = {};
       ws.getRow(1).eachCell((c: any, col: number) => {
@@ -3011,7 +3416,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         });
       });
 
-      // â”€â”€ 2. Enriquecer desde la BD: servicio vigente + ley + planta â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── 2. Enriquecer desde la BD: servicio vigente + ley + planta ─────────
       const { QueryTypes } = await import('sequelize');
       const dniNums = [...new Set(agentesXlsx.map(a => Number(a.dni)).filter(n => Number.isFinite(n) && n > 0))];
       const dbMap: Record<string, any> = {};
@@ -3087,7 +3492,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€â”€ HISTORIAL DE LICENCIAS (tabla `historial`, migraciones 032/033) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── HISTORIAL DE LICENCIAS (tabla `historial`, migraciones 032/033) ─────────
   // Filtros comunes por query: anio, dependencia, novedad, agrupamiento,
   // regimen (regimen_estatutario), planta, justificado, q (DNI o apellido),
   // incluirPresente=1 (por defecto PRESENTE queda afuera: no es licencia).
@@ -3125,13 +3530,13 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     return { where: conds.join(' AND '), repl };
   }
 
-  // GET /asistencia/historial-analisis â†’ todos los agregados para el tablero
+  // GET /asistencia/historial-analisis → todos los agregados para el tablero
   router.get('/historial-analisis', requirePermission('api:access'), async (req: Request, res: Response) => {
-    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexiÃ³n a DB principal' });
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
     try {
       const { QueryTypes } = await import('sequelize');
       const { where, repl } = historialWhere(req.query);
-      // dÃ­as de cada licencia = hasta - desde + 1 (mÃ­nimo 1)
+      // días de cada licencia = hasta - desde + 1 (mínimo 1)
       const DIAS = 'SUM(GREATEST(DATEDIFF(IFNULL(fecha_hasta, fecha_desde), fecha_desde) + 1, 1))';
       const SEL = `COUNT(*) AS licencias, ${DIAS} AS dias, COUNT(DISTINCT dni) AS agentes`;
       const Q = (sql: string) => sequelize.query<any>(sql, { type: QueryTypes.SELECT, replacements: repl });
@@ -3146,18 +3551,18 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
         Q(`SELECT DATE_FORMAT(fecha_desde, '%Y-%m') AS mes, ${SEL} FROM historial WHERE ${where} AND fecha_desde IS NOT NULL GROUP BY mes ORDER BY mes`),
         Q(`SELECT MONTH(fecha_desde) AS mes, ${SEL} FROM historial WHERE ${where} AND fecha_desde IS NOT NULL GROUP BY mes ORDER BY mes`),
         Q(`SELECT WEEKDAY(fecha_desde) AS dia, ${SEL} FROM historial WHERE ${where} AND fecha_desde IS NOT NULL GROUP BY dia ORDER BY dia`),
-        // GROUP BY columna cruda (sin IFNULL) para que el Ã­ndice cubridor (035)
+        // GROUP BY columna cruda (sin IFNULL) para que el índice cubridor (035)
         // agrupe solo, sin tabla temporal; el NULL se traduce a '(sin dato)'
         // abajo. FORCE INDEX porque el optimizador no lo elige solo (medido:
-        // 2-4Ã— mÃ¡s rÃ¡pido); con bÃºsqueda por apellido (txtQ, columna fuera del
-        // Ã­ndice) forzarlo obligarÃ­a a 1M de lookups â†’ se deja al optimizador.
+        // 2-4× más rápido); con búsqueda por apellido (txtQ, columna fuera del
+        // índice) forzarlo obligaría a 1M de lookups → se deja al optimizador.
         Q(`SELECT novedad AS valor, ${SEL} FROM historial WHERE ${where} GROUP BY novedad ORDER BY licencias DESC`),
         Q(`SELECT dependencia AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__dep)'} WHERE ${where} GROUP BY dependencia ORDER BY licencias DESC`),
         Q(`SELECT agrupamiento AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__agrup)'} WHERE ${where} GROUP BY agrupamiento ORDER BY licencias DESC`),
         Q(`SELECT regimen_estatutario AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__regimen)'} WHERE ${where} GROUP BY regimen_estatutario ORDER BY licencias DESC`),
         Q(`SELECT planta AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__planta)'} WHERE ${where} GROUP BY planta ORDER BY licencias DESC`),
         Q(`SELECT justificado AS valor, ${SEL} FROM historial ${repl.txtQ ? '' : 'FORCE INDEX (ix_historial__justif)'} WHERE ${where} GROUP BY justificado ORDER BY licencias DESC`),
-        // agregamos por dni sobre el Ã­ndice y reciÃ©n ahÃ­ buscamos el nombre (25 filas)
+        // agregamos por dni sobre el índice y recién ahí buscamos el nombre (25 filas)
         Q(`SELECT t.dni, p.apellido, p.nombre, t.licencias, t.dias, t.tipos
            FROM (
              SELECT dni, COUNT(*) AS licencias, ${DIAS} AS dias, COUNT(DISTINCT novedad) AS tipos
@@ -3168,7 +3573,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
              SELECT dni, COUNT(*) AS licencias, ${DIAS} AS dias, COUNT(DISTINCT novedad) AS tipos
              FROM historial WHERE ${where} GROUP BY dni ORDER BY licencias DESC LIMIT 25
            ) t LEFT JOIN personal p ON p.dni = t.dni`),
-        // aÃ±os disponibles SIN filtros, para que el selector no se achique solo
+        // años disponibles SIN filtros, para que el selector no se achique solo
         sequelize.query<any>(
           'SELECT DISTINCT YEAR(fecha_desde) AS anio FROM historial WHERE fecha_desde IS NOT NULL ORDER BY anio',
           { type: QueryTypes.SELECT },
@@ -3196,9 +3601,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // GET /asistencia/historial-detalle â†’ filas crudas paginadas (mismos filtros)
+  // GET /asistencia/historial-detalle → filas crudas paginadas (mismos filtros)
   router.get('/historial-detalle', requirePermission('api:access'), async (req: Request, res: Response) => {
-    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexiÃ³n a DB principal' });
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
     try {
       const { QueryTypes } = await import('sequelize');
       const { where, repl } = historialWhere(req.query);
@@ -3226,12 +3631,12 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // GET /asistencia/historial-excesos â†’ control de topes: agentes que acumulan
-  // minDias o mÃ¡s dÃ­as del mismo tipo de licencia en un mismo aÃ±o (con los
-  // mismos filtros del tablero: rÃ©gimen BECARIOS + tipo X + minDias=12 responde
-  // "Â¿quÃ© becarios se tomaron mÃ¡s de 12 dÃ­as de X?").
+  // GET /asistencia/historial-excesos → control de topes: agentes que acumulan
+  // minDias o más días del mismo tipo de licencia en un mismo año (con los
+  // mismos filtros del tablero: régimen BECARIOS + tipo X + minDias=12 responde
+  // "¿qué becarios se tomaron más de 12 días de X?").
   router.get('/historial-excesos', requirePermission('api:access'), async (req: Request, res: Response) => {
-    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexiÃ³n a DB principal' });
+    if (!sequelize) return res.status(500).json({ ok: false, error: 'Sin conexión a DB principal' });
     try {
       const { QueryTypes } = await import('sequelize');
       const { where, repl } = historialWhere(req.query);
@@ -3260,9 +3665,9 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // â”€â”€ LICENCIAS PDF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── LICENCIAS PDF ─────────────────────────────────────────────────────────────
 
-  // GET /asistencia/licencias-pdf/archivos â†’ lista los PDFs en LICENCIAS_PDF_DIR
+  // GET /asistencia/licencias-pdf/archivos → lista los PDFs en LICENCIAS_PDF_DIR
   router.get('/licencias-pdf/archivos', requirePermission('api:access'), async (_req: Request, res: Response) => {
     try {
       const dir = env.LICENCIAS_PDF_DIR;
@@ -3283,7 +3688,7 @@ export function buildAsistenciaRouter(sequelize?: import('sequelize').Sequelize)
     }
   });
 
-  // GET /asistencia/licencias-pdf/comparar â†’ corre la comparaciÃ³n
+  // GET /asistencia/licencias-pdf/comparar → corre la comparación
   router.get('/licencias-pdf/comparar', requirePermission('api:access'), async (_req: Request, res: Response) => {
     try {
       const dir = env.LICENCIAS_PDF_DIR;

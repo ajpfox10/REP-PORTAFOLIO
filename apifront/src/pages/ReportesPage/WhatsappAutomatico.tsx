@@ -1,7 +1,8 @@
 // src/pages/ReportesPage/WhatsappAutomatico.tsx
 // Pestaña WhatsApp de Reportes: conteo AUTOMÁTICO de mensajes recibidos (la extensión de Chrome lee
 // el WhatsApp Web abierto) + descarga/guía de la extensión. Reusa los componentes de
-// LicenciasMedicasControlPage; el conteo manual (consultas_whatsapp) sigue igual, debajo.
+// LicenciasMedicasControlPage. Lo leído se vuelca solo (API) a la carga de abajo (consultas_whatsapp):
+// cantidad = personas del día, sin pisar lo cargado a mano.
 import { useCallback, useEffect, useState } from 'react';
 import { aExtension } from '../LicenciasMedicasControlPage/WhatsappTab';
 import { RecibidosWhatsapp } from '../LicenciasMedicasControlPage/RecibidosWhatsapp';
@@ -10,7 +11,7 @@ import { ExtensionDescarga, NAV, hayVersionNueva, useVersionPublicada } from '..
 const BTN = { padding: '1px 8px', fontSize: '0.75rem' } as const;
 const sinExtension = async () => ({ ok: false, estado: 'ERROR', detalle: `Falta instalar la extensión de WhatsApp en este ${NAV.nombre}` });
 
-export function WhatsappAutomatico() {
+export function WhatsappAutomatico({ onLeido }: { onLeido?: () => void } = {}) {
   const [ext, setExt] = useState<string | null | undefined>(undefined); // undefined = verificando
   const detectar = useCallback(async () => {
     const r = await aExtension('PING', undefined, 1500);
@@ -41,7 +42,7 @@ export function WhatsappAutomatico() {
       {verDescarga && <ExtensionDescarga instalada={ext} publicada={publicada} onCerrar={() => setVerDescarga(false)} />}
 
       {/* Sin extensión se puede ver lo ya guardado; "Leer WhatsApp ahora" avisa que falta la extensión */}
-      {ext !== undefined && <RecibidosWhatsapp pedirExtension={ext ? aExtension : sinExtension} />}
+      {ext !== undefined && <RecibidosWhatsapp pedirExtension={ext ? aExtension : sinExtension} onLeido={onLeido} />}
     </div>
   );
 }

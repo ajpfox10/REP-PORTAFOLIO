@@ -17,6 +17,7 @@ import { useAgenteSearch } from '../Gesytionpage/hooks/useAgenteSearch';
 import { useDebounce } from '../Gesytionpage/hooks/useDebounce';
 import { AgenteSearchForm } from '../Gesytionpage/components/components/AgenteSearchForm';
 import { MatchesList } from '../Gesytionpage/components/components/MatchesList';
+import { ControlSiapeCard } from './ControlSiapeCard';
 
 // ─── Identificación de residente ──────────────────────────────────────────────
 const LEY_RESIDENTES = 11;
@@ -197,6 +198,8 @@ export function ResidentesPage() {
 
         {/* ── DERECHA: datos ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <ControlSiapeCard onSelectDni={(d) => agenteSearch.loadByDni(String(d))} />
 
           <div className="card" style={{ padding: '14px 16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 12 }}>

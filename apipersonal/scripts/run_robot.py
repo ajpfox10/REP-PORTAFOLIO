@@ -44,14 +44,17 @@ SIN_VENTANA_SIAPE = {"siape_tiempo_acumulado"}
 def recurso_de(cfg):
     """Robots que no pueden correr juntos comparten recurso."""
     grupo = cfg.get("grupo")
-    if cfg.get("script") in ("circuito_v2", "circuito_jefe"):
+    if cfg.get("script") in ("circuito_v2", "circuito_jefe", "circuito_ausentes"):
         # lanza otros robots que toman sus propios turnos: si compartiera uno, se trabaria solo
-        return "robots_circuito" if cfg["script"] == "circuito_v2" else "robots_circuito_jefe"
+        return {"circuito_v2": "robots_circuito", "circuito_jefe": "robots_circuito_jefe",
+                "circuito_ausentes": "robots_circuito_ausentes"}[cfg["script"]]
     if grupo == "Intranet MS" or str(cfg.get("script", "")).startswith("intranet_"):
         # mismo perfil de Chrome de la Intranet (aunque esten en otro grupo, p.ej. 2.0)
         return "robots_intranet"
     if grupo == "ProvinciART":          # portal ART por Chrome: no toca SiAPe
         return "robots_art"
+    if grupo == "Gmail":                # API de Gmail: sin ventanas, no espera a nadie
+        return "robots_gmail"
     if cfg.get("script") == "comparacion_siape_ministerio_v2":   # solo lee Excel + base
         return "robots_comparacion"
     return "robots_siape"

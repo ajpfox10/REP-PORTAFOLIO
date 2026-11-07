@@ -16,7 +16,6 @@ export const SUBCARPETAS_PRESETS: PresetSubcarpeta[] = [
       'Certificación de Tareas',
       'Planilla de Compatibilidad',
       'IPS',
-      'Antecedentes',
       'Matrícula',
       'DDJJ Salud',
       'Preocupacional',
@@ -36,10 +35,18 @@ export const SUBCARPETAS_PRESETS: PresetSubcarpeta[] = [
     categoria: 'Salud e IOMA',
     subdivisiones: ['IOMA', 'Certificados Médicos', 'Discapacidad'],
   },
-  { categoria: 'Antecedentes', subdivisiones: ['Nacionales', 'Provinciales'] },
+  // mismos nombres que crea docuCarpeta (orden_documentos_expediente) y usa el robot gmail_antecedentes
+  { categoria: 'Certificado ant. Nacionales', subdivisiones: [] },
+  { categoria: 'Certificado ant. Provinciales', subdivisiones: [] },
   { categoria: 'Jubilación', subdivisiones: [] },
   { categoria: 'Varios', subdivisiones: [] },
 ];
+
+/** Carpeta del legajo que se preselecciona al elegir el tipo de documento. */
+export const CARPETA_POR_TIPO: Record<string, string> = {
+  antecedentes_nacionales: 'Certificado ant. Nacionales',
+  antecedentes_provinciales: 'Certificado ant. Provinciales',
+};
 
 /** Devuelve las subdivisiones preset de una categoría (o []). */
 export function presetSubdivisiones(categoria: string): string[] {

@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { query } = require('./db');
-const { listarOrdenes } = require('./ordenesCompraDb');
+const { listarOrdenes, entregaDesdePlanilla } = require('./ordenesCompraDb');
+const { OPCIONES_COMPLETO } = require('./ordenesCompraExcel');
 
 // Sincroniza las O.C. de la base con un archivo de Google Drive (Excel .xlsx o Planilla de Google).
 // - El destino (archivo, pestaña fija o una pestaña por año) se elige desde la pagina y se guarda
@@ -40,6 +41,7 @@ async function leerDestino() {
     prefijo: row?.prefijo_anual ?? 'O.C ',
     pestanaFija: row?.pestana_fija || null,
     activo: row ? Boolean(row.activo) : true,
+    listaCompleto: row?.lista_completo || null,
     backup: row?.backup_fecha ? { revisionId: row.backup_revision_id, local: row.backup_local, fecha: row.backup_fecha } : null
   };
 }
@@ -71,6 +73,7 @@ async function guardarDestino(datos, usuarioId) {
   if (cambio) {
     // destino nuevo: se vuelve a vincular todo desde cero (lo escrito a mano en ese archivo se respeta)
     await query('UPDATE oc_renglones SET sync_valores = NULL');
+    await query('UPDATE oc_drive_config SET lista_completo = NULL WHERE id = 1');
     if (actual.fileId !== nuevo.fileId) {
       await query('UPDATE oc_drive_config SET backup_revision_id = NULL, backup_local = NULL, backup_fecha = NULL WHERE id = 1');
     }
@@ -266,7 +269,7 @@ function normalizar(vals) {
   const completo = vacio(vals.completo) ? null : String(vals.completo).trim().toUpperCase();
   return {
     entregada: Number.isInteger(entregadaNum) && entregadaNum >= 0 ? entregadaNum : null,
-    completo: ['SI', 'NO'].includes(completo) ? completo : null,
+    completo: OPCIONES_COMPLETO.includes(completo) ? completo : null,
     nroIngreso: vacio(vals.nroIngreso) ? null : String(vals.nroIngreso).trim().slice(0, 120),
     observacion: vacio(vals.observacion) ? null : String(vals.observacion).trim().slice(0, 500)
   };
@@ -289,9 +292,11 @@ function rango(pestana, a1) {
   return `'${pestana.replace(/'/g, "''")}'!${a1}`;
 }
 
+// El año puede venir con 2 digitos en filas escritas a mano: "452/26 MG INSUMOS"
 function numeroOc(texto) {
-  const m = String(texto ?? '').match(/(\d+)\s*\/\s*(\d{4})/);
-  return m ? `${Number(m[1])}/${m[2]}` : null;
+  const m = String(texto ?? '').match(/(\d+)\s*\/\s*(\d{4}|\d{2})(?!\d)/);
+  if (!m) return null;
+  return `${Number(m[1])}/${m[2].length === 2 ? `20${m[2]}` : m[2]}`;
 }
 
 // --- formato ---
@@ -349,6 +354,23 @@ function pedidosFormatoInicial(sheetId) {
   ];
 }
 
+// Col L (COMPLETA / INCOMPLETA): con algun NO o A REVISAR es INCOMPLETA; COMPLETA cuando todos los
+// renglones con codigo dicen SI, CAMBIO o DESAFECTADO
+function formulaEstado(r0, r1) {
+  const I = `I${r0}:I${r1}`;
+  return `IF(COUNTIF(${I},"NO")+COUNTIF(${I},"A REVISAR")>0,"INCOMPLETA",`
+    + `IF(COUNTIF(${I},"SI")+COUNTIF(${I},"CAMBIO")+COUNTIF(${I},"DESAFECTADO")>=COUNTA(D${r0}:D${r1}),"COMPLETA","INCOMPLETA"))`;
+}
+
+function validacionCompleto(sheetId, r0, r1) {
+  return {
+    setDataValidation: {
+      range: { sheetId, startRowIndex: r0 - 1, endRowIndex: r1, startColumnIndex: 8, endColumnIndex: 9 },
+      rule: { condition: { type: 'ONE_OF_LIST', values: OPCIONES_COMPLETO.map((o) => ({ userEnteredValue: o })) }, showCustomUi: true, strict: false }
+    }
+  };
+}
+
 function pedidosBloque(sheetId, r0, r1) {
   // r0/r1: filas 1-based inclusive del bloque de una O.C.
   const thin = { style: 'SOLID', width: 1 };
@@ -365,11 +387,8 @@ function pedidosBloque(sheetId, r0, r1) {
       fields: 'userEnteredFormat.verticalAlignment'
     }
   }, {
-    // desplegable SI/NO en COMPLETO (en filas que ya existian no se toca el formato)
-    setDataValidation: {
-      range: { sheetId, startRowIndex: r0 - 1, endRowIndex: r1, startColumnIndex: 8, endColumnIndex: 9 },
-      rule: { condition: { type: 'ONE_OF_LIST', values: [{ userEnteredValue: 'SI' }, { userEnteredValue: 'NO' }] }, showCustomUi: true, strict: false }
-    }
+    // desplegable en COMPLETO (en filas que ya existian no se toca el formato)
+    ...validacionCompleto(sheetId, r0, r1)
   }];
   if (r1 > r0) {
     for (const c of [0, 1, 11]) {
@@ -397,7 +416,7 @@ async function guardarSnapshot(id, vals) {
 }
 
 // --- plan por pestaña (no escribe nada) ---
-async function planificarPestana(api, hojas, pestana, ordenes, snaps) {
+async function planificarPestana(api, hojas, pestana, ordenes, snaps, listaNueva) {
   const props = hojas.find((h) => h.title === pestana) || null;
   const filas = props ? await api.leer(rango(pestana, 'A1:M')) : [];
   const fila1 = filas[0] || [];
@@ -426,6 +445,7 @@ async function planificarPestana(api, hojas, pestana, ordenes, snaps) {
 
   // 1) ubicar cada renglon: por ID (col M) y, para filas escritas a mano, por N° de O.C. (col B) + renglon (col C)
   const filaDeId = new Map();
+  const estadoEnHoja = new Map(); // N° de O.C. -> { fila, estado: col L de su primera fila }
   for (let i = 1; i < filas.length; i += 1) {
     const id = Number((filas[i] || [])[COL.id]);
     if (id && porId.has(id) && !filaDeId.has(id)) filaDeId.set(id, i + 1);
@@ -434,7 +454,11 @@ async function planificarPestana(api, hojas, pestana, ordenes, snaps) {
   for (let i = 1; i < filas.length; i += 1) {
     const row = filas[i] || [];
     // la col B esta combinada por O.C.: vale para las filas de abajo hasta la proxima O.C.
-    if (!vacio(row[1])) ocActual = numeroOc(row[1]);
+    if (!vacio(row[1])) {
+      ocActual = numeroOc(row[1]);
+      const estado = String(row[11] ?? '').trim().toUpperCase();
+      if (ocActual && !estadoEnHoja.has(ocActual)) estadoEnHoja.set(ocActual, { fila: i + 1, estado: ['COMPLETA', 'INCOMPLETA'].includes(estado) ? estado : null });
+    }
     const id = Number(row[COL.id]);
     if (id && porId.has(id)) continue;
     const ren = Number(row[2]);
@@ -458,17 +482,33 @@ async function planificarPestana(api, hojas, pestana, ordenes, snaps) {
     const cambioHoja = !snap || !iguales(hojaVals, snap);
     const hojaVacia = CAMPOS.every((c) => hojaVals[c] === null);
     if (cambioHoja && !(snap === null && hojaVacia)) {
-      plan.enBase.push(() => query(
-        `UPDATE oc_renglones SET cantidad_entregada = :entregada, completo = :completo, nro_ingreso = :nroIngreso,
-           observacion = :observacion, sync_valores = CAST(:v AS JSON) WHERE id = :id`,
-        { ...hojaVals, id, v: JSON.stringify(hojaVals) }
-      ));
+      const ren = porId.get(id).renglon;
+      plan.enBase.push(async () => {
+        await query(
+          `UPDATE oc_renglones SET cantidad_entregada = :entregada, completo = :completo, nro_ingreso = :nroIngreso,
+             observacion = :observacion, sync_valores = CAST(:v AS JSON) WHERE id = :id`,
+          { ...hojaVals, id, v: JSON.stringify(hojaVals) }
+        );
+        // O.C. INCOMPLETA: lo que cambio en CANTIDAD ENTREGADA queda como entrega (las COMPLETAS no se tocan)
+        if (ren.admiteEntregas && snap && hojaVals.entregada !== base.entregada) {
+          await entregaDesdePlanilla(id, { entregada: base.entregada, nroIngreso: base.nroIngreso }, hojaVals.entregada);
+        }
+      });
       resumen.haciaBase += 1;
     } else {
       plan.escrituras.push(...CAMPOS.map((c) => ({ range: rango(pestana, `${LETRA[c]}${fila}`), values: [[base[c] ?? '']] })));
       plan.enBase.push(() => guardarSnapshot(id, base));
       resumen.haciaPlanilla += 1;
     }
+  }
+
+  // 2b) O.C. traidas del Excel: lo que da la col L se copia a la base (estadoOrden). La col L no se escribe:
+  //     tiene la formula del estado (formulaEstado), que el Excel recalcula solo
+  for (const o of ordenes) {
+    const enHoja = estadoEnHoja.get(numeroOc(o.oc));
+    if (o.origen !== 'excel' || !enHoja || enHoja.estado === (o.estadoPlanilla || null)) continue;
+    plan.enBase.push(() => query('UPDATE oc_ordenes SET estado_planilla = :estado WHERE id = :id', { estado: enHoja.estado, id: o.id }));
+    resumen.haciaBase += 1;
   }
 
   // 3) renglones que no estan en la pestaña: se agregan al final, agrupados por O.C.
@@ -486,7 +526,7 @@ async function planificarPestana(api, hojas, pestana, ordenes, snaps) {
         values: [[
           k === 0 ? o.vence : '', k === 0 ? `${o.oc} ${o.proveedor}` : '', r.renglon, r.codigo, r.descripcion, r.cantidad,
           vals.entregada ?? '', `=IF(G${fila}="",F${fila},F${fila}-G${fila})`, vals.completo ?? '', vals.nroIngreso ?? '', vals.observacion ?? '',
-          k === 0 ? `=IF(COUNTIF(I${r0}:I${r1},"SI")=${faltan.length},"COMPLETA","INCOMPLETA")` : '', r.id
+          k === 0 ? `=${formulaEstado(r0, r1)}` : '', r.id
         ]]
       });
       plan.snapsNuevas.push([r.id, vals]);
@@ -496,7 +536,9 @@ async function planificarPestana(api, hojas, pestana, ordenes, snaps) {
     resumen.agregadas += faltan.length;
   }
   plan.ultimaFila = proxima - 1;
-  plan.escribe = plan.crear || Boolean(plan.encabezado) || plan.escrituras.length > 0 || plan.nuevas.length > 0;
+  // cambiaron las opciones de COMPLETO: se actualiza el desplegable de las filas que ya estaban
+  plan.validacion = listaNueva && filas.length > 1 ? [2, filas.length] : null;
+  plan.escribe = plan.crear || Boolean(plan.encabezado) || plan.escrituras.length > 0 || plan.nuevas.length > 0 || Boolean(plan.validacion);
   return plan;
 }
 
@@ -511,7 +553,8 @@ async function planificar(api, destino) {
   const hojas = await api.hojas();
   const snaps = await snapshots();
   const planes = [];
-  for (const [pestana, lista] of grupos) planes.push(await planificarPestana(api, hojas, pestana, lista, snaps));
+  const listaNueva = destino.listaCompleto !== OPCIONES_COMPLETO.join(',');
+  for (const [pestana, lista] of grupos) planes.push(await planificarPestana(api, hojas, pestana, lista, snaps, listaNueva));
   return planes;
 }
 
@@ -537,7 +580,10 @@ async function aplicarPestana(api, plan) {
     await api.batchUpdate([{ appendDimension: { sheetId, dimension: 'ROWS', length: necesarias + 50 } }]);
   }
   await api.escribir([...plan.escrituras, ...plan.nuevas]);
-  await api.batchUpdate(plan.bloques.flatMap(([r0, r1]) => pedidosBloque(sheetId, r0, r1)));
+  await api.batchUpdate([
+    ...(plan.validacion ? [validacionCompleto(sheetId, ...plan.validacion)] : []),
+    ...plan.bloques.flatMap(([r0, r1]) => pedidosBloque(sheetId, r0, r1))
+  ]);
 }
 
 async function descartarBackup(backup, nuevo, fileId) {
@@ -585,6 +631,9 @@ async function sincronizarCon(api, destino, { usuarioId = null } = {}) {
   if (backup) {
     await descartarBackup(destino.backup, backup, destino.fileId);
     await registrarBackup(backup);
+  }
+  if (planes.some((p) => p.validacion)) {
+    await query('UPDATE oc_drive_config SET lista_completo = :lista WHERE id = 1', { lista: OPCIONES_COMPLETO.join(',') });
   }
   if (escribe || total.haciaBase) {
     await query(
@@ -741,5 +790,7 @@ module.exports = {
   guardarDestino,
   pausar,
   restaurarBackup,
-  normalizar
+  normalizar,
+  numeroOc,
+  valoresDeFila
 };

@@ -6,7 +6,8 @@ Circuito 2.0: corre en orden, uno atras del otro, los robots de la version 2.0:
      corta aca: no compara ni carga nada (nunca cargar sobre datos viejos).
   4. comparacion_siape_ministerio_v2            (compara y guarda en tablas)
   5. intranet_carga_novedades_v2_hospital / _upa4 / _upa18
-     intranet_carga_ausentes_v2_hospital  / _upa4 / _upa18
+     (los AUSENTES ya no van aca: desde 04/11/2026 los carga el robot aparte "Ausentes"
+      = circuito_ausentes.py, que corre AL FINAL de todo, pedido del usuario)
   6. intranet_carga_art26_v2_hospital / _upa4 / _upa18  (Art. 26 como FC; no depende de las
      descargas: corre aunque el freno haya cortado)
   7. siape_horario_admin_dia                    (no lo usa el circuito: si falla no frena nada)
@@ -42,10 +43,7 @@ CARGAS = [
     "intranet_carga_novedades_v2_hospital",
     "intranet_carga_novedades_v2_upa4",
     "intranet_carga_novedades_v2_upa18",
-    "intranet_carga_ausentes_v2_hospital",
-    "intranet_carga_ausentes_v2_upa4",
-    "intranet_carga_ausentes_v2_upa18",
-]
+]   # ausentes: circuito_ausentes.py (robot "Ausentes"), al final de todo
 # no dependen de las descargas ni de la comparacion: corren siempre y no frenan nada
 AL_FINAL = [
     "intranet_carga_art26_v2_hospital",

@@ -24,6 +24,8 @@ const ocHistorial = require('./ocHistorialDb');
 const ministerio = require('./ministerioDb');
 const consumoMs = require('./consumoMsDb');
 const vencidos = require('./vencidosDb');
+const ocPendientesMs = require('./ocPendientesMs');
+const ocPdf = require('./ocPdf');
 const bajas = require('./bajasDb');
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
@@ -637,6 +639,90 @@ app.get('/api/requerimientos/analisis', requireAuth, requireAdmin, async (_req, 
   try {
     const [importaciones, items] = await Promise.all([requerimientos.listarImportaciones(), requerimientos.listarItems()]);
     res.json({ importaciones, items });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Carga manual del requerimiento (por anio, sin PDF) ---
+app.get('/api/requerimientos/manual/catalogo', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    res.json({ data: await requerimientos.catalogoFarmacos() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/requerimientos/manual', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anio = Number(req.query.anio);
+    if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) return res.status(400).json({ error: 'Año inválido' });
+    res.json({ data: await requerimientos.listarManual(anio) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Columnas elegibles del Analisis (consumo/pedidos/stock/O.C./bajas por semestre) para una lista de codigos
+app.post('/api/requerimientos/columnas', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const codigos = Array.isArray(req.body?.codigos) ? req.body.codigos : [];
+    res.json(await requerimientos.columnasPorCodigos(codigos));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/requerimientos/manual/columnas', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anio = Number(req.query.anio);
+    const semestre = Number(req.query.semestre);
+    if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) return res.status(400).json({ error: 'Año inválido' });
+    if (semestre !== 1 && semestre !== 2) return res.status(400).json({ error: 'Semestre inválido' });
+    res.json(await requerimientos.columnasManual(anio, semestre));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/requerimientos/manual/copiar', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anio = Number(req.body.anio);
+    const semestre = Number(req.body.semestre);
+    if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) return res.status(400).json({ error: 'Año inválido' });
+    if (semestre !== 1 && semestre !== 2) return res.status(400).json({ error: 'Semestre inválido' });
+    res.json(await requerimientos.copiarDesdeRequerimientoNuevo(anio, semestre, req.user.sub));
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.post('/api/requerimientos/manual', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const anio = Number(req.body.anio);
+    const codigo = String(req.body.codigo || '').trim();
+    const droga = String(req.body.droga || '').trim();
+    const descripcion = String(req.body.descripcion || '').trim().slice(0, 500);
+    const cantidad = Number(req.body.cantidad);
+    const semestre = Number(req.body.semestre);
+    if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) return res.status(400).json({ error: 'Año inválido' });
+    if (semestre !== 1 && semestre !== 2) return res.status(400).json({ error: 'Elegí el semestre (1 o 2)' });
+    if (!codigo || codigo.length > 20) return res.status(400).json({ error: 'Elegí un fármaco' });
+    if (!droga) return res.status(400).json({ error: 'Falta la droga' });
+    if (!Number.isFinite(cantidad) || cantidad < 0) return res.status(400).json({ error: 'La cantidad no puede ser negativa' });
+    await requerimientos.guardarManual({ anio, semestre, codigo, droga: droga.slice(0, 255), descripcion, cantidad }, req.user.sub);
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/requerimientos/manual/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const borrados = await requerimientos.eliminarManual(Number(req.params.id), req.user.sub);
+    if (!borrados) return res.status(404).json({ error: 'Renglón no encontrado' });
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
@@ -1990,7 +2076,75 @@ app.get('/api/ordenes-compra/cruce-stock', requireAuth, requireAdmin, async (_re
 
 app.get('/api/ordenes-compra', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
-    res.json({ data: await ordenesCompra.listarOrdenes() });
+    const [ordenes, ms] = await Promise.all([ordenesCompra.listarOrdenes(), ocPendientesMs.resultadosPorOc()]);
+    // lo ultimo que consulto el robot de pendientes de ingreso en Farmacia MS, por O.C. y renglon
+    const data = ordenes.map((o) => {
+      const x = ms.get(ocPendientesMs.numeroOc(o.oc));
+      if (!x) return o;
+      const enPagina = new Set(o.renglones.map((r) => r.renglon));
+      return {
+        ...o,
+        ms: {
+          encontrada: x.encontrada,
+          consultadoAt: x.consultadoAt,
+          nroSolicitud: x.nroSolicitud,
+          // renglones que Farmacia MS tiene y la pagina (el Excel) no
+          soloEnMs: [...x.renglones.values()].filter((r) => !enPagina.has(r.renglon))
+        },
+        renglones: o.renglones.map((r) => ({ ...r, ms: x.renglones.get(r.renglon) || null }))
+      };
+    });
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Robot de pendientes de ingreso por O.C. (Farmacia MS > Articulos Pendientes de Ingreso) ---
+app.get('/api/ordenes-compra/ms-pendientes', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    const [estado, ordenes] = await Promise.all([ocPendientesMs.estado(), ordenesCompra.listarOrdenes()]);
+    // O.C. cargadas en la pagina de Ordenes de Compra, para contar cuales falta consultar
+    res.json({ ...estado, ordenes: ordenes.map((o) => ({ oc: ocPendientesMs.numeroOc(o.oc), estado: o.estado, proveedor: o.proveedor })) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// body: { ocs: ['683/2026', '452/26'] } o { todas: true } (todas las O.C. cargadas en la pagina, completas o no)
+app.post('/api/ordenes-compra/ms-pendientes', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const enCurso = await ocPendientesMs.consultaEnCurso();
+    if (enCurso) return res.status(409).json({ error: `Ya hay una consulta en curso (#${enCurso.id})` });
+    let ocs;
+    if (req.body.todas) {
+      ocs = (await ordenesCompra.listarOrdenes()).map((o) => ocPendientesMs.numeroOc(o.oc));
+    } else {
+      const texto = Array.isArray(req.body.ocs) ? req.body.ocs.join(' ') : String(req.body.ocs || '');
+      ocs = [...texto.matchAll(/(\d+)\s*\/\s*(\d{4}|\d{2})(?!\d)/g)].map((m) => ocPendientesMs.numeroOc(m[0]));
+      if (!ocs.length) return res.status(400).json({ error: 'Escribí cada O.C. como número/año, por ejemplo 683/2026' });
+    }
+    ocs = [...new Set(ocs.filter(Boolean))];
+    if (!ocs.length) return res.status(400).json({ error: 'No hay O.C. para consultar' });
+    if (ocs.length > 300) return res.status(400).json({ error: 'Son demasiadas O.C. para una sola consulta (máximo 300)' });
+    const consultaId = await ocPendientesMs.crearConsulta(ocs, req.user.sub);
+    const logDir = path.resolve(__dirname, '../../logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const out = fs.openSync(path.join(logDir, `oc-pendientes-ms-${consultaId}.log`), 'a');
+    const err = fs.openSync(path.join(logDir, `oc-pendientes-ms-${consultaId}.err.log`), 'a');
+    // sin las variables del usuario de respaldo: el robot las lee del .env al arrancar (si se cargaron
+    // despues de levantar el servidor, process.env las tiene vacias y dotenv no las pisaria)
+    const { FARMACIA_WEB_USER_RESPALDO: _u, FARMACIA_WEB_PASSWORD_RESPALDO: _p, ...envRobot } = process.env;
+    const child = spawn(process.execPath, [path.resolve(__dirname, '../scripts/pendientes-oc-web.js')], {
+      cwd: path.resolve(__dirname, '..'),
+      env: { ...envRobot, NODE_ENV: config.envName, OCMS_CONSULTA_ID: String(consultaId) },
+      detached: true,
+      stdio: ['ignore', out, err],
+      windowsHide: true
+    });
+    child.unref();
+    await audit(req.user.sub, 'consultar_pendientes_ms', 'oc_ms_consultas', consultaId, { ocs: ocs.length });
+    res.status(202).json({ ok: true, consultaId, ocs });
   } catch (error) {
     next(error);
   }
@@ -2006,11 +2160,44 @@ app.post('/api/ordenes-compra/subir', requireAuth, requireAdmin, uploadPdfOc.arr
     if (!archivos.length) throw httpError(400, 'Elegí uno o más archivos PDF');
     const resultados = await ordenesCompra.importarArchivos(archivos, req.user.sub);
     if (resultados.some((r) => r.estado === 'nuevo')) ordenesCompraDrive.sincronizarEnSegundoPlano();
+    // los PDF de O.C. validos quedan en la carpeta de O.C., para poder verlos despues (boton Ver O.C.)
+    archivos.forEach((a, i) => {
+      if (resultados[i]?.estado === 'error') return;
+      try {
+        ocPdf.guardarEnCarpeta(a.name, a.buffer);
+      } catch (err) {
+        console.error('[oc-pdf] no se pudo guardar', a.name, err.message);
+      }
+    });
     const resumen = resumenImportacion(resultados);
     await audit(req.user.sub, 'subir_pdf_oc', 'oc_ordenes', null, { archivos: archivos.length, ...resumen });
     res.status(201).json({ resultados, ...resumen });
   } catch (error) {
     responderErrorOc(res, next, error);
+  }
+});
+
+// PDF de la O.C. (de la carpeta de O.C.), con el renglon marcado en rojo si se indica ?renglon=&codigo=
+app.get('/api/ordenes-compra/:id/pdf', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const orden = (await ordenesCompra.listarOrdenes()).find((o) => o.id === Number(req.params.id));
+    if (!orden) return res.status(404).json({ error: 'No existe esa O.C.' });
+    const ruta = await ocPdf.buscarPdf(orden.oc);
+    if (!ruta) {
+      return res.status(404).json({ error: `No está el PDF de la O.C. ${orden.oc} en ${config.ordenesCompraDir}. Copialo ahí (o subilo con "Subir PDF desde mi PC") y volvé a tocar Ver O.C.` });
+    }
+    let buffer = fs.readFileSync(ruta);
+    let pagina = null;
+    if (req.query.renglon) {
+      ({ buffer, pagina } = await ocPdf.marcarRenglon(buffer, Number(req.query.renglon), req.query.codigo || ''));
+    }
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${encodeURIComponent(path.basename(ruta))}"`);
+    res.set('X-Pagina', pagina ? String(pagina) : '');
+    res.set('Access-Control-Expose-Headers', 'X-Pagina');
+    res.send(buffer);
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -2036,6 +2223,32 @@ app.patch('/api/ordenes-compra/renglones/:id', requireAuth, requireAdmin, async 
     const { entregada, completo, nroIngreso, observacion } = req.body || {};
     const renglon = await ordenesCompra.actualizarRenglon(id, { entregada, completo, nroIngreso, observacion }, req.user.sub);
     ordenesCompraDrive.sincronizarEnSegundoPlano();
+    res.json({ data: renglon });
+  } catch (error) {
+    responderErrorOc(res, next, error);
+  }
+});
+
+// Entregas parciales ("salieron 1000"): solo renglones de O.C. INCOMPLETAS
+app.post('/api/ordenes-compra/renglones/:id/entregas', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { cantidad, nroIngreso, observacion, fecha, confirmarExceso } = req.body || {};
+    const renglon = await ordenesCompra.agregarEntrega(id, { cantidad, nroIngreso, observacion, fecha, confirmarExceso }, req.user.sub);
+    ordenesCompraDrive.sincronizarEnSegundoPlano();
+    await audit(req.user.sub, 'entrega_oc', 'oc_renglones', id, { cantidad, nroIngreso });
+    res.status(201).json({ data: renglon });
+  } catch (error) {
+    if (error.exceso) return res.status(409).json({ error: error.message, exceso: true, falta: error.falta });
+    responderErrorOc(res, next, error);
+  }
+});
+
+app.delete('/api/ordenes-compra/entregas/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const renglon = await ordenesCompra.eliminarEntrega(Number(req.params.id), req.user.sub);
+    ordenesCompraDrive.sincronizarEnSegundoPlano();
+    await audit(req.user.sub, 'eliminar_entrega_oc', 'oc_entregas', req.params.id, { renglonId: renglon.id });
     res.json({ data: renglon });
   } catch (error) {
     responderErrorOc(res, next, error);
@@ -2301,6 +2514,8 @@ app.listen(config.port, () => {
   requerimientos.ensureRequerimientoTables()
     .then(() => requerimientos.iniciarSondeoRequerimientos())
     .catch((err) => console.error('[requerimientos] no se pudieron crear las tablas:', err.message));
+  ocPendientesMs.ensureOcPendientesMsTables()
+    .catch((err) => console.error('[oc-pendientes-ms] no se pudieron crear las tablas:', err.message));
   ordenesCompra.ensureOrdenesCompraTables()
     .then(() => ordenesCompraDrive.iniciarSincronizacionDrive())
     .catch((err) => console.error('[ordenes-compra] no se pudieron crear las tablas:', err.message));

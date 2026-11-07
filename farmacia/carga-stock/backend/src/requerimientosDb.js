@@ -79,6 +79,339 @@ async function ensureRequerimientoTables() {
   `);
   const rows = await query('SELECT carpeta FROM requerimiento_config WHERE id = 1');
   if (rows[0]?.carpeta) carpetaActual = rows[0].carpeta;
+  // Requerimiento cargado a mano (sin PDF), por anio: una fila por codigo
+  await query(`
+    CREATE TABLE IF NOT EXISTS requerimiento_manual (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      anio INT NOT NULL,
+      codigo VARCHAR(20) NOT NULL,
+      droga VARCHAR(255) NOT NULL,
+      descripcion VARCHAR(500) NULL,
+      cantidad DECIMAL(14,2) NOT NULL,
+      creado_por INT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_requerimiento_manual (anio, codigo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  // El requerimiento es por semestre: una fila por anio + semestre + codigo
+  const semCol = await query(`
+    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requerimiento_manual' AND COLUMN_NAME = 'semestre'
+  `);
+  if (!semCol.length) {
+    await query('ALTER TABLE requerimiento_manual ADD COLUMN semestre TINYINT NOT NULL DEFAULT 1 AFTER anio');
+    await query('ALTER TABLE requerimiento_manual DROP INDEX uq_requerimiento_manual, ADD UNIQUE KEY uq_requerimiento_manual (anio, semestre, codigo)');
+  }
+}
+
+// Catalogo de farmacos conocidos (stock actual, consumo MS, trimestral y requerimientos) para elegir en la carga manual
+async function catalogoFarmacos() {
+  return query(`
+    SELECT codigo, MAX(droga) AS droga, MAX(descripcion) AS descripcion FROM (
+      SELECT codigo, nombre_generico AS droga,
+             TRIM(CONCAT_WS(' ', nombre_generico, concentracion, forma, presentacion)) AS descripcion
+        FROM stock_actual_items WHERE codigo IS NOT NULL AND codigo <> ''
+      UNION ALL
+      SELECT codigo, nombre_generico,
+             TRIM(CONCAT_WS(' ', nombre_generico, concentracion, forma, presentacion))
+        FROM consumo_ms_items WHERE codigo IS NOT NULL AND codigo <> ''
+      UNION ALL
+      SELECT codigo_articulo, nombre_generico,
+             TRIM(CONCAT_WS(' ', nombre_generico, concentracion, forma, presentacion))
+        FROM trimestre_items WHERE codigo_articulo IS NOT NULL AND codigo_articulo <> ''
+      UNION ALL
+      SELECT codigo, droga, LEFT(descripcion, 500) FROM requerimiento_items
+    ) t
+    GROUP BY codigo
+    ORDER BY droga, codigo
+  `);
+}
+
+async function listarManual(anio) {
+  return query(
+    `SELECT id, anio, semestre, codigo, droga, descripcion, cantidad, created_at, updated_at
+     FROM requerimiento_manual WHERE anio = :anio ORDER BY semestre, droga, codigo`,
+    { anio }
+  );
+}
+
+// Alta o cambio de cantidad (si el codigo ya estaba cargado para ese anio y semestre, se reemplaza la cantidad)
+async function guardarManual({ anio, semestre, codigo, droga, descripcion, cantidad }, usuarioId) {
+  await query(
+    `INSERT INTO requerimiento_manual (anio, semestre, codigo, droga, descripcion, cantidad, creado_por)
+     VALUES (:anio, :semestre, :codigo, :droga, :descripcion, :cantidad, :usuarioId)
+     ON DUPLICATE KEY UPDATE droga = VALUES(droga), descripcion = VALUES(descripcion), cantidad = VALUES(cantidad)`,
+    { anio, semestre, codigo, droga, descripcion: descripcion || null, cantidad, usuarioId }
+  );
+  await audit(usuarioId, 'guardar_requerimiento_manual', 'requerimiento_manual', null, { anio, semestre, codigo, cantidad });
+}
+
+// Copia al anio/semestre de la carga manual los farmacos del requerimiento de PDF mas nuevo
+// (el ciclo con el periodo de consumo mas reciente), con cantidad 0. No pisa lo ya cargado.
+async function copiarDesdeRequerimientoNuevo(anio, semestre, usuarioId) {
+  const [ult] = await query(`
+    SELECT YEAR(periodo_desde) anio, IF(MONTH(periodo_desde) <= 6, 1, 2) sem
+    FROM requerimiento_importaciones WHERE periodo_desde IS NOT NULL
+    ORDER BY periodo_desde DESC LIMIT 1
+  `);
+  if (!ult) { const e = new Error('No hay requerimientos de PDF cargados'); e.status = 400; throw e; }
+  const desde = `${ult.anio}-${ult.sem === 1 ? '01-01' : '07-01'}`;
+  const hasta = `${ult.anio}-${ult.sem === 1 ? '06-30' : '12-31'}`;
+  const result = await query(`
+    INSERT IGNORE INTO requerimiento_manual (anio, semestre, codigo, droga, descripcion, cantidad, creado_por)
+    SELECT :anio, :semestre, ri.codigo, MAX(ri.droga), MAX(LEFT(ri.descripcion, 500)), 0, :usuarioId
+    FROM requerimiento_items ri JOIN requerimiento_importaciones i ON i.id = ri.importacion_id
+    WHERE i.periodo_desde BETWEEN :desde AND :hasta
+    GROUP BY ri.codigo
+  `, { anio, semestre, usuarioId, desde, hasta });
+  const origen = `${ult.sem === 1 ? '1er' : '2do'} semestre ${ult.anio}`;
+  await audit(usuarioId, 'copiar_requerimiento_manual', 'requerimiento_manual', null, { anio, semestre, origen, insertados: result.affectedRows });
+  return { insertados: result.affectedRows, origen };
+}
+
+// Datos para las columnas opcionales de la carga manual, por codigo (solo los codigos cargados en el anio).
+// Consumo = Analisis Trimestral (todos los sectores), que cubre 2024-2026 por trimestre.
+async function columnasManual(anio, semestre) {
+  const filas = await query('SELECT codigo, semestre, cantidad FROM requerimiento_manual WHERE anio = :anio', { anio });
+  const codigos = Array.from(new Set(filas.map((f) => f.codigo)));
+  const out = {};
+  for (const c of codigos) out[c] = {};
+  if (!codigos.length) return { datos: out, meta: {} };
+  const inCod = codigos.map((_, i) => ':c' + i).join(', ');
+  const pc = Object.fromEntries(codigos.map((c, i) => ['c' + i, c]));
+  const set = (codigo, campo, valor) => { if (out[codigo]) out[codigo][campo] = valor; };
+  const trims = semestre === 1 ? [1, 2] : [3, 4];
+  const desde = `${anio}-${semestre === 1 ? '01-01' : '07-01'}`;
+  const hasta = `${anio}-${semestre === 1 ? '06-30' : '12-31'}`;
+
+  // Pedido manual: otro semestre y total del anio
+  for (const f of filas) {
+    const d = out[f.codigo];
+    d.totalAnio = (d.totalAnio || 0) + Number(f.cantidad);
+    if (Number(f.semestre) !== semestre) d.pedidoOtroSem = (d.pedidoOtroSem || 0) + Number(f.cantidad);
+  }
+
+  // Consumo por trimestre (Analisis Trimestral)
+  const cons = await query(`
+    SELECT ti.codigo_articulo codigo, i.anio, i.trimestre, SUM(ti.cantidad) cantidad
+    FROM trimestre_items ti JOIN trimestre_importaciones i ON i.id = ti.trimestre_importacion_id
+    WHERE ti.codigo_articulo IN (${inCod}) AND i.anio BETWEEN :a0 AND :a1
+    GROUP BY ti.codigo_articulo, i.anio, i.trimestre
+  `, { ...pc, a0: anio - 1, a1: anio + 1 });
+  for (const r of cons) {
+    const q = Number(r.cantidad || 0);
+    const d = out[r.codigo];
+    if (!d) continue;
+    if (r.anio === anio && trims.includes(r.trimestre)) d.consumoSem = (d.consumoSem || 0) + q;
+    if (r.anio === anio - 1 && trims.includes(r.trimestre)) d.consumoSemAnt = (d.consumoSemAnt || 0) + q;
+    if (r.anio === anio + 1) d.consumoAnioSig = (d.consumoAnioSig || 0) + q;
+  }
+  // Meses con datos en el semestre (para el promedio mensual)
+  const [tri] = await query(`
+    SELECT COUNT(DISTINCT trimestre) n FROM trimestre_importaciones WHERE anio = :anio AND trimestre IN (${trims.join(", ")})
+  `, { anio });
+  const mesesSem = Number(tri?.n || 0) * 3;
+
+  // Requerimientos de PDF de los anios siguientes (por anio del periodo de consumo)
+  const reqs = await query(`
+    SELECT ri.codigo, YEAR(i.periodo_desde) anio, SUM(ri.cantidad) cantidad
+    FROM requerimiento_items ri JOIN requerimiento_importaciones i ON i.id = ri.importacion_id
+    WHERE ri.codigo IN (${inCod}) AND i.periodo_desde IS NOT NULL
+    GROUP BY ri.codigo, YEAR(i.periodo_desde)
+  `, pc);
+  for (const r of reqs) {
+    if (r.anio === anio + 1) set(r.codigo, 'reqAnioSig', Number(r.cantidad));
+    if (r.anio === anio + 2) set(r.codigo, 'reqAnioSig2', Number(r.cantidad));
+  }
+  // Justiprecio: el del requerimiento mas reciente que lo tenga
+  const precios = await query(`
+    SELECT ri.codigo, ri.justiprecio
+    FROM requerimiento_items ri JOIN requerimiento_importaciones i ON i.id = ri.importacion_id
+    WHERE ri.codigo IN (${inCod}) AND ri.justiprecio IS NOT NULL
+    ORDER BY i.periodo_desde DESC, i.id DESC
+  `, pc);
+  for (const r of precios) if (out[r.codigo] && out[r.codigo].justiprecio == null) out[r.codigo].justiprecio = Number(r.justiprecio);
+
+  // Stock actual (ultima descarga ok, suma de sectores)
+  const [stk] = await query("SELECT id, fecha_stock FROM stock_actual_descargas WHERE estado = 'ok' ORDER BY id DESC LIMIT 1");
+  if (stk) {
+    const rows = await query(`
+      SELECT codigo, SUM(stock) stock, SUM(stock_minimo) minimo, SUM(stock_maximo) maximo
+      FROM stock_actual_items WHERE descarga_id = :id AND codigo IN (${inCod}) GROUP BY codigo
+    `, { id: stk.id, ...pc });
+    for (const r of rows) {
+      set(r.codigo, 'stockActual', Number(r.stock || 0));
+      set(r.codigo, 'minMs', r.minimo == null ? null : Number(r.minimo));
+      set(r.codigo, 'maxMs', r.maximo == null ? null : Number(r.maximo));
+    }
+  }
+  // Min/max sugerido
+  const sug = await query(`SELECT codigo_articulo codigo, stock_minimo, stock_maximo FROM stock_sugeridos WHERE codigo_articulo IN (${inCod})`, pc);
+  for (const r of sug) {
+    set(r.codigo, 'minSug', r.stock_minimo == null ? null : Number(r.stock_minimo));
+    set(r.codigo, 'maxSug', r.stock_maximo == null ? null : Number(r.stock_maximo));
+  }
+
+  // Proximo vencimiento (ultima descarga ok, desde hoy, con stock)
+  const [ven] = await query("SELECT id FROM venc_descargas WHERE estado = 'ok' ORDER BY id DESC LIMIT 1");
+  if (ven) {
+    const rows = await query(`
+      SELECT codigo, DATE_FORMAT(vencimiento, '%Y-%m-%d') vto, SUM(stock) cantidad
+      FROM venc_items
+      WHERE descarga_id = :id AND codigo IN (${inCod}) AND vencimiento >= CURDATE() AND stock > 0
+      GROUP BY codigo, vencimiento ORDER BY vencimiento
+    `, { id: ven.id, ...pc });
+    for (const r of rows) {
+      if (out[r.codigo] && !out[r.codigo].proxVto) {
+        out[r.codigo].proxVto = r.vto;
+        out[r.codigo].proxVtoCant = Number(r.cantidad || 0);
+      }
+    }
+  }
+
+  // O.C. del mismo anio + semestre (historial de Drive)
+  const ocs = await query(`
+    SELECT codigo, SUM(cantidad) pedida, SUM(entregada) entregada
+    FROM oc_historial WHERE anio = :anio AND semestre = :semestre AND codigo IN (${inCod}) GROUP BY codigo
+  `, { anio, semestre, ...pc });
+  for (const r of ocs) {
+    set(r.codigo, 'ocPedida', Number(r.pedida || 0));
+    set(r.codigo, 'ocEntregada', Number(r.entregada || 0));
+  }
+
+  // Bajas del semestre (descarte / vencimiento)
+  const bajas = await query(`
+    SELECT codigo, SUM(cantidad) cantidad FROM bajas_ms
+    WHERE codigo IN (${inCod}) AND fecha BETWEEN :desde AND :hasta GROUP BY codigo
+  `, { ...pc, desde, hasta });
+  for (const r of bajas) set(r.codigo, 'bajasSem', Number(r.cantidad || 0));
+
+  return { datos: out, meta: { mesesSem, stockFecha: stk?.fecha_stock || null } };
+}
+
+// Columnas elegibles del Analisis de Requerimiento: datos por codigo abiertos por semestre ('YYYY-S')
+async function columnasPorCodigos(codigosEntrada) {
+  const codigos = Array.from(new Set((codigosEntrada || []).map((c) => String(c || '').trim()).filter(Boolean))).slice(0, 3000);
+  const out = {};
+  for (const c of codigos) out[c] = { consumo: {}, manual: {}, req: {}, ocPedida: {}, ocEntregada: {}, bajas: {} };
+  const meta = { mesesConsumo: {}, ciclosConsumo: [], ciclosManual: [], ciclosReq: [], ciclosOc: [], ciclosBajas: [], stockFecha: null };
+  if (!codigos.length) return { datos: out, meta };
+  const inCod = codigos.map((_, i) => ':c' + i).join(', ');
+  const pc = Object.fromEntries(codigos.map((c, i) => ['c' + i, c]));
+  const set = (codigo, campo, valor) => { if (out[codigo]) out[codigo][campo] = valor; };
+  const sumar = (codigo, campo, ciclo, valor) => {
+    const d = out[codigo];
+    if (!d) return;
+    d[campo][ciclo] = (d[campo][ciclo] || 0) + valor;
+  };
+  const orden = (s) => Array.from(s).sort();
+
+  // Consumo por semestre (Analisis Trimestral, todos los sectores)
+  const trims = await query('SELECT anio, trimestre FROM trimestre_importaciones GROUP BY anio, trimestre');
+  const ciclosCons = new Set();
+  for (const t of trims) {
+    const ciclo = `${t.anio}-${t.trimestre <= 2 ? 1 : 2}`;
+    ciclosCons.add(ciclo);
+    meta.mesesConsumo[ciclo] = (meta.mesesConsumo[ciclo] || 0) + 3;
+  }
+  meta.ciclosConsumo = orden(ciclosCons);
+  const cons = await query(`
+    SELECT ti.codigo_articulo codigo, i.anio, i.trimestre, SUM(ti.cantidad) cantidad
+    FROM trimestre_items ti JOIN trimestre_importaciones i ON i.id = ti.trimestre_importacion_id
+    WHERE ti.codigo_articulo IN (${inCod})
+    GROUP BY ti.codigo_articulo, i.anio, i.trimestre
+  `, pc);
+  for (const r of cons) sumar(r.codigo, 'consumo', `${r.anio}-${r.trimestre <= 2 ? 1 : 2}`, Number(r.cantidad || 0));
+
+  // Carga manual (ej. 2025) por semestre
+  const man = await query(`SELECT codigo, anio, semestre, SUM(cantidad) cantidad FROM requerimiento_manual WHERE codigo IN (${inCod}) GROUP BY codigo, anio, semestre`, pc);
+  const ciclosMan = new Set((await query('SELECT DISTINCT anio, semestre FROM requerimiento_manual')).map((r) => `${r.anio}-${r.semestre}`));
+  for (const r of man) sumar(r.codigo, 'manual', `${r.anio}-${r.semestre}`, Number(r.cantidad || 0));
+  meta.ciclosManual = orden(ciclosMan);
+
+  // Requerimientos de PDF por ciclo (semestre del periodo de consumo)
+  const reqs = await query(`
+    SELECT ri.codigo, YEAR(i.periodo_desde) anio, IF(MONTH(i.periodo_desde) <= 6, 1, 2) sem, SUM(ri.cantidad) cantidad
+    FROM requerimiento_items ri JOIN requerimiento_importaciones i ON i.id = ri.importacion_id
+    WHERE ri.codigo IN (${inCod}) AND i.periodo_desde IS NOT NULL
+    GROUP BY ri.codigo, YEAR(i.periodo_desde), IF(MONTH(i.periodo_desde) <= 6, 1, 2)
+  `, pc);
+  const ciclosReq = new Set((await query(`
+    SELECT DISTINCT YEAR(periodo_desde) anio, IF(MONTH(periodo_desde) <= 6, 1, 2) sem FROM requerimiento_importaciones WHERE periodo_desde IS NOT NULL
+  `)).map((r) => `${r.anio}-${r.sem}`));
+  for (const r of reqs) sumar(r.codigo, 'req', `${r.anio}-${r.sem}`, Number(r.cantidad || 0));
+  meta.ciclosReq = orden(ciclosReq);
+
+  // Stock actual (ultima descarga ok, suma de sectores)
+  const [stk] = await query("SELECT id, fecha_stock FROM stock_actual_descargas WHERE estado = 'ok' ORDER BY id DESC LIMIT 1");
+  if (stk) {
+    meta.stockFecha = stk.fecha_stock || null;
+    const rows = await query(`
+      SELECT codigo, SUM(stock) stock, SUM(stock_minimo) minimo, SUM(stock_maximo) maximo
+      FROM stock_actual_items WHERE descarga_id = :id AND codigo IN (${inCod}) GROUP BY codigo
+    `, { id: stk.id, ...pc });
+    for (const r of rows) {
+      set(r.codigo, 'stockActual', Number(r.stock || 0));
+      set(r.codigo, 'minMs', r.minimo == null ? null : Number(r.minimo));
+      set(r.codigo, 'maxMs', r.maximo == null ? null : Number(r.maximo));
+    }
+  }
+  const sug = await query(`SELECT codigo_articulo codigo, stock_minimo, stock_maximo FROM stock_sugeridos WHERE codigo_articulo IN (${inCod})`, pc);
+  for (const r of sug) {
+    set(r.codigo, 'minSug', r.stock_minimo == null ? null : Number(r.stock_minimo));
+    set(r.codigo, 'maxSug', r.stock_maximo == null ? null : Number(r.stock_maximo));
+  }
+
+  // Proximo vencimiento (ultima descarga ok, desde hoy, con stock)
+  const [ven] = await query("SELECT id FROM venc_descargas WHERE estado = 'ok' ORDER BY id DESC LIMIT 1");
+  if (ven) {
+    const rows = await query(`
+      SELECT codigo, DATE_FORMAT(vencimiento, '%Y-%m-%d') vto, SUM(stock) cantidad
+      FROM venc_items
+      WHERE descarga_id = :id AND codigo IN (${inCod}) AND vencimiento >= CURDATE() AND stock > 0
+      GROUP BY codigo, vencimiento ORDER BY vencimiento
+    `, { id: ven.id, ...pc });
+    for (const r of rows) {
+      if (out[r.codigo] && !out[r.codigo].proxVto) {
+        out[r.codigo].proxVto = r.vto;
+        out[r.codigo].proxVtoCant = Number(r.cantidad || 0);
+      }
+    }
+  }
+
+  // O.C. por anio + semestre
+  const ocs = await query(`
+    SELECT codigo, anio, semestre, SUM(cantidad) pedida, SUM(entregada) entregada
+    FROM oc_historial WHERE codigo IN (${inCod}) AND anio IS NOT NULL AND semestre IN (1, 2)
+    GROUP BY codigo, anio, semestre
+  `, pc);
+  const ciclosOc = new Set((await query('SELECT DISTINCT anio, semestre FROM oc_historial WHERE anio IS NOT NULL AND semestre IN (1, 2)')).map((r) => `${r.anio}-${r.semestre}`));
+  for (const r of ocs) {
+    sumar(r.codigo, 'ocPedida', `${r.anio}-${r.semestre}`, Number(r.pedida || 0));
+    sumar(r.codigo, 'ocEntregada', `${r.anio}-${r.semestre}`, Number(r.entregada || 0));
+  }
+  meta.ciclosOc = orden(ciclosOc);
+
+  // Bajas por semestre (descarte / vencimiento)
+  const bajas = await query(`
+    SELECT codigo, YEAR(fecha) anio, IF(MONTH(fecha) <= 6, 1, 2) sem, SUM(cantidad) cantidad
+    FROM bajas_ms WHERE codigo IN (${inCod}) AND fecha IS NOT NULL
+    GROUP BY codigo, YEAR(fecha), IF(MONTH(fecha) <= 6, 1, 2)
+  `, pc);
+  const ciclosBajas = new Set((await query(`
+    SELECT DISTINCT YEAR(fecha) anio, IF(MONTH(fecha) <= 6, 1, 2) sem FROM bajas_ms WHERE fecha IS NOT NULL
+  `)).map((r) => `${r.anio}-${r.sem}`));
+  for (const r of bajas) sumar(r.codigo, 'bajas', `${r.anio}-${r.sem}`, Number(r.cantidad || 0));
+  meta.ciclosBajas = orden(ciclosBajas);
+
+  return { datos: out, meta };
+}
+
+async function eliminarManual(id, usuarioId) {
+  const result = await query('DELETE FROM requerimiento_manual WHERE id = :id', { id });
+  if (result.affectedRows) await audit(usuarioId, 'eliminar_requerimiento_manual', 'requerimiento_manual', id, {});
+  return result.affectedRows;
 }
 
 // true cuando hay que volver a leer los PDF ya cargados (cambio de estructura de la tabla)
@@ -306,5 +639,12 @@ module.exports = {
   iniciarSondeoRequerimientos,
   listarImportaciones,
   listarItems,
-  eliminarImportacion
+  eliminarImportacion,
+  catalogoFarmacos,
+  listarManual,
+  guardarManual,
+  eliminarManual,
+  columnasManual,
+  columnasPorCodigos,
+  copiarDesdeRequerimientoNuevo
 };

@@ -1,0 +1,18 @@
+[
+ {
+  "id": 1,
+  "file_id": "17bVwOrmhbnPR4u6P81mU74TpPlb3buCq",
+  "file_nombre": "Copia de ORDENES DE COMPRA.xlsx",
+  "file_tipo": "excel",
+  "modo_pestana": "anual",
+  "prefijo_anual": "O.C ",
+  "pestana_fija": null,
+  "activo": 1,
+  "lista_completo": "SI,NO,CAMBIO,DESAFECTADO,A REVISAR",
+  "backup_revision_id": "0BzEZcdu0WbHxOHJER0xiUC9vYXdLQ3REQUxGUGVCZkxOcjg4PQ",
+  "backup_local": "D:\\FARMACIA\\ORDENES COMPRA\\backup\\BACKUP production Copia de ORDENES DE COMPRA 20261103-011221.xlsx",
+  "backup_fecha": "2026-11-03T01:12:25.000Z",
+  "actualizado_por": 1,
+  "updated_at": "2026-11-03T01:16:07.000Z"
+ }
+]

@@ -81,7 +81,7 @@ export function AptosTab() {
         setExiste(r.data.existe);
         setPathXlsx(r.data.path ?? '');
       } else {
-        toast.error(r?.error ?? 'Error al leer APTOS.xlsx');
+        toast.error(r?.error ?? 'Error al leer los exámenes');
       }
     } catch (e: any) {
       toast.error(e?.message ?? 'Error');
@@ -135,7 +135,7 @@ export function AptosTab() {
   if (!existe) {
     return (
       <section className="td-card" style={{ padding: 24, textAlign: 'center' }}>
-        No se encontró <b>{pathXlsx || 'D:\\G\\APTOS\\APTOS.xlsx'}</b>. Dejá el Excel ahí y recargá.
+        No hay exámenes en <b>{pathXlsx || 'examenes_medicos_siape'}</b>. Corré el robot "Exportación Exámenes Médicos Salud" en la página Robots y recargá.
         <div style={{ marginTop: 10 }}>
           <button className="btn" type="button" onClick={() => void cargar()}>🔄 Reintentar</button>
         </div>
@@ -231,7 +231,7 @@ export function AptosTab() {
                 <tr><td colSpan={13} className="muted" style={{ padding: 16, textAlign: 'center' }}>Sin filas con los filtros actuales</td></tr>
               )}
               {loading && (
-                <tr><td colSpan={13} className="muted" style={{ padding: 16, textAlign: 'center' }}>⏳ Leyendo APTOS.xlsx...</td></tr>
+                <tr><td colSpan={13} className="muted" style={{ padding: 16, textAlign: 'center' }}>⏳ Leyendo exámenes...</td></tr>
               )}
             </tbody>
           </table>
